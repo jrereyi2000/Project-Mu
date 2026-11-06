@@ -1,0 +1,168 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:IND:OC",
+  "name": "Jim Bob Cooter",
+  "role": "OC",
+  "team": "IND",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "IND",
+    "role": "OC",
+    "name": "Jim Bob Cooter"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 4,
+    "openness": 5,
+    "warmth": 5,
+    "drive": 6
+  },
+  "slider_evidence": {
+    "confidence": [
+      "E1"
+    ],
+    "drive": [
+      "E1"
+    ]
+  },
+  "traits": [
+    "FILM_ROOM_RAT",
+    "QB_WHISPERER",
+    "TEACHER"
+  ],
+  "trait_evidence": {
+    "FILM_ROOM_RAT": [
+      "E1"
+    ],
+    "QB_WHISPERER": [
+      "E1",
+      "E2"
+    ],
+    "TEACHER": [
+      "E1"
+    ]
+  },
+  "views": [
+    {
+      "text": "Teach a young quarterback the offense from the ground up; shortcuts show up later as mistakes.",
+      "when": [
+        "QB",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "A coordinator who is not the play-caller earns his keep in the details of the plan.",
+      "when": [
+        "COACHING",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Write everything down; every stop in a career teaches you something worth keeping.",
+      "when": [
+        "COACHING",
+        "HISTORY"
+      ]
+    },
+    {
+      "text": "Working beside a great quarterback early teaches you what preparation really looks like.",
+      "when": [
+        "QB",
+        "HISTORY"
+      ]
+    },
+    {
+      "text": "When an offense changes coordinators midseason, simplify first and build back up.",
+      "when": [
+        "STRUGGLING",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Pitch your best ideas, then back the play-caller's final call completely.",
+      "when": [
+        "COACHING",
+        "GAME_REVIEW"
+      ]
+    }
+  ],
+  "signatures": [
+    "deflects credit for an offensive success to the play-caller and the quarterback",
+    "references a lesson from an earlier stop, often his years around Peyton Manning"
+  ],
+  "want": "to get another chance to run an offense, or a team, after years as a trusted number two",
+  "fear": "that his early play-calling stint in Detroit is the only thing people remember about him",
+  "voice": "Humble, soft-spoken and detailed; he talks like a quarterbacks-room teacher and defers to the head coach on anything strategic. He praises players' work habits and avoids headlines.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "IND",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E2"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.colts.com/news/jim-bob-cooter-offensive-coordinator-detroit-lions-peyton-manning-2023",
+      "publisher": "Indianapolis Colts (colts.com), JJ Stankevitz",
+      "published": "2023-12-07",
+      "accessed": "2026-11-05",
+      "summary": "Profile: a former Tennessee backup quarterback who worked with Peyton Manning in Indianapolis from 2009 and again in Denver, coordinated Detroit's offense, consulted for Steichen's Eagles, and coached Jacksonville's passing game; known for humility and note-taking, teaches young quarterbacks each step without shortcuts, sees his job as feeding ideas to the play-caller who has the final say; Steichen says he turns over every rock and predicts a head-coach chance. Team-written.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.si.com/nfl/2023/02/20/colts-to-hire-jim-bob-cooter-offensive-coordinator",
+      "publisher": "Sports Illustrated, Mike McDaniel",
+      "published": "2023-02-20",
+      "accessed": "2026-11-05",
+      "summary": "Colts reportedly hire Jacksonville's passing game coordinator as offensive coordinator under Steichen, who will call plays; Cooter worked in Indianapolis from 2009 to 2011 and was Detroit's coordinator, first on an interim basis in 2015 and then full-time for three seasons. Hiring report.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.nfl.com/news/lions-fire-offensive-coordinator-joe-lombardi-0ap3000000566406",
+      "publisher": "NFL.com",
+      "published": "2015-10-26",
+      "accessed": "2026-11-05",
+      "summary": "Detroit fires coordinator Joe Lombardi after a 1-6 start and promotes quarterbacks coach Cooter to run the offense. Staffing report.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://africa.espn.com/nfl/story/_/id/25663534/detroit-lions-fire-offensive-coordinator-jim-bob-cooter",
+      "publisher": "ESPN",
+      "published": "2019-01-01",
+      "accessed": "2026-11-05",
+      "summary": "After Matt Patricia's first season, Detroit does not retain Cooter, who had run the offense with Stafford for about three and a half seasons across two head coaches. Departure report; date taken from the announcement window.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.colts.com/news/shane-steichen-head-coach-afc-playoffs-gus-bradley-julian-blackmon",
+      "publisher": "Indianapolis Colts (colts.com), Raven Moore",
+      "published": "2023-11-30",
+      "accessed": "2026-11-05",
+      "summary": "Team feature on his first season: players say he set a clear standard and lives by it through Richardson's season-ending injury, a suspension and a three-game skid; Tyquan Lewis says he brought accountability; Blackmon says players trust the plan; DC Gus Bradley praises his steady message and that he holds players and coaches alike to the standard. Team-written.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "Coverage is mostly staffing; Steichen calls the plays."
+  }
+}

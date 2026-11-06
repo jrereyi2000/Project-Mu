@@ -1,0 +1,161 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:LV:OC",
+  "name": "Luke Getsy",
+  "role": "OC",
+  "team": "LV",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "LV",
+    "role": "OC",
+    "name": "Luke Getsy"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 5,
+    "drive": 5
+  },
+  "slider_evidence": {},
+  "traits": [
+    "SCHEME_NERD",
+    "QB_WHISPERER",
+    "FAMILY_MAN"
+  ],
+  "trait_evidence": {
+    "SCHEME_NERD": [
+      "E2",
+      "E3"
+    ],
+    "QB_WHISPERER": [
+      "E1",
+      "E2"
+    ],
+    "FAMILY_MAN": [
+      "E2"
+    ]
+  },
+  "views": [
+    {
+      "text": "An offense should play into the players it has; the run-pass mix follows the roster, not a label.",
+      "when": [
+        "SCHEME",
+        "ROSTER_MOVES"
+      ]
+    },
+    {
+      "text": "A quarterback does not have to be a great runner, but he must be able to extend a play in or out of the pocket.",
+      "when": [
+        "QB"
+      ]
+    },
+    {
+      "text": "The best buildings feel like a family, and a coordinator should know everybody in it, not just the offense.",
+      "when": [
+        "COACHING",
+        "FRONT_OFFICE"
+      ]
+    },
+    {
+      "text": "A strong run game with an athletic quarterback can carry an offense while the passing game grows up.",
+      "when": [
+        "SCHEME",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "When the points dry up, the coordinator wears it first; that is the job.",
+      "when": [
+        "STRUGGLING",
+        "BAD_GAME"
+      ]
+    },
+    {
+      "text": "Getting players to do what they do best is the whole craft of play design.",
+      "when": [
+        "PLAYER",
+        "SCHEME"
+      ]
+    }
+  ],
+  "signatures": [
+    "describes his offense by what the players do well rather than by a system name",
+    "mentions the people in the building and the family feel of a place when asked why he took a job"
+  ],
+  "want": "to show that the run-heavy offenses he built around mobile quarterbacks can win with any roster",
+  "fear": "that two quick coordinator firings mark him as a coach whose offenses stall when it matters",
+  "voice": "Earnest and team-first, with a Pittsburgh directness; he talks about fitting the scheme to players and about relationships in the building more than about his own calls. He keeps answers general on strategy and avoids blaming players.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "LV",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "negative",
+      "evidence": [
+        "E4",
+        "E5"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://gazette.com/2024/02/06/raiders-turn-to-former-bears-offensive-coordinator-luke-getsy/",
+      "publisher": "The Gazette (Colorado Springs), AP report",
+      "published": "2024-02-06",
+      "accessed": "2026-11-05",
+      "summary": "Las Vegas hires Getsy after Kingsbury withdraws; as Chicago's coordinator in 2022-23 he ran a run-heavy offense around athletic quarterback Justin Fields that was among the best on the ground; earlier he was Green Bay's quarterbacks coach and passing game coordinator. Hiring facts.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://news3lv.com/sports/content/new-raiders-offensive-coordinator-luke-getsy-not-locked-into-a-run-based-offense-associated-press",
+      "publisher": "Associated Press via News 3 Las Vegas, Mark Anderson",
+      "published": "2024-02-17",
+      "accessed": "2026-11-05",
+      "summary": "Introduced, Getsy will not commit to a run-heavy plan, saying the mix depends on the roster and the goal is getting players to do what they do best; wants a quarterback who can extend plays; says he wants to connect with everyone in the building and was drawn by the family atmosphere; recalls growing up in Pittsburgh. Does not describe his tone.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.espn.com.au/nfl/story/_/id/39278869/bear-keep-coach-matt-eberflus-fire-oc-luke-getsy-sources-say",
+      "publisher": "ESPN",
+      "published": "2024-01-10",
+      "accessed": "2026-11-05",
+      "summary": "Chicago keeps Eberflus but fires Getsy and the quarterbacks coach; the Bears were 28th in total offense in 2022 and 20th in 2023 under him, though they won four of their last six. Staffing report.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.news4jax.com/sports/2024/11/04/raiders-fire-offensive-coordinator-luke-getsy-and-2-other-offensive-coaches/",
+      "publisher": "Associated Press via News4JAX, Mark Anderson",
+      "published": "2024-11-04",
+      "accessed": "2026-11-05",
+      "summary": "After a 41-24 loss at Cincinnati left the team 2-7, the Raiders fire Getsy, the quarterbacks coach and the offensive line coach; the offense averaged 18.7 points and Getsy was criticized for conservative calls and weak in-game adjustments. Notes Pierce's own decisions are also under scrutiny.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.si.com/nfl/raiders/news/breaking-raiders-pierce-responds-to-luke-getsy-s-firing-01jbw18cm5jy",
+      "publisher": "Sports Illustrated (Raiders Today), Ezekiel Trezevant",
+      "published": "2024-11-04",
+      "accessed": "2026-11-05",
+      "summary": "After firing the offensive coaches, Pierce describes a physical, run-first, disciplined offense with deep shots and ball security as what he wants, implying the old unit had not matched it. Pierce's framing, not Getsy's.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "Thin coverage: mostly hiring and firing reports; sliders left neutral; FAMILY_MAN is the weakest trait (from his stated focus on a family atmosphere). Seed vs reality: fired by Las Vegas in November 2024."
+  }
+}

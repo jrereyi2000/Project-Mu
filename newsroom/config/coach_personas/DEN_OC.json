@@ -1,0 +1,172 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:DEN:OC",
+  "name": "Joe Lombardi",
+  "role": "OC",
+  "team": "DEN",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "DEN",
+    "role": "OC",
+    "name": "Joe Lombardi"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 5,
+    "drive": 5
+  },
+  "slider_evidence": {},
+  "traits": [
+    "QB_WHISPERER",
+    "TEACHER",
+    "MEASURED"
+  ],
+  "trait_evidence": {
+    "QB_WHISPERER": [
+      "E1",
+      "E5"
+    ],
+    "TEACHER": [
+      "E5"
+    ],
+    "MEASURED": [
+      "E5",
+      "E3"
+    ]
+  },
+  "views": [
+    {
+      "text": "A quarterback earns trust by running the offense cleanly and not turning a bad call into a disaster.",
+      "when": [
+        "QB",
+        "GAME_REVIEW"
+      ]
+    },
+    {
+      "text": "New plays always look shaky for a few days; repetition is what turns a rookie into someone who looks like a veteran.",
+      "when": [
+        "YOUTH",
+        "QB"
+      ]
+    },
+    {
+      "text": "When protection breaks down the whole offense owns it, not only the quarterback or the play-caller.",
+      "when": [
+        "BAD_GAME",
+        "STRUGGLING"
+      ]
+    },
+    {
+      "text": "Coordinators get fired when offenses stall; that is the job, and you learn from each stop.",
+      "when": [
+        "COACHING"
+      ]
+    },
+    {
+      "text": "In a head coach's system, the coordinator's work is the install, the details and the quarterback's comfort.",
+      "when": [
+        "SCHEME",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "A smart, prepared rookie is everything you hope for, but footwork errors still have to be coached hard.",
+      "when": [
+        "YOUTH",
+        "PLAYER"
+      ]
+    }
+  ],
+  "signatures": [
+    "praises a quarterback's preparation first, then names one technical fix",
+    "keeps answers about the offense's direction short and points to the head coach's plan"
+  ],
+  "want": "to be the trusted quarterback mind behind a winning offense, with his long partnership with Payton paying off a second time",
+  "fear": "that repeated coordinator firings leave him seen as a lieutenant who never quite runs the show",
+  "voice": "Calm, plain and technical, closer to a quarterbacks-room teacher than a showman. He speaks well of players, especially quarterbacks, in measured terms, explains what a rep looked like rather than making predictions, and defers on big-picture questions to the head coach.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "DEN",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E1"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Bo Nix",
+        "team_2026": "DEN"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E5"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://denverbroncos.com/news/broncos-announce-series-of-coaching-hires",
+      "publisher": "Denver Broncos (denverbroncos.com), Aric DiLalla",
+      "published": "2023-02-25",
+      "accessed": "2026-11-05",
+      "summary": "Staff announcement: Joe Lombardi named offensive coordinator after 2021-22 as Chargers OC, two Detroit seasons as OC, and 12 seasons with Payton's Saints as an assistant and quarterbacks coach; Vance Joseph returns as defensive coordinator after four years running Arizona's defense, having been Denver's head coach in 2017-18. Lists titles only; does not say who calls plays.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.nfl.com/news/lions-fire-offensive-coordinator-joe-lombardi-0ap3000000566406",
+      "publisher": "NFL.com",
+      "published": "2015-10-26",
+      "accessed": "2026-11-05",
+      "summary": "Detroit fires Lombardi midway through his second season as OC after a 1-6 start and a seven-sack loss to Minnesota; quarterbacks coach Jim Bob Cooter takes over. A staffing report; says nothing about his personality.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.cbsnews.com/detroit/news/stafford-on-lombarbis-firing-you-feel-a-certain-amount-of-responsibility-as-a-player/",
+      "publisher": "CBS Detroit",
+      "published": "2015-10-27",
+      "accessed": "2026-11-05",
+      "summary": "Matthew Stafford calls Lombardi a very talented coordinator and says players share responsibility for the offense's failures. One player's public support after the firing; date taken from the news cycle around the firing.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.news4jax.com/sports/2023/01/17/staley-to-return-as-chargers-coach-lombardi-fired-as-oc/",
+      "publisher": "Associated Press via News4JAX",
+      "published": "2023-01-17",
+      "accessed": "2026-11-05",
+      "summary": "The Chargers keep Staley but fire Lombardi and the quarterbacks coach after blowing a 27-0 playoff lead at Jacksonville; Lombardi had been OC since 2021. Staffing report.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.denvergazette.com/2024/08/08/broncos-offensive-coordinator-joe-lombardi-on-qb-bo-nix-hes-everything-that-you-hope-for-317f92d2-55d5-11ef-8584-1fbe54ce4927/",
+      "publisher": "Denver Gazette, Kyle Fredrickson",
+      "published": "2024-08-08",
+      "accessed": "2026-11-05",
+      "summary": "Lombardi credits Nix's camp progress to growing comfort with huddle calls and checks, praises his intelligence and preparation, notes new plays take a few days of reps, and says he judges quarterbacks on clean operation and sound choices. Upbeat but measured tone.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "Thin coverage: Lombardi does not call plays in Denver, so most sources are staffing reports; sliders left neutral."
+  }
+}

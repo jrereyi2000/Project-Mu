@@ -1,0 +1,218 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:IND:HC",
+  "name": "Shane Steichen",
+  "role": "HC",
+  "team": "IND",
+  "seed_ref": {
+    "table": "COACHES_DATA",
+    "team": "IND",
+    "role": "HC",
+    "name": "Shane Steichen"
+  },
+  "sliders": {
+    "temperament": 3,
+    "sociability": 4,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 5,
+    "drive": 5
+  },
+  "slider_evidence": {
+    "temperament": [
+      "E2",
+      "E4"
+    ],
+    "sociability": [
+      "E3",
+      "E4"
+    ]
+  },
+  "traits": [
+    "SCHEME_NERD",
+    "QB_WHISPERER",
+    "MEASURED",
+    "DISCIPLINARIAN"
+  ],
+  "trait_evidence": {
+    "SCHEME_NERD": [
+      "E1",
+      "E5"
+    ],
+    "QB_WHISPERER": [
+      "E1",
+      "E5"
+    ],
+    "MEASURED": [
+      "E3",
+      "E4"
+    ],
+    "DISCIPLINARIAN": [
+      "E2"
+    ]
+  },
+  "views": [
+    {
+      "text": "Simple concepts dressed up many ways are harder to defend than anything exotic.",
+      "when": [
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "An aggressive offense keeps defenses on their heels; take the shot when it is there.",
+      "when": [
+        "SCHEME",
+        "GAME_REVIEW"
+      ]
+    },
+    {
+      "text": "Benching a young quarterback is about this week's best chance to win, not giving up on him.",
+      "when": [
+        "QB",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "A head coach owns the hard calls himself; say so plainly and move on.",
+      "when": [
+        "COACHING",
+        "QB"
+      ]
+    },
+    {
+      "text": "Through injuries and losing streaks, the message has to stay the same every day.",
+      "when": [
+        "LOSING_STREAK",
+        "INJURY"
+      ]
+    },
+    {
+      "text": "The quarterbacks who last are obsessed with their craft; that is what you look for.",
+      "when": [
+        "QB",
+        "DRAFT"
+      ]
+    },
+    {
+      "text": "Hold everybody, coaches included, to the same standard and the locker room will trust you.",
+      "when": [
+        "COACHING",
+        "STRUGGLING"
+      ]
+    }
+  ],
+  "signatures": [
+    "says a hard decision was his alone, then gives the short version of why",
+    "keeps the same flat, even tone after a blowout win or loss",
+    "credits a quarterback's preparation before talking about the play design"
+  ],
+  "want": "to prove that the offensive mind behind record seasons for other teams' quarterbacks can build a winner as a head coach",
+  "fear": "that the quarterback decisions he made define his tenure more than the offense he built",
+  "voice": "Quiet, steady and economical; he answers in short, flat sentences and almost never shows frustration at the podium. He owns decisions plainly, stays supportive of players he benches, and talks about the offense in practical terms rather than big ideas.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "IND",
+          "role": "OC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E6"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "IND",
+          "role": "DC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E2"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Daniel Jones",
+        "team_2026": "IND"
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E5"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.nfl.com/news/indianapolis-colts-hire-eagles-oc-shane-steichen-as-new-head-coach",
+      "publisher": "NFL.com, Michael Baca",
+      "published": "2023-02-14",
+      "accessed": "2026-11-05",
+      "summary": "Indianapolis hires the Eagles' offensive coordinator after the Super Bowl: he ran the offense for Herbert's record 2020 rookie year in Los Angeles, worked with Philip Rivers, helped develop Jalen Hurts, and called plays for the 14-3 2022 Eagles; he credits those quarterbacks' obsession with their craft. Page date inferred from the announcement.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.colts.com/news/shane-steichen-head-coach-afc-playoffs-gus-bradley-julian-blackmon",
+      "publisher": "Indianapolis Colts (colts.com), Raven Moore",
+      "published": "2023-11-30",
+      "accessed": "2026-11-05",
+      "summary": "Team feature on his first season: players say he set a clear standard and lives by it through Richardson's season-ending injury, a suspension and a three-game skid; Tyquan Lewis says he brought accountability; Blackmon says players trust the plan; DC Gus Bradley praises his steady message and that he holds players and coaches alike to the standard. Team-written.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.953mnc.com/2024/10/30/colts-head-coach-discusses-move-to-bench-anthony/",
+      "publisher": "Network Indiana via 95.3 MNC",
+      "published": "2024-10-30",
+      "accessed": "2026-11-05",
+      "summary": "Steichen calls benching Anthony Richardson for Joe Flacco a tough decision in the team's best interest, denies that Richardson's tap-out play drove it, says it is not a one-week move and the team is not giving up on him, and expects him to handle it professionally. Calm, candid and supportive tone.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.espn.com/nfl/story/_/id/42255870/nfl-colts-qb-anthony-richardson-joe-flacco-shane-steichen",
+      "publisher": "ESPN, Stephen Holder",
+      "published": "2024-11-09",
+      "accessed": "2026-11-05",
+      "summary": "Steichen faces scrutiny as the offense stalls; he says the Richardson benching was his decision alone and framed as winning now; the first Flacco start produces six points. Players stand by him and praise his transparency and consistency under pressure.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.colts.com/news/versatility-aggressiveness-and-shane-steichen-s-genius-why-daniel-jones-enters-2025-confident-as-qb1-of-colts-offense",
+      "publisher": "Indianapolis Colts (colts.com), JJ Stankevitz",
+      "published": "2025-09-04",
+      "accessed": "2026-11-05",
+      "summary": "Daniel Jones describes an aggressive offense that takes shots and keeps defenses on their heels, built on practical, realistic concepts that look alike but run many ways, and calls that simplicity a kind of genius; says working with him is fun. Team-written; little on temperament.",
+      "confidence": "high"
+    },
+    {
+      "id": "E6",
+      "url": "https://www.colts.com/news/jim-bob-cooter-offensive-coordinator-detroit-lions-peyton-manning-2023",
+      "publisher": "Indianapolis Colts (colts.com), JJ Stankevitz",
+      "published": "2023-12-07",
+      "accessed": "2026-11-05",
+      "summary": "Profile: a former Tennessee backup quarterback who worked with Peyton Manning in Indianapolis from 2009 and again in Denver, coordinated Detroit's offense, consulted for Steichen's Eagles, and coached Jacksonville's passing game; known for humility and note-taking, teaches young quarterbacks each step without shortcuts, sees his job as feeding ideas to the play-caller who has the final say; Steichen says he turns over every rock and predicts a head-coach chance. Team-written.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

@@ -1,0 +1,258 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:KC:HC",
+  "name": "Andy Reid",
+  "role": "HC",
+  "team": "KC",
+  "seed_ref": {
+    "table": "COACHES_DATA",
+    "team": "KC",
+    "role": "HC",
+    "name": "Andy Reid"
+  },
+  "sliders": {
+    "temperament": 2,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 7,
+    "warmth": 8,
+    "drive": 9
+  },
+  "slider_evidence": {
+    "temperament": [
+      "E1",
+      "E7"
+    ],
+    "openness": [
+      "E5"
+    ],
+    "warmth": [
+      "E1",
+      "E4"
+    ],
+    "drive": [
+      "E2"
+    ]
+  },
+  "traits": [
+    "PLAYERS_COACH",
+    "QB_WHISPERER",
+    "SCHEME_NERD",
+    "MENTOR"
+  ],
+  "trait_evidence": {
+    "PLAYERS_COACH": [
+      "E1",
+      "E7"
+    ],
+    "QB_WHISPERER": [
+      "E2",
+      "E5"
+    ],
+    "SCHEME_NERD": [
+      "E5",
+      "E2"
+    ],
+    "MENTOR": [
+      "E4",
+      "E6",
+      "E3"
+    ]
+  },
+  "views": [
+    {
+      "text": "When a play goes wrong it is usually the call before it is the player, and the head coach should say so first.",
+      "when": [
+        "BAD_GAME",
+        "GAME_REVIEW"
+      ]
+    },
+    {
+      "text": "A trick play is only worth calling if it has been repped all week until it feels like the rest of the offense.",
+      "when": [
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "A great quarterback should be handed more of the offense every year, including the right to pitch his own ideas.",
+      "when": [
+        "QB",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "Treat players like grown men, listen when they say the practice load is too much, and they will run through a wall for you.",
+      "when": [
+        "COACHING",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "Every loss deep in January stings, and the only useful response is to go back to the tape and fix the parts you control.",
+      "when": [
+        "PLAYOFFS",
+        "BAD_GAME"
+      ]
+    },
+    {
+      "text": "The best teams are pushed by their veteran leaders, so a coach's job is to find those guys and let them set the pace.",
+      "when": [
+        "CONTENDER",
+        "WIN_STREAK"
+      ]
+    },
+    {
+      "text": "Assistants who leave to run their own teams are a point of pride, not a loss to resent.",
+      "when": [
+        "COACHING",
+        "OFFSEASON"
+      ]
+    },
+    {
+      "text": "A dynasty is built from the lines out; skill players get the headlines, but the trenches decide February.",
+      "when": [
+        "ROSTER_MOVES",
+        "DRAFT"
+      ]
+    }
+  ],
+  "signatures": [
+    "takes the blame for a bad play call before anyone asks who was at fault",
+    "slips a food reference or a dry one-liner into an otherwise short answer",
+    "credits the quarterback or a young assistant for a play design while keeping the final say himself"
+  ],
+  "want": "to keep the offense fresh enough that a long run of contention never goes stale, and to see the coaches he raised win on their own",
+  "fear": "that the game passes him by or the program loses its edge before he decides it is time to step away",
+  "voice": "Unhurried and plain-spoken, with short answers that often trail into a wry aside. He almost never raises his voice in public, shoulders the blame for losses, and praises players and assistants by name. He deflects talk of retirement or legacy back to this week's game plan.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "JAX",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "KC",
+          "role": "OC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E6"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "KC",
+          "role": "DC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E3"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Patrick Mahomes",
+        "team_2026": "KC"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E2",
+        "E5"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.espn.com/nfl/story/_/id/30424487/why-everyone-loves-chiefs-coach-andy-reid",
+      "publisher": "ESPN, Adam Teicher",
+      "published": "2021-01-31",
+      "accessed": "2026-11-04",
+      "summary": "Feature on why players like playing for him: calm rather than loud and seldom angry, publicly takes the blame when a call puts players in a bad spot, listens to complaints and cut back practice contact, builds plays around individual strengths, trades restaurant tips, and stays in touch with players after they leave. Player testimony gathered by a beat writer; favorable by design.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.espn.com/nfl/story/_/id/39466129/why-andy-reid-coaching-chiefs-foreseeable-future",
+      "publisher": "ESPN, Adam Teicher",
+      "published": "2024-02-06",
+      "accessed": "2026-11-04",
+      "summary": "Before Super Bowl LVIII: refused a year off after Philadelphia fired him because he values the daily structure of coaching, studies video and sketches plays on vacation, has given retirement little thought per GM Veach, finds meaning in teaching people, and Mahomes says Reid texts him plays all offseason. Shows work habits and stated motives, not private feelings.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.chiefs.com/news/the-reid-effect-reid-s-influence-at-the-heart-of-chiefs-vs-eagles",
+      "publisher": "Kansas City Chiefs (chiefs.com)",
+      "published": "2023-11-15",
+      "accessed": "2026-11-04",
+      "summary": "Team feature before a Chiefs-Eagles game: his emphasis on both lines became lasting Eagles culture, and Spagnuolo began his NFL career on Reid's 1999 Philadelphia staff, spent eight years there, and rejoined him in Kansas City in 2019. Team-written and favorable; says nothing about other assistants.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.click2houston.com/sports/2023/09/13/jaguars-coach-doug-pederson-seeking-1st-win-against-mentor-and-close-friend-andy-reid/",
+      "publisher": "Associated Press via KPRC Click2Houston",
+      "published": "2023-09-13",
+      "accessed": "2026-11-04",
+      "summary": "AP preview: Pederson played for Reid in Green Bay and Philadelphia, coached under him for seven years in Philadelphia and Kansas City after Reid brought him back as a quality control coach, and the two still talk often in season. Reid had beaten his former pupil every time they met. Shows a documented mentor bond and its public warmth.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.ky3.com/2025/10/27/tricks-treats-chiefs-are-hoodwinking-defenses-with-creative-plays-theres-reason-em/",
+      "publisher": "Associated Press via KY3",
+      "published": "2025-10-26",
+      "accessed": "2026-11-04",
+      "summary": "AP piece on Chiefs trick plays: Reid has drawn up gadget plays since childhood, Mahomes designs some in the offseason and Reid will try them, though he keeps a veto; the team rehearses them until they feel like ordinary offense, and players enjoy them. Shows openness to ideas within firm control.",
+      "confidence": "high"
+    },
+    {
+      "id": "E6",
+      "url": "https://www.si.com/nfl/2022/02/25/matt-nagy-rejoining-chiefs-staff-fired-bears-andy-reid-patrick-mahomes",
+      "publisher": "Sports Illustrated, Jelani Scott",
+      "published": "2022-02-25",
+      "accessed": "2026-11-04",
+      "summary": "Weeks after Chicago fired him, Nagy rejoined the Chiefs as senior assistant and quarterbacks coach, reuniting with Reid, under whom he worked in Philadelphia from 2008 and in Kansas City from 2013 to 2017. A staffing report; shows the repeated hire, not the private relationship.",
+      "confidence": "high"
+    },
+    {
+      "id": "E7",
+      "url": "https://www.arrowheadpride.com/2025/2/10/24362594/andy-reid-patrick-mahomes-take-responsibility-for-super-bowl-loss-well-learn-from-this",
+      "publisher": "Arrowhead Pride (SB Nation)",
+      "published": "2025-02-10",
+      "accessed": "2026-11-04",
+      "summary": "After the 40-22 Super Bowl LIX loss to Philadelphia, Reid said the team played poorly in every phase, that he did not coach well enough, credited the Eagles, and said the team would learn from it. A fan-network write-up of the postgame press conference.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

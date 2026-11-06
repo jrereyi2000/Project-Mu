@@ -1,0 +1,244 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:HOU:HC",
+  "name": "DeMeco Ryans",
+  "role": "HC",
+  "team": "HOU",
+  "seed_ref": {
+    "table": "COACHES_DATA",
+    "team": "HOU",
+    "role": "HC",
+    "name": "DeMeco Ryans"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 6,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 7,
+    "drive": 7
+  },
+  "slider_evidence": {
+    "sociability": [
+      "E3"
+    ],
+    "warmth": [
+      "E1",
+      "E3",
+      "E6"
+    ],
+    "drive": [
+      "E2",
+      "E3"
+    ]
+  },
+  "traits": [
+    "PLAYERS_COACH",
+    "LOYAL",
+    "MENTOR"
+  ],
+  "trait_evidence": {
+    "PLAYERS_COACH": [
+      "E1",
+      "E3"
+    ],
+    "LOYAL": [
+      "E6",
+      "E1"
+    ],
+    "MENTOR": [
+      "E3",
+      "E5"
+    ]
+  },
+  "views": [
+    {
+      "text": "Players care how much you care before they care how much you know.",
+      "when": [
+        "COACHING",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "Every snap deserves full effort, and a team that plays relentlessly for each other covers a lot of mistakes.",
+      "when": [
+        "PERFORMANCE",
+        "WIN_STREAK"
+      ]
+    },
+    {
+      "text": "A young quarterback with calm confidence lifts the whole locker room around him.",
+      "when": [
+        "QB",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "Tell a player the truth right away; softening a problem helps neither him nor the team.",
+      "when": [
+        "BAD_GAME",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "Draft high-character, football-first players from winning programs and the culture builds itself.",
+      "when": [
+        "DRAFT",
+        "ROSTER_MOVES"
+      ]
+    },
+    {
+      "text": "Firing a friend is the hardest part of the job, but protecting the quarterback and the offense comes first.",
+      "when": [
+        "COACHING",
+        "STRUGGLING"
+      ]
+    },
+    {
+      "text": "Every season starts fresh; last year's division title does not earn anything this year.",
+      "when": [
+        "OFFSEASON",
+        "CONTENDER"
+      ]
+    }
+  ],
+  "signatures": [
+    "celebrates big plays on the sideline as if he were still playing linebacker",
+    "answers questions about effort with talk of a relentless mindset and playing for one another",
+    "gives a direct, unvarnished assessment of a mistake, then turns to what the player does well"
+  ],
+  "want": "to make the franchise he starred for as a player a perennial contender built on his relentless culture",
+  "fear": "that loyalty to the people he brought with him slows the hard calls a contender needs",
+  "voice": "Energetic and sincere, with a former linebacker's directness; he speaks in short, positive sentences about effort, togetherness and character. He gives honest assessments without theatrics, praises players by name, and keeps personnel decisions framed as what is best for the team.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "HOU",
+          "role": "OC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "mixed",
+      "evidence": [
+        "E6"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "HOU",
+          "role": "DC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E7"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "SF",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E1"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "C.J. Stroud",
+        "team_2026": "HOU"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E3",
+        "E5"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.click2houston.com/sports/2023/02/07/texans-demeco-ryans-on-coaching-style-players-dont-care-about-how-much-you-know-theyre-focused-on-how-much-you-care/",
+      "publisher": "KPRC 2 Click2Houston, Aaron Wilson",
+      "published": "2023-02-07",
+      "accessed": "2026-11-05",
+      "summary": "At his introduction Ryans puts relationships ahead of schemes, saying players care more about a coach's concern than his knowledge; he names Kyle Shanahan, Andy Reid and Gary Kubiak as influences, recounts his Alabama and Texans playing career and the 49ers' top defense, and wants players from winning programs to reset a team that went 11-38-1 over three years.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.si.com/nfl/texans/onsi/news/houston-texans-head-coach-demeco-ryans-playing-days-coaching-style-training-camp-bobby-slowik-jonathan-greenard",
+      "publisher": "Sports Illustrated (Texans On SI), Casey Smith",
+      "published": "2023-08-09",
+      "accessed": "2026-11-05",
+      "summary": "Camp piece: Ryans corrects mistakes on the spot and will not soften problems, the blunt style he wished he had as a player, though he prefers to highlight good work; Greenard says he gives it to you straight and expects greatness. Slowik is described as openly owning his own mistakes in offensive meetings. Team-beat site.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.clickondetroit.com/sports/2024/01/17/first-year-coach-demeco-ryans-transforms-texans-with-relentless-mindset/",
+      "publisher": "Associated Press via ClickOnDetroit, Kristie Rieken",
+      "published": "2024-01-17",
+      "accessed": "2026-11-05",
+      "summary": "AP playoff feature: Ryans demands maximum effort every snap, players call his energy and positivity infectious, he jumps and screams with players after big plays, and rookie Stroud says they share a mindset about winning and work and credits Ryans with easing his transition.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.click2houston.com/sports/2024/01/25/texans-demeco-ryans-named-pfwa-nfl-coach-of-the-year/",
+      "publisher": "KPRC 2 Click2Houston",
+      "published": "2024-01-25",
+      "accessed": "2026-11-05",
+      "summary": "The Pro Football Writers of America name Ryans coach of the year after Houston went from 3-13-1 to an AFC South title and a playoff win in his first season with rookie Stroud. An award notice; shows results, not personality.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.click2houston.com/sports/2024/02/27/calm-demeanor-why-texans-demeco-ryans-believes-cj-stroud-to-make-huge-jump-next-season-after-epic-rookie-year",
+      "publisher": "KPRC 2 Click2Houston, Aaron Wilson",
+      "published": "2024-02-27",
+      "accessed": "2026-11-05",
+      "summary": "At the combine Ryans praises Stroud's calm confidence spreading through the locker room, recalls being struck by his maturity during the pre-draft process, predicts a big second-year jump, treats each season as a fresh start, and wants competitive players with a relentless mindset who play for each other.",
+      "confidence": "high"
+    },
+    {
+      "id": "E6",
+      "url": "https://www.click2houston.com/sports/2025/02/13/very-hard-to-let-bobby-go-texans-demeco-ryans-reflects-on-decision-to-move-on-from-bobby-slowik",
+      "publisher": "KPRC 2 Click2Houston, Aaron Wilson",
+      "published": "2025-02-13",
+      "accessed": "2026-11-05",
+      "summary": "Ryans says letting Slowik go was very hard, calls him a close friend from San Francisco who helped him early in his coaching career, and cites the offense falling to 22nd in yards and 19th in scoring, feedback from key offensive players, and Stroud's career-high 52 sacks; introduces Nick Caley as the replacement.",
+      "confidence": "high"
+    },
+    {
+      "id": "E7",
+      "url": "https://sports.yahoo.com/texans-dc-matt-burke-appreciative-224342852.html",
+      "publisher": "Texans Wire via Yahoo Sports, Mark Lane",
+      "published": "2023-03-09",
+      "accessed": "2026-11-05",
+      "summary": "New coordinator Matt Burke thanks Ryans for trusting him to run the defense, calls Ryans's approach as player and coach impeccable, and says his job is to serve Ryans and lighten a first-year head coach's load. Burke's own words; a fan-network write-up.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

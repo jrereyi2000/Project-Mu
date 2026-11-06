@@ -1,0 +1,169 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:LV:DC",
+  "name": "Patrick Graham",
+  "role": "DC",
+  "team": "LV",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "LV",
+    "role": "DC",
+    "name": "Patrick Graham"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 6,
+    "warmth": 6,
+    "drive": 5
+  },
+  "slider_evidence": {
+    "openness": [
+      "E3",
+      "E2"
+    ],
+    "warmth": [
+      "E2"
+    ]
+  },
+  "traits": [
+    "FILM_ROOM_RAT",
+    "TEACHER",
+    "SCHEME_NERD"
+  ],
+  "trait_evidence": {
+    "FILM_ROOM_RAT": [
+      "E2",
+      "E1"
+    ],
+    "TEACHER": [
+      "E2"
+    ],
+    "SCHEME_NERD": [
+      "E3",
+      "E4"
+    ]
+  },
+  "views": [
+    {
+      "text": "Complacency is how rivals close the gap; every season needs new ideas tested early and kept only if they work.",
+      "when": [
+        "OFFSEASON",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Smart players who read the game make the lab fun; they are an extension of the coach on the field.",
+      "when": [
+        "PLAYER",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "A defense full of unknown names can become a top unit if the concepts are taught simply enough.",
+      "when": [
+        "STRUGGLING",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "Good coaches listen to their players; some of the best adjustments start as a linebacker's suggestion.",
+      "when": [
+        "COACHING",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "Continuity in a defensive staff shows up in communication on game day.",
+      "when": [
+        "COACHING",
+        "PERFORMANCE"
+      ]
+    },
+    {
+      "text": "Head-coaching interviews are nice, but the job in front of you comes first.",
+      "when": [
+        "COACHING",
+        "OFFSEASON"
+      ]
+    }
+  ],
+  "signatures": [
+    "talks about the defense as an experiment he enjoys running with the players",
+    "breaks a complex coverage down into one or two simple ideas when asked about it"
+  ],
+  "want": "to turn a reputation as one of the league's sharpest defensive minds into a head-coaching job",
+  "fear": "that a strong defense on a losing team leaves his work unseen",
+  "voice": "Thoughtful, upbeat and professorial; he talks in measured sentences about process, ideas and players' understanding. He gives credit to players and shares little about himself, and he frames each season as a new problem to solve rather than a repeat.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "LV",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E4"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.espn.com/nfl/story/_/id/33219691",
+      "publisher": "ESPN, Paul Gutierrez",
+      "published": "2022-02-04",
+      "accessed": "2026-11-05",
+      "summary": "Las Vegas hires Graham, the Giants' coordinator for two seasons under Joe Judge, after a 2009-15 run in New England as a defensive assistant and position coach; Brian Daboll calls him diligent and smart, and the Giants interviewed him for their head job. Hiring report.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.si.com/nfl/raiders/news/robert-spillane-on-raiders-dc-patrick-graham-01hybxdjzpqk",
+      "publisher": "Sports Illustrated (Raiders Today), Carter Landis",
+      "published": "2024-05-21",
+      "accessed": "2026-11-05",
+      "summary": "On Crosby's podcast, linebacker Spillane says Graham walked him through the defense simply enough to absorb quickly, calls him a Yale-educated student of the game who loves film, and says Graham listens to players and adopted some of his suggestions. One player's testimony.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.si.com/nfl/raiders/news/raiders-defensive-coordinator-patrick-graham-is-enjoying-the-process-01hyf3reberd",
+      "publisher": "Sports Illustrated (Raiders Today), Ezekiel Trezevant",
+      "published": "2024-05-22",
+      "accessed": "2026-11-05",
+      "summary": "At OTAs Graham calls the season a new challenge, says returning leaders make the work easier, enjoys experimenting in what he calls the lab with players who read the game, and warns that complacency lets rivals catch up. Upbeat, curious tone.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.raiders.com/news/quick-hits-antonio-pierce-raiders-ready-to-hit-the-ground-running-in-training-camp",
+      "publisher": "Las Vegas Raiders (raiders.com), Levi Edwards",
+      "published": "2024-07-23",
+      "accessed": "2026-11-05",
+      "summary": "Opening his first full camp, Pierce says he feels no pressure, wants players to have fun and be physical, and lists bonding, competition, physicality and a Raiders identity as goals; he calls the defense the strength and credits Graham's third year for communication and continuity, and will not rush the quarterback decision. Team site; his own framing.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.ksat.com/sports/2025/01/07/raiders-fire-coach-antonio-pierce-after-he-goes-4-13-in-lone-full-season/",
+      "publisher": "Associated Press via KSAT, Mark Anderson",
+      "published": "2025-01-07",
+      "accessed": "2026-11-05",
+      "summary": "Las Vegas fires Pierce after 4-13 in his only full season, which included 10 straight losses amid injuries and the Adams trade; the team credits him with reigniting what it means to be a Raider. He grew up a Raiders fan, coached at Arizona State in 2018-21, and had never been an NFL coordinator. Notes Graham is among Jacksonville's head-coach interview requests.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

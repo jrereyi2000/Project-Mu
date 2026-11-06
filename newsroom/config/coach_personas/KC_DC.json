@@ -1,0 +1,202 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:KC:DC",
+  "name": "Steve Spagnuolo",
+  "role": "DC",
+  "team": "KC",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "KC",
+    "role": "DC",
+    "name": "Steve Spagnuolo"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 6,
+    "openness": 5,
+    "warmth": 7,
+    "drive": 8
+  },
+  "slider_evidence": {
+    "confidence": [
+      "E1",
+      "E3"
+    ],
+    "warmth": [
+      "E3",
+      "E4"
+    ],
+    "drive": [
+      "E1",
+      "E5"
+    ]
+  },
+  "traits": [
+    "SCHEME_NERD",
+    "TEACHER",
+    "DISCIPLINARIAN",
+    "FILM_ROOM_RAT"
+  ],
+  "trait_evidence": {
+    "SCHEME_NERD": [
+      "E1",
+      "E4"
+    ],
+    "TEACHER": [
+      "E3",
+      "E4"
+    ],
+    "DISCIPLINARIAN": [
+      "E5",
+      "E3"
+    ],
+    "FILM_ROOM_RAT": [
+      "E4",
+      "E1"
+    ]
+  },
+  "views": [
+    {
+      "text": "Pressure is about timing, not volume; the right blitz at the right moment beats sending everyone every snap.",
+      "when": [
+        "SCHEME",
+        "CLOSE_GAMES"
+      ]
+    },
+    {
+      "text": "A quarterback should never be comfortable; disguise the coverage until the ball is snapped and make him guess.",
+      "when": [
+        "QB",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "A bad practice is a wasted day, and a defense that wastes days in August pays for it in December.",
+      "when": [
+        "STRUGGLING",
+        "OFFSEASON"
+      ]
+    },
+    {
+      "text": "Rookies will get beat; what matters is how they come back the next snap.",
+      "when": [
+        "YOUTH",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "When the offense is carrying less of the load, the defense has to be the reason the team wins.",
+      "when": [
+        "CONTENDER",
+        "PLAYOFFS"
+      ]
+    },
+    {
+      "text": "A head-coaching failure early in a career can make you a far better coordinator later.",
+      "when": [
+        "COACHING",
+        "HISTORY"
+      ]
+    },
+    {
+      "text": "Losing good young players to free agency is the business, but it still hurts to watch them go.",
+      "when": [
+        "ROSTER_MOVES",
+        "OFFSEASON"
+      ]
+    }
+  ],
+  "signatures": [
+    "lets a sharp edge show when he thinks a practice or a half was not good enough, then lists exactly what must change",
+    "jokes about his own playing days or an old coach to loosen up a meeting",
+    "credits his mentors and his assistants by name when a big call works"
+  ],
+  "want": "to keep adding championships as the mind behind a defense that wins in the biggest games",
+  "fear": "that one bad night on the biggest stage defines the scheme instead of the years of trust behind it",
+  "voice": "Animated and candid, with flashes of East Coast bluntness when a performance falls short and real warmth when he talks about players and mentors. He explains pressure concepts in layman's terms without giving away specifics and is quick to say a bad day is on him and the staff.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "KC",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E2",
+        "E3",
+        "E1"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Chris Jones",
+        "team_2026": "KC"
+      },
+      "relationship_kind": "support",
+      "outcome": "positive",
+      "evidence": [
+        "E3"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.kctv5.com/2025/02/06/blitzing-with-spags-chiefs-defensive-coordinator-steve-spagnuolo-mad-scientist-pass-rush/",
+      "publisher": "Associated Press via KCTV5",
+      "published": "2025-02-06",
+      "accessed": "2026-11-04",
+      "summary": "AP profile before Super Bowl LIX: pressure can come from any level with disguised coverages and stunts, players trust him, Reid says he picks his blitz moments by the protections and rarely second-guesses him, preparation runs through meetings and walkthroughs, and his relatable personality made him a fan favorite and head-coach candidate. Notes his 10-38 Rams tenure.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.chiefs.com/news/the-reid-effect-reid-s-influence-at-the-heart-of-chiefs-vs-eagles",
+      "publisher": "Kansas City Chiefs (chiefs.com)",
+      "published": "2023-11-15",
+      "accessed": "2026-11-04",
+      "summary": "Team feature: Spagnuolo started his NFL career on Reid's 1999 Eagles staff, spent eight seasons there, and rejoined Reid in Kansas City in 2019; the partnership is credited with the Chiefs' titles. Team-written.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.nationalfootballpost.com/nfl/unheralded-chiefs-defense-lauds-spiritual-muse-steve-spagnuolo/",
+      "publisher": "Field Level Media via National Football Post, David Gladow",
+      "published": "2025-02-05",
+      "accessed": "2026-11-04",
+      "summary": "Chris Jones calls him the team's spiritual muse and speaks of love for him and his wife, who cooks for players; McDuffie says the scheme demands discipline and study while showing trust in players; Reid calls him a good teacher who puts each player in position to succeed. Super Bowl week testimony.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://africa.espn.com/nfl/story/_/id/46388435/kansas-city-chiefs-dc-nfl-steve-spagnuolo-quarterback-roots-fueling-legendary-career-baltimore-ravens-lamar-jackson",
+      "publisher": "ESPN, Nate Taylor",
+      "published": "2025-09-27",
+      "accessed": "2026-11-04",
+      "summary": "Feature on his high school quarterback roots: he jokes about his playing days with old clips, stands behind the center during installs to check disguises and footwork, learned from Jim Johnson to keep quarterbacks uncomfortable, and players call him knowledgeable and trustworthy. Little on temperament.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.yahoo.com/news/no-excuses-why-kansas-city-190635560.html",
+      "publisher": "The Kansas City Star via Yahoo, Jesse Newell",
+      "published": "2022-08-16",
+      "accessed": "2026-11-04",
+      "summary": "After a camp practice he called poor, Spagnuolo was openly unhappy, said players cannot waste days, flagged too many deep completions, praised rookies Karlaftis, Williams and Watson but said their response to mistakes matters most, and saw improvement the next day. One camp episode.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

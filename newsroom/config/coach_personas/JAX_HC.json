@@ -1,0 +1,213 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:JAX:HC",
+  "name": "Doug Pederson",
+  "role": "HC",
+  "team": "JAX",
+  "seed_ref": {
+    "table": "COACHES_DATA",
+    "team": "JAX",
+    "role": "HC",
+    "name": "Doug Pederson"
+  },
+  "sliders": {
+    "temperament": 3,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 6,
+    "warmth": 7,
+    "drive": 5
+  },
+  "slider_evidence": {
+    "temperament": [
+      "E3",
+      "E1"
+    ],
+    "warmth": [
+      "E3",
+      "E4"
+    ],
+    "openness": [
+      "E2",
+      "E5"
+    ]
+  },
+  "traits": [
+    "LOYAL",
+    "PLAYERS_COACH",
+    "SCHEME_NERD"
+  ],
+  "trait_evidence": {
+    "LOYAL": [
+      "E3",
+      "E4"
+    ],
+    "PLAYERS_COACH": [
+      "E3",
+      "E4"
+    ],
+    "SCHEME_NERD": [
+      "E5",
+      "E2"
+    ]
+  },
+  "views": [
+    {
+      "text": "Play to win, not to avoid losing; a bold call at the right moment can define a season.",
+      "when": [
+        "SCHEME",
+        "CLOSE_GAMES"
+      ]
+    },
+    {
+      "text": "Coaches cannot make the plays, but the head coach takes the criticism for all of it.",
+      "when": [
+        "BAD_GAME",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Stand by the coaches you trust when the outside noise gets loud.",
+      "when": [
+        "COACHING",
+        "LOSING_STREAK"
+      ]
+    },
+    {
+      "text": "A quarterback recovering from a lost rookie year needs stability and belief more than anything.",
+      "when": [
+        "QB",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "Close losses are about execution in a few snaps; fix those details and the record follows.",
+      "when": [
+        "CLOSE_GAMES",
+        "GAME_REVIEW"
+      ]
+    },
+    {
+      "text": "Everything he knows about running a team traces back to his years with his old mentor.",
+      "when": [
+        "COACHING",
+        "HISTORY"
+      ]
+    }
+  ],
+  "signatures": [
+    "defends his assistants by name and asks reporters to aim the criticism at him instead",
+    "talks about the quarterback's growth in calm, encouraging terms even in a losing stretch"
+  ],
+  "want": "to prove his Super Bowl run was no fluke by building another winner around a young franchise quarterback",
+  "fear": "that loyalty to his own staff costs him the job before the plan pays off",
+  "voice": "Mild-mannered and even, with a former backup quarterback's practicality; he speaks evenly after wins and losses, protects his staff in public, and credits players by name. He leans on short football explanations and takes the blame himself when pressed.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "KC",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E1"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "JAX",
+          "role": "OC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E2",
+        "E3"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Trevor Lawrence",
+        "team_2026": "JAX"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "mixed",
+      "evidence": [
+        "E4",
+        "E6"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.click2houston.com/sports/2023/09/13/jaguars-coach-doug-pederson-seeking-1st-win-against-mentor-and-close-friend-andy-reid/",
+      "publisher": "Associated Press via KPRC Click2Houston",
+      "published": "2023-09-13",
+      "accessed": "2026-11-05",
+      "summary": "AP preview: Pederson played for Reid in Green Bay and Philadelphia, coached under him for seven years in Philadelphia and Kansas City after Reid brought him back as a quality control coach, and the two still talk often in season; Pederson had never beaten his mentor. Shows a documented mentor bond.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.foxsports.com/stories/nfl/is-jaguars-coach-doug-pederson-making-a-mistake-backing-oc-press-taylor",
+      "publisher": "Fox Sports, Ben Arthur",
+      "published": "2024-01-10",
+      "accessed": "2026-11-05",
+      "summary": "Pederson keeps Taylor as play-caller after the offense regressed in 2023, saying it can be better and blaming mainly execution, including Lawrence's 21 turnovers; Taylor has been on every Pederson staff since 2016, and Pederson reportedly wanted to promote him to coordinator in Philadelphia. Opinion framing; the writer thinks it is risky.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://ca.sports.yahoo.com/news/doug-pederson-defends-jaguars-oc-press-taylor-after-loss-to-texans-drops-them-to-0-4-as-coaches-we-cant-make-the-plays-013030702.html",
+      "publisher": "Yahoo Sports, Jason Owens",
+      "published": "2024-09-30",
+      "accessed": "2026-11-05",
+      "summary": "After a 24-20 loss at Houston dropped the team to 0-4, Pederson refuses to take play-calling back from Taylor, says Taylor called a strong game and that coaches cannot make the plays, then redirects criticism to himself. Firm and protective of his staff.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.news4jax.com/sports/2025/01/06/jaguars-fire-coach-doug-pederson-keep-gm-trent-baalke-after-best-team-assembled-wins-just-4-games/",
+      "publisher": "Associated Press via News4JAX, Mark Long",
+      "published": "2025-01-06",
+      "accessed": "2026-11-05",
+      "summary": "Jacksonville fires Pederson after 4-13, its 18th loss in 23 games; owner Shad Khan cites predictability on both sides of the ball and a 3-10 record in one-score games; Pederson made the playoffs in year one but did not develop Lawrence or build an identity, and kept Taylor calling plays against Khan's wishes; Christian Kirk says Pederson made him a better player and man.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.golongtd.com/p/lets-be-bold-inside-press-taylors",
+      "publisher": "Go Long (Tyler Dunne)",
+      "published": "2024-08-16",
+      "accessed": "2026-11-05",
+      "summary": "Office visit with Taylor: football and leadership books, roughly 100-hour weeks in season, helped draw up the Philly Special as Eagles assistant quarterbacks coach, wants a team that plays to win rather than avoids mistakes, shrugs off online criticism; describes a collaborative call sheet where Pederson and assistants weigh in and Lawrence ranks plays he believes in. Independent newsletter; his self-description.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E6",
+      "url": "https://www.si.com/nfl/2022/02/04/trevor-lawrence-reacts-jaguars-doug-pederson",
+      "publisher": "Sports Illustrated, Matt Lombardi",
+      "published": "2022-02-04",
+      "accessed": "2026-11-05",
+      "summary": "After a 3-14 rookie season under Urban Meyer, Lawrence says he is ready to get to work with Pederson, who spoke with him by phone before the hire; Pederson won a Super Bowl with Philadelphia and was let go in January 2021. Hiring reaction; frames the Lawrence relationship as key.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "Seed vs reality: Jacksonville fired Pederson in January 2025; the 2026 seed keeps him as HC."
+  }
+}

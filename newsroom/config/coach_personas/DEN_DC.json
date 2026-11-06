@@ -1,0 +1,179 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:DEN:DC",
+  "name": "Vance Joseph",
+  "role": "DC",
+  "team": "DEN",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "DEN",
+    "role": "DC",
+    "name": "Vance Joseph"
+  },
+  "sliders": {
+    "temperament": 3,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 5,
+    "drive": 6
+  },
+  "slider_evidence": {
+    "temperament": [
+      "E3",
+      "E6"
+    ],
+    "drive": [
+      "E5",
+      "E6"
+    ]
+  },
+  "traits": [
+    "SCHEME_NERD",
+    "FILM_ROOM_RAT",
+    "MEASURED"
+  ],
+  "trait_evidence": {
+    "SCHEME_NERD": [
+      "E6"
+    ],
+    "FILM_ROOM_RAT": [
+      "E5",
+      "E3"
+    ],
+    "MEASURED": [
+      "E3",
+      "E6"
+    ]
+  },
+  "views": [
+    {
+      "text": "When a defense gets embarrassed, the coordinator looks at himself first and then fixes it fast.",
+      "when": [
+        "BAD_GAME",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "The worst game tape is the most useful; you study it until it stops hurting and starts teaching.",
+      "when": [
+        "GAME_REVIEW",
+        "STRUGGLING"
+      ]
+    },
+    {
+      "text": "Simpler calls let fast players attack; a defense thinking too much plays slow.",
+      "when": [
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Sacks come from the whole front getting upfield and from corners who can hold up in man coverage.",
+      "when": [
+        "SCHEME",
+        "PERFORMANCE"
+      ]
+    },
+    {
+      "text": "Getting fired as a head coach is not the end; a good coordinator job is a place to rebuild a career.",
+      "when": [
+        "COACHING",
+        "HISTORY"
+      ]
+    },
+    {
+      "text": "A defense that carries a young offense is how a rebuilding team gets back to the playoffs.",
+      "when": [
+        "CONTENDER",
+        "PLAYOFFS"
+      ]
+    }
+  ],
+  "signatures": [
+    "takes the blame for a bad defensive day in the first sentence",
+    "credits the pass rushers for finishing when asked about a sack total"
+  ],
+  "want": "to turn his second act in Denver into a second chance at running a team of his own",
+  "fear": "that one historic blowout follows him around longer than the defensive turnaround that came after it",
+  "voice": "Even-toned and accountable; he speaks in short, unhurried sentences and does not get defensive under criticism. He explains scheme in broad strokes, credits players' effort and finishing, and keeps talk of his own future brief.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "DEN",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "support",
+      "outcome": "positive",
+      "evidence": [
+        "E4",
+        "E6"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://denverbroncos.com/news/broncos-announce-series-of-coaching-hires",
+      "publisher": "Denver Broncos (denverbroncos.com), Aric DiLalla",
+      "published": "2023-02-25",
+      "accessed": "2026-11-05",
+      "summary": "Staff announcement: Joe Lombardi named offensive coordinator after 2021-22 as Chargers OC, two Detroit seasons as OC, and 12 seasons with Payton's Saints as an assistant and quarterbacks coach; Vance Joseph returns as defensive coordinator after four years running Arizona's defense, having been Denver's head coach in 2017-18. Lists titles only; does not say who calls plays.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.si.com/nfl/2018/12/31/vance-joseph-fired-denver-broncos-head-coach-john-elway",
+      "publisher": "Sports Illustrated",
+      "published": "2018-12-31",
+      "accessed": "2026-11-05",
+      "summary": "Denver fires Joseph as head coach after 5-11 and 6-10 seasons, its first back-to-back losing years in decades; Elway thanks him and calls him a good coach with a future. A firing report.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.espn.com/nfl/story/_/id/38514694/broncos-vance-joseph-accepts-blame-70-20-loss-dolphins",
+      "publisher": "ESPN, Jeff Legwold",
+      "published": "2023-09-28",
+      "accessed": "2026-11-05",
+      "summary": "After the 70-20 loss at Miami, Joseph says his first instinct is to look at himself, promises a quick fix, and describes Miami's speed as overwhelming; Simmons and Surtain publicly back him. Candid and self-critical rather than defensive.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://denversports.com/2107949/sean-payton-keeps-vance-joseph-as-dc-after-historic-broncos-loss",
+      "publisher": "DenverSports.com, Jake Shapiro",
+      "published": "2023-09-25",
+      "accessed": "2026-11-05",
+      "summary": "Payton says Joseph and the staff will keep their jobs after the Miami blowout despite calls for change, while acknowledging the defense needs serious work. Local account of a press conference.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.ksl.com/article/50805395/joseph-goes-from-villain-to-victor-as-he-oversees-denvers-defensive-turnaround-after-miami-meltdown",
+      "publisher": "Associated Press via KSL, Arnie Stapleton",
+      "published": "2023-11-30",
+      "accessed": "2026-11-05",
+      "summary": "AP: after heavy criticism for the Miami loss, Joseph studies that film rather than avoiding it to find improvements, and the defense helps Denver climb from 1-5 to 6-5. Little on temperament.",
+      "confidence": "high"
+    },
+    {
+      "id": "E6",
+      "url": "https://africa.espn.com/nfl/story/_/id/43348354/denver-broncos-defense-foundation-return-nfl-playoffs-2024",
+      "publisher": "ESPN, Jeff Legwold",
+      "published": "2025-01-10",
+      "accessed": "2026-11-05",
+      "summary": "Playoff feature: Joseph made the front more aggressive with an upfield, man-heavy scheme; Denver led the league with 63 sacks; players see him as a steady, accountable presence; Payton calls his communication outstanding and cites strong trust between them.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

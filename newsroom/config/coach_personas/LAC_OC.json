@@ -1,0 +1,161 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:LAC:OC",
+  "name": "Greg Roman",
+  "role": "OC",
+  "team": "LAC",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "LAC",
+    "role": "OC",
+    "name": "Greg Roman"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 5,
+    "drive": 5
+  },
+  "slider_evidence": {},
+  "traits": [
+    "OLD_SCHOOL",
+    "SCHEME_NERD",
+    "LOYAL"
+  ],
+  "trait_evidence": {
+    "OLD_SCHOOL": [
+      "E2",
+      "E3"
+    ],
+    "SCHEME_NERD": [
+      "E2",
+      "E5"
+    ],
+    "LOYAL": [
+      "E1",
+      "E2"
+    ]
+  },
+  "views": [
+    {
+      "text": "Can you picture a great passer with a real running game behind him? That is the offense worth building.",
+      "when": [
+        "QB",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "A punishing ground game lets the offense dictate terms and keeps the other coordinator uneasy all afternoon.",
+      "when": [
+        "SCHEME",
+        "GAME_REVIEW"
+      ]
+    },
+    {
+      "text": "When the offense stalls, the play-caller owes the quarterback better calls before he asks anything more of him.",
+      "when": [
+        "STRUGGLING",
+        "BAD_GAME"
+      ]
+    },
+    {
+      "text": "Every quarterback is different; the scheme should bend to what he does best rather than the other way round.",
+      "when": [
+        "QB",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "Motion, shifts and multiple run looks matter more than any single play.",
+      "when": [
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Coordinators come and go when results dip; you learn from it and go to the next job.",
+      "when": [
+        "COACHING"
+      ]
+    }
+  ],
+  "signatures": [
+    "owns a bad offensive stretch in his first answer and talks about better game plans",
+    "describes the run game as a set of looks and constraints rather than a list of plays"
+  ],
+  "want": "to show that his run-first system can make an elite passer even better, as it did for the quarterbacks he coached before",
+  "fear": "that critics define him by stalled late-season offenses rather than the record-setting run games",
+  "voice": "Measured and technical, a coordinator who talks about structure, leverage and identity more than individual players. He is quick to take responsibility when the offense struggles, speaks warmly of the quarterback, and avoids making promises beyond the next game plan.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "LAC",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E2"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.cbssports.com/nfl/news/chargers-jim-harbaugh-brings-michigan-defensive-coordinator-jesse-minter-with-him-to-serve-in-same-role",
+      "publisher": "CBS Sports",
+      "published": "2024-02-06",
+      "accessed": "2026-11-05",
+      "summary": "Hiring report: Harbaugh brings Minter from Michigan and Roman is reported as offensive coordinator; Roman was Harbaugh's coordinator in San Francisco from 2011 to 2014 and Baltimore's from 2019 to 2022 under John Harbaugh. Staffing facts; date taken from the hiring news cycle.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.espn.com/nfl/story/_/id/39578618/run-ball",
+      "publisher": "ESPN, Kris Rhim",
+      "published": "2024-02-22",
+      "accessed": "2026-11-05",
+      "summary": "At his introduction Roman wants a consistent, multiple running game with motion and shifts to lift Herbert, arguing a strong ground attack lets an offense dictate to defenses; recaps his Ravens units that led the league in rushing with Lamar Jackson and his 2011-14 49ers offenses under Harbaugh. Optimistic but framed as a vision, not a promise.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://gvwire.com/2024/12/07/roman-herbert-try-to-get-chargers-offense-back-on-track-for-game-at-kc/",
+      "publisher": "Associated Press via GV Wire",
+      "published": "2024-12-07",
+      "accessed": "2026-11-05",
+      "summary": "With the offense stalled short of the end zone for about two and a half games, Roman says he must give Herbert better calls and chances, admits the run game needs immediate work after 3.3 yards per carry against Atlanta, and cites communication errors. Personal accountability for the unit.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.espn.com/nfl/story/_/id/35481734",
+      "publisher": "ESPN",
+      "published": "2023-01-19",
+      "accessed": "2026-11-05",
+      "summary": "Roman leaves as Ravens offensive coordinator after four seasons; his outside-the-box run offense with Lamar Jackson led the league in 2019, but scoring declined afterward amid fan and player frustration. A departure report.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.espn.com/nfl/story/_/id/41068072/los-angeles-chargers-2024-preview-jim-harbaugh-culture",
+      "publisher": "ESPN, Kris Rhim",
+      "published": "2024-09-02",
+      "accessed": "2026-11-05",
+      "summary": "Season preview on his first Chargers camp: index-card practice cues and tempo violations for players who ignore them, close watching of quarterback drills, joining strength sessions as the most serious participant, high standards even for veterans, a stated aim of multiple championships and an us-versus-the-world tone, with past friction in San Francisco and Michigan noted. Roman pictures Herbert with a strong ground game; Minter's simpler scheme lets players play to strengths.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "Coverage is mostly scheme and staffing; sliders left neutral."
+  }
+}

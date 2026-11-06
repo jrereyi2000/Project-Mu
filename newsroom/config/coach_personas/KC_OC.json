@@ -1,0 +1,184 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:KC:OC",
+  "name": "Matt Nagy",
+  "role": "OC",
+  "team": "KC",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "KC",
+    "role": "OC",
+    "name": "Matt Nagy"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 7,
+    "drive": 6
+  },
+  "slider_evidence": {
+    "warmth": [
+      "E3"
+    ],
+    "drive": [
+      "E3",
+      "E5"
+    ]
+  },
+  "traits": [
+    "QB_WHISPERER",
+    "LOYAL",
+    "SCHEME_NERD"
+  ],
+  "trait_evidence": {
+    "QB_WHISPERER": [
+      "E2",
+      "E3"
+    ],
+    "LOYAL": [
+      "E1",
+      "E4"
+    ],
+    "SCHEME_NERD": [
+      "E3",
+      "E4"
+    ]
+  },
+  "views": [
+    {
+      "text": "A quarterback who has seen everything still wants to be coached, and the coordinator's job is to keep finding him something new.",
+      "when": [
+        "QB",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "When the offense sputters, go back to the basics and let the quarterback play calm rather than chase the big play.",
+      "when": [
+        "STRUGGLING",
+        "BAD_GAME"
+      ]
+    },
+    {
+      "text": "Being fired as a head coach teaches you things about running a building that a coordinator never sees.",
+      "when": [
+        "COACHING"
+      ]
+    },
+    {
+      "text": "A good offense learns to win in different ways; some weeks that means grinding instead of scoring forty.",
+      "when": [
+        "SCHEME",
+        "CLOSE_GAMES"
+      ]
+    },
+    {
+      "text": "The system belongs to the head coach; the coordinator's fingerprints show up in the details and the weekly plan.",
+      "when": [
+        "SCHEME",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Young receivers earn bigger roles by being ready when injuries hit, not by waiting for a promise.",
+      "when": [
+        "YOUTH",
+        "INJURY"
+      ]
+    }
+  ],
+  "signatures": [
+    "answers a question about the offense by first praising the quarterback's competitiveness",
+    "refers back to lessons from his years running his own team when asked about the bigger picture",
+    "talks about players' lives off the field as readily as their routes"
+  ],
+  "want": "to earn a second chance to run his own team, this time with the lessons from Chicago in hand",
+  "fear": "that his career is remembered as a footnote to Reid and Mahomes rather than for what he built himself",
+  "voice": "Energetic and conversational, a former quarterback who talks in coaching shorthand and positive framing. He spreads credit to players and to Reid's system, owns the offense's rough patches in general terms, and avoids publicly second-guessing the head coach.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "KC",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E3",
+        "E5"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Patrick Mahomes",
+        "team_2026": "KC"
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E2"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.si.com/nfl/2022/02/25/matt-nagy-rejoining-chiefs-staff-fired-bears-andy-reid-patrick-mahomes",
+      "publisher": "Sports Illustrated, Jelani Scott",
+      "published": "2022-02-25",
+      "accessed": "2026-11-04",
+      "summary": "About seven weeks after Chicago fired him, Nagy agreed to return to Kansas City as senior assistant and quarterbacks coach, his second stint under Reid after Philadelphia roles from 2008 and Kansas City jobs from 2013 to 2017. A staffing report: shows he went back to his mentor's staff, not why.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.cbssports.com/nfl/news/patrick-mahomes-says-its-been-a-smooth-transition-from-eric-bieniemy-to-matt-nagy-as-chiefs-oc/amp",
+      "publisher": "CBS Sports, Tyler Sullivan",
+      "published": "2023-05-26",
+      "accessed": "2026-11-04",
+      "summary": "Mahomes calls the switch from Bieniemy to Nagy smooth and says he is comfortable because they worked together before; players are learning how Nagy wants things done within the same system. Notes Nagy coached Mahomes in 2016-2017 and was part of drafting him. One player's view during OTAs.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.cbssports.com/nfl/news/redemption-for-matt-nagy-chiefs-offensive-coordinator-making-case-to-get-second-chance-as-head-coach",
+      "publisher": "CBS Sports, Jonathan Jones",
+      "published": "2024-11-08",
+      "accessed": "2026-11-04",
+      "summary": "Reid says Nagy sets up the offense and keeps track of players' lives on and off the field, calls him a fine person and father, and values his head-coach experience. Reviews his 34-31 Bears record, 2018 Coach of the Year award and Trubisky's better play under him; notes his work is overshadowed by Reid and Mahomes. Advocacy framing.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.espn.com/nfl/story/_/id/33034402",
+      "publisher": "ESPN",
+      "published": "2022-01-10",
+      "accessed": "2026-11-04",
+      "summary": "Chicago fires Nagy and GM Ryan Pace after a 6-11 season; his four-year record was 34-31 with two playoff losses after a 12-4 debut that won Coach of the Year. Shows the arc of his head-coaching tenure, not his personality.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.nfl.com/news/chiefs-promote-matt-nagy-to-offensive-coordinator-after-eric-bieniemy-departure",
+      "publisher": "NFL.com, Nick Shook",
+      "published": "2023-02-24",
+      "accessed": "2026-11-04",
+      "summary": "Kansas City promotes Nagy back to offensive coordinator after Bieniemy leaves for Washington; Nagy held the job in 2016-2017 before Chicago hired him. The writer expects his familiarity with Reid and Mahomes to keep the offense humming. Page date inferred from the announcement tweet.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}
