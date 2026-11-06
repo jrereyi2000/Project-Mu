@@ -1,0 +1,211 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:JAX:OC",
+  "name": "Grant Udinski",
+  "role": "OC",
+  "team": "JAX",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "JAX",
+    "role": "OC",
+    "name": "Grant Udinski"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 6,
+    "warmth": 6,
+    "drive": 8
+  },
+  "slider_evidence": {
+    "openness": [
+      "E2",
+      "E3"
+    ],
+    "warmth": [
+      "E2",
+      "E3"
+    ],
+    "drive": [
+      "E1",
+      "E4",
+      "E5"
+    ]
+  },
+  "traits": [
+    "QB_WHISPERER",
+    "SCHEME_NERD",
+    "FILM_ROOM_RAT"
+  ],
+  "trait_evidence": {
+    "QB_WHISPERER": [
+      "E2",
+      "E4"
+    ],
+    "SCHEME_NERD": [
+      "E2",
+      "E3"
+    ],
+    "FILM_ROOM_RAT": [
+      "E4"
+    ]
+  },
+  "views": [
+    {
+      "text": "Never call a run that does not fit the back carrying the ball; the play serves the player.",
+      "when": [
+        "SCHEME",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "Be fundamentally sound, attack, and master the situations; toughness is part of the scheme.",
+      "when": [
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "The quarterback position is human; the relationship takes time and has to run both ways.",
+      "when": [
+        "QB",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "A coordinator who does not call plays still owns the plan; the title matters less than the work.",
+      "when": [
+        "COACHING"
+      ]
+    },
+    {
+      "text": "A young coach's age matters less than whether players trust that he can help them.",
+      "when": [
+        "COACHING",
+        "ROSTER_MOVES"
+      ]
+    },
+    {
+      "text": "Quarterback development is preparation: what he sees on Wednesday is what he plays on Sunday.",
+      "when": [
+        "YOUTH",
+        "QB"
+      ]
+    },
+    {
+      "text": "A big season buys a raise and a longer look, not a pass on next year's work.",
+      "when": [
+        "CONTENDER",
+        "OFFSEASON"
+      ]
+    }
+  ],
+  "signatures": [
+    "praises a running back's style in vivid, almost fan-like terms before explaining the concept",
+    "credits the head coach and staff first when the offense is praised",
+    "talks about relationships with quarterbacks as something earned over time"
+  ],
+  "want": "to become the NFL's youngest head coach on the strength of the quarterback development and offensive design he has built behind more famous play-callers",
+  "fear": "that because he does not call the plays, the credit for Jacksonville's offense goes elsewhere and his ascent stalls",
+  "voice": "Enthusiastic, polite and collaborative; he speaks fast about core values, situational football and players' strengths and rarely about himself. He defers to the head coach on play-calling without any visible frustration and frames his own role as service to the team. Coverage of him is mostly about his age and rise, so his public voice is a short record.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "JAX",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E2",
+        "E5"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "MIN",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Trevor Lawrence",
+        "team_2026": "JAX"
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E2",
+        "E5"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.news4jax.com/sports/2025/02/06/jaguars-hire-rising-star-grant-udinski-as-teams-offensive-coordinator",
+      "publisher": "News4JAX, Justin Barney",
+      "published": "2025-02-06",
+      "accessed": "2026-11-06",
+      "summary": "Jacksonville hires the 29-year-old, younger than several of its players, as offensive coordinator; Coen will call plays. Path: Baylor graduate assistant, Panthers coaching assistant under Matt Rhule, then three seasons with Kevin O'Connell in Minnesota, last as assistant coordinator and assistant quarterbacks coach. Coen's statement cites his knowledge, energy and winning mindset. Hiring facts.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.jaguars.com/news/phenomenal-opportunity-for-jaguars-oc-grant-udinski-to-work-with-lawrence-and-star-playmakers",
+      "publisher": "Jacksonville Jaguars (jaguars.com), John Oehser",
+      "published": "2025-02-13",
+      "accessed": "2026-11-06",
+      "summary": "First press conference: he and Coen see offense alike philosophically and schematically, and he was drawn to Coen as a person; he lists being fundamentally sound, attacking, situationally sharp and tough as core values, calls working with Trevor Lawrence a phenomenal chance, says quarterback relationships take time and must go both ways, and has no qualms about not calling plays. Known for helping develop quarterbacks, including J.J. McCarthy. Team site.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.si.com/nfl/jaguars/onsi/jacksonville-udinski-on-importance-top-running-backs-roster",
+      "publisher": "Sports Illustrated (Jaguar Report), Jared Feinberg",
+      "published": "2025-11-23",
+      "accessed": "2026-11-06",
+      "summary": "In season he praises rookie Bhayshul Tuten's physical running and says Tuten and Travis Etienne Jr. can both run the key concepts, but the staff will not call a run that does not suit the back carrying it; plays are built around each player's strengths. Enthusiastic about players, measured in explaining the plan.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.si.com/nfl/browns/onsi/news/cleveland-browns-30-year-old-head-coach-candidate-grant-udinski-has-inspiring-story-01kethe7d3t5",
+      "publisher": "Sports Illustrated (Browns OnSI), Nick Pedone",
+      "published": "2026-01-13",
+      "accessed": "2026-11-06",
+      "summary": "As a Browns head-coaching candidate at 30: he reportedly lived in his car at 23 before Phil Snow took him in, then started at Baylor; credited with helping revive Sam Darnold in Minnesota, where sources felt his departure hurt quarterback preparation and pass design; Lawrence threw a career-high 29 touchdowns in 2025, though Udinski did not call plays. Reported, partly secondhand.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E5",
+      "url": "https://gmg-wjxt-prod.cdn.arcpublishing.com/sports/2026/01/27/grant-udinski-anthony-campanile-both-returning-to-jaguars-after-head-coach-interest",
+      "publisher": "News4JAX, Justin Barney",
+      "published": "2026-01-27",
+      "accessed": "2026-11-06",
+      "summary": "He withdraws from Cleveland's head-coaching search after two interviews, misses out on Buffalo when the Bills promote Joe Brady, and returns to Jacksonville with a raise. Credits Coen and Udinski with turning a bottom offense into one of the best and Lawrence into an MVP finalist. No quotes.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "New seat 2026 (JAX OC since 2025, retained January 2026 after head-coaching interviews). Five sources, 2025-02-06 to 2026-01-27; no 2026 offseason press conference was found. Not a play-caller; temperament, sociability and confidence stay at 5."
+  }
+}

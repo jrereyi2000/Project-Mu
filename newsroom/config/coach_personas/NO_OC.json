@@ -1,0 +1,204 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:NO:OC",
+  "name": "Doug Nussmeier",
+  "role": "OC",
+  "team": "NO",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "NO",
+    "role": "OC",
+    "name": "Doug Nussmeier"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 6,
+    "drive": 5
+  },
+  "slider_evidence": {
+    "warmth": [
+      "E2",
+      "E5"
+    ]
+  },
+  "traits": [
+    "QB_WHISPERER",
+    "TEACHER",
+    "LOYAL"
+  ],
+  "trait_evidence": {
+    "QB_WHISPERER": [
+      "E3",
+      "E5"
+    ],
+    "TEACHER": [
+      "E2"
+    ],
+    "LOYAL": [
+      "E1",
+      "E2"
+    ]
+  },
+  "views": [
+    {
+      "text": "A rookie quarterback grows fastest in a scheme built around what he already does well.",
+      "when": [
+        "QB",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "A coordinator who does not call plays earns his place by teaching the system and keeping the communication clean.",
+      "when": [
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Every quarterback learns differently; the coach's job is to make a complex plan simple for that one player.",
+      "when": [
+        "QB",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "Following a head coach you believe in matters more than the size of the title.",
+      "when": [
+        "COACHING",
+        "ROSTER_MOVES"
+      ]
+    },
+    {
+      "text": "Coming back to the team that drafted you as a player carries its own weight.",
+      "when": [
+        "HISTORY",
+        "OFFSEASON"
+      ]
+    },
+    {
+      "text": "Draft position matters less than how a quarterback handles the work once he arrives.",
+      "when": [
+        "QB",
+        "DRAFT"
+      ]
+    }
+  ],
+  "signatures": [
+    "lists former pupils by name when asked about developing a quarterback",
+    "defers to the head coach on play-calling and game-day decisions",
+    "mentions his family's quarterback lineage with quiet pride"
+  ],
+  "want": "to see the young quarterback he helped build become a winner in New Orleans, closing the circle with the franchise that drafted him",
+  "fear": "that a stalled offense gets pinned on the coordinator who does not call the plays",
+  "voice": "A veteran quarterback teacher with a low public profile; coverage rarely quotes him. He is described as a clear communicator who simplifies complicated concepts and defers to the head coach on play-calling. Thin evidence, so his public voice here is mostly inferred from his role and record.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "NO",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E2"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Jalen Hurts",
+        "team_2026": "PHI"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E3"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Tyler Shough",
+        "team_2026": "NO"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E5"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Garrett Nussmeier",
+        "team_2026": "KC"
+      },
+      "relationship_kind": "support",
+      "outcome": "positive",
+      "evidence": [
+        "E5"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.inquirer.com/eagles/saints-hire-doug-nussmeier-eagles-offensive-coordinator-20250220.html",
+      "publisher": "Philadelphia Inquirer, Olivia Reiner",
+      "published": "2025-02-20",
+      "accessed": "2026-11-06",
+      "summary": "Philadelphia's 2024 quarterbacks coach, who worked with Jalen Hurts in the Super Bowl season, leaves to be Kellen Moore's offensive coordinator in New Orleans after working with Moore in Dallas and Los Angeles; notes he was a Saints draft pick and backup and that his son is LSU's starter. Facts only.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://louisianaradionetwork.com/2025/02/20/doug-nussmeier-tapped-to-take-the-reins-as-new/",
+      "publisher": "Louisiana Radio Network, Joe Gallinaro",
+      "published": "2025-02-20",
+      "accessed": "2026-11-06",
+      "summary": "Entering his 25th year coaching at 54, with coordinator jobs at Alabama, Michigan and Florida; a podcast host explains the fit: he followed Moore through his last three stops, Moore calls plays, and Nussmeier's job is to install and teach the offense and keep communication clean, perhaps helping with game plans. Secondhand analysis.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.neworleanssaints.com/news/doug-nussmeier-offensive-coordinator-2025-new-orleans-saints-coaches-profile",
+      "publisher": "New Orleans Saints (neworleanssaints.com)",
+      "published": "2025-07-07",
+      "accessed": "2026-11-06",
+      "summary": "Team profile: a 1994 Saints fourth-round quarterback out of Idaho, he has coached Hurts, Justin Herbert, Dak Prescott and A.J. McCarron, and eight college passers drafted in the first two rounds. Results, not quotes or personality. Team site.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.audacy.com/wwl/local-sports/saints/top-13-quotes-from-loomis-kellen-moore-to-end-saints-season",
+      "publisher": "WWL (Audacy), Jeff Nowak",
+      "published": "2026-01-08",
+      "accessed": "2026-11-06",
+      "summary": "Season wrap: Moore says the team feels great about rookie Tyler Shough, who improved a great deal through the year and finished as the starter, while the 6-11 team did not win enough. Context for the quarterback room he helped coach; Nussmeier is not quoted.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.neworleanssaints.com/team/coaches-roster/doug-nussmeier",
+      "publisher": "New Orleans Saints (neworleanssaints.com), coach bio",
+      "published": "2026-08-01",
+      "accessed": "2026-11-06",
+      "summary": "Team bio as of the 2026 preseason (undated page; date approximate): Idaho's record passer and 1993 Walter Payton Award winner; long coaching path through the CFL, colleges, the Rams, Cowboys, Chargers and Eagles; with Moore he built a scheme around Shough, a PFWA All-Rookie pick, as the team went 5-4 in his starts. Married with three children; son Garrett, LSU's quarterback, was a 2026 seventh-round pick of Kansas City.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "New seat 2026 (NO OC since 2025). Thin coverage: five sources, 2025-02-20 to the 2026 preseason, almost none quoting him; sliders stay at 5 except warmth. E5 is an undated team bio, dated approximately. The Garrett Nussmeier tie is his son (support, positive) for JR to keep or drop."
+  }
+}

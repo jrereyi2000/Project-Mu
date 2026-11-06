@@ -1,0 +1,212 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:HOU:OC",
+  "name": "Nick Caley",
+  "role": "OC",
+  "team": "HOU",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "HOU",
+    "role": "OC",
+    "name": "Nick Caley"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 6,
+    "warmth": 6,
+    "drive": 7
+  },
+  "slider_evidence": {
+    "openness": [
+      "E1",
+      "E5"
+    ],
+    "warmth": [
+      "E1",
+      "E4"
+    ],
+    "drive": [
+      "E2",
+      "E3"
+    ]
+  },
+  "traits": [
+    "SCHEME_NERD",
+    "FILM_ROOM_RAT",
+    "PERFECTIONIST",
+    "TEACHER"
+  ],
+  "trait_evidence": {
+    "SCHEME_NERD": [
+      "E2",
+      "E3"
+    ],
+    "FILM_ROOM_RAT": [
+      "E3"
+    ],
+    "PERFECTIONIST": [
+      "E4"
+    ],
+    "TEACHER": [
+      "E1"
+    ]
+  },
+  "views": [
+    {
+      "text": "Build the offense around what the quarterback and the players do best, not around a system on paper.",
+      "when": [
+        "SCHEME",
+        "QB"
+      ]
+    },
+    {
+      "text": "It all starts up front: communication, trust and clear protection rules before any clever call.",
+      "when": [
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Every week gets its own game plan; there is no single way to beat every defense.",
+      "when": [
+        "SCHEME",
+        "PREVIEW"
+      ]
+    },
+    {
+      "text": "A quarterback's ideas belong in the plan; talking ball together is how the relationship grows.",
+      "when": [
+        "QB",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "A first-year play-caller should be his own hardest critic and accept that growth does not happen overnight.",
+      "when": [
+        "BAD_GAME",
+        "STRUGGLING"
+      ]
+    },
+    {
+      "text": "Turnovers and red-zone failures end seasons; that is the first thing to fix, not the last.",
+      "when": [
+        "PLAYOFFS",
+        "BAD_GAME"
+      ]
+    },
+    {
+      "text": "Nobody hands you a career; you earn it in the jobs nobody wants.",
+      "when": [
+        "COACHING"
+      ]
+    }
+  ],
+  "signatures": [
+    "calls himself his own hardest critic after a rough game",
+    "credits the offensive line coach and the quarterback by name when the offense improves",
+    "brings a rapid, energetic delivery to even routine questions"
+  ],
+  "want": "to turn Houston's offense into a consistent playoff threat and establish himself as a play-caller rather than a well-regarded position coach",
+  "fear": "that the playoff turnovers and slow starts define his tenure and cost him the job before Year 2 of his system pays off",
+  "voice": "Energetic, quick and earnest, in the organized cadence of a Patriots-trained assistant; he talks about game plans, communication and fitting the offense to players. Self-critical after bad games without blaming players, and warm about his quarterback. A first-time play-caller with a short public record, so many traits rest on what colleagues say of him.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "HOU",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E2",
+        "E5"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "LAR",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E1"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "C.J. Stroud",
+        "team_2026": "HOU"
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E4",
+        "E5"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.click2houston.com/sports/2025/02/13/he-can-spin-it-hes-got-the-it-factor-how-texans-new-oc-nick-caley-approaches-coaching-cj-stroud",
+      "publisher": "KPRC 2 Houston, Aaron Wilson",
+      "published": "2025-02-13",
+      "accessed": "2026-11-06",
+      "summary": "Introductory press conference: a first-time coordinator, he says the offense will be built on the quarterback's and players' strengths rather than a preset system, praises C.J. Stroud's accuracy, instincts and competitiveness, and says Stroud drew him to the job. Recaps his path from John Carroll student assistant to Patriots tight ends coach (Gronkowski's All-Pro year) to Rams pass-game coordinator; Hunter Henry calls him a favorite coach and McVay calls him a special coach and leader.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.nfl.com/news/texans-hc-demeco-ryans-says-new-oc-nick-caley-can-help-get-us-over-the-hump",
+      "publisher": "NFL.com, Nick Shook",
+      "published": "2025-02-13",
+      "accessed": "2026-11-06",
+      "summary": "Ryans cites Caley's energy, leadership, grasp of both run and pass, and record of tailoring offenses in several successful systems, and hopes he lifts the team over the hump. Caley says it all starts up front with communication and clear protection rules, and trusts line coach Cole Popovich from New England. Page shows no date; dated from his February 2025 introduction.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.click2houston.com/sports/2025/03/06/how-nick-caleys-roots-at-john-carroll-u-prepped-him-to-be-texans-oc-efficient-organized-worked-his-butt-off",
+      "publisher": "KPRC 2 Houston, Aaron Wilson",
+      "published": "2025-03-06",
+      "accessed": "2026-11-06",
+      "summary": "Background feature: from Canton, Ohio, he wanted to coach from childhood; his John Carroll head coach calls him efficient, organized and relentless, taking on extra jobs as a student assistant. Caserio calls him smart, flexible and adaptable, Ryans very energetic. Two Super Bowl rings in New England; he traces his game-plan-specific approach to the Patriots. Others' praise, favorable by nature.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://gmg-kprc-prod.cdn.arcpublishing.com/sports/2026/01/21/why-texans-offensive-coodinator-nick-caley-is-returning-as-play-caller-team-saw-growth-progress",
+      "publisher": "KPRC 2 Houston, Aaron Wilson",
+      "published": "2026-01-21",
+      "accessed": "2026-11-06",
+      "summary": "Houston keeps him as play-caller after year one: the offense started 0-3 but won 10 straight and a wild-card game, finished 13th in scoring, and Stroud's sacks fell from 52 to 23; Stroud threw four interceptions in the playoff loss to New England. Caserio says he grew a lot. Caley calls himself his own hardest critic and says growth takes time; Stroud says he loves him.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://abc13.com/post/texans-optimistic-growth-between-cj-stroud-nick-caley/19420003/",
+      "publisher": "ABC13 Houston, DJ Bien-Aime (with ESPN)",
+      "published": "2026-06-30",
+      "accessed": "2026-11-06",
+      "summary": "Spring 2026: Ryans says Stroud and Caley communicate much better, that Year 2 of the system lets the team move faster, and that Stroud brings play and formation ideas the staff uses. Caley says the relationship was always good and they now get to talk football in more depth; Stroud says he brought some familiar concepts to Caley.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "New seat 2026 (HOU OC since 2025, retained January 2026). Five sources, 2025-02-13 to 2026-06-30; E2's date is inferred from his introduction. Several traits rest on colleagues' praise rather than his own record; temperament, sociability and confidence stay at 5."
+  }
+}

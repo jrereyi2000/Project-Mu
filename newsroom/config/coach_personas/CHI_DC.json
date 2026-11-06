@@ -14,24 +14,30 @@
     "temperament": 4,
     "sociability": 5,
     "confidence": 6,
-    "openness": 5,
+    "openness": 6,
     "warmth": 6,
     "drive": 6
   },
   "slider_evidence": {
     "temperament": [
-      "E2",
-      "E6"
+      "E1",
+      "E4"
     ],
     "confidence": [
-      "E4"
+      "E3",
+      "E5"
+    ],
+    "openness": [
+      "E6",
+      "E7"
     ],
     "warmth": [
-      "E3",
-      "E6"
+      "E2",
+      "E4"
     ],
     "drive": [
-      "E4"
+      "E3",
+      "E6"
     ]
   },
   "traits": [
@@ -41,29 +47,43 @@
   ],
   "trait_evidence": {
     "SCHEME_NERD": [
-      "E1",
-      "E2"
+      "E5",
+      "E6"
     ],
     "GUARDED": [
-      "E2",
-      "E4"
+      "E1",
+      "E3"
     ],
     "PLAYERS_COACH": [
-      "E3",
-      "E6"
+      "E2",
+      "E4"
     ]
   },
   "views": [
     {
-      "text": "The biggest lesson of a first head-coaching job is to do it your own way and stay true to yourself.",
+      "text": "Defense should attack and take the fight to the offense instead of waiting to react.",
       "when": [
-        "COACHING"
+        "SCHEME"
       ]
     },
     {
-      "text": "Handing off the defensive play sheet is hard when you built the defense.",
+      "text": "Game planning is cooking with what is in the pantry: find what each player does well and ask him only for that.",
       "when": [
         "SCHEME",
+        "INJURY"
+      ]
+    },
+    {
+      "text": "Takeaways are earned through effort and pressure, not handed over by the offense.",
+      "when": [
+        "SCHEME",
+        "PERFORMANCE"
+      ]
+    },
+    {
+      "text": "When the fundamentals slip, the coordinator looks at himself first; a big install is no excuse.",
+      "when": [
+        "BAD_GAME",
         "COACHING"
       ]
     },
@@ -75,41 +95,34 @@
       ]
     },
     {
+      "text": "A coordinator who was once a head coach should be a sounding board for the boss, not a second voice telling him what to do.",
+      "when": [
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Players you have coached before are worth bringing along; you already know what they can carry.",
+      "when": [
+        "ROSTER_MOVES",
+        "PLAYER"
+      ]
+    },
+    {
       "text": "Outside noise comes with the job; the work in the building is what you control.",
       "when": [
         "STRUGGLING",
         "LOSING_STREAK"
       ]
-    },
-    {
-      "text": "A strong culture is a foundation to build on, not something to tear down and start over.",
-      "when": [
-        "COACHING",
-        "OFFSEASON"
-      ]
-    },
-    {
-      "text": "Injuries explain some losses, but the results still fall short of what the players' effort deserved.",
-      "when": [
-        "INJURY",
-        "LOSING_STREAK"
-      ]
-    },
-    {
-      "text": "Gather the facts before saying anything about a player's off-field trouble.",
-      "when": [
-        "PLAYER"
-      ]
     }
   ],
   "signatures": [
-    "declines to comment on a player issue until he has gathered the facts",
     "thanks the owner, general manager, staff and players in turn when looking back",
-    "talks about putting his own stamp on things while keeping what already works"
+    "names the backup who stepped in when asked about an injury-hit unit",
+    "takes the blame for a unit's flaw in plain terms before explaining the fix"
   ],
-  "want": "to prove his 8-28 Oakland stint was about circumstances, not him, by winning in New Orleans his own way",
-  "fear": "that he is remembered as the coach who could not carry on what Sean Payton built",
-  "voice": "Even-keeled, reserved and businesslike, with a dry streak of humor. He answers carefully, defers on sensitive player matters until he knows more, and shrugs off outside criticism as part of the job. He praises players' effort and commitment even when results are bad.",
+  "want": "to build a takeaway defense in Chicago that makes him a coordinator teams covet again after his New Orleans firing",
+  "fear": "that a thin pass rush and a step back in takeaways expose the 2025 defense as luck rather than design",
+  "voice": "Even-keeled, reserved and businesslike, with a dry streak of humor. He answers carefully, takes responsibility in plain terms when the unit falls short, and shrugs off outside criticism as part of the job. He praises players' effort and singles out the ones who step up from the bench.",
   "ties": [
     {
       "target": {
@@ -123,7 +136,7 @@
       "relationship_kind": "mentorship",
       "outcome": "positive",
       "evidence": [
-        "E2"
+        "E1"
       ]
     },
     {
@@ -138,22 +151,41 @@
       "relationship_kind": "collaboration",
       "outcome": "positive",
       "evidence": [
-        "E4"
+        "E3"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "CHI",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E5",
+        "E6"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "D'Marco Jackson",
+        "team_2026": "CHI"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E6"
       ]
     }
   ],
   "evidence": [
     {
       "id": "E1",
-      "url": "https://www.nbcsports.com/nfl/profootballtalk/rumor-mill/news/dennis-allen-on-calling-defensive-plays-hard-to-give-up-your-baby",
-      "publisher": "NBC Sports (ProFootballTalk), Josh Alper",
-      "published": "2022-02-08",
-      "accessed": "2026-11-05",
-      "summary": "At his introduction he says no decision on keeping defensive play-calling, that balancing it with head-coaching is hard, and jokes that giving up the defense is like handing over his baby. Brief item.",
-      "confidence": "high"
-    },
-    {
-      "id": "E2",
       "url": "https://africa.espn.com/nfl/story/_/id/33247398/new-saints-head-coach-dennis-allen-wants-create-my-own-legacy-new-orleans",
       "publisher": "ESPN, Mike Triplett",
       "published": "2022-02-09",
@@ -162,7 +194,7 @@
       "confidence": "high"
     },
     {
-      "id": "E3",
+      "id": "E2",
       "url": "https://www.si.com/nfl/saints/editorial-opinion/new-orleans-saints-cb-dennis-allen-alontae-taylor",
       "publisher": "Sports Illustrated (Saints News Network), Ross Jackson",
       "published": "2023-06-02",
@@ -171,7 +203,7 @@
       "confidence": "medium"
     },
     {
-      "id": "E4",
+      "id": "E3",
       "url": "https://global.espn.com/nfl/story/_/id/41137856/new-orleans-saints-dennis-allen-urgency-year-3-week-1-carolina-panthers",
       "publisher": "ESPN, Katherine Terrell",
       "published": "2024-09-06",
@@ -180,28 +212,46 @@
       "confidence": "high"
     },
     {
-      "id": "E5",
-      "url": "https://global.espn.com/nfl/story/_/id/42189276/sources-saints-fire-coach-dennis-allen-7th-loss-row",
-      "publisher": "ESPN, Katherine Terrell",
-      "published": "2024-11-04",
-      "accessed": "2026-11-05",
-      "summary": "Fired after a seventh straight loss left the Saints 2-7; 18-25 overall in New Orleans after a 2-0 start derailed by injuries. Loomis had defended him citing injuries; Benson called the move necessary; Woods takes over defensive calls. Results, little on demeanor.",
-      "confidence": "high"
-    },
-    {
-      "id": "E6",
+      "id": "E4",
       "url": "https://crescentcitysports.com/allen-releases-statement-after-firing-by-saints/",
       "publisher": "Crescent City Sports (staff)",
       "published": "2024-11-04",
       "accessed": "2026-11-05",
       "summary": "His statement after the firing thanks Benson and Loomis, admits the team fell short, praises his staff, tells players he never doubted their commitment, and thanks fans. Gracious and reflective; a prepared statement.",
       "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.chicagobears.com/news/new-bears-dc-dennis-allen-vows-to-employ-attacking-aggressive-defense",
+      "publisher": "Chicago Bears (chicagobears.com), Larry Mayer",
+      "published": "2025-01-30",
+      "accessed": "2026-11-06",
+      "summary": "First Chicago press conference: he wants an attacking, physical defense that takes the fight to offenses, has not settled how often to blitz, and sees pieces across the roster. Johnson reached out late in 2024 about joining him; Allen praises Johnson's creativity, work ethic and vision and says he will be a sounding board, not someone who tells the head coach what to do. Upbeat and humble. Team site.",
+      "confidence": "high"
+    },
+    {
+      "id": "E6",
+      "url": "https://africa.espn.com/nfl/story/_/id/47359548/chicago-bears-defense-dennis-allen-takeaways",
+      "publisher": "ESPN, Courtney Cronin",
+      "published": "2025-12-20",
+      "accessed": "2026-11-06",
+      "summary": "His defense leads the league with 30 takeaways and 21 interceptions. He leaned on players he coached before (Nahshon Wright, C.J. Gardner-Johnson, D'Marco Jackson) when injuries hit, added more man coverage and blitzes, and likens game planning to cooking with whatever ingredients are on hand. Jaylon Johnson calls him aggressive; he and Ben Johnson talk daily and trust grew over time.",
+      "confidence": "high"
+    },
+    {
+      "id": "E7",
+      "url": "https://heavy.com/sports/nfl/chicago-bears/dennis-allen-reality-check-on-himself/",
+      "publisher": "Heavy, Isaac Zuniga",
+      "published": "2026-05-09",
+      "accessed": "2026-11-06",
+      "summary": "Offseason media session: he says the review of 2025 pointed at him, that installing a big new scheme crowded out fundamentals and technique, and that 2026 coaching will shift toward execution. Cites the line's poor 2025 pass-rush and run-stop win rates. Aggregated quotes; page shows only an update date.",
+      "confidence": "medium"
     }
   ],
   "review": {
     "status": "draft",
     "reviewer": null,
     "reviewed_at": null,
-    "notes": "moved seat 2026; re-research for 2026 sources"
+    "notes": "Moved seat 2026 (NO HC to CHI DC, hired January 2025): added the Chicago introduction, the 2025 takeaway feature and his May 2026 self-assessment; dropped his Saints introduction and firing news items; openness moved to 6 for the scheme changes; views, want and fear now fit a coordinator under Ben Johnson; added ties to Johnson and D'Marco Jackson."
   }
 }

@@ -13,22 +13,28 @@
   "sliders": {
     "temperament": 4,
     "sociability": 5,
-    "confidence": 5,
+    "confidence": 6,
     "openness": 7,
     "warmth": 5,
-    "drive": 7
+    "drive": 8
   },
   "slider_evidence": {
     "temperament": [
       "E1"
     ],
+    "confidence": [
+      "E4",
+      "E8"
+    ],
     "openness": [
       "E1",
-      "E5"
+      "E3",
+      "E8"
     ],
     "drive": [
       "E1",
-      "E2"
+      "E2",
+      "E6"
     ]
   },
   "traits": [
@@ -40,14 +46,16 @@
   "trait_evidence": {
     "SCHEME_NERD": [
       "E1",
-      "E5"
+      "E3"
     ],
     "QB_WHISPERER": [
       "E1",
-      "E5"
+      "E3",
+      "E6"
     ],
     "PERFECTIONIST": [
-      "E1"
+      "E1",
+      "E6"
     ],
     "FILM_ROOM_RAT": [
       "E1",
@@ -70,23 +78,37 @@
       ]
     },
     {
-      "text": "Linemen should get a say in the run game; let them pick the runs they like best each week.",
+      "text": "The plays matter less than getting the playmakers the ball in space where they are best.",
       "when": [
         "SCHEME",
         "PLAYER"
       ]
     },
     {
-      "text": "Sloppy execution in a win still needs fixing before next week.",
+      "text": "Winning close games late is not a plan; sloppy execution in a win still needs fixing before next week.",
       "when": [
         "WIN_STREAK",
         "GAME_REVIEW"
       ]
     },
     {
-      "text": "Take a head coaching job only when you are truly ready for it, not because it is offered.",
+      "text": "Last year's success buys nothing; every season starts over from the bottom.",
+      "when": [
+        "CONTENDER",
+        "OFFSEASON"
+      ]
+    },
+    {
+      "text": "Hire experienced coordinators, give them room, and treat assistants leaving for promotions as proof the program works.",
       "when": [
         "COACHING"
+      ]
+    },
+    {
+      "text": "Be the young quarterback's biggest believer in public and his hardest critic in the meeting room.",
+      "when": [
+        "QB",
+        "YOUTH"
       ]
     },
     {
@@ -99,12 +121,13 @@
   ],
   "signatures": [
     "explains a big play by naming the small tweak to a familiar concept that made it work",
+    "refuses to celebrate a good season, calling it not good enough and a restart",
     "credits his quarterback's growth in reading pressure and handling protections",
-    "turns aside head coaching questions to focus on the current game"
+    "needles a division rival with a dry, cocky aside"
   ],
-  "want": "to be recognized as the sharpest offensive mind in the league and to lead a team only when he feels completely ready",
-  "fear": "that his offense is credited to talent and Sean McVay's system rather than to his own design",
-  "voice": "Calm, precise and understated; he speaks in specific football detail about concepts, motions and protections. He is sharp rather than loud about mistakes, credits players for ideas, and gives little away about his own plans.",
+  "want": "to turn Chicago into a perennial contender built on his own offense and Caleb Williams, and be recognized as the sharpest offensive mind in the league",
+  "fear": "that a first-year jump built on close wins and takeaways proves a mirage and his offense gets credited to talent rather than design",
+  "voice": "Calm, precise and understated, but with a competitive, faintly cocky edge; he speaks in specific football detail about concepts, motions and protections. He is sharp rather than loud about mistakes, refuses to linger on success, credits players and assistants for ideas, and gives little away about his own plans.",
   "ties": [
     {
       "target": {
@@ -118,8 +141,37 @@
       "relationship_kind": "collaboration",
       "outcome": "positive",
       "evidence": [
-        "E2",
-        "E3"
+        "E2"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "CHI",
+          "role": "DC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E5"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "CHI",
+          "role": "OC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E7"
       ]
     },
     {
@@ -132,7 +184,20 @@
       "outcome": "positive",
       "evidence": [
         "E1",
-        "E5"
+        "E3"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Caleb Williams",
+        "team_2026": "CHI"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E4",
+        "E6"
       ]
     }
   ],
@@ -157,36 +222,63 @@
     },
     {
       "id": "E3",
-      "url": "https://abc7news.com/post/dan-campbells-aggressiveness-has-detroit-lions/15727402/",
-      "publisher": "ESPN, Eric Woodyard, via ABC7",
-      "published": "2024-12-30",
-      "accessed": "2026-11-04",
-      "summary": "On Detroit's fourth-down approach; Johnson describes Campbell as comfortable being himself and accepting the consequences of his choices. Mostly about Campbell; one line from Johnson.",
-      "confidence": "high"
-    },
-    {
-      "id": "E4",
-      "url": "https://africa.espn.com/nfl/story/_/id/43492843/coach-dan-campbell-says-lions-gonna-come-back-stronger",
-      "publisher": "ESPN, Eric Woodyard",
-      "published": "2025-01-20",
-      "accessed": "2026-11-04",
-      "summary": "After the playoff loss Campbell expects to lose Johnson and Glenn to head coaching jobs and says both were central to the program's rise. Context for his standing; nothing from Johnson himself.",
-      "confidence": "high"
-    },
-    {
-      "id": "E5",
       "url": "https://www.detroitlions.com/news/ben-johnson-returning-as-detroit-lions-offensive-coordinator",
       "publisher": "Detroit Lions (detroitlions.com), Tim Twentyman",
       "published": "2023-01-19",
       "accessed": "2026-11-04",
       "summary": "He turns down head coaching interest, including Carolina, citing unfinished business after an offense that ranked fifth in scoring. Goff calls him as instrumental as any coach he has had and says Johnson invited him to help build the scheme. Analysts praise his design, personnel use and motion. Team-written.",
       "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.si.com/nfl/bears/news/4-key-takeaways-from-ben-johnson-introductory-press-conference-chicago-bears-head-coach",
+      "publisher": "Sports Illustrated (Bear Digest)",
+      "published": "2025-01-22",
+      "accessed": "2026-11-06",
+      "summary": "Takeaways from his Chicago introduction: he stresses accountability and says he would act fast on any locker-room culture problem, calls the roster loaded with talent, plans to rebuild the playbook around Caleb Williams, says contention in 2025 is possible if the team sacrifices and works, and jokes that he enjoyed beating Matt LaFleur twice a year. Fan-network summary of his remarks.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E5",
+      "url": "https://africa.espn.com/nfl/story/_/id/47359548/chicago-bears-defense-dennis-allen-takeaways",
+      "publisher": "ESPN, Courtney Cronin",
+      "published": "2025-12-20",
+      "accessed": "2026-11-06",
+      "summary": "On the league-leading takeaway defense: Johnson, a first-time head coach, hired experienced assistants such as former head coach Dennis Allen; the two talk daily, Johnson sometimes offers ideas Allen uses, players say Johnson runs the offense and gives Allen wide latitude, and Johnson gave Allen a game ball after a 31-3 win. Shows his staff management, mostly through others.",
+      "confidence": "high"
+    },
+    {
+      "id": "E6",
+      "url": "https://www.fox32chicago.com/sports/chicago-bears-officially-turn-page-2026-season-offseason-awaits-back-square-one",
+      "publisher": "FOX 32 Chicago, Chris Kwiecinski",
+      "published": "2026-01-21",
+      "accessed": "2026-11-06",
+      "summary": "End-of-season press conference after an 11-6 division title and a playoff win: unsentimental, he says the year was not good enough, that the team starts over from the bottom, and that it must stop relying on late comebacks in one-score games. He calls himself Caleb Williams's top believer, urges him to rest, and reads assistants leaving for promotions as a sign of a healthy program.",
+      "confidence": "high"
+    },
+    {
+      "id": "E7",
+      "url": "https://www.shawlocal.com/news/2026/05/26/how-chicago-bears-coaching-stability-will-benefit-caleb-williams-development/",
+      "publisher": "Shaw Local, Michal Dwojak",
+      "published": "2026-05-26",
+      "accessed": "2026-11-06",
+      "summary": "On the 2026 staff: Press Taylor replaces Declan Doyle as coordinator, running meetings when Johnson is out and handling halftime adjustments, while Johnson keeps calling plays. Johnson, in March, says he feels good about the change and that Taylor is natural in front of the room and respected by the staff. Williams learns the same offense again.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E8",
+      "url": "https://bleacherreport.com/articles/25436715-bears-ben-johnson-explains-how-hes-changed-significantly-play-caller-ahead-2026-season",
+      "publisher": "Bleacher Report, Mike Chiari",
+      "published": "2026-06-10",
+      "accessed": "2026-11-06",
+      "summary": "Before his second season he says he has changed a good deal as a play-caller and handles game situations better, crediting learning from his own mistakes; his focus is getting playmakers the ball in space rather than any specific play, and he calls fitting a changed group of pass catchers to their strengths the fun part of the job. Aggregated from his media session.",
+      "confidence": "medium"
     }
   ],
   "review": {
     "status": "draft",
     "reviewer": null,
     "reviewed_at": null,
-    "notes": "moved seat 2026; re-research for 2026 sources"
+    "notes": "Moved seat 2026 (DET OC to CHI HC, hired January 2025; 11-6 and a playoff win in 2025): added the introduction, the Allen partnership, the end-of-season press conference, the Taylor promotion and his June 2026 play-calling comments; dropped two Detroit context sources; confidence 6 and drive 8 on the Chicago evidence; added ties to Allen, Taylor and Caleb Williams."
   }
 }

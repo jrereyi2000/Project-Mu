@@ -1,0 +1,230 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:NO:DC",
+  "name": "Brandon Staley",
+  "role": "DC",
+  "team": "NO",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "NO",
+    "role": "DC",
+    "name": "Brandon Staley"
+  },
+  "sliders": {
+    "temperament": 3,
+    "sociability": 5,
+    "confidence": 7,
+    "openness": 7,
+    "warmth": 6,
+    "drive": 5
+  },
+  "slider_evidence": {
+    "temperament": [
+      "E1"
+    ],
+    "confidence": [
+      "E2"
+    ],
+    "openness": [
+      "E1",
+      "E5"
+    ],
+    "warmth": [
+      "E1",
+      "E5"
+    ]
+  },
+  "traits": [
+    "ANALYTICS_BELIEVER",
+    "SCHEME_NERD",
+    "MEASURED"
+  ],
+  "trait_evidence": {
+    "ANALYTICS_BELIEVER": [
+      "E1",
+      "E2"
+    ],
+    "SCHEME_NERD": [
+      "E4",
+      "E5"
+    ],
+    "MEASURED": [
+      "E5"
+    ]
+  },
+  "views": [
+    {
+      "text": "Build the defense around the players and the matchup each week, not around a system on paper.",
+      "when": [
+        "SCHEME",
+        "PREVIEW"
+      ]
+    },
+    {
+      "text": "Five defensive backs is the new base; hybrid groupings buy flexibility against any offense.",
+      "when": [
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Going for it on fourth down is not gambling when the numbers and the matchup both say go.",
+      "when": [
+        "CLOSE_GAMES",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Criticism comes with every decision; make the call you believe gives the team the best chance and live with it.",
+      "when": [
+        "BAD_GAME",
+        "STRUGGLING"
+      ]
+    },
+    {
+      "text": "A coach who has been fired as a head coach learns most by looking at himself, not outward.",
+      "when": [
+        "COACHING",
+        "HISTORY"
+      ]
+    },
+    {
+      "text": "Credit the assistants and players first; a staff that trusts each other plays calm.",
+      "when": [
+        "COACHING",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "A defense's identity is found on the practice field in spring, not announced in a press conference.",
+      "when": [
+        "OFFSEASON",
+        "SCHEME"
+      ]
+    }
+  ],
+  "signatures": [
+    "explains a decision in terms of advantage situations and percentages",
+    "praises the head coach and his fellow assistants unprompted",
+    "declines to define the defense's identity before seeing the players on the field"
+  ],
+  "want": "to rebuild his reputation as one of the league's sharpest defensive minds and earn another head-coaching chance",
+  "fear": "that he is remembered for the 63-21 loss and second-guessed fourth downs rather than for the 2020 Rams defense",
+  "voice": "Calm, articulate and analytical; he talks in terms of matchups, flexibility and advantage situations, with a lecturer's precision. He credits colleagues warmly and stays composed when criticized, but can bristle into a pointed defense of his reasoning. In New Orleans he is measured and avoids firm conclusions early.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "NO",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E4",
+        "E5"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "LAR",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E3"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Justin Herbert",
+        "team_2026": "LAC"
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E2"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.theringer.com/nfl/2021/10/5/22711002/los-angeles-chargers-brandon-staley-hot-start",
+      "publisher": "The Ringer, Kaelen Jones",
+      "published": "2021-10-05",
+      "accessed": "2026-11-06",
+      "summary": "Early in his first Chargers season he goes for it on fourth-and-2 at midfield with a lead, calling it an advantage situation given the coverages expected, and credits his analytics staff; Herbert calls it the best of both worlds and says Staley's composure spreads, Bosa calls him genuine. Calm, collaborative, quick to credit others.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://nbcsports.com/nfl/profootballtalk/rumor-mill/news/brandon-staley-real-football-people-understand-what-im-doing",
+      "publisher": "NBC Sports (ProFootballTalk)",
+      "published": "2021-12-18",
+      "accessed": "2026-11-06",
+      "summary": "After criticism of his fourth-down calls in a loss to Kansas City, he says people who truly understand football get his approach, that it fits a team with Herbert and a shaky kicking game, rejects the gambler label, and says analytics fans also miss football's nuances. Shows conviction under fire.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.si.com/nfl/2023/12/15/chargers-fire-brandon-staley-ugly-loss-raiders",
+      "publisher": "Sports Illustrated, Tom Dierberger",
+      "published": "2023-12-15",
+      "accessed": "2026-11-06",
+      "summary": "The Chargers fire him and GM Tom Telesco the morning after a 63-21 loss at Las Vegas; 24-24 in under three seasons. Recaps college jobs, Bears linebackers coach in 2017, Denver in 2019 and Rams defensive coordinator under McVay in 2020. Facts only.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://africa.espn.com/nfl/story/_/id/43953844/sources-saints-hiring-ex-chargers-coach-brandon-staley-dc",
+      "publisher": "ESPN, Katherine Terrell",
+      "published": "2025-02-21",
+      "accessed": "2026-11-06",
+      "summary": "New Orleans hires him as Kellen Moore's defensive coordinator, a reunion: Staley hired Moore as his Chargers coordinator in 2023. He spent 2024 as San Francisco's assistant head coach; his 2020 Rams defense led the league in scoring and total defense. Facts only.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.neworleanssaints.com/news/brandon-staley-new-orleans-saints-defensive-coordinator-coaching-staff-2025-personnel-scheme",
+      "publisher": "New Orleans Saints (neworleanssaints.com), John DeShazier",
+      "published": "2025-03-10",
+      "accessed": "2026-11-06",
+      "summary": "First Saints media session: the defense will be built around players rather than a fixed system, flexible enough for any offense and tailored to each matchup, with five-back and hybrid groupings as the norm; identity will come once players are on the field. He says he believes in Moore as much as anyone he has worked with. Measured, deliberate, warm about colleagues. Team site.",
+      "confidence": "high"
+    },
+    {
+      "id": "E6",
+      "url": "https://www.audacy.com/wwl/local-sports/saints/top-13-quotes-from-loomis-kellen-moore-to-end-saints-season",
+      "publisher": "WWL (Audacy), Jeff Nowak",
+      "published": "2026-01-08",
+      "accessed": "2026-11-06",
+      "summary": "At the season wrap GM Mickey Loomis praises Staley and the staff for the defense's late-season improvement on a 6-11 team. Loomis's view; Staley not quoted.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E7",
+      "url": "https://neworleans.football/article/why-brandon-staley-s-self-audit-of-his-unit-could-take-saints-defense-to-next-level",
+      "publisher": "NewOrleans.Football, Nick Underhill",
+      "published": "2026-07-05",
+      "accessed": "2026-11-06",
+      "summary": "Paywalled piece; only its subtitle is visible, saying he looks inward rather than outward when deciding how to grow. Supports tone only.",
+      "confidence": "low"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "New seat 2026 (NO DC since 2025). Seven sources, 2021-10-05 to 2026-07-05; New Orleans-era coverage quoting him is thin (E7 is low confidence, paywalled subtitle only), so the sliders lean on his Chargers years. Sociability and drive stay at 5."
+  }
+}

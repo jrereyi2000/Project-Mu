@@ -1,0 +1,218 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:ATL:OC",
+  "name": "Tommy Rees",
+  "role": "OC",
+  "team": "ATL",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "ATL",
+    "role": "OC",
+    "name": "Tommy Rees"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 6,
+    "confidence": 5,
+    "openness": 6,
+    "warmth": 6,
+    "drive": 7
+  },
+  "slider_evidence": {
+    "sociability": [
+      "E4",
+      "E5"
+    ],
+    "openness": [
+      "E4",
+      "E5"
+    ],
+    "warmth": [
+      "E4",
+      "E5"
+    ],
+    "drive": [
+      "E1",
+      "E5"
+    ]
+  },
+  "traits": [
+    "QB_WHISPERER",
+    "FILM_ROOM_RAT",
+    "SCHEME_NERD",
+    "PLAYERS_COACH"
+  ],
+  "trait_evidence": {
+    "QB_WHISPERER": [
+      "E1",
+      "E4"
+    ],
+    "FILM_ROOM_RAT": [
+      "E5"
+    ],
+    "SCHEME_NERD": [
+      "E4",
+      "E5"
+    ],
+    "PLAYERS_COACH": [
+      "E5"
+    ]
+  },
+  "views": [
+    {
+      "text": "Play-action from under center keeps a defense in conflict; it is not the only way, but it is the identity.",
+      "when": [
+        "SCHEME",
+        "GAME_REVIEW"
+      ]
+    },
+    {
+      "text": "Blend the zone runs with gap schemes so the best back gets the runs he grew up on.",
+      "when": [
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "A young quarterback plays best when the offense feels like his, not something handed to him.",
+      "when": [
+        "QB",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "The quarterback's job is to make good decisions and avoid the one mistake that loses a tight game.",
+      "when": [
+        "QB",
+        "CLOSE_GAMES"
+      ]
+    },
+    {
+      "text": "A staff that never argues is not working hard enough; good coaches push each other.",
+      "when": [
+        "COACHING"
+      ]
+    },
+    {
+      "text": "A quarterback competition is judged on each man's full body of work and how he absorbs the install, adjusted for the reps he has had.",
+      "when": [
+        "QB",
+        "ROSTER_MOVES"
+      ]
+    },
+    {
+      "text": "Players have to know you care about them before they will care what you teach.",
+      "when": [
+        "COACHING",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "Steal good ideas from around the league every spring, then make them fit your system.",
+      "when": [
+        "OFFSEASON",
+        "SCHEME"
+      ]
+    }
+  ],
+  "signatures": [
+    "calls himself the young guy in the room and credits veteran assistants by name",
+    "jokes about the hours of the job before getting into detail",
+    "answers quarterback questions with a measured both-paths framing and no ranking"
+  ],
+  "want": "to show that a former backup quarterback who reached an NFL coordinator job at 32 can build and call a playoff offense of his own",
+  "fear": "that his youth becomes the explanation for any offensive slump in his first full season as a play-caller",
+  "voice": "Easygoing, self-deprecating and quick with a joke about long hours or his own age, but precise once the talk turns to concepts. He praises colleagues and players, keeps quarterback rankings to himself, and frames his scheme in plain terms like conflict, ownership and decision-making. Thin record as a play-caller, so his public football opinions are mostly about principle rather than results.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "ATL",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E3",
+        "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Michael Penix Jr.",
+        "team_2026": "ATL"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E4",
+        "E6"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://spectrumnews1.com/oh/columbus/news/2025/01/15/browns-name-rees-offensive-coordinator",
+      "publisher": "Spectrum News 1 (Ohio)",
+      "published": "2025-01-15",
+      "accessed": "2026-11-06",
+      "summary": "Cleveland promotes him to offensive coordinator at 32 after firing Ken Dorsey; he had joined in 2024 as tight ends coach and pass-game specialist after a year as Alabama's coordinator and quarterbacks coach (an SEC title season) and six years on Notre Dame's staff, the last three as coordinator. He is a former Notre Dame quarterback. Hiring facts, not personality.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.si.com/nfl/browns/onsi/news/kevin-stefanski-announces-major-change-with-cleveland-browns-offense-after-bye-week-01k95edpt5b3",
+      "publisher": "Sports Illustrated (Browns Digest)",
+      "published": "2025-11-03",
+      "accessed": "2026-11-06",
+      "summary": "After the bye, Stefanski hands offensive play-calling to Rees, the second straight season he gave it to his coordinator midyear; the move follows a lopsided loss to New England with a rookie quarterback starting. Shows when he took the play sheet, not how well he called it.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.nbcsports.com/nfl/profootballtalk/rumor-mill/news/kevin-stefanski-says-tommy-rees-will-call-offensive-plays-for-falcons",
+      "publisher": "NBC Sports (ProFootballTalk), Myles Simmons",
+      "published": "2026-01-27",
+      "accessed": "2026-11-06",
+      "summary": "At his Atlanta introduction Stefanski says Rees will call the offense from the start and lead the offensive staff; he calls him outstanding, says experience is not only years, and that the two see the game alike but push each other. A head coach's endorsement.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.atlantafalcons.com/news/coordinators-tommy-rees-jeff-ulbrich-craig-aukerman",
+      "publisher": "Atlanta Falcons (atlantafalcons.com), Tori McElhaney",
+      "published": "2026-02-12",
+      "accessed": "2026-11-06",
+      "summary": "First Atlanta press conference: he followed Stefanski, says they can challenge each other and that healthy staffs need that, makes play-action and under-center football central, plans to mix gap runs into the wide-zone base for Bijan Robinson, defers to line coach Bill Callahan, and wants Penix to own the offense. He casts himself as the younger man in the room and praises colleagues. Team site.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.si.com/nfl/falcons/onsi/falcons-oc-tommy-rees-details-work-behind-new-offensive-system",
+      "publisher": "Sports Illustrated (Falcon Report), Tyler Carmona",
+      "published": "2026-05-24",
+      "accessed": "2026-11-06",
+      "summary": "OTA piece: he is installing his own system while borrowing concepts from around the league, describes long hours of film and playbook work before players arrive, and says relationships with players come before the X's and O's. Jokes about his family not having moved yet. Quarterback room unsettled between Penix, returning from a knee injury, and newly signed Tua Tagovailoa.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E6",
+      "url": "https://www.atlantafalcons.com/news/tommy-rees-quarterback-evaluation-michael-penix-jr-tua-tagovailoa",
+      "publisher": "Atlanta Falcons (atlantafalcons.com), Tori McElhaney",
+      "published": "2026-08-26",
+      "accessed": "2026-11-06",
+      "summary": "End-of-camp piece on the Week 1 quarterback call: he credits Tagovailoa for taking on new operational duties and for accuracy from a clean pocket, welcomes Penix back to team drills after the knee injury and calls him mentally sharp, and says he weighs each man's full game record and how he absorbs a new install, adjusting for Penix's fewer reps. The rep split was deliberate and the staff discusses the decision openly. Team site.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "New seat 2026 (ATL OC). Six sources, 2025-01-15 to 2026-08-26; play-calling record is short (from November 2025), so temperament and confidence stay at 5."
+  }
+}

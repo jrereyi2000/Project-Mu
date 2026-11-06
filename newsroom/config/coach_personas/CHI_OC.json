@@ -23,7 +23,8 @@
       "E1"
     ],
     "openness": [
-      "E1"
+      "E1",
+      "E6"
     ],
     "drive": [
       "E1"
@@ -69,7 +70,7 @@
       ]
     },
     {
-      "text": "Change is how a coach grows; last year's offense should not be this year's.",
+      "text": "Change is how a coach grows; stepping back from calling plays to learn another system is part of that.",
       "when": [
         "OFFSEASON",
         "COACHING"
@@ -88,15 +89,23 @@
         "COACHING",
         "CONTENDER"
       ]
+    },
+    {
+      "text": "A coordinator who does not call plays earns his keep at halftime and in the meeting room.",
+      "when": [
+        "COACHING",
+        "GAME_REVIEW"
+      ]
     }
   ],
   "signatures": [
     "mentions the hours and the reading he puts into the job when asked about pressure",
-    "credits the quarterback's input on the call sheet when a game plan works"
+    "credits the quarterback's input on the call sheet when a game plan works",
+    "defers to the head coach on anything about play-calling"
   ],
-  "want": "to prove he is a play-caller in his own right and not only Pederson's long-time protege",
-  "fear": "that he is remembered as the coordinator whose struggles got his mentor fired",
-  "voice": "Intense and earnest, with a younger coach's conviction; he speaks about aggression, growth and winning, brushes off criticism without heat, and spreads credit across the staff and the quarterback.",
+  "want": "to prove he is a play-caller in his own right, not only Pederson's long-time protege, by helping build a winner in Chicago",
+  "fear": "that he is remembered as the coordinator whose struggles in Jacksonville got his mentor fired",
+  "voice": "Intense and earnest, with a younger coach's conviction; he speaks about aggression, growth and winning, brushes off criticism without heat, and spreads credit across the staff and the quarterback. In Chicago he says little in public and defers to the head coach on play-calling, so his recent public record is thin.",
   "ties": [
     {
       "target": {
@@ -109,6 +118,22 @@
       "evidence": [
         "E1",
         "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "CHI",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E6",
+        "E7"
       ]
     }
   ],
@@ -157,12 +182,30 @@
       "accessed": "2026-11-05",
       "summary": "Jacksonville fires Pederson after 4-13, its 18th loss in 23 games; owner Shad Khan cites predictability on both sides of the ball and a 3-10 record in one-score games; Pederson made the playoffs in year one but did not develop Lawrence or build an identity, and kept Taylor calling plays against Khan's wishes; Christian Kirk says Pederson made him a better player and man.",
       "confidence": "high"
+    },
+    {
+      "id": "E6",
+      "url": "https://www.foxsports.com/articles/nfl/bears-promote-press-taylor-to-offensive-coordinator-under-coach-ben-johnson",
+      "publisher": "Associated Press, via Fox Sports",
+      "published": "2026-02-18",
+      "accessed": "2026-11-06",
+      "summary": "Chicago promotes him from pass-game coordinator, his 2025 role on Ben Johnson's first staff, to offensive coordinator, replacing Declan Doyle, who left to call plays in Baltimore. Johnson keeps calling plays. Notes his 2022-24 Jacksonville coordinator stint. Facts only; no quotes.",
+      "confidence": "high"
+    },
+    {
+      "id": "E7",
+      "url": "https://www.shawlocal.com/news/2026/05/26/how-chicago-bears-coaching-stability-will-benefit-caleb-williams-development/",
+      "publisher": "Shaw Local, Michal Dwojak",
+      "published": "2026-05-26",
+      "accessed": "2026-11-06",
+      "summary": "He takes over Doyle's duties: leading offensive meetings when Johnson cannot and handling halftime adjustments. Johnson says Taylor is natural in front of the room, respected by the staff and knows how to steer the meeting when Johnson is away. Taylor himself is not quoted.",
+      "confidence": "medium"
     }
   ],
   "review": {
     "status": "draft",
     "reviewer": null,
     "reviewed_at": null,
-    "notes": "moved seat 2026; re-research for 2026 sources"
+    "notes": "Moved seat 2026 (JAX OC to CHI OC; Bears pass-game coordinator in 2025, promoted February 2026, Johnson calls plays): added the AP promotion item and the May 2026 piece on his role; views and want now fit a non-play-calling coordinator; added a tie to Ben Johnson. Chicago-era coverage is thin and he is rarely quoted, so the sliders keep their Jacksonville basis."
   }
 }

@@ -1,0 +1,206 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:PIT:OC",
+  "name": "Brian Angelichio",
+  "role": "OC",
+  "team": "PIT",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "PIT",
+    "role": "OC",
+    "name": "Brian Angelichio"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 6,
+    "warmth": 6,
+    "drive": 5
+  },
+  "slider_evidence": {
+    "openness": [
+      "E4",
+      "E5"
+    ],
+    "warmth": [
+      "E4"
+    ]
+  },
+  "traits": [
+    "SCHEME_NERD",
+    "LOYAL",
+    "TEACHER"
+  ],
+  "trait_evidence": {
+    "SCHEME_NERD": [
+      "E4",
+      "E5"
+    ],
+    "LOYAL": [
+      "E3",
+      "E5"
+    ],
+    "TEACHER": [
+      "E4"
+    ]
+  },
+  "views": [
+    {
+      "text": "It all starts with the quarterback; a play he does not believe in never makes the game plan.",
+      "when": [
+        "QB",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "The West Coast principles that won in Green Bay still work: timing, rhythm and the quarterback's comfort.",
+      "when": [
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "An offense that only checks down gets nowhere; go hunting for explosive plays.",
+      "when": [
+        "SCHEME",
+        "PERFORMANCE"
+      ]
+    },
+    {
+      "text": "You can never have too many quarterbacks, and every one of them deserves a development plan, even with limited reps.",
+      "when": [
+        "QB",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "Linemen and receivers who can play several spots are worth more than five fixed starters.",
+      "when": [
+        "PLAYER",
+        "ROSTER_MOVES"
+      ]
+    },
+    {
+      "text": "A veteran quarterback who teaches the young ones is worth as much in the meeting room as on the field.",
+      "when": [
+        "QB",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "A coordinator who does not call plays serves the head coach's vision and the quarterback's comfort.",
+      "when": [
+        "COACHING"
+      ]
+    }
+  ],
+  "signatures": [
+    "starts answers with a hedged 'I think' and keeps scheme details vague",
+    "praises each quarterback in the room by name",
+    "credits his years with McCarthy for the staff's shared language"
+  ],
+  "want": "to help McCarthy and Rodgers revive Pittsburgh's offense and earn recognition as a coordinator after a long career as a position coach",
+  "fear": "that without play-calling duties his first coordinator job leaves him with the blame for a stalled offense and none of the credit for a good one",
+  "voice": "Upbeat, complimentary and careful; he credits players and the head coach, hedges on specifics, and avoids comparisons with the previous staff. He talks about the quarterback's comfort, explosives and versatility in plain terms. A first-time coordinator with a short public record, so sliders mostly stay at 5.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "PIT",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E3",
+        "E5"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Aaron Rodgers",
+        "team_2026": "PIT"
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "MIN",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E3"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.nfl.com/news/steelers-hire-brian-angelichio-offensive-coordinator",
+      "publisher": "NFL.com, Jeremy Bergman",
+      "published": "2026-01-28",
+      "accessed": "2026-11-06",
+      "summary": "Pittsburgh hires the 53-year-old Vikings pass-game coordinator and tight ends coach as offensive coordinator, his first coordinator job. He coached tight ends for McCarthy in Green Bay in 2016-18 with Aaron Rodgers, and at Pitt in 2006-10. The 2025 offense ranked 15th in scoring and 25th in yards. Page date blank; dated from the late-January news cycle.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.nbcsports.com/nfl/profootballtalk/rumor-mill/news/mike-mccarthy-will-call-offensive-plays-for-the-steelers",
+      "publisher": "NBC Sports (ProFootballTalk), Mike Florio",
+      "published": "2026-01-27",
+      "accessed": "2026-11-06",
+      "summary": "McCarthy says he will call the offensive plays and run the offense himself, so the coordinator title does not include play-calling. Context for the role.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://steelersnow.com/steelers-finalize-mike-mccarthys-first-coaching-staff/",
+      "publisher": "Steelers Now, Alan Saunders",
+      "published": "2026-02-12",
+      "accessed": "2026-11-06",
+      "summary": "Staff roundup: Angelichio worked with McCarthy and Rodgers in Green Bay (2016-18), coached at Pitt (2006-10), and was tight ends coach in Washington (2019) and Carolina (2020-21) before Minnesota (2022-25). Facts from a local site.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.audacy.com/kdkaradio/sports/new-steelers-oc-on-rodgers-4-qbs-rudolph-wrs",
+      "publisher": "93.7 The Fan (Audacy), Jeff Hathhorn",
+      "published": "2026-05-19",
+      "accessed": "2026-11-06",
+      "summary": "First OTA session: coaching Rodgers beats facing him, Rodgers is still elite and a generous mentor; he will not compare the offense to Arthur Smith's, wants to hunt explosive plays, says you can never have too many quarterbacks and plans reps for all four, praises Mason Rudolph's insight and rookie Drew Allar's mindset while noting his footwork work, and wants linemen and receivers to play several spots. Upbeat, complimentary, hedged on specifics.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://steelernation.com/2026/06/15/steelers-brian-angelichio-riveting-case",
+      "publisher": "Steeler Nation, Hagen Backus",
+      "published": "2026-06-15",
+      "accessed": "2026-11-06",
+      "summary": "Team video interview summarized: the offense starts with the quarterback and will be tailored to Rodgers; a play Rodgers does not like will not make the plan; core West Coast principles from McCarthy's Green Bay years return. Credits his long history with McCarthy for a shared understanding on staff. Fan-site summary.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "New seat 2026 (PIT OC, hired January 2026; McCarthy calls plays). Five sources, 2026-01-27 to 2026-06-15; E1's date is inferred from the news cycle. Thin personal coverage; temperament, sociability, confidence and drive stay at 5."
+  }
+}

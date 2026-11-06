@@ -20,18 +20,18 @@
   },
   "slider_evidence": {
     "temperament": [
-      "E4"
+      "E3"
     ],
     "confidence": [
-      "E5"
+      "E4"
     ],
     "openness": [
-      "E2",
-      "E6"
+      "E1",
+      "E5"
     ],
     "warmth": [
-      "E3",
-      "E6"
+      "E2",
+      "E5"
     ]
   },
   "traits": [
@@ -41,16 +41,17 @@
   ],
   "trait_evidence": {
     "QB_WHISPERER": [
-      "E3",
-      "E6"
+      "E2",
+      "E5",
+      "E7"
     ],
     "SCHEME_NERD": [
-      "E2",
-      "E5"
+      "E1",
+      "E4"
     ],
     "FILM_ROOM_RAT": [
-      "E3",
-      "E4"
+      "E2",
+      "E3"
     ]
   },
   "views": [
@@ -59,6 +60,13 @@
       "when": [
         "QB",
         "COACHING"
+      ]
+    },
+    {
+      "text": "Build around what the quarterback does best; a passer who throws well on the move should be moved.",
+      "when": [
+        "QB",
+        "SCHEME"
       ]
     },
     {
@@ -90,13 +98,6 @@
       ]
     },
     {
-      "text": "A young quarterback benefits from hearing it straight from his coordinator, face to face on the sideline.",
-      "when": [
-        "QB",
-        "YOUTH"
-      ]
-    },
-    {
       "text": "Outside criticism of a scheme is often a convenient story; the tape says what really went wrong.",
       "when": [
         "STRUGGLING",
@@ -107,11 +108,11 @@
   "signatures": [
     "credits the quarterback and the line by name after a good drive, and takes the blame himself after a bad one",
     "explains a scheme choice by listing the variations it hides rather than defending the label",
-    "refers back to what he learned beside McVay and Stafford in Los Angeles"
+    "refers back to what he learned beside McVay, Stafford and Mayfield in Los Angeles"
   ],
-  "want": "to show that a McVay-tree quarterbacks coach can run his own offense and grow a young passer in Atlanta",
-  "fear": "that his offense gets labeled predictable and the young quarterback's struggles get pinned on him",
-  "voice": "Calm, polite and analytical, a former quarterback who talks in the language of coverages and packaging. He spreads credit to players and owns slow starts, but pushes back firmly when he thinks a criticism of his scheme is lazy. Rarely raises his voice in public.",
+  "want": "to show in Tampa Bay that his offense, reunited with a quarterback he helped revive, can produce what Atlanta's did not",
+  "fear": "that a second straight coordinator job ends with his offense labeled predictable",
+  "voice": "Calm, polite and analytical, a former quarterback who talks in the language of coverages and packaging. He spreads credit to players, gushes about his quarterback's gifts, and owns slow starts, but pushes back firmly when he thinks a criticism of his scheme is lazy. Rarely raises his voice in public.",
   "ties": [
     {
       "target": {
@@ -125,7 +126,7 @@
       "relationship_kind": "mentorship",
       "outcome": "positive",
       "evidence": [
-        "E2"
+        "E1"
       ]
     },
     {
@@ -140,7 +141,22 @@
       "relationship_kind": "collaboration",
       "outcome": "positive",
       "evidence": [
-        "E1"
+        "E3"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "TB",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E6"
       ]
     },
     {
@@ -152,7 +168,7 @@
       "relationship_kind": "collaboration",
       "outcome": "positive",
       "evidence": [
-        "E3"
+        "E2"
       ]
     },
     {
@@ -164,22 +180,26 @@
       "relationship_kind": "mentorship",
       "outcome": "positive",
       "evidence": [
-        "E6"
+        "E5"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Baker Mayfield",
+        "team_2026": "TB"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E6",
+        "E7"
       ]
     }
   ],
   "evidence": [
     {
       "id": "E1",
-      "url": "https://sportstalkatl.com/raheem-morris-talks-falcons-first-time-play-calling-coordinators",
-      "publisher": "SportsTalk ATL (staff)",
-      "published": "2024-02-14",
-      "accessed": "2026-11-05",
-      "summary": "Morris says Robinson's lack of play-calling experience does not concern him and he trusts him fully; reports that about six teams pursued Robinson before he chose Atlanta. Local item, Morris's view.",
-      "confidence": "medium"
-    },
-    {
-      "id": "E2",
       "url": "https://www.si.com/nfl/rams/news/atlanta-falcons-offensive-coordinator-zac-robinson-reflects-head-coach-sean-mcvay-los-angeles-rams",
       "publisher": "Sports Illustrated (Rams On SI), Anthony Licciardi",
       "published": "2024-02-16",
@@ -188,7 +208,7 @@
       "confidence": "high"
     },
     {
-      "id": "E3",
+      "id": "E2",
       "url": "https://www.si.com/nfl/falcons/news/atlanta-falcons-zac-robinson-matthew-stafford-los-angeles-rams-relationship-smartest-guy",
       "publisher": "Sports Illustrated (Falcons On SI), Jon Alfano",
       "published": "2024-02-17",
@@ -197,7 +217,7 @@
       "confidence": "high"
     },
     {
-      "id": "E4",
+      "id": "E3",
       "url": "https://www.ajc.com/sports/atlanta-falcons/in-second-game-as-coordinator-falcons-zac-robinson-dialed-up-game-winning-drive/TLOO2UMPD5CWFL3NBLRVTVTIA4",
       "publisher": "Atlanta Journal-Constitution, D. Orlando Ledbetter",
       "published": "2024-09-19",
@@ -206,7 +226,7 @@
       "confidence": "high"
     },
     {
-      "id": "E5",
+      "id": "E4",
       "url": "https://www.si.com/nfl/falcons/news/espn-dan-orlovsky-rips-atlanta-falcons-offense-zac-robinson-again",
       "publisher": "Sports Illustrated (Falcons On SI), Scott Kennedy",
       "published": "2025-09-25",
@@ -215,19 +235,46 @@
       "confidence": "medium"
     },
     {
-      "id": "E6",
+      "id": "E5",
       "url": "https://www.atlantafalcons.com/news/zac-robinson-falcons-offense-play-calling-sideline",
       "publisher": "Atlanta Falcons (atlantafalcons.com), Terrin Waack",
       "published": "2025-09-29",
       "accessed": "2026-11-05",
       "summary": "He moves from the booth to the sideline for the first time; Penix says direct feedback built confidence, Bijan Robinson says he explained coverages, and the offense posts season highs. He is not quoted directly; a teammate relays that he said he should always have been downstairs.",
       "confidence": "high"
+    },
+    {
+      "id": "E6",
+      "url": "https://www.buccaneers.com/news/zac-robinson-hired-bucs-offensive-coordinator",
+      "publisher": "Tampa Bay Buccaneers (buccaneers.com), Scott Smith",
+      "published": "2026-01-24",
+      "accessed": "2026-11-06",
+      "summary": "Tampa Bay hires him to replace Josh Grizzard after two seasons as Atlanta's coordinator and play-caller (sixth in net yards his first year) and five on McVay's Rams staff; he was Rams quarterbacks coach when Mayfield arrived in late 2022. Bowles calls him one of the bright offensive minds, cites his plan for the existing talent and his teaching of young players. Team site; no Robinson quotes.",
+      "confidence": "high"
+    },
+    {
+      "id": "E7",
+      "url": "https://www.buccaneers.com/news/zac-robinson-baker-mayfield-right-stuff",
+      "publisher": "Tampa Bay Buccaneers (buccaneers.com), Scott Smith",
+      "published": "2026-01-28",
+      "accessed": "2026-11-06",
+      "summary": "Introductory press conference, with Mayfield in attendance: he calls Mayfield perhaps the league's best at throwing on the run, praises his leadership and effect on teammates, and plans to build around his strengths, including keepers, bootlegs and third-down scrambles. Family present. Team site.",
+      "confidence": "high"
+    },
+    {
+      "id": "E8",
+      "url": "https://www.espn.co.uk/nfl/story/_/id/47507975/source-falcons-move-raheem-morris-coach",
+      "publisher": "ESPN, Marc Raimondi",
+      "published": "2026-01-05",
+      "accessed": "2026-11-06",
+      "summary": "Atlanta fires head coach Raheem Morris after back-to-back 8-9 seasons; Penix was inconsistent in 12 starts before a torn ACL. Context for why Robinson's Falcons tenure ended; he is not quoted.",
+      "confidence": "medium"
     }
   ],
   "review": {
     "status": "draft",
     "reviewer": null,
     "reviewed_at": null,
-    "notes": "moved seat 2026; re-research for 2026 sources"
+    "notes": "Moved seat 2026 (ATL OC to TB OC, hired January 2026): added the Bucs hire announcement, his introductory press conference and the ESPN story on Atlanta's firings; dropped the SportsTalk ATL item; views and want/fear now fit Tampa Bay; added ties to Bowles and Baker Mayfield."
   }
 }

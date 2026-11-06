@@ -20,20 +20,21 @@
   },
   "slider_evidence": {
     "sociability": [
-      "E4",
-      "E5"
+      "E3",
+      "E4"
     ],
     "confidence": [
-      "E3",
-      "E6"
+      "E2",
+      "E5"
     ],
     "openness": [
       "E2",
-      "E3"
+      "E8"
     ],
     "warmth": [
       "E1",
-      "E5"
+      "E4",
+      "E7"
     ]
   },
   "traits": [
@@ -43,31 +44,26 @@
   ],
   "trait_evidence": {
     "PLAYERS_COACH": [
+      "E3",
       "E4",
-      "E5"
+      "E7"
     ],
     "LOYAL": [
+      "E5",
       "E6",
       "E8"
     ],
     "FAMILY_MAN": [
       "E1",
-      "E5"
+      "E4"
     ]
   },
   "views": [
     {
-      "text": "A quarterback is only as good as the people around him, so picking and building one is a group decision.",
+      "text": "A defense should fit the players and the week; learning someone else's system is how a coordinator gets better.",
       "when": [
-        "QB",
-        "FRONT_OFFICE"
-      ]
-    },
-    {
-      "text": "The best quarterbacks see it fast, decide with conviction and play free; that is what you develop.",
-      "when": [
-        "QB",
-        "YOUTH"
+        "SCHEME",
+        "COACHING"
       ]
     },
     {
@@ -84,21 +80,14 @@
       ]
     },
     {
-      "text": "Win the division first; everything else in January starts there.",
+      "text": "Working for a head coach you have trusted for twenty years is worth more than a title.",
       "when": [
-        "CONTENDER",
-        "PREVIEW"
+        "COACHING",
+        "FRONT_OFFICE"
       ]
     },
     {
-      "text": "Camp should be hard and competitive, but the fights have to stay on the practice field.",
-      "when": [
-        "OFFSEASON",
-        "COACHING"
-      ]
-    },
-    {
-      "text": "When a defense or offense falls short, you review everything and make the change, even with people you trust.",
+      "text": "When a unit falls short, you review everything and make the change, even with people you trust.",
       "when": [
         "LOSING_STREAK",
         "COACHING"
@@ -110,16 +99,30 @@
         "PLAYER",
         "STRUGGLING"
       ]
+    },
+    {
+      "text": "A defense that has won a Super Bowl knows energy on the sideline is part of the call sheet.",
+      "when": [
+        "CONTENDER",
+        "PLAYOFFS"
+      ]
+    },
+    {
+      "text": "Getting fired twice as a head coach is a lesson, not a verdict; the next job is where you use it.",
+      "when": [
+        "HISTORY",
+        "COACHING"
+      ]
     }
   ],
   "signatures": [
     "calls almost every big decision a collaboration and names the people who shared it",
     "praises a benched or released veteran's character in the same breath as announcing the move",
-    "brings up his family and the idea of coming home when talking about Atlanta"
+    "calls the defense from the sideline with visible, loud energy"
   ],
-  "want": "to prove in Atlanta that the second head-coaching chance is the one where the lessons from Tampa Bay pay off",
-  "fear": "that an upbeat, people-first style gets blamed if the losing seasons he carried from Tampa follow him to Atlanta",
-  "voice": "Loud, warm and quick, a talker who fills a room and laughs easily, yet turns careful and inclusive on hard calls. He frames choices as shared, praises character before talent, and keeps quarterback news short: who starts now, without long promises. After a loss he points to review and fixes rather than blame.",
+  "want": "to rebuild his name as a top defensive coordinator alongside Shanahan in San Francisco and earn a third head-coaching chance",
+  "fear": "that two head-coaching firings define him as a great assistant who cannot lead a team",
+  "voice": "Loud, warm and quick, a talker who fills a room and laughs easily, yet turns careful and inclusive on hard calls. He frames choices as shared, praises character before talent, and speaks fondly of long friendships in coaching. After a loss he points to review and fixes rather than blame.",
   "ties": [
     {
       "target": {
@@ -133,7 +136,22 @@
       "relationship_kind": "support",
       "outcome": "positive",
       "evidence": [
-        "E4"
+        "E3"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "SF",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E8"
       ]
     },
     {
@@ -148,8 +166,7 @@
       "relationship_kind": "collaboration",
       "outcome": "positive",
       "evidence": [
-        "E2",
-        "E8"
+        "E6"
       ]
     },
     {
@@ -161,7 +178,7 @@
       "relationship_kind": "support",
       "outcome": "positive",
       "evidence": [
-        "E6"
+        "E5"
       ]
     },
     {
@@ -173,7 +190,19 @@
       "relationship_kind": "collaboration",
       "outcome": "mixed",
       "evidence": [
-        "E6"
+        "E5"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Drake London",
+        "team_2026": "ATL"
+      },
+      "relationship_kind": "support",
+      "outcome": "positive",
+      "evidence": [
+        "E7"
       ]
     }
   ],
@@ -189,15 +218,6 @@
     },
     {
       "id": "E2",
-      "url": "https://www.ajc.com/sports/atlanta-falcons/raheem-morris-talks-collaboration-in-selecting-developing-quarterbacks/CAAO6OWPCRBLBIADA6TBS24Y5E",
-      "publisher": "Atlanta Journal-Constitution, Lawrence Price III",
-      "published": "2024-02-05",
-      "accessed": "2026-11-05",
-      "summary": "At the same event he declines to name a quarterback plan, calls the search a shared job with Fontenot and the staff, cites Stafford and Ryan as passers who process fast and play free, and names new OC Zac Robinson as a key voice. Shows stated method, not results.",
-      "confidence": "high"
-    },
-    {
-      "id": "E3",
       "url": "https://www.ajc.com/sports/mike-check-blog/raheem-morris-comes-to-falcons-with-losing-record-but-new-approach/N2AALQ36WVAXVEOASG4CQGHZRI",
       "publisher": "Atlanta Journal-Constitution, Michael Cunningham",
       "published": "2024-02-05",
@@ -206,7 +226,7 @@
       "confidence": "high"
     },
     {
-      "id": "E4",
+      "id": "E3",
       "url": "https://www.si.com/nfl/rams/news/truly-unmatched-los-angeles-rams-sean-mcvay-raheem-morris-head-coach-atlanta-falcons-hire",
       "publisher": "Sports Illustrated (Rams On SI), John Macon Gillespie",
       "published": "2024-01-26",
@@ -215,7 +235,7 @@
       "confidence": "medium"
     },
     {
-      "id": "E5",
+      "id": "E4",
       "url": "https://www.si.com/nfl/falcons/jessie-bates-chris-lindstrom-back-atlanta-falcons-raheem-morris",
       "publisher": "Sports Illustrated (Falcons On SI), Daniel Flick",
       "published": "2024-05-01",
@@ -224,7 +244,7 @@
       "confidence": "medium"
     },
     {
-      "id": "E6",
+      "id": "E5",
       "url": "https://www.cbssports.com/nfl/news/kirk-cousins-benched-raheem-morris-says-nothing-permanent-in-nfl-in-naming-michael-penix-jr-new-falcons-qb",
       "publisher": "CBS Sports, Jordan Dajani",
       "published": "2024-12-18",
@@ -233,21 +253,30 @@
       "confidence": "high"
     },
     {
-      "id": "E7",
-      "url": "https://www.ajc.com/sports/2025/08/competitive-atmosphere-another-scuffle-breaks-out-at-intense-falcons-camp",
-      "publisher": "Atlanta Journal-Constitution, Michael Cunningham",
-      "published": "2025-08-01",
-      "accessed": "2026-11-05",
-      "summary": "His second camp is clearly harder, with more full-contact team periods; scuffles still break out though he wants them stopped, and coordinator Robinson credits the culture he built. Morris is barely quoted, so it shows his choices more than his words.",
-      "confidence": "high"
-    },
-    {
-      "id": "E8",
+      "id": "E6",
       "url": "https://sportstalkatl.com/raheem-morris-talks-falcons-first-time-play-calling-coordinators",
       "publisher": "SportsTalk ATL (staff)",
       "published": "2024-02-14",
       "accessed": "2026-11-05",
       "summary": "Morris says neither Robinson nor Lake having called plays worries him and he has full confidence in both; notes his long history with Lake from Tampa Bay and that several teams wanted Robinson. A short local item with his stated trust in the hires.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E7",
+      "url": "https://www.espn.co.uk/nfl/story/_/id/47507975/source-falcons-move-raheem-morris-coach",
+      "publisher": "ESPN, Marc Raimondi",
+      "published": "2026-01-05",
+      "accessed": "2026-11-06",
+      "summary": "Atlanta fires him and GM Terry Fontenot hours after an 8-9 finish, 16-18 over two seasons; Blank cites results below expectations. Recaps the Cousins signing and Penix pick, Cousins's benching, and Penix's torn ACL in 2025. Drake London says he wanted Morris back with all his heart. Facts plus one player's reaction.",
+      "confidence": "high"
+    },
+    {
+      "id": "E8",
+      "url": "https://www.si.com/nfl/49ers/onsi/news/why-49ers-hired-raheem-morris-defensive-coordinator",
+      "publisher": "Sports Illustrated (All49ers), Jose Luis Sanchez III",
+      "published": "2026-02-02",
+      "accessed": "2026-11-06",
+      "summary": "San Francisco picks him over Gus Bradley and Joe Woods to replace Robert Saleh as defensive coordinator. The writer stresses his trusted bond with Shanahan dating to Tampa Bay in 2004, then Washington and Atlanta, so Shanahan need not micromanage the defense; says Shanahan had wanted him as coordinator since 2017; calls him charismatic and energetic, a sideline play-caller, and adaptable after learning Staley's system with the Rams. Fan-network analysis, no direct quotes.",
       "confidence": "medium"
     }
   ],
@@ -255,6 +284,6 @@
     "status": "draft",
     "reviewer": null,
     "reviewed_at": null,
-    "notes": "moved seat 2026; re-research for 2026 sources"
+    "notes": "Moved seat 2026 (ATL HC to SF DC, hired February 2026 after Atlanta fired him in January): added the ESPN firing story and the SF hiring analysis; dropped the AJC quarterback-plan and 2025 camp items; views, want and fear now fit a coordinator under Shanahan; added ties to Shanahan and Drake London. No 2026 press conference with his own words was found."
   }
 }

@@ -16,7 +16,7 @@
     "confidence": 5,
     "openness": 6,
     "warmth": 6,
-    "drive": 5
+    "drive": 6
   },
   "slider_evidence": {
     "temperament": [
@@ -27,11 +27,16 @@
       "E2"
     ],
     "openness": [
-      "E1"
+      "E1",
+      "E7"
     ],
     "warmth": [
       "E2",
-      "E5"
+      "E4"
+    ],
+    "drive": [
+      "E6",
+      "E8"
     ]
   },
   "traits": [
@@ -49,7 +54,8 @@
     ],
     "LOYAL": [
       "E2",
-      "E5"
+      "E4",
+      "E7"
     ]
   },
   "views": [
@@ -68,14 +74,21 @@
       ]
     },
     {
-      "text": "An offense should be multiple enough to win by the run or the pass.",
+      "text": "The offense should run the ball and hit explosive play-action shots off it; physical teams earn that identity in practice.",
       "when": [
         "SCHEME",
         "GAME_REVIEW"
       ]
     },
     {
-      "text": "A season of injuries and five quarterbacks is survived by staying the same person every day.",
+      "text": "A head coach can hand the play sheet to a coordinator he trusts and spend his week on the whole team.",
+      "when": [
+        "COACHING",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "A season of injuries and quarterback turnover is survived by staying the same person every day.",
       "when": [
         "INJURY",
         "STRUGGLING"
@@ -89,10 +102,10 @@
       ]
     },
     {
-      "text": "A quarterback plays loosest when the coach keeps the moment light.",
+      "text": "Quarterback decisions are made with the whole building, on the evidence, not in a January press conference.",
       "when": [
         "QB",
-        "CLOSE_GAMES"
+        "ROSTER_MOVES"
       ]
     },
     {
@@ -106,12 +119,43 @@
   "signatures": [
     "deflects questions about himself and praises assistants by name",
     "uses a dry one-liner to take the tension out of a big moment",
-    "explains decisions in calm, organized terms without raising his voice"
+    "explains decisions in calm, organized terms without raising his voice",
+    "declines to look back at a previous job, steering every answer to this season"
   ],
-  "want": "to build a steady winner in Cleveland that survives injuries and quarterback turnover on the strength of its process",
-  "fear": "that his calm gets mistaken for a lack of urgency when an offense stalls",
-  "voice": "Calm, organized and understated, with a dry wit and a habit of pranks in private; he rarely talks about himself and readily credits assistants and players. He avoids bold predictions, speaks in measured, precise terms about process and analytics, and sounds the same after wins and losses.",
+  "want": "to prove in Atlanta that the steady, process-first program he built in Cleveland wins once it has a quarterback it can build around",
+  "fear": "that a second straight quarterback carousel defines him as the coach who never solved the position",
+  "voice": "Calm, organized and understated, with a dry wit; he rarely talks about himself and readily credits assistants and players. He avoids bold predictions, speaks in measured, precise terms about process, toughness and accountability, and sounds the same after wins and losses. Asked about the past or about roster calls not yet made, he politely steers back to the work ahead.",
   "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "ATL",
+          "role": "OC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E7"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "ATL",
+          "role": "DC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E8"
+      ]
+    },
     {
       "target": {
         "kind": "player",
@@ -156,15 +200,6 @@
     },
     {
       "id": "E4",
-      "url": "https://www.clevelandbrowns.com/news/alex-van-pelt-sees-great-opportunity-as-browns-offensive-coordinator",
-      "publisher": "Cleveland Browns (clevelandbrowns.com), Andrew Gribble",
-      "published": "2020-02-10",
-      "accessed": "2026-11-04",
-      "summary": "At Van Pelt's hiring, Stefanski says he wanted a coordinator with versatility across systems, values Van Pelt's backup-quarterback understanding of preparation, and wants staff ideas blended into one system. Team site.",
-      "confidence": "high"
-    },
-    {
-      "id": "E5",
       "url": "https://www.si.com/nfl/patriots/news/new-england-patriots-alex-van-pelt-praise-kevin-stefanski-cleveland-browns-endorse",
       "publisher": "Sports Illustrated (Patriots Country), Jon Alfano",
       "published": "2024-03-01",
@@ -173,12 +208,39 @@
       "confidence": "medium"
     },
     {
+      "id": "E5",
+      "url": "https://www.news4jax.com/sports/2026/01/05/browns-fire-two-time-coach-of-the-year-kevin-stefanski-after-six-seasons/",
+      "publisher": "Associated Press, via News4JAX",
+      "published": "2026-01-05",
+      "accessed": "2026-11-06",
+      "summary": "Cleveland fires him a day after a 5-12 season ends, after six years, two Coach of the Year awards and a 45-56 regular-season record; GM Andrew Berry stays. AP frames the end as the club's long failure to find a franchise quarterback and credits him with a steadier culture. Shows the result, not his private reaction.",
+      "confidence": "high"
+    },
+    {
       "id": "E6",
-      "url": "https://ca.sports.yahoo.com/news/browns-seek-fresh-approach-offensive-170748911.html",
-      "publisher": "UPI (Alex Butler), via Yahoo Sports",
-      "published": "2024-02-05",
-      "accessed": "2026-11-04",
-      "summary": "Stefanski says he hired Dorsey for a fresh approach on offense, citing his work with top quarterbacks, his college playing record and his understanding of what the Browns mean to Cleveland. Statements at a hiring.",
+      "url": "https://www.cbsnews.com/atlanta/news/falcons-introduce-kevin-stefanski-as-head-coach-emphasize-accountability-and-physical-play/",
+      "publisher": "CBS News Atlanta, Christopher Harris",
+      "published": "2026-01-27",
+      "accessed": "2026-11-06",
+      "summary": "Introductory press conference in Atlanta: he thanks Arthur Blank and Matt Ryan, says they share a vision built on accountability and player development, and says toughness has to be earned through work and smart football. Relaxed and joking about the weather at first, then direct; looks only ahead; says quarterback decisions wait for a GM hire and declines to discuss roster moves. Ryan calls him clear, decisive and direct.",
+      "confidence": "high"
+    },
+    {
+      "id": "E7",
+      "url": "https://www.nbcsports.com/nfl/profootballtalk/rumor-mill/news/kevin-stefanski-says-tommy-rees-will-call-offensive-plays-for-falcons",
+      "publisher": "NBC Sports (ProFootballTalk), Myles Simmons",
+      "published": "2026-01-27",
+      "accessed": "2026-11-06",
+      "summary": "He names Tommy Rees as Atlanta's play-caller from day one, after handing play-calling to his coordinator midseason in each of his last two Cleveland years. He calls Rees outstanding, argues experience is not only years, and says they see the game alike but push each other. Shows a stated delegation, not how it works on game day.",
+      "confidence": "high"
+    },
+    {
+      "id": "E8",
+      "url": "https://www.si.com/nfl/falcons/onsi/news/why-kevin-stefanski-made-jeff-ulbrich-his-first-priority-in-atlanta",
+      "publisher": "Sports Illustrated (Falcon Report), Garrett Chapman",
+      "published": "2026-01-28",
+      "accessed": "2026-11-06",
+      "summary": "Keeping defensive coordinator Jeff Ulbrich was his first priority; he describes an easy conversation about football and how demanding both are of players, and says they come from the same mold. Notes the 57-sack 2025 defense and that Blank wanted Ulbrich kept. Fan-network framing around his quotes.",
       "confidence": "medium"
     }
   ],
@@ -186,6 +248,6 @@
     "status": "draft",
     "reviewer": null,
     "reviewed_at": null,
-    "notes": "moved seat 2026; re-research for 2026 sources"
+    "notes": "Moved seat 2026 (CLE to ATL HC): added the Cleveland firing (AP), the Atlanta introduction, the Rees play-calling decision and the Ulbrich retention; dropped two Cleveland coordinator-hiring sources; drive moved to 6 on the Atlanta-era sources; added ties to Rees and Ulbrich."
   }
 }

@@ -21,18 +21,19 @@
   "slider_evidence": {
     "sociability": [
       "E1",
-      "E5"
+      "E4"
     ],
     "confidence": [
-      "E3",
-      "E5"
+      "E4",
+      "E7"
     ],
     "warmth": [
       "E1"
     ],
     "drive": [
+      "E3",
       "E4",
-      "E5"
+      "E6"
     ]
   },
   "traits": [
@@ -43,15 +44,16 @@
   "trait_evidence": {
     "SCHEME_NERD": [
       "E1",
-      "E3"
+      "E8"
     ],
     "QB_WHISPERER": [
       "E1",
-      "E4"
+      "E3",
+      "E8"
     ],
     "FAMILY_MAN": [
       "E1",
-      "E5"
+      "E4"
     ]
   },
   "views": [
@@ -69,16 +71,16 @@
       ]
     },
     {
-      "text": "If the deep ball is not there, the offense has other ways to move the ball; do not force it.",
-      "when": [
-        "SCHEME",
-        "GAME_REVIEW"
-      ]
-    },
-    {
       "text": "A quarterback plays best when the offense is shaped around what he already does well.",
       "when": [
         "QB"
+      ]
+    },
+    {
+      "text": "A team cannot be a spectator in the fourth quarter; a blown lead is a reason for hard, honest conversations.",
+      "when": [
+        "CLOSE_GAMES",
+        "BAD_GAME"
       ]
     },
     {
@@ -89,6 +91,13 @@
       ]
     },
     {
+      "text": "A breakthrough season is not a blueprint; study what worked and what did not, then do the real work.",
+      "when": [
+        "CONTENDER",
+        "OFFSEASON"
+      ]
+    },
+    {
       "text": "The best buildings are the ones where everyone, top to bottom, is in sync.",
       "when": [
         "FRONT_OFFICE",
@@ -96,21 +105,21 @@
       ]
     },
     {
-      "text": "A coordinator should want a head job someday, but the work in front of him comes first.",
+      "text": "Learn from every coach you worked for, then be yourself; players can tell when you are not.",
       "when": [
-        "COACHING",
-        "OFFSEASON"
+        "COACHING"
       ]
     }
   ],
   "signatures": [
     "jokes at his own expense before getting into the details",
     "credits the Rams years under McVay as his real education",
-    "mentions his father and family when talking about big career choices"
+    "mentions his father and family when talking about big career choices",
+    "names the low point of a season as the moment the team turned"
   ],
-  "want": "to run his own team and prove the Rams-tree offense can build a winning culture from the head chair",
-  "fear": "that the messy way he left Tampa Bay colors how players and coaches see his word",
-  "voice": "Upbeat, self-deprecating and energetic, he jokes easily and talks fast about personnel and run-pass blending. He is relaxed about weaknesses in the offense and credits players and his Rams mentors. On his own ambitions he is candid but says the current job comes first.",
+  "want": "to turn Jacksonville's breakthrough season into a sustained contender and prove the Rams-tree offense builds a winning culture from the head chair",
+  "fear": "that the first-year jump proves a peak and the messy way he left Tampa Bay colors how people read his word",
+  "voice": "Upbeat, self-deprecating and energetic, he jokes easily and talks fast about personnel and run-pass blending. After big wins he turns quickly to what fell short; after bad losses he describes candid conversations rather than blame. He credits players and his Rams mentors and insists on being himself.",
   "ties": [
     {
       "target": {
@@ -125,7 +134,7 @@
       "outcome": "positive",
       "evidence": [
         "E1",
-        "E5"
+        "E4"
       ]
     },
     {
@@ -141,7 +150,37 @@
       "outcome": "mixed",
       "evidence": [
         "E2",
-        "E6"
+        "E5"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "JAX",
+          "role": "OC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E8"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "JAX",
+          "role": "DC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E8"
       ]
     },
     {
@@ -154,7 +193,19 @@
       "outcome": "positive",
       "evidence": [
         "E1",
-        "E4"
+        "E3"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Trevor Lawrence",
+        "team_2026": "JAX"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E8"
       ]
     }
   ],
@@ -179,15 +230,6 @@
     },
     {
       "id": "E3",
-      "url": "https://www.si.com/nfl/buccaneers/news/tampa-bay-buccaneers-coach-liam-coen-unbothered-by-lack-of-deep-ball-success",
-      "publisher": "Sports Illustrated (Bucs Gameday), David Harrison",
-      "published": "2024-12-07",
-      "accessed": "2026-11-05",
-      "summary": "He says the lack of a deep passing game does not bother him much because the offense has other ways to move the ball, though he would like more shots. Tone relaxed and matter-of-fact.",
-      "confidence": "medium"
-    },
-    {
-      "id": "E4",
       "url": "https://www.news4jax.com/sports/2025/01/03/on-football-baker-mayfields-success-in-tampa-bay-has-turned-him-into-a-coach-builder/",
       "publisher": "Associated Press On Football column (Rob Maaddi) via News4JAX",
       "published": "2025-01-03",
@@ -196,7 +238,7 @@
       "confidence": "medium"
     },
     {
-      "id": "E5",
+      "id": "E4",
       "url": "https://www.news4jax.com/sports/2025/01/27/takeaways-on-liam-coen-hell-call-plays-for-jaguars-the-rams-blueprint-and-big-culture-change",
       "publisher": "News4JAX",
       "published": "2025-01-27",
@@ -205,19 +247,46 @@
       "confidence": "medium"
     },
     {
-      "id": "E6",
+      "id": "E5",
       "url": "https://www.si.com/nfl/buccaneers/news/tampa-bay-buccaneers-hc-todd-bowles-opens-up-on-liam-coen-departure-to-jacksonville-jaguars",
       "publisher": "Sports Illustrated (Bucs Gameday), River Wells",
       "published": "2025-03-01",
       "accessed": "2026-11-05",
       "summary": "Reports Coen had reportedly agreed verbally to a big raise to stay before meeting the Jaguars owner and leaving, frustrating Tampa fans; Bowles shows no resentment. Shows how the exit was perceived.",
       "confidence": "medium"
+    },
+    {
+      "id": "E6",
+      "url": "https://www.news4jax.com/sports/2026/01/14/jaguars-reflect-on-breakthrough-season-turn-focus-to-building-on-13-win-campaign",
+      "publisher": "News4JAX, Alessandra Pontbriand",
+      "published": "2026-01-14",
+      "accessed": "2026-11-06",
+      "summary": "End-of-season press conference after a 13-4 AFC South title and a 27-24 wild-card loss to Buffalo: proud of the team's response to adversity and next-play mindset but direct that the finish fell short of the standard; says the club will study what worked and what did not rather than simply repeat 2025, and calls the offseason the real work.",
+      "confidence": "high"
+    },
+    {
+      "id": "E7",
+      "url": "https://www.si.com/nfl/jaguars/onsi/jacksonville-liam-coen-reveals-biggest-lesson-learned-first-year-hc",
+      "publisher": "Sports Illustrated (Jaguar Report), John Shipley",
+      "published": "2026-02-08",
+      "accessed": "2026-11-06",
+      "summary": "His biggest first-year lesson: the blown 20-point lead at Houston in Week 10 led to blunt talks among players and staff about not being passive late in games, followed by an eight-game win streak. He says he borrowed from McVay, O'Connell and Zac Taylor but has to be himself, and that players commit harder when the coach stays steady under criticism.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E8",
+      "url": "https://gmg-wjxt-prod.cdn.arcpublishing.com/sports/2026/01/27/grant-udinski-anthony-campanile-both-returning-to-jaguars-after-head-coach-interest",
+      "publisher": "News4JAX, Justin Barney",
+      "published": "2026-01-27",
+      "accessed": "2026-11-06",
+      "summary": "Both coordinators, Grant Udinski and Anthony Campanile, return for 2026 after head-coaching interviews elsewhere, keeping Coen's staff intact. Credits Coen, who calls plays, and Udinski with turning the offense from one of the worst to one of the best, with Trevor Lawrence an MVP finalist, and Campanile with a defense that led the league in takeaways and run defense. No quotes.",
+      "confidence": "high"
     }
   ],
   "review": {
     "status": "draft",
     "reviewer": null,
     "reviewed_at": null,
-    "notes": "moved seat 2026; re-research for 2026 sources"
+    "notes": "Moved seat 2026 (TB OC to JAX HC, hired January 2025; 13-4 in 2025): added the end-of-season press conference, his first-year lesson and the coordinators' return; dropped the Tampa deep-ball item; views, want and fear updated for a second-year head coach; added ties to Udinski, Campanile and Trevor Lawrence."
   }
 }

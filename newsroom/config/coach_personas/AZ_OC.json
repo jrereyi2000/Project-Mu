@@ -25,13 +25,15 @@
     ],
     "warmth": [
       "E2",
-      "E3"
+      "E3",
+      "E7"
     ]
   },
   "traits": [
     "QB_WHISPERER",
     "LOYAL",
-    "FAMILY_MAN"
+    "FAMILY_MAN",
+    "TEACHER"
   ],
   "trait_evidence": {
     "QB_WHISPERER": [
@@ -40,10 +42,14 @@
     ],
     "LOYAL": [
       "E2",
-      "E3"
+      "E3",
+      "E7"
     ],
     "FAMILY_MAN": [
       "E3"
+    ],
+    "TEACHER": [
+      "E7"
     ]
   },
   "views": [
@@ -55,6 +61,13 @@
       ]
     },
     {
+      "text": "Chase explosive plays, but build efficiency the players can lean on, and keep evolving as the roster changes.",
+      "when": [
+        "SCHEME",
+        "GAME_REVIEW"
+      ]
+    },
+    {
       "text": "A staff and a locker room should feel like a family; it is not about any one person.",
       "when": [
         "COACHING",
@@ -62,7 +75,7 @@
       ]
     },
     {
-      "text": "When you fail somewhere, own it completely and move on without excuses.",
+      "text": "When you fail somewhere, own it completely, take the lesson and pass it on so the next coach does not repeat it.",
       "when": [
         "BAD_GAME",
         "COACHING"
@@ -76,14 +89,14 @@
       ]
     },
     {
-      "text": "Working again with people you respect matters more than the title on the door.",
+      "text": "Working with people you respect matters more than the title on the door or who calls the plays.",
       "when": [
         "COACHING",
         "ROSTER_MOVES"
       ]
     },
     {
-      "text": "A great veteran quarterback should have a real say in the offense around him.",
+      "text": "A veteran quarterback should have a real say in the offense around him.",
       "when": [
         "QB",
         "PLAYER"
@@ -93,11 +106,11 @@
   "signatures": [
     "brings up his family's coaching history when talking about the job",
     "addresses past criticism head-on before anyone asks, owning the mistakes",
-    "talks about the quarterback as a partner and friend rather than a pupil"
+    "describes his role as making the head coach the best version of himself"
   ],
-  "want": "to show that his offense, not just his friendship with a star quarterback, can carry a team",
-  "fear": "that he is remembered for one failed head-coaching season and an offense that never took off",
-  "voice": "Animated, upbeat and constantly 'on'; he talks fast, laughs easily and treats the team as a family. He owns past failures openly and without excuses, and speaks warmly about colleagues and his quarterback. He avoids blaming players when the offense stalls.",
+  "want": "to help a first-time head coach succeed in Arizona and show that his offensive design, not just his friendship with a star quarterback, can carry a team",
+  "fear": "that he is remembered for one failed head-coaching season and offenses that never took off in Denver and New York",
+  "voice": "Animated, upbeat and constantly 'on'; he talks fast, laughs easily and treats the team as a family. He owns past failures openly and without excuses, now often framing them as lessons he can hand to others. He speaks warmly about colleagues and his quarterback and avoids blaming players when the offense stalls.",
   "ties": [
     {
       "target": {
@@ -127,6 +140,37 @@
       "outcome": "positive",
       "evidence": [
         "E2"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "AZ",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E6",
+        "E7"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "GB",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E6"
       ]
     }
   ],
@@ -175,12 +219,30 @@
       "accessed": "2026-11-04",
       "summary": "Denver fires him with two games left in a 4-11 first season after a 51-14 loss; the story says he never built an offense suited to Russell Wilson. News facts; nothing on his personality.",
       "confidence": "high"
+    },
+    {
+      "id": "E6",
+      "url": "https://www.foxsports.com/articles/nfl/cardinals-hiring-veteran-coach-nathaniel-hackett-as-offensive-coordinator-ap-source-says",
+      "publisher": "Associated Press, via Fox Sports",
+      "published": "2026-02-04",
+      "accessed": "2026-11-06",
+      "summary": "Arizona is hiring him as offensive coordinator, Mike LaFleur's first major hire, with LaFleur calling plays. Recaps his career: coordinator in Buffalo, Jacksonville, Green Bay (2019-21, two Rodgers MVP years under Matt LaFleur) and the Jets; a 4-11 Denver head-coaching season; a 2025 return to Green Bay as a defensive analyst; and a brief hire as Miami's quarterbacks coach. Facts only.",
+      "confidence": "high"
+    },
+    {
+      "id": "E7",
+      "url": "https://arizonasports.com/?p=3612149",
+      "publisher": "Arizona Sports (ArizonaSports.com), Tyler Drake",
+      "published": "2026-02-19",
+      "accessed": "2026-11-06",
+      "summary": "LaFleur says Hackett was his first and only choice and the two see the game alike; it is the first time they share a staff. Hackett sets the plan around explosives, efficiency and evolving with the roster, and says he wants to help LaFleur avoid the mistakes Hackett learned from in Denver. Beat reporting with both men's words.",
+      "confidence": "high"
     }
   ],
   "review": {
     "status": "draft",
     "reviewer": null,
     "reviewed_at": null,
-    "notes": "moved seat 2026; re-research for 2026 sources"
+    "notes": "Moved seat 2026 (NYJ OC to AZ OC under Mike LaFleur, who calls plays): added the AP hire story and the February offense piece; TEACHER added for his stated role of helping LaFleur grow; views, want and fear now fit a non-play-calling coordinator in Arizona; added ties to Mike LaFleur and Matt LaFleur."
   }
 }
