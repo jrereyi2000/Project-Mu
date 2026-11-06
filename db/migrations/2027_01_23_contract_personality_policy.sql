@@ -1,4 +1,4 @@
--- Personality contract policy receipts (docs/in_progress/PERSONALITY_CONTRACT_POLICY_PLAN.md §2.5;
+-- Personality contract policy receipts (docs/done/PERSONALITY_CONTRACT_POLICY_PLAN.md §2.5;
 -- engines/personality_contract_store.py). Additive and default-off: two tables, no seeds, no backfill.
 --   contract_policy_decisions     one immutable receipt per negotiation attempt or CPU decision batch entry
 --                                 (permitted view, revision, context/provider versions, components, gates, draws,

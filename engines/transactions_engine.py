@@ -28,7 +28,7 @@ rounded to $10,000, so near-equal players tie and the cap decides.
 Randomness: sha256 of the seed string only (no global random state), so a seed always gives the same moves.
 Every threshold below is an estimate unless a comment says otherwise.
 
-Player consent (docs/in_progress/PERSONALITY_CONTRACT_POLICY_PLAN.md §2.4, U3). plan_resign / resign_decisions take
+Player consent (docs/done/PERSONALITY_CONTRACT_POLICY_PLAN.md §2.4, U3). plan_resign / resign_decisions take
 keyword-only contract_inputs {player_id: {view, context, policy}} and an optional `decisions` list. Off and shadow
 keep every move, draw and test-market lottery exactly (shadow records the adjusted alternative in `decisions`). In
 active mode, for that player only:

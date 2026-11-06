@@ -1,4 +1,4 @@
-"""Personality contract policy (docs/in_progress/PERSONALITY_CONTRACT_POLICY_PLAN.md §2.1-§2.2, U1).
+"""Personality contract policy (docs/done/PERSONALITY_CONTRACT_POLICY_PLAN.md §2.1-§2.2, U1).
 
 Pure: no database, no model calls, no randomness. Turns a player's stored personality (the core's `contracts` feature
 view, personality.core.feature_view) and verified contract context (career, earned security, his own one-way view of

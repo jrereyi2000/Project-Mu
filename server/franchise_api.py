@@ -79,7 +79,7 @@ and launch; these are the contract):
        PolicyExplanation = {mode: shadow|active, applied: bool, base_utility, adjusted_utility, delta (signed, capped),
        raw_delta, cap_applied, terms: {ambition, attachment, home, grudge (<= 0)}, reasons: [str], policy_version,
        fingerprint}.
-  Contract policy (docs/in_progress/PERSONALITY_CONTRACT_POLICY_PLAN.md §2.5, U4). The server owns it: the mode and
+  Contract policy (docs/done/PERSONALITY_CONTRACT_POLICY_PLAN.md §2.5, U4). The server owns it: the mode and
        config come from engines/personality_contract_store.read_contract_activation for the universe registered to
        league_state.madden_league_id (persona_lifecycle_universes); no universe, or mode off (the default while the
        activation switchboard doesn't exist), is the original path with no extra reads or writes. Otherwise both

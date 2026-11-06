@@ -40,7 +40,7 @@ Every weight and threshold here is an estimate (V2 §4 names the shape, not the 
 role values 1.0 / 0.65 / 0.3, which the plan fixes. Statuses are ACCEPT | REJECT | COUNTER; the caller maps them
 to contract_offers.status (ACCEPTED / REJECTED / COUNTERED).
 
-Personality contract policy (docs/in_progress/PERSONALITY_CONTRACT_POLICY_PLAN.md §2.3, U3). Keyword-only and off
+Personality contract policy (docs/done/PERSONALITY_CONTRACT_POLICY_PLAN.md §2.3, U3). Keyword-only and off
 unless a caller passes it: offer_utility / acceptance / _counter take persona (the core's contracts feature view),
 contract_context (context v1) and policy (a validated config, engines/personality_contract_policy.py); run_wave,
 street_market and udfa_market take contract_inputs {player_id: {view, context, policy}}. Without a policy, or with
