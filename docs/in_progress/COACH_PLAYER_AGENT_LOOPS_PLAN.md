@@ -1,14 +1,14 @@
 # Project Mu: Coach and Player Agent Loops Plan
 
-**Status:** approved by JR (2026-11-03), Q1–Q3 settled as recommended (§8); not built. Queued: JR wants every personality sub-plan written and approved before more building (2026-11-03). The other plans were updated at approval (§7).
+**Status:** approved by JR (2026-11-03), Q1–Q3 settled as recommended (§8); building, wave 1 of 2 (U3 held until the inbox `CONTRACT`/`ROLE_TALK` kinds and trade talks U6, PERSONALITY_PLAN §5.3). The other plans were updated at approval (§7).
 **Builds on:**
 - [`PERSONALITY_PLAN.md`](../in_progress/PERSONALITY_PLAN.md) §8: agentic loops; the player negotiates for himself, with no hired agent.
-- [`TRADE_NEGOTIATIONS_PLAN.md`](TRADE_NEGOTIATIONS_PLAN.md) §2.1, §2.3: the GM loop pattern (legal options, persona policy, model choice with fallback, record don't replay).
+- [`TRADE_NEGOTIATIONS_PLAN.md`](../not_started/TRADE_NEGOTIATIONS_PLAN.md) §2.1, §2.3: the GM loop pattern (legal options, persona policy, model choice with fallback, record don't replay).
 - [`PERSONALITY_CONTRACT_POLICY_PLAN.md`](../done/PERSONALITY_CONTRACT_POLICY_PLAN.md) §2.3 (shared scoring and counters).
 - [`PERSONALITY_DEVELOPMENT_COACHING_PLAN.md`](../done/PERSONALITY_DEVELOPMENT_COACHING_PLAN.md) §2.5 (close-call opportunity preferences).
 - [`PERSONALITY_RELATIONSHIPS_PLAN.md`](../done/PERSONALITY_RELATIONSHIPS_PLAN.md) §2.2 (`promise_made` / `promise_resolved`).
 - [`FRONT_OFFICE_INBOX_PLAN.md`](../in_progress/FRONT_OFFICE_INBOX_PLAN.md) (the `CONTRACT` and `ROLE_TALK` kinds).
-- [`PERSONALITY_ACTIVATION_PLAN.md`](PERSONALITY_ACTIVATION_PLAN.md) (the switchboard and `PersonalityDeps`).
+- [`PERSONALITY_ACTIVATION_PLAN.md`](../not_started/PERSONALITY_ACTIVATION_PLAN.md) (the switchboard and `PersonalityDeps`).
 - [`REAL_COACH_PROFILES_PLAN.md`](../in_progress/REAL_COACH_PROFILES_PLAN.md) (`persona_for`).
 
 **Goal:** Let CPU coaches and players make their own choices and speak for themselves, inside what the engines allow. A coach decides his close depth-chart calls and can promise an unhappy player a role by a given week. That promise is recorded, kept or broken, and trust and trade requests react to it. A player in contract talks picks how hard to push among the counters the engine says he would accept, and can go public with it. Every decision is a seeded personality choice for free. The model is asked, and writes the words, only where JR or the press will see it.
@@ -284,3 +284,9 @@ JR approved all three recommendations on 2026-11-03.
 | Q1 | How many model-backed CPU cases a week? | 4 (`MARQUEE_PER_WEEK`), for the cases most likely to make news: a starting QB decision, a healthy starter benched, a top-50 contract. Tune from the shadow season's call count. |
 | Q2 | How long until a promise is judged? | 3 weeks (`PROMISE_REVIEW_WEEKS`). If he's hurt at the review, judge it a week later, once. |
 | Q3 | How many leaks? | At most one per player per season and three league-wide a week. |
+
+## 9. Build log
+
+| Unit | Wave | Branch | Worktree | Result | Merge |
+|---|---|---|---|---|---|
+| U3 | 3 | — | — | held (PERSONALITY_PLAN §5.3) | — |
