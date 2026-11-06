@@ -181,7 +181,7 @@ Scheme advice ranks only caller-supplied legal choices. Neutral ordering changes
 
 Receipts can supply verified source IDs for later reviewed sustained preparation, development milestones or mentoring events. One good week or invented practice prose cannot change a profile. Core owns revision/annual limits; a cross-feature coordinator arbitrates its single annual change slot: the arbiter in the [personality evolution plan](../done/PERSONALITY_EVOLUTION_PLAN.md), which takes this plan's candidates as `source 'DEVELOPMENT'`. unknowns need classification; slider changes wait for both band migrations.
 
-Later hiring preferences belong in `coaching_carousel.opening_appeal`/`pick`; owner patience belongs in existing hot-seat policy. Both are planned in the [owners, scouts and voters plan](../not_started/OWNERS_SCOUTS_VOTERS_PLAN.md). Preserve one hiring cycle, user-team restrictions, tenure/championship protections, firing budgets and recorded moves. Do not infer teaching quality from win totals, count churn twice, add an owner scalar store or build a parallel hiring engine. These are dependency notes, not implementation units.
+Later hiring preferences belong in `coaching_carousel.opening_appeal`/`pick`; owner patience belongs in existing hot-seat policy. Both are planned in the [owners, scouts and voters plan](../in_progress/OWNERS_SCOUTS_VOTERS_PLAN.md). Preserve one hiring cycle, user-team restrictions, tenure/championship protections, firing budgets and recorded moves. Do not infer teaching quality from win totals, count churn twice, add an owner scalar store or build a parallel hiring engine. These are dependency notes, not implementation units.
 
 ### 2.7 CLI, visibility and activation gates
 

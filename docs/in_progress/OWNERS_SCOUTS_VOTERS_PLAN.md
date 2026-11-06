@@ -1,7 +1,7 @@
 # Project Mu: Owners, Scouts and Media Voters Plan
 
-**Status:** approved by JR (2026-11-03), Q1, Q2 and Q4 settled as recommended and Q3 changed by JR (D5: All-Pro by ballot too) (§8); not built. Queued: JR wants every personality sub-plan written and approved before more building (2026-11-03). The other plans were updated at approval (§7).
-**Builds on:** [`PERSONALITY_PLAN.md`](../in_progress/PERSONALITY_PLAN.md) phase 6, §12 (owner and scout categories); [`REAL_COACH_PROFILES_PLAN.md`](../in_progress/REAL_COACH_PROFILES_PLAN.md) (the reviewed-profile files, research batches and review tool); [`SCOUTING_REVAMP_PLAN.md`](../in_progress/SCOUTING_REVAMP_PLAN.md) (the `scout_voice` / `regional_bias` hooks); [`PERSONALITY_DEVELOPMENT_COACHING_PLAN.md`](../done/PERSONALITY_DEVELOPMENT_COACHING_PLAN.md) §2.6 (hiring and owner patience left as notes); [`PERSONALITY_ACTIVATION_PLAN.md`](PERSONALITY_ACTIVATION_PLAN.md) (switchboard); [`COACH_PLAYER_AGENT_LOOPS_PLAN.md`](../in_progress/COACH_PLAYER_AGENT_LOOPS_PLAN.md) (the loop base); [`FRONT_OFFICE_INBOX_PLAN.md`](../in_progress/FRONT_OFFICE_INBOX_PLAN.md); PROJECT_SPEC §2.11, §2.19, §2.17d, §7.6b, §7.6c.
+**Status:** approved by JR (2026-11-03), Q1, Q2 and Q4 settled as recommended and Q3 changed by JR (D5: All-Pro by ballot too) (§8); building, wave 1 of 2 (2026-11-06). U5 (owner wiring and the `OWNER` inbox kind) and U6 (scouting directors, the migration and the switchboard features) are held per PERSONALITY_PLAN §5.3; waves 1–2 build U1, U4, U7, U2 and U3.
+**Builds on:** [`PERSONALITY_PLAN.md`](../in_progress/PERSONALITY_PLAN.md) phase 6, §12 (owner and scout categories); [`REAL_COACH_PROFILES_PLAN.md`](../in_progress/REAL_COACH_PROFILES_PLAN.md) (the reviewed-profile files, research batches and review tool); [`SCOUTING_REVAMP_PLAN.md`](../in_progress/SCOUTING_REVAMP_PLAN.md) (the `scout_voice` / `regional_bias` hooks); [`PERSONALITY_DEVELOPMENT_COACHING_PLAN.md`](../done/PERSONALITY_DEVELOPMENT_COACHING_PLAN.md) §2.6 (hiring and owner patience left as notes); [`PERSONALITY_ACTIVATION_PLAN.md`](../not_started/PERSONALITY_ACTIVATION_PLAN.md) (switchboard); [`COACH_PLAYER_AGENT_LOOPS_PLAN.md`](../in_progress/COACH_PLAYER_AGENT_LOOPS_PLAN.md) (the loop base); [`FRONT_OFFICE_INBOX_PLAN.md`](../in_progress/FRONT_OFFICE_INBOX_PLAN.md); PROJECT_SPEC §2.11, §2.19, §2.17d, §7.6b, §7.6c.
 
 **Goal:** Fill in the league's last faceless decision-makers.
 - **Owners:** the 32 real-inspired owners become reviewed characters whose personalities shape four things:
@@ -389,3 +389,8 @@ JR decided all four on 2026-11-03: Q1, Q2 and Q4 as recommended, and Q3 changed 
 | Q2 | Can an owner carry all three ownership pairs (for example Meddler, Deep Pockets and Headline Hunter)? | Yes. The pairs are separate axes, so the ownership category allows three traits for owners instead of the usual two-per-category limit. |
 | Q3 | Should All-Pro teams also go to ballots? | **JR (2026-11-03): yes (D5).** The same panel votes on every First-Team slot; the vote counts make the First and Second Teams. |
 | Q4 | Does a scouting director leave when his GM is fired? | No, he stays; a new GM can replace him at the next season's start (a later carousel rule). |
+
+## 9. Build log
+
+| Unit | Wave | Branch | Worktree | Result | Merge |
+|---|---|---|---|---|---|
