@@ -962,9 +962,19 @@ class Deps:
         from engines import progression_save
         return progression_save.slider_edits(snapshot)
 
-    def staff_depth_chart(self, roster, scheme, injuries):
+    def staff_depth_chart(self, roster, scheme, injuries, score_adjustments=None):
         from engines import depth_chart_engine as dce
-        return dce.staff_depth_chart(roster, scheme, injuries)
+        return dce.staff_depth_chart(roster, scheme, injuries, score_adjustments=score_adjustments)
+
+    def chart_adjustments(self, cur, team_id, season, week, roster=None, scheme=None, injuries=None):
+        """Opportunity score adjustments for a CPU staff chart: none here (PersonalityDeps passes them when the
+        switchboard's development_opportunity feature is active)."""
+        return None
+
+    def retirement_decision(self, cur, player, season, seed):
+        """(mu_keep, reason) for a player Madden retired: today's seeded age/OVR rule (PersonalityDeps asks the
+        retirement policy by switchboard mode)."""
+        return keep_retired(player, season, seed)
 
     def team_schemes(self, cur, season):
         cur.execute("SELECT to_regclass('coordinator_tenures') IS NOT NULL")
@@ -1078,6 +1088,12 @@ class Deps:
 
 
 # -------------------------------------------------------------- the steps ----
+def default_deps(cur):
+    """The personality switchboard's deps for this league (pipeline/league_office_personality.py)."""
+    from pipeline import league_office_personality as lop
+    return lop.default_deps(cur)
+
+
 def _payload_pgids(plan, ids):
     out = []
     for pid in ids or []:
@@ -1348,7 +1364,12 @@ def step_coach_charts(plan, deps, cur, user_teams, jr_charts, schemes):
             injuries[g] = {"out": out, "weeks": 1 if out else 0}
         if not roster:
             continue
-        chart = deps.staff_depth_chart(roster, schemes.get(team_id) or {}, injuries)
+        scheme = schemes.get(team_id) or {}
+        adjustments = deps.chart_adjustments(cur, team_id, plan.season, plan.week, roster, scheme, injuries)
+        if adjustments is None:
+            chart = deps.staff_depth_chart(roster, scheme, injuries)
+        else:
+            chart = deps.staff_depth_chart(roster, scheme, injuries, score_adjustments=adjustments)
         # MU_COACH outranks drift's restored chart: it is this week's coach decision.
         have = plan.depth.get(team_index)
         if have and have["source"] == "DRIFT":
@@ -1395,12 +1416,14 @@ def step_moves(plan, moves, priority, label):
             plan.warn(f"{label}: move kind {kind} not handled")
 
 
-def step_retirements(plan, seed):
-    """Madden's retirements: recorded, and un-retired (as free agents) where keep_retired says so."""
+def step_retirements(plan, seed, deps=None, cur=None):
+    """Madden's retirements: recorded, and un-retired (as free agents) where deps.retirement_decision (today's
+    keep_retired unless the switchboard's retirement feature says otherwise) keeps them."""
     for g, p in sorted(plan.players.items()):
         if p.get("status") != "Retired":
             continue
-        keep, reason = keep_retired(p, plan.season, seed)
+        keep, reason = (keep_retired(p, plan.season, seed) if deps is None
+                        else deps.retirement_decision(cur, p, plan.season, seed))
         pid = plan.pid(g)
         if pid is None:
             plan.warn(f"{plan.name(g)}: retired but not in players (no madden_pgid); not recorded")
@@ -1666,8 +1689,9 @@ def plan_stage(cur, snapshot, stage, seed, deps=None, wave=None, state=None, sou
     """Plans one stage: {"stage", "wave", "season", "week", "edits" (the ONE combined save_writer document),
     "edits_hash" (its canonical hash), "league_edits" (the league office's own part), "prepared" (the progression
     envelope, unchanged, or None), "progression" (what it was asked), "summary", "drift", "deferred", "warnings",
-    "errors", "db" (what run() records after a successful write), ...}. Progression and composition errors raise."""
-    deps = deps or Deps()
+    "errors", "db" (what run() records after a successful write), ...}. Progression and composition errors raise.
+    Without deps, the personality switchboard picks them (pipeline/league_office_personality.default_deps)."""
+    deps = deps or default_deps(cur)
     if stage not in STAGES:
         raise StageError(f"unknown stage {stage}")
     if stage in FA_STAGES and wave is None:
@@ -1678,6 +1702,9 @@ def plan_stage(cur, snapshot, stage, seed, deps=None, wave=None, state=None, sou
         wave = wave or (FA_WAVES if stage == COMBINE else 1)
     season, week = league_season(snapshot, stage), league_week(snapshot, stage)
     calendar = snapshot["season"]["calendar_year"]
+    begin = getattr(deps, "begin_stage", None)
+    if begin is not None:
+        begin(stage, season, week, wave if stage in FA_STAGES else None, seed)
     teams = deps.team_ids(cur, snapshot)
     plan = Plan(snapshot, stage, season, week, wave if stage in FA_STAGES else None, seed, teams,
                 deps.pgid_map(cur), state)
@@ -1706,7 +1733,7 @@ def plan_stage(cur, snapshot, stage, seed, deps=None, wave=None, state=None, sou
                                                     PRIORITY_STAGE, "waivers"))
     elif stage == OFFSEASON_START:
         plan.step("salary cap", step_salary_cap, plan, deps, cur)
-        plan.step("retirements", step_retirements, plan, seed)
+        plan.step("retirements", step_retirements, plan, seed, deps, cur)
         plan.step("promoted practice squads", lambda: step_promoted_ps(plan, deps.ps_without_contract(cur, calendar)))
     else:
         kept = plan.step("kept retirees", deps.kept_retirees, cur, season) or set()
@@ -1773,6 +1800,9 @@ def plan_stage(cur, snapshot, stage, seed, deps=None, wave=None, state=None, sou
     summary["records"] = len(edits.get("records") or [])
     if plan.db.get("salary_cap"):
         summary["salary_cap"] = dict(plan.db["salary_cap"])
+    report = getattr(deps, "personality_report", None)
+    if report is not None:
+        summary["personality"] = report()
     return {"stage": stage, "wave": plan.wave, "season": season, "week": week, "calendar_year": calendar,
             "seed": seed, "edits": edits, "edits_hash": canonical_hash(edits), "league_edits": league_edits,
             "prepared": prepared, "progression": prog_info, "summary": summary, "drift": drift,
@@ -2000,8 +2030,9 @@ def _load_run(cur, run_id):
 def run(cur, snapshot, save_path, stage="auto", dry_run=False, confirm_franchise_closed=False, seed=None,
         deps=None, wave=None, out=print):
     """Plans and writes one stage; returns the league_office_runs id. See the module docstring for the rules and
-    the receipt protocol."""
-    deps = deps or Deps()
+    the receipt protocol. Without deps, the personality switchboard picks them (default_deps); the frozen mode
+    snapshot goes into the operation record so --recover reuses it."""
+    deps = deps or default_deps(cur)
     conn = cur.connection
     if stage in (None, "auto"):
         stage, detected_wave = stage_and_wave(snapshot)
@@ -2026,6 +2057,9 @@ def run(cur, snapshot, save_path, stage="auto", dry_run=False, confirm_franchise
     if not dry_run:
         run_id = _insert_run(cur, meta, save_name, "PLANNED")
         conn.commit()
+    bind = getattr(deps, "bind_run", None)
+    if bind is not None:
+        bind(run_id)
     try:
         plan = plan_stage(cur, snapshot, stage, seed, deps=deps, wave=wave, state=state, source_fingerprint=input_sha)
     except Exception as e:
@@ -2061,6 +2095,7 @@ def run(cur, snapshot, save_path, stage="auto", dry_run=False, confirm_franchise
         return run_id
     # step 2: PREPARED operation (events + unchanged envelope + combined document) committed before any write
     op = new_operation(plan, run_id, save_path, input_sha)
+    op["personality_modes"] = getattr(deps, "modes_snapshot", None)
     _store_operation(cur, run_id, op, plan["summary"], plan["edits"])
     conn.commit()
 
@@ -2149,11 +2184,14 @@ def _acknowledge(cur, deps, op, save_path, output_sha):
 
 def recover(cur, run_id, save_path=None, deps=None, out=print):
     """Finishes a run whose save replacement may have happened without the acknowledgement / commit (§5.3a step 5).
-    Never recalculates, re-rolls or advances: only the stored operation and the save's observed sha256 are used."""
-    deps = deps or Deps()
+    Never recalculates, re-rolls or advances: only the stored operation and the save's observed sha256 are used.
+    Without deps, they are rebuilt from the operation's stored personality mode snapshot, never the switchboard."""
     conn = cur.connection
     row = _load_run(cur, run_id)
     op = (row["summary"] or {}).get("operation")
+    if deps is None:
+        from pipeline import league_office_personality as lop
+        deps = lop.deps_for(cur, (op or {}).get("personality_modes"))
     if row["status"] == "WRITTEN":
         out(json.dumps({"run_id": run_id, "status": "WRITTEN", "note": "already acknowledged; nothing to do"}))
         return "ALREADY_WRITTEN"
