@@ -39,6 +39,22 @@ sha256 of a seed string (no global random state), so a run is reproducible for i
 Every weight and threshold here is an estimate (V2 §4 names the shape, not the numbers) except W_DEFAULT and the
 role values 1.0 / 0.65 / 0.3, which the plan fixes. Statuses are ACCEPT | REJECT | COUNTER; the caller maps them
 to contract_offers.status (ACCEPTED / REJECTED / COUNTERED).
+
+Personality contract policy (docs/in_progress/PERSONALITY_CONTRACT_POLICY_PLAN.md §2.3, U3). Keyword-only and off
+unless a caller passes it: offer_utility / acceptance / _counter take persona (the core's contracts feature view),
+contract_context (context v1) and policy (a validated config, engines/personality_contract_policy.py); run_wave,
+street_market and udfa_market take contract_inputs {player_id: {view, context, policy}}. Without a policy, or with
+mode off, every result is the original dict and arithmetic exactly (a legacy persona argument stays ignored).
+  shadow   utility, ranking and decisions are the baseline; the score adds base_utility and policy_explanation
+           (delta, adjusted_utility, fingerprint) and acceptance's trace carries the adjusted alternative, computed
+           on copies (nothing is reserved or signed).
+  active   utility = round(unrounded base + capped delta, 4) for ranking, the bar and every counter candidate (the
+           same frozen view/context/policy); persona = the signed delta; the bar, the hard backup rejection, the
+           +-0.03 choice and mood noise and their seeds are unchanged. A supplied score whose fingerprint does not
+           match the inputs is recomputed (a stale score cannot authorize acceptance).
+Decisions made with contract_inputs also carry `bar` {base, shift} and `candidates` (every ranked offer: raw and
+adjusted utility, choice draw, noisy score, rank, outcome, counter attempts). The index-seeded choice noise keeps
+offer order significant; canonical_offer_order gives retries one order.
 """
 import hashlib
 
@@ -185,12 +201,24 @@ def role_score(projected_depth, player_ovr):
     return STAR_BACKUP_U if (player_ovr or 0) >= STAR_OVR else BACKUP_U
 
 
-def offer_utility(offer, player, team, market, persona=None):
+def _policy_on(policy):
+    return policy is not None and policy.get("mode") != "off"
+
+
+def _fingerprint(offer, player, team, market, persona, contract_context, policy):
+    from engines.personality_contract_policy import canonical_hash
+    return canonical_hash({"offer": offer, "player": player, "team": team, "market": market, "view": persona,
+                           "context": contract_context, "policy": policy})
+
+
+def offer_utility(offer, player, team, market, persona=None, *, contract_context=None, policy=None):
     """Score one offer for one player. offer: {team_id, player_id, years, total_value, bonus, guaranteed,
     projected_depth?, salary_by_year?}; player: {id, group, ovr, age, accrued_seasons?}; team: {team_id,
     win_pct?, playoff_odds?, popularity_index?, direction?, projected_depth?: {pid: depth}, scheme_fit?: {pid:
-    0..1}}; market: a trade_value.fit_market dict, or None for the league-minimum market. persona is ignored (D4).
-    Returns {utility, financial, opportunity, contention, scheme, persona: 0.0}."""
+    0..1}}; market: a trade_value.fit_market dict, or None for the league-minimum market. Returns {utility,
+    financial, opportunity, contention, scheme, persona: 0.0}. Without a policy (or mode off) persona is ignored
+    (D4). With a shadow/active policy, persona is the core's contracts feature view and the result adds
+    base_utility and policy_explanation (module docstring)."""
     fin = financial_score(offer, player, market)
     opp = role_score(_depth(offer, player, team), player.get("ovr"))
     con = contention_score(team)
@@ -198,8 +226,26 @@ def offer_utility(offer, player, team, market, persona=None):
     sch = NEUTRAL if fit is None else _clamp(float(fit))
     w = W_DEFAULT
     u = w["money"] * fin + w["role"] * opp + w["team"] * con + w["scheme"] * sch + 0.0
-    return {"utility": round(u, 4), "financial": round(fin, 4), "opportunity": round(opp, 4),
-            "contention": round(con, 4), "scheme": round(sch, 4), "persona": 0.0}
+    out = {"utility": round(u, 4), "financial": round(fin, 4), "opportunity": round(opp, 4),
+           "contention": round(con, 4), "scheme": round(sch, 4), "persona": 0.0}
+    if not _policy_on(policy):
+        return out
+    from engines.personality_contract_policy import contract_personality_delta
+    view = persona if isinstance(persona, dict) and "view_version" in persona else None
+    if contract_context is None:
+        raise ValueError("a shadow/active contract policy needs its contract_context")
+    d = contract_personality_delta({"financial": fin, "opportunity": opp, "contention": con, "scheme": sch,
+                                    "team_id": offer.get("team_id")}, view, contract_context, policy)
+    adjusted = round(u + d["capped_delta"], 4)
+    out["base_utility"] = out["utility"]
+    if policy["mode"] == "active":
+        out["utility"] = adjusted
+        out["persona"] = round(d["capped_delta"], 4)
+    out["policy_explanation"] = dict(d, base_utility=out["base_utility"], adjusted_utility=adjusted,
+                                     applied=policy["mode"] == "active",
+                                     fingerprint=_fingerprint(offer, player, team, market, view, contract_context,
+                                                              policy))
+    return out
 
 
 def accept_bar(player, in_season):
@@ -207,9 +253,10 @@ def accept_bar(player, in_season):
     return bar - (IN_SEASON_DISCOUNT if in_season else 0.0)
 
 
-def _counter(offer, player, team, market, bar):
+def _counter(offer, player, team, market, bar, *, persona=None, contract_context=None, policy=None, trace=None):
     """The smallest raise (COUNTER_STEP steps up to COUNTER_MAX_RAISE) at his ideal term and guarantee share that
-    clears the bar, or None."""
+    clears the bar, or None. Every candidate is rescored with the same frozen persona/context/policy; a trace dict
+    receives every attempt and the first clearing step."""
     vet = (player.get("age") or 27) >= VET_AGE
     years = max(offer.get("years") or 1, ideal_years(player.get("age"))) if vet else ideal_years(player.get("age"))
     share = max(_guar_share(offer), GUAR_TARGET_VET if vet else GUAR_TARGET)
@@ -221,25 +268,60 @@ def _counter(offer, player, team, market, bar):
         c = {"team_id": offer.get("team_id"), "player_id": offer.get("player_id"), "years": years,
              "total_value": total, "bonus": int(round(total * bonus_share)), "guaranteed": int(round(total * share)),
              "projected_depth": offer.get("projected_depth")}
-        if offer_utility(c, player, team, market)["utility"] >= bar:
+        u = offer_utility(c, player, team, market, persona, contract_context=contract_context,
+                          policy=policy)["utility"]
+        if trace is not None:
+            trace.setdefault("counter_attempts", []).append({"raise_step": k, "total_value": total, "utility": u})
+        if u >= bar:
+            if trace is not None:
+                trace["counter_clearing_step"] = k
             return {"years": c["years"], "total_value": c["total_value"], "bonus": c["bonus"],
                     "guaranteed": c["guaranteed"]}
     return None
 
 
-def acceptance(best, player, in_season):
+def acceptance(best, player, in_season, *, persona=None, contract_context=None, policy=None, trace=None):
     """best: {offer, team, market, score?, bar_shift?} (score = offer_utility's result, computed when missing;
     bar_shift moves the bar, run_wave's seeded mood and wave cooling). Returns (ACCEPT | REJECT | COUNTER,
-    counter {years, total_value, bonus, guaranteed} or None)."""
+    counter {years, total_value, bonus, guaranteed} or None). With a shadow/active policy the score is checked
+    against the inputs' fingerprint (recomputed when stale) and a trace dict, when given, receives the bar, the
+    hard rejection, the counter attempts and (shadow) the adjusted alternative."""
     offer, team, market = best["offer"], best.get("team") or {}, best.get("market")
-    score = best.get("score") or offer_utility(offer, player, team, market)
-    bar = accept_bar(player, in_season) + (best.get("bar_shift") or 0.0)
+    kw = {"contract_context": contract_context, "policy": policy}
+    if _policy_on(policy):
+        fresh = offer_utility(offer, player, team, market, persona, **kw)
+        supplied = best.get("score")
+        stale = supplied is not None and ((supplied.get("policy_explanation") or {}).get("fingerprint")
+                                          != fresh["policy_explanation"]["fingerprint"]
+                                          or supplied.get("utility") != fresh["utility"])
+        if trace is not None and stale:
+            trace["stale_score"] = True
+        score = fresh
+    else:
+        score = best.get("score") or offer_utility(offer, player, team, market)
+    base_bar = accept_bar(player, in_season)
+    bar = base_bar + (best.get("bar_shift") or 0.0)
+    if trace is not None:
+        trace.update(bar_base=round(base_bar, 4), bar_shift=round(best.get("bar_shift") or 0.0, 6),
+                     bar=round(bar, 6), utility=score["utility"])
+        if "base_utility" in score:
+            trace["base_utility"] = score["base_utility"]
+    if _policy_on(policy) and policy["mode"] == "shadow" and trace is not None:
+        alt = {}
+        status, c = acceptance(dict(best, score=None), player, in_season, persona=persona,
+                               contract_context=contract_context, policy=dict(policy, mode="active"), trace=alt)
+        trace["shadow"] = {"status": status, "counter": c, "adjusted_utility": alt.get("utility")}
     if (player.get("ovr") or 0) >= STAR_OVR and _depth(offer, player, team) >= 3:
         if _aav(offer) < STAR_BACKUP_PREMIUM * _worth(player, market):
+            if trace is not None:
+                trace["hard_rejection"] = "star_backup_role"
             return "REJECT", None
     if score["utility"] >= bar:
         return "ACCEPT", None
-    c = _counter(offer, player, team, market, bar)
+    if _policy_on(policy) or trace is not None:
+        c = _counter(offer, player, team, market, bar, persona=persona, trace=trace, **kw)
+    else:
+        c = _counter(offer, player, team, market, bar)
     return ("COUNTER", c) if c else ("REJECT", None)
 
 
@@ -252,8 +334,11 @@ def wave_tier(player):
     return WAVE_TIERS[-1][0]
 
 
-def _decide(player, scored, in_season, bar_shift, seed, tag):
-    """scored: [(index, offer, team, market, score)]. One decision for the player."""
+def _decide(player, scored, in_season, bar_shift, seed, tag, inputs=None):
+    """scored: [(index, offer, team, market, score)]. One decision for the player. inputs {view, context, policy}
+    switches to the recorded path (_decide_recorded)."""
+    if inputs is not None:
+        return _decide_recorded(player, scored, in_season, bar_shift, seed, tag, inputs)
     pid = _pid(player)
     ranked = sorted(scored, key=lambda s: (-(s[4]["utility"] + _noise(CHOICE_NOISE, seed, tag, pid,
                                                                        s[1].get("team_id"), s[0])), s[0]))
@@ -274,12 +359,67 @@ def _decide(player, scored, in_season, bar_shift, seed, tag):
             "status": "REJECT", "utility": score["utility"], "counter": None}
 
 
-def run_wave(players, offers, wave, seed):
+def _decide_recorded(player, scored, in_season, bar_shift, seed, tag, inputs):
+    """_decide with personality inputs: the same draws, order and outcome rule, recording every candidate."""
+    pid = _pid(player)
+    draws = {s[0]: _noise(CHOICE_NOISE, seed, tag, pid, s[1].get("team_id"), s[0]) for s in scored}
+    ranked = sorted(scored, key=lambda s: (-(s[4]["utility"] + draws[s[0]]), s[0]))
+    kw = {"persona": inputs.get("view"), "contract_context": inputs.get("context"), "policy": inputs.get("policy")}
+    candidates, chosen, first_counter = [], None, None
+    for rank, (idx, offer, team, market, score) in enumerate(ranked):
+        trace = {}
+        status, counter = acceptance({"offer": offer, "team": team, "market": market, "score": score,
+                                      "bar_shift": bar_shift}, player, in_season, trace=trace, **kw)
+        row = {"player_id": pid, "team_id": offer.get("team_id"), "offer_index": idx, "offer": offer,
+               "status": status, "utility": score["utility"], "counter": counter}
+        candidates.append({"offer_index": idx, "team_id": offer.get("team_id"), "rank": rank,
+                           "raw_utility": score.get("base_utility", score["utility"]), "utility": score["utility"],
+                           "choice_draw": round(draws[idx], 6), "noisy_score": round(score["utility"] + draws[idx], 6),
+                           "status": status, "counter": counter, "trace": trace,
+                           "policy": score.get("policy_explanation")})
+        if chosen is None:
+            if status == "ACCEPT":
+                chosen = row
+            elif status == "COUNTER" and first_counter is None:
+                first_counter = row
+    if chosen is None:
+        chosen = first_counter
+    if chosen is None:
+        idx, offer, team, market, score = ranked[0]
+        chosen = {"player_id": pid, "team_id": offer.get("team_id"), "offer_index": idx, "offer": offer,
+                  "status": "REJECT", "utility": score["utility"], "counter": None}
+    policy = inputs.get("policy") or {}
+    chosen.update(bar={"base": round(accept_bar(player, in_season), 4), "shift": round(bar_shift, 6)},
+                  candidates=candidates, policy_mode=policy.get("mode", "off"))
+    return chosen
+
+
+def canonical_offer_order(offers):
+    """One order for a batch's offers (player, team, terms), so a retried batch draws the same choice noise."""
+    return sorted(offers, key=lambda o: (str(o.get("player_id")), str(o.get("team_id")), o.get("years") or 0,
+                                         o.get("total_value") or 0, o.get("bonus") or 0, o.get("guaranteed") or 0))
+
+
+def _inputs_for(contract_inputs, pid):
+    """The player's {view, context, policy}, or None (no inputs, or mode off: the exact original path)."""
+    inp = (contract_inputs or {}).get(pid)
+    return inp if inp and _policy_on(inp.get("policy")) else None
+
+
+def _score_with(inputs, offer, player, team, market):
+    if inputs is None:
+        return offer_utility(offer, player, team, market)
+    return offer_utility(offer, player, team, market, inputs.get("view"), contract_context=inputs.get("context"),
+                         policy=inputs.get("policy"))
+
+
+def run_wave(players, offers, wave, seed, *, contract_inputs=None):
     """One offseason wave. players: unsigned free agents (player dicts); offers: offer dicts, each carrying the
     bidding team's context under "team" (offer_utility's team dict) and the market fit under "market" (None = the
     league-minimum market). Considers players of tier <= wave; each player takes at most one offer. Returns one
     decision per considered player with offers: {player_id, team_id, offer_index (into offers), offer, status,
-    utility, counter}, in player order."""
+    utility, counter}, in player order. contract_inputs {player_id: {view, context, policy}} (module docstring);
+    players without inputs are decided exactly as before."""
     by_player = {}
     for i, o in enumerate(offers):
         by_player.setdefault(o.get("player_id"), []).append(i)
@@ -289,13 +429,14 @@ def run_wave(players, offers, wave, seed):
         pid = _pid(p)
         if tier > wave or pid not in by_player:
             continue
+        inputs = _inputs_for(contract_inputs, pid)
         scored = []
         for i in by_player[pid]:
             o = offers[i]
             team, market = o.get("team") or {}, o.get("market")
-            scored.append((i, o, team, market, offer_utility(o, p, team, market)))
+            scored.append((i, o, team, market, _score_with(inputs, o, p, team, market)))
         shift = _noise(MOOD_NOISE, seed, "wave", wave, pid) - WAVE_COOLING * (wave - tier)
-        out.append(_decide(p, scored, False, shift, seed, f"wave{wave}"))
+        out.append(_decide(p, scored, False, shift, seed, f"wave{wave}", inputs))
     return out
 
 
@@ -324,10 +465,11 @@ def _ordered(players, seed, tag):
     return sorted(players, key=lambda p: (-(p.get("ovr") or 0), _u01(seed, tag, "order", _pid(p))))
 
 
-def _market(players, needs, seed, tag, make_offer, spots_default, in_season):
+def _market(players, needs, seed, tag, make_offer, spots_default, in_season, contract_inputs=None):
     spots = {t: int(ctx.get("roster_spots", spots_default)) for t, ctx in needs.items()}
     out = []
     for p in _ordered(players, seed, tag):
+        inputs = _inputs_for(contract_inputs, _pid(p))
         scored = []
         for t in sorted(needs, key=str):
             ctx = needs[t]
@@ -336,10 +478,10 @@ def _market(players, needs, seed, tag, make_offer, spots_default, in_season):
             offer = make_offer(p, t, ctx)
             offer["projected_depth"] = _market_depth(p, ctx)
             team = dict(ctx, team_id=t)
-            scored.append((len(scored), offer, team, None, offer_utility(offer, p, team, None)))
+            scored.append((len(scored), offer, team, None, _score_with(inputs, offer, p, team, None)))
         if not scored:
             continue
-        d = _decide(p, scored, in_season, _noise(MOOD_NOISE, seed, tag, "mood", _pid(p)), seed, tag)
+        d = _decide(p, scored, in_season, _noise(MOOD_NOISE, seed, tag, "mood", _pid(p)), seed, tag, inputs)
         d["offer_index"] = None
         if d["status"] == "ACCEPT":
             spots[d["team_id"]] -= 1
@@ -347,7 +489,7 @@ def _market(players, needs, seed, tag, make_offer, spots_default, in_season):
     return out
 
 
-def street_market(players, needs, seed):
+def street_market(players, needs, seed, *, contract_inputs=None):
     """In-season street free agents. needs: {team_id: {needs: {group: score} | [{group, score}], starter_ovr?:
     {group: weakest starter OVR}, roster_spots? (default 1), win_pct?, playoff_odds?, popularity_index?,
     direction?, scheme_fit?, projected_depth?}}. Teams with a need in his group offer 1 year at the league minimum
@@ -355,10 +497,10 @@ def street_market(players, needs, seed):
     def make(p, t, ctx):
         m = minimum_salary(p.get("accrued_seasons") or 0)
         return {"team_id": t, "player_id": _pid(p), "years": 1, "total_value": m, "bonus": 0, "guaranteed": 0}
-    return _market(players, needs, seed, "street", make, STREET_SPOTS, True)
+    return _market(players, needs, seed, "street", make, STREET_SPOTS, True, contract_inputs)
 
 
-def udfa_market(prospects, needs, seed):
+def udfa_market(prospects, needs, seed, *, contract_inputs=None):
     """Undrafted rookies after the draft. needs as in street_market (roster_spots default 3). Each team with a
     need in his group offers UDFA_YEARS years at the rookie minimum (0 accrued seasons each year, as Madden's
     flat UDFA deal) plus a seeded priority bonus up to UDFA_BONUS_MAX scaled by need, guaranteed = bonus; the role
@@ -369,4 +511,4 @@ def udfa_market(prospects, needs, seed):
         base = minimum_salary(0) * UDFA_YEARS
         return {"team_id": t, "player_id": _pid(p), "years": UDFA_YEARS, "total_value": base + bonus,
                 "bonus": bonus, "guaranteed": bonus}
-    return _market(prospects, needs, seed, "udfa", make, UDFA_SPOTS, True)
+    return _market(prospects, needs, seed, "udfa", make, UDFA_SPOTS, True, contract_inputs)
