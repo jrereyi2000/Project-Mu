@@ -189,6 +189,8 @@ def test_event_without_receipt_fails():
 # ------------------------------------------------------------- activation ----
 def test_activation_reads_off_without_switchboard(monkeypatch):
     monkeypatch.setitem(sys.modules, 'personality.features', None)     # import fails like an absent module
+    import personality
+    monkeypatch.delattr(personality, 'features', raising=False)         # the switchboard exists on main now
     a = cs.read_contract_activation(object(), U)
     assert a['source'] == 'default' and a['config']['mode'] == 'off'
 
