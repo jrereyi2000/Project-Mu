@@ -1,6 +1,7 @@
 # Project Mu: Personality Live Wiring and Activation Plan
 
-**Status:** approved by JR (2026-11-03), Q1–Q3 settled as recommended (§8); building, wave 1 of 2 (2026-11-06). Building the switchboard switches nothing on: every feature stays `off` by default, no migration is applied, no shadow season run and no clearance imported (JR's calls, §6).
+**Status:** approved by JR (2026-11-03), Q1–Q3 settled as recommended (§8); building, wave 1 of 2 done (2026-11-06). Building the switchboard switches nothing on: every feature stays `off` by default, no migration is applied, no shadow season run and no clearance imported (JR's calls, §6).
+- As built (U1): `config()` also returns `review_note` (the contract store's key) and accepts a lifecycle universe id (`mu:<uuid>`, resolved through `persona_lifecycle_universes`), since `read_contract_activation` passes one; a missing table or unknown league reads `off` without touching the transaction. `snapshot_mode`, `check`, `next_step`, `installed` and `league_now` added. "Code installed" = the feature's module is found and its migration file is present (`REQUIREMENTS`), so the six owner/scout/voter features (already listed in `FEATURES`, so the owners plan's U6 only has to add its `2027_02_02` migration and modules) can't reach shadow yet. Exporting a clearance takes the shadow report from `--report` or `config.report_path`; importing rehashes that file, so it must be readable where the real franchise runs. The opt-in scratch test (`PERSONALITY_FEATURES_TEST_DSN`) was not run: no PostgreSQL here.
 **Builds on:** [`PERSONALITY_PLAN.md`](../in_progress/PERSONALITY_PLAN.md) §5.3, §6; the approved feature plans: [contracts](../done/PERSONALITY_CONTRACT_POLICY_PLAN.md) §2.4, §2.6; [development/coaching](../done/PERSONALITY_DEVELOPMENT_COACHING_PLAN.md) §2.4–§2.5, §2.7; [trade requests](../done/PERSONALITY_TRADE_REQUESTS_PLAN.md) §2.5, gates G4–G5; [retirement](../done/PERSONALITY_RETIREMENT_PLAN.md) §2.4–§2.6, gates G4–G6; [relationships](../done/PERSONALITY_RELATIONSHIPS_PLAN.md) §2.1 modes; [event producers](../done/RELATIONSHIP_EVENT_PRODUCERS_PLAN.md); [evolution](../done/PERSONALITY_EVOLUTION_PLAN.md); [lifecycle](../done/PERSONALITY_DRAFT_INTEGRATION_PLAN.md) §6 gates; PROJECT_SPEC §2.21a, §6.0b.
 
 **Goal:** Connect the personality features to the live league, live from the real franchise's first season (2026 week 1). Each feature plan builds its policy, storage and offline reports and stops before the live hookup. This plan:
@@ -313,3 +314,4 @@ JR approved all three recommendations on 2026-11-03.
 
 | Unit | Wave | Branch | Worktree | Result | Merge |
 |---|---|---|---|---|---|
+| U1 | 1 | build/pa-u1 | .claude/worktrees/pa-u1 | merged | 0498f00 |
