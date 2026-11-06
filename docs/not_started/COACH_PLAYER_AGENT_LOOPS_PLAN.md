@@ -4,7 +4,7 @@
 **Builds on:**
 - [`PERSONALITY_PLAN.md`](../in_progress/PERSONALITY_PLAN.md) §8: agentic loops; the player negotiates for himself, with no hired agent.
 - [`TRADE_NEGOTIATIONS_PLAN.md`](TRADE_NEGOTIATIONS_PLAN.md) §2.1, §2.3: the GM loop pattern (legal options, persona policy, model choice with fallback, record don't replay).
-- [`PERSONALITY_CONTRACT_POLICY_PLAN.md`](PERSONALITY_CONTRACT_POLICY_PLAN.md) §2.3 (shared scoring and counters).
+- [`PERSONALITY_CONTRACT_POLICY_PLAN.md`](../in_progress/PERSONALITY_CONTRACT_POLICY_PLAN.md) §2.3 (shared scoring and counters).
 - [`PERSONALITY_DEVELOPMENT_COACHING_PLAN.md`](PERSONALITY_DEVELOPMENT_COACHING_PLAN.md) §2.5 (close-call opportunity preferences).
 - [`PERSONALITY_RELATIONSHIPS_PLAN.md`](../done/PERSONALITY_RELATIONSHIPS_PLAN.md) §2.2 (`promise_made` / `promise_resolved`).
 - [`FRONT_OFFICE_INBOX_PLAN.md`](../in_progress/FRONT_OFFICE_INBOX_PLAN.md) (the `CONTRACT` and `ROLE_TALK` kinds).

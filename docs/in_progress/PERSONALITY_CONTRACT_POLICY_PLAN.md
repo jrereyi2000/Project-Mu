@@ -1,6 +1,7 @@
 # Project Mu: Personality Contract Policy Plan
 
-**Status:** approved by JR (2026-11-03), Q1–Q4 settled as recommended (§8); not built. Approval covers building the units; production migration, seeding and activation each still need JR's separate go-ahead (§2.6).
+**Status:** approved by JR (2026-11-03), Q1–Q4 settled as recommended (§8); building, wave 1 of 3. Approval covers building the units; production migration, seeding and activation each still need JR's separate go-ahead (§2.6).
+- As built (wave 0 spike, offline, 2026-11-06): **gate** — contender certification is `contention >= contender_floor` on the offer team's contention score, which comes only from the frozen team snapshot of the batch, so offer money can never move it; money monotonicity and fixed-certification contention monotonicity hold, and the report's gate sweep lists the cross-certification jumps for JR (Q2's recommendation, no semantic change). **Extension representation** — the incremental new-money years only (the owed final year excluded), and an accepted counter rebuilds `[owed year] + make_contract(counter)` exactly as today's extension does, so extension activation is not blocked. **Runner** — the league office's `Deps.resign_decisions` / `run_wave` / `udfa_market` are the only callers (no `street_market` caller); this plan adds the `contract_inputs` keyword, the activation plan wires it. **Migration** `2027_01_23` is free. **Providers** — earnings through `career_earnings.is_secure`; relationships through `personality.relationships.relationship_context` (edges mapped by an adapter); the shared switchboard `personality.features` does not exist yet, so `read_contract_activation` reads off until it does.
 **JR decisions this plan follows (2026-11-03, PERSONALITY_PLAN §5 step 3, §5.1, D8–D13):** every player has an engine-generated profile (existing players once at the 2026 start, prospects at draft-class entry), and JR can edit any of them; the relationships plan owns one-way trust and the promise format.
 **Builds on:** PROJECT_SPEC §2.17a–b, §2.17d, §3.3p, §4.6b; [core README](../../personality/README.md); [personality plan](../in_progress/PERSONALITY_PLAN.md); [generated effects design](../in_progress/PERSONALITY_GENERATED_EFFECTS_DESIGN.md); [cap-relative plan](../done/CAP_RELATIVE_CONTRACTS_PLAN.md) (built and on main 2026-11-02).
 
@@ -30,7 +31,7 @@ Inspected canonical `/home/jrereyi/Project-Mu` on 2026-10-31. Read root AGENTS.m
 | S12 | Existing tools/personality_contract_demo.py and its test are untracked illustrative artifacts; the design's demo section excludes production counters/markets. | Demo is not calibration, activation or full-path verification. Keep its files under their existing owner's control. |
 | S13 | PROJECT_SPEC §2.17b still documents persona zero; §3.3p includes older rollout descriptions alongside newer core ownership documented in personality/README.md. | Parent consolidates §7 changes. Historical later takeover dates do not replace the requested 2026–2034 timeline. |
 
-**Corrected 2026-11-03 ([activation plan](PERSONALITY_ACTIVATION_PLAN.md) S2):** the league office does run these engines through its `Deps` class (`pipeline/league_office.py:890` `resign_decisions`, `:899` `run_wave`, `:909` `udfa_market`; `:1549` `step_free_agency`). The activation plan's `PersonalityDeps` passes this plan's `contract_inputs` through them. This plan's units add the keyword and stay neutral by default.
+**Corrected 2026-11-03 ([activation plan](../not_started/PERSONALITY_ACTIVATION_PLAN.md) S2):** the league office does run these engines through its `Deps` class (`pipeline/league_office.py:890` `resign_decisions`, `:899` `run_wave`, `:909` `udfa_market`; `:1549` `step_free_agency`). The activation plan's `PersonalityDeps` passes this plan's `contract_inputs` through them. This plan's units add the keyword and stay neutral by default.
 
 ## 1. Scope
 
@@ -272,3 +273,8 @@ JR approved all four recommendations on 2026-11-03.
 | Q4 | Must relationship effects activate with ambition? | Build adapters now, ambition-first activation after evidence review; attachment/home/grudge stay disabled until owner supplies reviewed source-backed outputs. No local trust substitute. |
 
 Plan approval is not migration, seed or activation approval; those stay separate JR decisions (§2.6).
+
+## 9. Build log
+
+| Unit | Wave | Branch | Worktree | Result | Merge |
+|---|---|---|---|---|---|
