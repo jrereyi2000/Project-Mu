@@ -21,7 +21,8 @@
   "slider_evidence": {
     "warmth": [
       "E1",
-      "E4"
+      "E4",
+      "E6"
     ],
     "sociability": [
       "E1"
@@ -34,13 +35,16 @@
   ],
   "trait_evidence": {
     "TEACHER": [
-      "E3"
+      "E3",
+      "E6"
     ],
     "LOYAL": [
-      "E3"
+      "E3",
+      "E6"
     ],
     "OLD_SCHOOL": [
-      "E2"
+      "E2",
+      "E6"
     ]
   },
   "views": [
@@ -58,17 +62,24 @@
       ]
     },
     {
-      "text": "When the energy dips, send pressure and let the defense feel it can make a play.",
+      "text": "Players should hear the truth every day, good or bad; consistency is how a coach earns credibility.",
       "when": [
-        "STRUGGLING",
-        "SCHEME"
+        "COACHING",
+        "PLAYER"
       ]
     },
     {
-      "text": "Every player deserves a blank slate with a new staff, judged on what he does now.",
+      "text": "Point out what went right so it gets repeated, not just what went wrong.",
+      "when": [
+        "GAME_REVIEW",
+        "WIN_STREAK"
+      ]
+    },
+    {
+      "text": "Linebackers who used to be safeties see the coverage picture faster.",
       "when": [
         "PLAYER",
-        "ROSTER_MOVES"
+        "SCHEME"
       ]
     },
     {
@@ -78,20 +89,21 @@
       ]
     },
     {
-      "text": "A steady head coach who holds coaches to the same standard makes a coordinator's job easier.",
+      "text": "Running the defense during the week while the head coach calls it on Sunday works when the standard is shared.",
       "when": [
         "COACHING",
-        "LOSING_STREAK"
+        "SCHEME"
       ]
     }
   ],
   "signatures": [
     "stays relentlessly upbeat at the podium even after a rough defensive day",
-    "talks about effort and enthusiasm before he talks about scheme"
+    "talks about effort and enthusiasm before he talks about scheme",
+    "calls himself an optimist when asked about a rebuild"
   ],
-  "want": "to field one more defense that plays with the speed and energy of his best units",
+  "want": "to help his old friend build one more fast, energetic defense, and prove his best coaching is not behind him",
   "fear": "that his positivity is remembered as softness because his records as a head coach and later coordinator fell short",
-  "voice": "Warm, upbeat and earnest; he speaks about effort, enthusiasm and toughness, avoids criticizing players publicly, and keeps a positive tone even when the numbers are bad.",
+  "voice": "Warm, upbeat and earnest; he speaks about effort, enthusiasm, honesty and consistency, avoids criticizing players publicly, and keeps a positive tone even when the numbers are bad. Comfortable in a supporting role beside a play-calling head coach.",
   "ties": [
     {
       "target": {
@@ -107,6 +119,21 @@
       "evidence": [
         "E4",
         "E5"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "TEN",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E6"
       ]
     }
   ],
@@ -155,12 +182,30 @@
       "accessed": "2026-11-05",
       "summary": "Indianapolis fires Bradley after three seasons without a playoff berth as the defense allowed the third-, fifth- and ninth-most points and regressed in yards and sacks; Steichen calls him a man of great character whom he respects. Firing report.",
       "confidence": "high"
+    },
+    {
+      "id": "E6",
+      "url": "https://www.tennesseetitans.com/news/new-titans-dc-gus-bradley-preaches-consistency-while-playing-fast-and-violent",
+      "publisher": "Tennessee Titans (tennesseetitans.com), Jim Wyatt",
+      "published": "2026-02-18",
+      "accessed": "2026-11-06",
+      "summary": "Introduction: wants a fast, violent defense without a huge menu of calls, with complexity never at the cost of identity; believes consistency and honest feedback build credibility, highlights what went right so it is repeated, and stresses accountability; longtime friend of Saleh, who calls the defense on game days; calls himself an optimist. 37th year coaching, eighth NFL franchise. Team-written.",
+      "confidence": "high"
+    },
+    {
+      "id": "E7",
+      "url": "https://www.espn.com.au/nfl/story/_/id/49419824/tennessee-titans-training-camp-2026-intel-updates",
+      "publisher": "ESPN (Titans camp log)",
+      "published": "2026-08-11",
+      "accessed": "2026-11-06",
+      "summary": "Camp note: speaks glowingly of a linebacker with a safety background and says the Titans like such linebackers for their instincts in coverage. One item.",
+      "confidence": "medium"
     }
   ],
   "review": {
     "status": "draft",
     "reviewer": null,
     "reviewed_at": null,
-    "notes": "moved seat 2026; re-research for 2026 sources"
+    "notes": "Moved seat 2026 (IND DC to 2024, SF assistant head coach 2025, now TEN DC under a play-calling Saleh). Added 2026 sources E6-E7 (introduction, camp). Views and voice updated for the non-play-calling role; new tie to Saleh. Sliders unchanged; 2026 coverage of him is light."
   }
 }

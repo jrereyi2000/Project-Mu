@@ -1,0 +1,238 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:LV:DC",
+  "name": "Rob Leonard",
+  "role": "DC",
+  "team": "LV",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "LV",
+    "role": "DC",
+    "name": "Rob Leonard"
+  },
+  "sliders": {
+    "temperament": 6,
+    "sociability": 6,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 7,
+    "drive": 7
+  },
+  "slider_evidence": {
+    "warmth": [
+      "E2",
+      "E4"
+    ],
+    "sociability": [
+      "E2",
+      "E5"
+    ],
+    "temperament": [
+      "E4"
+    ],
+    "drive": [
+      "E2",
+      "E4"
+    ]
+  },
+  "traits": [
+    "PLAYERS_COACH",
+    "MENTOR",
+    "SCHEME_NERD"
+  ],
+  "trait_evidence": {
+    "PLAYERS_COACH": [
+      "E1",
+      "E2",
+      "E5"
+    ],
+    "MENTOR": [
+      "E1",
+      "E2"
+    ],
+    "SCHEME_NERD": [
+      "E4",
+      "E5"
+    ]
+  },
+  "views": [
+    {
+      "text": "Coach players the way you wanted to be coached, and be yourself while you do it.",
+      "when": [
+        "COACHING",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "A defense should be player-led; the best meeting rooms are the ones where players talk.",
+      "when": [
+        "COACHING",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Play fast and aggressive, and live with a few mistakes rather than hesitate.",
+      "when": [
+        "SCHEME",
+        "PERFORMANCE"
+      ]
+    },
+    {
+      "text": "Scheme alone wins nothing; fundamentals, effort and clean assignments do.",
+      "when": [
+        "SCHEME",
+        "BAD_GAME"
+      ]
+    },
+    {
+      "text": "Versatile players who can line up anywhere make a multiple defense possible.",
+      "when": [
+        "SCHEME",
+        "ROSTER_MOVES"
+      ]
+    },
+    {
+      "text": "A star wants to be coached hard too; never shy away from coaching him.",
+      "when": [
+        "PLAYER",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "A front switch on paper matters less than how often the line rotates and how well it is taught.",
+      "when": [
+        "SCHEME",
+        "OFFSEASON"
+      ]
+    },
+    {
+      "text": "Turnovers and mental errors are the warning lights of a slump.",
+      "when": [
+        "STRUGGLING",
+        "GAME_REVIEW"
+      ]
+    }
+  ],
+  "signatures": [
+    "jumps into drills alongside his players",
+    "calls himself a little intense and leaves it at that",
+    "opens a new job with long football calls to the veterans he will coach"
+  ],
+  "want": "to turn the Raiders defense into his line room writ large: tough, close and player-led",
+  "fear": "that a first season as coordinator on a rebuilding team exposes him before his players are ready",
+  "voice": "Genuine, intense and relational; he talks about brotherhood, effort and being himself rather than about fronts and coverages. He is direct about wanting aggression over hesitation and credits players and mentors. His language comes from the line room: hands-on, blunt and warm.",
+  "ties": [
+    {
+      "target": {
+        "kind": "player",
+        "name": "Maxx Crosby",
+        "team_2026": "LV"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E2",
+        "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "LV",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E3",
+        "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "KC",
+          "role": "DC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "MIN",
+          "role": "DC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E4"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.si.com/nfl/raiders/onsi/las-vegas-raiders--rob-leonard-players-coach-maxx-crosby",
+      "publisher": "Sports Illustrated (Raiders Today), Carter Landis",
+      "published": "2024-03-28",
+      "accessed": "2026-11-06",
+      "summary": "Profile as Raiders line coach: former NC State player who was reluctant to coach at first, learned under Jon Tenuta, says he coaches players the way he wanted to be coached and values being genuine; works through drills alongside players. Credits his room with Koonce's development and Crosby's play. Fan-network profile with his quotes.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.si.com/nfl/raiders/onsi/news/maxx-crosby-raiders-d-line-have-utmost-respect-for-coach-rob-leonard-01j0y4wbfnz8",
+      "publisher": "Sports Illustrated (Raiders Today), Aidan Champion",
+      "published": "2024-06-21",
+      "accessed": "2026-11-06",
+      "summary": "Crosby on his position coach: pushes the group hard, tailors his approach to each player, never shies away from coaching, builds real relationships, and opened with an hour-long football call with Crosby and Rod Marinelli. Credits him with a big, popular, collaborative room. One star's testimony.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.kold.com/2026/02/16/raiders-coach-klint-kubiak-elevates-rob-leonard-hires-andrew-janocko-coordinators",
+      "publisher": "Associated Press via KOLD",
+      "published": "2026-02-16",
+      "accessed": "2026-11-06",
+      "summary": "AP report on the coordinator hires: Leonard, 38, promoted from defensive line coach and run game coordinator after a 2025 run defense that allowed 3.9 yards a carry; Janocko, 37, follows Kubiak from Seattle, where he coached Darnold. Kubiak will call plays but says he has never called a game alone and describes a staff that plans and communicates together on game day. Notes the hope that keeping Leonard helps mend the team's strained relationship with Maxx Crosby.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://abc7news.com/post/what-will-raiders-defense-look-like-rob-leonard/19378516/",
+      "publisher": "ESPN (Ryan McFadden) via ABC7",
+      "published": "2026-06-25",
+      "accessed": "2026-11-06",
+      "summary": "Spring feature: first DC job after the Giants (three seasons under Spagnuolo), Dolphins under Flores and Ravens under Macdonald; moving to a 3-4 base but rotating heavily and keeping his line teaching; wants a player-led, versatile defense that plays fast and aggressively even at the cost of some mistakes; calls himself a little intense. Crosby calls him smart and relatable. Kubiak hired him on a clear plan with no prior relationship.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.kold.com/2026/08/04/raiders-defense-working-create-identity-under-first-year-coordinator-rob-leonard/",
+      "publisher": "FOX5 Las Vegas (Vince Sapienza) via KOLD",
+      "published": "2026-08-04",
+      "accessed": "2026-11-06",
+      "summary": "Camp report: he wants to coach the whole defense the way he coached the line, as a brotherhood, says he is just being himself and that scheme alone does not win; stresses fundamentals, effort and avoiding mental errors. Nakobe Dean calls it a multiple defense with a hungry group; Kwity Paye says Leonard wants a player-led defense where players speak up in meetings.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "New seat 2026. Five sources, 2024-03 to 2026-08. The Spagnuolo and Flores ties rest on his years on their staffs (E4), not on testimony; JR may drop them. Confidence left at 5."
+  }
+}

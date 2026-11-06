@@ -1,0 +1,225 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:CLE:DC",
+  "name": "Mike Rutenberg",
+  "role": "DC",
+  "team": "CLE",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "CLE",
+    "role": "DC",
+    "name": "Mike Rutenberg"
+  },
+  "sliders": {
+    "temperament": 4,
+    "sociability": 6,
+    "confidence": 5,
+    "openness": 6,
+    "warmth": 7,
+    "drive": 5
+  },
+  "slider_evidence": {
+    "warmth": [
+      "E5",
+      "E6"
+    ],
+    "sociability": [
+      "E3",
+      "E5"
+    ],
+    "openness": [
+      "E3",
+      "E6"
+    ],
+    "temperament": [
+      "E3",
+      "E5"
+    ]
+  },
+  "traits": [
+    "MENTOR",
+    "TEACHER",
+    "LOYAL"
+  ],
+  "trait_evidence": {
+    "MENTOR": [
+      "E5",
+      "E6"
+    ],
+    "TEACHER": [
+      "E1",
+      "E5"
+    ],
+    "LOYAL": [
+      "E2",
+      "E5"
+    ]
+  },
+  "views": [
+    {
+      "text": "Style beats scheme: effort, speed and playing for each other matter more than any call sheet.",
+      "when": [
+        "SCHEME",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "When you inherit a great defense, build on what already works instead of tearing it up.",
+      "when": [
+        "SCHEME",
+        "OFFSEASON"
+      ]
+    },
+    {
+      "text": "Character comes first; how a player lives off the field shows up on it.",
+      "when": [
+        "PLAYER",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "A defense should celebrate its plays; confidence and energy are part of the plan.",
+      "when": [
+        "PERFORMANCE",
+        "WIN_STREAK"
+      ]
+    },
+    {
+      "text": "Disguise only works if the communication behind it is perfect.",
+      "when": [
+        "SCHEME",
+        "GAME_REVIEW"
+      ]
+    },
+    {
+      "text": "A new coordinator owes his stars a conversation before he owes them a plan.",
+      "when": [
+        "PLAYER",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Honest self-scouting by the staff is the first step out of any slump.",
+      "when": [
+        "STRUGGLING",
+        "GAME_REVIEW"
+      ]
+    }
+  ],
+  "signatures": [
+    "connects young players with greats of their position",
+    "keeps in touch with players he coached years earlier and recruits them to follow him",
+    "talks about his inherited defense with respect before describing changes"
+  ],
+  "want": "to keep Cleveland's defense among the league's best in his first coordinator job and step out of a famous predecessor's shadow",
+  "fear": "that the defense slips without its former architect and the drop gets pinned on him",
+  "voice": "Energetic and warm, with a teacher's habit of explaining the why; he talks about style, effort and character more than fronts and coverages. Respectful of what he inherited and of veteran players, candid about self-evaluation, and openly excited about the job.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "TEN",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E2"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Quincy Williams",
+        "team_2026": "CLE"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E5"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "CLE",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E2"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.newyorkjets.com/news/ota-notebook-jets-lb-coach-mike-rutenberg-c-j-mosley-has-an-amazing-amazing-brai",
+      "publisher": "New York Jets (newyorkjets.com), Jack Bell",
+      "published": "2022-06-10",
+      "accessed": "2026-11-06",
+      "summary": "OTA notebook as Jets linebackers coach: praises a new signing's familiarity with Saleh's system, energy and toughness, Quincy Williams' speed and strength, and C.J. Mosley's mind and leadership. Shows how he talks about players; little on method.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.espn.co.uk/nfl/story/_/id/47948501/source-browns-hire-falcons-rutenberg-replace-schwartz-dc",
+      "publisher": "ESPN, Daniel Oyefusi",
+      "published": "2026-02-16",
+      "accessed": "2026-11-06",
+      "summary": "Hire report: 44, Cornell graduate and D.C. native; began as a Washington personnel intern and assistant to Joe Gibbs, then UCLA, New Mexico State, the Jaguars (2013-19), the 49ers (2020), four seasons as Jets linebackers coach and one as Falcons pass game coordinator. First DC job, replacing Schwartz on a top-ranked defense whose scheme Monken does not plan to change.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.si.com/nfl/browns/onsi/news/mike-rutenberg-explains-how-he-ll-build-from-jim-schwartz-s-defense-with-browns-01kjx9grz427",
+      "publisher": "Sports Illustrated (Browns On SI), Nick Pedone",
+      "published": "2026-03-04",
+      "accessed": "2026-11-06",
+      "summary": "Introduction: he will build on what players and coaches already do well; wants a defense that plays hard, fast, violent and smart, with energy and celebration; stresses style over scheme; promises honest self-evaluation; kept most of the defensive staff; eager to meet and learn from the star pass rusher. Reported remarks.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.cleveland19.com/2026/03/04/new-browns-dc-mike-rutenberg-beyond-fired-up",
+      "publisher": "Cleveland 19 News, Christopher Dellecese",
+      "published": "2026-03-04",
+      "accessed": "2026-11-06",
+      "summary": "Short report on the introduction, headlined on his saying he is beyond fired up; notes he has big shoes to fill after Schwartz. Little beyond the headline.",
+      "confidence": "low"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.clevelandbrowns.com/news/quincy-williams-reunited-with-mike-rutenberg-as-he-begins-new-chapter-with-the-browns",
+      "publisher": "Cleveland Browns (clevelandbrowns.com), Kelsey Russo",
+      "published": "2026-03-18",
+      "accessed": "2026-11-06",
+      "summary": "Quincy Williams on signing in Cleveland: calls Rutenberg a close mentor, like a brother, who coached him in Jacksonville and New York; says he puts character before football, wants players to be themselves, and taught him nearly everything he knows at linebacker, from zone freedom to eye discipline and preparation habits. One player's warm testimony.",
+      "confidence": "high"
+    },
+    {
+      "id": "E6",
+      "url": "https://www.espn.com.au/nfl/story/_/id/49449000/cleveland-browns-training-camp-2026-intel-updates",
+      "publisher": "ESPN, Daniel Oyefusi (camp log)",
+      "published": "2026-08-20",
+      "accessed": "2026-11-06",
+      "summary": "Camp notes: a safety calls the new scheme exotic, with heavy disguise and communication, while the Schwartz foundation stays; a second-year linebacker says Rutenberg connected him with Luke Kuechly, his childhood idol. Brief items.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "New seat 2026. Six sources, 2022-06 to 2026-08 (E4 low, voice only). The Saleh tie rests on his years on Saleh-led staffs (49ers 2020, Jets 2021-24 per E2, E1), not on direct testimony; JR may prefer to drop it. No regular-season play-calling record by the cutoff."
+  }
+}

@@ -1,0 +1,227 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:SEA:OC",
+  "name": "Brian Fleury",
+  "role": "OC",
+  "team": "SEA",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "SEA",
+    "role": "OC",
+    "name": "Brian Fleury"
+  },
+  "sliders": {
+    "temperament": 3,
+    "sociability": 5,
+    "confidence": 6,
+    "openness": 7,
+    "warmth": 5,
+    "drive": 6
+  },
+  "slider_evidence": {
+    "temperament": [
+      "E4"
+    ],
+    "openness": [
+      "E1",
+      "E3"
+    ],
+    "confidence": [
+      "E3",
+      "E4"
+    ],
+    "drive": [
+      "E3",
+      "E4"
+    ]
+  },
+  "traits": [
+    "SCHEME_NERD",
+    "MEASURED",
+    "ANALYTICS_BELIEVER"
+  ],
+  "trait_evidence": {
+    "SCHEME_NERD": [
+      "E1",
+      "E3",
+      "E4"
+    ],
+    "MEASURED": [
+      "E3",
+      "E4"
+    ],
+    "ANALYTICS_BELIEVER": [
+      "E3"
+    ]
+  },
+  "views": [
+    {
+      "text": "Coaching both sides of the ball shows you how a defense wants to stop you.",
+      "when": [
+        "SCHEME",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Plan the call for each situation before kickoff so the game never surprises you.",
+      "when": [
+        "SCHEME",
+        "CLOSE_GAMES"
+      ]
+    },
+    {
+      "text": "Keep a championship offense's foundation and add tempo and new wrinkles so players keep studying.",
+      "when": [
+        "SCHEME",
+        "CONTENDER"
+      ]
+    },
+    {
+      "text": "Every play-caller is a first-time play-caller once; preparation is what closes the gap.",
+      "when": [
+        "COACHING",
+        "PREVIEW"
+      ]
+    },
+    {
+      "text": "A coordinator should be the same person after a touchdown as after an interception.",
+      "when": [
+        "COACHING",
+        "BAD_GAME"
+      ]
+    },
+    {
+      "text": "Short completions should become long gains; yards after the catch are coached, not lucky.",
+      "when": [
+        "SCHEME",
+        "PERFORMANCE"
+      ]
+    },
+    {
+      "text": "Know what each player does best and call the game to it.",
+      "when": [
+        "PLAYER",
+        "SCHEME"
+      ]
+    }
+  ],
+  "signatures": [
+    "visits a key player at home to build the relationship before the season",
+    "answers good and bad plays in the same even tone",
+    "calls himself an ordinary college backup when asked about his background"
+  ],
+  "want": "to keep a Super Bowl champion offense on top in his first job calling plays",
+  "fear": "that the offense slips after its play-caller left and the drop is blamed on the new voice",
+  "voice": "Steady, businesslike and precise; he talks about preparation, situations and post-snap detail, and his tone does not change with results. Self-deprecating about his playing days and quick to credit the existing staff and players. First season calling plays, so mostly plans rather than track record.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "SEA",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E3",
+        "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Sam Darnold",
+        "team_2026": "SEA"
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "George Kittle",
+        "team_2026": "SF"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E1"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "SF",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E2"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.nbcsportsbayarea.com/nfl/san-francisco-49ers/george-kittle-brian-fleury-seahawks/1917141",
+      "publisher": "NBC Sports Bay Area, Angelina Martin",
+      "published": "2026-02-15",
+      "accessed": "2026-11-06",
+      "summary": "On the reported move to Seattle: Kittle posts a one-word sad reaction; after Fleury became tight ends coach in 2022 he visited Kittle at home to build their bond; Kittle says his defensive background gave the room a different view and his pass-game detail was unlike what he had heard. Traces his 49ers path from defensive QC (2019) to TE coach and run game coordinator (2025).",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.seahawks.com/news/seahawks-hire-offensive-coordinator-brian-fleury",
+      "publisher": "Seattle Seahawks (seahawks.com), John Boyle",
+      "published": "2026-02-19",
+      "accessed": "2026-11-06",
+      "summary": "Hire release: replaces Kubiak after the Super Bowl LX win; Macdonald wanted continuity for a top-three scoring offense. Former Maryland and Towson QB, about a decade in college coaching, then Bills QC, Browns linebackers, and 49ers defensive then offensive roles; overlapped with Kubiak in San Francisco in 2023 and knows the same Shanahan-family offense. Team-written.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.fox13seattle.com/sports/macdonald-decision-trust-fleury-new-seahawks-coordinator",
+      "publisher": "FOX 13 Seattle, Curtis Crabtree",
+      "published": "2026-02-19",
+      "accessed": "2026-11-06",
+      "summary": "Introduction: Macdonald passed over internal candidates because Fleury's vision matched his and says every play-caller is new once. Fleury, 47, has coached both sides of the ball and worked in analytics in Miami, stresses planning calls for situations ahead of time, keeps the system with more tempo and physicality, and describes himself as a slow backup pocket passer in college. Described as clear and decisive.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.seahawks.com/news/offensive-coordinator-brian-fleury-brings-familiarity-fresh-ideas-to-seahawks-offense",
+      "publisher": "Seattle Seahawks (seahawks.com), Ari Horton",
+      "published": "2026-07-30",
+      "accessed": "2026-11-06",
+      "summary": "Camp feature: players say the offense is faster with new wrinkles that keep them studying; Macdonald calls him a multidimensional problem solver and strong post-snap teacher and told him to be himself. Players describe him as steady, even-tempered, businesslike and demanding; Darnold says his demeanor never changes good play or bad, which he knew from San Francisco. Team-written.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://towsontigers.com/news/2026/2/20/football-towson-alum-brian-fleury-hired-as-offensive-coordinator-for-seattle-seahawks.aspx",
+      "publisher": "Towson University Athletics",
+      "published": "2026-02-20",
+      "accessed": "2026-11-06",
+      "summary": "Alma mater's note on the hire, recapping his playing days and coaching path. Background only.",
+      "confidence": "low"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "New seat 2026. Five sources, all 2026 (E5 low, background only). ANALYTICS_BELIEVER rests on one source (E3: analytics work in Miami, pre-planned situational calls); JR may prefer TEACHER. The Shanahan tie rests on seven seasons on his staff, not testimony. Warmth and sociability left at 5."
+  }
+}

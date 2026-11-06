@@ -15,19 +15,26 @@
     "sociability": 6,
     "confidence": 6,
     "openness": 5,
-    "warmth": 6,
-    "drive": 5
+    "warmth": 7,
+    "drive": 6
   },
   "slider_evidence": {
     "sociability": [
-      "E4"
+      "E4",
+      "E6"
     ],
     "confidence": [
-      "E4"
+      "E4",
+      "E6"
     ],
     "warmth": [
       "E3",
-      "E4"
+      "E4",
+      "E8"
+    ],
+    "drive": [
+      "E6",
+      "E8"
     ]
   },
   "traits": [
@@ -42,11 +49,13 @@
     ],
     "SCHEME_NERD": [
       "E4",
-      "E5"
+      "E5",
+      "E6"
     ],
     "YOUTH_DEVELOPER": [
       "E5",
-      "E4"
+      "E4",
+      "E8"
     ]
   },
   "views": [
@@ -57,10 +66,24 @@
       ]
     },
     {
-      "text": "A great defense is a team defense; it should never depend on one star staying healthy.",
+      "text": "A head coach can still call the defense; staying close to the unit is part of why he got the job.",
       "when": [
-        "INJURY",
-        "PERFORMANCE"
+        "COACHING",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "A star quarterback is a relationship to build over months, not a problem to manage.",
+      "when": [
+        "QB",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "The offense should be designed around the quarterback, with a coordinator who connects the room.",
+      "when": [
+        "QB",
+        "SCHEME"
       ]
     },
     {
@@ -78,27 +101,35 @@
       ]
     },
     {
-      "text": "When every position group knows the whole defense, players can solve problems on the field without waiting for a call.",
+      "text": "Pre-snap penalties are a detail problem, and detail is the coaching staff's job to fix.",
       "when": [
-        "COACHING",
-        "YOUTH"
+        "GAME_REVIEW",
+        "STRUGGLING"
       ]
     },
     {
-      "text": "Leading the league in points allowed is a team stat, and it is the only one that matters to a defense.",
+      "text": "A young receiver earns the quarterback's trust one contested catch at a time.",
       "when": [
-        "RANKINGS",
-        "CONTENDER"
+        "YOUTH",
+        "QB"
+      ]
+    },
+    {
+      "text": "Tough, sound and together is the identity; being at your best in the biggest games is the measure.",
+      "when": [
+        "CONTENDER",
+        "PLAYOFFS"
       ]
     }
   ],
   "signatures": [
-    "celebrates a big defensive play on the sideline as if he made it himself",
-    "credits the whole unit rather than a single player when asked about a star"
+    "credits the whole unit rather than a single player when asked about a star",
+    "says he will be his own coach rather than a copy of his mentors",
+    "gathers the team after a practice scuffle and turns it into a talk about making each other better"
   ],
-  "want": "to prove the coaching lessons he gathered from his father, the Ravens and Michigan add up to a head-coaching career of his own",
-  "fear": "that his defense gets labeled a product of a soft schedule rather than real teaching",
-  "voice": "Upbeat, confident and plain-spoken; he sounds like a teacher explaining why something works. He spreads credit across the unit, avoids hype about himself, and talks about adjustments in practical terms.",
+  "want": "to build Baltimore into a tough, fundamentally sound contender that wins big games, with a quarterback who trusts him",
+  "fear": "that his partnership with the franchise quarterback never clicks and he is judged against the coach he replaced",
+  "voice": "Upbeat, plain-spoken and steady; he sounds like a teacher explaining why something works. He talks about relationships and identity more than about himself, spreads credit across the staff, and is direct about sloppy details without making it personal. He deflects comparisons with his mentors by saying he will be himself.",
   "ties": [
     {
       "target": {
@@ -115,6 +146,64 @@
         "E1",
         "E3",
         "E5"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "NYG",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E6"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Lamar Jackson",
+        "team_2026": "BAL"
+      },
+      "relationship_kind": "support",
+      "outcome": "positive",
+      "evidence": [
+        "E6",
+        "E8"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "BAL",
+          "role": "OC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E7"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "BAL",
+          "role": "DC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E9"
       ]
     }
   ],
@@ -163,12 +252,48 @@
       "accessed": "2026-11-05",
       "summary": "After a 35-6 loss to Jacksonville, Minter overhauled the defense with fronts unused all season and new roles such as Henley at outside linebacker; opponents were held to season lows, Harbaugh credited his adjustments and called himself a big supporter, and Derwin James called it the best defense he has played on.",
       "confidence": "high"
+    },
+    {
+      "id": "E6",
+      "url": "https://www.espn.com.au/nfl/story/_/id/47768384/ravens-minter-want-help-jackson-become-best-version-self",
+      "publisher": "ESPN, Jamison Hensley",
+      "published": "2026-01-30",
+      "accessed": "2026-11-06",
+      "summary": "Introductory news conference report: Minter, 42, says he has already talked with Jackson several times, that trust takes time, and that he wants an identity in which the quarterback can thrive. He wants a tough, fundamentally sound team, will keep calling the defense himself, and wants an offensive coordinator who connects people and builds a scheme around Jackson. John Harbaugh gave him his first NFL job and texted that Baltimore should hire him; Minter says he will be himself rather than copy either Harbaugh brother. Reported remarks, not a portrait of his private manner.",
+      "confidence": "high"
+    },
+    {
+      "id": "E7",
+      "url": "https://wtop.com/baltimore-ravens/2026/02/ravens-minter-praises-new-offensive-coordinator-declan-doyles-innovative-mindset",
+      "publisher": "Associated Press via WTOP",
+      "published": "2026-02-02",
+      "accessed": "2026-11-06",
+      "summary": "AP report on the Doyle hire: Minter's statement calls his new coordinator an offensive architect and praises a collaborative, team-first approach built on trust, with the scheme fitted to the players rather than imposed. Notes that Minter will call the defense, leaving the offense to Doyle. A prepared team statement.",
+      "confidence": "high"
+    },
+    {
+      "id": "E8",
+      "url": "https://www.espn.com/nfl/story/_/id/49434567/baltimore-ravens-training-camp-2026-intel-updates",
+      "publisher": "ESPN, Jamison Hensley (camp log)",
+      "published": "2026-08-13",
+      "accessed": "2026-11-06",
+      "summary": "Training-camp notes through August 13: players call the new coach upbeat and say he builds belief; he moved practices to the morning, excused a veteran for a family loss and eased him back slowly, rested stars, praised a rookie receiver's growth, gathered the team after a shove to talk about making each other better, and publicly criticized a run of pre-snap penalties. Daily beat notes, not a full profile.",
+      "confidence": "high"
+    },
+    {
+      "id": "E9",
+      "url": "https://wtop.com/baltimore-ravens/2026/02/defensive-coordinator-job-brings-anthony-weaver-back-to-the-baltimore-ravens",
+      "publisher": "Associated Press via WTOP",
+      "published": "2026-02-10",
+      "accessed": "2026-11-06",
+      "summary": "AP report on the Weaver hire: Minter praises his new coordinator as a proven Raven who lifts players through football knowledge and natural teaching, and notes Minter himself plans to call the defense. Weaver had also interviewed for the head job. A team announcement; shows Minter's stated view of his assistant.",
+      "confidence": "high"
     }
   ],
   "review": {
     "status": "draft",
     "reviewer": null,
     "reviewed_at": null,
-    "notes": "moved seat 2026; re-research for 2026 sources"
+    "notes": "Moved seat 2026 (LAC DC to BAL HC). Added 2026 sources E6-E9 (hiring presser, coordinator hires, camp). Views, want, fear and voice rewritten for a head coach who still calls the defense; warmth and drive nudged up on camp evidence. New ties: John Harbaugh (gave him his first NFL job), Lamar Jackson, Doyle, Weaver."
   }
 }

@@ -23,11 +23,13 @@
       "E5"
     ],
     "sociability": [
-      "E5"
+      "E5",
+      "E7"
     ],
     "drive": [
       "E5",
-      "E2"
+      "E2",
+      "E7"
     ]
   },
   "traits": [
@@ -38,11 +40,13 @@
   ],
   "trait_evidence": {
     "GUARDED": [
-      "E5"
+      "E5",
+      "E7"
     ],
     "QB_WHISPERER": [
       "E1",
-      "E2"
+      "E2",
+      "E7"
     ],
     "SCHEME_NERD": [
       "E1",
@@ -61,23 +65,37 @@
       ]
     },
     {
-      "text": "Teach in long meetings first, so players carry a lot of information onto the field.",
+      "text": "Calling plays is a staff effort; no one should call a game alone.",
       "when": [
-        "OFFSEASON",
+        "SCHEME",
         "COACHING"
+      ]
+    },
+    {
+      "text": "A franchise with a proud history needs work, not promises, from a new coach.",
+      "when": [
+        "COACHING",
+        "OFFSEASON"
+      ]
+    },
+    {
+      "text": "A rookie quarterback is a long project, and the staff around him matters more than the pick.",
+      "when": [
+        "QB",
+        "DRAFT"
+      ]
+    },
+    {
+      "text": "Hire coordinators who come in with a clear plan and know what they want.",
+      "when": [
+        "COACHING",
+        "FRONT_OFFICE"
       ]
     },
     {
       "text": "A good start is no reason to feel satisfied; stay hungry.",
       "when": [
         "WIN_STREAK",
-        "CONTENDER"
-      ]
-    },
-    {
-      "text": "Pressure in a winning program is healthy if you show up with backup plans and real reasons for your ideas.",
-      "when": [
-        "COACHING",
         "CONTENDER"
       ]
     },
@@ -89,21 +107,21 @@
       ]
     },
     {
-      "text": "Players should enjoy the game and celebrate; the standard and the fun are not opposites.",
+      "text": "A star who wants out should hear in person that he is part of the plan.",
       "when": [
         "PLAYER",
-        "WIN_STREAK"
+        "TRADE"
       ]
     }
   ],
   "signatures": [
     "answers in short, direct sentences and steers away from talking about himself",
-    "describes himself through his job, his faith and being a father",
-    "credits the head coach who opened his game-planning meetings to him"
+    "reminds reporters that game plans and calls come from the whole staff",
+    "declines to tip roster or draft decisions before they are made"
   ],
-  "want": "to show he is a play-caller in his own right, not just a famous coaching son and brother",
-  "fear": "that the early fireworks fade and he is judged only by a collapsing season around him",
-  "voice": "Reserved, brief and focused; he gives short answers and little of himself to reporters. Players describe a demanding thinker who corrects in front of the group and praises when earned. When he does open up, it is about faith, family and the work.",
+  "want": "to turn around the Raiders as a first-time head coach and prove last season's championship offense was his, not borrowed",
+  "fear": "that a rebuilding roster and a rookie quarterback bury him before his offense can work",
+  "voice": "Reserved, brief and understated; he gives short answers, little of himself and no bold promises. He talks about work, staff and quarterbacks in practical terms, credits assistants for shared game plans, and keeps personnel decisions close. Players describe a demanding thinker who corrects in front of the group.",
   "ties": [
     {
       "target": {
@@ -162,6 +180,50 @@
         "E4",
         "E5"
       ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "LV",
+          "role": "OC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E8",
+        "E9"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "LV",
+          "role": "DC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E8",
+        "E10"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Sam Darnold",
+        "team_2026": "SEA"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E7"
+      ]
     }
   ],
   "evidence": [
@@ -218,12 +280,48 @@
       "accessed": "2026-11-05",
       "summary": "His younger brother Klay, taking over Klint's 49ers pass game role, says it is the same job Klint held and that the two worked very closely together. Klay's account.",
       "confidence": "medium"
+    },
+    {
+      "id": "E7",
+      "url": "https://www.wsls.com/sports/2026/02/11/raiders-introduce-new-coach-klint-kubiak-with-a-nod-to-their-storied-past/",
+      "publisher": "Associated Press (Mark Anderson) via WSLS",
+      "published": "2026-02-10",
+      "accessed": "2026-11-06",
+      "summary": "AP report on his introduction two days after Seattle's Super Bowl win as OC: calls Las Vegas no ordinary job and a historic franchise, says leaving Seattle was easy, will enjoy the parade before hiring and evaluating, and wants Crosby in the team's future after meeting him for coffee. Declines to commit to drafting Mendoza; his work with Darnold was a selling point to owner Mark Davis. Reviewers elsewhere called the presser understated.",
+      "confidence": "high"
+    },
+    {
+      "id": "E8",
+      "url": "https://www.kold.com/2026/02/16/raiders-coach-klint-kubiak-elevates-rob-leonard-hires-andrew-janocko-coordinators",
+      "publisher": "Associated Press via KOLD",
+      "published": "2026-02-16",
+      "accessed": "2026-11-06",
+      "summary": "AP report on the coordinator hires: Leonard, 38, promoted from defensive line coach and run game coordinator after a 2025 run defense that allowed 3.9 yards a carry; Janocko, 37, follows Kubiak from Seattle, where he coached Darnold. Kubiak will call plays but says he has never called a game alone and describes a staff that plans and communicates together on game day. Notes the hope that keeping Leonard helps mend the team's strained relationship with Maxx Crosby.",
+      "confidence": "high"
+    },
+    {
+      "id": "E9",
+      "url": "https://www.raiders.com/news/andrew-janocko-las-vegas-raiders-offensive-coordinator-history-in-mind-nfl-2026-season",
+      "publisher": "Las Vegas Raiders (raiders.com), Paul Gutierrez",
+      "published": "2026-05-18",
+      "accessed": "2026-11-06",
+      "summary": "Team-site profile of the new OC: worked with Kubiak in Minnesota, New Orleans and Seattle and their families are close; came for trust in Kubiak and respect for Raiders history; sees his job as supporting the play-caller and fitting the offense to players; describes trust with Cousins and a curious rookie Mendoza. Kubiak calls him a phenomenal teacher who keeps teaching simple and prepares thoroughly. Pitt history major and pro wrestling fan. Team-written, favorable.",
+      "confidence": "high"
+    },
+    {
+      "id": "E10",
+      "url": "https://abc7news.com/post/what-will-raiders-defense-look-like-rob-leonard/19378516/",
+      "publisher": "ESPN (Ryan McFadden) via ABC7",
+      "published": "2026-06-25",
+      "accessed": "2026-11-06",
+      "summary": "Feature on the defense: Leonard had no prior tie to Kubiak and was recommended by the GM and an assistant; Kubiak asked few questions in the interview, says Leonard had a clear plan and was the right man. Shows Kubiak's hiring style briefly; mostly about Leonard.",
+      "confidence": "medium"
     }
   ],
   "review": {
     "status": "draft",
     "reviewer": null,
     "reviewed_at": null,
-    "notes": "moved seat 2026; re-research for 2026 sources"
+    "notes": "Moved seat 2026 (NO OC 2024, SEA OC 2025, now LV HC). Added 2026 sources E7-E10 (introduction, coordinator hires, Janocko profile, Leonard feature). The seed's SEA-era gap is covered only through E7/E8; no 2025 Seattle feature added. Views, want, fear and voice rewritten for a first-time head coach who calls plays; new ties to Janocko, Leonard and Darnold. Crosby relationship left out (E8 reports strain with the team, not with Kubiak)."
   }
 }

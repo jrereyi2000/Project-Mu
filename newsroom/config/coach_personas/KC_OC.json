@@ -1,0 +1,213 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:KC:OC",
+  "name": "Eric Bieniemy",
+  "role": "OC",
+  "team": "KC",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "KC",
+    "role": "OC",
+    "name": "Eric Bieniemy"
+  },
+  "sliders": {
+    "temperament": 8,
+    "sociability": 4,
+    "confidence": 7,
+    "openness": 5,
+    "warmth": 4,
+    "drive": 8
+  },
+  "slider_evidence": {
+    "temperament": [
+      "E1",
+      "E2"
+    ],
+    "drive": [
+      "E1",
+      "E4",
+      "E5"
+    ],
+    "confidence": [
+      "E3",
+      "E4"
+    ],
+    "sociability": [
+      "E1",
+      "E3"
+    ],
+    "warmth": [
+      "E1",
+      "E2"
+    ]
+  },
+  "traits": [
+    "DISCIPLINARIAN",
+    "PERFECTIONIST",
+    "LOYAL"
+  ],
+  "trait_evidence": {
+    "DISCIPLINARIAN": [
+      "E1",
+      "E2",
+      "E5"
+    ],
+    "PERFECTIONIST": [
+      "E1",
+      "E5"
+    ],
+    "LOYAL": [
+      "E3",
+      "E4"
+    ]
+  },
+  "views": [
+    {
+      "text": "If the basics are wrong, it does not matter who the opponent is.",
+      "when": [
+        "SCHEME",
+        "BAD_GAME"
+      ]
+    },
+    {
+      "text": "A mistake gets corrected on the spot, loudly if needed; waiting until the film room is too late.",
+      "when": [
+        "COACHING",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "A championship roster gets complacent about details, and that is what a coach has to attack first.",
+      "when": [
+        "CONTENDER",
+        "OFFSEASON"
+      ]
+    },
+    {
+      "text": "Demanding is not personal; any player can walk in and talk.",
+      "when": [
+        "PLAYER",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Calling plays on your own teaches you to explain the plan so players buy in.",
+      "when": [
+        "COACHING",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Even a great quarterback needs his footwork coached every day.",
+      "when": [
+        "QB",
+        "PERFORMANCE"
+      ]
+    },
+    {
+      "text": "Close losses come from small lapses, like a player easing off on a block.",
+      "when": [
+        "CLOSE_GAMES",
+        "GAME_REVIEW"
+      ]
+    },
+    {
+      "text": "The head coach owns the call sheet; the coordinator owns the standard in practice.",
+      "when": [
+        "COACHING",
+        "SCHEME"
+      ]
+    }
+  ],
+  "signatures": [
+    "yells corrections across the practice field the moment a rep goes wrong",
+    "sends a whole unit off the field when it lines up wrong",
+    "says he is the same person he always was when asked how he has changed"
+  ],
+  "want": "to restore the detail and discipline of Kansas City's championship offenses and earn the head-coaching job that has eluded him",
+  "fear": "that his intensity is remembered more than his results, as it was in Washington",
+  "voice": "Loud, direct and relentless on the field; in front of reporters he is energetic and plain-spoken, talking about standards, details and discipline. He frames his demands as care rather than anger, credits Reid warmly, and does not apologize for being hard on players.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "KC",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E3",
+        "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Patrick Mahomes",
+        "team_2026": "KC"
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E5"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.commanders.com/news/eric-bieniemy-s-coaching-style-is-pushing-players-to-get-better-each-and-every-d",
+      "publisher": "Washington Commanders (commanders.com), Zach Selby",
+      "published": "2023-05-17",
+      "accessed": "2026-11-06",
+      "summary": "Rookie minicamp feature after he became Washington's coordinator: earlier meetings, shorter rests, little margin for error; he calls out mistakes immediately from anywhere on the field, stresses finishing, footwork and ball security, and runs fast practices. Rookies call him loud from the start but say he pushes them daily. Team-written.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.clickondetroit.com/sports/2023/08/09/rivera-clarifies-his-statement-about-commanders-players-expressing-concern-with-bieniemys-style/",
+      "publisher": "Associated Press via ClickOnDetroit",
+      "published": "2023-08-09",
+      "accessed": "2026-11-06",
+      "summary": "Ron Rivera says some players had gone to him a little concerned about Bieniemy's intensity, then walks the remark back; Bieniemy says he is an open book, invites players to talk and that his demands are not personal; some veterans say they like the style. Shows that his intensity drew friction; does not show lasting conflict.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.nbcsports.com/nfl/profootballtalk/rumor-mill/news/andy-reid-we-all-know-the-energy-eric-bieniemy-brings-what-he-gives-to-a-team",
+      "publisher": "Pro Football Talk (NBC Sports), Myles Simmons",
+      "published": "2026-01-26",
+      "accessed": "2026-11-06",
+      "summary": "Andy Reid on the rehire: calls it a win-win, praises Bieniemy's energy as different from Nagy's, says he is very direct with players and coaches, honest, a strong leader with deep knowledge of the offense and no hidden agendas. Reid will keep calling plays with input from staff. A boss's praise.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.nbcsports.com/nfl/profootballtalk/rumor-mill/news/eric-bieniemy-on-return-to-chiefs-i-feel-like-a-kid-in-a-candy-store",
+      "publisher": "Pro Football Talk (NBC Sports), Myles Simmons",
+      "published": "2026-01-29",
+      "accessed": "2026-11-06",
+      "summary": "His introductory remarks: Reid's call was too good to refuse; calling plays in Washington and at UCLA taught him to be creative and to communicate a plan so players buy in; he is energized and will stay the same person, keeping the team disciplined, detailed and held to a high standard.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.nbcsports.com/nfl/profootballtalk/rumor-mill/news/eric-bieniemy-returns-chiefs-focus-to-fundamentals",
+      "publisher": "Pro Football Talk (NBC Sports), Mike Florio, citing The Athletic",
+      "published": "2026-06-08",
+      "accessed": "2026-11-06",
+      "summary": "Spring report: he refocuses the offense on basics such as footwork, stance and route plans, reportedly pulled the whole starting offense off the field after it lined up wrong, and says nothing else matters if the basics are not done right; Mahomes welcomes the approach. Secondhand quotes via a column.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "New seat 2026 (return to KC as OC; Reid still calls plays). Five sources, 2023-05 to 2026-06. E2 records friction over his intensity in Washington; it supports the voice and fear, not a negative tie, since no named player is involved."
+  }
+}

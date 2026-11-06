@@ -1,0 +1,229 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:WAS:DC",
+  "name": "Daronte Jones",
+  "role": "DC",
+  "team": "WAS",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "WAS",
+    "role": "DC",
+    "name": "Daronte Jones"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 4,
+    "confidence": 5,
+    "openness": 6,
+    "warmth": 5,
+    "drive": 7
+  },
+  "slider_evidence": {
+    "openness": [
+      "E5"
+    ],
+    "drive": [
+      "E1",
+      "E3"
+    ],
+    "sociability": [
+      "E4"
+    ]
+  },
+  "traits": [
+    "TEACHER",
+    "SCHEME_NERD",
+    "GUARDED"
+  ],
+  "trait_evidence": {
+    "TEACHER": [
+      "E2",
+      "E5"
+    ],
+    "SCHEME_NERD": [
+      "E3",
+      "E5"
+    ],
+    "GUARDED": [
+      "E4",
+      "E5"
+    ]
+  },
+  "views": [
+    {
+      "text": "Teach to every learning style in the room; a lesson that reaches one player and misses three failed.",
+      "when": [
+        "COACHING",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "Disguise wins on defense, but only if the communication behind it is airtight.",
+      "when": [
+        "SCHEME",
+        "GAME_REVIEW"
+      ]
+    },
+    {
+      "text": "Three, four or five down linemen in the same game keeps a quarterback guessing.",
+      "when": [
+        "SCHEME",
+        "QB"
+      ]
+    },
+    {
+      "text": "Do not hand opponents the fronts and alignments in a press conference.",
+      "when": [
+        "SCHEME",
+        "PREVIEW"
+      ]
+    },
+    {
+      "text": "A defense that finished last needs steady improvement, not a single dramatic fix.",
+      "when": [
+        "STRUGGLING",
+        "OFFSEASON"
+      ]
+    },
+    {
+      "text": "Effort, competition and technique are the three things every rep is graded on.",
+      "when": [
+        "PERFORMANCE",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Taking the long way through every level of football teaches what reaches players.",
+      "when": [
+        "COACHING",
+        "HISTORY"
+      ]
+    }
+  ],
+  "signatures": [
+    "declines to reveal scheme details and smiles about it",
+    "mentions his hometown roots when talking about the job",
+    "talks about lesson plans like a schoolteacher"
+  ],
+  "want": "to turn his hometown team's last-ranked defense into a disguised, aggressive unit in his first NFL play-calling job",
+  "fear": "that his first season calling an NFL defense exposes his inexperience in front of the fans he grew up with",
+  "voice": "Measured, private about scheme and teacher-like; he speaks about communication, technique and learning styles and gives little away about alignments. Proud of his long climb and his local roots, he credits mentors and keeps expectations framed as steady growth. Personality coverage is thin.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "MIN",
+          "role": "DC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E3"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "WAS",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E2",
+        "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "DEN",
+          "role": "DC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E3"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "IND",
+          "role": "DC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E3"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.espn.com.au/nfl/story/_/id/47739154/source-commanders-finalizing-deal-hire-daronte-jones-dc",
+      "publisher": "ESPN, John Keim",
+      "published": "2026-01-27",
+      "accessed": "2026-11-06",
+      "summary": "Hire report: D.C.-area native and Morgan State alum; college coach 2001-16 with high school and CFL stints; NFL since 2016 except a 2021 season calling plays as LSU's DC; Vikings DB coach from 2022 and pass game coordinator after; worked under Flores, Zimmer, Vance Joseph and Marvin Lewis. Interviewed with five teams; a source calls his interview impressive and a former colleague says the job was only a matter of time.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.si.com/nfl/commanders/onsi/news/washington-commanders-daronte-jones-defensive-coordinator-impact-scheme-fit-dan-quinn",
+      "publisher": "Sports Illustrated (Commanders On SI), Caleb Skinner",
+      "published": "2026-01-27",
+      "accessed": "2026-11-06",
+      "summary": "Analysis of the hire: expects better coverage, communication and takeaways from a secondary specialist described as a student-teacher coach who meets players halfway; his Flores-influenced scheme should fit Quinn's aggressive taste; first NFL play-calling job is the risk. A writer's projection.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.commanders.com/news/daronte-jones-commanders-defensive-coordinator-things-to-know",
+      "publisher": "Washington Commanders (commanders.com), Zach Selby",
+      "published": "2026-01-30",
+      "accessed": "2026-11-06",
+      "summary": "Things to know at the hire: coached at every level from Lenoir-Rhyne and Louisiana high schools to the CFL and NFL; Flores' right-hand man in Minnesota, whose secondary allowed the second-fewest passing yards; learned under Zimmer, Vance Joseph and with Anarumo; says he took the long way. Team-written; little on personality.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.nfl.com/news/commanders-two-first-time-coordinators-blough-jones-jayden-daniels",
+      "publisher": "Associated Press via NFL.com",
+      "published": "2026-02-10",
+      "accessed": "2026-11-06",
+      "summary": "AP on the formal introduction (page date not shown; Feb. 10 news cycle): grew up a Washington fan in the Maryland suburbs; three seasons as Flores' pass game coordinator; declined to give specifics on fronts and alignments; inherits a defense needing help at every level.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.wtvr.com/sports/commanders-defense-changes-aug-12-2026",
+      "publisher": "Associated Press via WTVR",
+      "published": "2026-08-12",
+      "accessed": "2026-11-06",
+      "summary": "Camp report (dated from the URL): installs a new system with Flores-style disguise and fronts of three, four or five linemen after Washington ranked last on defense; treats communication as a core standard; credits Louisiana high school years for his teaching and plans lessons for different learning styles; judges camp by steady improvement. Players call the scheme complicated and like the freedom to pick their spots.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "New seat 2026. Five sources, all 2026; personality coverage is thin (GUARDED rests on his declining scheme specifics, E4, E5). E4 is AP on NFL.com with no printed date, dated from the news cycle; E5 dated from the URL. Ties rest on staff overlap (Flores, Vance Joseph, Anarumo), not testimony."
+  }
+}
