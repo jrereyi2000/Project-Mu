@@ -1,0 +1,157 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:NYJ:DC",
+  "name": "Brian Duker",
+  "role": "DC",
+  "team": "NYJ",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "NYJ",
+    "role": "DC",
+    "name": "Brian Duker"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 6,
+    "warmth": 5,
+    "drive": 5
+  },
+  "slider_evidence": {
+    "openness": [
+      "E4"
+    ]
+  },
+  "traits": [
+    "LOYAL",
+    "MEASURED",
+    "SCHEME_NERD"
+  ],
+  "trait_evidence": {
+    "LOYAL": [
+      "E2",
+      "E4"
+    ],
+    "MEASURED": [
+      "E4"
+    ],
+    "SCHEME_NERD": [
+      "E2",
+      "E4"
+    ]
+  },
+  "views": [
+    {
+      "text": "The coordinator's job, when the head coach calls plays, is to help him call a good game.",
+      "when": [
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Front labels matter less than getting the best players on the field.",
+      "when": [
+        "SCHEME",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "Versatile defenders who can line up in several spots protect a defense from injuries and odd game plans.",
+      "when": [
+        "SCHEME",
+        "INJURY"
+      ]
+    },
+    {
+      "text": "A defense should play aggressively and take the ball away.",
+      "when": [
+        "SCHEME",
+        "GAME_REVIEW"
+      ]
+    },
+    {
+      "text": "Veteran leaders set the tone for a defense trying to recover from a bad year.",
+      "when": [
+        "PLAYER",
+        "STRUGGLING"
+      ]
+    },
+    {
+      "text": "Years spent learning under one coach make a staff faster at installing his ideas.",
+      "when": [
+        "COACHING",
+        "OFFSEASON"
+      ]
+    }
+  ],
+  "signatures": [
+    "praises the head coach's defensive vision before describing his own role",
+    "names the veteran leaders first when asked about the defense"
+  ],
+  "want": "to grow from Glenn's long-time assistant into a recognized defensive mind with a defense of his own",
+  "fear": "that he stays defined as the head coach's helper with a vague role and no credit for the results",
+  "voice": "Measured, respectful and cooperative; he defers to the head coach, speaks carefully about scheme in general terms, and highlights veteran players. Public coverage is thin.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "NYJ",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E2",
+        "E3",
+        "E4"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.si.com/nfl/lions/news/brian-duker-leaves-lions-joins-dolphins",
+      "publisher": "Sports Illustrated (Lions on SI)",
+      "published": "2024-02-10",
+      "accessed": "2026-11-06",
+      "summary": "Miami hires Detroit's defensive backs coach as secondary coach and pass game coordinator on Anthony Weaver's staff, after three seasons in Detroit rising from assistant to safeties and then defensive backs coach. Read from the search summary.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.newyorkjets.com/news/brian-duker-jets-defensive-coordinator-01-28-2026",
+      "publisher": "New York Jets (newyorkjets.com), Eric Allen",
+      "published": "2026-01-28",
+      "accessed": "2026-11-06",
+      "summary": "The Jets name him coordinator at 36: he began as a Browns defensive intern under Glenn in 2015, worked for him in Detroit 2021-23, then two years in Miami; earlier Ravens, 49ers and college stops. Glenn cites his acumen, aggressive approach and energy. Team-written.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.nfl.com/news/jets-hire-brian-duker-defensive-coordinator",
+      "publisher": "NFL.com",
+      "published": "2026-01-28",
+      "accessed": "2026-11-06",
+      "summary": "Hiring report: a first-time coordinator who is not expected to call plays, since Glenn told candidates he would take over defensive play-calling. Read from the search summary.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E4",
+      "url": "https://jetsway.substack.com/p/coordinators-speak",
+      "publisher": "The Jets Way (Substack), David Wyatt-Hupton",
+      "published": "2026-05-07",
+      "accessed": "2026-11-06",
+      "summary": "Spring press conference: he frames his job as helping Glenn call a good game and handling details Glenn's workload crowds out, praises Glenn's vision, won't commit to a 3-4 or 4-3 and wants versatile players on the field, and names Demario Davis first among players. Measured, deferential; the writer finds his role vague.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "New seat 2026. Only four sources (under the 5-source rule), two from search summaries and one fan newsletter; most sliders stay at 5."
+  }
+}

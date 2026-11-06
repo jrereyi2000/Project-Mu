@@ -1,0 +1,212 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:DAL:OC",
+  "name": "Klayton Adams",
+  "role": "OC",
+  "team": "DAL",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "DAL",
+    "role": "OC",
+    "name": "Klayton Adams"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 6,
+    "openness": 6,
+    "warmth": 6,
+    "drive": 7
+  },
+  "slider_evidence": {
+    "confidence": [
+      "E3"
+    ],
+    "openness": [
+      "E4",
+      "E5"
+    ],
+    "warmth": [
+      "E2",
+      "E4"
+    ],
+    "drive": [
+      "E4",
+      "E5"
+    ]
+  },
+  "traits": [
+    "SCHEME_NERD",
+    "TEACHER",
+    "PERFECTIONIST"
+  ],
+  "trait_evidence": {
+    "SCHEME_NERD": [
+      "E3",
+      "E4"
+    ],
+    "TEACHER": [
+      "E2",
+      "E4"
+    ],
+    "PERFECTIONIST": [
+      "E4",
+      "E5"
+    ]
+  },
+  "views": [
+    {
+      "text": "An offense should bring violence to the game; physical runs and hard blocking set the tone.",
+      "when": [
+        "SCHEME",
+        "PREVIEW"
+      ]
+    },
+    {
+      "text": "Running back what worked last year is the worst plan, because everybody has the film now.",
+      "when": [
+        "OFFSEASON",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Pick the run concept that fits this week's front instead of living in one scheme.",
+      "when": [
+        "SCHEME",
+        "GAME_REVIEW"
+      ]
+    },
+    {
+      "text": "When the head coach calls the plays, an idea goes on the sheet only if the play-caller believes in it.",
+      "when": [
+        "COACHING"
+      ]
+    },
+    {
+      "text": "A young tackle usually figures the job out somewhere past his twentieth start, so injuries call for patience.",
+      "when": [
+        "YOUTH",
+        "INJURY"
+      ]
+    },
+    {
+      "text": "Good numbers early in a season prove nothing; there is still a long way to go.",
+      "when": [
+        "WIN_STREAK",
+        "PERFORMANCE"
+      ]
+    },
+    {
+      "text": "A running back's blocking and leadership count as much as his yards.",
+      "when": [
+        "PLAYER"
+      ]
+    }
+  ],
+  "signatures": [
+    "brushes off praise for the offense's rankings by listing what still needs fixing",
+    "talks blocking schemes in detail and credits the line coaches",
+    "defers to the head coach on play calls without hesitation"
+  ],
+  "want": "to show that an offensive line coach can run a whole offense and earn a head-coaching shot of his own",
+  "fear": "that the run game's revival gets credited entirely to the play-caller and the stars around him",
+  "voice": "Intense, focused and plainspoken, with a former center's vocabulary of physicality and edge. He frames the job as problem-solving, gives detailed answers on line play, defers to the head coach on calls without fuss, and treats good statistics as unfinished business.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "DAL",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E2",
+        "E3",
+        "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Dak Prescott",
+        "team_2026": "DAL"
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E3",
+        "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Javonte Williams",
+        "team_2026": "DAL"
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E3",
+        "E5"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.kwtx.com/2025/02/01/cowboys-hire-cardinals-line-coach-klayton-adams-offensive-coordinator/",
+      "publisher": "Associated Press via KWTX",
+      "published": "2025-02-01",
+      "accessed": "2026-11-06",
+      "summary": "Dallas hires Arizona's offensive line coach of 2023-24 as offensive coordinator, his first coordinator job; Schottenheimer will call plays. Read from the search summary; facts only.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.dallascowboys.com/news/klayton-adams-opens-up-on-working-with-schottenheimer-offensive-identity-more",
+      "publisher": "Dallas Cowboys (dallascowboys.com), Tommy Yarrish",
+      "published": "2025-02-18",
+      "accessed": "2026-11-06",
+      "summary": "First media session: he wants the offense to bring violence and physicality to the game, sees the job as problem-solving, will not push plays the play-caller does not want, expects a growing process with a head coach he had not worked for, and will stay hands-on with the line. Talks about relationships and clear standards. Team-written.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.cbssports.com/nfl/news/cowboys-oc-klayton-adams-instrumental-in-run-game-revival-makes-case-for-future-as-nfl-head-coach",
+      "publisher": "CBS Sports, Garrett Podell",
+      "published": "2025-10-10",
+      "accessed": "2026-11-06",
+      "summary": "Five weeks in, Dallas leads the league in yards and its run game has jumped from 27th to 8th; Schottenheimer gives him control of the run plan and calls him very humble and easy to work with; Prescott credits his confidence and contagious energy; Pickens praises his gap-scheme knowledge. Favorable framing about a future head job.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://africa.espn.com/nfl/story/_/id/46544639/nfl-dallas-cowboys-klayton-adams-javonte-williams-dak-prescott",
+      "publisher": "ESPN, Todd Archer",
+      "published": "2025-10-11",
+      "accessed": "2026-11-06",
+      "summary": "Profile: a former Boise State center who mixes gap and zone runs by opponent, drills fundamentals, plans with Schottenheimer early in the week then has the staff attack the plan, and drops an idea the head coach rejects. Prescott cites his intensity and grit; Terence Steele calls him a master of the run game; he says the offense still has far to go.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.dallascowboys.com/news/klayton-adams-looking-to-seek-the-edge-for-cowboys-offense",
+      "publisher": "Dallas Cowboys (dallascowboys.com), Tommy Yarrish",
+      "published": "2026-02-25",
+      "accessed": "2026-11-06",
+      "summary": "Offseason remarks: repeating what worked last year is the worst approach now that opponents have a full year of film; he used the defensive coordinator interviews to learn how teams plan to stop Dallas; values Javonte Williams's pass protection and leadership; patient with Tyler Guyton's injury-slowed development. Team-written.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "New seat 2026 (in the job since 2025). Five sources; E1 read from the search summary. Temperament and sociability stay at 5."
+  }
+}

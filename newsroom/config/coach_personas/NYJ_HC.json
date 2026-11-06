@@ -11,26 +11,33 @@
     "name": "Aaron Glenn"
   },
   "sliders": {
-    "temperament": 5,
+    "temperament": 6,
     "sociability": 5,
     "confidence": 6,
-    "openness": 5,
+    "openness": 6,
     "warmth": 5,
     "drive": 6
   },
   "slider_evidence": {
+    "temperament": [
+      "E8"
+    ],
     "confidence": [
-      "E5"
+      "E4"
+    ],
+    "openness": [
+      "E8"
     ],
     "drive": [
       "E3",
-      "E5"
+      "E4"
     ]
   },
   "traits": [
     "TEACHER",
     "OLD_SCHOOL",
-    "FILM_ROOM_RAT"
+    "FILM_ROOM_RAT",
+    "LOYAL"
   ],
   "trait_evidence": {
     "TEACHER": [
@@ -38,10 +45,14 @@
     ],
     "OLD_SCHOOL": [
       "E1",
-      "E5"
+      "E4"
     ],
     "FILM_ROOM_RAT": [
-      "E5"
+      "E4"
+    ],
+    "LOYAL": [
+      "E6",
+      "E7"
     ]
   },
   "views": [
@@ -67,7 +78,7 @@
       ]
     },
     {
-      "text": "A challenge is an opportunity; a struggling unit is a chance to prove what the staff can build.",
+      "text": "A struggling unit is a chance to prove what a staff can build.",
       "when": [
         "STRUGGLING",
         "LOSING_STREAK"
@@ -86,15 +97,37 @@
         "PLAYER",
         "PERFORMANCE"
       ]
+    },
+    {
+      "text": "A coach who picked the wrong staff should say so and fix it, even after one year.",
+      "when": [
+        "COACHING",
+        "LOSING_STREAK"
+      ]
+    },
+    {
+      "text": "Frustration with results is no excuse to take it out on the people asking the questions.",
+      "when": [
+        "BAD_GAME",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Hire people who already know your standards; familiarity saves a rebuilding team time.",
+      "when": [
+        "COACHING",
+        "ROSTER_MOVES"
+      ]
     }
   ],
   "signatures": [
     "draws on his fifteen years as a cornerback when explaining technique",
-    "credits Parcells and the coaches he played for as the source of his approach"
+    "credits Parcells and the coaches he played for as the source of his approach",
+    "rebuilds his staff with coaches and teammates from earlier stops"
   ],
-  "want": "to become a head coach and prove a former player can lead a whole team, starting by fixing a broken Detroit defense",
-  "fear": "that he stays seen as Dan Campbell's lieutenant rather than a leader in his own right",
-  "voice": "Upbeat, direct and passionate, with flashes of light humor; he speaks like a former player, plainly and with conviction. Public coverage of his day-to-day voice is limited, so he keeps football talk practical and credits mentors.",
+  "want": "to save his first head-coaching job by turning a 3-14 team around in year two with a rebuilt staff",
+  "fear": "that a second losing season makes the staff overhaul look like blame-shifting and ends his tenure",
+  "voice": "Direct, passionate and plainspoken, a former player who speaks with conviction. He was combative with reporters in his first season and now calls that a mistake, so he is more open about his own errors. He credits mentors and old teammates and talks about rebuilding without excuses.",
   "ties": [
     {
       "target": {
@@ -110,7 +143,7 @@
       "evidence": [
         "E1",
         "E2",
-        "E6"
+        "E5"
       ]
     },
     {
@@ -126,6 +159,36 @@
       "outcome": "positive",
       "evidence": [
         "E3"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "NYJ",
+          "role": "OC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E7"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "NYJ",
+          "role": "DC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E6"
       ]
     }
   ],
@@ -159,15 +222,6 @@
     },
     {
       "id": "E4",
-      "url": "https://abc13.com/post/aaron-glenn-lions-defensive-coordinator-glenns-ties-to-houston-humble-native-nfl-career/14363373/",
-      "publisher": "ABC13 Houston",
-      "published": "2024-01-27",
-      "accessed": "2026-11-04",
-      "summary": "Hometown profile before the NFC title game: from Humble, Texas, a Texas A&M star, 15 seasons with the Jets, Texans, Cowboys, Jaguars and Saints, an original Texan and Pro Bowler, then Browns and Saints coaching and head coach interviews. Facts only.",
-      "confidence": "medium"
-    },
-    {
-      "id": "E5",
       "url": "https://www.clickondetroit.com/sports/2025/01/27/glenn-and-mougey-optimistic-in-their-intro-were-the-freakin-new-york-jets-were-built-for-this/",
       "publisher": "Associated Press, Dennis Waszak Jr., via WDIV",
       "published": "2025-01-27",
@@ -176,12 +230,39 @@
       "confidence": "high"
     },
     {
-      "id": "E6",
+      "id": "E5",
       "url": "https://africa.espn.com/nfl/story/_/id/43492843/coach-dan-campbell-says-lions-gonna-come-back-stronger",
       "publisher": "ESPN, Eric Woodyard",
       "published": "2025-01-20",
       "accessed": "2026-11-04",
       "summary": "Campbell says losing Glenn and Johnson will hurt because both were central to the program's rise. Campbell's view of his staff.",
+      "confidence": "high"
+    },
+    {
+      "id": "E6",
+      "url": "https://www.newyorkjets.com/news/brian-duker-jets-defensive-coordinator-01-28-2026",
+      "publisher": "New York Jets (newyorkjets.com), Eric Allen",
+      "published": "2026-01-28",
+      "accessed": "2026-11-06",
+      "summary": "He hires Brian Duker as coordinator, a coach who started under him as a Browns intern in 2015 and worked for him in Detroit 2021-23; Glenn praises his football acumen, aggressive approach and energy. Team-written.",
+      "confidence": "high"
+    },
+    {
+      "id": "E7",
+      "url": "https://www.foxsports.com/articles/nfl/jets-hire-veteran-coach-frank-reich-as-offensive-coordinator",
+      "publisher": "Associated Press via Fox Sports",
+      "published": "2026-02-04",
+      "accessed": "2026-11-06",
+      "summary": "After a 3-14 first season he hires Frank Reich, his 1996 Jets teammate, to replace Tanner Engstrand, praising his experience, creativity and calm under pressure; the offense was last in passing yards. Wire report.",
+      "confidence": "high"
+    },
+    {
+      "id": "E8",
+      "url": "https://www.nbcsports.com/nfl/profootballtalk/rumor-mill/news/aaron-glenn-regrets-his-approach-to-the-media-in-his-first-year",
+      "publisher": "Pro Football Talk (NBC Sports), Mike Florio",
+      "published": "2026-08-19",
+      "accessed": "2026-11-06",
+      "summary": "Relaying an Athletic interview: Glenn says he regrets his hostility toward reporters in year one, calls it misplaced, and also kicks himself over a first staff he had to overhaul; the column adds that his quarterback choice hurt 2025 and reads his new openness as partly strategic.",
       "confidence": "high"
     }
   ],
@@ -189,6 +270,6 @@
     "status": "draft",
     "reviewer": null,
     "reviewed_at": null,
-    "notes": "moved seat 2026; re-research for 2026 sources"
+    "notes": "Moved seat 2026 (Lions DC to Jets head coach, in the job since 2025). Added the 2026 coordinator hires and his August regret over his media approach and first staff; dropped the 2024 hometown profile. Temperament moved to 6 and openness to 6 on E8; LOYAL added; ties to Reich and Duker added; want, fear, voice and three views rewritten."
   }
 }

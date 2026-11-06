@@ -1,0 +1,239 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:DAL:DC",
+  "name": "Christian Parker",
+  "role": "DC",
+  "team": "DAL",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "DAL",
+    "role": "DC",
+    "name": "Christian Parker"
+  },
+  "sliders": {
+    "temperament": 4,
+    "sociability": 6,
+    "confidence": 6,
+    "openness": 6,
+    "warmth": 6,
+    "drive": 7
+  },
+  "slider_evidence": {
+    "temperament": [
+      "E4"
+    ],
+    "sociability": [
+      "E1"
+    ],
+    "confidence": [
+      "E4"
+    ],
+    "openness": [
+      "E3",
+      "E4"
+    ],
+    "warmth": [
+      "E1",
+      "E5"
+    ],
+    "drive": [
+      "E1",
+      "E4"
+    ]
+  },
+  "traits": [
+    "TEACHER",
+    "YOUTH_DEVELOPER",
+    "SCHEME_NERD",
+    "PERFECTIONIST"
+  ],
+  "trait_evidence": {
+    "TEACHER": [
+      "E1",
+      "E3",
+      "E5"
+    ],
+    "YOUTH_DEVELOPER": [
+      "E1",
+      "E3"
+    ],
+    "SCHEME_NERD": [
+      "E3",
+      "E4"
+    ],
+    "PERFECTIONIST": [
+      "E1"
+    ]
+  },
+  "views": [
+    {
+      "text": "Complicated football should feel simple by the time it reaches the players.",
+      "when": [
+        "COACHING",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Fit the call to the players: blitz if it works, man if the corners can, zone if they see it better.",
+      "when": [
+        "SCHEME",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "Young corners can play right away if someone teaches them the basics nobody thinks to ask about.",
+      "when": [
+        "YOUTH",
+        "DRAFT"
+      ]
+    },
+    {
+      "text": "Promise nothing about a rebuild; do it the right way, one day at a time.",
+      "when": [
+        "STRUGGLING",
+        "PREVIEW"
+      ]
+    },
+    {
+      "text": "Learning under a great coordinator means borrowing his principles, not copying his defense.",
+      "when": [
+        "COACHING",
+        "HISTORY"
+      ]
+    },
+    {
+      "text": "High standards land better in a room that can laugh.",
+      "when": [
+        "COACHING",
+        "HUMOR"
+      ]
+    },
+    {
+      "text": "The best players win in any scheme; the scheme's job is to let them.",
+      "when": [
+        "SCHEME",
+        "PLAYER"
+      ]
+    }
+  ],
+  "signatures": [
+    "quizzes players on scheme and situations in game-show style",
+    "keeps an open door but expects players to arrive with specific questions",
+    "answers questions about expectations by returning to process"
+  ],
+  "want": "to turn one of the worst defenses in the league around in his first coordinator job and prove 34 is not too young",
+  "fear": "that a slow start gets blamed on his youth and inexperience before the new scheme takes hold",
+  "voice": "Calm, measured and quietly confident; his answers sound prepared and lean on process rather than promises. He credits his mentors and his players, explains scheme in plain terms, and is lighter and funnier inside the meeting room than at the podium.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "PHI",
+          "role": "DC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E3",
+        "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "DAL",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E4",
+        "E5"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Cooper DeJean",
+        "team_2026": "PHI"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E1"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Quinyon Mitchell",
+        "team_2026": "PHI"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E3"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.inquirer.com/eagles/eagles-cornerbacks-quinyon-mitchell-cooper-dejean-coach-christian-parker-20241102.html",
+      "publisher": "Philadelphia Inquirer, EJ Smith",
+      "published": "2024-11-02",
+      "accessed": "2026-11-06",
+      "summary": "How the Eagles' defensive backs coach readied rookies Mitchell and DeJean: daily eyes-feet-hands drills, basics a rookie might not ask about, game-show style scheme quizzes, an open door that expects specific questions, and high standards; he plays music and jokes in meetings. Mitchell says he chases perfection; Surtain recalls knowledge beyond his years.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://africa.espn.com/nfl/story/_/id/47694903/source-cowboys-reach-dc-agreement-eagles-christian-parker",
+      "publisher": "ESPN",
+      "published": "2026-01-22",
+      "accessed": "2026-11-06",
+      "summary": "Dallas agrees to make the Eagles' passing game coordinator and defensive backs coach its coordinator; 34 and never a coordinator; Schottenheimer wanted a teacher and communicator and interviewed nine candidates. Read from the search summary.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.dallascowboys.com/news/how-did-christian-parker-earn-the-cowboys-defensive-coordinator-job",
+      "publisher": "Dallas Cowboys (dallascowboys.com), Tommy Yarrish",
+      "published": "2026-01-28",
+      "accessed": "2026-11-06",
+      "summary": "Why he won the job: Stephen Jones says he made complex ideas simple for the whole panel; Will McClay heard nothing negative and calls him wise beyond his years; his plan pairs a front seven with the secondary, borrowing Fangio's principles with his own wrinkles; the team trusts his development of Surtain, Mitchell and DeJean. No quotes from Parker.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://africa.espn.com/nfl/story/_/id/47970515/christian-parker-taking-day-day-cowboys-defense",
+      "publisher": "ESPN, Todd Archer",
+      "published": "2026-02-19",
+      "accessed": "2026-11-06",
+      "summary": "Introductory news conference: sets no expectations for the rebuild and wants to do it the right way day by day; credits his preparation and mentors for his confidence; a multiple 3-4 base; blitz, man or zone depending on what the players do best; best players win in any scheme. Comes across measured and prepared.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.ksat.com/sports/2026/07/29/cowboys-open-2026-training-camp-with-focus-on-defensive-overhaul/",
+      "publisher": "KSAT, Larry Ramirez",
+      "published": "2026-07-28",
+      "accessed": "2026-11-06",
+      "summary": "At camp opening Schottenheimer calls him an incredible communicator whose office players keep visiting to talk scheme, praises how he runs drills and installs, and says he does not act like a 34-year-old first-time coordinator. The head coach's view.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "New seat 2026. Five sources (E2 from the search summary); later reports after the cutoff (his move to the booth in October 2026) are not used."
+  }
+}

@@ -1,0 +1,164 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:MIA:DC",
+  "name": "Sean Duggan",
+  "role": "DC",
+  "team": "MIA",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "MIA",
+    "role": "DC",
+    "name": "Sean Duggan"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 6,
+    "warmth": 6,
+    "drive": 5
+  },
+  "slider_evidence": {
+    "openness": [
+      "E3",
+      "E4"
+    ],
+    "warmth": [
+      "E3",
+      "E4"
+    ]
+  },
+  "traits": [
+    "LOYAL",
+    "TEACHER",
+    "SCHEME_NERD"
+  ],
+  "trait_evidence": {
+    "LOYAL": [
+      "E1",
+      "E2",
+      "E3"
+    ],
+    "TEACHER": [
+      "E2",
+      "E3"
+    ],
+    "SCHEME_NERD": [
+      "E3",
+      "E4"
+    ]
+  },
+  "views": [
+    {
+      "text": "Accountability only works once a player believes the coach cares about his growth.",
+      "when": [
+        "COACHING",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "A defense should be multiple enough to handle whatever plan an offense brings.",
+      "when": [
+        "SCHEME",
+        "PREVIEW"
+      ]
+    },
+    {
+      "text": "Fit the scheme to the players instead of forcing a philosophy on them.",
+      "when": [
+        "SCHEME",
+        "ROSTER_MOVES"
+      ]
+    },
+    {
+      "text": "Stop the run, play your gap, then get after the quarterback.",
+      "when": [
+        "SCHEME",
+        "GAME_REVIEW"
+      ]
+    },
+    {
+      "text": "A coordinator who does not call plays earns his keep by freeing the head coach to run the whole team.",
+      "when": [
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Every front and coverage has trade-offs; the right one depends on who you are playing.",
+      "when": [
+        "SCHEME"
+      ]
+    }
+  ],
+  "signatures": [
+    "answers scheme questions by saying it depends on the opponent and the personnel",
+    "credits Hafley for much of what he knows",
+    "jokes about his own size"
+  ],
+  "want": "to grow from Hafley's long-time assistant into a defensive play-caller in his own right",
+  "fear": "that he is seen only as the head coach's loyal helper and never gets credit for the defense",
+  "voice": "Earnest, humble and upbeat; he qualifies answers carefully and defers to the head coach on the big calls. He talks about trust, relationships and teaching, and lightens things with self-deprecating jokes. Public coverage is limited to his hiring.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "MIA",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E2",
+        "E3",
+        "E4"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://africa.espn.com/nfl/story/_/id/47800410/sources-dolphins-hiring-sean-duggan-defensive-coordinator",
+      "publisher": "ESPN, Marcel Louis-Jacques",
+      "published": "2026-02-01",
+      "accessed": "2026-11-06",
+      "summary": "Miami hires the Packers' linebackers coach, 32, as coordinator, his fourth stint under Hafley after Ohio State, Boston College and Green Bay; most of his 11-year career was in college; Hafley will call the defense. News report.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.si.com/nfl/dolphins/onsi/news/hafley-s-comments-reveal-why-dolphins-fans-should-feel-better-about-sean-duggan-01kgmyy0h89q",
+      "publisher": "Sports Illustrated (Dolphins on SI), Dante Collinelli",
+      "published": "2026-02-04",
+      "accessed": "2026-11-06",
+      "summary": "Hafley says he fought to bring him over LaFleur's objection, calls him a rising star, and recalls trusting his booth observations at Ohio State; the writer expects Duggan to handle installation and daily teaching from the booth. Hafley's view plus analysis.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.miamidolphins.com/news/transcript-oc-bobby-slowik-dc-sean-duggan-and-stc-chris-tabor-introductory-press-conference-feb-4",
+      "publisher": "Miami Dolphins (miamidolphins.com)",
+      "published": "2026-02-05",
+      "accessed": "2026-11-06",
+      "summary": "His introductory press conference: eighth year with Hafley built on deep trust; aims to free Hafley to run all three phases; wants a multiple, fast, physical defense that stops the run and pressures the quarterback, with the scheme set by personnel; treats coaching as teaching and trust with players as central. Earnest, deferential, jokes about his size.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://africa.espn.com/nfl/story/_/id/47839670/miami-dolphins-sean-duggan-defensive-coordinator-jeff-hafley-green-bay-packers",
+      "publisher": "ESPN, Marcel Louis-Jacques",
+      "published": "2026-02-06",
+      "accessed": "2026-11-06",
+      "summary": "Profile: a Boston College linebacker turned coach, second-youngest coordinator in the league; says players respond when they believe he cares about their growth and that accountability is hard without a relationship; wants a multiple defense and credits Hafley with teaching him to fit the scheme to the players.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "New seat 2026. Only four sources, all from his February 2026 hiring (under the 5-source rule; no earlier coverage found); four sliders stay at 5."
+  }
+}

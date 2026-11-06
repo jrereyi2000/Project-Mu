@@ -1,0 +1,215 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:BUF:OC",
+  "name": "Pete Carmichael Jr.",
+  "role": "OC",
+  "team": "BUF",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "BUF",
+    "role": "OC",
+    "name": "Pete Carmichael Jr."
+  },
+  "sliders": {
+    "temperament": 4,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 6,
+    "warmth": 6,
+    "drive": 5
+  },
+  "slider_evidence": {
+    "temperament": [
+      "E1",
+      "E5"
+    ],
+    "openness": [
+      "E1",
+      "E5"
+    ],
+    "warmth": [
+      "E5"
+    ]
+  },
+  "traits": [
+    "TEACHER",
+    "MEASURED",
+    "LOYAL",
+    "FILM_ROOM_RAT"
+  ],
+  "trait_evidence": {
+    "TEACHER": [
+      "E5"
+    ],
+    "MEASURED": [
+      "E1",
+      "E5"
+    ],
+    "LOYAL": [
+      "E3",
+      "E4",
+      "E5"
+    ],
+    "FILM_ROOM_RAT": [
+      "E5"
+    ]
+  },
+  "views": [
+    {
+      "text": "A coordinator should prepare every week as if the call sheet is his, even when it isn't.",
+      "when": [
+        "SCHEME",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "A great quarterback's opinion belongs in the plan; if he doesn't like a play, it comes out.",
+      "when": [
+        "QB",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Criticism of the offense comes with the job, and the answer is cleaner details rather than excuses.",
+      "when": [
+        "STRUGGLING",
+        "BAD_GAME"
+      ]
+    },
+    {
+      "text": "Explosive plays and red-zone touchdowns decide games more than yardage totals do.",
+      "when": [
+        "GAME_REVIEW",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Get your best playmakers the ball in more than one way, backs in the passing game included.",
+      "when": [
+        "PLAYER",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "A staff works when every coach carries the head coach's message the same way in every room.",
+      "when": [
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Spotting a young coach early and staying close for years is how good staffs get built.",
+      "when": [
+        "COACHING",
+        "YOUTH"
+      ]
+    }
+  ],
+  "signatures": [
+    "credits players by name after a good week and says he must be better after a bad one",
+    "describes his role as keeping the offensive staff aligned behind the head coach",
+    "reaches for lessons from his years with an all-time great quarterback when talking passing concepts"
+  ],
+  "want": "to help a second star quarterback reach a Super Bowl while backing the young head coach he helped discover",
+  "fear": "that the stalled final seasons in New Orleans define him more than the long run of success before them",
+  "voice": "Enthusiastic but measured; he talks plainly about preparation, details and communication and rarely about himself. He accepts blame for a poor stretch in a sentence and moves straight to fixes, and he credits players and the head coach generously. Coverage of his personality is thin, so most of his voice comes from how he talks about others.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "BUF",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E4",
+        "E5"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "DEN",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E2",
+        "E3",
+        "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Josh Allen",
+        "team_2026": "BUF"
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E5"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.audacy.com/wwl/local-sports/saints/pete-carmichael-saints-offense-heard-the-critics-responded",
+      "publisher": "WWL (Audacy), Jeff Nowak",
+      "published": "2023-10-10",
+      "accessed": "2026-11-06",
+      "summary": "As Saints coordinator after a criticized first month, he calls the criticism part of the job, says he has to be better, credits players for a 34-0 win built on motion, the run game and red-zone touchdowns, and admits the tight ends and Michael Thomas needed more chances; sets a target of about eight explosive plays a game.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://louisianaradionetwork.com/2024/01/17/saints-part-ways-from-longtime-offensive-coordinator-pete-carmichael/",
+      "publisher": "Louisiana Radio Network",
+      "published": "2024-01-17",
+      "accessed": "2026-11-06",
+      "summary": "New Orleans parts ways with Carmichael after 15 seasons as offensive coordinator, the last link to the Payton era, following an uneven 2023 offense. A news item; read from the search summary, says nothing about his manner.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E3",
+      "url": "https://gazette.com/2024/02/14/broncos-finalize-hire-of-dbs-coach-passing-game-coordinator-jim-leonhard-senior-offensive-assistant-pete-carmichael",
+      "publisher": "The Gazette (Colorado Springs)",
+      "published": "2024-02-14",
+      "accessed": "2026-11-06",
+      "summary": "Denver finalizes Carmichael as senior offensive assistant on Sean Payton's staff, alongside defensive backs coach Jim Leonhard. Hiring news from the search summary only.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.news4jax.com/sports/2026/01/30/joe-brady-turns-to-former-colleague-agreeing-to-hire-pete-carmichael-as-bills-offensive-coordinator/",
+      "publisher": "Associated Press via News4JAX",
+      "published": "2026-01-30",
+      "accessed": "2026-11-06",
+      "summary": "Brady hires Carmichael as Buffalo coordinator: Saints coordinator 2009-2023, Super Bowl with Brees, two seasons as a Denver senior assistant; the two overlapped on the 2017-18 Saints staff; Brady keeps play-calling. Wire report.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.buffalobills.com/news/something-special-about-this-guy-why-pete-carmichael-waited-seven-years-to-get-back-with-joe-brady",
+      "publisher": "Buffalo Bills (buffalobills.com), Maddy Glab",
+      "published": "2026-02-05",
+      "accessed": "2026-11-06",
+      "summary": "At his first Buffalo press session he is visibly excited, says he waited years to work with Brady again after spotting him early in New Orleans, describes his job as keeping the staff aligned and carrying the head coach's message, plans each game as if he might call it, and wants Josh Allen's input on plays, dropping ideas Allen dislikes. Brady calls him a great communicator. Team-written.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "New seat 2026. Five sources, two read only from search summaries (E2, E3); little first-person personality coverage, so confidence, sociability and drive stay at 5."
+  }
+}

@@ -1,0 +1,172 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:NE:DC",
+  "name": "Zak Kuhr",
+  "role": "DC",
+  "team": "NE",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "NE",
+    "role": "DC",
+    "name": "Zak Kuhr"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 6,
+    "openness": 6,
+    "warmth": 6,
+    "drive": 7
+  },
+  "slider_evidence": {
+    "confidence": [
+      "E2"
+    ],
+    "openness": [
+      "E1",
+      "E4"
+    ],
+    "warmth": [
+      "E2"
+    ],
+    "drive": [
+      "E2"
+    ]
+  },
+  "traits": [
+    "SCHEME_NERD",
+    "FILM_ROOM_RAT",
+    "LOYAL",
+    "PLAYERS_COACH"
+  ],
+  "trait_evidence": {
+    "SCHEME_NERD": [
+      "E1",
+      "E4"
+    ],
+    "FILM_ROOM_RAT": [
+      "E4"
+    ],
+    "LOYAL": [
+      "E1",
+      "E2"
+    ],
+    "PLAYERS_COACH": [
+      "E2"
+    ]
+  },
+  "views": [
+    {
+      "text": "Coaching offense first shows a defensive coach what spread and option teams want.",
+      "when": [
+        "SCHEME",
+        "HISTORY"
+      ]
+    },
+    {
+      "text": "Prepare the calls, then step back and let the players play.",
+      "when": [
+        "COACHING",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "The playoffs are the time to turn up the pressure and trust the corners in man.",
+      "when": [
+        "PLAYOFFS",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Study a runner's style all the way back to college to know what he wants to do.",
+      "when": [
+        "GAME_REVIEW",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "Doubters and believers both fuel the work; commit fully to whatever role you are given.",
+      "when": [
+        "COACHING"
+      ]
+    },
+    {
+      "text": "A defense that loses the run game in the biggest game has to rebuild that first.",
+      "when": [
+        "BAD_GAME",
+        "SCHEME"
+      ]
+    }
+  ],
+  "signatures": [
+    "credits his support system and the players before himself",
+    "answers questions about his rise by talking about the role he was handed",
+    "brings up detailed opponent tendencies when asked about a game plan"
+  ],
+  "want": "to prove he earned the coordinator title on merit after running the defense through a Super Bowl as a fill-in",
+  "fear": "that he is remembered as a stopgap who got the job because of a colleague's illness",
+  "voice": "Driven and confident but deferential; he hands credit to his support system and players and speaks in detail about opponents. Public coverage of his own voice is thin.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "NE",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E2",
+        "E4"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.cbsnews.com/amp/boston/news/zak-kuhr-patriots-defense-dolphins-nfl-week-2-terrell-williams",
+      "publisher": "CBS Boston, Matt Geagan",
+      "published": "2025-09-12",
+      "accessed": "2026-11-06",
+      "summary": "Before he first calls the defense: a Giants assistant in 2024, four years on Vrabel's Tennessee staff, 11 college seasons largely on offense (including Texas State coordinator); Vrabel says his offensive background helps against spread and RPO teams and calls him a superstar.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.foxsports.com/articles/nfl/zak-kuhr-has-thrived-leading-patriots-defense-after-stepping-in-for-an-ill-terrell-williams",
+      "publisher": "Associated Press via Fox Sports",
+      "published": "2026-02-06",
+      "accessed": "2026-11-06",
+      "summary": "Before the Super Bowl: he became the de facto coordinator when Williams was treated for cancer, added new wrinkles, and the defense allowed two playoff touchdowns; a linebacker says he lets players play and trusts them to make every call right; he credits his support system and says doubters and believers both drive him.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.nashuatelegraph.com/sports/local-sports/2026/02/18/tag-removed-kuhr-no-longer-an-interim-as-pats-dc/",
+      "publisher": "Nashua Telegraph, Tom King",
+      "published": "2026-02-18",
+      "accessed": "2026-11-06",
+      "summary": "The interim tag comes off at 37 as Williams moves to a senior role; the defense allowed 18.8 points a game, fourth in the league, and was strong against the run until the Super Bowl. Little on personality.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.patriots.com/news/analysis-patriots-promote-zak-kuhr-to-defensive-coordinator-terrell-williams-named-assistant-head-coach",
+      "publisher": "New England Patriots (patriots.com), Evan Lazar",
+      "published": "2026-03-16",
+      "accessed": "2026-11-06",
+      "summary": "Official promotion: he ran the defense for the final 20 games, kept the split-safety four-man-front system, raised the playoff blitz rate from about 28 to 44 percent and played more man; players praise his detail and clear messages, such as studying Kenneth Walker's running back to college. Vrabel calls him fantastic.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "New seat 2026. Only four sources (under the 5-source rule; little else found); temperament and sociability stay at 5."
+  }
+}

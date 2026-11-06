@@ -16,33 +16,48 @@
     "confidence": 6,
     "openness": 5,
     "warmth": 7,
-    "drive": 5
+    "drive": 6
   },
   "slider_evidence": {
     "sociability": [
       "E1"
     ],
     "confidence": [
-      "E1"
+      "E1",
+      "E4"
     ],
     "warmth": [
-      "E2"
+      "E2",
+      "E5"
+    ],
+    "drive": [
+      "E4",
+      "E7"
     ]
   },
   "traits": [
     "SCHEME_NERD",
     "LOYAL",
-    "DISCIPLINARIAN"
+    "DISCIPLINARIAN",
+    "OLD_SCHOOL"
   ],
   "trait_evidence": {
     "SCHEME_NERD": [
-      "E1"
+      "E1",
+      "E4"
     ],
     "LOYAL": [
-      "E2"
+      "E2",
+      "E5",
+      "E6"
     ],
     "DISCIPLINARIAN": [
-      "E3"
+      "E3",
+      "E7"
+    ],
+    "OLD_SCHOOL": [
+      "E4",
+      "E7"
     ]
   },
   "views": [
@@ -60,7 +75,7 @@
       ]
     },
     {
-      "text": "The coaches on a staff liking and supporting each other matters more than what they know about X's and O's.",
+      "text": "Coaches on a staff liking and backing each other matters more than what they know about X's and O's.",
       "when": [
         "COACHING"
       ]
@@ -73,27 +88,48 @@
       ]
     },
     {
-      "text": "College football has changed fast with the portal and NIL; some of it needs fixing, but it is still a great game.",
-      "when": [
-        "DRAFT",
-        "HISTORY"
-      ]
-    },
-    {
       "text": "A disciplined team that does not beat itself with penalties gives itself a chance every week.",
       "when": [
         "BAD_GAME",
         "CLOSE_GAMES"
       ]
+    },
+    {
+      "text": "A physical run game should still work when the defense knows it is coming.",
+      "when": [
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "The whole roster should play with the edge of a good defense: more physical than whoever is across from it.",
+      "when": [
+        "COACHING",
+        "PREVIEW"
+      ]
+    },
+    {
+      "text": "Turn on the tape; effort and toughness show up there before anything else in a prospect.",
+      "when": [
+        "DRAFT",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "A new quarterback should grow while staying himself, without a number hung on him.",
+      "when": [
+        "QB",
+        "PLAYER"
+      ]
     }
   ],
   "signatures": [
     "talks at length and in detail about coverage technique when given the floor",
-    "praises his assistants by name for their character as much as their football minds"
+    "praises his assistants by name for their character as much as their football minds",
+    "explains calling his own defense by pointing to the offensive head coaches he worked for"
   ],
-  "want": "to prove the former college head coach belongs back in the NFL and can build a top defense there",
-  "fear": "that his NFL pass defenses are judged by the struggles of his earlier stops",
-  "voice": "Talkative, upbeat and detailed; he speaks at length about coverage concepts and is open about criticism of his career. He talks about his staff warmly and in terms of character and relationships. Coverage of his day-to-day manner is modest.",
+  "want": "to change Miami's culture into a tough, physical team and win the franchise's first playoff game in a generation as a first-time NFL head coach",
+  "fear": "that running the whole team and calling the defense leaves both jobs half done",
+  "voice": "Talkative, upbeat and detailed; he speaks at length about coverage concepts and about toughness and physicality as an identity for the whole team. He talks about his staff warmly and in terms of trust and character, and keeps expectations for individual players loose.",
   "ties": [
     {
       "target": {
@@ -108,7 +144,7 @@
       "outcome": "positive",
       "evidence": [
         "E1",
-        "E4"
+        "E3"
       ]
     },
     {
@@ -124,6 +160,49 @@
       "outcome": "positive",
       "evidence": [
         "E3"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "MIA",
+          "role": "DC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E5",
+        "E6"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "MIA",
+          "role": "OC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E6"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Malik Willis",
+        "team_2026": "MIA"
+      },
+      "relationship_kind": "support",
+      "outcome": "positive",
+      "evidence": [
+        "E7"
       ]
     }
   ],
@@ -157,11 +236,38 @@
     },
     {
       "id": "E4",
-      "url": "https://spectrumnews1.com/wi/milwaukee/news/2024/02/01/new-green-bay-packers-defensive-coordinator-jeff-hafley-",
-      "publisher": "Spectrum News 1 Wisconsin, Aly Prouty and the Associated Press",
-      "published": "2024-01-31",
-      "accessed": "2026-11-04",
-      "summary": "Hiring story: LaFleur cites his success and player development at every stop; Hafley's statement thanks Boston College warmly. Notes his 22-26 record there and the trend of college head coaches taking NFL assistant jobs. Little on personality.",
+      "url": "https://www.si.com/nfl/dolphins/jeff-hafley-first-comments-coach-press-conference-everything-we-learned",
+      "publisher": "Sports Illustrated, Eva Geitheim",
+      "published": "2026-01-22",
+      "accessed": "2026-11-06",
+      "summary": "Introductory Dolphins press conference: he wants a physical run game that works even when expected, will keep calling defensive plays as Shanahan and LaFleur called offense, wants an offense that can run under center, screen and hit explosives; the quarterback decision is left open. Measured, fundamentals-focused remarks.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.si.com/nfl/dolphins/onsi/news/hafley-s-comments-reveal-why-dolphins-fans-should-feel-better-about-sean-duggan-01kgmyy0h89q",
+      "publisher": "Sports Illustrated (Dolphins on SI), Dante Collinelli",
+      "published": "2026-02-04",
+      "accessed": "2026-11-06",
+      "summary": "He says he fought to bring Sean Duggan from Green Bay over LaFleur's wish to keep him, chose him on merit rather than eight or nine years together, calls him a rising star who frees him to run all three phases, and recalls trusting his booth observations as an Ohio State graduate assistant.",
+      "confidence": "high"
+    },
+    {
+      "id": "E6",
+      "url": "https://www.miamidolphins.com/news/transcript-oc-bobby-slowik-dc-sean-duggan-and-stc-chris-tabor-introductory-press-conference-feb-4",
+      "publisher": "Miami Dolphins (miamidolphins.com)",
+      "published": "2026-02-05",
+      "accessed": "2026-11-06",
+      "summary": "Transcript of his new coordinators' introduction: Slowik calls Hafley a close friend and is grateful to work with him again; Duggan describes deep trust over eight years and says Hafley lets him build the defense around players. Their words about him, not his.",
+      "confidence": "high"
+    },
+    {
+      "id": "E7",
+      "url": "https://www.miamidolphins.com/news/recapping-jeff-hafley-s-comments-at-the-2026-nfl-annual-meeting",
+      "publisher": "Miami Dolphins (miamidolphins.com), Travis Wingfield",
+      "published": "2026-03-31",
+      "accessed": "2026-11-06",
+      "summary": "At the league meeting he wants the whole roster as physical and aggressive as his Green Bay defense, says prospects' tape shows whether they love football and play hard, wants Malik Willis to keep growing while staying himself without set expectations, and backs a deal for De'Von Achane. Team-written.",
       "confidence": "high"
     }
   ],
@@ -169,6 +275,6 @@
     "status": "draft",
     "reviewer": null,
     "reviewed_at": null,
-    "notes": "moved seat 2026; re-research for 2026 sources"
+    "notes": "Moved seat 2026 (Packers DC to Dolphins head coach). Added the introduction, the Duggan hiring remarks, the coordinators' transcript and the league-meeting remarks; dropped the 2024 AP hiring story. OLD_SCHOOL added (physical identity); drive moved to 6; college-football view replaced with head-coach views; ties to Duggan, Slowik and Willis added."
   }
 }
