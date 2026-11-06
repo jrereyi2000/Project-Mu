@@ -1,6 +1,7 @@
 # Project Mu: Personality Evolution Plan
 
-**Status:** approved by JR (2026-11-03), Q1–Q3 settled as recommended (§8); building, wave 1 of 3 (2026-11-05). The other plans' pointers were updated at approval (§7).
+**Status:** approved by JR (2026-11-03), Q1–Q3 settled as recommended (§8); building, wave 1 of 3 done (2026-11-05). The other plans' pointers were updated at approval (§7).
+- As built (U1): `seasons_in_league` is an extra fact (TITLE_LEGACY's "tenure ≥ 4 seasons in the league"); `LOSING_OPENNESS` reads "kept his job" as `coach_fired` False. `arbitrate` takes an optional `profiles` map for the blocked check (without it, no validation). External `ready` candidates take `EXTERNAL_PRIORITY = 0` (reviewed and approved, so they outrank rules) unless they carry a priority, and count as draw 0 in ties; they keep their own `rule_version` and cite their `source_event_id` first. Rule IDs for externals are `external:<event_id>`. Star awards are the `awards.award_type` values `MVP`, `OPOY`, `DPOY`, `First Team All-Pro`; Coach of the Year is `COTY`.
 **Builds on:** [`PERSONALITY_PLAN.md`](../in_progress/PERSONALITY_PLAN.md) §5 ("Change over time", steps 4–5), D4, D6; [`PERSONALITY_GENERATED_EFFECTS_DESIGN.md`](../in_progress/PERSONALITY_GENERATED_EFFECTS_DESIGN.md) §4 step 6; [`personality/README.md`](../../personality/README.md) (evolution boundary); [`PERSONALITY_CORE_EXTENSIONS_PLAN.md`](../done/PERSONALITY_CORE_EXTENSIONS_PLAN.md) (`kind 'evolution'`, overrides, `history`); [`PERSONALITY_RELATIONSHIPS_PLAN.md`](../done/PERSONALITY_RELATIONSHIPS_PLAN.md) §2.5 (external candidates); [`RELATIONSHIP_EVENT_PRODUCERS_PLAN.md`](../done/RELATIONSHIP_EVENT_PRODUCERS_PLAN.md) (the event inputs); [`REAL_COACH_PROFILES_PLAN.md`](../in_progress/REAL_COACH_PROFILES_PLAN.md) (`persona_for`).
 
 **Goal:** Let big simulated events slowly change who players and coaches are, the way Sims aspirations do. A title can turn a Ring Chaser into a Legacy Builder, a firing can raise a coach's temper, a mentor's retirement can turn a veteran into a Mentor. Each change has its cause logged, so writers can tell the story. At most one change per person per season (D6), decided by fixed rules and a seeded draw, and you can undo any of them.
@@ -286,3 +287,4 @@ JR approved all three recommendations on 2026-11-03.
 
 | Unit | Wave | Branch | Worktree | Result | Merge |
 |---|---|---|---|---|---|
+| U1 rules, draw, arbiter, notes | 1 | build/evo-u1 | .claude/worktrees/evo-u1 | merged | 0d9e58a |
