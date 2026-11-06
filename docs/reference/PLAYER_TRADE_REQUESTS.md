@@ -1,6 +1,6 @@
 # Player trade requests: reference and handoff guide
 
-What is built (plan: [`PERSONALITY_TRADE_REQUESTS_PLAN.md`](../in_progress/PERSONALITY_TRADE_REQUESTS_PLAN.md)), what it does, and what a later integration has to wire. **Nothing here is live.** No production caller, no applied migration, no production policy. Personality effects are inactive.
+What is built (plan: [`PERSONALITY_TRADE_REQUESTS_PLAN.md`](../done/PERSONALITY_TRADE_REQUESTS_PLAN.md)), what it does, and what a later integration has to wire. **Nothing here is live.** No production caller, no applied migration, no production policy. Personality effects are inactive.
 
 ## What a request is (and is not)
 
