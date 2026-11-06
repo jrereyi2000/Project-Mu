@@ -1,0 +1,1935 @@
+{
+ "cap": 255000000,
+ "cohorts": [
+  {
+   "name": "veterans",
+   "offers": [
+    {
+     "bonus": 4962400,
+     "guaranteed": 9924800,
+     "player_id": 1,
+     "projected_depth": 2,
+     "team_id": 1,
+     "total_value": 24812000,
+     "years": 3
+    },
+    {
+     "bonus": 5762800,
+     "guaranteed": 11525600,
+     "player_id": 1,
+     "projected_depth": 1,
+     "team_id": 2,
+     "total_value": 28814000,
+     "years": 3
+    },
+    {
+     "bonus": 6883400,
+     "guaranteed": 13766800,
+     "player_id": 1,
+     "projected_depth": 1,
+     "team_id": 3,
+     "total_value": 34417000,
+     "years": 3
+    },
+    {
+     "bonus": 5442800,
+     "guaranteed": 10885600,
+     "player_id": 1,
+     "projected_depth": 2,
+     "team_id": 4,
+     "total_value": 27214000,
+     "years": 3
+    },
+    {
+     "bonus": 6142400,
+     "guaranteed": 12284800,
+     "player_id": 2,
+     "projected_depth": 2,
+     "team_id": 1,
+     "total_value": 30712000,
+     "years": 3
+    },
+    {
+     "bonus": 7133200,
+     "guaranteed": 14266400,
+     "player_id": 2,
+     "projected_depth": 1,
+     "team_id": 2,
+     "total_value": 35666000,
+     "years": 3
+    },
+    {
+     "bonus": 8520200,
+     "guaranteed": 17040400,
+     "player_id": 2,
+     "projected_depth": 1,
+     "team_id": 3,
+     "total_value": 42601000,
+     "years": 3
+    },
+    {
+     "bonus": 6736800,
+     "guaranteed": 13473600,
+     "player_id": 2,
+     "projected_depth": 1,
+     "team_id": 4,
+     "total_value": 33684000,
+     "years": 3
+    },
+    {
+     "bonus": 7402800,
+     "guaranteed": 14805600,
+     "player_id": 3,
+     "projected_depth": 2,
+     "team_id": 1,
+     "total_value": 37014000,
+     "years": 3
+    },
+    {
+     "bonus": 8596800,
+     "guaranteed": 17193600,
+     "player_id": 3,
+     "projected_depth": 1,
+     "team_id": 2,
+     "total_value": 42984000,
+     "years": 3
+    },
+    {
+     "bonus": 10268400,
+     "guaranteed": 20536800,
+     "player_id": 3,
+     "projected_depth": 1,
+     "team_id": 3,
+     "total_value": 51342000,
+     "years": 3
+    },
+    {
+     "bonus": 8119200,
+     "guaranteed": 16238400,
+     "player_id": 3,
+     "projected_depth": 2,
+     "team_id": 4,
+     "total_value": 40596000,
+     "years": 3
+    },
+    {
+     "bonus": 8743400,
+     "guaranteed": 17486800,
+     "player_id": 4,
+     "projected_depth": 2,
+     "team_id": 1,
+     "total_value": 43717000,
+     "years": 3
+    },
+    {
+     "bonus": 10153800,
+     "guaranteed": 20307600,
+     "player_id": 4,
+     "projected_depth": 1,
+     "team_id": 2,
+     "total_value": 50769000,
+     "years": 3
+    },
+    {
+     "bonus": 12128000,
+     "guaranteed": 24256000,
+     "player_id": 4,
+     "projected_depth": 1,
+     "team_id": 3,
+     "total_value": 60640000,
+     "years": 3
+    },
+    {
+     "bonus": 9589600,
+     "guaranteed": 19179200,
+     "player_id": 4,
+     "projected_depth": 1,
+     "team_id": 4,
+     "total_value": 47948000,
+     "years": 3
+    },
+    {
+     "bonus": 6187200,
+     "guaranteed": 12374400,
+     "player_id": 5,
+     "projected_depth": 2,
+     "team_id": 1,
+     "total_value": 30936000,
+     "years": 3
+    },
+    {
+     "bonus": 7185000,
+     "guaranteed": 14370000,
+     "player_id": 5,
+     "projected_depth": 1,
+     "team_id": 2,
+     "total_value": 35925000,
+     "years": 3
+    },
+    {
+     "bonus": 8582200,
+     "guaranteed": 17164400,
+     "player_id": 5,
+     "projected_depth": 1,
+     "team_id": 3,
+     "total_value": 42911000,
+     "years": 3
+    },
+    {
+     "bonus": 6785800,
+     "guaranteed": 13571600,
+     "player_id": 5,
+     "projected_depth": 2,
+     "team_id": 4,
+     "total_value": 33929000,
+     "years": 3
+    },
+    {
+     "bonus": 7541200,
+     "guaranteed": 15082400,
+     "player_id": 6,
+     "projected_depth": 2,
+     "team_id": 1,
+     "total_value": 37706000,
+     "years": 3
+    },
+    {
+     "bonus": 8757600,
+     "guaranteed": 17515200,
+     "player_id": 6,
+     "projected_depth": 1,
+     "team_id": 2,
+     "total_value": 43788000,
+     "years": 3
+    },
+    {
+     "bonus": 10460400,
+     "guaranteed": 20920800,
+     "player_id": 6,
+     "projected_depth": 1,
+     "team_id": 3,
+     "total_value": 52302000,
+     "years": 3
+    },
+    {
+     "bonus": 8271000,
+     "guaranteed": 16542000,
+     "player_id": 6,
+     "projected_depth": 1,
+     "team_id": 4,
+     "total_value": 41355000,
+     "years": 3
+    },
+    {
+     "bonus": 6809000,
+     "guaranteed": 13618000,
+     "player_id": 7,
+     "projected_depth": 2,
+     "team_id": 1,
+     "total_value": 34045000,
+     "years": 3
+    },
+    {
+     "bonus": 7907400,
+     "guaranteed": 15814800,
+     "player_id": 7,
+     "projected_depth": 1,
+     "team_id": 2,
+     "total_value": 39537000,
+     "years": 3
+    },
+    {
+     "bonus": 9444800,
+     "guaranteed": 18889600,
+     "player_id": 7,
+     "projected_depth": 1,
+     "team_id": 3,
+     "total_value": 47224000,
+     "years": 3
+    },
+    {
+     "bonus": 7468000,
+     "guaranteed": 14936000,
+     "player_id": 7,
+     "projected_depth": 2,
+     "team_id": 4,
+     "total_value": 37340000,
+     "years": 3
+    },
+    {
+     "bonus": 8042600,
+     "guaranteed": 16085200,
+     "player_id": 8,
+     "projected_depth": 2,
+     "team_id": 1,
+     "total_value": 40213000,
+     "years": 3
+    },
+    {
+     "bonus": 9339800,
+     "guaranteed": 18679600,
+     "player_id": 8,
+     "projected_depth": 1,
+     "team_id": 2,
+     "total_value": 46699000,
+     "years": 3
+    },
+    {
+     "bonus": 11156000,
+     "guaranteed": 22312000,
+     "player_id": 8,
+     "projected_depth": 1,
+     "team_id": 3,
+     "total_value": 55780000,
+     "years": 3
+    },
+    {
+     "bonus": 8821000,
+     "guaranteed": 17642000,
+     "player_id": 8,
+     "projected_depth": 1,
+     "team_id": 4,
+     "total_value": 44105000,
+     "years": 3
+    },
+    {
+     "bonus": 5821000,
+     "guaranteed": 11642000,
+     "player_id": 9,
+     "projected_depth": 2,
+     "team_id": 1,
+     "total_value": 29105000,
+     "years": 3
+    },
+    {
+     "bonus": 6760000,
+     "guaranteed": 13520000,
+     "player_id": 9,
+     "projected_depth": 1,
+     "team_id": 2,
+     "total_value": 33800000,
+     "years": 3
+    },
+    {
+     "bonus": 8074400,
+     "guaranteed": 16148800,
+     "player_id": 9,
+     "projected_depth": 1,
+     "team_id": 3,
+     "total_value": 40372000,
+     "years": 3
+    },
+    {
+     "bonus": 6384400,
+     "guaranteed": 12768800,
+     "player_id": 9,
+     "projected_depth": 2,
+     "team_id": 4,
+     "total_value": 31922000,
+     "years": 3
+    },
+    {
+     "bonus": 7068000,
+     "guaranteed": 14136000,
+     "player_id": 10,
+     "projected_depth": 2,
+     "team_id": 1,
+     "total_value": 35340000,
+     "years": 3
+    },
+    {
+     "bonus": 8208000,
+     "guaranteed": 16416000,
+     "player_id": 10,
+     "projected_depth": 1,
+     "team_id": 2,
+     "total_value": 41040000,
+     "years": 3
+    },
+    {
+     "bonus": 9804000,
+     "guaranteed": 19608000,
+     "player_id": 10,
+     "projected_depth": 1,
+     "team_id": 3,
+     "total_value": 49020000,
+     "years": 3
+    },
+    {
+     "bonus": 7752000,
+     "guaranteed": 15504000,
+     "player_id": 10,
+     "projected_depth": 1,
+     "team_id": 4,
+     "total_value": 38760000,
+     "years": 3
+    },
+    {
+     "bonus": 8395200,
+     "guaranteed": 16790400,
+     "player_id": 11,
+     "projected_depth": 2,
+     "team_id": 1,
+     "total_value": 41976000,
+     "years": 3
+    },
+    {
+     "bonus": 9749400,
+     "guaranteed": 19498800,
+     "player_id": 11,
+     "projected_depth": 1,
+     "team_id": 2,
+     "total_value": 48747000,
+     "years": 3
+    },
+    {
+     "bonus": 11645000,
+     "guaranteed": 23290000,
+     "player_id": 11,
+     "projected_depth": 1,
+     "team_id": 3,
+     "total_value": 58225000,
+     "years": 3
+    },
+    {
+     "bonus": 9207800,
+     "guaranteed": 18415600,
+     "player_id": 11,
+     "projected_depth": 2,
+     "team_id": 4,
+     "total_value": 46039000,
+     "years": 3
+    },
+    {
+     "bonus": 5825600,
+     "guaranteed": 11651200,
+     "player_id": 12,
+     "projected_depth": 2,
+     "team_id": 1,
+     "total_value": 29128000,
+     "years": 3
+    },
+    {
+     "bonus": 6765200,
+     "guaranteed": 13530400,
+     "player_id": 12,
+     "projected_depth": 1,
+     "team_id": 2,
+     "total_value": 33826000,
+     "years": 3
+    },
+    {
+     "bonus": 8080600,
+     "guaranteed": 16161200,
+     "player_id": 12,
+     "projected_depth": 1,
+     "team_id": 3,
+     "total_value": 40403000,
+     "years": 3
+    },
+    {
+     "bonus": 6389200,
+     "guaranteed": 12778400,
+     "player_id": 12,
+     "projected_depth": 1,
+     "team_id": 4,
+     "total_value": 31946000,
+     "years": 3
+    }
+   ],
+   "players": [
+    {
+     "accrued_seasons": 7,
+     "age": 29,
+     "current_team_id": 2,
+     "established": null,
+     "group": "WR",
+     "id": 1,
+     "ovr": 80,
+     "secure": true,
+     "teams": {
+      "2": {
+       "attachment": "none",
+       "attachment_as_of": "2030-22",
+       "relationship_version": "fixture-rel-v1",
+       "role_satisfactory": true,
+       "source_event_ids": [
+        "ev-1-tenure"
+       ],
+       "treatment_satisfactory": true,
+       "unresolved_breach": false
+      },
+      "3": {
+       "attachment_as_of": "2030-22",
+       "grudge": true,
+       "relationship_version": "fixture-rel-v1",
+       "source_event_ids": [
+        "ev-1-breach"
+       ],
+       "unresolved_breach": true
+      },
+      "4": {
+       "attachment_as_of": "2030-22",
+       "home_source_ids": [
+        "home-1"
+       ],
+       "meaningful_home_match": true,
+       "relationship_version": "fixture-rel-v1"
+      }
+     },
+     "traits": [
+      "MONEY_FIRST"
+     ]
+    },
+    {
+     "accrued_seasons": 8,
+     "age": 30,
+     "current_team_id": 2,
+     "established": true,
+     "group": "QB",
+     "id": 2,
+     "ovr": 83,
+     "secure": false,
+     "teams": {
+      "2": {
+       "attachment": "weak",
+       "attachment_as_of": "2030-22",
+       "relationship_version": "fixture-rel-v1",
+       "role_satisfactory": true,
+       "source_event_ids": [
+        "ev-2-tenure"
+       ],
+       "treatment_satisfactory": true,
+       "unresolved_breach": false
+      },
+      "3": {
+       "attachment_as_of": "2030-22",
+       "grudge": false,
+       "relationship_version": "fixture-rel-v1",
+       "source_event_ids": [],
+       "unresolved_breach": false
+      },
+      "4": {
+       "attachment_as_of": "2030-22",
+       "home_source_ids": [],
+       "meaningful_home_match": false,
+       "relationship_version": "fixture-rel-v1"
+      }
+     },
+     "traits": [
+      "RING_CHASER"
+     ]
+    },
+    {
+     "accrued_seasons": 9,
+     "age": 31,
+     "current_team_id": 2,
+     "established": true,
+     "group": "CB",
+     "id": 3,
+     "ovr": 86,
+     "secure": null,
+     "teams": {
+      "2": {
+       "attachment": "established",
+       "attachment_as_of": "2030-22",
+       "relationship_version": "fixture-rel-v1",
+       "role_satisfactory": true,
+       "source_event_ids": [
+        "ev-3-tenure"
+       ],
+       "treatment_satisfactory": true,
+       "unresolved_breach": false
+      },
+      "3": {
+       "attachment_as_of": "2030-22",
+       "grudge": true,
+       "relationship_version": "fixture-rel-v1",
+       "source_event_ids": [
+        "ev-3-breach"
+       ],
+       "unresolved_breach": true
+      },
+      "4": {
+       "attachment_as_of": "2030-22",
+       "home_source_ids": [],
+       "meaningful_home_match": false,
+       "relationship_version": "fixture-rel-v1"
+      }
+     },
+     "traits": [
+      "LOYAL"
+     ]
+    },
+    {
+     "accrued_seasons": 10,
+     "age": 32,
+     "current_team_id": 2,
+     "established": true,
+     "group": "OL",
+     "id": 4,
+     "ovr": 89,
+     "secure": true,
+     "teams": {
+      "2": {
+       "attachment": "strong",
+       "attachment_as_of": "2030-22",
+       "relationship_version": "fixture-rel-v1",
+       "role_satisfactory": true,
+       "source_event_ids": [
+        "ev-4-tenure"
+       ],
+       "treatment_satisfactory": true,
+       "unresolved_breach": false
+      },
+      "3": {
+       "attachment_as_of": "2030-22",
+       "grudge": false,
+       "relationship_version": "fixture-rel-v1",
+       "source_event_ids": [],
+       "unresolved_breach": false
+      },
+      "4": {
+       "attachment_as_of": "2030-22",
+       "home_source_ids": [
+        "home-4"
+       ],
+       "meaningful_home_match": true,
+       "relationship_version": "fixture-rel-v1"
+      }
+     },
+     "traits": [
+      "HOMETOWN_GUY"
+     ]
+    },
+    {
+     "accrued_seasons": 11,
+     "age": 33,
+     "current_team_id": 2,
+     "established": true,
+     "group": "DL",
+     "id": 5,
+     "ovr": 81,
+     "secure": false,
+     "teams": {
+      "2": {
+       "attachment": "none",
+       "attachment_as_of": "2030-22",
+       "relationship_version": "fixture-rel-v1",
+       "role_satisfactory": true,
+       "source_event_ids": [
+        "ev-5-tenure"
+       ],
+       "treatment_satisfactory": true,
+       "unresolved_breach": false
+      },
+      "3": {
+       "attachment_as_of": "2030-22",
+       "grudge": true,
+       "relationship_version": "fixture-rel-v1",
+       "source_event_ids": [
+        "ev-5-breach"
+       ],
+       "unresolved_breach": true
+      },
+      "4": {
+       "attachment_as_of": "2030-22",
+       "home_source_ids": [],
+       "meaningful_home_match": false,
+       "relationship_version": "fixture-rel-v1"
+      }
+     },
+     "traits": [
+      "GRUDGE_HOLDER"
+     ]
+    },
+    {
+     "accrued_seasons": 7,
+     "age": 29,
+     "current_team_id": 2,
+     "established": true,
+     "group": "LB",
+     "id": 6,
+     "ovr": 84,
+     "secure": null,
+     "teams": {
+      "2": {
+       "attachment": "weak",
+       "attachment_as_of": "2030-22",
+       "relationship_version": "fixture-rel-v1",
+       "role_satisfactory": true,
+       "source_event_ids": [
+        "ev-6-tenure"
+       ],
+       "treatment_satisfactory": true,
+       "unresolved_breach": false
+      },
+      "3": {
+       "attachment_as_of": "2030-22",
+       "grudge": false,
+       "relationship_version": "fixture-rel-v1",
+       "source_event_ids": [],
+       "unresolved_breach": false
+      },
+      "4": {
+       "attachment_as_of": "2030-22",
+       "home_source_ids": [],
+       "meaningful_home_match": false,
+       "relationship_version": "fixture-rel-v1"
+      }
+     },
+     "traits": [
+      "LEGACY_BUILDER"
+     ]
+    },
+    {
+     "accrued_seasons": 8,
+     "age": 30,
+     "current_team_id": 2,
+     "established": null,
+     "group": "S",
+     "id": 7,
+     "ovr": 87,
+     "secure": true,
+     "teams": {
+      "2": {
+       "attachment": "established",
+       "attachment_as_of": "2030-22",
+       "relationship_version": "fixture-rel-v1",
+       "role_satisfactory": true,
+       "source_event_ids": [
+        "ev-7-tenure"
+       ],
+       "treatment_satisfactory": true,
+       "unresolved_breach": false
+      },
+      "3": {
+       "attachment_as_of": "2030-22",
+       "grudge": true,
+       "relationship_version": "fixture-rel-v1",
+       "source_event_ids": [
+        "ev-7-breach"
+       ],
+       "unresolved_breach": true
+      },
+      "4": {
+       "attachment_as_of": "2030-22",
+       "home_source_ids": [
+        "home-7"
+       ],
+       "meaningful_home_match": true,
+       "relationship_version": "fixture-rel-v1"
+      }
+     },
+     "traits": []
+    },
+    {
+     "accrued_seasons": 9,
+     "age": 31,
+     "current_team_id": 2,
+     "established": true,
+     "group": "HB",
+     "id": 8,
+     "ovr": 90,
+     "secure": false,
+     "teams": {
+      "2": {
+       "attachment": "strong",
+       "attachment_as_of": "2030-22",
+       "relationship_version": "fixture-rel-v1",
+       "role_satisfactory": true,
+       "source_event_ids": [
+        "ev-8-tenure"
+       ],
+       "treatment_satisfactory": true,
+       "unresolved_breach": false
+      },
+      "3": {
+       "attachment_as_of": "2030-22",
+       "grudge": false,
+       "relationship_version": "fixture-rel-v1",
+       "source_event_ids": [],
+       "unresolved_breach": false
+      },
+      "4": {
+       "attachment_as_of": "2030-22",
+       "home_source_ids": [],
+       "meaningful_home_match": false,
+       "relationship_version": "fixture-rel-v1"
+      }
+     },
+     "traits": [
+      "MONEY_FIRST",
+      "LOYAL"
+     ]
+    },
+    {
+     "accrued_seasons": 10,
+     "age": 32,
+     "current_team_id": 2,
+     "established": true,
+     "group": "TE",
+     "id": 9,
+     "ovr": 82,
+     "secure": null,
+     "teams": {
+      "2": {
+       "attachment": "none",
+       "attachment_as_of": "2030-22",
+       "relationship_version": "fixture-rel-v1",
+       "role_satisfactory": true,
+       "source_event_ids": [
+        "ev-9-tenure"
+       ],
+       "treatment_satisfactory": true,
+       "unresolved_breach": false
+      },
+      "3": {
+       "attachment_as_of": "2030-22",
+       "grudge": true,
+       "relationship_version": "fixture-rel-v1",
+       "source_event_ids": [
+        "ev-9-breach"
+       ],
+       "unresolved_breach": true
+      },
+      "4": {
+       "attachment_as_of": "2030-22",
+       "home_source_ids": [],
+       "meaningful_home_match": false,
+       "relationship_version": "fixture-rel-v1"
+      }
+     },
+     "traits": [
+      "RING_CHASER",
+      "HOMETOWN_GUY"
+     ]
+    },
+    {
+     "accrued_seasons": 11,
+     "age": 33,
+     "current_team_id": 2,
+     "established": true,
+     "group": "WR",
+     "id": 10,
+     "ovr": 85,
+     "secure": true,
+     "teams": {
+      "2": {
+       "attachment": "weak",
+       "attachment_as_of": "2030-22",
+       "relationship_version": "fixture-rel-v1",
+       "role_satisfactory": true,
+       "source_event_ids": [
+        "ev-10-tenure"
+       ],
+       "treatment_satisfactory": true,
+       "unresolved_breach": false
+      },
+      "3": {
+       "attachment_as_of": "2030-22",
+       "grudge": false,
+       "relationship_version": "fixture-rel-v1",
+       "source_event_ids": [],
+       "unresolved_breach": false
+      },
+      "4": {
+       "attachment_as_of": "2030-22",
+       "home_source_ids": [
+        "home-10"
+       ],
+       "meaningful_home_match": true,
+       "relationship_version": "fixture-rel-v1"
+      }
+     },
+     "traits": [
+      "SPOTLIGHT_SEEKER"
+     ]
+    },
+    {
+     "accrued_seasons": 7,
+     "age": 29,
+     "current_team_id": 2,
+     "established": true,
+     "group": "WR",
+     "id": 11,
+     "ovr": 88,
+     "secure": false,
+     "teams": {
+      "2": {
+       "attachment": "established",
+       "attachment_as_of": "2030-22",
+       "relationship_version": "fixture-rel-v1",
+       "role_satisfactory": true,
+       "source_event_ids": [
+        "ev-11-tenure"
+       ],
+       "treatment_satisfactory": true,
+       "unresolved_breach": false
+      },
+      "3": {
+       "attachment_as_of": "2030-22",
+       "grudge": true,
+       "relationship_version": "fixture-rel-v1",
+       "source_event_ids": [
+        "ev-11-breach"
+       ],
+       "unresolved_breach": true
+      },
+      "4": {
+       "attachment_as_of": "2030-22",
+       "home_source_ids": [],
+       "meaningful_home_match": false,
+       "relationship_version": "fixture-rel-v1"
+      }
+     },
+     "traits": [
+      "MONEY_FIRST"
+     ]
+    },
+    {
+     "accrued_seasons": 8,
+     "age": 30,
+     "current_team_id": 2,
+     "established": true,
+     "group": "QB",
+     "id": 12,
+     "ovr": 80,
+     "profile": "missing",
+     "secure": null,
+     "teams": {
+      "2": {
+       "attachment": "strong",
+       "attachment_as_of": "2030-22",
+       "relationship_version": "fixture-rel-v1",
+       "role_satisfactory": true,
+       "source_event_ids": [
+        "ev-12-tenure"
+       ],
+       "treatment_satisfactory": true,
+       "unresolved_breach": false
+      },
+      "3": {
+       "attachment_as_of": "2030-22",
+       "grudge": false,
+       "relationship_version": "fixture-rel-v1",
+       "source_event_ids": [],
+       "unresolved_breach": false
+      },
+      "4": {
+       "attachment_as_of": "2030-22",
+       "home_source_ids": [],
+       "meaningful_home_match": false,
+       "relationship_version": "fixture-rel-v1"
+      }
+     },
+     "traits": [
+      "RING_CHASER"
+     ]
+    }
+   ],
+   "season": 2031,
+   "teams": [
+    {
+     "direction": "CONTEND",
+     "playoff_odds": 0.92,
+     "popularity_index": 85,
+     "team_id": 1,
+     "win_pct": 0.82
+    },
+    {
+     "playoff_odds": 0.5,
+     "popularity_index": 55,
+     "team_id": 2,
+     "win_pct": 0.55
+    },
+    {
+     "direction": "REBUILD",
+     "playoff_odds": 0.1,
+     "popularity_index": 30,
+     "team_id": 3,
+     "win_pct": 0.3
+    },
+    {
+     "direction": "CONTEND",
+     "playoff_odds": 0.75,
+     "popularity_index": 70,
+     "team_id": 4,
+     "win_pct": 0.7
+    }
+   ]
+  },
+  {
+   "name": "young_market",
+   "offers": [
+    {
+     "bonus": 2715600,
+     "guaranteed": 5431200,
+     "player_id": 101,
+     "projected_depth": 2,
+     "team_id": 1,
+     "total_value": 13578000,
+     "years": 3
+    },
+    {
+     "bonus": 3153600,
+     "guaranteed": 6307200,
+     "player_id": 101,
+     "projected_depth": 1,
+     "team_id": 2,
+     "total_value": 15768000,
+     "years": 3
+    },
+    {
+     "bonus": 3766800,
+     "guaranteed": 7533600,
+     "player_id": 101,
+     "projected_depth": 1,
+     "team_id": 3,
+     "total_value": 18834000,
+     "years": 3
+    },
+    {
+     "bonus": 2978400,
+     "guaranteed": 5956800,
+     "player_id": 101,
+     "projected_depth": 2,
+     "team_id": 4,
+     "total_value": 14892000,
+     "years": 3
+    },
+    {
+     "bonus": 3868800,
+     "guaranteed": 7737600,
+     "player_id": 102,
+     "projected_depth": 2,
+     "team_id": 1,
+     "total_value": 19344000,
+     "years": 3
+    },
+    {
+     "bonus": 4492800,
+     "guaranteed": 8985600,
+     "player_id": 102,
+     "projected_depth": 1,
+     "team_id": 2,
+     "total_value": 22464000,
+     "years": 3
+    },
+    {
+     "bonus": 5366400,
+     "guaranteed": 10732800,
+     "player_id": 102,
+     "projected_depth": 1,
+     "team_id": 3,
+     "total_value": 26832000,
+     "years": 3
+    },
+    {
+     "bonus": 4243200,
+     "guaranteed": 8486400,
+     "player_id": 102,
+     "projected_depth": 1,
+     "team_id": 4,
+     "total_value": 21216000,
+     "years": 3
+    },
+    {
+     "bonus": 5102400,
+     "guaranteed": 10204800,
+     "player_id": 103,
+     "projected_depth": 2,
+     "team_id": 1,
+     "total_value": 25512000,
+     "years": 3
+    },
+    {
+     "bonus": 5925400,
+     "guaranteed": 11850800,
+     "player_id": 103,
+     "projected_depth": 1,
+     "team_id": 2,
+     "total_value": 29627000,
+     "years": 3
+    },
+    {
+     "bonus": 7077400,
+     "guaranteed": 14154800,
+     "player_id": 103,
+     "projected_depth": 1,
+     "team_id": 3,
+     "total_value": 35387000,
+     "years": 3
+    },
+    {
+     "bonus": 5596200,
+     "guaranteed": 11192400,
+     "player_id": 103,
+     "projected_depth": 2,
+     "team_id": 4,
+     "total_value": 27981000,
+     "years": 3
+    },
+    {
+     "bonus": 6416200,
+     "guaranteed": 12832400,
+     "player_id": 104,
+     "projected_depth": 2,
+     "team_id": 1,
+     "total_value": 32081000,
+     "years": 3
+    },
+    {
+     "bonus": 7451200,
+     "guaranteed": 14902400,
+     "player_id": 104,
+     "projected_depth": 1,
+     "team_id": 2,
+     "total_value": 37256000,
+     "years": 3
+    },
+    {
+     "bonus": 8900000,
+     "guaranteed": 17800000,
+     "player_id": 104,
+     "projected_depth": 1,
+     "team_id": 3,
+     "total_value": 44500000,
+     "years": 3
+    },
+    {
+     "bonus": 7037200,
+     "guaranteed": 14074400,
+     "player_id": 104,
+     "projected_depth": 1,
+     "team_id": 4,
+     "total_value": 35186000,
+     "years": 3
+    },
+    {
+     "bonus": 2684400,
+     "guaranteed": 5368800,
+     "player_id": 105,
+     "projected_depth": 2,
+     "team_id": 1,
+     "total_value": 13422000,
+     "years": 3
+    },
+    {
+     "bonus": 3117400,
+     "guaranteed": 6234800,
+     "player_id": 105,
+     "projected_depth": 1,
+     "team_id": 2,
+     "total_value": 15587000,
+     "years": 3
+    },
+    {
+     "bonus": 3723400,
+     "guaranteed": 7446800,
+     "player_id": 105,
+     "projected_depth": 1,
+     "team_id": 3,
+     "total_value": 18617000,
+     "years": 3
+    },
+    {
+     "bonus": 2944200,
+     "guaranteed": 5888400,
+     "player_id": 105,
+     "projected_depth": 2,
+     "team_id": 4,
+     "total_value": 14721000,
+     "years": 3
+    },
+    {
+     "bonus": 3730400,
+     "guaranteed": 7460800,
+     "player_id": 106,
+     "projected_depth": 2,
+     "team_id": 1,
+     "total_value": 18652000,
+     "years": 3
+    },
+    {
+     "bonus": 4332000,
+     "guaranteed": 8664000,
+     "player_id": 106,
+     "projected_depth": 1,
+     "team_id": 2,
+     "total_value": 21660000,
+     "years": 3
+    },
+    {
+     "bonus": 5174400,
+     "guaranteed": 10348800,
+     "player_id": 106,
+     "projected_depth": 1,
+     "team_id": 3,
+     "total_value": 25872000,
+     "years": 3
+    },
+    {
+     "bonus": 4091400,
+     "guaranteed": 8182800,
+     "player_id": 106,
+     "projected_depth": 1,
+     "team_id": 4,
+     "total_value": 20457000,
+     "years": 3
+    },
+    {
+     "bonus": 4856800,
+     "guaranteed": 9713600,
+     "player_id": 107,
+     "projected_depth": 2,
+     "team_id": 1,
+     "total_value": 24284000,
+     "years": 3
+    },
+    {
+     "bonus": 5640200,
+     "guaranteed": 11280400,
+     "player_id": 107,
+     "projected_depth": 1,
+     "team_id": 2,
+     "total_value": 28201000,
+     "years": 3
+    },
+    {
+     "bonus": 6736800,
+     "guaranteed": 13473600,
+     "player_id": 107,
+     "projected_depth": 1,
+     "team_id": 3,
+     "total_value": 33684000,
+     "years": 3
+    },
+    {
+     "bonus": 5326800,
+     "guaranteed": 10653600,
+     "player_id": 107,
+     "projected_depth": 2,
+     "team_id": 4,
+     "total_value": 26634000,
+     "years": 3
+    },
+    {
+     "bonus": 6063600,
+     "guaranteed": 12127200,
+     "player_id": 108,
+     "projected_depth": 2,
+     "team_id": 1,
+     "total_value": 30318000,
+     "years": 3
+    },
+    {
+     "bonus": 7041600,
+     "guaranteed": 14083200,
+     "player_id": 108,
+     "projected_depth": 1,
+     "team_id": 2,
+     "total_value": 35208000,
+     "years": 3
+    },
+    {
+     "bonus": 8410800,
+     "guaranteed": 16821600,
+     "player_id": 108,
+     "projected_depth": 1,
+     "team_id": 3,
+     "total_value": 42054000,
+     "years": 3
+    },
+    {
+     "bonus": 6650400,
+     "guaranteed": 13300800,
+     "player_id": 108,
+     "projected_depth": 1,
+     "team_id": 4,
+     "total_value": 33252000,
+     "years": 3
+    },
+    {
+     "bonus": 3520600,
+     "guaranteed": 7041200,
+     "player_id": 109,
+     "projected_depth": 2,
+     "team_id": 1,
+     "total_value": 17603000,
+     "years": 3
+    },
+    {
+     "bonus": 4088400,
+     "guaranteed": 8176800,
+     "player_id": 109,
+     "projected_depth": 1,
+     "team_id": 2,
+     "total_value": 20442000,
+     "years": 3
+    },
+    {
+     "bonus": 4883400,
+     "guaranteed": 9766800,
+     "player_id": 109,
+     "projected_depth": 1,
+     "team_id": 3,
+     "total_value": 24417000,
+     "years": 3
+    },
+    {
+     "bonus": 3861400,
+     "guaranteed": 7722800,
+     "player_id": 109,
+     "projected_depth": 2,
+     "team_id": 4,
+     "total_value": 19307000,
+     "years": 3
+    },
+    {
+     "bonus": 4740800,
+     "guaranteed": 9481600,
+     "player_id": 110,
+     "projected_depth": 2,
+     "team_id": 1,
+     "total_value": 23704000,
+     "years": 3
+    },
+    {
+     "bonus": 5505400,
+     "guaranteed": 11010800,
+     "player_id": 110,
+     "projected_depth": 1,
+     "team_id": 2,
+     "total_value": 27527000,
+     "years": 3
+    },
+    {
+     "bonus": 6576000,
+     "guaranteed": 13152000,
+     "player_id": 110,
+     "projected_depth": 1,
+     "team_id": 3,
+     "total_value": 32880000,
+     "years": 3
+    },
+    {
+     "bonus": 5199600,
+     "guaranteed": 10399200,
+     "player_id": 110,
+     "projected_depth": 1,
+     "team_id": 4,
+     "total_value": 25998000,
+     "years": 3
+    },
+    {
+     "bonus": 6041200,
+     "guaranteed": 12082400,
+     "player_id": 111,
+     "projected_depth": 2,
+     "team_id": 1,
+     "total_value": 30206000,
+     "years": 3
+    },
+    {
+     "bonus": 7015600,
+     "guaranteed": 14031200,
+     "player_id": 111,
+     "projected_depth": 1,
+     "team_id": 2,
+     "total_value": 35078000,
+     "years": 3
+    },
+    {
+     "bonus": 8379800,
+     "guaranteed": 16759600,
+     "player_id": 111,
+     "projected_depth": 1,
+     "team_id": 3,
+     "total_value": 41899000,
+     "years": 3
+    },
+    {
+     "bonus": 6626000,
+     "guaranteed": 13252000,
+     "player_id": 111,
+     "projected_depth": 2,
+     "team_id": 4,
+     "total_value": 33130000,
+     "years": 3
+    },
+    {
+     "bonus": 2389800,
+     "guaranteed": 4779600,
+     "player_id": 112,
+     "projected_depth": 2,
+     "team_id": 1,
+     "total_value": 11949000,
+     "years": 3
+    },
+    {
+     "bonus": 2775200,
+     "guaranteed": 5550400,
+     "player_id": 112,
+     "projected_depth": 1,
+     "team_id": 2,
+     "total_value": 13876000,
+     "years": 3
+    },
+    {
+     "bonus": 3314800,
+     "guaranteed": 6629600,
+     "player_id": 112,
+     "projected_depth": 1,
+     "team_id": 3,
+     "total_value": 16574000,
+     "years": 3
+    },
+    {
+     "bonus": 2621000,
+     "guaranteed": 5242000,
+     "player_id": 112,
+     "projected_depth": 1,
+     "team_id": 4,
+     "total_value": 13105000,
+     "years": 3
+    }
+   ],
+   "players": [
+    {
+     "accrued_seasons": 2,
+     "age": 24,
+     "current_team_id": 2,
+     "established": null,
+     "group": "WR",
+     "id": 101,
+     "ovr": 72,
+     "secure": false,
+     "teams": {
+      "2": {
+       "attachment": "none",
+       "attachment_as_of": "2030-22",
+       "relationship_version": "fixture-rel-v1",
+       "role_satisfactory": true,
+       "source_event_ids": [
+        "ev-101-tenure"
+       ],
+       "treatment_satisfactory": true,
+       "unresolved_breach": false
+      },
+      "3": {
+       "attachment_as_of": "2030-22",
+       "grudge": true,
+       "relationship_version": "fixture-rel-v1",
+       "source_event_ids": [
+        "ev-101-breach"
+       ],
+       "unresolved_breach": true
+      },
+      "4": {
+       "attachment_as_of": "2030-22",
+       "home_source_ids": [
+        "home-101"
+       ],
+       "meaningful_home_match": true,
+       "relationship_version": "fixture-rel-v1"
+      }
+     },
+     "traits": [
+      "MONEY_FIRST"
+     ]
+    },
+    {
+     "accrued_seasons": 3,
+     "age": 25,
+     "current_team_id": 2,
+     "established": false,
+     "group": "QB",
+     "id": 102,
+     "ovr": 75,
+     "secure": null,
+     "teams": {
+      "2": {
+       "attachment": "weak",
+       "attachment_as_of": "2030-22",
+       "relationship_version": "fixture-rel-v1",
+       "role_satisfactory": true,
+       "source_event_ids": [
+        "ev-102-tenure"
+       ],
+       "treatment_satisfactory": true,
+       "unresolved_breach": false
+      },
+      "3": {
+       "attachment_as_of": "2030-22",
+       "grudge": false,
+       "relationship_version": "fixture-rel-v1",
+       "source_event_ids": [],
+       "unresolved_breach": false
+      },
+      "4": {
+       "attachment_as_of": "2030-22",
+       "home_source_ids": [],
+       "meaningful_home_match": false,
+       "relationship_version": "fixture-rel-v1"
+      }
+     },
+     "traits": [
+      "RING_CHASER"
+     ]
+    },
+    {
+     "accrued_seasons": 4,
+     "age": 26,
+     "current_team_id": 2,
+     "established": true,
+     "group": "CB",
+     "id": 103,
+     "ovr": 78,
+     "secure": false,
+     "teams": {
+      "2": {
+       "attachment": "established",
+       "attachment_as_of": "2030-22",
+       "relationship_version": "fixture-rel-v1",
+       "role_satisfactory": true,
+       "source_event_ids": [
+        "ev-103-tenure"
+       ],
+       "treatment_satisfactory": true,
+       "unresolved_breach": false
+      },
+      "3": {
+       "attachment_as_of": "2030-22",
+       "grudge": true,
+       "relationship_version": "fixture-rel-v1",
+       "source_event_ids": [
+        "ev-103-breach"
+       ],
+       "unresolved_breach": true
+      },
+      "4": {
+       "attachment_as_of": "2030-22",
+       "home_source_ids": [],
+       "meaningful_home_match": false,
+       "relationship_version": "fixture-rel-v1"
+      }
+     },
+     "traits": [
+      "LOYAL"
+     ]
+    },
+    {
+     "accrued_seasons": 5,
+     "age": 27,
+     "current_team_id": 2,
+     "established": true,
+     "group": "OL",
+     "id": 104,
+     "ovr": 81,
+     "secure": null,
+     "teams": {
+      "2": {
+       "attachment": "strong",
+       "attachment_as_of": "2030-22",
+       "relationship_version": "fixture-rel-v1",
+       "role_satisfactory": true,
+       "source_event_ids": [
+        "ev-104-tenure"
+       ],
+       "treatment_satisfactory": true,
+       "unresolved_breach": false
+      },
+      "3": {
+       "attachment_as_of": "2030-22",
+       "grudge": false,
+       "relationship_version": "fixture-rel-v1",
+       "source_event_ids": [],
+       "unresolved_breach": false
+      },
+      "4": {
+       "attachment_as_of": "2030-22",
+       "home_source_ids": [
+        "home-104"
+       ],
+       "meaningful_home_match": true,
+       "relationship_version": "fixture-rel-v1"
+      }
+     },
+     "traits": [
+      "HOMETOWN_GUY"
+     ]
+    },
+    {
+     "accrued_seasons": 6,
+     "age": 28,
+     "current_team_id": 2,
+     "established": true,
+     "group": "DL",
+     "id": 105,
+     "ovr": 73,
+     "secure": false,
+     "teams": {
+      "2": {
+       "attachment": "none",
+       "attachment_as_of": "2030-22",
+       "relationship_version": "fixture-rel-v1",
+       "role_satisfactory": true,
+       "source_event_ids": [
+        "ev-105-tenure"
+       ],
+       "treatment_satisfactory": true,
+       "unresolved_breach": false
+      },
+      "3": {
+       "attachment_as_of": "2030-22",
+       "grudge": true,
+       "relationship_version": "fixture-rel-v1",
+       "source_event_ids": [
+        "ev-105-breach"
+       ],
+       "unresolved_breach": true
+      },
+      "4": {
+       "attachment_as_of": "2030-22",
+       "home_source_ids": [],
+       "meaningful_home_match": false,
+       "relationship_version": "fixture-rel-v1"
+      }
+     },
+     "traits": [
+      "GRUDGE_HOLDER"
+     ]
+    },
+    {
+     "accrued_seasons": 2,
+     "age": 24,
+     "current_team_id": 2,
+     "established": false,
+     "group": "LB",
+     "id": 106,
+     "ovr": 76,
+     "secure": null,
+     "teams": {
+      "2": {
+       "attachment": "weak",
+       "attachment_as_of": "2030-22",
+       "relationship_version": "fixture-rel-v1",
+       "role_satisfactory": true,
+       "source_event_ids": [
+        "ev-106-tenure"
+       ],
+       "treatment_satisfactory": true,
+       "unresolved_breach": false
+      },
+      "3": {
+       "attachment_as_of": "2030-22",
+       "grudge": false,
+       "relationship_version": "fixture-rel-v1",
+       "source_event_ids": [],
+       "unresolved_breach": false
+      },
+      "4": {
+       "attachment_as_of": "2030-22",
+       "home_source_ids": [],
+       "meaningful_home_match": false,
+       "relationship_version": "fixture-rel-v1"
+      }
+     },
+     "traits": [
+      "LEGACY_BUILDER"
+     ]
+    },
+    {
+     "accrued_seasons": 3,
+     "age": 25,
+     "current_team_id": 2,
+     "established": null,
+     "group": "S",
+     "id": 107,
+     "ovr": 79,
+     "secure": false,
+     "teams": {
+      "2": {
+       "attachment": "established",
+       "attachment_as_of": "2030-22",
+       "relationship_version": "fixture-rel-v1",
+       "role_satisfactory": true,
+       "source_event_ids": [
+        "ev-107-tenure"
+       ],
+       "treatment_satisfactory": true,
+       "unresolved_breach": false
+      },
+      "3": {
+       "attachment_as_of": "2030-22",
+       "grudge": true,
+       "relationship_version": "fixture-rel-v1",
+       "source_event_ids": [
+        "ev-107-breach"
+       ],
+       "unresolved_breach": true
+      },
+      "4": {
+       "attachment_as_of": "2030-22",
+       "home_source_ids": [
+        "home-107"
+       ],
+       "meaningful_home_match": true,
+       "relationship_version": "fixture-rel-v1"
+      }
+     },
+     "traits": []
+    },
+    {
+     "accrued_seasons": 4,
+     "age": 26,
+     "current_team_id": 2,
+     "established": true,
+     "group": "HB",
+     "id": 108,
+     "ovr": 82,
+     "secure": null,
+     "teams": {
+      "2": {
+       "attachment": "strong",
+       "attachment_as_of": "2030-22",
+       "relationship_version": "fixture-rel-v1",
+       "role_satisfactory": true,
+       "source_event_ids": [
+        "ev-108-tenure"
+       ],
+       "treatment_satisfactory": true,
+       "unresolved_breach": false
+      },
+      "3": {
+       "attachment_as_of": "2030-22",
+       "grudge": false,
+       "relationship_version": "fixture-rel-v1",
+       "source_event_ids": [],
+       "unresolved_breach": false
+      },
+      "4": {
+       "attachment_as_of": "2030-22",
+       "home_source_ids": [],
+       "meaningful_home_match": false,
+       "relationship_version": "fixture-rel-v1"
+      }
+     },
+     "traits": [
+      "MONEY_FIRST",
+      "LOYAL"
+     ]
+    },
+    {
+     "accrued_seasons": 5,
+     "age": 27,
+     "current_team_id": 2,
+     "established": true,
+     "group": "TE",
+     "id": 109,
+     "ovr": 74,
+     "secure": false,
+     "teams": {
+      "2": {
+       "attachment": "none",
+       "attachment_as_of": "2030-22",
+       "relationship_version": "fixture-rel-v1",
+       "role_satisfactory": true,
+       "source_event_ids": [
+        "ev-109-tenure"
+       ],
+       "treatment_satisfactory": true,
+       "unresolved_breach": false
+      },
+      "3": {
+       "attachment_as_of": "2030-22",
+       "grudge": true,
+       "relationship_version": "fixture-rel-v1",
+       "source_event_ids": [
+        "ev-109-breach"
+       ],
+       "unresolved_breach": true
+      },
+      "4": {
+       "attachment_as_of": "2030-22",
+       "home_source_ids": [],
+       "meaningful_home_match": false,
+       "relationship_version": "fixture-rel-v1"
+      }
+     },
+     "traits": [
+      "RING_CHASER",
+      "HOMETOWN_GUY"
+     ]
+    },
+    {
+     "accrued_seasons": 6,
+     "age": 28,
+     "current_team_id": 2,
+     "established": true,
+     "group": "WR",
+     "id": 110,
+     "ovr": 77,
+     "secure": null,
+     "teams": {
+      "2": {
+       "attachment": "weak",
+       "attachment_as_of": "2030-22",
+       "relationship_version": "fixture-rel-v1",
+       "role_satisfactory": true,
+       "source_event_ids": [
+        "ev-110-tenure"
+       ],
+       "treatment_satisfactory": true,
+       "unresolved_breach": false
+      },
+      "3": {
+       "attachment_as_of": "2030-22",
+       "grudge": false,
+       "relationship_version": "fixture-rel-v1",
+       "source_event_ids": [],
+       "unresolved_breach": false
+      },
+      "4": {
+       "attachment_as_of": "2030-22",
+       "home_source_ids": [
+        "home-110"
+       ],
+       "meaningful_home_match": true,
+       "relationship_version": "fixture-rel-v1"
+      }
+     },
+     "traits": [
+      "SPOTLIGHT_SEEKER"
+     ]
+    },
+    {
+     "accrued_seasons": 2,
+     "age": 24,
+     "current_team_id": 2,
+     "established": false,
+     "group": "WR",
+     "id": 111,
+     "ovr": 80,
+     "secure": false,
+     "teams": {
+      "2": {
+       "attachment": "established",
+       "attachment_as_of": "2030-22",
+       "relationship_version": "fixture-rel-v1",
+       "role_satisfactory": true,
+       "source_event_ids": [
+        "ev-111-tenure"
+       ],
+       "treatment_satisfactory": true,
+       "unresolved_breach": false
+      },
+      "3": {
+       "attachment_as_of": "2030-22",
+       "grudge": true,
+       "relationship_version": "fixture-rel-v1",
+       "source_event_ids": [
+        "ev-111-breach"
+       ],
+       "unresolved_breach": true
+      },
+      "4": {
+       "attachment_as_of": "2030-22",
+       "home_source_ids": [],
+       "meaningful_home_match": false,
+       "relationship_version": "fixture-rel-v1"
+      }
+     },
+     "traits": [
+      "MONEY_FIRST"
+     ]
+    },
+    {
+     "accrued_seasons": 3,
+     "age": 25,
+     "current_team_id": 2,
+     "established": false,
+     "group": "QB",
+     "id": 112,
+     "ovr": 72,
+     "profile": "missing",
+     "secure": null,
+     "teams": {
+      "2": {
+       "attachment": "strong",
+       "attachment_as_of": "2030-22",
+       "relationship_version": "fixture-rel-v1",
+       "role_satisfactory": true,
+       "source_event_ids": [
+        "ev-112-tenure"
+       ],
+       "treatment_satisfactory": true,
+       "unresolved_breach": false
+      },
+      "3": {
+       "attachment_as_of": "2030-22",
+       "grudge": false,
+       "relationship_version": "fixture-rel-v1",
+       "source_event_ids": [],
+       "unresolved_breach": false
+      },
+      "4": {
+       "attachment_as_of": "2030-22",
+       "home_source_ids": [],
+       "meaningful_home_match": false,
+       "relationship_version": "fixture-rel-v1"
+      }
+     },
+     "traits": [
+      "RING_CHASER"
+     ]
+    }
+   ],
+   "season": 2031,
+   "teams": [
+    {
+     "direction": "CONTEND",
+     "playoff_odds": 0.92,
+     "popularity_index": 85,
+     "team_id": 1,
+     "win_pct": 0.82
+    },
+    {
+     "playoff_odds": 0.5,
+     "popularity_index": 55,
+     "team_id": 2,
+     "win_pct": 0.55
+    },
+    {
+     "direction": "REBUILD",
+     "playoff_odds": 0.1,
+     "popularity_index": 30,
+     "team_id": 3,
+     "win_pct": 0.3
+    },
+    {
+     "direction": "CONTEND",
+     "playoff_odds": 0.75,
+     "popularity_index": 70,
+     "team_id": 4,
+     "win_pct": 0.7
+    }
+   ]
+  }
+ ],
+ "config": {
+  "relationship_enabled": true
+ },
+ "market": {
+  "b": 0.09,
+  "base_worth": 10000000
+ },
+ "note": "Fictional players, teams and offers for offline policy review; no real people.",
+ "schema": "contract-policy-cohorts-v1",
+ "seeds": [
+  "cohort-seed-1",
+  "cohort-seed-2",
+  "cohort-seed-3"
+ ]
+}
