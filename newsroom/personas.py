@@ -93,6 +93,7 @@ POST_KIND_TAGS = {
 }
 
 MAX_VIEWS = 3          # views shown per piece
+MAX_CHANGE_NOTES = 2   # personality-evolution change notes shown (personality.evolution.MAX_CHANGE_NOTES)
 MIN_VIEWS = 2          # topped up from the general views (empty `when`)
 RECENT_ARTICLES = 3    # signature detection window, articles
 RECENT_POSTS = 15      # signature detection window, posts
@@ -810,7 +811,9 @@ def used_signatures(signatures: list, recent_texts: list) -> set:
 
 def render_persona(persona, fmt: str = "ARTICLE", tags: set = frozenset(), seed: str = "",
                    recent_texts: list = (), recent_headlines: list = (), traits: dict = None) -> str:
-    """The ROLE & PERSONA block for one piece. fmt is ARTICLE or POST. A plain string persona passes through."""
+    """The ROLE & PERSONA block for one piece. fmt is ARTICLE or POST. A plain string persona passes through.
+    An optional `change_notes` list (newest first, personality.evolution.change_notes) shows its first
+    MAX_CHANGE_NOTES under the voice."""
     if isinstance(persona, str):
         return persona
     if traits is None:
@@ -818,6 +821,11 @@ def render_persona(persona, fmt: str = "ARTICLE", tags: set = frozenset(), seed:
     rng = random.Random(f"persona:{seed}")
     tags = set(tags)
     out = [persona["voice"].strip()]
+
+    notes = [n.strip() for n in (persona.get("change_notes") or []) if isinstance(n, str) and n.strip()]
+    if notes:
+        out.append("HOW YOU HAVE CHANGED LATELY (background; let it colour your outlook, do not recite it):\n"
+                   + "\n".join(f"- {n}" for n in notes[:MAX_CHANGE_NOTES]))
 
     sentence = slider_sentence(persona.get("sliders", {}))
     if sentence:

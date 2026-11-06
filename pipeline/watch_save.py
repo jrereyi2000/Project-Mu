@@ -571,6 +571,90 @@ def step_relationship_producers(snapshot_path, save_season, dsn=None, log_fn=log
                 pass
 
 
+# ------------------------------------------------------------------------------------- personality evolution ---
+EVOLUTION_ENV = "MU_PERSONALITY_EVOLUTION"
+EVOLUTION_TICK = 24   # league_office.STAGE_WEEKS["OFFSEASON_START"]
+
+
+def personality_evolution_on():
+    """True only when MU_PERSONALITY_EVOLUTION=on (off by default; the activation plan's switchboard will decide
+    when it is built, with this variable kept as the kill switch)."""
+    return os.environ.get(EVOLUTION_ENV, "").strip().lower() == "on"
+
+
+def step_personality_evolution(snapshot_path, save_season, dsn=None, log_fn=log, connect=None):
+    """Personality evolution for the season just ended (PERSONALITY_EVOLUTION_PLAN.md §2.5), on the OFFSEASON_START
+    ingest (tick 24) only, after the relationship producers and before the league office. Its own connection and
+    transaction; skipped unless MU_PERSONALITY_EVOLUTION=on, or (with a logged reason) when the evolution tables
+    aren't migrated or the league has no lifecycle universe. Writes the season report under verify_output/ and
+    notifies "Mu: N personality changes in <season>". Never fails the ingest: an error is logged, notified and
+    recorded as a FAILED run."""
+    if not personality_evolution_on():
+        log_fn(f"Personality evolution off ({EVOLUTION_ENV} is not 'on').")
+        return {"status": "off"}
+    season = universe = None
+    conn = None
+    try:
+        from pipeline import league_office as lo
+        from personality import evolution_run as er
+        with open(snapshot_path) as fh:
+            snapshot = json.load(fh)
+        stage = lo.detect_stage(snapshot)
+        if stage in lo.IN_SEASON or lo.STAGE_WEEKS.get(stage) != EVOLUTION_TICK:
+            return {"status": "skipped", "reason": "not_offseason_start", "stage": stage}
+        season = lo.league_season(snapshot, stage)
+        if connect is None:
+            import psycopg
+            connect = psycopg.connect
+        conn = connect(dsn or os.environ.get("DATABASE_URL"))
+        with conn.cursor() as cur:
+            if not er.tables_ready(cur):
+                conn.rollback()
+                log_fn("Personality evolution skipped: persona_evolution tables not migrated.")
+                return {"status": "skipped", "reason": "not_migrated"}
+            try:
+                universe = er.resolve_universe(cur)
+            except er.EvolutionRunError as e:
+                conn.rollback()
+                log_fn(f"Personality evolution skipped: {e}")
+                return {"status": "skipped", "reason": "no_universe"}
+            report = er.run_season(cur, universe, season)
+        conn.commit()
+        path = er.write_report(report, er.report_path(universe, season))
+        changes = report["counts"].get("applied", 0) if report["status"] == "applied" else 0
+        log_fn(f"Personality evolution {season}: {report['status']} ({changes} changes); report {path}")
+        if report["status"] == "applied":
+            send_notify(f"Mu: {changes} personality changes in {season}. Report: {path}",
+                        title="Mu: personality evolution", tags=("busts_in_silhouette",))
+        return {"status": report["status"], "season": season, "universe_id": universe, "changes": changes,
+                "report": path}
+    except Exception as e:  # noqa: BLE001 - never fatal to the ingest
+        msg = f"Personality evolution failed for season {season}: {e}"
+        log_fn(msg)
+        traceback.print_exc()
+        if conn is not None:
+            try:
+                conn.rollback()
+                if universe is not None and season is not None:
+                    from personality import evolution_run as er
+                    with conn.cursor() as cur:
+                        er.record_failure(cur, universe, season, e)
+                    conn.commit()
+            except Exception as rec_err:  # noqa: BLE001
+                log_fn(f"Could not record the FAILED evolution run: {rec_err}")
+        try:
+            send_notify(msg, title="Mu: personality evolution failed", priority="default", tags=("warning",))
+        except Exception:  # noqa: BLE001
+            pass
+        return {"status": "failed", "error": str(e)}
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:  # noqa: BLE001
+                pass
+
+
 # ----------------------------------------------------------------------------------------- league office ---
 def franchise_closed_env():
     """True when JR has set LEAGUE_OFFICE_FRANCHISE_CLOSED (Madden at its main menu, franchise closed)."""
@@ -723,6 +807,8 @@ def ingest_snapshot(snapshot_path, save_season, save_week, dry_run=False, no_art
 
     # Step: relationship producers (after the load, before the stage_only branch; off by default; never fatal)
     producers = step_relationship_producers(snapshot_path, save_season, dsn=dsn, log_fn=log_fn)
+    # Step: personality evolution (OFFSEASON_START only, after the producers, before the league office; off by default)
+    evolution = step_personality_evolution(snapshot_path, save_season, dsn=dsn, log_fn=log_fn)
 
     def step_league_office():
         nonlocal lo_result
@@ -738,7 +824,8 @@ def ingest_snapshot(snapshot_path, save_season, save_week, dry_run=False, no_art
 
     def result():
         return {"status": "success", "dry_run": False, "season": save_season, "week": save_week,
-                "load_report": load_report, "league_office": lo_result, "relationship_producers": producers}
+                "load_report": load_report, "league_office": lo_result, "relationship_producers": producers,
+                "personality_evolution": evolution}
 
     if stage_only:
         # An offseason stop: no current week, so no weekly engines, articles or mod pack.
