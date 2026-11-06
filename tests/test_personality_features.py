@@ -399,4 +399,5 @@ def test_scratch_migration_twice_and_incompatible_table_refused():
         cur.execute('CREATE TABLE personality_feature_clearances (league_id BIGINT PRIMARY KEY)')
         with pytest.raises(psycopg.Error, match='incompatible'):
             cur.execute(MIGRATION.read_text())
+        cur.execute('ROLLBACK')   # the migration's own BEGIN left the refused transaction open
         cur.execute('DROP SCHEMA pf_test CASCADE')
