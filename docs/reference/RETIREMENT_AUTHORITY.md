@@ -1,6 +1,6 @@
 # Retirement authority and interface inventory
 
-Source-only inventory for [PERSONALITY_RETIREMENT_PLAN.md](../in_progress/PERSONALITY_RETIREMENT_PLAN.md) U0 (2026-11-06). It separates what the saves have **shown** (observed timing) from what Project Mu has **proven** it may write (authority). Nothing here launched an executable, opened a save, read a database or ran a migration. Line numbers were rechecked on main at `7bbfb62`.
+Source-only inventory for [PERSONALITY_RETIREMENT_PLAN.md](../done/PERSONALITY_RETIREMENT_PLAN.md) U0 (2026-11-06). It separates what the saves have **shown** (observed timing) from what Project Mu has **proven** it may write (authority). Nothing here launched an executable, opened a save, read a database or ran a migration. Line numbers were rechecked on main at `7bbfb62`.
 
 **Bottom line:** Mu has observed native retirement timing and already has one restore path in the league office (`keep_retired`), but no disposable-save proof that a restore keeps contracts, references and survives the next advance, and no write path at all for retiring an active player. Both actions stay **unsupported** in `pipeline/retirement_edits.py` (default deny) until gate G4. The offline policy, state machine, store and preview do not need that proof and are built without it.
 
