@@ -9,6 +9,36 @@ import copy
 import math
 from engines import progression_state as state
 from engines import progression_policy as policy
+from engines.personality_development import POLICY_SCHEMA
+
+
+def applied_personality_effects(events):
+    """Signed attributed personality effects recorded on APPLIED enabled receipts of one earned season."""
+    totals = {}
+    for event in events:
+        if event.get("status", "APPLIED") != "APPLIED":
+            continue
+        block = (event.get("metadata") or {}).get(POLICY_SCHEMA) or {}
+        if block.get("mode") != "enabled":
+            continue
+        for rating, value in (block.get("attributed_effect") or {}).items():
+            totals[rating] = totals.get(rating, 0.0) + float(value)
+    return {k: round(v, 10) for k, v in sorted(totals.items()) if round(v, 10)}
+
+
+def include_personality_effects(annual_target, effects):
+    """The neutral full-year target plus applied personality effects, once (0..99).
+
+    reconcile_annual then subtracts the applied totals (which contain those effects), so the
+    year ends at neutral + effect; carry is never added again. No effects -> target unchanged.
+    """
+    if not effects:
+        return annual_target
+    unknown = set(effects) - set(annual_target)
+    if unknown:
+        raise state.ProgressionStateError(f"personality effects name unknown ratings {sorted(unknown)}")
+    return {k: max(0.0, min(99.0, float(v) + effects.get(k, 0.0))) if k in effects else v
+            for k, v in annual_target.items()}
 
 
 def reconcile_annual(base_start, current_base, annual_target, applied, carry):
@@ -107,6 +137,9 @@ def prepare_offseason(cur, rows, *, earned_season, application_season, source_fi
             latest = max(prior, key=lambda e: e["base_revision"], default=None)
             carry = latest["metadata"].get("fractions", {}) if latest else {}
             start = annual_start_ratings(cur, pid, earned_season)
+            effects = applied_personality_effects(prior)
+            neutral_target = target
+            target = include_personality_effects(target, effects)
             reconciled = reconcile_annual(start, current["base_ratings"], target,
                                          state.load_annual_applied(cur, pid, earned_season), carry)
             band = copy.deepcopy(row.get("target_band", current["band"]))
@@ -119,6 +152,9 @@ def prepare_offseason(cur, rows, *, earned_season, application_season, source_fi
                         "annual_entitlement": reconciled["annual_entitlement"],
                         "annual_target": target, "decisions": [], "desired_label": desired,
                         "actual_dev_write": None}
+            if effects:
+                metadata[POLICY_SCHEMA] = {"annual_effect_included": effects,
+                                           "neutral_annual_target": neutral_target}
             metadata["report_context"] = state.capture_report_context(
                 cur, current, position=row.get("position"), actual_dev_before=row.get("actual_dev_before"))
             # Full calibrated results remain private receipt metadata. The root

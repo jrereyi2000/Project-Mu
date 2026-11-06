@@ -16,6 +16,7 @@ from engines import progression_policy as policy
 from engines import progression_save as psave
 from engines import form_engine as form
 from engines import ovr_weights as ow
+from engines import personality_development as pdev
 
 RULES_VERSION = "progression-2026-10-31-v1"
 
@@ -36,15 +37,120 @@ def _used(applied, kind):
             if decision["kind"] == kind for gid in decision["evidence_ids"]}
 
 
+def applied_development_effects(applied):
+    """Attributed personality effects of APPLIED receipts only (PREPARED proposals never spend)."""
+    by_rating, spend = defaultdict(float), 0.0
+    for event in applied:
+        block = (event.get("metadata") or {}).get(pdev.POLICY_SCHEMA)
+        if not block or block.get("mode") != "enabled":
+            continue
+        for rating, value in (block.get("attributed_effect") or {}).items():
+            by_rating[rating] += float(value)
+        spend += float(block.get("annual_abs_spend") or 0.0)
+    return {"by_rating": {k: round(v, 10) for k, v in sorted(by_rating.items())}, "abs_spend": round(spend, 10)}
+
+
+def _exact_ovr(doc, save_position):
+    arches = [a for a in doc["slots"][save_position] if a and a in doc["archetypes"]]
+    return lambda ratings: max(ow.predict_grade(doc, a, ratings, exact=True) for a in arches)
+
+
+def _development_effect(*, player_id, base, decisions, player_games, applied, annual_start, position,
+                        save_position, doc, context, config):
+    """Personality effect on this event's eligible fractional learning, capped before quantization.
+
+    Returns (metadata block, effect to add to requested). Shadow adds nothing. Mentor effects stay
+    disabled: progression's mentor term is an annual OVR scalar with no isolated rating component.
+    """
+    reasons = ["MENTOR_COMPONENT_NOT_ISOLATED"]
+    if context is None:
+        reasons.append("NO_CONTEXT")
+        context = {}
+    elif context.get("player_id") not in (None, player_id):
+        raise state.ProgressionStateError("development context belongs to another player")
+    weeks = {g["game_id"]: g.get("week") for g in player_games}
+    from engines.personality_development_inputs import exposure_by_coach
+    neutral, requested, raw, capped, refs = defaultdict(float), defaultdict(float), {}, {}, {}
+    teaching = personality = False
+    for decision in decisions:
+        result = decision["result"]
+        for rating, amount in result["skill_deltas"].items():
+            neutral[rating] += amount
+        if decision["kind"] not in pdev.LEARNING_KINDS:
+            continue
+        exposure = exposure_by_coach(context, [weeks[g] for g in decision["evidence_ids"]
+                                               if weeks.get(g) is not None])
+        coaches = [{"view": view, "exposure": exposure.get(key, 0.0), "persona_id": key}
+                   for key, view in sorted((context.get("coach_views") or {}).items())]
+        out = pdev.evaluate_learning_effect(
+            neutral_result=result, player_view=context.get("player_view"), coach_views=coaches,
+            mentor_view=None, context={"checkpoint_kind": decision["kind"], "is_qb": position == "QB",
+                                       "ratings": base}, config=config)
+        attribution = out["attribution"]
+        effect = out["skill_deltas"] or attribution.get("shadow_skill_deltas") or {}
+        for rating, amount in effect.items():
+            requested[rating] += amount
+        for rating, channels in attribution.get("raw_channels", {}).items():
+            raw.setdefault(decision["kind"], {})[rating] = channels
+            teaching |= bool(channels.get("teaching"))
+            personality |= any(channels.get(c) for c in pdev.PLAYER_CHANNELS)
+        capped[decision["kind"]] = attribution.get("capped_channels", {})
+        for ref in attribution.get("profile_refs", []):
+            refs[(ref["scope"], str(ref["persona_id"]))] = ref
+        reasons += attribution.get("reasons", [])
+    neutral_target = {k: v + neutral.get(k, 0.0) for k, v in base.items()}
+    proposed = {k: neutral_target[k] + requested.get(k, 0.0) for k in base}
+    prior = applied_development_effects(applied)
+    # Shadow compares against the same caps when they are configured; shadow never changes a target.
+    caps_set = all(getattr(config, f) > 0 for f in pdev.CAP_FIELDS)
+    if config.mode == "enabled" or caps_set:
+        limit_config = pdev.DevelopmentConfig(**{**config.as_dict(), "mode": "enabled"})
+        limited = pdev.limit_annual_effect(annual_start=annual_start, neutral_target=neutral_target,
+                                           proposed_target=proposed, applied_effects=prior,
+                                           config=limit_config, ovr_at=_exact_ovr(doc, save_position))
+    else:
+        uncapped = {k: round(v, 10) for k, v in requested.items() if round(v, 10)}
+        limited = {"target": proposed, "annual_effects": uncapped, "reasons": ["SHADOW_CAPS_NOT_CONFIGURED"]}
+    effects = limited["annual_effects"]
+    enabled = config.mode == "enabled"
+    public = []
+    if enabled and effects:
+        public = sorted(({"PERSONALITY"} if personality else set()) | ({"COACHING"} if teaching else set()))
+    block = {"mode": config.mode, "policy_version": config.version, "config_hash": config.config_hash(),
+             "context_hash": context.get("context_hash"),
+             "profile_refs": [refs[k] for k in sorted(refs)],
+             "evidence_ids": sorted({str(g) for d in decisions if d["kind"] in pdev.LEARNING_KINDS
+                                     for g in d["evidence_ids"]}),
+             "neutral_skill_deltas": {k: round(v, 10) for k, v in sorted(neutral.items())},
+             "raw_channels": raw, "capped_channels": capped,
+             "requested_effect": {k: round(v, 10) for k, v in sorted(requested.items())},
+             "attributed_effect": effects if enabled else {},
+             "shadow_effect": {} if enabled else effects,
+             "annual_abs_spend": round(sum(abs(v) for v in effects.values()), 10) if enabled else 0.0,
+             "prior_applied": prior,
+             "neutral_target": {k: round(v, 10) for k, v in sorted(neutral_target.items())},
+             "effect_target": {k: round(v, 10) for k, v in sorted(limited["target"].items())},
+             "cap_reasons": limited["reasons"], "public_reasons": public,
+             "mentor": {"status": "disabled", "reason": "MENTOR_COMPONENT_NOT_ISOLATED"},
+             "reasons": sorted(set(reasons))}
+    return block, (effects if enabled else {})
+
+
 def prepare_player(cur, *, player_id, pgid, earned_season, application_season,
                    as_of_week, source_fingerprint, player_games, team_games,
                    position, age=None, season_closed=False, playoff_run_closed=False,
-                   form_value=0.0, supported_skills=(), notes=(), actual_dev_before=None, config=None, doc=None):
+                   form_value=0.0, supported_skills=(), notes=(), actual_dev_before=None, config=None, doc=None,
+                   development_context=None, development_config=None):
     """Prepare one composite event/player. Frozen evidence cutoffs make retries stable.
 
     Ordinary checkpoint evidence and breakout review evidence are accounted separately.
     A finished postseason run is an independent review route. No actual dev-field write.
+    development_config (personality_development.DevelopmentConfig, default None = off) and a
+    frozen development_context (personality_development_inputs.load_development_context) add a
+    capped personality effect to eligible learning before quantization; off changes nothing.
     """
+    if development_config is not None and not isinstance(development_config, pdev.DevelopmentConfig):
+        raise ValueError("development_config must be a DevelopmentConfig")
     if not math.isfinite(float(form_value)) or abs(float(form_value)) > form.FORM_MAX:
         raise ValueError("form must be finite and within the configured +/-3 OVR limit")
     current = state.load_state(cur, player_id)
@@ -102,6 +208,15 @@ def prepare_player(cur, *, player_id, pgid, earned_season, application_season,
             requested[rating] += amount
         decisions.append({"kind": "REVIEW", "evidence_ids": review.get("fresh_evidence_ids", review["evidence_ids"]),
                           "evidence": review, "result": result})
+    annual_start = applied[0]["metadata"].get("annual_start", base) if applied else base
+    personality = None
+    if development_config is not None and development_config.mode != "off":
+        personality, effect = _development_effect(
+            player_id=player_id, base=base, decisions=decisions, player_games=player_games, applied=applied,
+            annual_start=annual_start, position=position, save_position=save_position, doc=doc,
+            context=development_context, config=development_config)
+        for rating, amount in effect.items():
+            requested[rating] += amount
     # Fractional learning is retained only by applied events, never by prepared plans.
     latest = max(applied, key=lambda e: e["base_revision"], default=None)
     fractions = latest["metadata"].get("fractions", {}) if latest else {}
@@ -118,8 +233,10 @@ def prepare_player(cur, *, player_id, pgid, earned_season, application_season,
     metadata = {"week": as_of_week, "application_week": as_of_week, "pgid": pgid, "position": position,
                 "decisions": decisions, "fractions": carry, "form": float(form_value),
                 "input_notes": list(notes),
-                "annual_start": applied[0]["metadata"].get("annual_start", base) if applied else base,
+                "annual_start": annual_start,
                 "desired_label": policy.summarize_band(band, config), "actual_dev_write": None}
+    if personality is not None:
+        metadata[pdev.POLICY_SCHEMA] = personality
     metadata["report_context"] = state.capture_report_context(
         cur, current, position=position, actual_dev_before=actual_dev_before)
     consumed = sorted({str(gid) for d in decisions for gid in d["evidence_ids"]})
@@ -140,7 +257,7 @@ def document_for_events(events, snapshot, doc=None):
 
 
 def prepare_pass(cur, snapshot, season, week, *, source_fingerprint,
-                 player_inputs, forms=None, config=None):
+                 player_inputs, forms=None, config=None, development_config=None):
     """player_inputs is cutoff-normalized evidence per internal player ID.
 
     Missing authoritative state is a hard failure; bootstrap is an explicit setup step.
@@ -154,7 +271,8 @@ def prepare_pass(cur, snapshot, season, week, *, source_fingerprint,
             inputs.setdefault("actual_dev_before", players.get(inputs.get("pgid"), {}).get("dev_trait"))
             events.append(prepare_player(cur, player_id=pid, earned_season=season,
                 application_season=season, as_of_week=week, source_fingerprint=source_fingerprint,
-                form_value=(forms or {}).get(pid, 0.0), config=config, **inputs))
+                form_value=(forms or {}).get(pid, 0.0), config=config,
+                development_config=development_config, **inputs))
         document = document_for_events(events, snapshot)
         pending = [event for event in events if event["status"] != "APPLIED"]
     return {"document": document, "event_ids": [e["event_id"] for e in pending],
