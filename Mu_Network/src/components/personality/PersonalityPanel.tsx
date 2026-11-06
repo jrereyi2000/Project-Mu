@@ -4,7 +4,7 @@ import type { PersonalityKind, PersonalityProfile, PersonRef } from "../../types
 import { PersonalityEditor } from "./PersonalityEditor";
 import "./personality.css";
 
-// Personality panel (docs/in_progress/PERSONALITY_DISPLAY_PLAN.md §2.2): who this person is, in words. Sliders as
+// Personality panel (docs/done/PERSONALITY_DISPLAY_PLAN.md §2.2): who this person is, in words. Sliders as
 // sentences with a 0-10 bar, traits with what they tend to do (hover), this week's mood tag, how he has changed,
 // his ties as labels, attachment, open promises and a public trade request. Blocks the API marks unavailable are
 // hidden. JR's Edit button shows when a #debug token is stored and the profile is editable.

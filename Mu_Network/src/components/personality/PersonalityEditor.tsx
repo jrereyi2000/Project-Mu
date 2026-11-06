@@ -7,7 +7,7 @@ import type {
   PersonalityProfile,
 } from "../../types/personality";
 
-// JR's on-page editor (docs/in_progress/PERSONALITY_DISPLAY_PLAN.md §2.2, D3): slider steppers with a live total
+// JR's on-page editor (docs/done/PERSONALITY_DISPLAY_PLAN.md §2.2, D3): slider steppers with a live total
 // that must stay in the band, a trait picker that greys out conflicts, full categories and ineligible traits, and a
 // required reason. Save posts the audited core override; a reason starting "note:" also shows in "How he's
 // changed" (Q2). These checks are for convenience: the server is the authority and its 409/422 message is shown.

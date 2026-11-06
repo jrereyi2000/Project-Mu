@@ -177,7 +177,7 @@ export function PlayerPage({ playerId }: { category?: string; playerId: number }
         </div>
       </section>
 
-      {/* Personality (docs/in_progress/PERSONALITY_DISPLAY_PLAN.md §2.2): after the hero's career path */}
+      {/* Personality (docs/done/PERSONALITY_DISPLAY_PLAN.md §2.2): after the hero's career path */}
       <div className="player-data-layout">
         <PersonalityPanel kind="player" refId={playerId} />
       </div>

@@ -212,23 +212,23 @@ def fetch_staff(cur, team_id: int, season: int) -> dict | None:
     coach = fetch_team_coach(cur, team_id, season)
     coach["observed"] = fetch_observed(cur, team_id, season, coach["id"])
     cur.execute("""
-        SELECT ct.role, c.coordinator_name, c.scheme, c.playbook, ct.start_season
+        SELECT ct.role, c.id, c.coordinator_name, c.scheme, c.playbook, ct.start_season
         FROM coordinator_tenures ct JOIN coordinators c ON c.id = ct.coordinator_id
         WHERE ct.team_id = %s AND ct.start_season <= %s AND COALESCE(ct.end_season, 9999) >= %s
         ORDER BY ct.start_season, ct.id;
     """, (team_id, season, season))
     coords = {}
-    for role, name, scheme, playbook, since in cur.fetchall():   # latest tenure per role wins (fetch_team_staff)
-        coords[role] = {"role": role, "name": None if PLACEHOLDER_COORDINATOR.search(name or "") else name,
+    for role, coord_id, name, scheme, playbook, since in cur.fetchall():   # latest tenure per role wins (fetch_team_staff)
+        coords[role] = {"role": role, "id": coord_id, "name": None if PLACEHOLDER_COORDINATOR.search(name or "") else name,
                         "scheme": scheme, "playbook": playbook, "since": since}
-    out = {"head_coach": shape_head_coach(profile, coach),
+    out = {"head_coach": dict(shape_head_coach(profile, coach), id=coach["id"]),   # ids open the Personality row
            "coordinators": [coords[r] for r in ("OC", "DC") if r in coords],
            "gm": None, "direction": None, "needs": [], "urgent_need": None}
     if front_office.installed(cur):
         gm = front_office.get_gm(cur, team_id, season)
         if gm:
             cur.execute("SELECT coach_id FROM gm_profiles WHERE id = %s;", (gm["gm_id"],))
-            out["gm"] = {"name": gm["gm_name"], "bio": gm["bio"], "since": gm["start_season"],
+            out["gm"] = {"id": gm["gm_id"], "name": gm["gm_name"], "bio": gm["bio"], "since": gm["start_season"],
                          "head_coach_too": cur.fetchone()[0] is not None}
             out["direction"] = gm["direction"]
             out["needs"], out["urgent_need"] = shape_needs(gm["needs"], gm["urgent_need"])

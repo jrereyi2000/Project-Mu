@@ -1,4 +1,4 @@
-// /api/personality (server/personality_api.py; docs/in_progress/PERSONALITY_DISPLAY_PLAN.md §2.1). Words, not
+// /api/personality (server/personality_api.py; docs/done/PERSONALITY_DISPLAY_PLAN.md §2.1). Words, not
 // engine numbers: the only numbers are the slider values, the profile revision and a public trade request's date.
 
 export type PersonalityKind = "player" | "coach" | "coordinator" | "owner" | "gm" | "scout" | "writer";

@@ -234,7 +234,7 @@ function Contracts({ contracts, committed, years, focus }:
   );
 }
 
-// The people above the staff (docs/in_progress/PERSONALITY_DISPLAY_PLAN.md §2.2, Q3): the GM, the owner and the scouting
+// The people above the staff (docs/done/PERSONALITY_DISPLAY_PLAN.md §2.2, Q3): the GM, the owner and the scouting
 // director, each with his Personality panel. A card shows only when /api/personality has a profile for him.
 function PersonCard({ label, kind, refId }: { label: string; kind: PersonalityKind; refId: string | number }) {
   const [profile, setProfile] = useState<PersonalityProfile | null>(null);

@@ -166,7 +166,10 @@ class EndpointTest(unittest.TestCase):
         for n in staff["needs"]:
             self.assertEqual(set(n), {"group", "label", "reasons"})       # no need scores
         if staff["gm"]:
-            self.assertEqual(set(staff["gm"]), {"name", "bio", "since", "head_coach_too"})   # no persona dials
+            self.assertEqual(set(staff["gm"]), {"id", "name", "bio", "since", "head_coach_too"})   # no persona dials
+        self.assertIsInstance(staff["head_coach"]["id"], int)
+        for c in staff["coordinators"]:
+            self.assertIn("id", c)
         self.assertIn(staff["direction"], (None, "CONTEND", "RETOOL", "REBUILD"))
 
     def test_team_roster_drops_released_players(self):

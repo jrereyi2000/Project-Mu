@@ -46,7 +46,7 @@ const DIRECTION: Record<string, [string, string]> = {
 const TENDENCY_LABEL = { pass_lean: "Pass lean", fourth_down_aggressiveness: "Fourth down", man_coverage: "Coverage" };
 const ROLE = { OC: "Offensive Coordinator", DC: "Defensive Coordinator" };
 
-// A collapsible Personality row on a staff card (docs/in_progress/PERSONALITY_DISPLAY_PLAN.md §2.2). The panel
+// A collapsible Personality row on a staff card (docs/done/PERSONALITY_DISPLAY_PLAN.md §2.2). The panel
 // mounts (and fetches) only once the row is opened.
 const SUMMARY_STYLE = { cursor: "pointer", color: "var(--gray-500)", font: "700 9px var(--font-mono)", letterSpacing: ".07em", textTransform: "uppercase" } as const;
 

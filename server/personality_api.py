@@ -1,4 +1,4 @@
-"""Personality on the site (/api/personality/*; docs/in_progress/PERSONALITY_DISPLAY_PLAN.md §2.1, PROJECT_SPEC §4.8).
+"""Personality on the site (/api/personality/*; docs/done/PERSONALITY_DISPLAY_PLAN.md §2.1, PROJECT_SPEC §4.8).
 
 Who everyone in the league is, in words: a person's sliders as sentences with a 0-10 bar, his traits with what
 they tend to do, this week's mood tag, how he has changed (evolution notes), his known ties as labels, his

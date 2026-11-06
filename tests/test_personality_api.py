@@ -1,4 +1,4 @@
-"""server/personality_api.py (docs/in_progress/PERSONALITY_DISPLAY_PLAN.md §2.1, §4): the Personality panel's
+"""server/personality_api.py (docs/done/PERSONALITY_DISPLAY_PLAN.md §2.1, §4): the Personality panel's
 profile read, catalogue and JR's override, against fake sources and real pure core profiles. No database."""
 import unittest
 from copy import deepcopy
