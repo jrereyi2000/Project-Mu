@@ -1,0 +1,192 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:DET:OC",
+  "name": "Ben Johnson",
+  "role": "OC",
+  "team": "DET",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "DET",
+    "role": "OC",
+    "name": "Ben Johnson"
+  },
+  "sliders": {
+    "temperament": 4,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 7,
+    "warmth": 5,
+    "drive": 7
+  },
+  "slider_evidence": {
+    "temperament": [
+      "E1"
+    ],
+    "openness": [
+      "E1",
+      "E5"
+    ],
+    "drive": [
+      "E1",
+      "E2"
+    ]
+  },
+  "traits": [
+    "SCHEME_NERD",
+    "QB_WHISPERER",
+    "PERFECTIONIST",
+    "FILM_ROOM_RAT"
+  ],
+  "trait_evidence": {
+    "SCHEME_NERD": [
+      "E1",
+      "E5"
+    ],
+    "QB_WHISPERER": [
+      "E1",
+      "E5"
+    ],
+    "PERFECTIONIST": [
+      "E1"
+    ],
+    "FILM_ROOM_RAT": [
+      "E1",
+      "E2"
+    ]
+  },
+  "views": [
+    {
+      "text": "The best plays start from familiar concepts with one new wrinkle the defense has not seen on film.",
+      "when": [
+        "SCHEME",
+        "PREVIEW"
+      ]
+    },
+    {
+      "text": "A quarterback who helps design the offense owns it, and plays faster because of it.",
+      "when": [
+        "QB",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Linemen should get a say in the run game; let them pick the runs they like best each week.",
+      "when": [
+        "SCHEME",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "Sloppy execution in a win still needs fixing before next week.",
+      "when": [
+        "WIN_STREAK",
+        "GAME_REVIEW"
+      ]
+    },
+    {
+      "text": "Take a head coaching job only when you are truly ready for it, not because it is offered.",
+      "when": [
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Giving the quarterback several options at the line is how you beat defenses that disguise.",
+      "when": [
+        "QB",
+        "GAME_REVIEW"
+      ]
+    }
+  ],
+  "signatures": [
+    "explains a big play by naming the small tweak to a familiar concept that made it work",
+    "credits his quarterback's growth in reading pressure and handling protections",
+    "turns aside head coaching questions to focus on the current game"
+  ],
+  "want": "to be recognized as the sharpest offensive mind in the league and to lead a team only when he feels completely ready",
+  "fear": "that his offense is credited to talent and Sean McVay's system rather than to his own design",
+  "voice": "Calm, precise and understated; he speaks in specific football detail about concepts, motions and protections. He is sharp rather than loud about mistakes, credits players for ideas, and gives little away about his own plans.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "DET",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E2",
+        "E3"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Jared Goff",
+        "team_2026": "DET"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E5"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.theringer.com/2023/08/14/nfl/how-detroit-lions-offensive-coordinator-ben-johnson-fixed-jared-goff",
+      "publisher": "The Ringer, Ben Solak",
+      "published": "2023-08-14",
+      "accessed": "2026-11-04",
+      "summary": "Feature on his offense: seven Miami seasons coaching quarterbacks, tight ends and receivers under three coordinators shaped a flexible style; calm on the sideline but sharp about sloppy execution; clear, precise communication. Builds plays from familiar concepts with new wrinkles, lets linemen circle favorite runs, gives Goff options at the line, and worked with Goff to design the offense from Rams concepts. Analysis with staff input.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.audacy.com/wwjnewsradio/sports/detroit-lions-dan-campbell-thrilled-to-keep-ben-johnson",
+      "publisher": "WWJ / Audacy, Will Burchfield",
+      "published": "2024-02-28",
+      "accessed": "2026-11-04",
+      "summary": "Campbell on Johnson staying after interest from Carolina and Washington: he stays fully focused on the task at hand, kept his mind on the playoffs over interviews, is qualified to lead a team but will not take on anything he does not feel ready for, and is one of us. Campbell's view.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://abc7news.com/post/dan-campbells-aggressiveness-has-detroit-lions/15727402/",
+      "publisher": "ESPN, Eric Woodyard, via ABC7",
+      "published": "2024-12-30",
+      "accessed": "2026-11-04",
+      "summary": "On Detroit's fourth-down approach; Johnson describes Campbell as comfortable being himself and accepting the consequences of his choices. Mostly about Campbell; one line from Johnson.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://africa.espn.com/nfl/story/_/id/43492843/coach-dan-campbell-says-lions-gonna-come-back-stronger",
+      "publisher": "ESPN, Eric Woodyard",
+      "published": "2025-01-20",
+      "accessed": "2026-11-04",
+      "summary": "After the playoff loss Campbell expects to lose Johnson and Glenn to head coaching jobs and says both were central to the program's rise. Context for his standing; nothing from Johnson himself.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.detroitlions.com/news/ben-johnson-returning-as-detroit-lions-offensive-coordinator",
+      "publisher": "Detroit Lions (detroitlions.com), Tim Twentyman",
+      "published": "2023-01-19",
+      "accessed": "2026-11-04",
+      "summary": "He turns down head coaching interest, including Carolina, citing unfinished business after an offense that ranked fifth in scoring. Goff calls him as instrumental as any coach he has had and says Johnson invited him to help build the scheme. Analysts praise his design, personnel use and motion. Team-written.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

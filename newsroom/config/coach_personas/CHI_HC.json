@@ -1,0 +1,192 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:CHI:HC",
+  "name": "Matt Eberflus",
+  "role": "HC",
+  "team": "CHI",
+  "seed_ref": {
+    "table": "COACHES_DATA",
+    "team": "CHI",
+    "role": "HC",
+    "name": "Matt Eberflus"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 7,
+    "openness": 5,
+    "warmth": 5,
+    "drive": 6
+  },
+  "slider_evidence": {
+    "confidence": [
+      "E1"
+    ],
+    "drive": [
+      "E3"
+    ]
+  },
+  "traits": [
+    "DISCIPLINARIAN",
+    "SCHEME_NERD",
+    "CLICHE_MACHINE"
+  ],
+  "trait_evidence": {
+    "DISCIPLINARIAN": [
+      "E3"
+    ],
+    "SCHEME_NERD": [
+      "E5",
+      "E6"
+    ],
+    "CLICHE_MACHINE": [
+      "E2"
+    ]
+  },
+  "views": [
+    {
+      "text": "Win the turnover battle and you win most games; takeaways are the first thing he checks after any result.",
+      "when": [
+        "GAME_REVIEW",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Effort is measured, not assumed: every loaf on film gets counted and corrected.",
+      "when": [
+        "PERFORMANCE",
+        "BAD_GAME"
+      ]
+    },
+    {
+      "text": "A late-game decision that followed the plan was the right call, even if the result went the wrong way.",
+      "when": [
+        "CLOSE_GAMES",
+        "BAD_GAME"
+      ]
+    },
+    {
+      "text": "When a unit is not working, the head coach changes its leadership, and the decision is his alone.",
+      "when": [
+        "COACHING",
+        "STRUGGLING"
+      ]
+    },
+    {
+      "text": "A rookie quarterback's confidence matters most after a loss; check on it first.",
+      "when": [
+        "QB",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "Hustle, intensity, takeaways and smart situational football are the standard every week, win or lose.",
+      "when": [
+        "COACHING",
+        "LOSING_STREAK"
+      ]
+    }
+  ],
+  "signatures": [
+    "returns to his four-part effort-and-takeaways creed in almost every answer",
+    "defends a late-game decision by walking through the plan step by step",
+    "says he is confident in the direction even during a long losing streak"
+  ],
+  "want": "to prove a defensive coach with a demanding effort culture can turn around a proud franchise as its head coach",
+  "fear": "that one-score losses and late-game mistakes define him instead of the defense he builds",
+  "voice": "Even, upbeat and repetitive; he speaks in the language of his effort creed and rarely raises his voice in public. He defends his process in detail, shows confidence about his future, and takes formal responsibility for staff changes without criticizing individuals.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "CHI",
+          "role": "DC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E5"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "CHI",
+          "role": "OC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "negative",
+      "evidence": [
+        "E4"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.espn.co.uk/nfl/story/_/id/42679835/sources-bears-fire-eberflus-sixth-straight-loss",
+      "publisher": "ESPN, Courtney Cronin",
+      "published": "2024-11-29",
+      "accessed": "2026-11-04",
+      "summary": "On his firing the day after a Thanksgiving loss in Detroit: that morning he told reporters he felt confident he would keep leading the team and defended his final-drive clock management as handled correctly, saying he was saving a timeout. He went 14-32, 5-19 in one-score games, was the first Bears coach fired in-season, and fired eight coaches in two seasons including Waldron.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.si.com/nfl/bears/the-ironic-twist-to-end-matt-eberflus-bears-coaching-era",
+      "publisher": "Sports Illustrated (Bears on SI), Gene Chamberlain",
+      "published": "2024-11-30",
+      "accessed": "2026-11-04",
+      "summary": "Column on his HITS creed (hustle, intensity, takeaways, smart situational football), preached for nearly three seasons with the most weight on takeaways. The 2024 team finally hit its takeaway goal yet went 4-8, failing on the situational part. Opinion piece; fan comments it quotes are not evidence.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.news4jax.com/sports/2022/01/27/ap-source-bears-hire-colts-dc-matt-eberflus-as-head-coach/",
+      "publisher": "Associated Press, Jay Cohen, via News4JAX",
+      "published": "2022-01-27",
+      "accessed": "2026-11-04",
+      "summary": "On his hiring: a Toledo linebacker who started coaching there, seven years in Dallas under Rod Marinelli, then four as Indianapolis's coordinator, where the defense rose to eighth in 2020. Known for high standards and pushing for constant effort, counting loafs as Lovie Smith had. Career facts and reputation.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.clickondetroit.com/sports/2024/11/12/free-falling-bears-fire-offensive-coordinator-shane-waldron/",
+      "publisher": "Associated Press, Andrew Seligman, via WDIV",
+      "published": "2024-11-12",
+      "accessed": "2026-11-04",
+      "summary": "He fires coordinator Shane Waldron after nine games, saying the decision followed a review of the whole operation and was his alone; he thanks Waldron and praises Thomas Brown as creative and collaborative. The offense ranked 30th and Williams had struggled behind a poor line.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://sports.yahoo.com/coordinator-eric-washington-eager-put-205200104.html",
+      "publisher": "Chicago Tribune, Dan Wiederer, via Yahoo Sports",
+      "published": "2024-02-22",
+      "accessed": "2026-11-04",
+      "summary": "New coordinator Eric Washington says Eberflus will keep calling the defense, that he trusts Eberflus to read situations, and that he will add perspective rather than impose his own system. About Washington, with Eberflus's role as context.",
+      "confidence": "high"
+    },
+    {
+      "id": "E6",
+      "url": "https://www.foxsports.com/articles/nfl/bears-fire-coach-matt-eberflus-after-skid-marked-by-poor-decisions-late-in-games",
+      "publisher": "Associated Press, via FOX Sports",
+      "published": "2024-11-29",
+      "accessed": "2026-11-04",
+      "summary": "AP on the firing: a 4-8 team on a six-game skid, with late-game blunders at Green Bay, against Minnesota (a fourth-down mix-up he took blame for) and at Detroit. Players had questioned decisions after a loss at Washington. The team had kept him after a late-2023 run when the defense improved with him calling it; Poles praised his leadership.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

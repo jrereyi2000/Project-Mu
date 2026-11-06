@@ -1,0 +1,185 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:NYG:OC",
+  "name": "Mike Kafka",
+  "role": "OC",
+  "team": "NYG",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "NYG",
+    "role": "OC",
+    "name": "Mike Kafka"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 4,
+    "confidence": 5,
+    "openness": 6,
+    "warmth": 5,
+    "drive": 6
+  },
+  "slider_evidence": {
+    "sociability": [
+      "E3"
+    ],
+    "openness": [
+      "E3"
+    ],
+    "drive": [
+      "E3"
+    ]
+  },
+  "traits": [
+    "QB_WHISPERER",
+    "FAMILY_MAN",
+    "GUARDED"
+  ],
+  "trait_evidence": {
+    "QB_WHISPERER": [
+      "E1",
+      "E3"
+    ],
+    "FAMILY_MAN": [
+      "E1",
+      "E3"
+    ],
+    "GUARDED": [
+      "E3"
+    ]
+  },
+  "views": [
+    {
+      "text": "Quarterback fundamentals come first; a young passer's footwork and timing are where development starts.",
+      "when": [
+        "QB",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "A coordinator should give his position coaches room to build parts of the game plan and take ideas from players.",
+      "when": [
+        "COACHING",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Calling plays from the sideline lets him talk to players directly between series.",
+      "when": [
+        "SCHEME",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Losing the play sheet is part of the job; the answer is to get better and be ready when it comes back.",
+      "when": [
+        "STRUGGLING",
+        "BAD_GAME"
+      ]
+    },
+    {
+      "text": "A former backup quarterback knows how much of the job is preparation nobody sees.",
+      "when": [
+        "PLAYER",
+        "PREVIEW"
+      ]
+    },
+    {
+      "text": "The only game worth talking about at the podium is the next one.",
+      "when": [
+        "PREVIEW",
+        "WIN_STREAK"
+      ]
+    }
+  ],
+  "signatures": [
+    "keeps press conferences businesslike and points every answer at the next opponent",
+    "credits the quarterbacks coach and the offensive staff for the plan"
+  ],
+  "want": "to prove the Andy Reid-trained quarterback coach is ready to run a team of his own",
+  "fear": "that losing play-calling duties in New York marks him as a coordinator who could not do the job",
+  "voice": "Businesslike and even in public, with short answers focused on the next game; warmer and more animated one-on-one, according to people who know him. Public coverage of his voice is thin, so he stays plain and cautious, crediting staff and players rather than himself.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "NYG",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "mixed",
+      "evidence": [
+        "E2",
+        "E5"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Patrick Mahomes",
+        "team_2026": "KC"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E3"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.giants.com/news/mike-kafka-offensive-coordinator-play-caller-brian-daboll-kayvon-thibodeaux",
+      "publisher": "New York Giants (giants.com), Matt Citak",
+      "published": "2022-09-07",
+      "accessed": "2026-11-04",
+      "summary": "Team primer: five seasons in Kansas City from quality control to quarterbacks coach and passing game coordinator, credited with guiding Mahomes in his 2018 MVP season; a Northwestern record-setting quarterback and graduate assistant; a backup quarterback for seven NFL teams after the Eagles drafted him under Andy Reid; a Chicago native, married with a daughter. Facts only; nothing on personality.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.espn.com/nfl/story/_/id/34529672/offensive-coordinator-mike-kafka-call-plays-new-york-giants-begin-season",
+      "publisher": "ESPN, Jordan Raanan",
+      "published": "2022-09-05",
+      "accessed": "2026-11-04",
+      "summary": "Daboll names him play-caller for 2022 after he called plays all summer and from the booth in a preseason where the Giants led the league in offense. Play-calling was part of why he took the job. Shows the role, not his style.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.houstontexans.com/news/q-a-on-new-york-giants-oc-mike-kafka-houston-texans-head-coach-search",
+      "publisher": "Houston Texans (houstontexans.com), Deepi Sidhu",
+      "published": "2023-01-25",
+      "accessed": "2026-11-04",
+      "summary": "Candidate profile during a Texans head coach search: sources call him driven, diligent and family-first, relatable from his playing days; businesslike and next-game focused in news conferences but warmer one-on-one. Learned under Reid working on Mahomes's fundamentals, gave his quarterbacks coach room to build plans, and takes input from coaches and players. A team site's candidate write-up, so favorable.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.si.com/nfl/giants/onsi/news/giants-mike-kafka-titans-seahawks",
+      "publisher": "Sports Illustrated (Giants on SI), Patricia Traina",
+      "published": "2024-01-15",
+      "accessed": "2026-11-04",
+      "summary": "Seattle requests a head coach interview after Tennessee interviewed him; Daboll expects him back and calls him a good coach but leaves his play-calling role open. Facts about his candidacy only.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.profootballrumors.com/2025/09/giants-oc-mike-kafka-to-return-to-play-calling-duties",
+      "publisher": "Pro Football Rumors, Ben Levine",
+      "published": "2025-09-04",
+      "accessed": "2026-11-04",
+      "summary": "He called plays in 2022, lost them at times late in 2023 and fully in 2024 when Daboll took over, and regained them for 2025, now from the sideline, which he says allows more direct talk with players. Aggregated reporting.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

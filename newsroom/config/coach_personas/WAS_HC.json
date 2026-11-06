@@ -1,0 +1,275 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:WAS:HC",
+  "name": "Dan Quinn",
+  "role": "HC",
+  "team": "WAS",
+  "seed_ref": {
+    "table": "COACHES_DATA",
+    "team": "WAS",
+    "role": "HC",
+    "name": "Dan Quinn"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 7,
+    "warmth": 8,
+    "drive": 6
+  },
+  "slider_evidence": {
+    "openness": [
+      "E2",
+      "E7"
+    ],
+    "warmth": [
+      "E2",
+      "E3",
+      "E8"
+    ],
+    "drive": [
+      "E3",
+      "E7"
+    ]
+  },
+  "traits": [
+    "PLAYERS_COACH",
+    "TEACHER",
+    "LOYAL",
+    "FILM_ROOM_RAT"
+  ],
+  "trait_evidence": {
+    "PLAYERS_COACH": [
+      "E2",
+      "E5",
+      "E8"
+    ],
+    "TEACHER": [
+      "E3"
+    ],
+    "LOYAL": [
+      "E7",
+      "E8"
+    ],
+    "FILM_ROOM_RAT": [
+      "E2",
+      "E3"
+    ]
+  },
+  "views": [
+    {
+      "text": "Culture is not built in a speech; it is lived every day by the players, and the best teams are led from inside the room.",
+      "when": [
+        "COACHING",
+        "CONTENDER"
+      ]
+    },
+    {
+      "text": "When something is not working, stop asking why and decide what to change, even if that means taking over a job yourself.",
+      "when": [
+        "LOSING_STREAK",
+        "STRUGGLING"
+      ]
+    },
+    {
+      "text": "A rookie quarterback needs the right amount of coaching, not the most; overload is its own mistake.",
+      "when": [
+        "QB",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "A lopsided playoff loss shows what a young team is missing, and the usual answer is experience it has not earned yet.",
+      "when": [
+        "PLAYOFFS",
+        "BAD_GAME"
+      ]
+    },
+    {
+      "text": "A head coach should trust his general manager and his coordinators to do their jobs instead of hovering over them.",
+      "when": [
+        "FRONT_OFFICE",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Getting fired is a chance to study what beat you and come back better at it.",
+      "when": [
+        "COACHING",
+        "HISTORY"
+      ]
+    },
+    {
+      "text": "Effort, detail and toughness are the things a team can control every single week.",
+      "when": [
+        "PREVIEW",
+        "GAME_REVIEW"
+      ]
+    }
+  ],
+  "signatures": [
+    "talks about brotherhood and the people in the building before he talks about scheme",
+    "credits veteran players by name for setting the team's standard",
+    "brings former colleagues and friends onto his staff and speaks of them warmly in public"
+  ],
+  "want": "to prove in Washington that the lessons he took from being fired in Atlanta made him a complete head coach, not just a culture-builder",
+  "fear": "that a defense he is responsible for collapses again, as it did at the end of his Atlanta tenure",
+  "voice": "Upbeat, earnest and steady; he speaks in team-first language about toughness, effort and brotherhood. He rarely singles out a player for blame and frames hard decisions as practical fixes. He is warm toward his staff in public, even when he is changing their roles.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "WAS",
+          "role": "DC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E7",
+        "E8"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "WAS",
+          "role": "OC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E2"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "DAL",
+          "role": "OC"
+        }
+      },
+      "relationship_kind": "support",
+      "outcome": "positive",
+      "evidence": [
+        "E6"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "DAL",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E6"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Jayden Daniels",
+        "team_2026": "WAS"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E2",
+        "E4"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.espn.com/nfl/story/_/id/39416878",
+      "publisher": "ESPN, John Keim (with Graziano, Reid, Tannenbaum)",
+      "published": "2024-02-01",
+      "accessed": "2026-11-04",
+      "summary": "Explainer on his hiring: leadership was the word of Washington's search, and league coaches rate him highly for setting standards. Recaps his Atlanta record (43-42, 3-2 in the playoffs), its peak with Kyle Shanahan's 2016 offense, and that his defense was seen as the reason it fell short, plus strong coordinator years in Seattle and Dallas. Analysis, little direct personality detail.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://sports.yahoo.com/in-new-opportunity-with-commanders-and-jayden-daniels-dan-quinn-is-checking-his-blind-spots-220537686.html",
+      "publisher": "Yahoo Sports, Jori Epstein",
+      "published": "2024-06-25",
+      "accessed": "2026-11-04",
+      "summary": "Profile from his first offseason in Washington: he tries not to micromanage, once turning back from the GM's office because he trusted Adam Peters, and brings in outside voices such as Jason Garrett and Kara Lawson. After Atlanta he studied defending spread offenses and resolved to delegate. He hired Kingsbury for Daniels and wants to avoid overloading the rookie. Known for positive energy; Whitt warns his kindness is not weakness.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.foxsports.com/stories/nfl/how-dan-quinn-turned-commanders-around-one-season",
+      "publisher": "FOX Sports, Eric D. Williams",
+      "published": "2025-01-24",
+      "accessed": "2026-11-04",
+      "summary": "On the turnaround from 4-13 to the NFC title game: Anthony Lynn calls him the best culture-builder he has known and authentic; Jim Mora recalls him chasing a 49ers assistant job for weeks and says players accept his demands because he invests in them; Matt Hasselbeck remembers detailed, engaging meetings in Seattle that broke down mechanics closely. Testimony from friends and former colleagues.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.commanders.com/news/five-takeaways-from-dan-quinn-adam-peters-end-of-season-press-conference",
+      "publisher": "Washington Commanders (commanders.com), Zach Selby",
+      "published": "2025-01-28",
+      "accessed": "2026-11-04",
+      "summary": "End-of-season press conference after a 12-5 year and a 55-23 NFC Championship loss: he credits brotherhood, toughness and work ethic, says the loss showed the missing piece was hard-earned experience, and says the values must be lived daily. Peters credits him with uniting the team from the start. Team-written and favorable.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.si.com/nfl/commanders/news/commanders-culture-dan-quinn-player-led-accountability-meeting",
+      "publisher": "Sports Illustrated (Commanders on SI), David Harrison",
+      "published": "2025-08-06",
+      "accessed": "2026-11-04",
+      "summary": "Safety Jeremy Reaves says the culture was driven by the players, with Quinn empowering veterans such as McLaurin, Ertz and Wagner to set it and giving honest feedback he expects in return. A player meeting set standards for holding each other accountable. No direct Quinn quotes; one player's account.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E6",
+      "url": "https://www.espn.com/nfl/story/_/id/46626198/nfl-dallas-cowboys-washington-commanders-brian-schottenheimer-dan-quinn",
+      "publisher": "ESPN, Todd Archer",
+      "published": "2025-10-18",
+      "accessed": "2026-11-04",
+      "summary": "Feature on his friendship with Brian Schottenheimer from the 2007-08 Jets staff. When McCarthy brought Schottenheimer to Dallas as a 2022 consultant, he sat in Quinn's defensive meetings and they stayed late talking leadership. Quinn was not surprised Schottenheimer got the Dallas job and roots for him except head to head. Described as an elite leader and connector.",
+      "confidence": "high"
+    },
+    {
+      "id": "E7",
+      "url": "https://www.cbssports.com/nfl/news/commanders-dan-quinn-taking-over-as-defensive-coordinator-amid-washingtons-3-7-start/",
+      "publisher": "CBS Sports, Zachary Pereles",
+      "published": "2025-11-10",
+      "accessed": "2026-11-04",
+      "summary": "At 3-7 and after a 44-22 loss in which Detroit never punted, he takes over defensive play-calling from Whitt, moving Whitt to the booth. He frames it as a practical fix: focus on what to change rather than why it failed. He praises Whitt as his longtime right-hand man who took it professionally. Injuries had gutted the defense.",
+      "confidence": "high"
+    },
+    {
+      "id": "E8",
+      "url": "https://www.golongtd.com/p/q-and-a-joe-whitt-jr-on-the-power",
+      "publisher": "Go Long (Tyler Dunne)",
+      "published": "2025-01-11",
+      "accessed": "2026-11-04",
+      "summary": "Interview with Joe Whitt Jr., who calls Quinn deeply caring and sincere, says he picked players who bought into a team-first culture, spent the first week with no football at all, and made sure assistants could attend their children's events. A loyal assistant's view, on a newsletter site.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

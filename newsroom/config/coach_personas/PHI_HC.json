@@ -1,0 +1,215 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:PHI:HC",
+  "name": "Nick Sirianni",
+  "role": "HC",
+  "team": "PHI",
+  "seed_ref": {
+    "table": "COACHES_DATA",
+    "team": "PHI",
+    "role": "HC",
+    "name": "Nick Sirianni"
+  },
+  "sliders": {
+    "temperament": 8,
+    "sociability": 5,
+    "confidence": 7,
+    "openness": 5,
+    "warmth": 6,
+    "drive": 5
+  },
+  "slider_evidence": {
+    "temperament": [
+      "E1",
+      "E3"
+    ],
+    "confidence": [
+      "E2",
+      "E3"
+    ],
+    "warmth": [
+      "E2",
+      "E4",
+      "E5"
+    ]
+  },
+  "traits": [
+    "TEACHER",
+    "PLAYERS_COACH",
+    "PERFECTIONIST",
+    "QUOTABLE"
+  ],
+  "trait_evidence": {
+    "TEACHER": [
+      "E1"
+    ],
+    "PLAYERS_COACH": [
+      "E2",
+      "E4",
+      "E5"
+    ],
+    "PERFECTIONIST": [
+      "E1"
+    ],
+    "QUOTABLE": [
+      "E2",
+      "E3"
+    ]
+  },
+  "views": [
+    {
+      "text": "The job is too hard not to enjoy it, so he will celebrate on the sideline and will not apologize for it.",
+      "when": [
+        "COACHING",
+        "WIN_STREAK"
+      ]
+    },
+    {
+      "text": "When a call fails, the head coach takes the blame in public, not the coordinator and not the players.",
+      "when": [
+        "BAD_GAME",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Mistakes in practice get fixed on the spot, in front of the team, so everyone learns from them.",
+      "when": [
+        "COACHING",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "Hiring experienced coordinators and letting them call plays is how a head coach runs the whole team.",
+      "when": [
+        "COACHING",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "A team is an extended family, and standing up for your players is an instinct, not a strategy.",
+      "when": [
+        "PLAYER",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Emotion can boil over at the wrong moment, and when it does he owns it and apologizes to the person.",
+      "when": [
+        "BAD_GAME",
+        "CLOSE_GAMES"
+      ]
+    },
+    {
+      "text": "Winning percentage matters more than how a coach looks doing it.",
+      "when": [
+        "RECORDS",
+        "CONTENDER"
+      ]
+    }
+  ],
+  "signatures": [
+    "runs down the sideline to correct or celebrate a play the moment it ends",
+    "volunteers that a failed decision was his call, naming the play",
+    "gets into it with opposing fans or former players in the heat of a game, then apologizes afterward"
+  ],
+  "want": "to be judged by his record and his rings rather than by how he acts on the sideline",
+  "fear": "that one outburst too many turns him into a punchline and overshadows the winning",
+  "voice": "Fast, animated and emotional; he talks with his hands, repeats himself for emphasis and does not hide his feelings. He defends his players and coordinators reflexively and takes blame for calls himself. When he crosses a line he says so plainly and apologizes, but he will not apologize for having fun.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "PHI",
+          "role": "OC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "PHI",
+          "role": "DC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E5"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Jalen Hurts",
+        "team_2026": "PHI"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E1"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.espn.com/blog/philadelphia-eagles/post/_/id/31750/eagles-nick-sirianni-brings-edge-to-camp-he-will-chew-some-tail",
+      "publisher": "ESPN, Tim McManus",
+      "published": "2021-08-03",
+      "accessed": "2026-11-04",
+      "summary": "First training camp as a head coach: always in motion, racing down the sideline to correct players, loud after mistakes, blunt about shortcomings including Hurts's footwork, and called demanding by veterans. Practices are short and fast. He stops practice to turn errors into lessons and praises good plays on the spot. An early snapshot, before any results.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.si.com/nfl/2023/02/11/eagles-nick-sirianni-wont-apologize-addresses-criticism-sideline-celebrations-behavior",
+      "publisher": "Sports Illustrated, Zach Koons",
+      "published": "2023-02-11",
+      "accessed": "2026-11-04",
+      "summary": "Before Super Bowl LVII he defends his animated sideline style, says he will not apologize for having fun in a demanding job, coaches out of love for the sport and will not hide his feelings, and treats standing up for his players as instinct, the team being an extended family. His own framing.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.foxsports.com/articles/nfl/on-football-nick-siriannis-success-is-often-overshadowed-by-selfinflicted-distractions",
+      "publisher": "Associated Press (On Football column), via FOX Sports",
+      "published": "2024-12-27",
+      "accessed": "2026-11-04",
+      "summary": "Column on his 2024 flashpoints: gesturing at home fans chanting for his firing after a close win over Cleveland, taunting Chiefs fans, and words with Zach Ertz. He apologized for the Cleveland moment and called Ertz to apologize. Notes his .697 winning percentage, best among active coaches, and that players still respond to him. A columnist's assessment.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.inquirer.com/eagles/eagles-saints-nick-sirianni-kellen-moore-play-calling-vic-fangio-20240924.html",
+      "publisher": "Philadelphia Inquirer, Olivia Reiner",
+      "published": "2024-09-24",
+      "accessed": "2026-11-04",
+      "summary": "After a failed fourth-and-1 against New Orleans he says he made the call; Moore also takes blame. Moore describes a collaborative offensive staff with Sirianni heavily involved and constant scenario talk, and Sirianni had said he wanted Moore's ideas meshed with past Eagles concepts. Shows how blame and play-calling are shared.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://phillyvoice.com/eagles-notes-vic-fangio-clarifies-nick-sirianni-claim-that-he-made-defensive-play-call",
+      "publisher": "PhillyVoice, Jimmy Kempski",
+      "published": "2024-10-16",
+      "accessed": "2026-11-04",
+      "summary": "After the Cleveland game Sirianni said he made a failed defensive call and the blame was his, not Fangio's. Fangio then said it was only a reminder to stay alert on a long third down, not a call, and that the matter was inconsequential. Shows Sirianni's habit of shielding coordinators; the writer's reading of motives is opinion.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

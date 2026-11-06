@@ -1,0 +1,163 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:GB:OC",
+  "name": "Adam Stenavich",
+  "role": "OC",
+  "team": "GB",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "GB",
+    "role": "OC",
+    "name": "Adam Stenavich"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 5,
+    "drive": 6
+  },
+  "slider_evidence": {
+    "drive": [
+      "E1",
+      "E3"
+    ]
+  },
+  "traits": [
+    "OLD_SCHOOL",
+    "TEACHER",
+    "FILM_ROOM_RAT"
+  ],
+  "trait_evidence": {
+    "OLD_SCHOOL": [
+      "E1",
+      "E3"
+    ],
+    "TEACHER": [
+      "E1",
+      "E3"
+    ],
+    "FILM_ROOM_RAT": [
+      "E1",
+      "E3"
+    ]
+  },
+  "views": [
+    {
+      "text": "An offense is built from the line out; the run game and protection come before anything fancy.",
+      "when": [
+        "SCHEME",
+        "PREVIEW"
+      ]
+    },
+    {
+      "text": "When linemen go down, the next man is coached to play like a starter, not protected from mistakes.",
+      "when": [
+        "INJURY",
+        "STRUGGLING"
+      ]
+    },
+    {
+      "text": "Talent in a position group is only potential; it has to be earned in practice every day.",
+      "when": [
+        "PLAYER",
+        "OFFSEASON"
+      ]
+    },
+    {
+      "text": "A coordinator who does not call plays still owns the game plan's details and the room's command.",
+      "when": [
+        "COACHING",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "A practice-squad career teaches you how hard every roster spot is to keep.",
+      "when": [
+        "YOUTH",
+        "ROSTER_MOVES"
+      ]
+    },
+    {
+      "text": "Young linemen grow fastest when they are thrown in and told to take on the challenge.",
+      "when": [
+        "YOUTH",
+        "PERFORMANCE"
+      ]
+    }
+  ],
+  "signatures": [
+    "answers scheme questions with dry, deadpan humor before getting to the point",
+    "praises the offensive line's resilience whenever injuries hit"
+  ],
+  "want": "to show that the former Packers practice-squad lineman can run a whole offense, not only its front",
+  "fear": "that he stays seen as a line coach with a coordinator's title while the head coach calls the plays",
+  "voice": "Plain, dry and even-tempered, with a lineman's bluntness and flashes of deadpan humor. Coverage of his voice is limited; he keeps answers practical and credits players and the head coach.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "GB",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E2"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Aaron Rodgers",
+        "team_2026": "PIT"
+      },
+      "relationship_kind": "support",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E3"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.espn.com/blog/green-bay-packers/post/_/id/52070/adam-stenavich-takes-wild-path-to-become-packers-offensive-coordinator",
+      "publisher": "ESPN, Rob Demovsky",
+      "published": "2022-04-22",
+      "accessed": "2026-11-04",
+      "summary": "On his path from a 2006 Packers practice-squad lineman cut in 2007, through six years of college jobs and the 49ers, to Green Bay line coach in 2019 and coordinator in 2022, with LaFleur still calling plays. Rodgers, a 2006 teammate, calls him a good man and bright coach; Randall Cobb praises his command of the room. Praised for a strong line despite 2021 injuries; light humor in his answers; as coordinator he was studying to broaden his passing-game knowledge.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.packers.com/news/packers-promote-adam-stenavich-to-offensive-coordinator",
+      "publisher": "Green Bay Packers (packers.com), Evan Siegle",
+      "published": "2022-01-31",
+      "accessed": "2026-11-04",
+      "summary": "Promotion announcement: line coach in 2019-20, run game coordinator in 2021 when Aaron Jones and AJ Dillon both topped 1,100 scrimmage yards; earlier 49ers assistant line coach and college stops; a Michigan left tackle. Facts only.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.packers.com/news/5-things-to-know-about-new-packers-offensive-coordinator-adam-stenavich",
+      "publisher": "Green Bay Packers (packers.com), Wes Hodkiewicz",
+      "published": "2022-01-31",
+      "accessed": "2026-11-04",
+      "summary": "Primer: continued the line tradition, developing Bakhtiari, Linsley and Jenkins; nine different line starters in 2021 yet a top offense; Rodgers calls him a fantastic coach and thoughtful person; remembered as a competitive, hard-working scout-team player; Wisconsin native. Team-written; little on his coaching voice.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

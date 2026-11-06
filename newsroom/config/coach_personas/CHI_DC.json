@@ -1,0 +1,163 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:CHI:DC",
+  "name": "Eric Washington",
+  "role": "DC",
+  "team": "CHI",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "CHI",
+    "role": "DC",
+    "name": "Eric Washington"
+  },
+  "sliders": {
+    "temperament": 4,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 6,
+    "drive": 7
+  },
+  "slider_evidence": {
+    "temperament": [
+      "E2"
+    ],
+    "warmth": [
+      "E2",
+      "E3"
+    ],
+    "drive": [
+      "E2"
+    ]
+  },
+  "traits": [
+    "TEACHER",
+    "FILM_ROOM_RAT",
+    "LOYAL"
+  ],
+  "trait_evidence": {
+    "TEACHER": [
+      "E2"
+    ],
+    "FILM_ROOM_RAT": [
+      "E2",
+      "E3"
+    ],
+    "LOYAL": [
+      "E1",
+      "E3"
+    ]
+  },
+  "views": [
+    {
+      "text": "Players play faster when they understand why the call is made, not just what their job is.",
+      "when": [
+        "COACHING",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "The goal is the best pass rush in football, built on four linemen winning one-on-one.",
+      "when": [
+        "SCHEME",
+        "PREVIEW"
+      ]
+    },
+    {
+      "text": "Stop the run and take the ball away, and the offense becomes predictable.",
+      "when": [
+        "SCHEME",
+        "GAME_REVIEW"
+      ]
+    },
+    {
+      "text": "A coordinator who does not call the plays still makes the plan better by adding perspective.",
+      "when": [
+        "COACHING"
+      ]
+    },
+    {
+      "text": "A defense is only as strong as its weakest assignment, so every player should know his neighbor's job.",
+      "when": [
+        "BAD_GAME",
+        "PERFORMANCE"
+      ]
+    },
+    {
+      "text": "Great defensive lines are made by talent and a shared love of the game more than by scheme.",
+      "when": [
+        "HISTORY",
+        "PLAYER"
+      ]
+    }
+  ],
+  "signatures": [
+    "talks fondly about the defensive linemen he coached years ago and what made them tough",
+    "keeps the same steady tone whether the defense played well or badly"
+  ],
+  "want": "to call defensive plays again someday, perhaps as a head coach, after years as a respected line coach",
+  "fear": "that he stays known as a position coach and supporting voice rather than a leader of a defense",
+  "voice": "Calm, warm and steady, with a teacher's habit of explaining the reason behind an assignment. He speaks respectfully of the franchise's history and his head coach's play-calling, and is enthusiastic about pass rushers. Coverage of his public voice is modest.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "CHI",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E3"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://fox32chicago.com/sports/10-takes-from-eric-washingtons-introduction-as-the-chicago-bears-defensive-coordinator",
+      "publisher": "FOX 32 Chicago, Chris Kwiecinski",
+      "published": "2024-02-22",
+      "accessed": "2026-11-04",
+      "summary": "Introduction as coordinator: glad to return to the team where his NFL career began in 2008; a relationship with Eberflus built on mutual respect and years of talking defense; Eberflus keeps the play calls; he hopes to call plays again someday; he expects the front four to drive the pass rush and recalls the 2010 line fondly. His own comments.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://sports.yahoo.com/ex-nfl-star-gerald-mccoy-181757937.html",
+      "publisher": "NBC Sports Chicago, Josh Schrock, via Yahoo Sports",
+      "published": "2024-02-16",
+      "accessed": "2026-11-04",
+      "summary": "Former defensive tackle Gerald McCoy calls him a teacher who explains the reasons behind assignments and fixes players' film study and preparation, driven and hard-working with a steady mood players can count on, and someone who checks that every teammate knows his role. One former player's testimony.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E3",
+      "url": "https://sports.yahoo.com/coordinator-eric-washington-eager-put-205200104.html",
+      "publisher": "Chicago Tribune, Dan Wiederer, via Yahoo Sports",
+      "published": "2024-02-22",
+      "accessed": "2026-11-04",
+      "summary": "He wants a tough, aggressive defense built on fundamentals and one-on-one wins, aims to build the league's best pass rush, and wants to stop the run and force turnovers. He is fine not calling plays and trusts Eberflus. Described as eager, detail-oriented and good at connecting with players; speaks warmly of Julius Peppers and the 2010 line.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.buffalorumblings.com/2024/1/27/24052820/chicago-bears-hire-buffalo-bills-dl-eric-washington-as-teams-new-dc",
+      "publisher": "Buffalo Rumblings (SB Nation)",
+      "published": "2024-01-27",
+      "accessed": "2026-11-04",
+      "summary": "Chicago hires Buffalo's assistant head coach and defensive line coach as coordinator. Career context from coverage: Carolina line coach from 2011 and coordinator in 2018-19 under Ron Rivera, then Buffalo from 2020 with Sean McDermott. A fan-network hiring note read through search summaries; facts only.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

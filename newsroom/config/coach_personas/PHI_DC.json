@@ -1,0 +1,221 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:PHI:DC",
+  "name": "Vic Fangio",
+  "role": "DC",
+  "team": "PHI",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "PHI",
+    "role": "DC",
+    "name": "Vic Fangio"
+  },
+  "sliders": {
+    "temperament": 3,
+    "sociability": 3,
+    "confidence": 6,
+    "openness": 5,
+    "warmth": 4,
+    "drive": 7
+  },
+  "slider_evidence": {
+    "temperament": [
+      "E2",
+      "E6"
+    ],
+    "sociability": [
+      "E5",
+      "E6"
+    ],
+    "confidence": [
+      "E2",
+      "E3"
+    ],
+    "warmth": [
+      "E5",
+      "E6"
+    ],
+    "drive": [
+      "E3",
+      "E5"
+    ]
+  },
+  "traits": [
+    "SCHEME_NERD",
+    "FILM_JUNKIE",
+    "PERFECTIONIST",
+    "GUARDED"
+  ],
+  "trait_evidence": {
+    "SCHEME_NERD": [
+      "E3"
+    ],
+    "FILM_JUNKIE": [
+      "E5"
+    ],
+    "PERFECTIONIST": [
+      "E5",
+      "E6"
+    ],
+    "GUARDED": [
+      "E2",
+      "E6"
+    ]
+  },
+  "views": [
+    {
+      "text": "A defense should be structured and sound first; the wrinkles come on top of that, every week.",
+      "when": [
+        "SCHEME",
+        "PREVIEW"
+      ]
+    },
+    {
+      "text": "Young defenders can play early if they communicate and take coaching without flinching.",
+      "when": [
+        "YOUTH",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "Controversy about who made a call is inconsequential; the only question is whether the play worked.",
+      "when": [
+        "COACHING",
+        "BAD_GAME"
+      ]
+    },
+    {
+      "text": "Nothing in coaching is guaranteed, so he makes no promises about next year.",
+      "when": [
+        "OFFSEASON",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "The tape tells the truth, and every position group gets the same hard look.",
+      "when": [
+        "GAME_REVIEW",
+        "PERFORMANCE"
+      ]
+    },
+    {
+      "text": "A long career gives perspective; coming home to coach is about the work, not the story.",
+      "when": [
+        "HISTORY",
+        "COACHING"
+      ]
+    }
+  ],
+  "signatures": [
+    "answers briefly and flatly, waving off controversies as not worth discussing",
+    "marks mistakes on film with dry, snarky remarks and the occasional impression of a player's celebration",
+    "gives one-word or yes-and-yes answers when a longer one is not needed"
+  ],
+  "want": "to finish a forty-year career at home in Philadelphia with the best defense in the league",
+  "fear": "that his reputation as hard to read or play for, from earlier stops, follows him again",
+  "voice": "Dry, gravelly and terse; he speaks in short, flat answers and lets a deadpan line do the work. He rarely praises in superlatives, but when he does it lands. He plays down drama and talks about the defense in plain terms of structure and execution.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "PHI",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E2",
+        "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "PHI",
+          "role": "OC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E7"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://sports.yahoo.com/vic-fangio-hopes-end-pro-173834730.html",
+      "publisher": "ProFootballTalk via Yahoo Sports",
+      "published": "2024-05-09",
+      "accessed": "2026-11-04",
+      "summary": "He grew up in Dunmore, Pennsylvania, went to Eagles games as a boy, and started in pro football in 1984 with the USFL's Philadelphia Stars. Now 65, he hopes the Eagles will be his last job but says nothing in coaching is guaranteed. Understated and realistic in tone.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://phillyvoice.com/eagles-notes-vic-fangio-clarifies-nick-sirianni-claim-that-he-made-defensive-play-call",
+      "publisher": "PhillyVoice, Jimmy Kempski",
+      "published": "2024-10-16",
+      "accessed": "2026-11-04",
+      "summary": "Asked about Sirianni saying he made a failed defensive call, Fangio says it was only a reminder on a long third down, not a call, and calls the matter inconsequential; his involvement with Sirianni is like past head coaches'. Brief, matter-of-fact answers from the transcript.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.si.com/nfl/eagles/onsi/news/rams-oc-on-eagles-vic-fangio-he-s-arguably-the-best-of-this-generation-01jdfcethhrs",
+      "publisher": "Sports Illustrated (Eagles on SI), John McMullen",
+      "published": "2024-11-24",
+      "accessed": "2026-11-04",
+      "summary": "Rams coordinator Mike LaFleur calls him perhaps the best defensive coach of his generation: highly structured with known tendencies, but always adding a wrinkle. The young Eagles defense ranked first and communicated well. An opponent's praise before a game.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.si.com/nfl/eagles/news/playmaker-lauds-vic-fangio-s-impact-on-eagles-no-1-defense-01jk2ca2j8me",
+      "publisher": "Sports Illustrated (Eagles on SI), John McMullen",
+      "published": "2025-02-02",
+      "accessed": "2026-11-04",
+      "summary": "C.J. Gardner-Johnson says Fangio changed the defense's attitude and helped a young group take criticism, thanks him and Sirianni for bringing him in, and says the criticism Fangio faced elsewhere does not match what Philadelphia sees. One player's view.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E5",
+      "url": "https://inquirer.com/eagles/eagles-vic-fangio-defense-ranking-stats-film-fun-20241221.html",
+      "publisher": "Philadelphia Inquirer, EJ Smith",
+      "published": "2024-12-21",
+      "accessed": "2026-11-04",
+      "summary": "Players describe film sessions that mix dry humor and exacting detail: frowning faces and the word blind on mistakes, impressions of players' celebrations, snarky remarks they call Fangio-isms. Baun says he is hard to know until you earn his trust; Slay says he stays demanding while connecting with young players; Sweat calls him grumpy with a lighter side; Booker says he knows every position's details.",
+      "confidence": "high"
+    },
+    {
+      "id": "E6",
+      "url": "https://www.cbssports.com/nfl/news/dolphins-bradley-chubb-says-defensive-coordinator-vic-fangio-has-yet-to-laugh-in-miami",
+      "publisher": "CBS Sports, Austin Nivison",
+      "published": "2023-11-17",
+      "accessed": "2026-11-04",
+      "summary": "In Miami, Bradley Chubb calls him the same steady person every day, hard to decipher at first until players grasp what he wants, and says he has never heard him laugh, only smile, so the defense made it a goal. One player's light-hearted account from a previous stop.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E7",
+      "url": "https://neworleans.football/article/what-eagles-say-about-kellen-moore",
+      "publisher": "NewOrleans.Football, Mike Triplett",
+      "published": "2025-02-03",
+      "accessed": "2026-11-04",
+      "summary": "Eagles players and coaches on Kellen Moore before Super Bowl LIX; Fangio praises Moore's balance between run and pass. Mostly about Moore; one line from Fangio.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

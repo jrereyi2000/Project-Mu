@@ -1,0 +1,198 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:CHI:OC",
+  "name": "Shane Waldron",
+  "role": "OC",
+  "team": "CHI",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "CHI",
+    "role": "OC",
+    "name": "Shane Waldron"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 6,
+    "openness": 6,
+    "warmth": 6,
+    "drive": 5
+  },
+  "slider_evidence": {
+    "confidence": [
+      "E1",
+      "E2"
+    ],
+    "openness": [
+      "E1",
+      "E2"
+    ],
+    "warmth": [
+      "E1"
+    ]
+  },
+  "traits": [
+    "TEACHER",
+    "SCHEME_NERD",
+    "QB_WHISPERER"
+  ],
+  "trait_evidence": {
+    "TEACHER": [
+      "E1",
+      "E2"
+    ],
+    "SCHEME_NERD": [
+      "E1"
+    ],
+    "QB_WHISPERER": [
+      "E1",
+      "E5"
+    ]
+  },
+  "views": [
+    {
+      "text": "Install the system first, then bend it to the strengths of whoever is playing quarterback.",
+      "when": [
+        "SCHEME",
+        "QB"
+      ]
+    },
+    {
+      "text": "Any quarterback can learn the offense quickly if the coaches teach it clearly enough.",
+      "when": [
+        "QB",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "Effort, toughness and teamwork are the base of an offense before any concept is called.",
+      "when": [
+        "SCHEME",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "A quarterback who believes in himself and trusts the call can turn a career around.",
+      "when": [
+        "QB",
+        "PERFORMANCE"
+      ]
+    },
+    {
+      "text": "Relationships tighten with time in the building; you cannot rush them.",
+      "when": [
+        "COACHING",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "A shared language lets a whole roster attack a defense several ways from the same look.",
+      "when": [
+        "SCHEME"
+      ]
+    }
+  ],
+  "signatures": [
+    "stays upbeat and talks about adaptability whatever the question",
+    "declines to discuss a specific quarterback's evaluation, speaking only in general terms"
+  ],
+  "want": "to show the McVay-tree coordinator who revived Geno Smith can build an offense around a franchise rookie",
+  "fear": "that his offense is judged by a quarterback relationship that never clicked",
+  "voice": "Positive, smooth and general; he speaks in terms of adaptability, teaching and common language, and avoids specifics about players' evaluations. He keeps a smile on even in rough stretches and credits his quarterbacks' mindset more than his scheme.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "CHI",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "negative",
+      "evidence": [
+        "E3",
+        "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Geno Smith",
+        "team_2026": "NYJ"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E5"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Caleb Williams",
+        "team_2026": "CHI"
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "mixed",
+      "evidence": [
+        "E4"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://chicagobears.com/news/waldron-seeking-effort-toughness-teamwork-on-offense",
+      "publisher": "Chicago Bears (chicagobears.com), Larry Mayer",
+      "published": "2024-02-22",
+      "accessed": "2026-11-04",
+      "summary": "Introductory press conference: he wants an offense built on effort, toughness and teamwork, adapted to each player; a common language that players learn quickly and own. Background with the Rams (2017-20) and three years as Seattle's coordinator. He praises Geno Smith's mindset and belief during his 2022 comeback. Upbeat and optimistic; drawn by the Eberflus-Poles relationship. Team-written.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.espn.co.uk/nfl/story/_/id/39577883/caleb-williams-justin-fields-bears-shane-waldron",
+      "publisher": "ESPN, Courtney Cronin",
+      "published": "2024-02-22",
+      "accessed": "2026-11-04",
+      "summary": "He calls his offense adaptable, to be installed and then tailored to the quarterback, believes quarterbacks learn quickly when taught efficiently, and declines to evaluate Justin Fields or the draft prospects specifically. He has started reaching out to players.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.clickondetroit.com/sports/2024/11/12/free-falling-bears-fire-offensive-coordinator-shane-waldron/",
+      "publisher": "Associated Press, Andrew Seligman, via WDIV",
+      "published": "2024-11-12",
+      "accessed": "2026-11-04",
+      "summary": "Fired after nine games with the offense 30th in yards; Eberflus says the decision was his alone and promotes Thomas Brown. Williams had been sacked often and held the ball too long, with no touchdowns in the three games before the move.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://africa.espn.com/nfl/story/_/id/42346375/nfl-bears-caleb-williams-shane-waldron-offensive-coordinator",
+      "publisher": "ESPN, Courtney Cronin",
+      "published": "2024-11-12",
+      "accessed": "2026-11-04",
+      "summary": "After a 19-3 loss to New England: Williams showed only flashes and seemed to regress, and he and Waldron did not seem on the same page at times. Eberflus named in-game communication as the main problem. The writer's reading of a working relationship, not a reported falling-out.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.cbssports.com/nfl/news/pete-carroll-says-geno-smith-is-thriving-because-he-doesnt-doubt-play-calls-there-was-resistance-in-past",
+      "publisher": "CBS Sports, Cody Benjamin",
+      "published": "2022-11-09",
+      "accessed": "2026-11-04",
+      "summary": "Pete Carroll credits Smith's 2022 rise partly to his work with Waldron, who stays in his ear until the communication cutoff; a wristband sped up the operation, and Smith takes Waldron's calls without second-guessing. A head coach's view at midseason.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

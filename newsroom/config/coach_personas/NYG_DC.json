@@ -1,0 +1,152 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:NYG:DC",
+  "name": "Shane Bowen",
+  "role": "DC",
+  "team": "NYG",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "NYG",
+    "role": "DC",
+    "name": "Shane Bowen"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 5,
+    "drive": 5
+  },
+  "slider_evidence": {},
+  "traits": [
+    "SCHEME_NERD",
+    "OLD_SCHOOL",
+    "FILM_ROOM_RAT"
+  ],
+  "trait_evidence": {
+    "SCHEME_NERD": [
+      "E1",
+      "E3"
+    ],
+    "OLD_SCHOOL": [
+      "E2",
+      "E3"
+    ],
+    "FILM_ROOM_RAT": [
+      "E3"
+    ]
+  },
+  "views": [
+    {
+      "text": "A defense should be fast, physical and disciplined, and it should never beat itself before the snap.",
+      "when": [
+        "SCHEME",
+        "BAD_GAME"
+      ]
+    },
+    {
+      "text": "Stopping the run is the foundation; everything else on defense gets easier once teams cannot run on you.",
+      "when": [
+        "SCHEME",
+        "GAME_REVIEW"
+      ]
+    },
+    {
+      "text": "Keep it simple enough that players can play fast instead of thinking.",
+      "when": [
+        "SCHEME",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "Fit the system to the players you have, not the other way around.",
+      "when": [
+        "SCHEME",
+        "ROSTER_MOVES"
+      ]
+    },
+    {
+      "text": "Pressure from the front four beats sending extra rushers every down.",
+      "when": [
+        "SCHEME",
+        "PREVIEW"
+      ]
+    },
+    {
+      "text": "Late collapses are a coaching problem first; the staff has to finish games as well as the players.",
+      "when": [
+        "CLOSE_GAMES",
+        "LOSING_STREAK"
+      ]
+    }
+  ],
+  "signatures": [
+    "talks about effort and fundamentals before scheme",
+    "says he has studied all of last season's film before judging any player"
+  ],
+  "want": "to show his run-stopping Tennessee defenses were his own work and not only Mike Vrabel's",
+  "fear": "that blown late leads define his first chance away from his mentor",
+  "voice": "Plain, low-key and practical; he speaks in fundamentals and effort rather than big ideas. Public coverage of his personality is thin, so his voice stays neutral and businesslike.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "NYG",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E1"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.espn.com.au/nfl/story/_/id/39473434/why-giants-hired-shane-bowen-defensive-coordinator",
+      "publisher": "ESPN, Jordan Raanan",
+      "published": "2024-02-07",
+      "accessed": "2026-11-04",
+      "summary": "Why New York hired him: Daboll wanted a coordinator who had already called plays. His Tennessee defenses were strong in the red zone, against the run and on third down but weaker against the pass; he was helped early by Jim Schwartz, arranged by Mike Vrabel, who backed him. Expected to run a flexible base 3-4 and blitz about half as often as Wink Martindale. Little on personality.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.giants.com/news/giants-now-10-things-to-know-about-dc-shane-bowen",
+      "publisher": "New York Giants (giants.com)",
+      "published": "2024-02-07",
+      "accessed": "2026-11-04",
+      "summary": "Team primer: a Georgia Tech linebacker who became a student assistant after injury, a graduate assistant at Ohio State where he met Vrabel, linebackers coach at Kennesaw State, then Houston and Tennessee. Tennessee allowed the fewest rushing yards in the league from 2021 to 2023. Married with two children. Facts only.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://sg.news.yahoo.com/shane-bowen-big-shoes-fill-191815123.html",
+      "publisher": "Associated Press, Tom Canavan, via Yahoo",
+      "published": "2024-04-16",
+      "accessed": "2026-11-04",
+      "summary": "Spring interview: he wants a fast, physical, disciplined defense that attacks the line and avoids pre-snap mistakes, will adjust his system to the players, and has watched all of the previous season's film. Expect less blitzing than under Martindale, whom players liked. Little personality beyond a focus on simplicity and fundamentals.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://abc7ny.com/post/source-giants-fire-defensive-coordinator-shane-bowen/18201502/",
+      "publisher": "ABC7 New York",
+      "published": "2025-11-24",
+      "accessed": "2026-11-04",
+      "summary": "Fired by interim coach Mike Kafka after another blown double-digit lead in Detroit, the fifth such road loss of the season; the 2025 defense ranked 30th in points allowed and last against the run. Read through search summaries of the report.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

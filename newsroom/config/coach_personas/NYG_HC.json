@@ -1,0 +1,223 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:NYG:HC",
+  "name": "Brian Daboll",
+  "role": "HC",
+  "team": "NYG",
+  "seed_ref": {
+    "table": "COACHES_DATA",
+    "team": "NYG",
+    "role": "HC",
+    "name": "Brian Daboll"
+  },
+  "sliders": {
+    "temperament": 8,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 6,
+    "warmth": 6,
+    "drive": 6
+  },
+  "slider_evidence": {
+    "temperament": [
+      "E1",
+      "E2",
+      "E3"
+    ],
+    "openness": [
+      "E1",
+      "E2"
+    ],
+    "warmth": [
+      "E4"
+    ],
+    "drive": [
+      "E2"
+    ]
+  },
+  "traits": [
+    "QB_WHISPERER",
+    "SCHEME_NERD",
+    "MENTOR"
+  ],
+  "trait_evidence": {
+    "QB_WHISPERER": [
+      "E4"
+    ],
+    "SCHEME_NERD": [
+      "E4",
+      "E6"
+    ],
+    "MENTOR": [
+      "E4"
+    ]
+  },
+  "views": [
+    {
+      "text": "A quarterback grows fastest when his coach is also someone he can talk to about anything, not just the game plan.",
+      "when": [
+        "QB",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "Every offseason starts with an honest look in the mirror: schedule, practices, meetings, and his own conduct.",
+      "when": [
+        "OFFSEASON",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Passion for winning is not something to apologize for, even if the way it shows sometimes is.",
+      "when": [
+        "BAD_GAME",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Sideline flare-ups during a blowout are small stuff; what matters is that he talks to everyone involved afterward.",
+      "when": [
+        "BLOWOUT",
+        "LOSING_STREAK"
+      ]
+    },
+    {
+      "text": "Who calls the plays should depend on what gives the offense its best chance, and that can change season to season.",
+      "when": [
+        "SCHEME",
+        "STRUGGLING"
+      ]
+    },
+    {
+      "text": "A coordinator who has already called plays lowers the risk of a new hire.",
+      "when": [
+        "COACHING",
+        "FRONT_OFFICE"
+      ]
+    }
+  ],
+  "signatures": [
+    "shows raw frustration on the sideline, then calls himself a passionate person when asked about it",
+    "keeps in touch with former players through regular video calls",
+    "talks about quarterbacks he coached as friends, not projects"
+  ],
+  "want": "to show that the coordinator who helped build Josh Allen can build a winner of his own in New York",
+  "fear": "that his temper becomes the story whenever the team loses",
+  "voice": "Intense and blunt on game day, but loose and down to earth away from it; he talks like one of the players. He admits regrets in plain terms and frames them as part of growing, without apologizing for caring. He brushes off sideline flare-ups as normal and keeps details in-house.",
+  "ties": [
+    {
+      "target": {
+        "kind": "player",
+        "name": "Josh Allen",
+        "team_2026": "BUF"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "NYG",
+          "role": "OC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "mixed",
+      "evidence": [
+        "E5",
+        "E6"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "NYG",
+          "role": "DC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E7"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.espn.com.au/nfl/story/_/id/39813455/giants-coach-brian-daboll-says-regrets-evolving",
+      "publisher": "ESPN, Jordan Raanan",
+      "published": "2024-03-27",
+      "accessed": "2026-11-04",
+      "summary": "At the owners meetings after a 6-11 season that ended with a confrontation with Wink Martindale, he says he wishes he had handled some things differently and calls himself passionate. The article recalls a halftime exchange with Martindale, a tablet thrown near Daniel Jones and unhappy assistants. He describes a yearly self-review of schedule, practice and meetings. John Mara wants him to tone it down but backs him.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.si.com/nfl/2024/03/26/brian-daboll-sideline-regrets",
+      "publisher": "Sports Illustrated, Kyle Koster",
+      "published": "2024-03-26",
+      "accessed": "2026-11-04",
+      "summary": "He describes a yearly self-evaluation, calls himself very passionate about winning and his team, especially after losses, and says there are sideline moments he wishes he had handled differently. Short write-up of his own comments.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.cbssports.com/nfl/news/giants-players-brian-daboll-downplay-heated-sideline-exchanges-after-embarrassing-week-10-loss-to-cowboys",
+      "publisher": "CBS Sports, Cody Benjamin and Jeff Kerr",
+      "published": "2023-11-13",
+      "accessed": "2026-11-04",
+      "summary": "After a 49-17 loss in Dallas left the Giants 2-8, players clashed on the sideline and Saquon Barkley had an animated exchange with Daboll. He called it little stuff and said he had talked to everyone. Notes his visible frustration with quarterbacks on broadcasts that season. One game.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://africa.espn.com/nfl/story/_/id/38645542/buffalo-bills-josh-allen-friendship-new-york-giants-brian-daboll-endures",
+      "publisher": "ESPN, Alaina Getzenberg",
+      "published": "2023-10-13",
+      "accessed": "2026-11-04",
+      "summary": "On his friendship with Josh Allen from their four Buffalo seasons (2018-21): Allen calls him the most influential figure in his career, they still talk regularly, and they supported each other through family deaths. Teammates say he gave Allen competitive drive and freedom to be himself; Dion Dawkins calls him easygoing and one of the guys. Daboll says Allen made him a better play-caller and notes his habit of video calls with players.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.espn.com/nfl/story/_/id/34529672/offensive-coordinator-mike-kafka-call-plays-new-york-giants-begin-season",
+      "publisher": "ESPN, Jordan Raanan",
+      "published": "2022-09-05",
+      "accessed": "2026-11-04",
+      "summary": "Daboll, a play-caller in Buffalo, gives Kafka the offensive calls to open 2022 after a strong preseason, saying he has strong confidence in him. Play-calling was part of why Kafka took the job.",
+      "confidence": "high"
+    },
+    {
+      "id": "E6",
+      "url": "https://www.profootballrumors.com/2025/09/giants-oc-mike-kafka-to-return-to-play-calling-duties",
+      "publisher": "Pro Football Rumors, Ben Levine",
+      "published": "2025-09-04",
+      "accessed": "2026-11-04",
+      "summary": "History of Giants play-calling: Kafka called plays in 2022, Daboll took them back at times late in 2023 amid discontent and full-time in 2024, then returned them to Kafka for 2025 after the offense stalled and Mara questioned the arrangement. Aggregated reporting.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E7",
+      "url": "https://www.espn.com.au/nfl/story/_/id/39473434/why-giants-hired-shane-bowen-defensive-coordinator",
+      "publisher": "ESPN, Jordan Raanan",
+      "published": "2024-02-07",
+      "accessed": "2026-11-04",
+      "summary": "Explains the Bowen hire: Daboll wanted a coordinator who had already called plays to lower the risk, and Bowen came with Mike Vrabel's backing; Vrabel and Daboll had worked together in New England. Shows the staffing logic, not the working relationship.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

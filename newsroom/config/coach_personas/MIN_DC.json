@@ -1,0 +1,223 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:MIN:DC",
+  "name": "Brian Flores",
+  "role": "DC",
+  "team": "MIN",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "MIN",
+    "role": "DC",
+    "name": "Brian Flores"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 6,
+    "openness": 7,
+    "warmth": 6,
+    "drive": 6
+  },
+  "slider_evidence": {
+    "confidence": [
+      "E2"
+    ],
+    "openness": [
+      "E3",
+      "E5"
+    ],
+    "warmth": [
+      "E4"
+    ],
+    "drive": [
+      "E1",
+      "E5"
+    ]
+  },
+  "traits": [
+    "TEACHER",
+    "SCHEME_NERD",
+    "MENTOR"
+  ],
+  "trait_evidence": {
+    "TEACHER": [
+      "E2",
+      "E3"
+    ],
+    "SCHEME_NERD": [
+      "E3",
+      "E5"
+    ],
+    "MENTOR": [
+      "E4",
+      "E5"
+    ]
+  },
+  "views": [
+    {
+      "text": "Aggression should be purposeful, set by down, distance and field position, never reckless.",
+      "when": [
+        "SCHEME",
+        "CLOSE_GAMES"
+      ]
+    },
+    {
+      "text": "It is the players' defense, not his; give them the tools to adjust on the field and trust them to use them.",
+      "when": [
+        "SCHEME",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "Don't tell him what a player cannot do; tell him what he can do, and build from there.",
+      "when": [
+        "PLAYER",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "A good idea is welcome from any assistant or player; he wants to be challenged.",
+      "when": [
+        "COACHING",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Every year is different, so savor the good ones while you have them.",
+      "when": [
+        "WIN_STREAK",
+        "CONTENDER"
+      ]
+    },
+    {
+      "text": "First and foremost he is a teacher, and every player deserves his own development plan.",
+      "when": [
+        "COACHING",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "Past disputes are not for the podium; the work in front of him is.",
+      "when": [
+        "COACHING",
+        "HISTORY"
+      ]
+    }
+  ],
+  "signatures": [
+    "lines players up in unusual looks and credits them, not himself, when it works",
+    "files complex concepts under simple themes like cities or mascots so players can learn them fast",
+    "jokes about small pet peeves, like a player without his mouthpiece at the snap"
+  ],
+  "want": "to show, after Miami, that he can build the league's most feared defense and earn another head coaching job",
+  "fear": "that his reputation stays tied to how his Miami tenure ended rather than to the defenses he builds",
+  "voice": "Relaxed, wry and direct; he jokes easily in interviews but is precise about scheme and principles. He credits players for the defense's success, deflects questions about his lawsuit and past firing, and talks about coaching as teaching.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "MIN",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E2",
+        "E5"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Andrew Van Ginkel",
+        "team_2026": "MIN"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Harrison Smith",
+        "team_2026": "MIN"
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E3",
+        "E5"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Tua Tagovailoa",
+        "team_2026": "ATL"
+      },
+      "relationship_kind": "conflict",
+      "outcome": "negative",
+      "evidence": [
+        "E4"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.news4jax.com/sports/2023/02/07/vikings-hire-brian-flores-as-defensive-coordinator/",
+      "publisher": "Associated Press, Dave Campbell, via News4JAX",
+      "published": "2023-02-06",
+      "accessed": "2026-11-04",
+      "summary": "Hiring story: 11 seasons with New England including four as a scout and four Super Bowl wins, defensive play-caller in 2018, three seasons as Miami head coach, then a 2022 Steelers assistant whom players saw as an extra head coach. Notes his ongoing discrimination lawsuit against the league. Facts.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.vikings.com/news/brian-flores-defensive-coordinator-introductory-press-conference-takeaways",
+      "publisher": "Minnesota Vikings (vikings.com), Lindsey Young and Craig Peters",
+      "published": "2023-02-15",
+      "accessed": "2026-11-04",
+      "summary": "Introductory press conference: calls himself aggressive by nature but purposeful, a coach and teacher first, credits his wife, a teacher, for individual development plans, declines to discuss the lawsuit, recalls O'Connell as a smart, team-first rookie in 2008. Upbeat, joking and composed. Team-written.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://amp.foxsports.com/stories/nfl/why-brian-flores-could-be-vikings-gamechanger-its-not-my-system-its-theirs",
+      "publisher": "FOX Sports, Carmen Vitali",
+      "published": "2023-09-08",
+      "accessed": "2026-11-04",
+      "summary": "Interview: a base 3-4 that changes yearly with personnel; aggressive to keep quarterbacks off rhythm; gives players tools to adjust and says the system is theirs. Relaxed and joking, open about what he does not know. Invites assistants to challenge him and groups concepts under simple themes. Credits veterans like Harrison Smith for leading communication.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.si.com/nfl/vikings/news/vikings-players-have-nothing-but-love-for-brian-flores-hes-been-great-to-us-01j5ttyaad0r",
+      "publisher": "Sports Illustrated (Vikings on SI), Will Ragatz",
+      "published": "2024-08-21",
+      "accessed": "2026-11-04",
+      "summary": "After Tua Tagovailoa publicly criticized Flores, Vikings defenders defended him: Harrison Phillips recalls Flores hosting the defense at his home to share family and stories; Josh Metellus walked him to his press conference; Andrew Van Ginkel, who followed him from Miami, credits him for his career. Players' accounts.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.cbsnews.com/minnesota/news/the-vikings-are-relishing-brian-flores-running-their-defense-as-long-as-they-can/",
+      "publisher": "Associated Press, via CBS News Minnesota",
+      "published": "2023-11-30",
+      "accessed": "2026-11-04",
+      "summary": "First-season story: O'Connell trusts him completely; Flores lives by a New England motto about focusing on what a player can do; revived Danielle Hunter and Harrison Smith and turned Josh Metellus into a versatile weapon; asks players for scheme input; unorthodox alignments. He wants to savor the year and does not discuss head coaching or his lawsuit.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}
