@@ -416,17 +416,21 @@ def lifecycle_entries(docs) -> list[dict]:
     return out
 
 
-def persona_for(doc, view=None) -> dict:
+def persona_for(doc, view=None, change_notes=None) -> dict:
     """The render_persona shape. A stored core feature view's sliders and traits replace the file's, so JR's
-    overrides and later evolution show; the file keeps the voice, views, signatures and want/fear."""
+    overrides and later evolution show; the file keeps the voice, views, signatures and want/fear. Evolution
+    change notes (personality.evolution_run.change_notes_for, newest first) pass through as `change_notes`."""
     _require_reviewed(doc)
     sliders, traits = dict(doc['sliders']), list(doc['traits'])
     if view is not None and view.get('status') == 'stored':
         sliders, traits = dict(view['sliders']), list(view['traits'])
     sigs = [dict(s) if isinstance(s, dict) else {'text': s} for s in doc['signatures']]
-    return dict(voice=doc['voice'], sliders=sliders, traits=traits,
-                views=[dict(text=v['text'], when=list(v['when'])) for v in doc['views']],
-                signatures=sigs, want=doc['want'], fear=doc['fear'])
+    out = dict(voice=doc['voice'], sliders=sliders, traits=traits,
+               views=[dict(text=v['text'], when=list(v['when'])) for v in doc['views']],
+               signatures=sigs, want=doc['want'], fear=doc['fear'])
+    if change_notes:
+        out['change_notes'] = [str(n) for n in change_notes]
+    return out
 
 
 def tie_events(doc, resolve) -> tuple[list[dict], list[dict]]:
