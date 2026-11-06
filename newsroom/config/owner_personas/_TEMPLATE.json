@@ -1,0 +1,32 @@
+{
+  "schema_version": "owner-profile-v1",
+  "key": "owner:TEAM",
+  "name": "<Owner name exactly as in personality/owner_profiles.py OWNERS_DATA>",
+  "role": "OWNER",
+  "team": "TEAM",
+  "seed_ref": {"table": "OWNERS_DATA", "team": "TEAM", "name": "<Name as in the OWNERS_DATA row>"},
+  "sliders": {"temperament": 5, "sociability": 5, "confidence": 5, "openness": 5, "warmth": 5, "drive": 5},
+  "slider_evidence": {},
+  "traits": ["HANDS_OFF", "DEEP_POCKETS", "PATIENT_BUILDER"],
+  "trait_evidence": {"HANDS_OFF": ["E1"], "DEEP_POCKETS": ["E1"], "PATIENT_BUILDER": ["E2"]},
+  "views": [
+    {"text": "<A view about how he runs the franchise, one sentence; style, never his exact phrases>", "when": ["FRONT_OFFICE"]},
+    {"text": "<A view about his head coach and general manager>", "when": ["COACHING"]},
+    {"text": "<A view about a losing stretch and his patience>", "when": ["LOSING_STREAK", "BAD_GAME"]},
+    {"text": "<A view about contention and winning now>", "when": ["WIN_STREAK", "CONTENDER"]},
+    {"text": "<A view about spending, contracts or free agency>", "when": ["CAP", "ROSTER_MOVES"]},
+    {"text": "<A view about the draft or building through youth>", "when": ["DRAFT", "YOUTH"]}
+  ],
+  "signatures": ["<A recurring habit a writer would notice, in your words>", "<Another habit>"],
+  "want": "<One want: a reasoned reading of his public record as an owner, marked medium confidence on review>",
+  "fear": "<One fear, the same way>",
+  "voice": "<Two to four sentences on how he talks in public: register, what he deflects, what he praises. Style, never his exact phrases.>",
+  "ties": [],
+  "evidence": [
+    {"id": "E1", "url": "https://example.com/source-one", "publisher": "<Publisher>", "published": "2025-01-01",
+     "accessed": "2026-11-06", "summary": "<A paraphrase of what the source shows, and what it does not.>", "confidence": "high"},
+    {"id": "E2", "url": "https://example.com/source-two", "publisher": "<Publisher>", "published": "2025-01-01",
+     "accessed": "2026-11-06", "summary": "<A paraphrase of a second source.>", "confidence": "medium"}
+  ],
+  "review": {"status": "draft", "reviewer": null, "reviewed_at": null, "notes": null}
+}

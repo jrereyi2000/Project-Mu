@@ -1,5 +1,5 @@
 {
-  "_comment": "Shared trait catalogue (docs/in_progress/PERSONALITY_PLAN.md \u00a74.2). Each trait: category, roles (role -> draw weight, used for seeding in phase 2), label, prompt (a tendency, phrased 'tends to ...'), optional when (tags from newsroom/personas.py; empty = a standing tendency), conflicts. At most two traits per category per agent. Engine effects (phase 4) will be added per trait as an 'effects' object.",
+  "_comment": "Shared trait catalogue (docs/in_progress/PERSONALITY_PLAN.md \u00a74.2). Each trait: category, roles (role -> draw weight, used for seeding in phase 2), label, prompt (a tendency, phrased 'tends to ...'), optional when (tags from newsroom/personas.py; empty = a standing tendency), conflicts. At most two traits per category per agent. Engine effects (phase 4) will be added per trait as an 'effects' object. Owner and scout traits (docs/in_progress/OWNERS_SCOUTS_VOTERS_PLAN.md \u00a72.1) carry a 'group' ('ownership' or 'scouting'): the three ownership pairs sit in two existing categories (work, ambition) so an owner can hold one trait from each pair within the two-per-category rule.",
   "traits": {
     "FILM_JUNKIE": {
       "id": "FILM_JUNKIE",
@@ -31,7 +31,7 @@
         "coach": 1,
         "writer": 3,
         "player": 0,
-        "owner": 0,
+        "owner": 1,
         "scout": 0
       },
       "conflicts": [
@@ -53,7 +53,7 @@
         "gm": 1,
         "fan": 1,
         "writer": 2,
-        "owner": 0,
+        "owner": 1,
         "scout": 0
       },
       "conflicts": [
@@ -94,7 +94,7 @@
         "writer": 2,
         "gm": 0,
         "player": 0,
-        "owner": 0,
+        "owner": 1,
         "scout": 0
       },
       "conflicts": [],
@@ -180,7 +180,7 @@
         "media": 1,
         "writer": 1,
         "gm": 0,
-        "owner": 0,
+        "owner": 1,
         "scout": 0
       },
       "conflicts": [
@@ -224,7 +224,7 @@
         "media": 1,
         "fan": 1,
         "writer": 1,
-        "owner": 0,
+        "owner": 1,
         "scout": 0
       },
       "conflicts": [
@@ -247,7 +247,7 @@
         "media": 1,
         "writer": 1,
         "gm": 0,
-        "owner": 0,
+        "owner": 1,
         "scout": 0
       },
       "conflicts": [
@@ -347,7 +347,7 @@
         "coach": 1,
         "writer": 0,
         "gm": 0,
-        "owner": 0,
+        "owner": 1,
         "scout": 0
       },
       "conflicts": [
@@ -393,7 +393,7 @@
         "media": 1,
         "writer": 1,
         "gm": 0,
-        "owner": 0,
+        "owner": 2,
         "scout": 0
       },
       "conflicts": [],
@@ -415,7 +415,7 @@
         "writer": 1,
         "gm": 0,
         "coach": 0,
-        "owner": 0,
+        "owner": 2,
         "scout": 0
       },
       "conflicts": [],
@@ -436,7 +436,7 @@
         "writer": 2,
         "gm": 0,
         "coach": 0,
-        "owner": 0,
+        "owner": 1,
         "scout": 0
       },
       "conflicts": [],
@@ -455,7 +455,7 @@
         "coach": 1,
         "writer": 2,
         "gm": 0,
-        "owner": 0,
+        "owner": 1,
         "scout": 0
       },
       "conflicts": [
@@ -476,7 +476,7 @@
         "coach": 2,
         "gm": 2,
         "writer": 1,
-        "owner": 0,
+        "owner": 2,
         "scout": 0
       },
       "conflicts": [
@@ -559,7 +559,7 @@
         "gm": 1,
         "writer": 2,
         "player": 0,
-        "owner": 0,
+        "owner": 1,
         "scout": 0
       },
       "conflicts": [
@@ -962,7 +962,7 @@
         "media": 1,
         "writer": 1,
         "gm": 0,
-        "owner": 0,
+        "owner": 1,
         "scout": 0
       },
       "conflicts": [],
@@ -1027,6 +1027,242 @@
       "conflicts": [],
       "prompt_text": "tends to bring your dog into a joke now and then",
       "prompt": "tends to bring your dog into a joke now and then",
+      "effects": {}
+    },
+    "MEDDLER": {
+      "id": "MEDDLER",
+      "name": "Meddler",
+      "label": "Meddler",
+      "category": "work",
+      "group": "ownership",
+      "roles": {
+        "media": 0,
+        "player": 0,
+        "coach": 0,
+        "scout": 0,
+        "writer": 0,
+        "gm": 0,
+        "owner": 2
+      },
+      "conflicts": [
+        "HANDS_OFF"
+      ],
+      "prompt_text": "tends to weigh in on football decisions himself and to expect his front office to clear big moves with him",
+      "prompt": "tends to weigh in on football decisions himself and to expect his front office to clear big moves with him",
+      "effects": {}
+    },
+    "HANDS_OFF": {
+      "id": "HANDS_OFF",
+      "name": "Hands-off",
+      "label": "Hands-off",
+      "category": "work",
+      "group": "ownership",
+      "roles": {
+        "media": 0,
+        "player": 0,
+        "coach": 0,
+        "scout": 0,
+        "writer": 0,
+        "gm": 0,
+        "owner": 2
+      },
+      "conflicts": [
+        "MEDDLER"
+      ],
+      "prompt_text": "tends to hire football people and let them run the football side, judging them on results",
+      "prompt": "tends to hire football people and let them run the football side, judging them on results",
+      "effects": {}
+    },
+    "DEEP_POCKETS": {
+      "id": "DEEP_POCKETS",
+      "name": "Deep pockets",
+      "label": "Deep pockets",
+      "category": "work",
+      "group": "ownership",
+      "roles": {
+        "media": 0,
+        "player": 0,
+        "coach": 0,
+        "scout": 0,
+        "writer": 0,
+        "gm": 0,
+        "owner": 2
+      },
+      "conflicts": [
+        "BUDGET_CONSCIOUS"
+      ],
+      "prompt_text": "tends to spend to the cap and beyond on facilities, staff and free agents when it helps win",
+      "prompt": "tends to spend to the cap and beyond on facilities, staff and free agents when it helps win",
+      "effects": {}
+    },
+    "BUDGET_CONSCIOUS": {
+      "id": "BUDGET_CONSCIOUS",
+      "name": "Budget conscious",
+      "label": "Budget conscious",
+      "category": "work",
+      "group": "ownership",
+      "roles": {
+        "media": 0,
+        "player": 0,
+        "coach": 0,
+        "scout": 0,
+        "writer": 0,
+        "gm": 0,
+        "owner": 2
+      },
+      "conflicts": [
+        "DEEP_POCKETS"
+      ],
+      "prompt_text": "tends to watch costs, prefer value deals and leave cap room unspent rather than overpay",
+      "prompt": "tends to watch costs, prefer value deals and leave cap room unspent rather than overpay",
+      "effects": {}
+    },
+    "HEADLINE_HUNTER": {
+      "id": "HEADLINE_HUNTER",
+      "name": "Headline hunter",
+      "label": "Headline hunter",
+      "category": "ambition",
+      "group": "ownership",
+      "roles": {
+        "media": 0,
+        "player": 0,
+        "coach": 0,
+        "scout": 0,
+        "writer": 0,
+        "gm": 0,
+        "owner": 2
+      },
+      "conflicts": [
+        "PATIENT_BUILDER"
+      ],
+      "prompt_text": "tends to want a splash: the big-name hire, the star signing, a quick turnaround the city can feel",
+      "prompt": "tends to want a splash: the big-name hire, the star signing, a quick turnaround the city can feel",
+      "effects": {}
+    },
+    "PATIENT_BUILDER": {
+      "id": "PATIENT_BUILDER",
+      "name": "Patient builder",
+      "label": "Patient builder",
+      "category": "ambition",
+      "group": "ownership",
+      "roles": {
+        "media": 0,
+        "player": 0,
+        "coach": 0,
+        "scout": 0,
+        "writer": 0,
+        "gm": 0,
+        "owner": 2
+      },
+      "conflicts": [
+        "HEADLINE_HUNTER"
+      ],
+      "prompt_text": "tends to give coaches and general managers time and to judge a rebuild over seasons, not weeks",
+      "prompt": "tends to give coaches and general managers time and to judge a rebuild over seasons, not weeks",
+      "effects": {}
+    },
+    "TRAITS_CHASER": {
+      "id": "TRAITS_CHASER",
+      "name": "Traits chaser",
+      "label": "Traits chaser",
+      "category": "football_mind",
+      "group": "scouting",
+      "roles": {
+        "media": 0,
+        "player": 0,
+        "coach": 0,
+        "scout": 2,
+        "writer": 0,
+        "gm": 0,
+        "owner": 0
+      },
+      "conflicts": [],
+      "prompt_text": "tends to fall for size, speed and explosive testing numbers and to bet on raw tools",
+      "prompt": "tends to fall for size, speed and explosive testing numbers and to bet on raw tools",
+      "effects": {}
+    },
+    "TAPE_GRINDER": {
+      "id": "TAPE_GRINDER",
+      "name": "Tape grinder",
+      "label": "Tape grinder",
+      "category": "football_mind",
+      "group": "scouting",
+      "roles": {
+        "media": 0,
+        "player": 0,
+        "coach": 0,
+        "scout": 2,
+        "writer": 0,
+        "gm": 0,
+        "owner": 0
+      },
+      "conflicts": [],
+      "prompt_text": "tends to trust college production and what the game tape shows over workout numbers",
+      "prompt": "tends to trust college production and what the game tape shows over workout numbers",
+      "effects": {}
+    },
+    "CHARACTER_HAWK": {
+      "id": "CHARACTER_HAWK",
+      "name": "Character hawk",
+      "label": "Character hawk",
+      "category": "football_mind",
+      "group": "scouting",
+      "roles": {
+        "media": 0,
+        "player": 0,
+        "coach": 0,
+        "scout": 2,
+        "writer": 0,
+        "gm": 0,
+        "owner": 0
+      },
+      "conflicts": [],
+      "prompt_text": "tends to dig into interviews, background and makeup and to mark a prospect down for red flags",
+      "prompt": "tends to dig into interviews, background and makeup and to mark a prospect down for red flags",
+      "effects": {}
+    },
+    "FLOOR_SEEKER": {
+      "id": "FLOOR_SEEKER",
+      "name": "Floor seeker",
+      "label": "Floor seeker",
+      "category": "football_mind",
+      "group": "scouting",
+      "roles": {
+        "media": 0,
+        "player": 0,
+        "coach": 0,
+        "scout": 1,
+        "writer": 0,
+        "gm": 0,
+        "owner": 0
+      },
+      "conflicts": [
+        "CEILING_GAMBLER"
+      ],
+      "prompt_text": "tends to prefer the safe prospect who will surely play over the boom-or-bust one",
+      "prompt": "tends to prefer the safe prospect who will surely play over the boom-or-bust one",
+      "effects": {}
+    },
+    "CEILING_GAMBLER": {
+      "id": "CEILING_GAMBLER",
+      "name": "Ceiling gambler",
+      "label": "Ceiling gambler",
+      "category": "football_mind",
+      "group": "scouting",
+      "roles": {
+        "media": 0,
+        "player": 0,
+        "coach": 0,
+        "scout": 1,
+        "writer": 0,
+        "gm": 0,
+        "owner": 0
+      },
+      "conflicts": [
+        "FLOOR_SEEKER"
+      ],
+      "prompt_text": "tends to chase the prospect who could become a star, accepting a bigger chance of a miss",
+      "prompt": "tends to chase the prospect who could become a star, accepting a bigger chance of a miss",
       "effects": {}
     }
   }
