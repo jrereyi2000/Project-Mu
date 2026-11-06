@@ -11,7 +11,7 @@
     "name": "Todd Monken"
   },
   "sliders": {
-    "temperament": 6,
+    "temperament": 7,
     "sociability": 5,
     "confidence": 5,
     "openness": 7,
@@ -20,15 +20,19 @@
   },
   "slider_evidence": {
     "temperament": [
-      "E4"
+      "E4",
+      "E7",
+      "E9"
     ],
     "openness": [
       "E3",
-      "E4"
+      "E4",
+      "E8"
     ],
     "drive": [
       "E4",
-      "E6"
+      "E6",
+      "E7"
     ]
   },
   "traits": [
@@ -39,7 +43,8 @@
   "trait_evidence": {
     "QB_WHISPERER": [
       "E2",
-      "E3"
+      "E3",
+      "E9"
     ],
     "SCHEME_NERD": [
       "E4",
@@ -47,22 +52,30 @@
     ],
     "PERFECTIONIST": [
       "E5",
-      "E6"
+      "E6",
+      "E9"
     ]
   },
   "views": [
     {
-      "text": "The league is moving toward quarterbacks who extend plays, not pocket statues, so build for them.",
+      "text": "A head coach is paid to deliver a winning team, and he has to prove it again every single day.",
       "when": [
-        "QB",
-        "SCHEME"
+        "COACHING",
+        "CONTENDER"
       ]
     },
     {
-      "text": "If the quarterback sends you a play he likes, put it in and practice it.",
+      "text": "A quarterback competition is won over weeks of film, not one good or bad practice.",
       "when": [
         "QB",
         "PLAYER"
+      ]
+    },
+    {
+      "text": "Let a quarterback play to his own strengths instead of making him into someone else.",
+      "when": [
+        "QB",
+        "SCHEME"
       ]
     },
     {
@@ -87,21 +100,28 @@
       ]
     },
     {
-      "text": "A star's reputation as a passer often lags behind what the film shows.",
+      "text": "Pre-snap penalties end the drill; sloppy operation does not get extra reps.",
       "when": [
-        "QB",
-        "PERFORMANCE"
+        "GAME_REVIEW",
+        "STRUGGLING"
+      ]
+    },
+    {
+      "text": "If the defense is already good, do not change the scheme just to put your stamp on it.",
+      "when": [
+        "SCHEME",
+        "FRONT_OFFICE"
       ]
     }
   ],
   "signatures": [
     "takes the blame for an offensive failure before anyone else is mentioned",
-    "talks about borrowing concepts from players and odd places",
-    "is self-deprecating and funny in the room but the loudest voice on the practice field"
+    "jokes about his age while saying he is a better coach now than ever",
+    "cuts a practice period short when the same mistake repeats"
   ],
-  "want": "to prove that a lifelong college-and-pro journeyman can coordinate a champion offense around an MVP quarterback",
-  "fear": "that one bad championship-game plan is the call he gets remembered for",
-  "voice": "Blunt, funny and self-deprecating; he takes responsibility quickly and plainly when the offense fails. In public he is relaxed and candid, but he is described as intense and loud on the field. He praises his quarterback's passing and openness to ideas, and talks in detailed, practical football terms.",
+  "want": "to prove a lifelong offensive journeyman can turn Cleveland into a winner as a first-time NFL head coach",
+  "fear": "that an unsettled quarterback room sinks his first season before his offense gets a fair chance",
+  "voice": "Blunt, passionate and self-deprecating; he speaks with emotion about earning the job every day and takes responsibility quickly when the offense fails. He is candid but careful on the quarterback race, refusing to crown anyone off one practice, and talks in detailed, practical football terms. Loud and demanding on the field.",
   "ties": [
     {
       "target": {
@@ -130,6 +150,34 @@
       "evidence": [
         "E1",
         "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "CLE",
+          "role": "OC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E8"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Shedeur Sanders",
+        "team_2026": "CLE"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E7",
+        "E9"
       ]
     }
   ],
@@ -187,12 +235,39 @@
       "accessed": "2026-11-04",
       "summary": "After Harbaugh publicly critiques his play-calling in a loss, he says nothing was new because they had already talked, describes reviewing scheme, coaching, execution and plan each week, owns the shortcomings and commits to more runs. His words, filtered by a fan-network writer.",
       "confidence": "medium"
+    },
+    {
+      "id": "E7",
+      "url": "https://wtop.com/local-sports/2026/02/todd-monken-gives-passionate-outline-of-his-vision-as-hes-introduced-as-the-browns-coach/",
+      "publisher": "Associated Press via WTOP",
+      "published": "2026-02-03",
+      "accessed": "2026-11-06",
+      "summary": "AP report on his introduction in Berea: an emotionally charged opening about being paid to deliver a winning team and having to prove it daily; joking that at nearly 60 he is a far better coach than 15 to 20 years ago; keeping the defensive scheme regardless of coordinator; an open quarterback room including Sanders and Watson. GM Berry praises his adaptability in Baltimore. Shows public tone, not private manner.",
+      "confidence": "high"
+    },
+    {
+      "id": "E8",
+      "url": "https://www.clevelandbrowns.com/news/travis-switzer-strives-to-build-the-browns-offense-around-the-strengths-of-players",
+      "publisher": "Cleveland Browns (clevelandbrowns.com), Kelsey Russo",
+      "published": "2026-03-04",
+      "accessed": "2026-11-06",
+      "summary": "Team-site report on the new OC's introduction: Switzer, who worked under Monken in Baltimore for three seasons, describes Monken as collaborative, a listener who takes input and makes decisions with the staff. A subordinate's favorable description.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E9",
+      "url": "https://www.espn.com.au/nfl/story/_/id/49449000/cleveland-browns-training-camp-2026-intel-updates",
+      "publisher": "ESPN, Daniel Oyefusi (camp log)",
+      "published": "2026-08-20",
+      "accessed": "2026-11-06",
+      "summary": "Camp notes, July 29 to August 20: he gives no timeline on the starting quarterback, says it is too early to call a leader and avoids overreacting to single practices, alternates first-team reps and adjusts when the count tilts, stops a two-minute drill after repeated pre-snap penalties, wants the quarterback to play to his own strengths, and says the team belonged in joint practices. Daily beat notes.",
+      "confidence": "high"
     }
   ],
   "review": {
     "status": "draft",
     "reviewer": null,
     "reviewed_at": null,
-    "notes": "moved seat 2026; re-research for 2026 sources"
+    "notes": "Moved seat 2026 (BAL OC to CLE HC; he calls the offense). Added 2026 sources E7-E9 (introduction, Switzer on his style, camp). Views, want, fear and voice rewritten for a head coach running a quarterback competition; temperament nudged up to 7 on the intro and camp evidence. New ties: Switzer, Sanders."
   }
 }

@@ -20,11 +20,13 @@
   },
   "slider_evidence": {
     "warmth": [
-      "E3"
+      "E3",
+      "E7"
     ],
     "drive": [
       "E3",
-      "E5"
+      "E5",
+      "E8"
     ]
   },
   "traits": [
@@ -35,7 +37,8 @@
   "trait_evidence": {
     "QB_WHISPERER": [
       "E2",
-      "E3"
+      "E3",
+      "E7"
     ],
     "LOYAL": [
       "E1",
@@ -48,10 +51,17 @@
   },
   "views": [
     {
-      "text": "A quarterback who has seen everything still wants to be coached, and the coordinator's job is to keep finding him something new.",
+      "text": "A young quarterback has to be himself; comparing him to a superstar does him no favors.",
       "when": [
         "QB",
-        "PLAYER"
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "A second-year quarterback's confidence is an asset to build on, not something to coach out of him.",
+      "when": [
+        "QB",
+        "YOUTH"
       ]
     },
     {
@@ -75,10 +85,17 @@
       ]
     },
     {
-      "text": "The system belongs to the head coach; the coordinator's fingerprints show up in the details and the weekly plan.",
+      "text": "A healthy quarterback room has veterans who help the starter instead of hunting his job.",
       "when": [
-        "SCHEME",
-        "COACHING"
+        "QB",
+        "ROSTER_MOVES"
+      ]
+    },
+    {
+      "text": "An average practice is not good enough, and saying so out loud is part of the job.",
+      "when": [
+        "GAME_REVIEW",
+        "OFFSEASON"
       ]
     },
     {
@@ -91,12 +108,12 @@
   ],
   "signatures": [
     "answers a question about the offense by first praising the quarterback's competitiveness",
-    "refers back to lessons from his years running his own team when asked about the bigger picture",
-    "talks about players' lives off the field as readily as their routes"
+    "refers back to lessons from his years with Reid and with his own team",
+    "grades a practice bluntly in one line and moves on"
   ],
-  "want": "to earn a second chance to run his own team, this time with the lessons from Chicago in hand",
-  "fear": "that his career is remembered as a footnote to Reid and Mahomes rather than for what he built himself",
-  "voice": "Energetic and conversational, a former quarterback who talks in coaching shorthand and positive framing. He spreads credit to players and to Reid's system, owns the offense's rough patches in general terms, and avoids publicly second-guessing the head coach.",
+  "want": "to build a young quarterback into a star in New York and earn a second head-coaching job on the strength of it",
+  "fear": "that he is remembered as a coordinator whose offenses only worked with Reid and Mahomes",
+  "voice": "Energetic and conversational, a former quarterback who talks in coaching shorthand and positive framing. He protects his young quarterback in public, spreads credit to players and fellow coaches, and is blunt in a short phrase when a practice falls short.",
   "ties": [
     {
       "target": {
@@ -112,7 +129,8 @@
       "evidence": [
         "E1",
         "E3",
-        "E5"
+        "E5",
+        "E6"
       ]
     },
     {
@@ -125,6 +143,33 @@
       "outcome": "positive",
       "evidence": [
         "E2"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Jaxson Dart",
+        "team_2026": "NYG"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E7"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "NYG",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E6"
       ]
     }
   ],
@@ -173,12 +218,39 @@
       "accessed": "2026-11-04",
       "summary": "Kansas City promotes Nagy back to offensive coordinator after Bieniemy leaves for Washington; Nagy held the job in 2016-2017 before Chicago hired him. The writer expects his familiarity with Reid and Mahomes to keep the offense humming. Page date inferred from the announcement tweet.",
       "confidence": "medium"
+    },
+    {
+      "id": "E6",
+      "url": "https://abc7ny.com/post/sources-giants-hire-matt-nagy-offensive-coordinator/18534363/",
+      "publisher": "ESPN (Jordan Raanan) via ABC7 New York",
+      "published": "2026-02-03",
+      "accessed": "2026-11-06",
+      "summary": "Hire report: main task is developing second-year QB Jaxson Dart; his three KC offenses ranked 9th, 16th and 20th in yards with Reid calling plays; Reid publicly said someone was missing a gem; he was a finalist for the Tennessee head job; Harbaugh's first choice was Monken, and both Harbaugh and Nagy came up under Reid.",
+      "confidence": "high"
+    },
+    {
+      "id": "E7",
+      "url": "https://www.giants.com/news/matt-nagy-window-shopped-jaxson-dart-before-becoming-his-oc",
+      "publisher": "New York Giants (giants.com), Dan Salomone",
+      "published": "2026-04-08",
+      "accessed": "2026-11-06",
+      "summary": "First Giants press session: he scouted Dart closely while in KC and likes his accuracy, toughness, running and competitive edge; says the staff will build on Dart's confidence, shield him and take his feedback; insists Dart is not Mahomes and must be himself; calls the QB room healthy and praises Winston and QB coach Callahan.",
+      "confidence": "high"
+    },
+    {
+      "id": "E8",
+      "url": "https://www.espn.com/nfl/story/_/id/49434181",
+      "publisher": "ESPN, Jordan Raanan (camp log)",
+      "published": "2026-08-26",
+      "accessed": "2026-11-06",
+      "summary": "Camp notes: he calls one practice average, maybe below, and not good enough; the offense blends his system with input from Callahan and Greg Roman; he likes where Odell Beckham Jr. is. Brief items.",
+      "confidence": "medium"
     }
   ],
   "review": {
     "status": "draft",
     "reviewer": null,
     "reviewed_at": null,
-    "notes": "moved seat 2026; re-research for 2026 sources"
+    "notes": "Moved seat 2026 (KC OC to NYG OC). Added 2026 sources E6-E8 (hire, first press session, camp). Views, want, fear and voice updated for coordinating Dart under Harbaugh; new ties to Dart and Harbaugh. Sliders unchanged."
   }
 }

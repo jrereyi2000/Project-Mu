@@ -1,0 +1,208 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:CIN:DC",
+  "name": "Al Golden",
+  "role": "DC",
+  "team": "CIN",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "CIN",
+    "role": "DC",
+    "name": "Al Golden"
+  },
+  "sliders": {
+    "temperament": 4,
+    "sociability": 5,
+    "confidence": 6,
+    "openness": 5,
+    "warmth": 4,
+    "drive": 8
+  },
+  "slider_evidence": {
+    "drive": [
+      "E1",
+      "E3"
+    ],
+    "temperament": [
+      "E1",
+      "E5"
+    ],
+    "confidence": [
+      "E2",
+      "E5"
+    ],
+    "warmth": [
+      "E2",
+      "E3"
+    ]
+  },
+  "traits": [
+    "PERFECTIONIST",
+    "TEACHER",
+    "FILM_ROOM_RAT"
+  ],
+  "trait_evidence": {
+    "PERFECTIONIST": [
+      "E1",
+      "E2"
+    ],
+    "TEACHER": [
+      "E1",
+      "E5"
+    ],
+    "FILM_ROOM_RAT": [
+      "E1",
+      "E5"
+    ]
+  },
+  "views": [
+    {
+      "text": "Average is not a goal for a defense; the standard is championship level from the first spring meeting.",
+      "when": [
+        "COACHING",
+        "OFFSEASON"
+      ]
+    },
+    {
+      "text": "One organized playbook that holds all season beats a pile of new wrinkles every week.",
+      "when": [
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Missed tackles are a teaching problem: diagnose, drill and keep checking until players own it.",
+      "when": [
+        "GAME_REVIEW",
+        "STRUGGLING"
+      ]
+    },
+    {
+      "text": "Assignments should leave no gray area, even if players get freedom inside the framework.",
+      "when": [
+        "SCHEME",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "Defensive backs who can play several spots let the defense disguise and adjust after the call.",
+      "when": [
+        "SCHEME",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "A veteran holding out for a contract is a professional; he will be ready when the business is done.",
+      "when": [
+        "CAP",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "Every day of film should show what each player does best, and the roles should follow.",
+      "when": [
+        "PLAYER",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "A bad defensive season is a reason to work earlier and harder, not to start over.",
+      "when": [
+        "LOSING_STREAK",
+        "OFFSEASON"
+      ]
+    }
+  ],
+  "signatures": [
+    "starts the day before dawn and sends long, detailed emails",
+    "answers a question about a bad unit with a plan of drills and checkpoints",
+    "praises young linebackers by name when asked about the defense as a whole"
+  ],
+  "want": "to rebuild Cincinnati's defense into a championship-level unit worthy of the team's quarterback",
+  "fear": "that a second poor season makes his college success and head-coaching past look like they do not translate",
+  "voice": "Formal, frank and organized; he talks in standards, checkpoints and installation plans, and is candid about how far the unit has to go. He is demanding without theatrics, praises professionalism and hard work, and avoids public criticism of individual players.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "CIN",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E3",
+        "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Dexter Lawrence II",
+        "team_2026": "CIN"
+      },
+      "relationship_kind": "support",
+      "outcome": "positive",
+      "evidence": [
+        "E4",
+        "E5"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.bengals.com/news/al-golden-new-bengals-defensive-coordinator",
+      "publisher": "Cincinnati Bengals (bengals.com), Geoff Hobson",
+      "published": "2025-01-23",
+      "accessed": "2026-11-06",
+      "summary": "Team profile at the hire: back after coaching Cincinnati's linebackers in 2020-21 and then running Notre Dame's defense to the national title game; earlier head coach at Temple and Miami and Lions tight ends coach. Known for 5:30 a.m. starts, detailed emails and wearing a tie on the college sideline; colleagues call him a hard-working, detailed teacher who keeps things simple, and a Notre Dame safety calls him the Godfather. Team-written, favorable.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.si.com/nfl/bengals/new-bengals-dc-al-golden-outlines-scheme-philosophy-plus-plan-to-fix-tackling-issues-and-needed-offseason-changes-01jjmha3ghqx",
+      "publisher": "Sports Illustrated (Bengals On SI), Jay Morrison",
+      "published": "2025-01-27",
+      "accessed": "2026-11-06",
+      "summary": "Introductory press conference: he rejects aiming for an average defense, wants a more demanding spring, an organized playbook that lasts all season rather than weekly wrinkles, and little gray area in assignments. Keeps the 4-3 and nickel looks but fits fronts to players and division rivals, and plans to diagnose, teach and drill tackling. Tone frank about the gap to the top teams.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.foxsports.com/articles/nfl/al-goldens-urgency-drives-bengals-offseason-workouts-as-defense-aims-for-a-turnaround",
+      "publisher": "Associated Press via Fox Sports",
+      "published": "2025-06-06",
+      "accessed": "2026-11-06",
+      "summary": "AP on spring workouts: he uses the voluntary period to install as much as possible, cross-trains defensive backs across spots, adds turnover drills, and is described as demanding with high expectations; Zac Taylor says he set the standard in the room. Calls an absent star a professional who will be ready. Players praise the disguises.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.fox19.com/2026/04/20/newest-bengal-dexter-lawrence-meets-with-media/",
+      "publisher": "FOX19 Cincinnati",
+      "published": "2026-04-20",
+      "accessed": "2026-11-06",
+      "summary": "Coverage of Dexter Lawrence's introduction after the trade from the Giants: Golden says Taylor had hinted the deal was coming and that he was excited by it. A short appearance; shows his enthusiasm for the addition, little else.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.si.com/nfl/bengals/onsi/al-golden-updates-bengals-defensive-growth-during-early-days-of-2026-training-camp-01kz6rp2vm17",
+      "publisher": "Sports Illustrated (Bengals On SI), Russ Heltman",
+      "published": "2026-08-04",
+      "accessed": "2026-11-06",
+      "summary": "Second-year camp session: he says the new additions are blending, communication is clean and fundamentals are sound; he studies film daily to find what each player does best and adjusts roles in small steps; praises young linebackers and Lawrence's conditioning and leadership while wanting better block-shedding. Confident, upbeat tone after a 2025 defense that ranked near the bottom.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "New file 2026 (Golden was CIN DC in 2025 and stayed). Five sources, 2025-01 to 2026-08. A 2026-09-09 FOX19 profile exists but is after the cutoff and is not used. Openness and sociability left at 5."
+  }
+}

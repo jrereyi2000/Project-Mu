@@ -22,7 +22,8 @@
     "temperament": [
       "E1",
       "E2",
-      "E3"
+      "E3",
+      "E9"
     ],
     "openness": [
       "E1",
@@ -32,7 +33,8 @@
       "E4"
     ],
     "drive": [
-      "E2"
+      "E2",
+      "E8"
     ]
   },
   "traits": [
@@ -42,14 +44,17 @@
   ],
   "trait_evidence": {
     "QB_WHISPERER": [
-      "E4"
+      "E4",
+      "E8",
+      "E10"
     ],
     "SCHEME_NERD": [
       "E4",
       "E6"
     ],
     "MENTOR": [
-      "E4"
+      "E4",
+      "E9"
     ]
   },
   "views": [
@@ -58,6 +63,20 @@
       "when": [
         "QB",
         "YOUTH"
+      ]
+    },
+    {
+      "text": "First learn how the young quarterback sees the game, then build the plan from there.",
+      "when": [
+        "QB",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "Run the plays the quarterback is comfortable with; a clever call he does not trust is a bad call.",
+      "when": [
+        "QB",
+        "SCHEME"
       ]
     },
     {
@@ -75,21 +94,21 @@
       ]
     },
     {
-      "text": "Sideline flare-ups during a blowout are small stuff; what matters is that he talks to everyone involved afterward.",
+      "text": "Talent at quarterback is only the start; the young ones still have to put the work in.",
       "when": [
-        "BLOWOUT",
-        "LOSING_STREAK"
+        "QB",
+        "PLAYER"
       ]
     },
     {
-      "text": "Who calls the plays should depend on what gives the offense its best chance, and that can change season to season.",
+      "text": "Who calls the plays should depend on what gives the offense its best chance.",
       "when": [
         "SCHEME",
         "STRUGGLING"
       ]
     },
     {
-      "text": "A coordinator who has already called plays lowers the risk of a new hire.",
+      "text": "A coordinator who has been a head coach knows what the boss needs from the offense.",
       "when": [
         "COACHING",
         "FRONT_OFFICE"
@@ -99,11 +118,11 @@
   "signatures": [
     "shows raw frustration on the sideline, then calls himself a passionate person when asked about it",
     "keeps in touch with former players through regular video calls",
-    "talks about quarterbacks he coached as friends, not projects"
+    "compares a young quarterback's development to his years with Josh Allen"
   ],
-  "want": "to show that the coordinator who helped build Josh Allen can build a winner of his own in New York",
-  "fear": "that his temper becomes the story whenever the team loses",
-  "voice": "Intense and blunt on game day, but loose and down to earth away from it; he talks like one of the players. He admits regrets in plain terms and frames them as part of growing, without apologizing for caring. He brushes off sideline flare-ups as normal and keeps details in-house.",
+  "want": "to build a young quarterback into a star again and show he can still lift an offense after his New York firing",
+  "fear": "that his temper becomes the story whenever the offense struggles",
+  "voice": "Intense and blunt on game day, loose and down to earth away from it; he talks like one of the players. He is openly confident in his quarterback while insisting on the work, admits regrets plainly and frames them as growth, and avoids talking about his old job.",
   "ties": [
     {
       "target": {
@@ -115,6 +134,35 @@
       "outcome": "positive",
       "evidence": [
         "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Cam Ward",
+        "team_2026": "TEN"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E8",
+        "E9",
+        "E10"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "TEN",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E8"
       ]
     }
   ],
@@ -181,12 +229,39 @@
       "accessed": "2026-11-04",
       "summary": "Explains the Bowen hire: Daboll wanted a coordinator who had already called plays to lower the risk, and Bowen came with Mike Vrabel's backing; Vrabel and Daboll had worked together in New England. Shows the staffing logic, not the working relationship.",
       "confidence": "high"
+    },
+    {
+      "id": "E8",
+      "url": "https://www.tennesseetitans.com/news/new-titans-oc-brian-daboll-excited-about-opportunity-with-the-right-people-in-tennessee-including-qb-cam-ward",
+      "publisher": "Tennessee Titans (tennesseetitans.com), Jim Wyatt",
+      "published": "2026-02-18",
+      "accessed": "2026-11-06",
+      "summary": "Introduction: says Tennessee felt like the right fit because of his history with Saleh from New York, Saleh's vision and GM Borgonzi's; calls Ward young, athletic and accurate, smart, able to play on the move and tough with a high standard, but says he must put the work in; plans to run what Ward is comfortable with. No remarks on his Giants firing. Team-written.",
+      "confidence": "high"
+    },
+    {
+      "id": "E9",
+      "url": "https://www.cbssports.com/nfl/news/cam-ward-titans-robert-saleh-brian-daboll/",
+      "publisher": "CBS Sports, Zachary Pereles",
+      "published": "2026-02-04",
+      "accessed": "2026-11-06",
+      "summary": "Cam Ward recalls Daboll trying to trade up for him as Giants coach; says he wants, not needs, tough love and expects Daboll to be a fiery coach who holds him to a high standard; wants consistency and straight talk.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E10",
+      "url": "https://www.wsmv.com/2026/06/16/titans-begin-minicamp-daboll-pleased-with-wards-progress/",
+      "publisher": "WSMV 4, Janyre Cooper",
+      "published": "2026-06-16",
+      "accessed": "2026-11-06",
+      "summary": "Minicamp: he is very pleased with Ward, cites his grasp of the offense, footwork, eye discipline and vision, and notes many factors go into quarterback play. Short report.",
+      "confidence": "high"
     }
   ],
   "review": {
     "status": "draft",
     "reviewer": null,
     "reviewed_at": null,
-    "notes": "moved seat 2026; re-research for 2026 sources"
+    "notes": "Moved seat 2026 (NYG HC to TEN OC). Added 2026 sources E8-E10 (introduction, Ward on him, minicamp). Views, want, fear and voice rewritten for coordinating Ward under Saleh; new ties to Ward and Saleh. Sliders unchanged. Play-calling split with Saleh not stated in the sources found."
   }
 }

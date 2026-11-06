@@ -1,0 +1,186 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:CLE:OC",
+  "name": "Travis Switzer",
+  "role": "OC",
+  "team": "CLE",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "CLE",
+    "role": "OC",
+    "name": "Travis Switzer"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 6,
+    "drive": 5
+  },
+  "slider_evidence": {
+    "warmth": [
+      "E3",
+      "E4"
+    ]
+  },
+  "traits": [
+    "TEACHER",
+    "OLD_SCHOOL",
+    "LOYAL"
+  ],
+  "trait_evidence": {
+    "TEACHER": [
+      "E1",
+      "E3"
+    ],
+    "OLD_SCHOOL": [
+      "E2",
+      "E3"
+    ],
+    "LOYAL": [
+      "E1",
+      "E3"
+    ]
+  },
+  "views": [
+    {
+      "text": "The offensive line is the heartbeat of an offense and sets its tone.",
+      "when": [
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "A veteran running back is not finished just because another team moved on from him.",
+      "when": [
+        "PLAYER",
+        "ROSTER_MOVES"
+      ]
+    },
+    {
+      "text": "Build the scheme around what the players do well rather than forcing a system on them.",
+      "when": [
+        "SCHEME",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "Ball security and red-zone touchdowns decide more games than yards between the twenties.",
+      "when": [
+        "SCHEME",
+        "GAME_REVIEW"
+      ]
+    },
+    {
+      "text": "A second-year quarterback can make the biggest jump of his career if the staff is patient.",
+      "when": [
+        "QB",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "Good staffs listen to each other and decide together; the play-caller still has the final word.",
+      "when": [
+        "COACHING"
+      ]
+    },
+    {
+      "text": "A team that represents a football city carries a responsibility on Sundays.",
+      "when": [
+        "COACHING",
+        "PREVIEW"
+      ]
+    }
+  ],
+  "signatures": [
+    "talks about the offensive line before any other position group",
+    "calls a quarterback race open and declines to set a timeline"
+  ],
+  "want": "to show that a coach who rose from the Ravens' front office to run-game architect can build a physical offense of his own",
+  "fear": "that as a first-time coordinator under a play-calling head coach, his own fingerprints never show",
+  "voice": "Upbeat, earnest and team-first; he talks like a former center about physicality, finishing blocks and doing the work together. He praises colleagues and young players, stays in step with the head coach on quarterbacks, and gives few hot quotes. Thin public record: sliders mostly left at 5.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "CLE",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E2",
+        "E3"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Derrick Henry",
+        "team_2026": "BAL"
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E2"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.si.com/nfl/browns/onsi/news/three-things-browns-fans-should-know-about-new-offensive-coordinator-travis-switzer-01kgacw2qqxp",
+      "publisher": "Sports Illustrated (Browns On SI), Nick Pedone",
+      "published": "2026-01-31",
+      "accessed": "2026-11-06",
+      "summary": "Explainer at the reported hire: first-time coordinator with nine seasons in Baltimore, from administrative assistant in 2017 through analyst and quality control to run game coordinator in 2023; Lancaster, Pa. native and 36-start Akron center with academic honors; credited with helping revive Derrick Henry. Background, not personality.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.nfl.com/news/browns-hire-former-ravens-assistant-travis-switzer-as-offensive-coordinator",
+      "publisher": "NFL.com, Grant Gordon",
+      "published": "2026-02-20",
+      "accessed": "2026-11-06",
+      "summary": "Hire report (page date not shown; announced with the Feb. 20 coordinator slate): 33 years old, the last three Baltimore seasons with Monken as coordinator, part of the 2024 season when Henry won the AFC rushing title; the Browns ranked 27th in rushing yards in 2025 and hope he lifts the run game. Monken calls the plays.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.clevelandbrowns.com/news/travis-switzer-strives-to-build-the-browns-offense-around-the-strengths-of-players",
+      "publisher": "Cleveland Browns (clevelandbrowns.com), Kelsey Russo",
+      "published": "2026-03-04",
+      "accessed": "2026-11-06",
+      "summary": "Introduction: he calls his relationship with Monken strong and growing, describes Monken as collaborative and shares that philosophy; wants a multiple offense tailored to the roster, ball security, red-zone scoring and a tough, fast style; calls the offensive line the heartbeat and tone-setter of an offense; is upbeat about the skill players. Team-written.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.si.com/nfl/browns/onsi/news/new-browns-oc-travis-switzer-dives-into-cleveland-s-quarterback-plans-01kjx5pq424q",
+      "publisher": "Sports Illustrated (Browns On SI), Nick Pedone",
+      "published": "2026-03-04",
+      "accessed": "2026-11-06",
+      "summary": "Same press conference, quarterback focus: calls the competition open with no timeline, says Watson's past success earns him a chance, sees room for Sanders to grow from year one to year two, and notes Sanders is mobile enough for the planned offense. Positions him in line with Monken.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.cleveland19.com/2026/03/04/new-oc-travis-switzer-i-understand-what-browns-mean-cleveland",
+      "publisher": "Cleveland 19 News, Christopher Dellecese",
+      "published": "2026-03-04",
+      "accessed": "2026-11-06",
+      "summary": "Short report on the introduction headlined on his remark that he understands what the Browns mean to the city. Little beyond the headline quote.",
+      "confidence": "low"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "New seat 2026. Thin coverage: five sources, all from the 2026 hire and introduction (E5 is low and supports only voice). No camp coverage of him found by the cutoff. Traits are modest readings: TEACHER (rose through quality control, plans to develop the line), OLD_SCHOOL (run-first, line-first), LOYAL (nine seasons in one building, followed Monken). Five sliders at 5."
+  }
+}

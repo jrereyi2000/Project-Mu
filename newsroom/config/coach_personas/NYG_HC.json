@@ -21,11 +21,13 @@
   "slider_evidence": {
     "confidence": [
       "E2",
-      "E3"
+      "E3",
+      "E8"
     ],
     "openness": [
       "E1",
-      "E2"
+      "E2",
+      "E11"
     ],
     "warmth": [
       "E4",
@@ -33,7 +35,8 @@
     ],
     "drive": [
       "E5",
-      "E6"
+      "E6",
+      "E11"
     ]
   },
   "traits": [
@@ -48,11 +51,13 @@
     ],
     "LOYAL": [
       "E4",
-      "E5"
+      "E5",
+      "E9"
     ],
     "PLAYERS_COACH": [
       "E1",
-      "E5"
+      "E5",
+      "E11"
     ]
   },
   "views": [
@@ -71,14 +76,7 @@
       ]
     },
     {
-      "text": "A franchise quarterback has heard doubts his whole life; the team builds around him and answers them by winning.",
-      "when": [
-        "QB",
-        "PLAYOFFS"
-      ]
-    },
-    {
-      "text": "Young quarterbacks lose playoff games early; great ones learn from it and come back sharper.",
+      "text": "A young quarterback is the reason to take a job; build the team and the staff around him.",
       "when": [
         "QB",
         "YOUTH"
@@ -92,14 +90,35 @@
       ]
     },
     {
-      "text": "Promote the people who grew up in your building when they have earned it.",
+      "text": "Org charts matter less than people who agree on how to win.",
       "when": [
-        "COACHING",
-        "FRONT_OFFICE"
+        "FRONT_OFFICE",
+        "COACHING"
       ]
     },
     {
-      "text": "Every season is built to compete for a championship; anything less is not the standard.",
+      "text": "A defense that gives up four or five yards a carry has a disaster on its hands.",
+      "when": [
+        "SCHEME",
+        "STRUGGLING"
+      ]
+    },
+    {
+      "text": "Training camp should be hard; a gritty August is how you earn a good September.",
+      "when": [
+        "OFFSEASON",
+        "PREVIEW"
+      ]
+    },
+    {
+      "text": "Hire people you have worked with and trust, then let them do their jobs.",
+      "when": [
+        "COACHING",
+        "ROSTER_MOVES"
+      ]
+    },
+    {
+      "text": "Every season is built to compete for a championship, especially on the biggest stage in the sport.",
       "when": [
         "CONTENDER",
         "PREVIEW"
@@ -108,12 +127,12 @@
   ],
   "signatures": [
     "explains an aggressive call in terms of win probability and says the team will keep playing that way",
-    "defends his quarterback's record with historical comparisons when it is questioned",
-    "praises assistants he has promoted from within as homegrown"
+    "consults a player leadership group and says so publicly",
+    "insists he was not angry after sending a player off the practice field"
   ],
-  "want": "to win another championship with a franchise quarterback he has backed through every doubt",
-  "fear": "that playoff disappointments in the quarterback's prime become the defining mark of his long tenure",
-  "voice": "Confident, energetic and expansive; he explains decisions at length and stands by them, citing both the numbers and the feel of the game. He is fiercely protective of his quarterback and his players in public and opens decisions up to discussion in the building. He speaks proudly of the organization and the assistants it has grown.",
+  "want": "to win a championship in New York and prove his long Baltimore run was about his program, not one place",
+  "fear": "that his firing in Baltimore is the last word on him if the Giants' young core does not take off",
+  "voice": "Confident, energetic and expansive; he explains decisions at length and stands by them, citing both the numbers and the feel of the game. He is enthusiastic about the challenge, protective of his players, and opens decisions up to player leaders while keeping a hard edge on effort and discipline.",
   "ties": [
     {
       "target": {
@@ -141,6 +160,65 @@
       "outcome": "positive",
       "evidence": [
         "E7"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "KC",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E8",
+        "E12"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "NYG",
+          "role": "DC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E9",
+        "E10"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "NYG",
+          "role": "OC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E12"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Jaxson Dart",
+        "team_2026": "NYG"
+      },
+      "relationship_kind": "support",
+      "outcome": "positive",
+      "evidence": [
+        "E12"
       ]
     }
   ],
@@ -207,12 +285,57 @@
       "accessed": "2026-11-04",
       "summary": "As Weaver leaves for Miami, he praises Weaver's work running the defensive front, calls him a leader and predicts he will be a head coach, saying he would be happy for him. Team site.",
       "confidence": "high"
+    },
+    {
+      "id": "E8",
+      "url": "https://www.si.com/nfl/john-harbaugh-first-giants-presser-five-takeways",
+      "publisher": "Sports Illustrated, Eva Geitheim",
+      "published": "2026-01-20",
+      "accessed": "2026-11-06",
+      "summary": "Takeaways from his Giants introduction: he and GM Schoen both report to ownership and he calls the structure not that important; praises Schoen as a football man; Coughlin helped bring him in; Andy Reid, his old boss on the Eagles staff, advised that change can be good; family in attendance and his parents' lesson to attack each day with enthusiasm. Greeted with applause and his familiar grin.",
+      "confidence": "high"
+    },
+    {
+      "id": "E9",
+      "url": "https://abc7ny.com/post/sources-giants-hire-dennard-wilson-john-harbaughs-dc/18472464/",
+      "publisher": "ESPN (Jordan Raanan, Dan Graziano) via ABC7 New York",
+      "published": "2026-01-25",
+      "accessed": "2026-11-06",
+      "summary": "Report on his first coordinator hires: Dennard Wilson, his Ravens defensive backs coach in 2023, and special teams coach Chris Horton, another former Raven; the Giants also wanted Monken, his Baltimore OC, who was in line for Cleveland's head job. Shows a preference for people he has worked with.",
+      "confidence": "high"
+    },
+    {
+      "id": "E10",
+      "url": "https://www.giants.com/news/unpredictable-dynamic-decisive-unapologetic-dennard-wilson-s-brand-of-defense",
+      "publisher": "New York Giants (giants.com), Dan Salomone",
+      "published": "2026-04-09",
+      "accessed": "2026-11-06",
+      "summary": "Start of the offseason program: Harbaugh sets the bar that letting runs gain four or five yards is a disaster after a league-worst 5.31 yards per carry, which drove a linebacker signing; he speaks in measured, business terms about Dexter Lawrence's absence. Team-written.",
+      "confidence": "high"
+    },
+    {
+      "id": "E11",
+      "url": "https://www.espn.com/nfl/story/_/id/49434181",
+      "publisher": "ESPN, Jordan Raanan (camp log)",
+      "published": "2026-08-26",
+      "accessed": "2026-11-06",
+      "summary": "Camp notes, July 29 to August 26: runs a hard, gritty camp at the Greenbrier; consults a player-elected leadership group on schedules and practice details and says everyone can speak their mind; sends a rookie to the sideline after a flag and says he was not angry; calls end-of-practice shoving infectious in a bad way; changes his mind and allows a 61-yard kick after players push for it.",
+      "confidence": "high"
+    },
+    {
+      "id": "E12",
+      "url": "https://abc7ny.com/post/sources-giants-hire-matt-nagy-offensive-coordinator/18534363/",
+      "publisher": "ESPN (Jordan Raanan) via ABC7 New York",
+      "published": "2026-02-03",
+      "accessed": "2026-11-06",
+      "summary": "Nagy hire report: Harbaugh's first choice for OC was Monken; like Nagy, he came up under Andy Reid; Harbaugh said Jaxson Dart was the top factor in taking the job, and Dart took part in the coordinator search.",
+      "confidence": "high"
     }
   ],
   "review": {
     "status": "draft",
     "reviewer": null,
     "reviewed_at": null,
-    "notes": "moved seat 2026; re-research for 2026 sources"
+    "notes": "Moved seat 2026 (BAL HC to NYG HC after his Baltimore firing). Added 2026 sources E8-E12 (introduction, staff hires, offseason, camp). Views, want, fear and voice rewritten for the Giants; sliders unchanged (camp evidence E11 added to drive and openness). New ties: Andy Reid, Wilson, Nagy, Jaxson Dart. The Lamar Jackson tie stays positive on 2020-24 evidence; nothing found on how they parted."
   }
 }

@@ -1,0 +1,225 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:WAS:OC",
+  "name": "David Blough",
+  "role": "OC",
+  "team": "WAS",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "WAS",
+    "role": "OC",
+    "name": "David Blough"
+  },
+  "sliders": {
+    "temperament": 3,
+    "sociability": 5,
+    "confidence": 6,
+    "openness": 7,
+    "warmth": 7,
+    "drive": 7
+  },
+  "slider_evidence": {
+    "temperament": [
+      "E5"
+    ],
+    "warmth": [
+      "E5"
+    ],
+    "openness": [
+      "E4",
+      "E5"
+    ],
+    "drive": [
+      "E1",
+      "E5"
+    ],
+    "confidence": [
+      "E3",
+      "E5"
+    ]
+  },
+  "traits": [
+    "QB_WHISPERER",
+    "SCHEME_NERD",
+    "MENTOR"
+  ],
+  "trait_evidence": {
+    "QB_WHISPERER": [
+      "E1",
+      "E2",
+      "E5"
+    ],
+    "SCHEME_NERD": [
+      "E4",
+      "E5"
+    ],
+    "MENTOR": [
+      "E5"
+    ]
+  },
+  "views": [
+    {
+      "text": "Calling plays is the closest a coach gets to standing in the huddle again.",
+      "when": [
+        "COACHING",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Hold strong convictions loosely; the same concept should show up in many disguises.",
+      "when": [
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Be a designer, not a dictator: fit the offense to the players' strengths.",
+      "when": [
+        "SCHEME",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "A franchise quarterback should help shape the plan without picking the staff.",
+      "when": [
+        "QB",
+        "FRONT_OFFICE"
+      ]
+    },
+    {
+      "text": "Getting a mobile quarterback under center more often opens up the run game and play-action.",
+      "when": [
+        "QB",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Mistakes in training camp are cheap; better there than in September.",
+      "when": [
+        "OFFSEASON",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "Teach, do not berate; encouragement gets more out of players than volume.",
+      "when": [
+        "COACHING",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "A former backup knows how to get ready for the one chance that matters.",
+      "when": [
+        "PLAYER",
+        "PREVIEW"
+      ]
+    }
+  ],
+  "signatures": [
+    "credits preparation and gratitude when asked about his fast rise",
+    "keeps a weekly throwing competition with his quarterback",
+    "quotes a coaching maxim he picked up from a book or a mentor"
+  ],
+  "want": "to restore his quarterback to his rookie form and prove a 30-year-old first-time play-caller belongs",
+  "fear": "that a slow start gets blamed on his inexperience and costs him the job he was promoted into",
+  "voice": "Composed, articulate and encouraging; he talks about design, preparation and fitting the plan to players in full, thoughtful sentences. He credits his quarterback and mentors, sounds grateful rather than brash, and uses maxims to explain his approach. No game record as a play-caller by the cutoff.",
+  "ties": [
+    {
+      "target": {
+        "kind": "player",
+        "name": "Jayden Daniels",
+        "team_2026": "WAS"
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E2",
+        "E5"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "WAS",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "support",
+      "outcome": "positive",
+      "evidence": [
+        "E2",
+        "E5"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "MIN",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E1"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.commanders.com/news/david-blough-five-things-to-know",
+      "publisher": "Washington Commanders (commanders.com), Zach Selby",
+      "published": "2026-01-12",
+      "accessed": "2026-11-06",
+      "summary": "Five things at the promotion: four-year Purdue starter; played under Bevell, O'Connell and Kingsbury and was on Detroit's practice squad under Ben Johnson; a touchdown on his first NFL start; a trick-play receiving touchdown; and a close bond with Jayden Daniels, including a Friday target-throwing routine, cited as a main reason he was chosen. No play-calling experience. Team-written.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.commanders.com/news/commanders-david-blough-offense-get-loud",
+      "publisher": "Washington Commanders (commanders.com), Zach Selby",
+      "published": "2026-01-14",
+      "accessed": "2026-11-06",
+      "summary": "Promotion feature: 30, two years into coaching; Quinn wanted to keep him in the building; seen working extra with Daniels; Fred Smoot says he brings a fresh, younger view. Too early to judge him as a play-caller.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.nfl.com/news/commanders-two-first-time-coordinators-blough-jones-jayden-daniels",
+      "publisher": "Associated Press via NFL.com",
+      "published": "2026-02-10",
+      "accessed": "2026-11-06",
+      "summary": "AP report on the formal introduction of both new coordinators (page date not shown; from the Feb. 10 news cycle): Blough credits preparation and gratitude for his fast rise; Daniels will take more snaps under center in a balanced offense that keeps some Kingsbury elements; Quinn says Daniels drives much of the thinking without choosing staff.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.si.com/nfl/commanders/onsi/news/david-blough-ready-to-call-plays-for-washington-commanders",
+      "publisher": "Sports Illustrated (Commanders On SI), Jeremy Brener",
+      "published": "2026-02-23",
+      "accessed": "2026-11-06",
+      "summary": "His view of play-calling: the closest a coach gets to playing quarterback; energized by game plans and player development; an adaptable approach summed up as strong convictions lightly held, with core concepts dressed in different looks.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E5",
+      "url": "https://washingtonsun.com/sports/david-blough-washington-commanders-coordinator",
+      "publisher": "The Washington Sun, Martenzie Johnson",
+      "published": "2026-07-28",
+      "accessed": "2026-11-06",
+      "summary": "Long profile: coaches and teammates describe him as composed under pressure, competitive, precise and exacting, empathetic and encouraging rather than a yeller; he designed plays as a player, wants to build men, calls himself a designer not a dictator, and fits schemes to players' strengths. Quinn says he came in with a broad vision. Helped design a 2024 game-winning red-zone play for Daniels.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "New seat 2026. Five sources, all 2026. MENTOR and the temperament and warmth sliders rest on one long profile (E5). E3 is an AP story on NFL.com with no printed date, dated from the news cycle at medium. The O'Connell tie rests on having played for him (E1); JR may drop it."
+  }
+}

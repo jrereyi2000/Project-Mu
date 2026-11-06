@@ -1,0 +1,237 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:BAL:OC",
+  "name": "Declan Doyle",
+  "role": "OC",
+  "team": "BAL",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "BAL",
+    "role": "OC",
+    "name": "Declan Doyle"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 6,
+    "confidence": 6,
+    "openness": 7,
+    "warmth": 5,
+    "drive": 7
+  },
+  "slider_evidence": {
+    "confidence": [
+      "E3",
+      "E4"
+    ],
+    "openness": [
+      "E2",
+      "E4"
+    ],
+    "drive": [
+      "E4",
+      "E5"
+    ],
+    "sociability": [
+      "E3",
+      "E4"
+    ]
+  },
+  "traits": [
+    "SCHEME_NERD",
+    "QB_WHISPERER",
+    "PERFECTIONIST"
+  ],
+  "trait_evidence": {
+    "SCHEME_NERD": [
+      "E2",
+      "E4"
+    ],
+    "QB_WHISPERER": [
+      "E3",
+      "E4"
+    ],
+    "PERFECTIONIST": [
+      "E4",
+      "E5"
+    ]
+  },
+  "views": [
+    {
+      "text": "Age does not matter in a meeting room; players follow the coach who can actually help them.",
+      "when": [
+        "COACHING",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "A quarterback who improvises brilliantly still needs the scripted plays to be clean and on time.",
+      "when": [
+        "QB",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Cadence, shifts and motion are free advantages: the offense knows them and the defense does not.",
+      "when": [
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Players grow under stress, so spring practice should be hard on purpose.",
+      "when": [
+        "OFFSEASON",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Build the offense around the players you have rather than forcing a system onto them.",
+      "when": [
+        "SCHEME",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "An offense has to make explosive plays; a long drive every time is too much to ask.",
+      "when": [
+        "SCHEME",
+        "PERFORMANCE"
+      ]
+    },
+    {
+      "text": "In this division the weather is part of the opponent, and the plan has to handle it.",
+      "when": [
+        "PREVIEW",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "A rookie who apologizes for a mistake should just fix it on the next rep.",
+      "when": [
+        "YOUTH",
+        "PLAYER"
+      ]
+    }
+  ],
+  "signatures": [
+    "talks fast enough that players ask him to slow down",
+    "compares young receivers to stars he coached earlier in his career",
+    "stays in the quarterback's ear between snaps at practice"
+  ],
+  "want": "to prove the league's youngest play-caller can build an explosive offense around a two-time MVP",
+  "fear": "that his first season calling plays is judged only on whether the star quarterback looks like himself again",
+  "voice": "Quick, technical and confident; he talks in specifics about cadence, motion and timing and speeds up when excited. He answers questions about his age by pointing to what he can teach, praises the quarterback's eagerness to learn, and keeps a light, joking touch with players. Thin record as a play-caller, so his public voice is still mostly about plans.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "BAL",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E2"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Lamar Jackson",
+        "team_2026": "BAL"
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E3",
+        "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "DEN",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E1"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "CHI",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E2"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.baltimoreravens.com/news/ravens-name-declan-doyle-offensive-coordinator",
+      "publisher": "Baltimore Ravens (baltimoreravens.com)",
+      "published": "2026-02-02",
+      "accessed": "2026-11-06",
+      "summary": "Team release: lists his path from Iowa offensive assistant (2016-18) to Saints offensive assistant under Sean Payton (2019-22), Broncos tight ends coach (2023-24) and Bears offensive coordinator (2025). Minter calls him an architect who will build around the players. A release; no personality detail.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://wtop.com/baltimore-ravens/2026/02/ravens-minter-praises-new-offensive-coordinator-declan-doyles-innovative-mindset",
+      "publisher": "Associated Press via WTOP",
+      "published": "2026-02-02",
+      "accessed": "2026-11-06",
+      "summary": "AP report: not yet 30 and born months before Jackson, he becomes one of the key assistant hires of the cycle. Minter praises an innovative, collaborative, team-first approach and says the scheme will fit the players. In Chicago he held the OC title while Ben Johnson called plays. Shows the hiring rationale, not results.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://wtop.com/baltimore-ravens/2026/02/new-ravens-oc-declan-doyle-praises-lamar-jacksons-hunger-to-learn-and-seeks-consistency-from-qb",
+      "publisher": "Associated Press via WTOP",
+      "published": "2026-02-18",
+      "accessed": "2026-11-06",
+      "summary": "AP report from his introduction: he will be the primary play-caller for the first time; his relationship with Jackson began with a long video call in the interview to test their fit; he praises Jackson's eagerness to learn and wants more consistency in the scripted offense (eyes, footwork, timing). He says he has always been young for his jobs and that players listen once they see a coach can help them.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://africa.espn.com/nfl/story/_/id/48958657/baltimore-ravens-2026-nfl-offensive-coordinator-declan-doyle-reboot-offense",
+      "publisher": "ESPN, Jamison Hensley",
+      "published": "2026-06-06",
+      "accessed": "2026-11-06",
+      "summary": "Spring feature: he pushes players hard because he believes growth comes from stress, works on cadence, adds new shifts and motions, and talks with Jackson between plays at practice. Zay Flowers calls him a genius who talks too fast, Weaver calls him a human computer, Jackson says they are in sync on calls, and he has a playful side with players. Beat feature with player quotes.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.espn.com/nfl/story/_/id/49434567/baltimore-ravens-training-camp-2026-intel-updates",
+      "publisher": "ESPN, Jamison Hensley (camp log)",
+      "published": "2026-08-13",
+      "accessed": "2026-11-06",
+      "summary": "Camp notes: Justice Hill calls him the most detail-oriented coordinator he has had; he compares a rookie's hands to Michael Thomas, whom he coached in New Orleans, stresses preparing for weather games, tells a rookie to move on after an apology, and emphasizes explosive plays. Brief items.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "New seat 2026. Five sources, all 2026 (hire release, AP x2, ESPN feature and camp log). Coverage is mostly hiring and spring practice; he had not called a regular-season game by the cutoff. Temperament and warmth left at 5. Payton and Johnson ties rest on his time on their staffs (E1, E2), not on public testimony."
+  }
+}

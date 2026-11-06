@@ -21,7 +21,8 @@
   "slider_evidence": {
     "confidence": [
       "E3",
-      "E2"
+      "E2",
+      "E7"
     ],
     "sociability": [
       "E2",
@@ -44,11 +45,13 @@
     ],
     "DISCIPLINARIAN": [
       "E5",
-      "E3"
+      "E3",
+      "E7"
     ],
     "SCHEME_NERD": [
       "E2",
-      "E3"
+      "E3",
+      "E7"
     ]
   },
   "views": [
@@ -60,10 +63,17 @@
       ]
     },
     {
-      "text": "A defense should swarm the football and take it away, no matter how many weapons the offense has.",
+      "text": "A defense should be unpredictable and violent, and still disciplined enough not to hurt itself.",
       "when": [
         "SCHEME",
         "PERFORMANCE"
+      ]
+    },
+    {
+      "text": "Stopping the run is the entry fee; a wall up front lets the pass rush hunt.",
+      "when": [
+        "SCHEME",
+        "STRUGGLING"
       ]
     },
     {
@@ -81,10 +91,16 @@
       ]
     },
     {
-      "text": "Limiting explosive plays is the first job of a secondary.",
+      "text": "A contract standoff is business; it does not change how a coach feels about the player.",
       "when": [
-        "SCHEME",
-        "GAME_REVIEW"
+        "CAP",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "The best defensive minds listen to their staff and still keep one clear direction.",
+      "when": [
+        "COACHING"
       ]
     },
     {
@@ -96,13 +112,57 @@
     }
   ],
   "signatures": [
-    "promises an attacking, physical defense in vivid terms",
-    "mixes humor with hard coaching in meetings"
+    "describes his defense with a string of punchy one-word ideals",
+    "mixes humor with hard coaching in meetings",
+    "praises the coaches he learned from by name"
   ],
-  "want": "to prove that a longtime secondary coach can build an attacking defense of his own and climb further",
-  "fear": "that a losing team buries a good defense and his first coordinator job is judged only by the record",
-  "voice": "Intense, confident and motivational, with flashes of humor; he talks about effort, violence at the point of attack, togetherness and taking the ball away. He stays upbeat in public and focuses on his own unit rather than opponents.",
-  "ties": [],
+  "want": "to build a nasty, run-stopping defense in New York that reestablishes him after a down second year in Tennessee",
+  "fear": "that a bad run defense, the Giants' old weakness, follows him into his second coordinator job",
+  "voice": "Intense, confident and motivational, with flashes of humor; he talks in vivid, punchy terms about violence at the point of attack, discipline and taking the ball away. He stays upbeat and loyal to players in public and credits mentors such as Harbaugh and Macdonald.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "NYG",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E6"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "SEA",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E7"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Dexter Lawrence II",
+        "team_2026": "CIN"
+      },
+      "relationship_kind": "support",
+      "outcome": "positive",
+      "evidence": [
+        "E7"
+      ]
+    }
+  ],
   "evidence": [
     {
       "id": "E1",
@@ -148,12 +208,39 @@
       "accessed": "2026-11-05",
       "summary": "Chidobe Awuzie says Wilson sets the tone in the meeting room and players must match his intensity until they can set it themselves; notes this is Wilson's first coordinator job after a strong Ravens defense.",
       "confidence": "medium"
+    },
+    {
+      "id": "E6",
+      "url": "https://abc7ny.com/post/sources-giants-hire-dennard-wilson-john-harbaughs-dc/18472464/",
+      "publisher": "ESPN (Jordan Raanan, Dan Graziano) via ABC7 New York",
+      "published": "2026-01-25",
+      "accessed": "2026-11-06",
+      "summary": "Hire report: 43, Titans DC for two seasons (defense 2nd in his first year, 21st in his second), previously Harbaugh's Ravens defensive backs coach in 2023; had been a favorite for the Giants job two years earlier but chose Tennessee. Harbaugh's first coordinator hire.",
+      "confidence": "high"
+    },
+    {
+      "id": "E7",
+      "url": "https://www.giants.com/news/unpredictable-dynamic-decisive-unapologetic-dennard-wilson-s-brand-of-defense",
+      "publisher": "New York Giants (giants.com), Dan Salomone",
+      "published": "2026-04-09",
+      "accessed": "2026-11-06",
+      "summary": "First day of the offseason program: lays out four ideas for the defense (unpredictable, dynamic, decisive, unapologetic), promises a nasty, violent but disciplined style, a multiple pressure defense that walls off the run, and situational play partly modeled on Mike Macdonald, whom he praises for listening to staff while keeping direction. Says he loves Dexter Lawrence and will let the contract standoff play out. Team-written.",
+      "confidence": "high"
+    },
+    {
+      "id": "E8",
+      "url": "https://www.espn.com/nfl/story/_/id/49434181",
+      "publisher": "ESPN, Jordan Raanan (camp log)",
+      "published": "2026-08-26",
+      "accessed": "2026-11-06",
+      "summary": "Camp note: he and Harbaugh made stopping the run the priority after 5.3 yards a carry allowed in 2025, with early results described as encouraging. One item.",
+      "confidence": "medium"
     }
   ],
   "review": {
     "status": "draft",
     "reviewer": null,
     "reviewed_at": null,
-    "notes": "moved seat 2026; re-research for 2026 sources"
+    "notes": "Moved seat 2026 (TEN DC to NYG DC). Added 2026 sources E6-E8 (hire, offseason vision, camp). Views, want, fear and voice updated for the Giants; new ties to Harbaugh, Macdonald and Lawrence (who was traded to CIN in April 2026). Sliders unchanged."
   }
 }

@@ -1,0 +1,217 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:LV:OC",
+  "name": "Andrew Janocko",
+  "role": "OC",
+  "team": "LV",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "LV",
+    "role": "OC",
+    "name": "Andrew Janocko"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 6,
+    "confidence": 5,
+    "openness": 7,
+    "warmth": 6,
+    "drive": 5
+  },
+  "slider_evidence": {
+    "openness": [
+      "E1",
+      "E4"
+    ],
+    "warmth": [
+      "E4"
+    ],
+    "sociability": [
+      "E4"
+    ]
+  },
+  "traits": [
+    "TEACHER",
+    "QB_WHISPERER",
+    "HISTORIAN"
+  ],
+  "trait_evidence": {
+    "TEACHER": [
+      "E1",
+      "E4"
+    ],
+    "QB_WHISPERER": [
+      "E1",
+      "E4"
+    ],
+    "HISTORIAN": [
+      "E4"
+    ]
+  },
+  "views": [
+    {
+      "text": "Install a play from the quarterback's eyes outward; footwork and progression follow the eyes.",
+      "when": [
+        "QB",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "A coordinator under a play-calling head coach exists to solve problems, not to get credit.",
+      "when": [
+        "COACHING",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "A rookie quarterback who asks why every play is called is going to be fine.",
+      "when": [
+        "QB",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "A veteran quarterback needs a baseline of trust more than new tricks.",
+      "when": [
+        "QB",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "Keep the teaching simple and the preparation exhaustive.",
+      "when": [
+        "COACHING",
+        "OFFSEASON"
+      ]
+    },
+    {
+      "text": "Old franchises have standards worth knowing; history is part of the job.",
+      "when": [
+        "HISTORY",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Build the offense around the players in the room rather than the system on paper.",
+      "when": [
+        "SCHEME",
+        "PLAYER"
+      ]
+    }
+  ],
+  "signatures": [
+    "credits the quarterback's work ethic for any success attributed to his coaching",
+    "brings up franchise history and old teams when talking about the job",
+    "slips a pro wrestling reference into an otherwise technical answer"
+  ],
+  "want": "to help build a winning offense and a franchise quarterback in Las Vegas alongside the head coach he has followed for years",
+  "fear": "that his rise is read as riding a friend's coattails rather than earned",
+  "voice": "Thoughtful, curious and low-key; he explains quarterback teaching in precise terms about eyes, feet and progressions, and passes credit to the players. He speaks warmly of long working relationships and of the franchise's past. First-time coordinator with a modest public record.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "LV",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E2",
+        "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Sam Darnold",
+        "team_2026": "SEA"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E1"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Kirk Cousins",
+        "team_2026": "LV"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Fernando Mendoza",
+        "team_2026": "LV"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E4"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.heraldnet.com/sports/seahawks-sam-darnold-has-refined-his-eyes-and-mechanics/",
+      "publisher": "The News Tribune (Gregg Bell) via HeraldNet",
+      "published": "2025-11-07",
+      "accessed": "2026-11-06",
+      "summary": "Seattle QB-coach feature: Darnold credits Janocko's teaching of each phase of the playbook since spring; Janocko praises Darnold's retention and processing and describes building each play from where the quarterback's eyes should go, tying footwork, eyes and progression together, drawing on Norv Turner, Gary Kubiak and O'Connell.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.espn.co.uk/nfl/story/_/id/47941780/sources-raiders-expected-hire-andrew-janocko-oc",
+      "publisher": "ESPN, Ryan McFadden",
+      "published": "2026-02-15",
+      "accessed": "2026-11-06",
+      "summary": "Hire report: follows Kubiak for a fourth stop after Minnesota (assistant line, receivers and QB roles, 2019-21), New Orleans (QB coach 2024) and Seattle (QB coach 2025), with two seasons as Bears QB coach between; was a candidate to replace Kubiak in Seattle. No quotes about him.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.kold.com/2026/02/16/raiders-coach-klint-kubiak-elevates-rob-leonard-hires-andrew-janocko-coordinators",
+      "publisher": "Associated Press via KOLD",
+      "published": "2026-02-16",
+      "accessed": "2026-11-06",
+      "summary": "AP report on the coordinator hires: Leonard, 38, promoted from defensive line coach and run game coordinator after a 2025 run defense that allowed 3.9 yards a carry; Janocko, 37, follows Kubiak from Seattle, where he coached Darnold. Kubiak will call plays but says he has never called a game alone and describes a staff that plans and communicates together on game day. Notes the hope that keeping Leonard helps mend the team's strained relationship with Maxx Crosby.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.raiders.com/news/andrew-janocko-las-vegas-raiders-offensive-coordinator-history-in-mind-nfl-2026-season",
+      "publisher": "Las Vegas Raiders (raiders.com), Paul Gutierrez",
+      "published": "2026-05-18",
+      "accessed": "2026-11-06",
+      "summary": "Team-site profile of the new OC: worked with Kubiak in Minnesota, New Orleans and Seattle and their families are close; came for trust in Kubiak and respect for Raiders history; sees his job as supporting the play-caller and fitting the offense to players; describes trust with Cousins and a curious rookie Mendoza. Kubiak calls him a phenomenal teacher who keeps teaching simple and prepares thoroughly. Pitt history major and pro wrestling fan. Team-written, favorable.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.seahawks.com/news/offensive-coordinator-brian-fleury-brings-familiarity-fresh-ideas-to-seahawks-offense",
+      "publisher": "Seattle Seahawks (seahawks.com), Ari Horton",
+      "published": "2026-07-30",
+      "accessed": "2026-11-06",
+      "summary": "Seahawks camp piece noting that quarterbacks coach Janocko and run game coordinator Dennison left with Kubiak for Las Vegas. One line; confirms the move.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "New seat 2026. Five sources, 2025-11 to 2026-07. Kubiak calls the plays, so Janocko's public record is mostly as a quarterbacks coach. HISTORIAN rests on one team-written profile (E4: history major, talks about the franchise's past); JR may prefer MENTOR. Temperament, confidence and drive left at 5."
+  }
+}

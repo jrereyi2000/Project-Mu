@@ -23,7 +23,8 @@
       "E4"
     ],
     "openness": [
-      "E4"
+      "E4",
+      "E7"
     ],
     "warmth": [
       "E3",
@@ -31,7 +32,8 @@
     ],
     "drive": [
       "E2",
-      "E5"
+      "E5",
+      "E7"
     ]
   },
   "traits": [
@@ -46,7 +48,8 @@
     ],
     "OLD_SCHOOL": [
       "E3",
-      "E5"
+      "E5",
+      "E7"
     ],
     "FAMILY_MAN": [
       "E4"
@@ -82,17 +85,23 @@
       ]
     },
     {
-      "text": "Fourth-quarter collapses come from habits, and habits are fixed without blaming anyone else.",
+      "text": "Fourth-quarter collapses come from habits, and habits are fixed by repetition, not blame.",
       "when": [
         "CLOSE_GAMES",
         "LOSING_STREAK"
       ]
     },
     {
-      "text": "He coordinates to help his players win, not to audition for the next job.",
+      "text": "An opponent should walk off the field feeling it has been in a fight.",
       "when": [
-        "COACHING",
-        "STRUGGLING"
+        "SCHEME",
+        "PERFORMANCE"
+      ]
+    },
+    {
+      "text": "Running the room while the head coach calls the game is a real job, and ego has no place in it.",
+      "when": [
+        "COACHING"
       ]
     },
     {
@@ -104,13 +113,13 @@
     }
   ],
   "signatures": [
-    "draws on his seven playing seasons when talking a player through a slump",
-    "asks players for their input on calls and mentions it in public",
-    "admits when he has been on edge, then points to the habits that need fixing"
+    "draws on his playing days in Baltimore when talking a player through a slump",
+    "compares a young pass rusher to great players he has coached",
+    "calls himself a nice guy and old school in the same breath"
   ],
-  "want": "to earn a head-coaching job on the strength of a defense that plays tough and loves its coaches",
-  "fear": "that a bad defensive season defines him before he gets the chance to lead his own team",
-  "voice": "Warm, direct and plain-spoken, with the credibility of a former player; he talks about players as people and about toughness as a standard. In bad stretches he stays deliberate, owns being on edge and refuses to blame others, with a little dry humor left in. He praises effort and connection more than scheme.",
+  "want": "to restore the physical, feared Baltimore defense he once played on, and earn a head-coaching job doing it",
+  "fear": "that being passed over for the top job and not calling plays leaves him seen as an assistant rather than a leader",
+  "voice": "Warm, direct and plain-spoken, with the credibility of a former Raven; he talks about players as people and about physical play as a standard. He is easygoing in tone but blunt about the violence of the game, and stresses having no ego beside a play-calling head coach. He praises effort and connection more than scheme.",
   "ties": [
     {
       "target": {
@@ -140,6 +149,22 @@
       "outcome": "positive",
       "evidence": [
         "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "BAL",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E6",
+        "E7"
       ]
     }
   ],
@@ -188,12 +213,48 @@
       "accessed": "2026-11-04",
       "summary": "With the defense near the bottom of the league, he says he coaches to help players win rather than for advancement, admits being a little edgy, calls for mental toughness and no blaming, and ties fourth-quarter losses to habits under pressure. Writer describes him as deliberate but frustrated.",
       "confidence": "medium"
+    },
+    {
+      "id": "E6",
+      "url": "https://wtop.com/baltimore-ravens/2026/02/defensive-coordinator-job-brings-anthony-weaver-back-to-the-baltimore-ravens",
+      "publisher": "Associated Press via WTOP",
+      "published": "2026-02-10",
+      "accessed": "2026-11-06",
+      "summary": "AP report on his return: Baltimore names him defensive coordinator under Minter after two seasons running Miami's defense. Minter calls him the definition of a Raven who lifts players through football knowledge and natural teaching. He also interviewed for the Ravens head job, and Minter plans to call the defense. A team announcement; says nothing of his private manner.",
+      "confidence": "high"
+    },
+    {
+      "id": "E7",
+      "url": "https://www.baltimoreravens.com/news/anthony-weaver-ravens-defense-coordinator-punish-jesse-minter-return",
+      "publisher": "Baltimore Ravens (baltimoreravens.com), Justin Robertson",
+      "published": "2026-02-16",
+      "accessed": "2026-11-06",
+      "summary": "Team-site piece from his introduction: he wants opponents to come away feeling they were in a fight, points to the late-game collapses of 2025 as something fixed by repetition, calls himself old school and a nice guy who believes the defense's problems are solved by physical play, and says he and Minter share a no-ego approach to situational football. Team-written, so favorable.",
+      "confidence": "high"
+    },
+    {
+      "id": "E8",
+      "url": "https://www.espn.com/nfl/story/_/id/49434567/baltimore-ravens-training-camp-2026-intel-updates",
+      "publisher": "ESPN, Jamison Hensley (camp log)",
+      "published": "2026-08-13",
+      "accessed": "2026-11-06",
+      "summary": "Camp notes: he compares a new edge rusher's demeanor to J.J. Watt, whom he coached for five seasons, gives measured injury updates on the corners, and praises a defensive tackle's progress in strong terms. Brief items.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E9",
+      "url": "https://africa.espn.com/nfl/story/_/id/48958657/baltimore-ravens-2026-nfl-offensive-coordinator-declan-doyle-reboot-offense",
+      "publisher": "ESPN, Jamison Hensley",
+      "published": "2026-06-06",
+      "accessed": "2026-11-06",
+      "summary": "Feature on the new offense: among other quotes, Weaver jokingly calls Doyle a human computer for his memory of plays. One light remark about a colleague.",
+      "confidence": "medium"
     }
   ],
   "review": {
     "status": "draft",
     "reviewer": null,
     "reviewed_at": null,
-    "notes": "moved seat 2026; re-research for 2026 sources"
+    "notes": "Moved seat 2026 (MIA DC to BAL DC, under a head coach who calls the defense). Added 2026 sources E6-E9 (hire, introduction, camp). Views, want, fear and voice updated for the return to Baltimore and the non-play-calling role; new tie to Minter. Older Miami evidence kept."
   }
 }

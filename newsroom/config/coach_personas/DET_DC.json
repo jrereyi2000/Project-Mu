@@ -1,0 +1,234 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:DET:DC",
+  "name": "Kelvin Sheppard",
+  "role": "DC",
+  "team": "DET",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "DET",
+    "role": "DC",
+    "name": "Kelvin Sheppard"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 6,
+    "confidence": 6,
+    "openness": 5,
+    "warmth": 7,
+    "drive": 7
+  },
+  "slider_evidence": {
+    "warmth": [
+      "E2"
+    ],
+    "sociability": [
+      "E2"
+    ],
+    "drive": [
+      "E2",
+      "E5"
+    ],
+    "confidence": [
+      "E2",
+      "E5"
+    ]
+  },
+  "traits": [
+    "PLAYERS_COACH",
+    "YOUTH_DEVELOPER",
+    "MENTOR"
+  ],
+  "trait_evidence": {
+    "PLAYERS_COACH": [
+      "E2"
+    ],
+    "YOUTH_DEVELOPER": [
+      "E1",
+      "E2"
+    ],
+    "MENTOR": [
+      "E2",
+      "E5"
+    ]
+  },
+  "views": [
+    {
+      "text": "Nerves come from being unprepared; a ready coach is only anxious to start.",
+      "when": [
+        "COACHING",
+        "PREVIEW"
+      ]
+    },
+    {
+      "text": "Five calls the players run with confidence beat fifty they are thinking about.",
+      "when": [
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "A defense should be fast, aggressive and physical, with an edge to it.",
+      "when": [
+        "SCHEME",
+        "PERFORMANCE"
+      ]
+    },
+    {
+      "text": "Titles do not make a coach; connecting with every player in the room does.",
+      "when": [
+        "COACHING",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "A player who has been cut and fought back has something to teach the young ones.",
+      "when": [
+        "PLAYER",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "When the defense gets exploited, the first fix is the coach's in-game adjustments.",
+      "when": [
+        "BAD_GAME",
+        "GAME_REVIEW"
+      ]
+    },
+    {
+      "text": "Injuries in the secondary are a reason to simplify, not an excuse.",
+      "when": [
+        "INJURY",
+        "STRUGGLING"
+      ]
+    },
+    {
+      "text": "The second year as a play-caller is when the lessons from the first start paying off.",
+      "when": [
+        "OFFSEASON",
+        "COACHING"
+      ]
+    }
+  ],
+  "signatures": [
+    "credits the mentors who prepared him before taking any credit himself",
+    "talks about his own setbacks as a player when he relates to someone who is struggling",
+    "owns a bad defensive day as his problem to solve"
+  ],
+  "want": "to build a defense that matches Detroit's identity and grow from first-year coordinator into a head-coaching candidate",
+  "fear": "that his first-year struggles with in-game adjustments become how opponents and his bosses see him",
+  "voice": "Humble, earnest and player-close; he talks about preparation, connection and repaying the coaches who invested in him. He takes responsibility for breakdowns and frames them as lessons, keeps the scheme talk simple, and sounds more like a teammate than a boss.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "DET",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E2",
+        "E5"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "NYJ",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E2"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "KC",
+          "role": "DC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E2"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Jack Campbell",
+        "team_2026": "DET"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E1"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.nfl.com/news/lions-promoting-lbs-coach-kelvin-sheppard-to-defensive-coordinator",
+      "publisher": "NFL.com, Michael Baca",
+      "published": "2025-01-25",
+      "accessed": "2026-11-06",
+      "summary": "Promotion report (page date not shown; the reports came on Saturday, Jan. 25, 2025): Detroit promotes its linebackers coach, who worked under Aaron Glenn since 2021, to replace Glenn; expects the defense to stay philosophically similar; credits him with developing Anzalone, Rodriguez and Jack Campbell; eight-season NFL linebacker, drafted by Buffalo in 2011.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.si.com/nfl/lions/news/kelvin-sheppard-anxious-for-first-game-as-defensive-coordinator",
+      "publisher": "Sports Illustrated (Lions On SI), Vito Chirco",
+      "published": "2025-09-02",
+      "accessed": "2026-11-06",
+      "summary": "Before his first game calling plays: anxious, not nervous, because nerves come from being unprepared; credits Spagnuolo, Campbell and Glenn; wants a fast, aggressive, physical defense like Glenn's; prefers a few calls players run confidently over a big menu. Described as humble and selfless; a cornerback says he can seem like a teammate as much as a coach. Draws on his own struggles as a player who was traded and cut.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.kplctv.com/2025/09/23/former-lsu-star-kelvin-sheppard-shines-lions-dc-win-over-ravens",
+      "publisher": "Gray Louisiana (KPLC/WAFB)",
+      "published": "2025-09-23",
+      "accessed": "2026-11-06",
+      "summary": "Hometown-angle story: his defense sacks Lamar Jackson seven times in a 38-30 Monday night win at Baltimore and holds Jackson and Henry to 85 rushing yards; recaps his LSU captaincy and path into coaching. A result, not a personality read.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.si.com/nfl/lions/onsi/news/grading-first-season-lions-defensive-coordinator-kelvin-sheppard",
+      "publisher": "Sports Illustrated (Lions On SI), Christian Booher",
+      "published": "2026-01-20",
+      "accessed": "2026-11-06",
+      "summary": "Year-one grade of B-: pass rush fourth in sacks, takeaways middling, yards allowed mid-pack; injuries in the secondary; late-season explosive plays and exploited tendencies, which he acknowledged meant he had to adjust better in games. Interviewed for the Miami head job. Expected back in 2026. Columnist's assessment.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.si.com/nfl/lions/onsi/kelvin-sheppard-much-more-comfortable-in-year-two",
+      "publisher": "Sports Illustrated (Lions On SI), Vito Chirco",
+      "published": "2026-06-13",
+      "accessed": "2026-11-06",
+      "summary": "Spring of year two: Campbell says he is much more comfortable and now oversees the whole defense; Sheppard calls year one a baptism of fire, says repetition builds instinct and that reviewing why plays failed taught him fixes, and puts the onus on coaches to solve problems so players can perform. Confident, reflective tone.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "New file 2026 (Sheppard was DET DC in 2025 and stayed). Five sources, 2025-01 to 2026-06. PLAYERS_COACH and two sliders rest on one strong source (E2); E1 is NFL.com with no printed date, dated from the news cycle at medium confidence. Openness and temperament left at 5."
+  }
+}
