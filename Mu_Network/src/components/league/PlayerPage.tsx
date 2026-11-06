@@ -4,6 +4,7 @@ import { SystemContext } from "../../context/SystemContext";
 import { Chevron, DEFAULT_AVATAR, getPlayerHeadshot, handleHeadshotError, logo } from "../../lib/gridiron";
 import PlayerHonors from "../history/PlayerHonors";
 import PlayerCareerPath from "./PlayerCareerPath";
+import { PersonalityPanel } from "../personality/PersonalityPanel";
 
 export const POSITION_LABELS: Record<string, string> = {
   QB: "Quarterback", HB: "Halfback", FB: "Fullback", WR: "Wide Receiver", TE: "Tight End",
@@ -175,6 +176,11 @@ export function PlayerPage({ playerId }: { category?: string; playerId: number }
           </div>
         </div>
       </section>
+
+      {/* Personality (docs/in_progress/PERSONALITY_DISPLAY_PLAN.md §2.2): after the hero's career path */}
+      <div className="player-data-layout">
+        <PersonalityPanel kind="player" refId={playerId} />
+      </div>
 
       <div className="player-data-layout">
         <section className="player-log-section">

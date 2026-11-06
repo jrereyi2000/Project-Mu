@@ -1,13 +1,18 @@
 // Front Office tab: who runs the team (head coach, coordinators, GM) and where it's headed (direction, top needs),
 // from the endpoint's staff block (server/front_office_api.py fetch_staff). Tendencies come from engines/coach_profile:
 // pass lean and fourth down are measured in this league when there are games; man coverage is reputation.
+import { useState } from "react";
 import { ordinal } from "./format";
+import { PersonalityPanel } from "../personality/PersonalityPanel";
+import type { PersonalityKind } from "../../types/personality";
 
 type Tendency = { tier: "Low" | "Medium" | "High"; meaning: string; measured: boolean };
-type Coordinator = { role: "OC" | "DC"; name: string | null; scheme: string | null; playbook: string | null; since: number };
+// `id` (coaches.id / coordinators.id / gm_profiles.id) opens the Personality row; a staff block without ids shows none.
+type Coordinator = { id?: number | null; role: "OC" | "DC"; name: string | null; scheme: string | null; playbook: string | null; since: number };
 type Need = { group: string; label: string; reasons: string[] };
 export type Staff = {
   head_coach: {
+    id?: number | null;
     name: string;
     slant: "OFFENSIVE" | "DEFENSIVE" | "CEO";
     since: number;
@@ -26,7 +31,7 @@ export type Staff = {
     coach_of_the_year: number[];
   };
   coordinators: Coordinator[];
-  gm: { name: string; bio: string | null; since: number; head_coach_too: boolean } | null;
+  gm: { id?: number | null; name: string; bio: string | null; since: number; head_coach_too: boolean } | null;
   direction: "CONTEND" | "RETOOL" | "REBUILD" | null;
   needs: Need[];
   urgent_need: { group: string; label: string } | null;
@@ -40,6 +45,21 @@ const DIRECTION: Record<string, [string, string]> = {
 };
 const TENDENCY_LABEL = { pass_lean: "Pass lean", fourth_down_aggressiveness: "Fourth down", man_coverage: "Coverage" };
 const ROLE = { OC: "Offensive Coordinator", DC: "Defensive Coordinator" };
+
+// A collapsible Personality row on a staff card (docs/in_progress/PERSONALITY_DISPLAY_PLAN.md §2.2). The panel
+// mounts (and fetches) only once the row is opened.
+const SUMMARY_STYLE = { cursor: "pointer", color: "var(--gray-500)", font: "700 9px var(--font-mono)", letterSpacing: ".07em", textTransform: "uppercase" } as const;
+
+export function PersonalityRow({ kind, id }: { kind: PersonalityKind; id?: number | null }) {
+  const [open, setOpen] = useState(false);
+  if (id === null || id === undefined) return null;
+  return (
+    <details className="fo-personality" onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)}>
+      <summary style={SUMMARY_STYLE}>Personality</summary>
+      {open && <PersonalityPanel kind={kind} refId={id} compact />}
+    </details>
+  );
+}
 
 function Stat({ label, value, note }: { label: string; value: string | null; note?: string | null }) {
   return (
@@ -120,6 +140,7 @@ export default function StaffCards({ staff, season }: { staff: Staff; season: nu
               );
             })}
           </ul>
+          <PersonalityRow kind="coach" id={hc.id} />
         </article>
 
         {staff.coordinators.map((c) => (
@@ -133,6 +154,7 @@ export default function StaffCards({ staff, season }: { staff: Staff; season: nu
               <div><dt>Scheme</dt><dd>{c.scheme || "—"}</dd></div>
               <div><dt>Playbook</dt><dd>{c.playbook || "—"}</dd></div>
             </dl>
+            {c.name && <PersonalityRow kind="coordinator" id={c.id} />}
           </article>
         ))}
 

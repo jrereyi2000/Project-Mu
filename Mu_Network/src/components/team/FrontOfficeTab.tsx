@@ -6,6 +6,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { API_BASE } from "../../api";
 import DraftCapital, { type DraftPicks } from "./DraftCapital";
 import StaffCards, { type Staff } from "./StaffCards";
+import { PersonalityPanel } from "../personality/PersonalityPanel";
+import type { PersonalityKind, PersonalityProfile } from "../../types/personality";
 import TransactionsTimeline, { type Transactions } from "./TransactionsTimeline";
 import { money, ordinal } from "./format";
 import "./frontOffice.css";
@@ -232,6 +234,41 @@ function Contracts({ contracts, committed, years, focus }:
   );
 }
 
+// The people above the staff (docs/in_progress/PERSONALITY_DISPLAY_PLAN.md §2.2, Q3): the GM, the owner and the scouting
+// director, each with his Personality panel. A card shows only when /api/personality has a profile for him.
+function PersonCard({ label, kind, refId }: { label: string; kind: PersonalityKind; refId: string | number }) {
+  const [profile, setProfile] = useState<PersonalityProfile | null>(null);
+  useEffect(() => {
+    setProfile(null);
+    fetch(`${API_BASE}/api/personality/${kind}/${encodeURIComponent(String(refId))}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then(setProfile)
+      .catch(() => setProfile(null));
+  }, [kind, refId]);
+  if (!profile) return null;
+  return (
+    <article className="fo-card">
+      <header>
+        <span>{label}</span>
+        <h3>{profile.name || label}</h3>
+      </header>
+      <PersonalityPanel kind={kind} refId={refId} compact fixture={profile} />
+    </article>
+  );
+}
+
+function FrontOfficePeople({ abbr, gm }: { abbr: string; gm: Staff["gm"] | null | undefined }) {
+  return (
+    <section className="fo-block">
+      <div className="fo-staff">
+        {gm?.id != null && <PersonCard label="General Manager" kind="gm" refId={gm.id} />}
+        <PersonCard label="Owner" kind="owner" refId={abbr} />
+        <PersonCard label="Scouting Director" kind="scout" refId={abbr} />
+      </div>
+    </section>
+  );
+}
+
 export default function FrontOfficeTab({ abbr, season, focus }: { abbr: string; season: number; focus?: ContractFocus | null }) {
   const [data, setData] = useState<FrontOffice | null>(null);
   const [error, setError] = useState(false);
@@ -250,6 +287,7 @@ export default function FrontOfficeTab({ abbr, season, focus }: { abbr: string; 
   return (
     <section className="team-data-view fo-view">
       {data.staff && <StaffCards staff={data.staff} season={data.season} />}
+      <FrontOfficePeople abbr={data.team.abbreviation} gm={data.staff?.gm} />
       {data.cap
         ? <CapSheet cap={data.cap} />
         : <p className="fo-state">No cap sheet recorded for {data.season}.</p>}
