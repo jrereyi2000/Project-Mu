@@ -497,22 +497,79 @@ def route_franchise(fid, save_name, save_season, save_week, auto_init=False, res
     return {"status": "ready", "db": db, "dsn": dsn, "seeded": False}
 
 
-# ---------------------------------------------------------------------------------- relationship producers ---
+# ------------------------------------------------------------------------------ personality switchboard ---
+# The personality feature switchboard (personality/features.py, PERSONALITY_ACTIVATION_PLAN.md §2.4) decides the
+# personality steps below; it is read once per ingest (personality_modes) and handed to each step. Each step's
+# environment variable stays as a kill switch: "off" turns the step off whatever the switchboard says, and "on" is
+# an operator override that runs it as active (the variables' behaviour before the switchboard existed).
 PRODUCERS_ENV = "MU_RELATIONSHIP_PRODUCERS"
+TRADE_REQUESTS_ENV = "MU_TRADE_REQUESTS"
 
 
-def relationship_producers_on():
-    """True only when MU_RELATIONSHIP_PRODUCERS=on (off by default; the activation plan's switchboard replaces it)."""
-    return os.environ.get(PRODUCERS_ENV, "").strip().lower() == "on"
+def env_switch(name):
+    """'on', 'off' or None (unset / anything else) for a personality step's environment variable."""
+    v = os.environ.get(name, "").strip().lower()
+    return v if v in ("on", "off") else None
 
 
-def step_relationship_producers(snapshot_path, save_season, dsn=None, log_fn=log, connect=None):
+def personality_modes(dsn=None, connect=None, log_fn=log):
+    """The switchboard snapshot for this database's league, read once per ingest; None when it can't be read
+    (no database, no league yet). Never raises: every personality step then reads 'off'."""
+    if not (dsn or os.environ.get("DATABASE_URL")) and connect is None:
+        return None
+    conn = None
+    try:
+        from personality import features as pf
+        if connect is None:
+            import psycopg
+            connect = psycopg.connect
+        conn = connect(dsn or os.environ.get("DATABASE_URL"))
+        with conn.cursor() as cur:
+            cur.execute("SELECT madden_league_id FROM league_state WHERE id = 1")
+            row = cur.fetchone()
+            snap = None if not row or row[0] is None else pf.snapshot(cur, int(row[0]))
+        conn.rollback()
+        return snap
+    except Exception as e:  # noqa: BLE001 - personality steps then stay off
+        log_fn(f"Personality switchboard not read ({e}); personality steps stay off.")
+        return None
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:  # noqa: BLE001
+                pass
+
+
+def feature_gate(feature, env_name, modes):
+    """(mode, why) for a watcher step: the environment kill switch wins, else the switchboard snapshot."""
+    switch = env_switch(env_name)
+    if switch == "off":
+        return "off", f"{env_name}=off (kill switch)"
+    if switch == "on":
+        return "active", f"{env_name}=on (operator override)"
+    if modes is None:
+        return "off", "switchboard not read"
+    from personality import features as pf
+    mode = pf.snapshot_mode(modes, feature)
+    return mode, f"switchboard {feature} is {mode}"
+
+
+def relationship_producers_on(modes=None):
+    """True when the producers step runs: MU_RELATIONSHIP_PRODUCERS=on, or the switchboard's producers feature in
+    shadow (observe) or active, unless MU_RELATIONSHIP_PRODUCERS=off."""
+    return feature_gate("producers", PRODUCERS_ENV, modes)[0] != "off"
+
+
+def step_relationship_producers(snapshot_path, save_season, dsn=None, log_fn=log, connect=None, modes=None):
     """Relationship event producers for this save (RELATIONSHIP_EVENT_PRODUCERS_PLAN.md §2.4), right after the
-    load, on weekly ingests and offseason stops alike. Its own connection and transaction; skipped unless
-    MU_RELATIONSHIP_PRODUCERS=on, or (with a logged reason) when the producer or relationships tables aren't
-    migrated. Never fails the ingest: an error is logged, notified and recorded as a FAILED run."""
-    if not relationship_producers_on():
-        log_fn(f"Relationship producers off ({PRODUCERS_ENV} is not 'on').")
+    load, on weekly ingests and offseason stops alike. Its own connection and transaction; runs when the switchboard
+    `modes` has producers in shadow (observe: events recorded, consumers neutral) or active (feature_gate: the
+    MU_RELATIONSHIP_PRODUCERS kill switch wins), skipped (with a logged reason) when the producer or relationships
+    tables aren't migrated. Never fails the ingest: an error is logged, notified and recorded as a FAILED run."""
+    mode, why = feature_gate("producers", PRODUCERS_ENV, modes)
+    if mode == "off":
+        log_fn(f"Relationship producers off ({why}).")
         return {"status": "off"}
     season = tick = league = None
     conn = None
@@ -576,21 +633,23 @@ EVOLUTION_ENV = "MU_PERSONALITY_EVOLUTION"
 EVOLUTION_TICK = 24   # league_office.STAGE_WEEKS["OFFSEASON_START"]
 
 
-def personality_evolution_on():
-    """True only when MU_PERSONALITY_EVOLUTION=on (off by default; the activation plan's switchboard will decide
-    when it is built, with this variable kept as the kill switch)."""
-    return os.environ.get(EVOLUTION_ENV, "").strip().lower() == "on"
+def personality_evolution_on(modes=None):
+    """True when the evolution step runs: MU_PERSONALITY_EVOLUTION=on, or the switchboard's evolution feature in
+    shadow (dry run) or active, unless MU_PERSONALITY_EVOLUTION=off (the kill switch)."""
+    return feature_gate("evolution", EVOLUTION_ENV, modes)[0] != "off"
 
 
-def step_personality_evolution(snapshot_path, save_season, dsn=None, log_fn=log, connect=None):
+def step_personality_evolution(snapshot_path, save_season, dsn=None, log_fn=log, connect=None, modes=None):
     """Personality evolution for the season just ended (PERSONALITY_EVOLUTION_PLAN.md §2.5), on the OFFSEASON_START
     ingest (tick 24) only, after the relationship producers and before the league office. Its own connection and
-    transaction; skipped unless MU_PERSONALITY_EVOLUTION=on, or (with a logged reason) when the evolution tables
-    aren't migrated or the league has no lifecycle universe. Writes the season report under verify_output/ and
-    notifies "Mu: N personality changes in <season>". Never fails the ingest: an error is logged, notified and
-    recorded as a FAILED run."""
-    if not personality_evolution_on():
-        log_fn(f"Personality evolution off ({EVOLUTION_ENV} is not 'on').")
+    transaction; runs by the switchboard `modes` (feature_gate: the MU_PERSONALITY_EVOLUTION kill switch wins):
+    shadow runs the season as a dry run (report only, no profile changes), active applies it. Skipped (with a
+    logged reason) when the evolution tables aren't migrated or the league has no lifecycle universe. Writes the
+    season report under verify_output/ and, when applied, notifies "Mu: N personality changes in <season>". Never
+    fails the ingest: an error is logged, notified and recorded as a FAILED run."""
+    mode, why = feature_gate("evolution", EVOLUTION_ENV, modes)
+    if mode == "off":
+        log_fn(f"Personality evolution off ({why}).")
         return {"status": "off"}
     season = universe = None
     conn = None
@@ -618,11 +677,14 @@ def step_personality_evolution(snapshot_path, save_season, dsn=None, log_fn=log,
                 conn.rollback()
                 log_fn(f"Personality evolution skipped: {e}")
                 return {"status": "skipped", "reason": "no_universe"}
-            report = er.run_season(cur, universe, season)
-        conn.commit()
+            report = er.run_season(cur, universe, season, dry_run=mode == "shadow")
+        if mode == "shadow":
+            conn.rollback()
+        else:
+            conn.commit()
         path = er.write_report(report, er.report_path(universe, season))
         changes = report["counts"].get("applied", 0) if report["status"] == "applied" else 0
-        log_fn(f"Personality evolution {season}: {report['status']} ({changes} changes); report {path}")
+        log_fn(f"Personality evolution {season} ({mode}): {report['status']} ({changes} changes); report {path}")
         if report["status"] == "applied":
             send_notify(f"Mu: {changes} personality changes in {season}. Report: {path}",
                         title="Mu: personality evolution", tags=("busts_in_silhouette",))
@@ -644,6 +706,221 @@ def step_personality_evolution(snapshot_path, save_season, dsn=None, log_fn=log,
                 log_fn(f"Could not record the FAILED evolution run: {rec_err}")
         try:
             send_notify(msg, title="Mu: personality evolution failed", priority="default", tags=("warning",))
+        except Exception:  # noqa: BLE001
+            pass
+        return {"status": "failed", "error": str(e)}
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:  # noqa: BLE001
+                pass
+
+
+# ------------------------------------------------------------------------------------------ trade requests ---
+TRADE_REQUEST_REPORTS = os.path.join("verify_output", "personality_trade_requests")
+
+
+def trade_request_clock(universe_id, season, tick):
+    """The trade-requests plan's RequestClock for an ingest: the 32-tick relationships calendar and the GM window
+    (gm_trade_engine.window_for; ticks 24-32 are the offseason window)."""
+    from engines import gm_trade_engine as gm
+    from engines import player_trade_requests as tr
+    window = gm.window_for(tick) or "CLOSED"
+    return tr.RequestClock(universe_id=universe_id, season=season, checkpoint_id=f"tick:{tick}",
+                           ordinal=tr.clock_ordinal(season, tick), window_id=f"{season}:{window}",
+                           window_kind=window, trades_open=window != "CLOSED",
+                           source_event_id=f"ingest:{universe_id}:{season}:{tick}")
+
+
+def trade_request_policy(modes, mode):
+    """The request policy from the switchboard's trade_requests config ('policy'), or the offline illustration
+    policy in shadow; None when active without a reviewed policy (the store refuses the offline one)."""
+    from engines import player_trade_requests as tr
+    from personality import features as pf
+    row = ((modes or {}).get("features") or {}).get("trade_requests") or {}
+    cfg = (row.get("config") or {}).get("policy")
+    if cfg is not None:
+        return tr.policy_from_dict(cfg)
+    return tr.offline_illustration_policy() if mode == "shadow" else None
+
+
+def trade_request_contexts(cur, universe, season, tick, clock, modes, user_team_ids):
+    """[(RequestContext, current team_id)] for every player persona on a team: the relationships plan's incidents
+    (only while its policy is in the switchboard's relationships config; otherwise none, so nobody qualifies) and
+    the core's trade_requests view. Players without a stored persona are skipped."""
+    from engines import player_trade_requests as tr
+    from personality import core, lifecycle as plc, store
+    from personality import reactions as rx, relationships as rel, relationship_store as rs
+    uid = universe["universe_id"]
+    rel_row = ((modes or {}).get("features") or {}).get("relationships") or {}
+    rel_policy = (rel_row.get("config") or {}).get("policy")
+    cur.execute("SELECT to_regclass(%s) IS NOT NULL", (rs.EVENTS_TABLE,))
+    have_events = bool(cur.fetchone()[0])
+    cur.execute("SELECT p.id, p.madden_pgid, p.team_id FROM players p WHERE p.team_id IS NOT NULL "
+                "AND p.madden_pgid IS NOT NULL ORDER BY p.id")
+    out = []
+    as_of = {"season": season, "tick": tick}
+    for player_id, pgid, team_id in cur.fetchall():
+        ident = store.resolve_alias(cur, uid, "player", plc.pgid_namespace(universe), str(pgid))
+        if ident is None:
+            continue
+        profile = store.read(cur, ident)
+        if profile is None:
+            continue
+        view = core.feature_view(profile, "trade_requests")
+        subject = {"kind": "person", "universe_id": uid, "role": "player", "persona_id": profile["persona_id"]}
+        incidents, rel_rev, rx_rev = (), "none", "none"
+        if rel_policy is not None and have_events:
+            events = rs.read_events(cur, subject=subject, as_of=as_of)
+            seasons = {ev["occurred_at"]["season"] for ev in events} | {season}
+            cal = {y: 32 for y in range(min(seasons), max(seasons) + 1)}
+            state = rel.project_relationships(events, subject=subject, as_of=as_of, known_through=None,
+                                              policy=rel_policy, calendar=cal)
+            reactions = rx.project_reactions(events, state, feature_view=core.feature_view(profile, "reactions"),
+                                             as_of=as_of, known_through=None, policy=rel_policy, calendar=cal)
+            incidents = tuple(tr.incidents_from_shared(events, state, reactions, team_id=int(team_id),
+                                                       team_key=f"team:{team_id}"))
+            rel_rev, rx_rev = state["input_hash"], reactions["input_hash"]
+        control = tr.control_context(int(team_id), user_team_ids=user_team_ids, suggestions_on=True)
+        ctx = tr.RequestContext(schema_version=tr.SCHEMA_VERSION, persona_id=profile["persona_id"],
+                                team_id=int(team_id), profile_view=view, relationship_revision=rel_rev,
+                                reaction_revision=rx_rev, assessment_id=f"{season}:{tick}",
+                                as_of_ordinal=clock.ordinal, complete_through_ordinal=clock.ordinal,
+                                incidents=incidents, control=control)
+        out.append((ctx, int(team_id)))
+    return out
+
+
+def registry_user_team_ids(cur):
+    """JR's teams from the franchise registry's user_teams (ids), or None when the registry can't say."""
+    try:
+        _, entry = franchises.active_entry()
+        abbrs = [a.upper() for a in ((entry or {}).get("user_teams") or [])]
+    except Exception:  # noqa: BLE001 - unknown authority
+        return None
+    if not abbrs:
+        return set()
+    cur.execute("SELECT id FROM teams WHERE upper(abbreviation) = ANY(%s)", (abbrs,))
+    return {r[0] for r in cur.fetchall()}
+
+
+def review_trade_requests(cur, universe, season, tick, mode, modes, *, contexts=None, user_team_ids=None):
+    """One checkpoint review for every player context (pure orchestration over the trade-requests plan's engine and
+    store). shadow: evaluate_request in SHADOW mode, nothing persisted, decisions returned for the report; active:
+    record_decision through the store and, for an ACTIVE stored episode, REVIEW_REPAIR (still on the requesting
+    team) or a deferred CLOSE_EMPLOYMENT (he left it; the departure is not verified here). One player's error is
+    recorded and the others carry on."""
+    from engines import player_trade_request_store as trs
+    from engines import player_trade_requests as tr
+    clock = trade_request_clock(universe["universe_id"], season, tick)
+    policy = trade_request_policy(modes, mode)
+    if policy is None:
+        return {"status": "skipped", "reason": "no_policy", "decisions": []}
+    if contexts is None:
+        contexts = trade_request_contexts(cur, universe, season, tick, clock, modes, user_team_ids)
+    decisions, counts = [], {}
+    for ctx, team_id in contexts:
+        try:
+            if mode == "shadow":
+                d = tr.evaluate_request(ctx, clock, None, None, policy, mode="SHADOW")
+                row = {"persona_id": ctx.persona_id, "team_id": team_id, "outcome": d.outcome,
+                       "decision": tr.to_dict(d)}
+            else:
+                episode = trs.read_active(cur, clock.universe_id, ctx.persona_id)
+                if episode is not None:
+                    left = team_id != episode.team_id
+                    action = tr.RequestAction(
+                        event_id=f"{'close' if left else 'repair'}:{clock.season}:{clock.checkpoint_id}",
+                        source_event_id=clock.source_event_id, expected_revision=episode.revision,
+                        kind="CLOSE_EMPLOYMENT" if left else "REVIEW_REPAIR", actor="SYSTEM",
+                        payload={"reason": "UNKNOWN", "from_team_id": episode.team_id} if left else {})
+                    if left:
+                        ctx = tr.RequestContext(**dict(tr.to_dict(ctx) | {"team_id": episode.team_id,
+                                                "control": tr.control_context(episode.team_id,
+                                                user_team_ids=user_team_ids, suggestions_on=True),
+                                                "incidents": ctx.incidents}))
+                    r = trs.apply_action(cur, episode.request_id, action, ctx, clock, policy)
+                    row = {"persona_id": ctx.persona_id, "team_id": team_id, "outcome": action.kind,
+                           "receipt": r}
+                else:
+                    r = trs.record_decision(cur, ctx, clock, policy, mode="ENABLED")
+                    row = {"persona_id": ctx.persona_id, "team_id": team_id,
+                           "outcome": r["decision"]["outcome"], "receipt": r}
+        except Exception as e:  # noqa: BLE001 - one player never stops the review
+            row = {"persona_id": ctx.persona_id, "team_id": team_id, "outcome": "ERROR",
+                   "error": f"{type(e).__name__}: {e}"}
+        counts[row["outcome"]] = counts.get(row["outcome"], 0) + 1
+        decisions.append(row)
+    return {"status": mode, "counts": counts, "decisions": decisions, "clock": tr.to_dict(clock)}
+
+
+def step_trade_requests(snapshot_path, save_season, dsn=None, log_fn=log, connect=None, modes=None):
+    """Trade-request reviews (PERSONALITY_ACTIVATION_PLAN.md §2.4) on every ingest, after the producers and
+    evolution steps, when the switchboard's trade_requests feature is not off (MU_TRADE_REQUESTS=off is the kill
+    switch). Its own connection and transaction. shadow writes the decisions to a report under
+    verify_output/personality_trade_requests/ and persists nothing; active persists through the trade-requests
+    store. Skipped (with a logged reason) when the tables aren't migrated or the league has no lifecycle universe.
+    Never fails the ingest."""
+    mode, why = feature_gate("trade_requests", TRADE_REQUESTS_ENV, modes)
+    if mode == "off":
+        log_fn(f"Trade requests off ({why}).")
+        return {"status": "off"}
+    conn = None
+    try:
+        from engines import player_trade_request_store as trs
+        from engines.relationship_producers import calendar as rcal, sources
+        from pipeline import league_office as lo
+        with open(snapshot_path) as fh:
+            snapshot = json.load(fh)
+        stage = lo.detect_stage(snapshot)
+        season = lo.league_season(snapshot, stage)
+        tick = rcal.tick_for(snapshot, lo.league_week(snapshot, stage) if stage in lo.IN_SEASON else None)
+        if connect is None:
+            import psycopg
+            connect = psycopg.connect
+        conn = connect(dsn or os.environ.get("DATABASE_URL"))
+        with conn.cursor() as cur:
+            cur.execute("SELECT to_regclass(%s) IS NOT NULL, to_regclass('persona_lifecycle_universes') IS NOT NULL",
+                        (trs.REQUESTS_TABLE,))
+            have_requests, have_lifecycle = cur.fetchone()
+            if not (have_requests and have_lifecycle):
+                conn.rollback()
+                log_fn("Trade requests skipped: trade-request or lifecycle tables not migrated.")
+                return {"status": "skipped", "reason": "not_migrated"}
+            from personality import lifecycle_store
+            universe = lifecycle_store.universe_for_league(cur, sources.league_id(cur))
+            if universe is None:
+                conn.rollback()
+                log_fn("Trade requests skipped: no lifecycle universe for this league.")
+                return {"status": "skipped", "reason": "no_universe"}
+            result = review_trade_requests(cur, universe, season, tick, mode, modes,
+                                           user_team_ids=registry_user_team_ids(cur))
+        if mode == "active":
+            conn.commit()
+        else:
+            conn.rollback()
+        out = {"status": result["status"], "season": season, "tick": tick, "counts": result.get("counts", {})}
+        if mode == "shadow" and result.get("decisions") is not None:
+            os.makedirs(TRADE_REQUEST_REPORTS, exist_ok=True)
+            path = os.path.join(TRADE_REQUEST_REPORTS,
+                                f"shadow_{universe['universe_id'].replace(':', '_')}_{season}_{tick:02d}.json")
+            with open(path, "w") as fh:
+                json.dump(result, fh, indent=1, sort_keys=True, default=str)
+            out["report"] = path
+        log_fn(f"Trade requests {season}:{tick} ({mode}): {out['counts']}")
+        return out
+    except Exception as e:  # noqa: BLE001 - never fatal to the ingest
+        msg = f"Trade requests failed: {e}"
+        log_fn(msg)
+        traceback.print_exc()
+        if conn is not None:
+            try:
+                conn.rollback()
+            except Exception:  # noqa: BLE001
+                pass
+        try:
+            send_notify(msg, title="Mu: trade requests failed", priority="default", tags=("warning",))
         except Exception:  # noqa: BLE001
             pass
         return {"status": "failed", "error": str(e)}
@@ -805,10 +1082,14 @@ def ingest_snapshot(snapshot_path, save_season, save_week, dry_run=False, no_art
     dsn = os.environ.get("DATABASE_URL")
     lo_result = None
 
+    # The personality switchboard, read once for this ingest (every feature off by default)
+    modes = personality_modes(dsn, log_fn=log_fn)
     # Step: relationship producers (after the load, before the stage_only branch; off by default; never fatal)
-    producers = step_relationship_producers(snapshot_path, save_season, dsn=dsn, log_fn=log_fn)
+    producers = step_relationship_producers(snapshot_path, save_season, dsn=dsn, log_fn=log_fn, modes=modes)
     # Step: personality evolution (OFFSEASON_START only, after the producers, before the league office; off by default)
-    evolution = step_personality_evolution(snapshot_path, save_season, dsn=dsn, log_fn=log_fn)
+    evolution = step_personality_evolution(snapshot_path, save_season, dsn=dsn, log_fn=log_fn, modes=modes)
+    # Step: trade-request reviews (after producers and evolution; off by default; never fatal)
+    trade_requests = step_trade_requests(snapshot_path, save_season, dsn=dsn, log_fn=log_fn, modes=modes)
 
     def step_league_office():
         nonlocal lo_result
@@ -825,7 +1106,7 @@ def ingest_snapshot(snapshot_path, save_season, save_week, dry_run=False, no_art
     def result():
         return {"status": "success", "dry_run": False, "season": save_season, "week": save_week,
                 "load_report": load_report, "league_office": lo_result, "relationship_producers": producers,
-                "personality_evolution": evolution}
+                "personality_evolution": evolution, "trade_requests": trade_requests}
 
     if stage_only:
         # An offseason stop: no current week, so no weekly engines, articles or mod pack.

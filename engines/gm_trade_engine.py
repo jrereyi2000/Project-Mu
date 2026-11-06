@@ -1524,9 +1524,51 @@ def set_status(cur, pid, status, reason=None):
 
 
 # --------------------------------------------------------------------- run ----
-def run_week(cur, season, week, dry_run=False, replace=False, llm=None, log=print, window=None, stage=None):
+def request_shopping(b, request_signals):
+    """{team_id: {player_id: request_id}} from the trade-requests plan's GM signals (PERSONALITY_ACTIVATION_PLAN.md
+    §2.4): actionable signals for players still on the requesting team, never for a user-controlled team (JR's
+    teams get the inbox card only). A signal needs `player_id` (the caller maps the persona to the player)."""
+    out = {}
+    for sig in request_signals or ():
+        tid, pid = sig.get("team_id"), sig.get("player_id")
+        if not sig.get("actionable") or sig.get("status") != "ACTIVE" or tid is None or pid is None:
+            continue
+        gm = b["gm"].get(tid)
+        if gm is None or gm.get("user_controlled") or pid not in b["roster"].get(tid, []):
+            continue
+        out.setdefault(tid, {})[pid] = sig.get("request_id")
+    return out
+
+
+def request_deals(b, valuer, seller, requested):
+    """Deals that shop the seller's requesting players (a request is a reason to listen to offers, not a discount):
+    teams that value the player more than the seller does, through the usual packages, legality and acceptance."""
+    deals, scored = [], []
+    for pid in sorted(requested):
+        if not free_player(b, pid):
+            continue
+        for buyer in b["teams"]:
+            if buyer == seller or not eligible_team(b, buyer):
+                continue
+            x = {"type": "PLAYER", "player_id": pid, "from": seller, "to": buyer}
+            gain = valuer.value(x, buyer) - valuer.value(x, seller)
+            if gain > 0:
+                scored.append((gain, buyer, x))
+    scored.sort(key=lambda s: (-s[0], s[1], s[2]["player_id"]))
+    for _, buyer, x in scored[:TOP_TARGETS]:
+        for d in packages(b, valuer, buyer, seller, [x], "SELL"):
+            d["a"], d["b"] = seller, buyer             # the seller initiated
+            d["request_id"] = requested[x["player_id"]]
+            deals.append(d)
+    return deals
+
+
+def run_week(cur, season, week, dry_run=False, replace=False, llm=None, log=print, window=None, stage=None,
+             request_signals=None):
     """One engine run. Returns a report dict; in a dry run nothing is written (the caller rolls back too). In the
-    offseason (week 24) `stage` is the offseason stage 1-5 (OFFSEASON_STAGES; default 1)."""
+    offseason (week 24) `stage` is the offseason stage 1-5 (OFFSEASON_STAGES; default 1). request_signals: the
+    trade-requests plan's GM signals (optional; None = today's search exactly): each requesting CPU team also shops
+    its requesting player at his normal valuation (request_shopping / request_deals), flagged trade_request:<id>."""
     from engines import gm_direction
     window = window or window_for(week)
     if window == "OFFSEASON":
@@ -1597,6 +1639,8 @@ def run_week(cur, season, week, dry_run=False, replace=False, llm=None, log=prin
         f"{IN_SEASON_MAX_OPEN if window == 'IN_SEASON' else MAX_OPEN} open)")
     # 5-8. search, legality, acceptance, choice
     used = set()
+    requests = request_shopping(b, request_signals)
+    rep["requests"] = {tid: sorted(p) for tid, p in requests.items()}
     for tid in order:
         if len(rep["proposals"]) >= n:
             break
@@ -1612,6 +1656,8 @@ def run_week(cur, season, week, dry_run=False, replace=False, llm=None, log=prin
             deals = (shaped_sell_deals if shaped else sell_deals)(b, valuer, tid)
         else:
             deals = buy(b, valuer, tid)
+        if tid in requests:
+            deals = deals + request_deals(b, valuer, tid, requests[tid])
         deals = [d for d in deals if d["b"] not in used and d["a"] not in used]
         cands = evaluate(deals, b, valuer)
         pick = choose_shaped(cands, rng) if shaped else choose(cands, rng)
@@ -1625,6 +1671,8 @@ def run_week(cur, season, week, dry_run=False, replace=False, llm=None, log=prin
         if window == "OFFSEASON":
             flags.append(f"stage:{stage}")
         flags += release_flags(pick.get("legality") or {}, b)
+        if pick.get("request_id"):
+            flags.append(f"trade_request:{pick['request_id']}")
         if pick.get("shape"):
             flags.append(f"shape:{pick['shape']}")
             b["blockbusters"] = b.get("blockbusters", 0) + (pick["shape"] == "BLOCKBUSTER")

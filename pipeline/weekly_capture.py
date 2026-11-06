@@ -378,6 +378,67 @@ def step_engines(season):
                           f"articles): {e!r}")
 
 
+TRADE_REQUESTS_ENV = "MU_TRADE_REQUESTS"
+
+
+def trade_request_signals(cur, season, week, log=print):
+    """The trade-requests plan's GM signals for run_week (PERSONALITY_ACTIVATION_PLAN.md §2.4), or None.
+
+    Only when the switchboard's trade_requests feature is active (MU_TRADE_REQUESTS=off is the kill switch; shadow
+    gives None, so run_week searches exactly as before) and the request tables exist. Each ACTIVE episode's
+    gm_request_signal gets the player's id (through the lifecycle save-pgid alias); teams in the franchise
+    registry's user_teams get no automatic shopping (JR sees the inbox card)."""
+    if os.environ.get(TRADE_REQUESTS_ENV, "").strip().lower() == "off":
+        return None
+    import json
+    from personality import features as pf
+    cur.execute("SELECT madden_league_id FROM league_state WHERE id = 1")
+    row = cur.fetchone()
+    if not row or row[0] is None or pf.snapshot_mode(pf.snapshot(cur, int(row[0])), "trade_requests") != "active":
+        return None
+    from engines import player_trade_request_store as trs
+    from engines import player_trade_requests as tr
+    from engines.gm_trade_engine import window_for
+    from personality import lifecycle as plc, lifecycle_store
+    cur.execute("SELECT to_regclass(%s) IS NOT NULL, to_regclass('persona_lifecycle_universes') IS NOT NULL",
+                (trs.REQUESTS_TABLE,))
+    if not all(cur.fetchone()):
+        return None
+    universe = lifecycle_store.universe_for_league(cur, int(row[0]))
+    if universe is None:
+        return None
+    try:
+        from db.franchises import active_entry
+        _, entry = active_entry()
+        users = {a.upper() for a in ((entry or {}).get("user_teams") or [])}
+    except Exception:  # noqa: BLE001 - unknown authority: shop nobody's request automatically
+        log("  GM trade requests: franchise registry unreadable; no requests shopped")
+        return []
+    cur.execute("SELECT id FROM teams WHERE upper(abbreviation) = ANY(%s)", (sorted(users),))
+    user_ids = {r[0] for r in cur.fetchall()}
+    tick = min(max(int(week), 1), 32)
+    window = window_for(tick) or "CLOSED"
+    clock = tr.RequestClock(universe_id=universe["universe_id"], season=season, checkpoint_id=f"tick:{tick}",
+                            ordinal=tr.clock_ordinal(season, tick), window_id=f"{season}:{window}",
+                            window_kind=window, trades_open=window != "CLOSED",
+                            source_event_id=f"gm:{universe['universe_id']}:{season}:{tick}")
+    cur.execute(f"SELECT state FROM {trs.REQUESTS_TABLE} WHERE universe_id = %s AND status = 'ACTIVE'",
+                (universe["universe_id"],))
+    signals = []
+    for (state,) in cur.fetchall():
+        episode = tr.episode_from_dict(json.loads(state) if isinstance(state, str) else state)
+        sig = tr.gm_request_signal(episode, clock=clock)
+        if sig is None or sig["team_id"] in user_ids:
+            continue
+        cur.execute("SELECT p.id FROM persona_core_aliases a JOIN players p ON p.madden_pgid::text = a.external_id "
+                    "WHERE a.universe_id = %s AND a.persona_type = 'player' AND a.persona_id = %s "
+                    "AND a.namespace = %s", (universe["universe_id"], sig["persona_id"], plc.pgid_namespace(universe)))
+        found = cur.fetchone()
+        if found is not None:
+            signals.append(dict(sig, player_id=found[0]))
+    return signals
+
+
 def step_gm(season, next_stage=False):
     """GM trade proposals (team management step 3, engines/gm_trade_engine.py) for league_state's week, after the
     engines and before articles. After the Super Bowl scan the league is in the offseason: stage 1 (post-Super
@@ -415,13 +476,24 @@ def step_gm(season, next_stage=False):
                     log(f"  GM trade proposals: offseason stage {done} already ran; run the next stage from #debug")
                     return 0
                 stage = 1                                     # right after the Super Bowl scan: post-Super Bowl
+            try:
+                signals = trade_request_signals(cur, season, week, log=log)
+            except Exception as e:  # noqa: BLE001 - requests are optional; the search runs as before
+                try:
+                    conn.rollback()                    # nothing written yet this run; clears an aborted read
+                except Exception:  # noqa: BLE001
+                    pass
+                log(f"  GM trade requests unavailable ({e}); searching without them")
+                signals = None
+            if signals:
+                log(f"  GM trade requests: {len(signals)} requesting player(s) shopped")
             bio_llm = make_llm("gm_persona")
             if bio_llm is not None:
                 n = backfill_bios(cur, season, bio_llm, log=log)
                 if n:
                     log(f"  GM bios: {n} written by Gemini")
                 flush(bio_llm)
-            rep = run_week(cur, season, week, llm=llm, log=log, stage=stage)
+            rep = run_week(cur, season, week, llm=llm, log=log, stage=stage, request_signals=signals)
             conn.commit()
         flush(llm)
         n = len(rep["proposals"])

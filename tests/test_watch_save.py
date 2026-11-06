@@ -32,6 +32,13 @@ def no_real_mod_manager(tmp_path, monkeypatch):
     monkeypatch.setattr("pipeline.mod_packs.write_pack", refuse)
 
 
+@pytest.fixture(autouse=True)
+def no_switchboard(monkeypatch):
+    """The ingest reads the personality switchboard once (personality_modes), which opens a database connection;
+    tests get None (no switchboard: every step falls back to its env flag) unless they patch it themselves."""
+    monkeypatch.setattr("pipeline.watch_save.personality_modes", lambda *a, **k: None)
+
+
 class DebouncerTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
