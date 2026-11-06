@@ -1547,6 +1547,62 @@ CREATE TABLE IF NOT EXISTS retirement_decisions (
     PRIMARY KEY (season, player_id)
 );
 
+-- Retirement policy sidecars (2027_01_26_retirement_policy.sql, engines/retirement_store.py,
+-- PERSONALITY_RETIREMENT_PLAN §2.5): career state machine rows, append-only review/event receipts and save-write
+-- receipts. Policy intent and execution only; retirement_decisions above stays the league office's projection.
+CREATE TABLE IF NOT EXISTS career_decision_states (
+    universe_id TEXT NOT NULL,
+    person_key TEXT NOT NULL,
+    earned_season INTEGER NOT NULL,
+    player_id INTEGER NOT NULL REFERENCES players (id),
+    state TEXT NOT NULL CHECK (state IN ('OPEN', 'AVAILABLE', 'RETIRE_INTENT', 'SIGN_PENDING', 'RETIRE_PENDING',
+                                         'RETURNING', 'UNSIGNED_RETURN_ELIGIBLE', 'RETIRED', 'BLOCKED_DATA',
+                                         'CONFLICT')),
+    revision INTEGER NOT NULL CHECK (revision >= 0),
+    decision_id UUID NOT NULL UNIQUE,
+    reservation JSONB NULL CHECK (reservation IS NULL OR jsonb_typeof(reservation) = 'object'),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (universe_id, person_key, earned_season)
+);
+
+CREATE TABLE IF NOT EXISTS retirement_policy_events (
+    event_id UUID PRIMARY KEY,
+    decision_id UUID NOT NULL REFERENCES career_decision_states (decision_id),
+    checkpoint TEXT NOT NULL CHECK (checkpoint IN ('OPEN', 'MARKET_CLOSE', 'ROLLOVER_REVIEW', 'EVENT')),
+    event_kind TEXT NOT NULL,
+    source_event_id TEXT NOT NULL,
+    request_hash TEXT NOT NULL,
+    input_snapshot JSONB NOT NULL,
+    policy_snapshot JSONB NOT NULL,
+    draw_hex TEXT NULL,
+    breakdown JSONB NULL,
+    before_state JSONB NOT NULL,
+    after_state JSONB NOT NULL,
+    receipt JSONB NOT NULL CHECK (jsonb_typeof(receipt) = 'object'),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (decision_id, source_event_id)
+);
+
+CREATE TABLE IF NOT EXISTS retirement_write_receipts (
+    operation_id UUID PRIMARY KEY,
+    decision_id UUID NOT NULL REFERENCES career_decision_states (decision_id),
+    status TEXT NOT NULL CHECK (status IN ('PREPARED', 'VERIFIED', 'FAILED', 'CONFLICT')),
+    source_save_hash TEXT NOT NULL,
+    output_hash TEXT NULL,
+    edits_hash TEXT NOT NULL,
+    league_office_run INTEGER NULL REFERENCES league_office_runs (id),
+    before_image JSONB NOT NULL,
+    verification JSONB NULL,
+    request_hash TEXT NOT NULL,
+    ack_hash TEXT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    acknowledged_at TIMESTAMPTZ NULL,
+    CHECK ((status = 'PREPARED') = (ack_hash IS NULL))
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS retirement_write_receipts_one_prepared
+    ON retirement_write_receipts (decision_id) WHERE status = 'PREPARED';
+
 -- Each player's fate between two captured seasons (plan D10: captured seasons only, 2035 -> 2036 on).
 CREATE TABLE IF NOT EXISTS player_season_transitions (
     player_id INT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
