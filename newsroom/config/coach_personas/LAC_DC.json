@@ -1,0 +1,184 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:LAC:DC",
+  "name": "Chris O'Leary",
+  "role": "DC",
+  "team": "LAC",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "LAC",
+    "role": "DC",
+    "name": "Chris O'Leary"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 6,
+    "drive": 6
+  },
+  "slider_evidence": {
+    "warmth": [
+      "E2"
+    ],
+    "drive": [
+      "E2",
+      "E5"
+    ]
+  },
+  "traits": [
+    "TEACHER",
+    "LOYAL",
+    "SCHEME_NERD"
+  ],
+  "trait_evidence": {
+    "TEACHER": [
+      "E2",
+      "E3"
+    ],
+    "LOYAL": [
+      "E2",
+      "E3"
+    ],
+    "SCHEME_NERD": [
+      "E3",
+      "E5"
+    ]
+  },
+  "views": [
+    {
+      "text": "Don't tear down a top defense; raise it and let it grow from what already works.",
+      "when": [
+        "SCHEME",
+        "OFFSEASON"
+      ]
+    },
+    {
+      "text": "A good coach brings respect, accountability and high expectations, whatever his title.",
+      "when": [
+        "COACHING"
+      ]
+    },
+    {
+      "text": "The relationships in a building are worth more than any single job offer.",
+      "when": [
+        "COACHING",
+        "FRONT_OFFICE"
+      ]
+    },
+    {
+      "text": "A safety who can do everything is the piece a defense gets built around.",
+      "when": [
+        "PLAYER",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Linebackers who play downhill and an extra rusher on passing downs keep offenses from getting comfortable.",
+      "when": [
+        "SCHEME",
+        "PREVIEW"
+      ]
+    },
+    {
+      "text": "Young defenders improve fastest when the coach pushes them hard every day.",
+      "when": [
+        "YOUTH",
+        "PLAYER"
+      ]
+    }
+  ],
+  "signatures": [
+    "names his favorite player to coach without hesitating",
+    "frames every change as building on what the previous coordinator started",
+    "credits calls and texts from players as a reason he took the job"
+  ],
+  "want": "to keep the Chargers' defense among the league's best as a first-time NFL coordinator and stamp it with his own aggression",
+  "fear": "that any dip in the defense gets blamed on losing Minter rather than on something he can fix",
+  "voice": "Energetic and earnest, relationship-first; he talks about standards, accountability and pushing players, and credits his predecessor and the players for what is already built. He says little about scheme detail in public. Coverage is mostly from his hiring and first camp.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "BAL",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E3"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Derwin James Jr.",
+        "team_2026": "LAC"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E2",
+        "E3"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.chargers.com/news/agree-to-terms-chris-oleary-defensive-coordinator-2026",
+      "publisher": "Los Angeles Chargers (chargers.com)",
+      "published": "2026-01-28",
+      "accessed": "2026-11-06",
+      "summary": "The Chargers agree to terms with O'Leary, 34, their 2024 safeties coach, after a season as Western Michigan's coordinator (MAC title, 17.4 points allowed per game); a graduate assistant under Jesse Minter at Georgia State and six years at Notre Dame. Read from the search summary.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.chargers.com/news/chris-oleary-derwin-james-defensive-coordinator-press-conference",
+      "publisher": "Los Angeles Chargers (chargers.com), Omar Navarro",
+      "published": "2026-02-03",
+      "accessed": "2026-11-06",
+      "summary": "Introduction: calls the job a once-in-a-lifetime chance, says relationships with players and staff made it easy and Derwin James called as he accepted; turned down other offers; a good coach brings respect, accountability and high expectations; the title changes little in how he treats players and he wants to push them. Team-written.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.si.com/nfl/chargers/onsi/chargers-chris-oleary-hire-promises-bring-jesse-minter",
+      "publisher": "Sports Illustrated (Chargers on SI), Thomas Martinez",
+      "published": "2026-02-03",
+      "accessed": "2026-11-06",
+      "summary": "He pledges to elevate and evolve a defense that was among the league's best under Minter rather than start over; his Western Michigan scheme mirrored the Chargers' with Notre Dame touches; Minter hired him as a graduate assistant in 2015 and brought him to Los Angeles in 2024; calls James a favorite player.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.chargers.com/news/chris-oleary-defensive-coordinator-jim-harbaugh-2026",
+      "publisher": "Los Angeles Chargers (chargers.com), Omar Navarro",
+      "published": "2026-02-12",
+      "accessed": "2026-11-06",
+      "summary": "Round-up of outside reaction: analysts expect him to keep the system largely intact and add layers, note the defense's top-six efficiency over two seasons, and trust Harbaugh's eye for coordinators. No quotes from O'Leary or Harbaugh.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.si.com/nfl/chargers/onsi/chargers-training-camp-chris-oleary-first-week-tells-us-vision",
+      "publisher": "Sports Illustrated (Chargers on SI), Thomas Martinez",
+      "published": "2026-08-04",
+      "accessed": "2026-11-06",
+      "summary": "First camp week: same base defense, but signs of a more aggressive approach with linebackers near the line, more extra rushers on passing downs and possibly more man coverage; Daiyan Henley says he brings his own flair, energy and willingness to attack.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "New seat 2026. Five sources, several medium (fan-network and team round-ups; E1 from the search summary); thin on personality, so four sliders stay at 5."
+  }
+}

@@ -13,29 +13,38 @@
   "sliders": {
     "temperament": 5,
     "sociability": 6,
-    "confidence": 5,
-    "openness": 7,
-    "warmth": 7,
-    "drive": 5
+    "confidence": 6,
+    "openness": 6,
+    "warmth": 6,
+    "drive": 7
   },
   "slider_evidence": {
     "sociability": [
       "E3",
-      "E5"
+      "E4"
+    ],
+    "confidence": [
+      "E5",
+      "E7"
     ],
     "openness": [
       "E2",
-      "E3"
+      "E6"
     ],
     "warmth": [
       "E3",
-      "E5"
+      "E4"
+    ],
+    "drive": [
+      "E5",
+      "E8"
     ]
   },
   "traits": [
     "QB_WHISPERER",
     "PLAYERS_COACH",
-    "SCHEME_NERD"
+    "SCHEME_NERD",
+    "FILM_ROOM_RAT"
   ],
   "trait_evidence": {
     "QB_WHISPERER": [
@@ -44,16 +53,19 @@
     ],
     "PLAYERS_COACH": [
       "E3",
-      "E5"
+      "E4"
     ],
     "SCHEME_NERD": [
       "E4",
-      "E5"
+      "E7"
+    ],
+    "FILM_ROOM_RAT": [
+      "E7"
     ]
   },
   "views": [
     {
-      "text": "The offense belongs to the quarterback; the coordinator's job is to make his calls simple and his reads clean.",
+      "text": "The offense belongs to the quarterback; the play caller's job is to make his reads simple and clean.",
       "when": [
         "QB",
         "SCHEME"
@@ -74,13 +86,6 @@
       ]
     },
     {
-      "text": "When an offense loses big names it does not need rebuilding, only a sharper version of what already worked.",
-      "when": [
-        "ROSTER_MOVES",
-        "OFFSEASON"
-      ]
-    },
-    {
       "text": "Getting fired early taught him to trust his players more and to stop overthinking the play sheet.",
       "when": [
         "COACHING",
@@ -93,16 +98,37 @@
         "SCHEME",
         "PLAYOFFS"
       ]
+    },
+    {
+      "text": "Big expectations come with this job, and a coach who tries to lower them is in the wrong building.",
+      "when": [
+        "CONTENDER",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Alignment means arguing it out behind closed doors, then everyone pulling the same way once it is decided.",
+      "when": [
+        "FRONT_OFFICE",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Camp should be hard enough that the fall feels easier by comparison.",
+      "when": [
+        "OFFSEASON",
+        "PREVIEW"
+      ]
     }
   ],
   "signatures": [
     "calls the offense the quarterback's offense whenever asked about his own system",
     "mentions which players asked for which plays when explaining a game plan",
-    "brings up the lessons from his first coordinator job when asked how he has changed"
+    "keeps the play sheet as head coach and says so plainly whenever asked who runs the offense"
   ],
-  "want": "to prove that his fast rise was not a fluke by building a lasting, balanced offense around an elite quarterback",
-  "fear": "that he becomes known as the coordinator who was fired in his first NFL play-calling job, not the one who fixed it",
-  "voice": "Young, energetic and conversational; he talks with obvious enthusiasm and leans on the word trust. He deflects credit to the quarterback and the players who asked for the calls, and he is open about what his early firing taught him. He keeps scheme talk accessible rather than technical in public.",
+  "want": "to win Buffalo's first Super Bowl of the Allen era as a first-time head coach who still calls the offense",
+  "fear": "that replacing a long-tenured head coach without delivering the title makes him the face of the change that failed",
+  "voice": "Young, energetic and conversational; he meets big expectations head-on rather than talking them down, and admits openly that he will make mistakes. He talks about trust, alignment and the quarterback owning the offense, keeps scheme talk accessible, and steers credit toward players and assistants. In camp his tone turns demanding.",
   "ties": [
     {
       "target": {
@@ -116,6 +142,21 @@
         "E1",
         "E2",
         "E3"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "BUF",
+          "role": "OC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E7"
       ]
     }
   ],
@@ -149,27 +190,54 @@
     },
     {
       "id": "E4",
-      "url": "https://www.si.com/nfl/josh-allen-perfect-plan-keep-teams-hiring-bills-joe-brady",
-      "publisher": "Sports Illustrated, Ryan Phillips",
-      "published": "2025-01-08",
-      "accessed": "2026-11-04",
-      "summary": "Allen jokes that teams should not hire Brady, plainly wanting to keep him. Notes the offense ranked second in scoring with a balanced attack, his 2019 Broyles Award at LSU and his short Carolina tenure. Says little about his personality directly.",
-      "confidence": "medium"
-    },
-    {
-      "id": "E5",
       "url": "https://www.si.com/nfl/bills/news/newly-minted-60-million-star-reveals-what-makes-oc-joe-brady-special",
       "publisher": "Sports Illustrated (Bills on SI), Brian Letscher",
       "published": "2025-03-12",
       "accessed": "2026-11-04",
       "summary": "Khalil Shakir praises his everybody-eats philosophy and personal traits; credits him with moving Buffalo to a balanced run-pass offense that set franchise scoring records in 2024, and says he stayed after head-coach interest. A fan-network write-up of a podcast; it misdates the LSU title.",
       "confidence": "medium"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.nbcsports.com/nfl/profootballtalk/rumor-mill/news/joe-brady-i-didnt-take-this-job-to-shy-away-from-expectations",
+      "publisher": "Pro Football Talk (NBC Sports), Myles Simmons",
+      "published": "2026-01-29",
+      "accessed": "2026-11-06",
+      "summary": "Introductory press conference as head coach: he says he is not backing away from high expectations and intends to meet the pressure directly, admits he will make mistakes, wants to give fans and owner Terry Pegula what they deserve, and calls the roster continuity an advantage. A short news write-up of his remarks.",
+      "confidence": "high"
+    },
+    {
+      "id": "E6",
+      "url": "https://www.si.com/nfl/bills/onsi/joe-brady-s-introduction-as-bills-head-coach-revealed-underlying-tension-among-ranks-coaching",
+      "publisher": "Sports Illustrated (Bills on SI), Alex Brasky",
+      "published": "2026-01-29",
+      "accessed": "2026-11-06",
+      "summary": "Reads the introduction as a reset after friction between the fired McDermott and the front office; Beane says he wanted a CEO-type coach and keeps stressing alignment. Brady describes alignment as open disagreement followed by full commitment once a call is made, and Allen backs the new direction. Editorial framing; medium for the tension reading.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E7",
+      "url": "https://www.buffalobills.com/news/something-special-about-this-guy-why-pete-carmichael-waited-seven-years-to-get-back-with-joe-brady",
+      "publisher": "Buffalo Bills (buffalobills.com), Maddy Glab",
+      "published": "2026-02-05",
+      "accessed": "2026-11-06",
+      "summary": "Feature on the new coordinator: Brady, the youngest active head coach at 36, keeps calling the offense and wants a coordinator who game-plans as if he will call it. Recalls Brady filling notebooks in the Saints quarterback room in 2017-18 and Carmichael spotting him early and steering him to LSU. Team-written and favorable.",
+      "confidence": "high"
+    },
+    {
+      "id": "E8",
+      "url": "https://www.espn.com.au/nfl/story/_/id/49096995/2026-buffalo-bills-training-camp-preview",
+      "publisher": "ESPN, Alaina Getzenberg",
+      "published": "2026-07-23",
+      "accessed": "2026-11-06",
+      "summary": "Camp preview: Brady wants his first camp as head coach to be very hard, moves practice more than an hour earlier than under McDermott, says pads are needed to judge positions like left guard, and notes Leonhard bringing a 3-4 base. Beat-writer preview; little on personality beyond the demanding tone.",
+      "confidence": "high"
     }
   ],
   "review": {
     "status": "draft",
     "reviewer": null,
     "reviewed_at": null,
-    "notes": "moved seat 2026; re-research for 2026 sources"
+    "notes": "Moved seat 2026 (Bills OC to head coach). Added four 2026 sources (introduction, alignment coverage, Carmichael feature, camp preview); dropped the 2025 SI Allen-joke piece; drive raised to 7 on camp evidence; FILM_ROOM_RAT added; tie to his OC Carmichael added. Want, fear, voice and three views rewritten for the head job."
   }
 }

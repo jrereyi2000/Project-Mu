@@ -15,10 +15,15 @@
     "sociability": 5,
     "confidence": 5,
     "openness": 5,
-    "warmth": 5,
+    "warmth": 6,
     "drive": 5
   },
-  "slider_evidence": {},
+  "slider_evidence": {
+    "warmth": [
+      "E5",
+      "E7"
+    ]
+  },
   "traits": [
     "QB_WHISPERER",
     "FILM_ROOM_RAT",
@@ -33,8 +38,8 @@
       "E3"
     ],
     "TEACHER": [
-      "E3",
-      "E2"
+      "E2",
+      "E3"
     ]
   },
   "views": [
@@ -74,20 +79,34 @@
       ]
     },
     {
-      "text": "Late in a close game, trust the hunch you have prepared for all week.",
+      "text": "Late in a close game, trust the hunch you prepared for all week.",
       "when": [
         "CLOSE_GAMES",
         "SCHEME"
+      ]
+    },
+    {
+      "text": "Run the ball and win the trenches; everything else in an offense sits on top of that.",
+      "when": [
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "An offense should change shape every year with its players, even when the roots stay the same.",
+      "when": [
+        "SCHEME",
+        "ROSTER_MOVES"
       ]
     }
   ],
   "signatures": [
     "always has one specific coaching point for the quarterback, even after a good game",
-    "starts a review of a bad half by naming his own call that went wrong"
+    "starts a review of a bad half by naming his own call that went wrong",
+    "tells the story of switching from defense to offense under Shanahan when asked about himself"
   ],
-  "want": "to prove the Shanahan-tree offense he built around a rookie quarterback can make him a head coach",
-  "fear": "that one standout season with a rookie gets remembered as the quarterback's doing and not his",
-  "voice": "Analytical and quietly intense, a play-caller who talks in concepts and coaching points. He is candid about his own errors, credits the quarterback and receivers, and avoids grand statements about himself.",
+  "want": "to rebuild his play-calling name in Miami with a new quarterback after Houston let him go",
+  "fear": "that Houston's 2024 slide becomes the lasting verdict on him rather than the rookie season before it",
+  "voice": "Analytical and quietly intense, a play-caller who talks in concepts and coaching points, but warm and gracious at the podium. He is candid about his own errors, credits quarterbacks and receivers, and avoids grand statements about himself or what the offense will do.",
   "ties": [
     {
       "target": {
@@ -131,6 +150,22 @@
       "evidence": [
         "E3",
         "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "MIA",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E6",
+        "E7"
       ]
     }
   ],
@@ -179,12 +214,30 @@
       "accessed": "2026-11-05",
       "summary": "Ryans says letting Slowik go was very hard, calls him a close friend from San Francisco who helped him early in his coaching career, and cites the offense falling to 22nd in yards and 19th in scoring, feedback from key offensive players, and Stroud's career-high 52 sacks; introduces Nick Caley as the replacement.",
       "confidence": "high"
+    },
+    {
+      "id": "E6",
+      "url": "https://africa.espn.com/nfl/story/_/id/47717683/source-dolphins-promote-bobby-slowik-offensive-coordinator",
+      "publisher": "ESPN",
+      "published": "2026-01-24",
+      "accessed": "2026-11-06",
+      "summary": "Miami promotes its 2025 senior passing game coordinator to offensive coordinator under Hafley; the two overlapped on Shanahan's 49ers staff in 2017-18; he will call the offense while Hafley calls defense. Read from the search summary.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E7",
+      "url": "https://www.miamidolphins.com/news/transcript-oc-bobby-slowik-dc-sean-duggan-and-stc-chris-tabor-introductory-press-conference-feb-4",
+      "publisher": "Miami Dolphins (miamidolphins.com)",
+      "published": "2026-02-05",
+      "accessed": "2026-11-06",
+      "summary": "His introductory press conference as Miami coordinator: an offense with McDaniel-style roots that changes with personnel, built on the run game and winning the trenches; calls Hafley a close friend; reflects on lessons from each stop; praises Tagovailoa's composure; explains moving from defense to offense under Shanahan. Warm, gracious and careful not to overpromise.",
+      "confidence": "high"
     }
   ],
   "review": {
     "status": "draft",
     "reviewer": null,
     "reviewed_at": null,
-    "notes": "moved seat 2026; re-research for 2026 sources"
+    "notes": "Moved seat 2026 (Texans OC to Dolphins OC). Added his promotion and his Miami introduction; warmth raised to 6 on the transcript; two views, a signature, want and fear updated; tie to Hafley added. Other sliders stay at 5 (thin personality coverage)."
   }
 }

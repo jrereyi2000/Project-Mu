@@ -14,68 +14,65 @@
     "temperament": 6,
     "sociability": 6,
     "confidence": 6,
-    "openness": 5,
+    "openness": 6,
     "warmth": 5,
     "drive": 7
   },
   "slider_evidence": {
     "temperament": [
-      "E7"
+      "E5"
     ],
     "sociability": [
       "E1",
-      "E2"
+      "E7"
     ],
     "confidence": [
       "E1",
-      "E3"
+      "E2"
+    ],
+    "openness": [
+      "E7",
+      "E8"
     ],
     "drive": [
       "E1",
-      "E2"
+      "E8"
     ]
   },
   "traits": [
     "QUOTABLE",
-    "OLD_SCHOOL",
-    "SCHEME_NERD"
+    "SCHEME_NERD",
+    "MENTOR"
   ],
   "trait_evidence": {
     "QUOTABLE": [
-      "E3"
-    ],
-    "OLD_SCHOOL": [
-      "E1",
       "E2"
     ],
     "SCHEME_NERD": [
-      "E6"
+      "E4",
+      "E7"
+    ],
+    "MENTOR": [
+      "E3"
     ]
   },
   "views": [
     {
-      "text": "A team should be adaptable, physical, explosive and smart, and every plan should show all four.",
-      "when": [
-        "SCHEME",
-        "PREVIEW"
-      ]
-    },
-    {
-      "text": "Stay where your feet are; this week's work is the only one you can win.",
+      "text": "Stay where your feet are; this week is the only one you can win.",
       "when": [
         "COACHING",
         "WIN_STREAK"
       ]
     },
     {
-      "text": "Put defenses in conflict: when a run and a pass look the same, they have to guess.",
+      "text": "The best disguise makes two looks identical, so the quarterback has to guess.",
       "when": [
         "SCHEME",
         "QB"
       ]
     },
     {
-      "text": "A dynamic quarterback is a problem for every defense, and the offense should lean into that.",
+      "text": "A quarterback who can make every throw and protect the ball is the hardest thing to defend.",
       "when": [
         "QB"
       ]
@@ -95,21 +92,35 @@
       ]
     },
     {
-      "text": "When the head coach loses his composure, he owns it in front of the team, apologizes and moves on.",
+      "text": "When a coach loses his composure, he owns it in front of the team, apologizes and moves on.",
       "when": [
         "BAD_GAME",
         "COACHING"
+      ]
+    },
+    {
+      "text": "Labels like 4-3 or 3-4 matter less than putting players where they feel sure of themselves.",
+      "when": [
+        "SCHEME",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "Failing as a head coach teaches things no coordinator job can, and a good coach carries that back to the field.",
+      "when": [
+        "COACHING",
+        "HISTORY"
       ]
     }
   ],
   "signatures": [
     "leans on a stock of short catchphrases that reporters start collecting",
-    "brings players into the room at big announcements and speaks to them directly",
-    "apologizes to the team as a group when he crosses a line"
+    "apologizes to the team as a group when he crosses a line",
+    "talks about the fun of being back to hands-on coaching after running a whole team"
   ],
-  "want": "to build Arizona into a physical, adaptable winner around a young staff he hand-picked",
-  "fear": "that the heat that makes him energizing on the sideline turns into a moment that defines him",
-  "voice": "High-energy, emphatic and full of slogans; he speaks in punchy phrases and repeats a few favorite expressions. He talks up toughness, adaptability and staying present, and is effusive about players he likes. When he gets something wrong he names it plainly and apologizes.",
+  "want": "to rebuild his name with a top defense in Green Bay after a losing run as a head coach, and earn another chance",
+  "fear": "that three losing seasons in Arizona and one sideline outburst define him more than his Philadelphia defenses",
+  "voice": "High-energy and emphatic, full of slogans and punchy phrases. He is candid and good-humored about his setbacks, grateful rather than bitter about Arizona, and effusive about players he likes. When he gets something wrong he names it plainly and apologizes.",
   "ties": [
     {
       "target": {
@@ -123,8 +134,7 @@
       "relationship_kind": "mentorship",
       "outcome": "positive",
       "evidence": [
-        "E4",
-        "E5"
+        "E3"
       ]
     },
     {
@@ -139,8 +149,8 @@
       "relationship_kind": "collaboration",
       "outcome": "positive",
       "evidence": [
-        "E4",
-        "E6"
+        "E3",
+        "E4"
       ]
     },
     {
@@ -153,7 +163,23 @@
       "outcome": "positive",
       "evidence": [
         "E1",
-        "E6"
+        "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "GB",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E6",
+        "E7"
       ]
     }
   ],
@@ -169,15 +195,6 @@
     },
     {
       "id": "E2",
-      "url": "https://www.azcardinals.com/news/right-away-jonathan-gannon-shows-players-his-passion",
-      "publisher": "Arizona Cardinals (azcardinals.com), Darren Urban",
-      "published": "2023-02-16",
-      "accessed": "2026-11-05",
-      "summary": "Speaking to players seated up front, he lays out a team built on adaptability, physicality, explosiveness and smarts; GM Ossenfort says his energy never dropped in interviews and Ertz, who played for him in Philadelphia, calls him a great leader who stayed in touch. Team site.",
-      "confidence": "high"
-    },
-    {
-      "id": "E3",
       "url": "https://arizonasports.com/haboob-blog/let-it-rip-a-guide-to-cardinals-head-coach-jonathan-gannons-vocabulary",
       "publisher": "Arizona Sports",
       "published": "2023-02-20",
@@ -186,7 +203,7 @@
       "confidence": "medium"
     },
     {
-      "id": "E4",
+      "id": "E3",
       "url": "https://www.azcardinals.com/news/gannon-cardinals-get-coordinators-nick-rallis-drew-petzing",
       "publisher": "Arizona Cardinals (azcardinals.com), Darren Urban",
       "published": "2023-02-19",
@@ -195,16 +212,7 @@
       "confidence": "high"
     },
     {
-      "id": "E5",
-      "url": "https://azcardinals.com/news/problem-solver-nick-rallis-ready-for-job-as-cardinals-defensive-coordinator",
-      "publisher": "Arizona Cardinals (azcardinals.com), Darren Urban",
-      "published": "2023-02-22",
-      "accessed": "2026-11-05",
-      "summary": "Gannon says he fully trusts Rallis to run the defense, cares more about serving players and results than age, and asks candidates about the best and worst things their bosses did. Team site.",
-      "confidence": "high"
-    },
-    {
-      "id": "E6",
+      "id": "E4",
       "url": "https://africa.espn.com/nfl/story/_/id/39575533/kyler-murray-center-drew-petzing-jonathan-gannon",
       "publisher": "ESPN, Josh Weinfuss",
       "published": "2024-02-24",
@@ -213,19 +221,46 @@
       "confidence": "high"
     },
     {
-      "id": "E7",
+      "id": "E5",
       "url": "https://www.news4jax.com/sports/2025/10/08/cardinals-coach-jonathan-gannon-fined-100k-for-sideline-incident-with-player-ap-sources-say/",
       "publisher": "Associated Press via News4JAX",
       "published": "2025-10-08",
       "accessed": "2026-11-05",
       "summary": "The team fines him $100,000 after video shows him shouting at and swiping toward running back Demercado following a costly fumble; he says he apologized to the player and team, let the moment overwhelm him, and calls it a mistake. One incident; the league took no action.",
       "confidence": "high"
+    },
+    {
+      "id": "E6",
+      "url": "https://wtop.com/nfl/2026/02/packers-add-former-cardinals-head-coach-jonathan-gannon-as-defensive-coordinator/",
+      "publisher": "Associated Press via WTOP",
+      "published": "2026-02-02",
+      "accessed": "2026-11-06",
+      "summary": "Green Bay names him defensive coordinator to replace Jeff Hafley after Arizona fired him following a 3-14 season and a 15-36 record over three years; he ran the Eagles' defense on their Super Bowl LVII run and plans to fit his scheme to the players' strengths. Wire report.",
+      "confidence": "high"
+    },
+    {
+      "id": "E7",
+      "url": "https://fox11online.com/sports/packers-and-nfl/gannon-and-achord",
+      "publisher": "WLUK Fox 11",
+      "published": "2026-05-04",
+      "accessed": "2026-11-06",
+      "summary": "First Green Bay media session: front labels matter less than putting players where they feel confident; praises Jordan Love as a top-tier quarterback; glad to reconnect with LaFleur; jokes about sweating through his interview in a coat and tie and says he told his wife Green Bay was the place. Candid and good-humored.",
+      "confidence": "high"
+    },
+    {
+      "id": "E8",
+      "url": "https://www.si.com/nfl/cardinals/onsi/jonathan-gannon-finally-speaks-failed-arizona-cardinals-tenure",
+      "publisher": "Sports Illustrated (Cardinals on SI), Donnie Druin",
+      "published": "2026-05-04",
+      "accessed": "2026-11-06",
+      "summary": "On his Arizona tenure he is grateful, calls the head job a real education he will carry into Green Bay, says the Packers will run a new system rather than his Arizona defense, and enjoys returning to hands-on coaching.",
+      "confidence": "medium"
     }
   ],
   "review": {
     "status": "draft",
     "reviewer": null,
     "reviewed_at": null,
-    "notes": "moved seat 2026; re-research for 2026 sources"
+    "notes": "Moved seat 2026 (Cardinals head coach to Packers DC). Added his firing and hiring (AP) and two May 2026 media sessions; dropped two 2023 Arizona team-site pieces to stay at 8 sources. OLD_SCHOOL replaced by MENTOR (young coordinators he hired); openness now cites his fit-the-players remarks; tie to LaFleur added. Want, fear and two views rewritten for the coordinator role."
   }
 }

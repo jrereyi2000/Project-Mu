@@ -1,0 +1,162 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:NYJ:OC",
+  "name": "Frank Reich",
+  "role": "OC",
+  "team": "NYJ",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "NYJ",
+    "role": "OC",
+    "name": "Frank Reich"
+  },
+  "sliders": {
+    "temperament": 3,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 6,
+    "drive": 5
+  },
+  "slider_evidence": {
+    "temperament": [
+      "E1",
+      "E3"
+    ],
+    "warmth": [
+      "E1",
+      "E2"
+    ]
+  },
+  "traits": [
+    "TEACHER",
+    "MEASURED",
+    "QB_WHISPERER"
+  ],
+  "trait_evidence": {
+    "TEACHER": [
+      "E2"
+    ],
+    "MEASURED": [
+      "E1",
+      "E3"
+    ],
+    "QB_WHISPERER": [
+      "E2",
+      "E3"
+    ]
+  },
+  "views": [
+    {
+      "text": "The standard is elite, and the commitment to getting better has no ceiling.",
+      "when": [
+        "COACHING",
+        "PREVIEW"
+      ]
+    },
+    {
+      "text": "An interim or a short stint is still a chance to plant something that lasts.",
+      "when": [
+        "COACHING",
+        "OFFSEASON"
+      ]
+    },
+    {
+      "text": "Calm under pressure is a play-caller's first tool; panic travels down to the quarterback.",
+      "when": [
+        "CLOSE_GAMES",
+        "QB"
+      ]
+    },
+    {
+      "text": "Being fired is part of the profession; blame no one and look for the next chapter.",
+      "when": [
+        "BAD_GAME",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Use the strengths of the players you have rather than the offense you wish you had.",
+      "when": [
+        "SCHEME",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "No deficit is too big while there is time on the clock.",
+      "when": [
+        "CLOSE_GAMES",
+        "HISTORY"
+      ]
+    }
+  ],
+  "signatures": [
+    "frames setbacks as one chapter closing and another opening",
+    "credits the head coach and staff before talking about his own plans",
+    "gives long, detailed answers that sound like a former head coach"
+  ],
+  "want": "to show he can still build an offense that works after two head-coaching jobs ended early",
+  "fear": "that the Jets offense stays stuck and his late return to the NFL becomes another short chapter",
+  "voice": "Calm, steady and gracious; he talks about faith, trust and high standards without raising his voice, and accepts setbacks without blaming anyone. He gives detailed answers and carries himself like the former head coach he is.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "NYJ",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E3"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://ca.sports.yahoo.com/news/frank-reich-talks-panthers-firing-says-probably-the-final-chapter-in-nfl-career-201415942.html",
+      "publisher": "Yahoo Sports, Frank Schwab",
+      "published": "2023-11-27",
+      "accessed": "2026-11-06",
+      "summary": "After Carolina fires him at 1-10, a year after the Colts did, he says it is probably the last chapter of his NFL journey, blames no one, praises owner David Tepper despite earlier heated talks, takes comfort in his faith, and sounds accepting and at peace. Relays his Charlotte Observer interview.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://stanforddaily.com/2025/04/03/stanford-introduces-frank-reich/",
+      "publisher": "The Stanford Daily, Dan Kubota and Isaac Sullivan",
+      "published": "2025-04-03",
+      "accessed": "2026-11-06",
+      "summary": "Introduced as Stanford's one-year interim coach by general manager Andrew Luck, whom he coached in Indianapolis: sets an elite standard, says the interim label is not a holding pattern but a chance to plant a long-term vision, and that he starts by building trust with the staff; Luck calls him a teacher.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.foxsports.com/articles/nfl/jets-hire-veteran-coach-frank-reich-as-offensive-coordinator",
+      "publisher": "Associated Press via Fox Sports",
+      "published": "2026-02-04",
+      "accessed": "2026-11-06",
+      "summary": "The Jets hire him, 64, as coordinator and play-caller: 14 seasons as a quarterback including the 1992 comeback for Buffalo, Colts head coach 40-33-1 and Panthers 1-10, Eagles coordinator for the 2017 title, Stanford interim 4-8; Glenn, his 1996 teammate, praises his experience, creativity and calm under pressure.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://jetsway.substack.com/p/coordinators-speak",
+      "publisher": "The Jets Way (Substack), David Wyatt-Hupton",
+      "published": "2026-05-07",
+      "accessed": "2026-11-06",
+      "summary": "Fan newsletter on the coordinators' spring press conferences: the writer says Reich commands the room, gives detailed answers and carries a former head coach's experience. Mostly paywalled; context only.",
+      "confidence": "low"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "New seat 2026. Only four sources, one low (E4); 2026 first-person coverage is thin (no camp transcript found). Reported quarterback preferences from rumor columns are not used."
+  }
+}

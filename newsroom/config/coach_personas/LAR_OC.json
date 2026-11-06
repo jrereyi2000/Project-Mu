@@ -1,0 +1,183 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:LAR:OC",
+  "name": "Nathan Scheelhaase",
+  "role": "OC",
+  "team": "LAR",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "LAR",
+    "role": "OC",
+    "name": "Nathan Scheelhaase"
+  },
+  "sliders": {
+    "temperament": 4,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 6,
+    "drive": 7
+  },
+  "slider_evidence": {
+    "temperament": [
+      "E5"
+    ],
+    "warmth": [
+      "E4"
+    ],
+    "drive": [
+      "E1",
+      "E4"
+    ]
+  },
+  "traits": [
+    "FILM_ROOM_RAT",
+    "MEASURED",
+    "LOYAL"
+  ],
+  "trait_evidence": {
+    "FILM_ROOM_RAT": [
+      "E4"
+    ],
+    "MEASURED": [
+      "E4",
+      "E5"
+    ],
+    "LOYAL": [
+      "E4",
+      "E5"
+    ]
+  },
+  "views": [
+    {
+      "text": "Good work done every day creates the next opportunity; chasing the job ahead wastes the one you have.",
+      "when": [
+        "COACHING",
+        "OFFSEASON"
+      ]
+    },
+    {
+      "text": "Relationships and hard work are the whole method.",
+      "when": [
+        "COACHING",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "Moving up inside one building is rare and worth more than a quicker title somewhere else.",
+      "when": [
+        "FRONT_OFFICE",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "The great offensive teachers make ideas stick with players, and that is what a young coordinator should study.",
+      "when": [
+        "SCHEME",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "A record-setting offense still has to earn it again; last year's numbers don't carry over.",
+      "when": [
+        "WIN_STREAK",
+        "PREVIEW"
+      ]
+    },
+    {
+      "text": "A play-caller should learn the whole league, not just next week's opponent.",
+      "when": [
+        "SCHEME",
+        "GAME_REVIEW"
+      ]
+    }
+  ],
+  "signatures": [
+    "uses a homespun saying about good work speaking for itself",
+    "credits his old college head coach for shaping him",
+    "turns head-coaching questions back to the week in front of him"
+  ],
+  "want": "to earn his own head-coaching job the way McVay's earlier coordinators did, by mastering the whole offense first",
+  "fear": "that he stays seen as a helper in McVay's shadow rather than a coach with ideas of his own",
+  "voice": "Humble, steady and present-focused, with a former college quarterback's ease. He speaks plainly and upbeat about relationships and work ethic, credits McVay and his old college staff, and deflects talk of his own ambitions. Coverage of his day-to-day voice is limited.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "LAR",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E4",
+        "E5"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://cyclones.com/news/2022/12/5/football-scheelhaase-named-cyclones-offensive-coordinator",
+      "publisher": "Iowa State Athletics (cyclones.com)",
+      "published": "2022-12-05",
+      "accessed": "2026-11-06",
+      "summary": "Iowa State promotes him to offensive coordinator; Matt Campbell calls him one of the rising stars in college coaching. Team release, read from the search summary.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.si.com/nfl/rams/news/can-rams-assistant-coach-nate-scheelhaase-follow-in-hc-sean-mcvay-s-footsteps-01jkn7re0rhw",
+      "publisher": "Sports Illustrated (Rams on SI), Michael Canelo",
+      "published": "2025-02-10",
+      "accessed": "2026-11-06",
+      "summary": "After his first Rams season: six years at Iowa State (2018-23) rising to coordinator and quarterbacks coach, interviewed by several teams, widely tipped as a future head coach. Fan-network piece; nothing on temperament.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.news4jax.com/sports/2026/02/20/rams-promote-nate-scheelhaase-to-offensive-coordinator-ap-source-says/",
+      "publisher": "Associated Press via News4JAX",
+      "published": "2026-02-20",
+      "accessed": "2026-11-06",
+      "summary": "The Rams promote their pass game coordinator to offensive coordinator after Mike LaFleur leaves to coach Arizona; Dave Ragone is co-coordinator and McVay keeps calling plays. Read from the search summary.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.therams.com/news/rams-offensive-coordinator-nate-scheelhaase-appreciates-rare-opportunity-to-be-elevated-by-same-organization-continue-growth-development-as-coach",
+      "publisher": "Los Angeles Rams (therams.com), Stu Jackson",
+      "published": "2026-06-09",
+      "accessed": "2026-11-06",
+      "summary": "He calls moving up inside one organization rare, says he does not dwell on January head-coach interest, credits Campbell for shaping him, describes his method as relationships and hard work, takes detailed notes and studies the league, and uses a folksy saying about good work speaking for itself. Team-written.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://wtop.com/nfl/2026/06/nate-scheelhaase-seeks-to-make-most-of-big-opportunity-as-los-angeles-rams-offensive-coordinator/",
+      "publisher": "Associated Press via WTOP",
+      "published": "2026-06-09",
+      "accessed": "2026-11-06",
+      "summary": "Profile: a four-year Illinois starting quarterback, 35, who went from little-known assistant to five interviews to coordinator in months, chose to stay and learn under McVay, praises McVay's offensive knowledge and teaching, and takes the rise in stride while focusing on the present.",
+      "confidence": "high"
+    },
+    {
+      "id": "E6",
+      "url": "https://fantasynerds.com/news/story/2026/08/13/nate-scheelhaase-to-call-plays-for-rams-in-preseason-opener-vs-chiefs-1596115",
+      "publisher": "Fantasy Nerds",
+      "published": "2026-08-13",
+      "accessed": "2026-11-06",
+      "summary": "Brief item: McVay lets him call the offense in the preseason opener against Kansas City. Aggregator; used only for context.",
+      "confidence": "low"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "New seat 2026. Six sources, but only two (E4, E5) are read in full; personality coverage is thin, so most sliders stay at 5."
+  }
+}

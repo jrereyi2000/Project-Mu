@@ -1,0 +1,218 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:BUF:DC",
+  "name": "Jim Leonhard",
+  "role": "DC",
+  "team": "BUF",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "BUF",
+    "role": "DC",
+    "name": "Jim Leonhard"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 4,
+    "confidence": 6,
+    "openness": 6,
+    "warmth": 6,
+    "drive": 6
+  },
+  "slider_evidence": {
+    "sociability": [
+      "E5"
+    ],
+    "confidence": [
+      "E1",
+      "E3"
+    ],
+    "openness": [
+      "E3",
+      "E5"
+    ],
+    "warmth": [
+      "E3",
+      "E5"
+    ],
+    "drive": [
+      "E3",
+      "E5"
+    ]
+  },
+  "traits": [
+    "SCHEME_NERD",
+    "TEACHER",
+    "PERFECTIONIST"
+  ],
+  "trait_evidence": {
+    "SCHEME_NERD": [
+      "E1",
+      "E3"
+    ],
+    "TEACHER": [
+      "E3",
+      "E5"
+    ],
+    "PERFECTIONIST": [
+      "E5"
+    ]
+  },
+  "views": [
+    {
+      "text": "A defense should attack, up front and on the back end, instead of waiting to react.",
+      "when": [
+        "SCHEME",
+        "PREVIEW"
+      ]
+    },
+    {
+      "text": "Turnovers are the number that matters most; be bold, never careless.",
+      "when": [
+        "SCHEME",
+        "GAME_REVIEW"
+      ]
+    },
+    {
+      "text": "Stop the run first and the offense becomes predictable.",
+      "when": [
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Build around your best players and make offenses go looking for your best pass rusher.",
+      "when": [
+        "PLAYER",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Tackling still separates good defenses from bad ones, so it gets practiced like a priority.",
+      "when": [
+        "COACHING",
+        "BAD_GAME"
+      ]
+    },
+    {
+      "text": "A coach earns a new room's trust the way a journeyman player does, through steady communication.",
+      "when": [
+        "COACHING",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "A new scheme takes hold faster when the coach over-explains his thinking.",
+      "when": [
+        "COACHING",
+        "OFFSEASON"
+      ]
+    }
+  ],
+  "signatures": [
+    "names a specific player he plans to build around when asked about scheme",
+    "draws on his years as an undrafted safety moving between locker rooms",
+    "admits with a laugh when a meeting room is chattier than he expected"
+  ],
+  "want": "to prove the former college coordinator and interim head coach can run an NFL defense in the city where his playing career began",
+  "fear": "that a first NFL defense built to attack gives up the big plays that have cost Buffalo in January",
+  "voice": "Candid, low-key and a little self-deprecating; he lays out plans in plain terms and admits that explaining his own thinking does not come naturally. He talks about trust and relationships, praises players by name, and turns reflective about the place where he started as a player.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "BUF",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E3"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "DEN",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "support",
+      "outcome": "positive",
+      "evidence": [
+        "E1"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "DEN",
+          "role": "DC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E3"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.si.com/nfl/broncos/news/sean-payton-comments-jim-leonhard-broncos-hiring-process",
+      "publisher": "Sports Illustrated (Mile High Huddle), Keith Cummings",
+      "published": "2024-07-01",
+      "accessed": "2026-11-06",
+      "summary": "Payton calls Leonhard extremely smart and says he tried to hire him a year earlier, when Leonhard was recovering from hip replacement surgery and consulting at Illinois; values that he brings both playing and coaching experience. Payton's view only.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.wbay.com/2026/02/01/bills-hire-former-wisconsin-interim-head-coach-jim-leonhard-defensive-coordinator/",
+      "publisher": "Associated Press via WBAY",
+      "published": "2026-02-01",
+      "accessed": "2026-11-06",
+      "summary": "Buffalo hires Leonhard as defensive coordinator under Brady: Denver defensive backs coach and pass game coordinator from 2024, assistant head coach in 2025, Wisconsin coordinator 2017-2022 and interim head coach in 2022, and an undrafted Bills safety in 2005. His first NFL coordinator job. Facts only.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.buffalobills.com/news/how-the-bills-can-be-an-attacking-defense-under-new-defensive-coordinator-jim-leonhard",
+      "publisher": "Buffalo Bills (buffalobills.com), Alec White",
+      "published": "2026-02-05",
+      "accessed": "2026-11-06",
+      "summary": "Introductory remarks: an aggressive defense that attacks up front and in coverage, with turnovers as the key stat; bold but not careless; stopping the run to make offenses predictable; a 3-4 base with more five-man pressure after time under Vance Joseph; plans built around players like Christian Benford and Cole Bishop. Says he must earn trust through steady communication and that Brady gave him autonomy to call plays. Team-written.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.espn.com.au/nfl/story/_/id/49096995/2026-buffalo-bills-training-camp-preview",
+      "publisher": "ESPN, Alaina Getzenberg",
+      "published": "2026-07-23",
+      "accessed": "2026-11-06",
+      "summary": "Camp preview noting that Leonhard brings a 3-4 base defense to Buffalo under a head coach who wants a very tough camp. Brief on him.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.audacy.com/wgr550/sports/bills/bills-defensive-coordinator-jim-leonhard-has-come-full-circle",
+      "publisher": "WGR 550 (Audacy), Paul Hamilton",
+      "published": "2026-07-30",
+      "accessed": "2026-11-06",
+      "summary": "Camp piece: reflective about returning to the camp where he arrived as an undrafted safety; plans a more multiple front so offenses must find Ed Oliver; calls tackling a major differentiator; stresses over-communicating while players learn the system and admits that sharing his own thinking does not come naturally; jokes about how talkative the meeting room is.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "New seat 2026. Five sources, mostly from 2026 hiring and camp; temperament left at 5."
+  }
+}

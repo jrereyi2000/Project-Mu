@@ -20,46 +20,44 @@
   },
   "slider_evidence": {
     "temperament": [
-      "E4"
+      "E2"
     ],
     "sociability": [
-      "E1",
-      "E5"
+      "E3"
     ],
     "confidence": [
-      "E4",
-      "E5"
+      "E2",
+      "E3"
     ],
     "openness": [
-      "E2",
-      "E5"
+      "E1",
+      "E7"
     ],
     "warmth": [
-      "E2",
-      "E5"
+      "E1",
+      "E3"
     ]
   },
   "traits": [
     "QUOTABLE",
-    "FAMILY_MAN",
     "TEACHER",
-    "PLAYERS_COACH"
+    "PLAYERS_COACH",
+    "SCHEME_NERD"
   ],
   "trait_evidence": {
     "QUOTABLE": [
-      "E1",
-      "E5"
-    ],
-    "FAMILY_MAN": [
-      "E3",
-      "E5"
+      "E3"
     ],
     "TEACHER": [
-      "E2"
+      "E1"
     ],
     "PLAYERS_COACH": [
-      "E2",
+      "E1",
       "E3"
+    ],
+    "SCHEME_NERD": [
+      "E6",
+      "E8"
     ]
   },
   "views": [
@@ -99,17 +97,23 @@
       ]
     },
     {
-      "text": "The best run games come from a staff that gives its young assistants room to try ideas.",
+      "text": "Football is won inside out; the line of scrimmage comes before any clever design.",
       "when": [
-        "SCHEME",
-        "COACHING"
+        "SCHEME"
       ]
     },
     {
-      "text": "A hot streak is a reason to stay focused on your own team, whoever is on the other sideline.",
+      "text": "The offense should be efficient enough that a star quarterback only has to be special when it truly counts.",
       "when": [
-        "WIN_STREAK",
-        "CONTENDER"
+        "QB",
+        "PLAYOFFS"
+      ]
+    },
+    {
+      "text": "Losing a job is humbling, and the useful answer is to get sharper at the next one.",
+      "when": [
+        "COACHING",
+        "BAD_GAME"
       ]
     }
   ],
@@ -118,9 +122,9 @@
     "tells a story from his own rough years when a player is going through something",
     "turns questions about a quarterback's mistakes toward the whole unit's execution"
   ],
-  "want": "to prove that an unconventional, openly human head coach can build a winner and keep it winning",
-  "fear": "that his quirks get read as a lack of seriousness the moment the team stops winning",
-  "voice": "Quick, playful and openly unguarded; he jokes with reporters, calls himself random and a nerd, and wanders into long, thoughtful answers. When a player is hurt he turns serious and plainly shaken, speaking about the person before the player. He shrugs off outside criticism, credits mentors warmly and explains scheme in plain language.",
+  "want": "to unlock Justin Herbert's playoff ceiling as a play-caller and earn a second head-coaching job",
+  "fear": "that the slide of his last two Miami offenses gets read as a scheme figured out rather than a quarterback hurt",
+  "voice": "Quick, playful and openly unguarded; he jokes with reporters and wanders into long, thoughtful answers. Since his firing he sounds humbled but not bitter, talking about adapting to his players and adding value to people. When a player is hurt he turns serious and speaks about the person first, and he explains scheme in plain language.",
   "ties": [
     {
       "target": {
@@ -134,7 +138,7 @@
       "relationship_kind": "mentorship",
       "outcome": "positive",
       "evidence": [
-        "E6"
+        "E4"
       ]
     },
     {
@@ -144,25 +148,31 @@
         "team_2026": "ATL"
       },
       "relationship_kind": "mentorship",
+      "outcome": "mixed",
+      "evidence": [
+        "E1",
+        "E7"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "LAC",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
       "outcome": "positive",
       "evidence": [
-        "E2",
-        "E3"
+        "E6"
       ]
     }
   ],
   "evidence": [
     {
       "id": "E1",
-      "url": "https://www.si.com/extra-mustard/2022/03/03/mike-mcdaniel-dolphins-interviews-rich-eisen-cliches",
-      "publisher": "Sports Illustrated (Extra Mustard), Jimmy Traina",
-      "published": "2022-03-03",
-      "accessed": "2026-11-04",
-      "summary": "Column on his first weeks as Miami coach: he jokes freely with interviewers, calls himself random and embraces the nerd label, takes up a dare to use three cliches at a press conference, and teases that his style beats Shanahan's. A columnist's enthusiasm; shows his public manner only.",
-      "confidence": "medium"
-    },
-    {
-      "id": "E2",
       "url": "https://www.upi.com/Sports_News/NFL/2022/07/28/Mike-McDaniel-uses-his-vulnerability-lessons-from-past-to-coach-Dolphins/6441659020143/",
       "publisher": "UPI, Alex Butler",
       "published": "2022-07-28",
@@ -171,16 +181,7 @@
       "confidence": "high"
     },
     {
-      "id": "E3",
-      "url": "https://www.cbssports.com/nfl/news/dolphins-mike-mcdaniel-details-tua-tagovailoa-head-injury-qb-issues-heartfelt-statement",
-      "publisher": "CBS Sports, Jeff Kerr",
-      "published": "2022-09-30",
-      "accessed": "2026-11-04",
-      "summary": "After Tagovailoa's head injury in Cincinnati he is visibly shaken, describes the quarterback asking for him on the field, centers the person over the player and promises the concussion protocol will not be bent. One press conference in an extreme moment.",
-      "confidence": "high"
-    },
-    {
-      "id": "E4",
+      "id": "E2",
       "url": "https://www.espn.com/nfl/story/_/id/34733611/miami-dolphins-coach-mike-mcdaniel-not-fretting-criticism-team-handling-tua-tagovailoa",
       "publisher": "ESPN, Marcel Louis-Jacques",
       "published": "2022-10-05",
@@ -189,7 +190,7 @@
       "confidence": "high"
     },
     {
-      "id": "E5",
+      "id": "E3",
       "url": "https://www.nbcmiami.com/news/sports/miami-dolphins/dolphins-coach-mike-mcdaniel-is-unapologetically-himself-and-thats-no-joke/3155646/",
       "publisher": "Associated Press (Tim Reynolds), via NBC 6 South Florida",
       "published": "2023-11-09",
@@ -198,19 +199,55 @@
       "confidence": "high"
     },
     {
-      "id": "E6",
+      "id": "E4",
       "url": "https://www.nbcsportsbayarea.com/nfl/san-francisco-49ers/mcdaniel-explains-what-shanahan-game-vs-49ers-mean-to-him/1444279/",
       "publisher": "NBC Sports Bay Area, Angelina Martin",
       "published": "2022-12-01",
       "accessed": "2026-11-04",
       "summary": "Before facing San Francisco he credits Kyle Shanahan with seeing his potential early and giving him room to grow, jokes about their long friendship, and says his focus is on his own team and its winning streak. His own account of the relationship.",
       "confidence": "medium"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.abc15.com/sports/dolphins-fire-mike-mcdaniel-the-quirky-inventive-coach-who-they-once-viewed-as-their-future",
+      "publisher": "Associated Press via ABC15",
+      "published": "2026-01-08",
+      "accessed": "2026-11-06",
+      "summary": "Miami fires him after a 7-10 season, its second straight losing year, with owner Stephen Ross citing a need for comprehensive change; he finishes 35-33 with playoff trips in his first two seasons, days after saying he was coach until told otherwise. Wire report.",
+      "confidence": "high"
+    },
+    {
+      "id": "E6",
+      "url": "https://www.news4jax.com/sports/2026/01/26/mike-mcdaniel-joins-harbaugh-herbert-as-chargers-offensive-coordinator-after-dolphins-firing/",
+      "publisher": "Associated Press (Greg Beacham) via News4JAX",
+      "published": "2026-01-26",
+      "accessed": "2026-11-06",
+      "summary": "The Chargers hire him as coordinator after Harbaugh fires Greg Roman; he had talked with several teams about head jobs; described as one of the top offensive minds from Shanahan's tree, expected to build a more versatile offense with simpler reads for Justin Herbert. Wire report.",
+      "confidence": "high"
+    },
+    {
+      "id": "E7",
+      "url": "https://www.si.com/nfl/dolphins/onsi/news/the-main-dolphins-related-and-other-takeaways-from-mcdaniel-press-conference-01kg0q7rmqx0",
+      "publisher": "Sports Illustrated (Dolphins on SI), Alain Poupart",
+      "published": "2026-01-27",
+      "accessed": "2026-11-06",
+      "summary": "Introductory Chargers press conference: ties Miami's decline to Tagovailoa's injuries, calls the drop humbling, says scheme should fit the best players and that speed alone was not the answer, wants to add value to people daily, and still hopes to be a head coach again while focusing on this job.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E8",
+      "url": "https://www.chargers.com/news/most-important-newcomer-2026-training-camp",
+      "publisher": "Los Angeles Chargers (chargers.com), Eric Smith",
+      "published": "2026-07-16",
+      "accessed": "2026-11-06",
+      "summary": "Named the most important newcomer: he calls the plays, says he spent much of his career running the run game, frames football as inside out with the line of scrimmage first, and wants Herbert at his strongest in December and January. Team site citing The Athletic.",
+      "confidence": "high"
     }
   ],
   "review": {
     "status": "draft",
     "reviewer": null,
     "reviewed_at": null,
-    "notes": "moved seat 2026; re-research for 2026 sources"
+    "notes": "Moved seat 2026 (Dolphins head coach to Chargers OC). Added his firing, hiring, introduction and a camp piece; dropped the 2022 SI column and the Tagovailoa-injury presser to stay at 8 sources. FAMILY_MAN (thin) replaced by SCHEME_NERD; Tagovailoa tie now mixed given the decline he described; tie to Harbaugh added; want, fear and three views rewritten."
   }
 }

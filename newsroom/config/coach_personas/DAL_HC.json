@@ -12,24 +12,33 @@
   },
   "sliders": {
     "temperament": 6,
-    "sociability": 7,
+    "sociability": 6,
     "confidence": 5,
-    "openness": 5,
-    "warmth": 8,
-    "drive": 5
+    "openness": 6,
+    "warmth": 7,
+    "drive": 6
   },
   "slider_evidence": {
     "temperament": [
-      "E4"
+      "E4",
+      "E5"
     ],
     "sociability": [
       "E2",
       "E4"
     ],
+    "openness": [
+      "E8"
+    ],
     "warmth": [
       "E2",
       "E3",
       "E4"
+    ],
+    "drive": [
+      "E5",
+      "E6",
+      "E8"
     ]
   },
   "traits": [
@@ -44,12 +53,12 @@
       "E4"
     ],
     "MENTOR": [
-      "E2"
+      "E2",
+      "E7"
     ],
     "QB_WHISPERER": [
       "E1",
-      "E2",
-      "E5"
+      "E2"
     ],
     "FAMILY_MAN": [
       "E3"
@@ -78,7 +87,7 @@
       ]
     },
     {
-      "text": "Rookies and undrafted players should feel the coaches know their names and want them there from the first day.",
+      "text": "Rookies and undrafted players should feel the coaches know their names and want them there from day one.",
       "when": [
         "YOUTH",
         "DRAFT"
@@ -96,16 +105,38 @@
       "when": [
         "COACHING"
       ]
+    },
+    {
+      "text": "A losing season starts with the head coach; own it first, then dig out what went wrong.",
+      "when": [
+        "BAD_GAME",
+        "LOSING_STREAK"
+      ]
+    },
+    {
+      "text": "Fights in practice cost the whole team, so the whole team pays for them.",
+      "when": [
+        "COACHING",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "Players tune out repetition, so the meetings and the message should change every year.",
+      "when": [
+        "OFFSEASON",
+        "COACHING"
+      ]
     }
   ],
   "signatures": [
     "praises his quarterback in sweeping terms, often reaching for a comparison to an all-time great",
-    "shows emotion openly on the sidelines and in team meetings, and talks about it afterward",
-    "talks about friendships with other coaches and what he learned from them"
+    "shows emotion openly on the sideline and in team meetings, and talks about it afterward",
+    "talks about friendships with other coaches and what he learned from them",
+    "repeats his praise for a new assistant's communication several times in the same answer"
   ],
-  "want": "to show that a career assistant, and the son of a famous coach, can lead a room on his own energy and relationships",
-  "fear": "that the energy and culture talk gets dismissed as noise if the offense does not produce",
-  "voice": "Loud, warm and emotional; he speaks quickly and with visible enthusiasm, and is quick to hand out praise to players by name. He talks about culture, caring and connection as much as plays, and openly credits mentors and friends. He keeps criticism of players inside the building.",
+  "want": "to pair a high-scoring offense with a rebuilt defense and prove a career assistant can lead Dallas deep into January",
+  "fear": "that a second straight year out of the playoffs ends his first head-coaching job before his culture work pays off",
+  "voice": "Loud, warm and emotional; he speaks quickly with visible enthusiasm and hands out praise by name, especially to quarterbacks and new assistants. He owns losses in the first person and promises to get to the bottom of them, and his temper shows when players fight in practice. He keeps criticism of individual players inside the building.",
   "ties": [
     {
       "target": {
@@ -147,8 +178,24 @@
       "relationship_kind": "collaboration",
       "outcome": "positive",
       "evidence": [
-        "E4",
-        "E5"
+        "E1",
+        "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "DAL",
+          "role": "DC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E7",
+        "E8"
       ]
     }
   ],
@@ -191,18 +238,45 @@
     },
     {
       "id": "E5",
-      "url": "https://www.si.com/nfl/2023/10/31/cowboys-dak-prescott-drew-brees-comparison-brian-schottenheimer",
-      "publisher": "Sports Illustrated",
-      "published": "2023-10-31",
-      "accessed": "2026-11-04",
-      "summary": "As coordinator, asked about Prescott after two wins, he goes well beyond a routine answer and compares his quarterback's makeup to Drew Brees. Read from the headline and search summary, not the full text. Shows his habit of lavish public praise for his quarterback, not his role in the play-calling.",
-      "confidence": "medium"
+      "url": "https://www.cbssports.com/nfl/news/infuriated-brian-schottenheimer-makes-cowboys-run-after-fights-take-over-training-camp",
+      "publisher": "CBS Sports, Jordan Dajani",
+      "published": "2025-07-30",
+      "accessed": "2026-11-06",
+      "summary": "In his first camp as head coach, after several practice fights, he makes the whole team and some coaches run, sends a rookie lineman off for throwing a punch, and shouts a profane challenge at the fighters; CeeDee Lamb publicly backs the discipline. One episode.",
+      "confidence": "high"
+    },
+    {
+      "id": "E6",
+      "url": "https://bleacherreport.com/articles/25348449-brian-schottenheimer-takes-blame-cowboys-losing-season-starts-me",
+      "publisher": "Bleacher Report, Scott Polacek",
+      "published": "2026-01-04",
+      "accessed": "2026-11-06",
+      "summary": "After a 7-9-1 first season ends with a loss to the Giants, he says he expected the playoffs and a Super Bowl push, takes responsibility for falling short, and promises to find out what went wrong. Short report on his postgame remarks.",
+      "confidence": "high"
+    },
+    {
+      "id": "E7",
+      "url": "https://africa.espn.com/nfl/story/_/id/47970515/christian-parker-taking-day-day-cowboys-defense",
+      "publisher": "ESPN, Todd Archer",
+      "published": "2026-02-19",
+      "accessed": "2026-11-06",
+      "summary": "At his new coordinator's introduction he calls Christian Parker wise beyond his years and convicted in his beliefs, notes he himself became a coordinator at 32, says Parker has prepared for the job for years, and says Dallas hit a home run with the hire after nine coordinator interviews.",
+      "confidence": "high"
+    },
+    {
+      "id": "E8",
+      "url": "https://www.ksat.com/sports/2026/07/29/cowboys-open-2026-training-camp-with-focus-on-defensive-overhaul/",
+      "publisher": "KSAT, Larry Ramirez",
+      "published": "2026-07-28",
+      "accessed": "2026-11-06",
+      "summary": "State of the Cowboys address opening camp: he calls missing the playoffs unacceptable, repeatedly praises Parker as a communicator whose office players keep visiting, says he changed how the team grades film and runs meetings, and wants to avoid routine because players tune out repetition.",
+      "confidence": "high"
     }
   ],
   "review": {
     "status": "draft",
     "reviewer": null,
     "reviewed_at": null,
-    "notes": "moved seat 2026; re-research for 2026 sources"
+    "notes": "Moved seat 2026 (Cowboys OC in the old seed, head coach since 2025). Added the 2025 camp-discipline story, the season-end blame, the Parker introduction and the 2026 camp address; dropped the headline-only 2023 Brees-comparison piece (QB_WHISPERER now rests on E1 and E2). Sliders rebalanced to stay within 36: temperament and drive cite the new sources; tie to DC Parker added."
   }
 }

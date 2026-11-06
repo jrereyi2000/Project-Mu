@@ -1,0 +1,188 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:NE:OC",
+  "name": "Josh McDaniels",
+  "role": "OC",
+  "team": "NE",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "NE",
+    "role": "OC",
+    "name": "Josh McDaniels"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 6,
+    "warmth": 5,
+    "drive": 5
+  },
+  "slider_evidence": {
+    "openness": [
+      "E3"
+    ]
+  },
+  "traits": [
+    "SCHEME_NERD",
+    "QB_WHISPERER",
+    "LOYAL"
+  ],
+  "trait_evidence": {
+    "SCHEME_NERD": [
+      "E2",
+      "E3"
+    ],
+    "QB_WHISPERER": [
+      "E2",
+      "E3"
+    ],
+    "LOYAL": [
+      "E2",
+      "E4"
+    ]
+  },
+  "views": [
+    {
+      "text": "A quarterback should help pick the plays he runs; the system bends to him, not the reverse.",
+      "when": [
+        "QB",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Design the offense around the players on this roster, not around past rosters.",
+      "when": [
+        "SCHEME",
+        "ROSTER_MOVES"
+      ]
+    },
+    {
+      "text": "A new receiver is ready when he knows the system well enough to suggest what to run.",
+      "when": [
+        "PLAYER",
+        "OFFSEASON"
+      ]
+    },
+    {
+      "text": "Head-coaching talk can wait; the job in front of him and his family's roots come first.",
+      "when": [
+        "COACHING",
+        "FRONT_OFFICE"
+      ]
+    },
+    {
+      "text": "A Super Bowl where the offense never got going is something to study, not an identity.",
+      "when": [
+        "PLAYOFFS",
+        "BAD_GAME"
+      ]
+    },
+    {
+      "text": "Variety is a weapon; show the defense many looks from the same personnel.",
+      "when": [
+        "SCHEME",
+        "GAME_REVIEW"
+      ]
+    }
+  ],
+  "signatures": [
+    "turns questions about head-coaching interest back to the current season",
+    "credits the quarterback's input on the plays",
+    "keeps playbook details vague in public"
+  ],
+  "want": "to build his late career around developing a second great quarterback in New England after two head-coaching stints ended early",
+  "fear": "that his two failed head-coaching jobs remain the headline over his record as a coordinator",
+  "voice": "Measured, careful and polished; he reveals little about scheme and stays on process and the present week. He credits quarterbacks and players, and sounds settled and content about staying in New England. Little 2026 first-person coverage was found.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "NE",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E2"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Drake Maye",
+        "team_2026": "NE"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E3"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.news4jax.com/sports/2023/11/01/raiders-fire-coach-josh-mcdaniels-and-gm-dave-ziegler/",
+      "publisher": "Associated Press via News4JAX",
+      "published": "2023-11-01",
+      "accessed": "2026-11-06",
+      "summary": "Las Vegas fires him and general manager Dave Ziegler after a 3-5 start in his second season, his second head-coaching job to end midway through year two. Read from the search summary; anonymous locker-room accounts from other outlets are not used.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.cbssports.com/nfl/news/patriots-hire-josh-mcdaniels-as-offensive-coordinator-six-time-super-bowl-champion-returns-to-new-england/",
+      "publisher": "CBS Sports",
+      "published": "2025-01-22",
+      "accessed": "2026-11-06",
+      "summary": "Vrabel hires him for a third stint as New England's coordinator (2006-08, 2012-21 before), citing scheme and offensive management and a relationship dating to 2001. Read from the search summary.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.nbcsports.com/nfl/profootballtalk/rumor-mill/news/drake-maye-josh-mcdaniels-has-been-awesome-so-far-the-stuff-works",
+      "publisher": "Pro Football Talk (NBC Sports), Myles Simmons",
+      "published": "2025-05-01",
+      "accessed": "2026-11-06",
+      "summary": "Maye says working with McDaniels has been awesome, that the system works, and that McDaniels has asked for his input on plays from his rookie year and from past offenses; Maye wants more responsibility at the line. Maye's view.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.profootballrumors.com/2025/10/patriots-oc-josh-mcdaniels-downplays-future-hc-interest",
+      "publisher": "Pro Football Rumors, Adam La Rose",
+      "published": "2025-10-17",
+      "accessed": "2026-11-06",
+      "summary": "Asked about head jobs, he says he loves living in New England, enjoys working for Vrabel, is focused on the present and would be surprised to move his kids; notes his 20-33 record across two firings. His own words.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.nbcsports.com/nfl/profootballtalk/rumor-mill/news/mike-vrabel-we-have-to-remember-what-this-feels-like-and-make-sure-it-isnt-repeatable",
+      "publisher": "Pro Football Talk (NBC Sports), Josh Alper",
+      "published": "2026-02-08",
+      "accessed": "2026-11-06",
+      "summary": "Super Bowl LX recap: New England loses 29-13 to Seattle and its offense shows little until it trails 19-0. About the team, not McDaniels personally.",
+      "confidence": "high"
+    },
+    {
+      "id": "E6",
+      "url": "https://www.boston.com/sports/new-england-patriots/2026/07/27/patriots-aj-brown-josh-mcdaniels-offense-comments/",
+      "publisher": "Boston.com, Khari A. Thompson",
+      "published": "2026-07-27",
+      "accessed": "2026-11-06",
+      "summary": "Early camp: new receiver A.J. Brown says he is about 90 percent through McDaniels's system and stresses constant communication with Maye, but declines with a joke to say whether he can request plays yet. Brown's words; nothing on McDaniels's manner.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "New seat 2026 (in the job since 2025). Six sources, two from search summaries; personality coverage is thin, so five sliders stay at 5."
+  }
+}

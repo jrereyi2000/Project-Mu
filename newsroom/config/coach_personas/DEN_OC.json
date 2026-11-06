@@ -1,0 +1,196 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:DEN:OC",
+  "name": "Davis Webb",
+  "role": "OC",
+  "team": "DEN",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "DEN",
+    "role": "OC",
+    "name": "Davis Webb"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 6,
+    "openness": 6,
+    "warmth": 6,
+    "drive": 7
+  },
+  "slider_evidence": {
+    "confidence": [
+      "E4"
+    ],
+    "openness": [
+      "E2",
+      "E5"
+    ],
+    "warmth": [
+      "E2"
+    ],
+    "drive": [
+      "E2"
+    ]
+  },
+  "traits": [
+    "QB_WHISPERER",
+    "TEACHER",
+    "FILM_ROOM_RAT",
+    "LOYAL"
+  ],
+  "trait_evidence": {
+    "QB_WHISPERER": [
+      "E2",
+      "E3"
+    ],
+    "TEACHER": [
+      "E3",
+      "E5"
+    ],
+    "FILM_ROOM_RAT": [
+      "E2"
+    ],
+    "LOYAL": [
+      "E3",
+      "E5"
+    ]
+  },
+  "views": [
+    {
+      "text": "Simple and clear beats clever; a quarterback plays fastest with one reminder, not ten.",
+      "when": [
+        "QB",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Great quarterbacks stay coachable; the day they stop listening is the day they stop improving.",
+      "when": [
+        "QB",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "Getting the call in fast gives the quarterback time to read the defense, and that matters as much as the call.",
+      "when": [
+        "SCHEME",
+        "GAME_REVIEW"
+      ]
+    },
+    {
+      "text": "A former player can tell a quarterback he has made the same decision himself, and it lands differently.",
+      "when": [
+        "COACHING",
+        "QB"
+      ]
+    },
+    {
+      "text": "Slow starts are a scripting problem to fix, not bad luck.",
+      "when": [
+        "STRUGGLING",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Learning beside an elite play-caller is worth more than a head job taken too soon.",
+      "when": [
+        "COACHING",
+        "FRONT_OFFICE"
+      ]
+    }
+  ],
+  "signatures": [
+    "keeps every game plan he has been part of on file and still goes back to them",
+    "calls the head coach's suggestions part of the deal rather than a threat to his role",
+    "describes the quarterback's growth through small, specific pointers"
+  ],
+  "want": "to grow from Payton's protege into a play-caller and future head coach in his own right",
+  "fear": "that any offensive stumble reads as Payton taking the sheet back and the handoff looking premature",
+  "voice": "Young, earnest and grateful, with a former quarterback's shorthand. He speaks calmly and specifically, credits Payton and Nix before himself, and avoids grand claims about his own future.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "DEN",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E2",
+        "E4",
+        "E5"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Bo Nix",
+        "team_2026": "DEN"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E3",
+        "E5"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.si.com/nfl/2023/02/23/broncos-hiring-davis-webb-as-qbs-coach-per-report",
+      "publisher": "Sports Illustrated",
+      "published": "2023-02-23",
+      "accessed": "2026-11-06",
+      "summary": "Report that Payton is hiring the Giants' backup quarterback, 28, as Denver's quarterbacks coach in his first coaching job; Payton later says Webb had been a coach on the field for years. Read from the search summary.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.denverbroncos.com/news/this-was-the-only-opportunity-i-was-interested-in-qbs-coach-davis-webb-details-j?mm-view=app",
+      "publisher": "Denver Broncos (denverbroncos.com), Aric DiLalla",
+      "published": "2023-06-30",
+      "accessed": "2026-11-06",
+      "summary": "He retired after his first career start to coach, which he wanted since childhood watching his father coach Texas high school football; Payton cites his preparation, including a file of every game plan since high school; he uses his playing past to relate to quarterbacks and thinks great ones stay coachable; Lombardi calls him hard-working and good with players. Team-written.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.espn.com/nfl/story/_/id/47809198/broncos-promote-qbs-coach-davis-webb-oc-position",
+      "publisher": "ESPN, Jeff Legwold",
+      "published": "2026-02-02",
+      "accessed": "2026-11-06",
+      "summary": "Denver promotes him to offensive coordinator after firing Lombardi; he had interviewed for head jobs with the Raiders, Bills and Ravens; Payton credits him with Bo Nix's development and Nix praises his communication and simplicity; whether he calls plays was still open. News report.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.denverbroncos.com/news/i-wouldn-t-do-it-if-i-didn-t-think-it-was-going-to-help-our-team-win-hc-sean-payton-announces-oc-davis-webb-to-call-plays-for-broncos-offense",
+      "publisher": "Denver Broncos (denverbroncos.com), Aric DiLalla",
+      "published": "2026-02-24",
+      "accessed": "2026-11-06",
+      "summary": "At the combine Payton says Webb will call plays in 2026, calling him extremely talented and sharp with a gift for it, citing a 2025 preseason game he called; Payton will still call some plays and stay involved. Payton's view.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.tsn.ca/nfl/article/a-new-voice-for-nix-but-payton-still-holds-broncos-play-call-sheet/",
+      "publisher": "Associated Press (Arnie Stapleton) via TSN",
+      "published": "2026-09-07",
+      "accessed": "2026-11-06",
+      "summary": "Eve of the season: Webb, 31, calls the plays while Payton keeps a sideline sheet and offers suggestions and some mandates; the change aims to get calls in faster and fix slow starts; he stayed in Denver after Payton offered play-calling; he is grateful to learn from Payton; Nix says he gives small reminders without overloading him.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "New seat 2026. Five sources (E1 from the search summary); temperament and sociability stay at 5. Reports after the cutoff about his play-calling are not used."
+  }
+}

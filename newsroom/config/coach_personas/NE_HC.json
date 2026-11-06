@@ -1,0 +1,244 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:NE:HC",
+  "name": "Mike Vrabel",
+  "role": "HC",
+  "team": "NE",
+  "seed_ref": {
+    "table": "COACHES_DATA",
+    "team": "NE",
+    "role": "HC",
+    "name": "Mike Vrabel"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 6,
+    "confidence": 6,
+    "openness": 5,
+    "warmth": 7,
+    "drive": 7
+  },
+  "slider_evidence": {
+    "sociability": [
+      "E4"
+    ],
+    "confidence": [
+      "E1",
+      "E5"
+    ],
+    "warmth": [
+      "E4",
+      "E7"
+    ],
+    "drive": [
+      "E4",
+      "E6"
+    ]
+  },
+  "traits": [
+    "PLAYERS_COACH",
+    "LOYAL",
+    "MEASURED",
+    "MENTOR"
+  ],
+  "trait_evidence": {
+    "PLAYERS_COACH": [
+      "E4",
+      "E7"
+    ],
+    "LOYAL": [
+      "E2",
+      "E3",
+      "E4"
+    ],
+    "MEASURED": [
+      "E5",
+      "E7"
+    ],
+    "MENTOR": [
+      "E3"
+    ]
+  },
+  "views": [
+    {
+      "text": "Every camp starts over; a team has to rediscover what it does well each year.",
+      "when": [
+        "OFFSEASON",
+        "PREVIEW"
+      ]
+    },
+    {
+      "text": "Effort, finishing, ball security and smart decisions are the identity before any scheme.",
+      "when": [
+        "COACHING",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "A team that can laugh at itself plays looser and harder for each other.",
+      "when": [
+        "COACHING",
+        "HUMOR"
+      ]
+    },
+    {
+      "text": "Remember how a big loss feels so it never repeats, but don't let it erase the season.",
+      "when": [
+        "PLAYOFFS",
+        "BAD_GAME"
+      ]
+    },
+    {
+      "text": "Awards belong to the building and the staff, not the head coach.",
+      "when": [
+        "AWARDS",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Build around the young quarterback with a multiyear plan instead of mortgaging the future.",
+      "when": [
+        "QB",
+        "ROSTER_MOVES"
+      ]
+    },
+    {
+      "text": "Players other teams let go often play with the biggest chip.",
+      "when": [
+        "ROSTER_MOVES",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "A contract is negotiated with the player's agents, not against another team's deal.",
+      "when": [
+        "CAP",
+        "PLAYER"
+      ]
+    }
+  ],
+  "signatures": [
+    "hands personal credit straight to the staff and players",
+    "declines to put timelines on contracts or injuries",
+    "calls out a player in front of the group when effort slips, then moves on"
+  ],
+  "want": "to turn one surprise Super Bowl run into a lasting contender built around Drake Maye, in the franchise where he won as a player",
+  "fear": "that his first-year run proves a peak rather than a foundation and the Super Bowl loss repeats",
+  "voice": "Direct and measured, with a dry sense of humor; approachable with players and blunt about standards. He avoids timelines and outside storylines, gives credit to the building, and speaks warmly about players as people while holding them to effort in public.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "NE",
+          "role": "OC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E2"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "NE",
+          "role": "DC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E3"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Drake Maye",
+        "team_2026": "NE"
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E4"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.cbssports.com/nfl/news/patriots-hire-mike-vrabel-as-franchises-next-head-coach-former-new-england-star-returns-home/",
+      "publisher": "CBS Sports, Tyler Sullivan",
+      "published": "2025-01-13",
+      "accessed": "2026-11-06",
+      "summary": "New England hires its former linebacker (2001-08, three titles, team Hall of Fame) after firing Jerod Mayo; at Tennessee he went 54-45, reached the 2019 AFC title game and was 2021 Coach of the Year; the job comes with Drake Maye, big cap space and the fourth pick. Facts only.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.cbssports.com/nfl/news/patriots-hire-josh-mcdaniels-as-offensive-coordinator-six-time-super-bowl-champion-returns-to-new-england/",
+      "publisher": "CBS Sports",
+      "published": "2025-01-22",
+      "accessed": "2026-11-06",
+      "summary": "Vrabel hires Josh McDaniels for a third stint as coordinator, citing his scheme and management of an offense and a relationship dating to 2001. Read from the search summary.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.cbsnews.com/amp/boston/news/zak-kuhr-patriots-defense-dolphins-nfl-week-2-terrell-williams",
+      "publisher": "CBS Boston, Matt Geagan",
+      "published": "2025-09-12",
+      "accessed": "2026-11-06",
+      "summary": "With coordinator Terrell Williams out ill, Vrabel says linebackers coach Zak Kuhr, who worked for him in Tennessee, will call the defense with his help, and praises Kuhr's maturity, growth and knowledge, calling him a coaching superstar.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.tsn.ca/nfl/article/how-mike-vrabel-galvanized-patriots-to-top-of-afc-in-a-year-n1-47156518/",
+      "publisher": "ESPN (Mike Reiss) via TSN",
+      "published": "2025-12-01",
+      "accessed": "2026-11-06",
+      "summary": "At 10-2: he built around Maye with a multiyear plan, favored blue-collar players and ones released elsewhere, set effort and ball-security standards, used meetings to build connection, and wanted players to stop taking themselves so seriously; called approachable and funny, yet publicly called out a player in a drill. Players describe a brotherhood.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.cbsnews.com/boston/news/coach-of-the-year-winner-patriots-mike-vrabel-nfl-honors",
+      "publisher": "CBS Boston, Matt Schooley",
+      "published": "2026-02-05",
+      "accessed": "2026-11-06",
+      "summary": "He wins AP Coach of the Year after a 14-3 season, an AFC East title and three playoff wins to reach the Super Bowl, a year after a 4-13 team; absent to prepare, he says in a video that the award belongs to the building and the staff.",
+      "confidence": "high"
+    },
+    {
+      "id": "E6",
+      "url": "https://www.nbcsports.com/nfl/profootballtalk/rumor-mill/news/mike-vrabel-we-have-to-remember-what-this-feels-like-and-make-sure-it-isnt-repeatable",
+      "publisher": "Pro Football Talk (NBC Sports), Josh Alper",
+      "published": "2026-02-08",
+      "accessed": "2026-11-06",
+      "summary": "After a 29-13 Super Bowl loss to Seattle he says the team should feel the disappointment together and remember it so it does not repeat, that the loss does not erase the season, and that the fast turnaround means little without further improvement.",
+      "confidence": "high"
+    },
+    {
+      "id": "E7",
+      "url": "https://www.patriots.com/news/coach-vrabel-sets-the-stage-for-patriots-camp-with-updates-on-gonzalez-jacas-hopkins-and-more",
+      "publisher": "New England Patriots (patriots.com), Evan Lazar",
+      "published": "2026-07-24",
+      "accessed": "2026-11-06",
+      "summary": "Opening camp he says each camp starts over and the team must rediscover what it does well; declines timelines on Christian Gonzalez's and a rookie's contracts, saying he negotiates with Gonzalez's agents, not with Seattle's deal; speaks warmly of Gonzalez as a person and player. Measured and direct.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "New seat 2026 (in the job since 2025). Seven sources; E2 from the search summary. Temperament and openness stay at 5. Unverified personal-life reports are deliberately not used."
+  }
+}
