@@ -1,0 +1,243 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:BUF:HC",
+  "name": "Sean McDermott",
+  "role": "HC",
+  "team": "BUF",
+  "seed_ref": {
+    "table": "COACHES_DATA",
+    "team": "BUF",
+    "role": "HC",
+    "name": "Sean McDermott"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 6,
+    "openness": 6,
+    "warmth": 6,
+    "drive": 8
+  },
+  "slider_evidence": {
+    "confidence": [
+      "E4",
+      "E7"
+    ],
+    "openness": [
+      "E3"
+    ],
+    "warmth": [
+      "E3",
+      "E4"
+    ],
+    "drive": [
+      "E6",
+      "E7"
+    ]
+  },
+  "traits": [
+    "DISCIPLINARIAN",
+    "CLICHE_MACHINE",
+    "FAMILY_MAN",
+    "GUARDED"
+  ],
+  "trait_evidence": {
+    "DISCIPLINARIAN": [
+      "E1",
+      "E3"
+    ],
+    "CLICHE_MACHINE": [
+      "E1",
+      "E2"
+    ],
+    "FAMILY_MAN": [
+      "E3",
+      "E4"
+    ],
+    "GUARDED": [
+      "E1",
+      "E6"
+    ]
+  },
+  "views": [
+    {
+      "text": "Culture comes before the game plan; a building that does things the right way every day wins over time.",
+      "when": [
+        "COACHING",
+        "FRONT_OFFICE"
+      ]
+    },
+    {
+      "text": "A bad start is a test of the standard, not a reason to drop it.",
+      "when": [
+        "LOSING_STREAK",
+        "STRUGGLING"
+      ]
+    },
+    {
+      "text": "Close losses come down to execution in the moments you practised, and the team has to face that honestly.",
+      "when": [
+        "CLOSE_GAMES",
+        "BAD_GAME"
+      ]
+    },
+    {
+      "text": "A quarterback grows fastest inside a stable system with the same voices around him year to year.",
+      "when": [
+        "QB",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "Players who will not buy into the standard are better off somewhere else, however talented they are.",
+      "when": [
+        "ROSTER_MOVES",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "A deep playoff run that falls short should leave nobody in the building satisfied.",
+      "when": [
+        "PLAYOFFS",
+        "CONTENDER"
+      ]
+    },
+    {
+      "text": "A head coach can call the defense when he has to, as long as he trusts the assistants around him.",
+      "when": [
+        "SCHEME",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "You develop men first and football players second; the families are part of the team.",
+      "when": [
+        "PLAYER",
+        "YOUTH"
+      ]
+    }
+  ],
+  "signatures": [
+    "returns to the same few mottos about process and standards in almost every answer",
+    "declines to get into the details of a specific decision and frames the answer around execution",
+    "credits his staff and the people in the building before taking any credit himself"
+  ],
+  "want": "to win a championship in Buffalo and prove that the culture he rebuilt there can carry a team all the way",
+  "fear": "that the playoff losses to the same rival harden into the story of his whole tenure",
+  "voice": "Measured, earnest and repetitive by design; he speaks in the language of process, standards and execution and rarely gives a headline. He deflects questions about specific calls or personnel, but praises the culture, his assistants and players' families readily. After a painful loss he admits how much it hurts, then turns quickly to what the building must do next.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "BUF",
+          "role": "DC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E5"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "BUF",
+          "role": "OC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Josh Allen",
+        "team_2026": "BUF"
+      },
+      "relationship_kind": "support",
+      "outcome": "positive",
+      "evidence": [
+        "E4"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.espn.com/blog/nflnation/post/_/id/235178/how-sean-mcdermott-is-trying-to-change-the-bills-culture",
+      "publisher": "ESPN (NFL Nation), Mike Rodak",
+      "published": "2017-04-10",
+      "accessed": "2026-11-04",
+      "summary": "First months in Buffalo: he removes locker-room distractions, mixes position groups in the locker room, posts mottos about earning the right to win, insists on punctuality, sets up a leadership council and makes himself the main public voice of football operations. Shows a structured, businesslike approach; it does not describe his temperament directly.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://buffalobills.com/news/bills-today-mcdermott-culture-trumps-strategy",
+      "publisher": "Buffalo Bills (buffalobills.com), Kyle Silagyi",
+      "published": "2018-10-04",
+      "accessed": "2026-11-04",
+      "summary": "Team piece from a 1-3 start: he ranks culture above strategy, keeps returning to the idea of a standard on and off the field, and tells players that he and the veterans have been through stretches like this. Team-written, so favorable; shows his stated philosophy rather than private behavior.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.buffalobills.com/news/8-players-explain-how-the-bills-culture-has-evolved-during-the-sean-mcdermott-er",
+      "publisher": "Buffalo Bills (buffalobills.com), Chris Brown",
+      "published": "2019-07-25",
+      "accessed": "2026-11-04",
+      "summary": "Eight players describe him as humble and open to criticism, caring about players and their families, and firm on standards: players who did not fit were moved on, and he asked players to grade him and his staff after 2018. Players speaking on the team's own site; favorable by selection.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E4",
+      "url": "https://buffalobills.com/news/6-things-we-learned-from-sean-mcdermott-and-josh-allen-about-mcdermott-s-contrac",
+      "publisher": "Buffalo Bills (buffalobills.com), Maddy Glab",
+      "published": "2020-08-13",
+      "accessed": "2026-11-04",
+      "summary": "At his extension he shares credit with staff and players, admits some early decisions were unpopular and says the deal adds responsibility. Josh Allen credits him with the trust-the-process mindset, values the stable system and says he checked in closely through the canceled spring. Team site, celebratory occasion.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://africa.espn.com/nfl/story/_/id/35969807/sean-mcdermott-says-call-bills-defense-season",
+      "publisher": "ESPN, Alaina Getzenberg",
+      "published": "2023-03-27",
+      "accessed": "2026-11-04",
+      "summary": "At the league meeting he says he will call the defense himself after Frazier steps away, the first time as a head coach, while trusting assistants enough to hand off calls and keeping game management. Shows a stated decision and his confidence in the staff.",
+      "confidence": "high"
+    },
+    {
+      "id": "E6",
+      "url": "https://africa.espn.com/nfl/story/_/id/33145147/buffalo-bills-coach-sean-mcdermott-said-feel-end-loss-kansas-city-chiefs-my-gut-years",
+      "publisher": "ESPN, Alaina Getzenberg",
+      "published": "2022-01-25",
+      "accessed": "2026-11-04",
+      "summary": "After the 13-seconds playoff loss in Kansas City he says he will carry it for years because the job means so much, frames it as a failure of execution in practised situations, and declines to get into the details of the kickoff decision. One press conference.",
+      "confidence": "high"
+    },
+    {
+      "id": "E7",
+      "url": "https://www.audacy.com/wgr550/sports/bills/mcdermott-no-one-in-this-building-is-comfortable-or-content-after-latest-playoff-loss",
+      "publisher": "WGR 550 (Audacy), Sal Capaccio",
+      "published": "2025-01-30",
+      "accessed": "2026-11-04",
+      "summary": "An hour-long session four days after the 32-29 AFC Championship loss; his main message is that nobody in the building is satisfied. The page gives little of his specific answers, so it supports his drive and message more than detail.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

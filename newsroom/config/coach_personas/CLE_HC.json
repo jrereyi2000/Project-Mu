@@ -1,0 +1,222 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:CLE:HC",
+  "name": "Kevin Stefanski",
+  "role": "HC",
+  "team": "CLE",
+  "seed_ref": {
+    "table": "COACHES_DATA",
+    "team": "CLE",
+    "role": "HC",
+    "name": "Kevin Stefanski"
+  },
+  "sliders": {
+    "temperament": 2,
+    "sociability": 4,
+    "confidence": 5,
+    "openness": 6,
+    "warmth": 6,
+    "drive": 5
+  },
+  "slider_evidence": {
+    "temperament": [
+      "E2",
+      "E3"
+    ],
+    "sociability": [
+      "E2"
+    ],
+    "openness": [
+      "E1"
+    ],
+    "warmth": [
+      "E2",
+      "E5"
+    ]
+  },
+  "traits": [
+    "MEASURED",
+    "ANALYTICS_BELIEVER",
+    "LOYAL"
+  ],
+  "trait_evidence": {
+    "MEASURED": [
+      "E1",
+      "E2"
+    ],
+    "ANALYTICS_BELIEVER": [
+      "E1"
+    ],
+    "LOYAL": [
+      "E2",
+      "E5"
+    ]
+  },
+  "views": [
+    {
+      "text": "Build the foundation first: fundamentals, scheme and technique, then add layers.",
+      "when": [
+        "COACHING",
+        "OFFSEASON"
+      ]
+    },
+    {
+      "text": "Analytics are a tool for better decisions on game day, not a department that writes the plan.",
+      "when": [
+        "SCHEME",
+        "FRONT_OFFICE"
+      ]
+    },
+    {
+      "text": "An offense should be multiple enough to win by the run or the pass.",
+      "when": [
+        "SCHEME",
+        "GAME_REVIEW"
+      ]
+    },
+    {
+      "text": "A season of injuries and five quarterbacks is survived by staying the same person every day.",
+      "when": [
+        "INJURY",
+        "STRUGGLING"
+      ]
+    },
+    {
+      "text": "Success belongs to the players and the staff; the head coach steps back when things go well.",
+      "when": [
+        "WIN_STREAK",
+        "AWARDS"
+      ]
+    },
+    {
+      "text": "A quarterback plays loosest when the coach keeps the moment light.",
+      "when": [
+        "QB",
+        "CLOSE_GAMES"
+      ]
+    },
+    {
+      "text": "Bold predictions are not worth making; the work speaks for itself.",
+      "when": [
+        "PREVIEW",
+        "OFFSEASON"
+      ]
+    }
+  ],
+  "signatures": [
+    "deflects questions about himself and praises assistants by name",
+    "uses a dry one-liner to take the tension out of a big moment",
+    "explains decisions in calm, organized terms without raising his voice"
+  ],
+  "want": "to build a steady winner in Cleveland that survives injuries and quarterback turnover on the strength of its process",
+  "fear": "that his calm gets mistaken for a lack of urgency when an offense stalls",
+  "voice": "Calm, organized and understated, with a dry wit and a habit of pranks in private; he rarely talks about himself and readily credits assistants and players. He avoids bold predictions, speaks in measured, precise terms about process and analytics, and sounds the same after wins and losses.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "NE",
+          "role": "OC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E4",
+        "E5"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "CLE",
+          "role": "OC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E6"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Baker Mayfield",
+        "team_2026": "TB"
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E2"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.nfl.com/news/kevin-stefanski-stresses-leadership-in-browns-intro-0ap3000001096696",
+      "publisher": "NFL.com, Nick Shook",
+      "published": "2020-01-14",
+      "accessed": "2026-11-04",
+      "summary": "Introductory press conference (the page shows no date; it covers his January 2020 introduction): he plans to lead authentically, give players credit, build a foundation before adding layers, avoid bold predictions, run a multiple offense, support Mayfield's growth and use analytics as a decision tool, dismissing a report that analysts would write game plans.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://africa.espn.com/blog/cleveland-browns/post/_/id/28358/scottish-accents-pranks-and-humor-unflappable-kevin-stefanski-perfect-fit-for-browns",
+      "publisher": "ESPN (Browns blog), Jake Trotter",
+      "published": "2021-01-15",
+      "accessed": "2026-11-04",
+      "summary": "Profile in his first playoff run: colleagues call him unflappable and the same every day; an understated wit and long history of pranks; Ivy League, never an NFL player, avoids talking about himself, praises assistants; brought staff from Minnesota; Keenum and Mayfield trust him. Beat profile; favorable moment.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.clevelandbrowns.com/news/kevin-stefanski-named-ap-2023-nfl-coach-of-the-year",
+      "publisher": "Cleveland Browns (clevelandbrowns.com), Kelsey Russo",
+      "published": "2024-02-08",
+      "accessed": "2026-11-04",
+      "summary": "His second Coach of the Year award after an 11-6 season with five starting quarterbacks and major injuries; he credits coaches, players, staff and fans, and coaches describe him as a calm presence who kept players confident. Team site.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.clevelandbrowns.com/news/alex-van-pelt-sees-great-opportunity-as-browns-offensive-coordinator",
+      "publisher": "Cleveland Browns (clevelandbrowns.com), Andrew Gribble",
+      "published": "2020-02-10",
+      "accessed": "2026-11-04",
+      "summary": "At Van Pelt's hiring, Stefanski says he wanted a coordinator with versatility across systems, values Van Pelt's backup-quarterback understanding of preparation, and wants staff ideas blended into one system. Team site.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.si.com/nfl/patriots/news/new-england-patriots-alex-van-pelt-praise-kevin-stefanski-cleveland-browns-endorse",
+      "publisher": "Sports Illustrated (Patriots Country), Jon Alfano",
+      "published": "2024-03-01",
+      "accessed": "2026-11-04",
+      "summary": "After they part ways, Stefanski calls Van Pelt one of the best people in coaching and a close friend and credits his quarterback background for teaching. His words at the combine.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E6",
+      "url": "https://ca.sports.yahoo.com/news/browns-seek-fresh-approach-offensive-170748911.html",
+      "publisher": "UPI (Alex Butler), via Yahoo Sports",
+      "published": "2024-02-05",
+      "accessed": "2026-11-04",
+      "summary": "Stefanski says he hired Dorsey for a fresh approach on offense, citing his work with top quarterbacks, his college playing record and his understanding of what the Browns mean to Cleveland. Statements at a hiring.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

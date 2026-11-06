@@ -1,0 +1,170 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:NE:DC",
+  "name": "DeMarcus Covington",
+  "role": "DC",
+  "team": "NE",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "NE",
+    "role": "DC",
+    "name": "DeMarcus Covington"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 6,
+    "drive": 6
+  },
+  "slider_evidence": {
+    "warmth": [
+      "E4"
+    ],
+    "drive": [
+      "E3",
+      "E4"
+    ]
+  },
+  "traits": [
+    "TEACHER",
+    "OLD_SCHOOL",
+    "FILM_ROOM_RAT"
+  ],
+  "trait_evidence": {
+    "TEACHER": [
+      "E4"
+    ],
+    "OLD_SCHOOL": [
+      "E3",
+      "E4"
+    ],
+    "FILM_ROOM_RAT": [
+      "E3",
+      "E4"
+    ]
+  },
+  "views": [
+    {
+      "text": "A defense is built on physical play, discipline, fundamentals and running to the ball together.",
+      "when": [
+        "SCHEME",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "A defense that worked does not need a new scheme just because the title on the door changed.",
+      "when": [
+        "SCHEME",
+        "OFFSEASON"
+      ]
+    },
+    {
+      "text": "Breakdowns are usually communication before and after the snap, and repetition is what fixes them.",
+      "when": [
+        "BAD_GAME",
+        "STRUGGLING"
+      ]
+    },
+    {
+      "text": "Preparation for a first play-calling job happens years earlier, in the classroom and in simulated situations.",
+      "when": [
+        "COACHING",
+        "PREVIEW"
+      ]
+    },
+    {
+      "text": "Young linemen grow when the coach earns their trust before he asks more of them.",
+      "when": [
+        "YOUTH",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "The coaching staff works as one room, whoever holds the call sheet.",
+      "when": [
+        "COACHING",
+        "GAME_REVIEW"
+      ]
+    }
+  ],
+  "signatures": [
+    "describes problems as communication breakdowns rather than talent problems",
+    "talks about his years of preparation behind the scenes when asked about readiness",
+    "credits the whole defensive staff when explaining a plan"
+  ],
+  "want": "to prove that a coach who rose from coaching assistant can run a top defense as its play-caller",
+  "fear": "that a bad year calling plays undoes the reputation he built as a position coach",
+  "voice": "Respectful, earnest and grateful for the opportunity; he talks about fundamentals, physicality and togetherness in plain coaching language. Under criticism he stays calm and points to communication and execution. Coverage of him is limited to his first coordinator season, so his voice is drawn from a handful of sessions.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "NE",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E4"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.espn.in/nfl/story/_/id/39401876/patriots-intend-promote-demarcus-covington-dc",
+      "publisher": "ESPN, Mike Reiss",
+      "published": "2024-01-28",
+      "accessed": "2026-11-04",
+      "summary": "Report of his planned promotion from defensive line coach: in his eighth season in New England, worked closely with Mayo since 2019, and the 2023 line allowed a league-low 3.3 yards per carry while Barmore broke out. Career facts; no personal detail.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.patriots.com/news/patriots-announce-new-group-of-coordinators",
+      "publisher": "New England Patriots (patriots.com)",
+      "published": "2024-02-01",
+      "accessed": "2026-11-04",
+      "summary": "Coordinator announcement: coaching assistant from 2017, outside linebackers 2019, defensive line 2020-23, earlier college jobs at Eastern Illinois, UT-Martin, Ole Miss and UAB, and a receiver at Samford. Facts only.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.si.com/nfl/patriots/news/new-england-patriots-demarcus-covington-defensive-coordinator-coach-jerod-mayo-call-calling-plays-playcalling",
+      "publisher": "Sports Illustrated (Patriots Country), Mike D'Abate",
+      "published": "2024-02-22",
+      "accessed": "2026-11-04",
+      "summary": "He says he will call the defense for the first time, has prepared for years through practice, classroom work and simulated game situations, will keep a seventh-ranked scheme largely intact, and wants a physical, disciplined, unified defense. His own words.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.bostonglobe.com/2024/03/07/sports/demarcus-covington-patriots-defensive-coordinator",
+      "publisher": "The Boston Globe, Christopher Price",
+      "published": "2024-03-07",
+      "accessed": "2026-11-04",
+      "summary": "Profile: grew up in Alabama, a receiver at Samford, then Southern college jobs before Belichick hired him. People who know him describe someone who grasped complex plays fast and explained them to others, respectful and grateful, with thorough film study and strong player bonds. Mayo calls their relationship mentorship both ways.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.bostonglobe.com/2024/11/27/sports/patriots-defense-demarcus-covington/",
+      "publisher": "The Boston Globe, Nicole Yang",
+      "published": "2024-11-27",
+      "accessed": "2026-11-04",
+      "summary": "Late in a down season he blames breakdowns on communication before and after the snap rather than preparation and expects repetition to fix it; Mayo backs his play-calling and points to execution. The page shows no date; dated from its contents.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

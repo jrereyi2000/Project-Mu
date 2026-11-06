@@ -1,0 +1,162 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:CLE:DC",
+  "name": "Jim Schwartz",
+  "role": "DC",
+  "team": "CLE",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "CLE",
+    "role": "DC",
+    "name": "Jim Schwartz"
+  },
+  "sliders": {
+    "temperament": 7,
+    "sociability": 4,
+    "confidence": 8,
+    "openness": 5,
+    "warmth": 5,
+    "drive": 7
+  },
+  "slider_evidence": {
+    "temperament": [
+      "E1",
+      "E4"
+    ],
+    "sociability": [
+      "E4"
+    ],
+    "confidence": [
+      "E1",
+      "E4"
+    ],
+    "drive": [
+      "E4",
+      "E2"
+    ]
+  },
+  "traits": [
+    "SCHEME_NERD",
+    "DISCIPLINARIAN",
+    "QUOTABLE"
+  ],
+  "trait_evidence": {
+    "SCHEME_NERD": [
+      "E1",
+      "E2"
+    ],
+    "DISCIPLINARIAN": [
+      "E4"
+    ],
+    "QUOTABLE": [
+      "E1",
+      "E5"
+    ]
+  },
+  "views": [
+    {
+      "text": "The way to change a game is a four-man rush that gets home without blitzing.",
+      "when": [
+        "SCHEME",
+        "GAME_REVIEW"
+      ]
+    },
+    {
+      "text": "Build the defense around your best front players and let them attack from wide alignments.",
+      "when": [
+        "SCHEME",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "Honesty that stings is still the respectful thing to give a player.",
+      "when": [
+        "COACHING",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "A star on a record contract should feel the responsibility and play the best football of his career.",
+      "when": [
+        "PLAYER",
+        "CAP"
+      ]
+    },
+    {
+      "text": "Discipline in technique and preparation is what separates good defenses from lucky ones.",
+      "when": [
+        "SCHEME",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "He has been a head coach, a scout and a Super Bowl coordinator, and he will say what he thinks.",
+      "when": [
+        "COACHING",
+        "HISTORY"
+      ]
+    }
+  ],
+  "signatures": [
+    "cites sack and pressure numbers when defending his scheme",
+    "answers bluntly, sometimes prickly, and lets the silence sit",
+    "uses pop-culture lines to make a point about a player's responsibility"
+  ],
+  "want": "to prove again that his attacking front can carry a team, and perhaps earn one more head-coaching chance",
+  "fear": "that his bluntness gets him seen as difficult rather than right",
+  "voice": "Gruff, blunt and sure of his intelligence; he can come across as dismissive in public and is not afraid to be defiant. Former colleagues describe a coach who demands a lot and then backs his players. He talks scheme with precision, cites numbers, and is quotable when he wants to be.",
+  "ties": [],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://sports.yahoo.com/jim-schwartz-browns-getting-defensive-173919233.html",
+      "publisher": "Browns Wire (USA Today network), Jeff Risdon, via Yahoo Sports",
+      "published": "2023-01-17",
+      "accessed": "2026-11-04",
+      "summary": "Hiring explainer: started as a Cleveland scout under Belichick, Lions head coach 2009-13; favors a four-man front with twists, stunts and the wide-9, blitzes rarely, builds around his best linemen; described as outspoken, confrontational and confident in his intelligence, which the writer says could push Stefanski. Opinion-heavy.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.clevelandbrowns.com/news/5-things-to-know-about-jim-schwartz-011823",
+      "publisher": "Cleveland Browns (clevelandbrowns.com), Anthony Poisal",
+      "published": "2023-01-18",
+      "accessed": "2026-11-04",
+      "summary": "Team explainer: three Super Bowl teams, began as a personnel assistant under Belichick, took Detroit to the 2011 playoffs, coordinated Tennessee to a Super Bowl and Philadelphia to a title, designs ways to get linemen into the backfield; quotes Haynesworth calling him a mastermind. Says little about temperament.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.si.com/nfl/browns/news/myles-garrett-a-key-factor-in-hire-of-jim-schwartz",
+      "publisher": "Sports Illustrated (Browns Digest), Brandon Little",
+      "published": "2023-01-23",
+      "accessed": "2026-11-04",
+      "summary": "Reports the Browns believe his wide-9 can unlock Myles Garrett and that he said he looked forward to coaching him. Little direct quotation and nothing on personality.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E4",
+      "url": "https://clevelandmagazine.com/articles/all-in-the-details-browns-new-defensive-coordinator-jim-schwartz-brings-different-pedigree-to-the-job",
+      "publisher": "Cleveland Magazine, Marla Ridenour",
+      "published": "2023-09-10",
+      "accessed": "2026-11-04",
+      "summary": "Profile: gruff, reserved exterior that can read as cold, little patience for distractions, but colleagues say he cares about players; sharp, organized, detail-driven, demanding and blunt, holds players accountable then supports them, lets them show personality. One of nine children, Georgetown economics.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.nbcsports.com/nfl/profootballtalk/rumor-mill/news/jim-schwartz-myles-garrett-is-going-to-have-the-best-year-of-his-career",
+      "publisher": "Pro Football Talk (NBC Sports), Michael David Smith",
+      "published": "2025-06-04",
+      "accessed": "2026-11-04",
+      "summary": "He predicts Garrett's best season after his record contract, borrowing a Spider-Man line about power and responsibility; notes Garrett skipped voluntary workouts after a trade request. One quote, plus context.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

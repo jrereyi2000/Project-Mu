@@ -1,0 +1,178 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:BAL:DC",
+  "name": "Zach Orr",
+  "role": "DC",
+  "team": "BAL",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "BAL",
+    "role": "DC",
+    "name": "Zach Orr"
+  },
+  "sliders": {
+    "temperament": 3,
+    "sociability": 5,
+    "confidence": 6,
+    "openness": 5,
+    "warmth": 6,
+    "drive": 7
+  },
+  "slider_evidence": {
+    "temperament": [
+      "E5"
+    ],
+    "confidence": [
+      "E4"
+    ],
+    "warmth": [
+      "E5"
+    ],
+    "drive": [
+      "E2",
+      "E5"
+    ]
+  },
+  "traits": [
+    "LOYAL",
+    "FILM_ROOM_RAT",
+    "OLD_SCHOOL"
+  ],
+  "trait_evidence": {
+    "LOYAL": [
+      "E1",
+      "E4"
+    ],
+    "FILM_ROOM_RAT": [
+      "E2",
+      "E4"
+    ],
+    "OLD_SCHOOL": [
+      "E4",
+      "E5"
+    ]
+  },
+  "views": [
+    {
+      "text": "The defense's identity does not change with the coordinator: physical, aggressive, together and finishing every play.",
+      "when": [
+        "SCHEME",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Confidence in a first play-calling job comes from years of preparation, not from the title.",
+      "when": [
+        "COACHING",
+        "PREVIEW"
+      ]
+    },
+    {
+      "text": "A pass defense that gets exposed needs proactive fixes, not hope that it settles down.",
+      "when": [
+        "BAD_GAME",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Players should see the same coach whether the team is winning or losing.",
+      "when": [
+        "WIN_STREAK",
+        "LOSING_STREAK"
+      ]
+    },
+    {
+      "text": "An undrafted player who keeps working deserves the same chance as a first-round pick.",
+      "when": [
+        "DRAFT",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "Leaning on veteran coaching voices is a strength for a young coordinator.",
+      "when": [
+        "COACHING",
+        "STRUGGLING"
+      ]
+    }
+  ],
+  "signatures": [
+    "speaks about the organization that stood by him after his playing career ended",
+    "stays visibly even after both wins and blowups",
+    "credits veterans and older coaches who helped him along the way"
+  ],
+  "want": "to prove the homegrown, undrafted linebacker can run one of the league's proudest defenses as its play-caller",
+  "fear": "that being the young, first-time play-caller makes him the one blamed when the defense slips",
+  "voice": "Steady, good-humored and competitive; he speaks about the organization with deep loyalty and about defense in plain, physical terms. He is the same in wins and losses, admits frustration without showing it on the sideline, and credits mentors and veterans freely.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "BAL",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E2",
+        "E3"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://baltimoreravens.com/news/zachary-orr-exemplifying-ravens-faster-defense-17685391",
+      "publisher": "Baltimore Ravens (baltimoreravens.com), Ryan Mink",
+      "published": "2016-09-14",
+      "accessed": "2026-11-04",
+      "summary": "As an undrafted first-time starting linebacker he is described as humble, driven and grateful, thanking veterans who believed in him; Harbaugh calls him fast and instinctive. Shows the player he was, not the coach.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.baltimoreravens.com/news/zachary-orr-hired-ravens-defensive-coordinator-zach-linebacker-former-neck",
+      "publisher": "Baltimore Ravens (baltimoreravens.com), Ryan Mink",
+      "published": "2024-02-01",
+      "accessed": "2026-11-04",
+      "summary": "Promotion story: undrafted in 2014, second-team All-Pro in 2016, forced out by a spinal condition, then analyst, Jacksonville assistant and Ravens inside linebackers coach. Described as diligent, sharp and enthusiastic with no play-calling experience; Harbaugh praises his energy, intelligence and communication. Team site.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://africa.espn.com/nfl/story/_/id/39436631/former-ravens-lb-zachary-orr-promoted-team-dc-job",
+      "publisher": "ESPN, Jamison Hensley",
+      "published": "2024-02-01",
+      "accessed": "2026-11-04",
+      "summary": "News report: first former Ravens player to become a coordinator, second-youngest coordinator in the league at 31; Harbaugh calls him homegrown in every way, continuing his pattern of promoting from within. Facts and one quote.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.cbsnews.com/amp/baltimore/news/baltimore-ravens-introduced-new-defensive-coordinator-zach-orr-i-bleed-purple-and-black",
+      "publisher": "CBS Baltimore (WJZ), Mark Viviano",
+      "published": "2024-02-06",
+      "accessed": "2026-11-04",
+      "summary": "At his introduction he describes a strong bond with the organization that stood by him after his career ended, says thorough preparation gives him confidence to call plays, and lists the philosophy as teamwork, physicality, aggression and finishing. His own words.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.baltimoreravens.com/news/zach-orr-ravens-defense-answers-dean-pees",
+      "publisher": "Baltimore Ravens (baltimoreravens.com), Clifton Brown",
+      "published": "2024-10-10",
+      "accessed": "2026-11-04",
+      "summary": "After a shootout win exposes the pass defense, he calls himself a lifelong competitor who takes losses hard but can no longer work it off physically, wants proactive fixes and welcomes Dean Pees as an advisor. Kyle Van Noy praises his consistency in wins and losses. Team site.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

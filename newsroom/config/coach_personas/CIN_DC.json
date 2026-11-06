@@ -1,0 +1,184 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:CIN:DC",
+  "name": "Lou Anarumo",
+  "role": "DC",
+  "team": "CIN",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "CIN",
+    "role": "DC",
+    "name": "Lou Anarumo"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 7,
+    "warmth": 6,
+    "drive": 7
+  },
+  "slider_evidence": {
+    "openness": [
+      "E3",
+      "E5"
+    ],
+    "warmth": [
+      "E1",
+      "E4"
+    ],
+    "drive": [
+      "E3",
+      "E2"
+    ]
+  },
+  "traits": [
+    "SCHEME_NERD",
+    "TEACHER",
+    "FILM_ROOM_RAT"
+  ],
+  "trait_evidence": {
+    "SCHEME_NERD": [
+      "E3",
+      "E5"
+    ],
+    "TEACHER": [
+      "E1",
+      "E2"
+    ],
+    "FILM_ROOM_RAT": [
+      "E1",
+      "E3"
+    ]
+  },
+  "views": [
+    {
+      "text": "An elite quarterback should never see the same look twice.",
+      "when": [
+        "SCHEME",
+        "QB"
+      ]
+    },
+    {
+      "text": "Build the defense around the players you have, not around a system you brought with you.",
+      "when": [
+        "SCHEME",
+        "ROSTER_MOVES"
+      ]
+    },
+    {
+      "text": "Trust and relationships with players matter most when results go badly.",
+      "when": [
+        "LOSING_STREAK",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "Halftime is where games are won; adjust to what the offense is actually doing.",
+      "when": [
+        "GAME_REVIEW",
+        "CLOSE_GAMES"
+      ]
+    },
+    {
+      "text": "Players can question the call, and sometimes they are right.",
+      "when": [
+        "COACHING",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "A defense without stars can still beat the best quarterbacks if it plays as a unit.",
+      "when": [
+        "CONTENDER",
+        "PLAYOFFS"
+      ]
+    },
+    {
+      "text": "Young defensive backs grow fastest when veterans help coach them.",
+      "when": [
+        "YOUTH",
+        "PLAYER"
+      ]
+    }
+  ],
+  "signatures": [
+    "describes disguises and matchup plans in detail when asked about a big win",
+    "invites players to challenge his calls and mentions it",
+    "draws on his years as a teacher when explaining how he coaches"
+  ],
+  "want": "to earn a head-coaching job by proving his multiple defense can stop the league's best quarterbacks",
+  "fear": "that he stays labelled a coordinator who is always a finalist and never the hire",
+  "voice": "Direct, intense and approachable, with a Staten Island bluntness and a teacher's patience. He talks scheme with relish but in clear terms, can be fiery after a poor showing yet steady through long stretches, and welcomes players' challenges. He credits players and assistants for adjustments.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "CIN",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E2",
+        "E3"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.bengals.com/news/bengals-defense-now-skipping-to-lou",
+      "publisher": "Cincinnati Bengals (bengals.com), Geoff Hobson",
+      "published": "2019-02-21",
+      "accessed": "2026-11-04",
+      "summary": "At his hiring, his first coordinator job: favors a multiple defense fitted to the roster, draws on 4-3 and 3-4 influences, is described as intense but approachable, direct and low-key, stresses trust with players when results go badly; colleagues and Taylor call him a detail-oriented teacher. Team site.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://bengals.com/news/five-fun-facts-about-lou-anarumo",
+      "publisher": "Cincinnati Bengals (bengals.com), Michael LaPlaca",
+      "published": "2019-03-06",
+      "accessed": "2026-11-04",
+      "summary": "Five facts: on Miami's staff with Taylor 2012-15, interim coordinator in 2015; former players call him smart and energetic; long college career; a special-education graduate whose coaching mirrors his teacher father; Staten Island roots, family of five. Team site.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.espn.com/nfl/story/_/id/35532675/mad-scientist-lou-anarumo-man-bengals-defense",
+      "publisher": "ESPN, Ben Baby",
+      "published": "2023-01-28",
+      "accessed": "2026-11-04",
+      "summary": "Feature: players call him a mad scientist who keeps reworking the defense so elite quarterbacks never see the same look; intense after poor performances but steady in hard stretches; welcomes players' challenges; close friend of Taylor from Miami; early veterans who resisted were moved on. Beat-writer profile with player quotes.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://nfl.com/news/bengals-defenders-ecstatic-lou-anarumo-returning-as-defensive-coordinator-2023",
+      "publisher": "NFL.com, Kevin Patra",
+      "published": "2023-02-14",
+      "accessed": "2026-11-04",
+      "summary": "After he misses the Arizona head job, Logan Wilson and Sam Hubbard welcome him back; Wilson calls him a strong leader who lets players play freely. The page shows no date; related links place it in mid-February 2023.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.si.com/nfl/2023/08/09/bengals-defensive-coordinator-lou-anarumo-consistent",
+      "publisher": "Sports Illustrated, Matt Verderame",
+      "published": "2023-08-09",
+      "accessed": "2026-11-04",
+      "summary": "Profile: a multiple, matchup-heavy defense that has held up against top quarterbacks without many stars; described as calm under pressure, aggressive in calls and clear about expectations, with a teaching background; D.J. Reader says he listens and makes the best halftime adjustments in the league.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}
