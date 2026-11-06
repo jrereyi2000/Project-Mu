@@ -1,0 +1,233 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:BAL:HC",
+  "name": "John Harbaugh",
+  "role": "HC",
+  "team": "BAL",
+  "seed_ref": {
+    "table": "COACHES_DATA",
+    "team": "BAL",
+    "role": "HC",
+    "name": "John Harbaugh"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 7,
+    "openness": 7,
+    "warmth": 6,
+    "drive": 6
+  },
+  "slider_evidence": {
+    "confidence": [
+      "E2",
+      "E3"
+    ],
+    "openness": [
+      "E1",
+      "E2"
+    ],
+    "warmth": [
+      "E4",
+      "E5"
+    ],
+    "drive": [
+      "E5",
+      "E6"
+    ]
+  },
+  "traits": [
+    "ANALYTICS_BELIEVER",
+    "LOYAL",
+    "PLAYERS_COACH"
+  ],
+  "trait_evidence": {
+    "ANALYTICS_BELIEVER": [
+      "E2",
+      "E3"
+    ],
+    "LOYAL": [
+      "E4",
+      "E5"
+    ],
+    "PLAYERS_COACH": [
+      "E1",
+      "E5"
+    ]
+  },
+  "views": [
+    {
+      "text": "Go for two or for it on fourth down when the numbers say so, and keep doing it after it fails once.",
+      "when": [
+        "SCHEME",
+        "CLOSE_GAMES"
+      ]
+    },
+    {
+      "text": "The data informs the call, but the feel of the game and the situation still decide it.",
+      "when": [
+        "SCHEME",
+        "GAME_REVIEW"
+      ]
+    },
+    {
+      "text": "A franchise quarterback has heard doubts his whole life; the team builds around him and answers them by winning.",
+      "when": [
+        "QB",
+        "PLAYOFFS"
+      ]
+    },
+    {
+      "text": "Young quarterbacks lose playoff games early; great ones learn from it and come back sharper.",
+      "when": [
+        "QB",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "When players push back on a decision, hear them out and explain the reasons; the team comes out stronger.",
+      "when": [
+        "COACHING",
+        "LOSING_STREAK"
+      ]
+    },
+    {
+      "text": "Promote the people who grew up in your building when they have earned it.",
+      "when": [
+        "COACHING",
+        "FRONT_OFFICE"
+      ]
+    },
+    {
+      "text": "Every season is built to compete for a championship; anything less is not the standard.",
+      "when": [
+        "CONTENDER",
+        "PREVIEW"
+      ]
+    }
+  ],
+  "signatures": [
+    "explains an aggressive call in terms of win probability and says the team will keep playing that way",
+    "defends his quarterback's record with historical comparisons when it is questioned",
+    "praises assistants he has promoted from within as homegrown"
+  ],
+  "want": "to win another championship with a franchise quarterback he has backed through every doubt",
+  "fear": "that playoff disappointments in the quarterback's prime become the defining mark of his long tenure",
+  "voice": "Confident, energetic and expansive; he explains decisions at length and stands by them, citing both the numbers and the feel of the game. He is fiercely protective of his quarterback and his players in public and opens decisions up to discussion in the building. He speaks proudly of the organization and the assistants it has grown.",
+  "ties": [
+    {
+      "target": {
+        "kind": "player",
+        "name": "Lamar Jackson",
+        "team_2026": "BAL"
+      },
+      "relationship_kind": "support",
+      "outcome": "positive",
+      "evidence": [
+        "E4",
+        "E5"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "BAL",
+          "role": "DC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E6"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "MIA",
+          "role": "DC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E7"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.cbssports.com/nfl/news/john-harbaugh-shows-he-doesnt-have-to-be-old-school",
+      "publisher": "CBS Sports, Josh Katzowitz",
+      "published": "2012-11-28",
+      "accessed": "2026-11-04",
+      "summary": "When players resisted a full-pads practice after a heavy loss, he opened a team discussion, let them object and explained his reasoning; players called him receptive and fair and the team came out more united. A columnist's reading of one episode, years before the seed.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.espn.com/blog/baltimore-ravens/post/_/id/50798/ravens-john-harbaugh-being-lauded-as-prince-of-football-analytics",
+      "publisher": "ESPN (Ravens blog), Jamison Hensley",
+      "published": "2019-09-25",
+      "accessed": "2026-11-04",
+      "summary": "After three failed two-point tries in Kansas City he explains each through win probability, says analytics staff feed him numbers but game feel and situation weigh more, and stands by the calls; analytics writers praise him. His explanations; one game.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.theringer.com/nfl/2019/9/22/20878730/baltimore-ravens-kansas-city-chiefs-analytics",
+      "publisher": "The Ringer, Riley McAtee",
+      "published": "2019-09-22",
+      "accessed": "2026-11-04",
+      "summary": "Same game: details the two-point and fourth-down choices and quotes him calling them clear analytic decisions and saying the team will keep playing that way. An analytics-friendly writer's framing.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E4",
+      "url": "https://baltimoreravens.com/news/john-harbaugh-defends-lamar-jackson-s-playoff-record-excited-about-continued-gro",
+      "publisher": "Baltimore Ravens (baltimoreravens.com), Clifton Brown",
+      "published": "2020-01-17",
+      "accessed": "2026-11-04",
+      "summary": "After the 2019 playoff loss he describes meeting Jackson about improvement, calls him self-critical and ahead of many great quarterbacks who struggled early in the playoffs, and praises his urgency. Team site.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://cbssports.com/nfl/news/john-harbaugh-says-ravens-vision-for-lamar-jackson-is-to-be-recognized-as-the-greatest-qb-ever-in-nfl",
+      "publisher": "CBS Sports, Jeff Kerr",
+      "published": "2024-07-22",
+      "accessed": "2026-11-04",
+      "summary": "He defends Jackson against playoff criticism, says the shared goal is for Jackson to be remembered as the greatest quarterback, credits his work ethic and notes he has faced doubts since childhood. Writer adds Jackson's record and playoff numbers.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E6",
+      "url": "https://nbcsports.com/nfl/profootballtalk/rumor-mill/news/john-harbaugh-excited-to-promote-homegrown-raven-zach-orr-to-defensive-coordinator",
+      "publisher": "Pro Football Talk (NBC Sports), Michael David Smith",
+      "published": "2024-02-01",
+      "accessed": "2026-11-04",
+      "summary": "He calls Orr's promotion the payoff of years of work, traces his path from undrafted player to All-Pro to coach, and praises his energy, intelligence, communication and grasp of the team's standards. His own statement.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E7",
+      "url": "https://www.baltimoreravens.com/news/anthony-weaver-miami-dolphins-defensive-coordinator",
+      "publisher": "Baltimore Ravens (baltimoreravens.com), Clifton Brown",
+      "published": "2024-02-03",
+      "accessed": "2026-11-04",
+      "summary": "As Weaver leaves for Miami, he praises Weaver's work running the defensive front, calls him a leader and predicts he will be a head coach, saying he would be happy for him. Team site.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

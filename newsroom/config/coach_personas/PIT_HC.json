@@ -1,0 +1,209 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:PIT:HC",
+  "name": "Mike Tomlin",
+  "role": "HC",
+  "team": "PIT",
+  "seed_ref": {
+    "table": "COACHES_DATA",
+    "team": "PIT",
+    "role": "HC",
+    "name": "Mike Tomlin"
+  },
+  "sliders": {
+    "temperament": 3,
+    "sociability": 5,
+    "confidence": 8,
+    "openness": 6,
+    "warmth": 5,
+    "drive": 7
+  },
+  "slider_evidence": {
+    "temperament": [
+      "E1"
+    ],
+    "confidence": [
+      "E2",
+      "E3"
+    ],
+    "openness": [
+      "E4"
+    ],
+    "drive": [
+      "E2",
+      "E1"
+    ]
+  },
+  "traits": [
+    "DISCIPLINARIAN",
+    "QUOTABLE",
+    "LOYAL"
+  ],
+  "trait_evidence": {
+    "DISCIPLINARIAN": [
+      "E1"
+    ],
+    "QUOTABLE": [
+      "E2",
+      "E3"
+    ],
+    "LOYAL": [
+      "E5",
+      "E6"
+    ]
+  },
+  "views": [
+    {
+      "text": "There is one standard for every player, star or backup, and injuries or bad breaks do not lower it.",
+      "when": [
+        "COACHING",
+        "INJURY"
+      ]
+    },
+    {
+      "text": "The aim is a world title, not winning this week's game, and quarterback decisions follow from that.",
+      "when": [
+        "QB",
+        "CONTENDER"
+      ]
+    },
+    {
+      "text": "Big calls are the head coach's job; that is what he is paid for.",
+      "when": [
+        "COACHING",
+        "QB"
+      ]
+    },
+    {
+      "text": "Former head coaches on the staff see the subtle things a head coach needs to see.",
+      "when": [
+        "COACHING",
+        "ROSTER_MOVES"
+      ]
+    },
+    {
+      "text": "A struggling unit is everyone's responsibility, not a reason to hang one coordinator out to dry.",
+      "when": [
+        "STRUGGLING",
+        "LOSING_STREAK"
+      ]
+    },
+    {
+      "text": "Staying consistent through a chaotic season is what keeps a locker room focused.",
+      "when": [
+        "LOSING_STREAK",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "Promoting a coach who already knows the system keeps continuity while letting him leave his own imprint.",
+      "when": [
+        "COACHING",
+        "SCHEME"
+      ]
+    }
+  ],
+  "signatures": [
+    "answers a pointed question with a wry one-liner and moves on",
+    "reaches for sweeping, vivid phrasing that players and fans repeat",
+    "backs his coordinators in public while admitting the unit is not good enough"
+  ],
+  "want": "to win another championship and keep his record of never presiding over a losing season",
+  "fear": "that a long run without playoff success makes his standard sound like a slogan",
+  "voice": "Articulate, commanding and wry; he favors big words and memorable phrasing, and can end a question with a single quip. He is steady and consistent in public, refuses to pamper or belittle players, and owns big decisions as his own. He defends his staff publicly while being candid that results fall short.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "PIT",
+          "role": "DC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E5",
+        "E6"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "PIT",
+          "role": "OC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E4"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.dkpittsburghsports.com/2019/12/13/steelers-mike-tomlin-coaching-job-2019-antonio-brown-update-fdl",
+      "publisher": "DK Pittsburgh Sports, Dale Lolley",
+      "published": "2019-12-13",
+      "accessed": "2026-11-04",
+      "summary": "In a season of upheaval, Heyward says his consistency held the team together and he stays available to players; Vince Williams says he holds himself to the standard he sets; Foster calls him firm but approachable and says he handled the Antonio Brown saga patiently and privately. Players' views from one season.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E2",
+      "url": "https://thescore.com/nfl/news/3103772/steelers-tomlin-i-went-lone-ranger-in-decision-to-start-wilson-over-fields",
+      "publisher": "theScore, Caio Miari",
+      "published": "2024-10-20",
+      "accessed": "2026-11-04",
+      "summary": "He tells Fox that he made the call alone to start Russell Wilson over a 4-2 Justin Fields, wants to see both play, and frames the goal as a championship rather than single wins. The page is undated; context places it before the Jets game on October 20, 2024.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.cbssports.com/nfl/news/steelers-coach-mike-tomlin-on-starting-russell-wilson-over-justin-fields-thats-why-im-well-compensated/",
+      "publisher": "CBS Sports, Chris Bengel",
+      "published": "2024-10-21",
+      "accessed": "2026-11-04",
+      "summary": "After the switch works in a win over the Jets, asked whether it was bold, he jokes that this is why he is well paid and ends the press conference. One brief exchange.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E4",
+      "url": "https://sports.yahoo.com/mike-tomlin-arthur-smiths-head-124043325.html",
+      "publisher": "Pro Football Talk (NBC Sports), via Yahoo Sports",
+      "published": "2024-03-29",
+      "accessed": "2026-11-04",
+      "summary": "Explaining Arthur Smith's hire, he says former head coaches on his staff help him see subtle things from a head coach's view and that he looks forward to trading ideas on scheduling and best practices. His own reasoning.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E5",
+      "url": "https://steelersnow.com/tomlin-teryl-austin-will-put-his-imprint-on-steelers-defense",
+      "publisher": "Steelers Now, Nick Farabaugh",
+      "published": "2022-04-01",
+      "accessed": "2026-11-04",
+      "summary": "On promoting Teryl Austin, he calls the move natural because Austin knows the defense, and says Austin will have latitude to change things and put his imprint on it; notes their long history. His words, via a fan-network site.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E6",
+      "url": "https://www.nfl.com/news/mike-tomlin-teryl-austin-steelers-defense-struggles",
+      "publisher": "Associated Press, via NFL.com",
+      "published": "2025-10-28",
+      "accessed": "2026-11-04",
+      "summary": "With the defense near the bottom of the league, he says he has been largely pleased with Austin's work, that both are unhappy with results, rejects taking over play-calling and spreads responsibility to everyone. The page shows no date; contents place it on October 28, 2025.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

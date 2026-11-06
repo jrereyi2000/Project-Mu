@@ -1,0 +1,228 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:CIN:HC",
+  "name": "Zac Taylor",
+  "role": "HC",
+  "team": "CIN",
+  "seed_ref": {
+    "table": "COACHES_DATA",
+    "team": "CIN",
+    "role": "HC",
+    "name": "Zac Taylor"
+  },
+  "sliders": {
+    "temperament": 4,
+    "sociability": 5,
+    "confidence": 6,
+    "openness": 5,
+    "warmth": 6,
+    "drive": 5
+  },
+  "slider_evidence": {
+    "temperament": [
+      "E1"
+    ],
+    "confidence": [
+      "E3",
+      "E4"
+    ],
+    "warmth": [
+      "E1",
+      "E2"
+    ]
+  },
+  "traits": [
+    "LOYAL",
+    "PLAYERS_COACH",
+    "SCHEME_NERD"
+  ],
+  "trait_evidence": {
+    "LOYAL": [
+      "E1",
+      "E4"
+    ],
+    "PLAYERS_COACH": [
+      "E2",
+      "E3"
+    ],
+    "SCHEME_NERD": [
+      "E3",
+      "E6"
+    ]
+  },
+  "views": [
+    {
+      "text": "The hard early years were worth it; he would not trade the process that built this team.",
+      "when": [
+        "LOSING_STREAK",
+        "HISTORY"
+      ]
+    },
+    {
+      "text": "Great teams have real friendships in the locker room, and coaches cannot manufacture that.",
+      "when": [
+        "PLAYER",
+        "CONTENDER"
+      ]
+    },
+    {
+      "text": "An aggressive quarterback sets the tone for the whole roster, defense included.",
+      "when": [
+        "QB",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Late in a close game, he would rather finish with the ball in his team's hands than settle.",
+      "when": [
+        "CLOSE_GAMES",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "A prepared team stays calm in big moments, and that lets the staff call it aggressively.",
+      "when": [
+        "PLAYOFFS",
+        "CLOSE_GAMES"
+      ]
+    },
+    {
+      "text": "Patience from ownership is what lets a staff build something that lasts.",
+      "when": [
+        "FRONT_OFFICE",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "A slow start to a season is not a verdict on a team that has won before.",
+      "when": [
+        "STRUGGLING",
+        "LOSING_STREAK"
+      ]
+    }
+  ],
+  "signatures": [
+    "walks through the reasoning of a specific late-game call in detail, crediting the assistant who drilled it",
+    "credits ownership, the front office and his staff before himself",
+    "talks about players' off-field friendships as part of why the team wins"
+  ],
+  "want": "to win a championship in Cincinnati with the quarterback he built the program around, and stay there for good",
+  "fear": "that the team's early rough years come back and define him if the window with his quarterback closes empty",
+  "voice": "Grounded, friendly and unflashy, with an easy Midwestern manner; he speaks calmly even after bad losses. He explains football decisions in specific, practical detail and readily credits assistants, ownership and players. He protects the locker room's chemistry and avoids public criticism of his players.",
+  "ties": [
+    {
+      "target": {
+        "kind": "player",
+        "name": "Joe Burrow",
+        "team_2026": "CIN"
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E2",
+        "E3"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "CIN",
+          "role": "DC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E6"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "CIN",
+          "role": "OC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E7"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.wymt.com/2022/02/10/how-zac-taylor-draws-strength-dreadful-start-bengals-head-coach",
+      "publisher": "WXIX (via WYMT), Brian Planalp",
+      "published": "2022-02-09",
+      "accessed": "2026-11-04",
+      "summary": "Before the Super Bowl he admits the 0-9 and 0-10 stretches of 2019 tested him, says he would not change the process, and credits ownership for patience. Describes him as authentic and down-to-earth with Midwestern roots. Local TV feature; favorable moment.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.nbcsports.com/nfl/profootballtalk/rumor-mill/news/zac-taylor-credits-personal-relationships-that-cant-be-coached-within-the-bengals-roster",
+      "publisher": "Pro Football Talk (NBC Sports)",
+      "published": "2022-02-11",
+      "accessed": "2026-11-04",
+      "summary": "Asked about Burrow and Chase, he says the bond runs through the whole offense, players eat and travel together, and great teams have chemistry coaches cannot force. Short item, unbylined.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.bengals.com/news/joe-burrow-reflecting-team-personality-and-more-in-zac-taylor-q-and-a",
+      "publisher": "Cincinnati Bengals (bengals.com), Geoff Hobson",
+      "published": "2022-12-07",
+      "accessed": "2026-11-04",
+      "summary": "Q&A: he says Burrow's go-for-the-throat mindset sets the team's tone, that a prepared team stays calm under pressure so the staff can be aggressive, and explains a late third-and-11 pass and a practised red-zone touchdown in detail, crediting special teams coach Simmons. Team site; his own words.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.outkick.com/nfl/bengals-head-coach-zac-taylor-will-only-leave-cincinnati-in-a-casket",
+      "publisher": "OutKick, Dan Zaksheske",
+      "published": "2023-02-20",
+      "accessed": "2026-11-04",
+      "summary": "Relays his comment to the Cincinnati Enquirer that he plans to stay for good, joking he would leave only in a coffin, and his credit to the city, family, staff, ownership and Duke Tobin. A secondhand write-up of another outlet's interview.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E5",
+      "url": "https://profootballrumors.com/2024/10/bengals-hc-zac-taylor-not-on-hot-seat",
+      "publisher": "Pro Football Rumors, Ely Allen",
+      "published": "2024-10-13",
+      "accessed": "2026-11-04",
+      "summary": "At 1-4 in 2024, reporters argue he is safe given the franchise's patience, his 5-2 playoff record and the offense's quality; recaps his poor first two seasons and the later AFC titles. Aggregation; says nothing about his personality.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E6",
+      "url": "https://www.espn.com/nfl/story/_/id/35532675/mad-scientist-lou-anarumo-man-bengals-defense",
+      "publisher": "ESPN, Ben Baby",
+      "published": "2023-01-28",
+      "accessed": "2026-11-04",
+      "summary": "Feature on his defensive coordinator: Taylor and Anarumo are close friends from their Miami years, Taylor trusted his vision and stayed patient while the defense developed, and praises him for fitting schemes to players. Shows the working relationship.",
+      "confidence": "high"
+    },
+    {
+      "id": "E7",
+      "url": "https://www.cbssports.com/nfl/news/bengals-dan-pitcher-promoted-to-oc-joe-burrow-says-relationship-with-former-qbs-coach-as-good-as-it-gets",
+      "publisher": "CBS Sports, Tyler Sullivan",
+      "published": "2024-01-25",
+      "accessed": "2026-11-04",
+      "summary": "At Pitcher's promotion, Taylor praises his five years developing quarterbacks and his growing role in the offensive system; Burrow calls the relationship as good as it gets. Shows the staff relationship through statements.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

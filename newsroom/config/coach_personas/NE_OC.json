@@ -1,0 +1,215 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:NE:OC",
+  "name": "Alex Van Pelt",
+  "role": "OC",
+  "team": "NE",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "NE",
+    "role": "OC",
+    "name": "Alex Van Pelt"
+  },
+  "sliders": {
+    "temperament": 3,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 6,
+    "warmth": 6,
+    "drive": 5
+  },
+  "slider_evidence": {
+    "temperament": [
+      "E6"
+    ],
+    "openness": [
+      "E1",
+      "E5"
+    ],
+    "warmth": [
+      "E2"
+    ]
+  },
+  "traits": [
+    "QB_WHISPERER",
+    "TEACHER",
+    "MEASURED",
+    "OLD_SCHOOL"
+  ],
+  "trait_evidence": {
+    "QB_WHISPERER": [
+      "E3",
+      "E6"
+    ],
+    "TEACHER": [
+      "E1",
+      "E2"
+    ],
+    "MEASURED": [
+      "E3",
+      "E4"
+    ],
+    "OLD_SCHOOL": [
+      "E1",
+      "E6"
+    ]
+  },
+  "views": [
+    {
+      "text": "Developing a rookie quarterback is a marathon; he earns the job through consistent practices, not a calendar.",
+      "when": [
+        "QB",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "A rookie can learn by watching, until the offense's production and his practice growth say otherwise.",
+      "when": [
+        "QB",
+        "STRUGGLING"
+      ]
+    },
+    {
+      "text": "Build the offense on the run game, play-action and keepers, and keep it easy to learn.",
+      "when": [
+        "SCHEME",
+        "OFFSEASON"
+      ]
+    },
+    {
+      "text": "A coach learns as much from a great quarterback as he teaches him.",
+      "when": [
+        "QB",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Keeping a young quarterback healthy matters more than squeezing a few yards out of designed runs.",
+      "when": [
+        "INJURY",
+        "QB"
+      ]
+    },
+    {
+      "text": "A former backup quarterback understands preparation better than anyone in the building.",
+      "when": [
+        "COACHING",
+        "PLAYER"
+      ]
+    }
+  ],
+  "signatures": [
+    "reaches for analogies such as a marathon when explaining development",
+    "lays out his reasons step by step when he changes his mind on a quarterback decision",
+    "refers back to quarterbacks he has coached when describing a young one"
+  ],
+  "want": "to show he can be a full-time play-caller and not only a trusted quarterbacks coach",
+  "fear": "that a struggling offense makes him the scapegoat for a young quarterback's slow start",
+  "voice": "Even-keeled and plain-spoken, a former quarterback who talks in practical, patient terms. He explains decisions through process and analogy, rarely gets high or low, and credits the quarterbacks he has coached. He avoids public friction even when questioned about his calls.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "CLE",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E2"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Drake Maye",
+        "team_2026": "NE"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E3",
+        "E5",
+        "E6"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Aaron Rodgers",
+        "team_2026": "PIT"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E1"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.clevelandbrowns.com/news/alex-van-pelt-sees-great-opportunity-as-browns-offensive-coordinator",
+      "publisher": "Cleveland Browns (clevelandbrowns.com), Andrew Gribble",
+      "published": "2020-02-10",
+      "accessed": "2026-11-04",
+      "summary": "At his Cleveland hiring he wants a system easy for players to learn, builds around the run game, play-action and keepers, and says coaching Rodgers taught him as much as he taught. Stefanski wanted his versatility and values his backup-quarterback understanding of preparation. Team site.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.si.com/nfl/patriots/news/new-england-patriots-alex-van-pelt-praise-kevin-stefanski-cleveland-browns-endorse",
+      "publisher": "Sports Illustrated (Patriots Country), Jon Alfano",
+      "published": "2024-03-01",
+      "accessed": "2026-11-04",
+      "summary": "At the combine Stefanski calls him one of the best people in coaching and a close friend, and credits his quarterback background for teaching the system in a way players understand. A former boss's praise.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E3",
+      "url": "https://africa.espn.com/nfl/story/_/id/40279205/patriots-oc-praises-qb-drake-maye-stresses-patience",
+      "publisher": "ESPN, Mike Reiss",
+      "published": "2024-06-04",
+      "accessed": "2026-11-04",
+      "summary": "He compares developing Drake Maye to a marathon, says reps are earned by consistent practices, sets no timetable and keeps Brissett as starter. His words; the article does not describe his personality.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.audacy.com/weei/sports/patriots/patriots-oc-alex-van-pelt-leading-drake-mayes-development",
+      "publisher": "WEEI 93.7 (Audacy)",
+      "published": "2024-06-05",
+      "accessed": "2026-11-04",
+      "summary": "Same spring: a patient, methodical plan for Maye, playing time tied to practice success, confidence drawn from installing an offense in Cleveland despite a rough passing game in OTAs. Unbylined station write-up.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.nbcsports.com/nfl/profootballtalk/rumor-mill/news/patriots-oc-alex-van-pelt-on-drake-maye-his-growth-our-lack-of-production-led-to-change",
+      "publisher": "Pro Football Talk (NBC Sports), Josh Alper",
+      "published": "2024-10-10",
+      "accessed": "2026-11-04",
+      "summary": "He explains switching to Maye as starter after earlier favoring learning by watching: the passing game was not producing and Maye had grown in practice. Shows he will change course and say why.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E6",
+      "url": "https://www.audacy.com/weei/sports/patriots/patriots-alex-van-pelt-still-has-something-to-prove",
+      "publisher": "WEEI 93.7 (Audacy), Meghan Ottolini",
+      "published": "2024-11-15",
+      "accessed": "2026-11-04",
+      "summary": "Opinion piece: calls him even-keeled and run-first with a knack for quarterbacks, quotes Mayo calling him level-headed, and credits much of Maye's growth to him while arguing the offense still ranks near the bottom. Opinion framing.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

@@ -1,0 +1,168 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:MIA:OC",
+  "name": "Frank Smith",
+  "role": "OC",
+  "team": "MIA",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "MIA",
+    "role": "OC",
+    "name": "Frank Smith"
+  },
+  "sliders": {
+    "temperament": 4,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 5,
+    "drive": 5
+  },
+  "slider_evidence": {
+    "temperament": [
+      "E2",
+      "E4"
+    ]
+  },
+  "traits": [
+    "MEASURED",
+    "SCHEME_NERD",
+    "PLAYERS_COACH"
+  ],
+  "trait_evidence": {
+    "MEASURED": [
+      "E2",
+      "E4"
+    ],
+    "SCHEME_NERD": [
+      "E2",
+      "E3"
+    ],
+    "PLAYERS_COACH": [
+      "E2",
+      "E5"
+    ]
+  },
+  "views": [
+    {
+      "text": "A struggling run game is a collective problem, never one back's or one lineman's fault.",
+      "when": [
+        "SCHEME",
+        "STRUGGLING"
+      ]
+    },
+    {
+      "text": "A smaller back can still win short yardage if he has the feel and timing to find space.",
+      "when": [
+        "PLAYER",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "The rookie year is the hardest; the jump comes once the volume of the offense slows down for him.",
+      "when": [
+        "YOUTH",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "A disappointing season is something to study, not something to bury.",
+      "when": [
+        "BAD_GAME",
+        "OFFSEASON"
+      ]
+    },
+    {
+      "text": "Consistency comes from daily habits in the spring, not from promises in the summer.",
+      "when": [
+        "OFFSEASON",
+        "PREVIEW"
+      ]
+    },
+    {
+      "text": "Game plans are built together by the head coach, the coordinator and the position coaches.",
+      "when": [
+        "COACHING",
+        "GAME_REVIEW"
+      ]
+    }
+  ],
+  "signatures": [
+    "credits the position coaches by name for a player's growth",
+    "declines to rank or single out a player when asked to compare him with others",
+    "frames problems as execution against the looks the defense showed"
+  ],
+  "want": "to be seen as the architect of a lasting run game in his own right, not only as the head coach's partner",
+  "fear": "that the offense's dips get pinned on him while its best days are credited to the play-caller",
+  "voice": "Earnest, measured and process-focused; he speaks in long, qualified sentences and avoids blaming individuals. He spreads credit to position coaches and players and turns setbacks into lessons to study. He has a light, self-deprecating humor but rarely makes promises. Public coverage of him is thin, so his voice rests mostly on press-conference transcripts.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "MIA",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E2"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://africa.espn.com/nfl/story/_/id/33289229/source-miami-dolphins-hire-los-angeles-chargers-frank-smith-offensive-coordinator",
+      "publisher": "ESPN, Marcel Louis-Jacques",
+      "published": "2022-02-14",
+      "accessed": "2026-11-04",
+      "summary": "Hiring report: came from the Chargers as run game coordinator and offensive line coach, after tight ends jobs with the Raiders and Bears and an assistant line job with the Saints; the Chargers' run- and pass-block win rates improved under him. Career facts only.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://media.miamidolphins.com/?p=41761",
+      "publisher": "Miami Dolphins media site (press-conference transcript)",
+      "published": "2023-10-05",
+      "accessed": "2026-11-04",
+      "summary": "Full transcript: measured and upbeat, he credits position coaches Studesville and Barry, praises players' work habits, declines to rank a tackle, explains receivers' quiet games as collective issues and describes the game plan as a joint process with McDaniel. Primary source; one session.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.si.com/nfl/dolphins/news/why-the-dolphins-like-achane-in-short-yardage-situations-01jexqfk414t",
+      "publisher": "Sports Illustrated (All Dolphins), Alain Poupart",
+      "published": "2024-12-12",
+      "accessed": "2026-11-04",
+      "summary": "He explains how the staff decides whether a short-yardage problem needs correction or a scheme change, rejects the idea that Achane is too small for short yardage, and calls run-game efficiency a collective effort. His own explanation, filtered by a beat writer.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.si.com/nfl/dolphins/news/where-dolphins-oc-wants-to-see-improvement-in-2025-01jw1ayz7acv",
+      "publisher": "Sports Illustrated (All Dolphins), Jake Mendel",
+      "published": "2025-05-24",
+      "accessed": "2026-11-04",
+      "summary": "Spring 2025: he calls 2024 a letdown with some bright spots, wants the consistency and discipline of 2023 back, and uses the offseason to align players' understanding. The writer describes him as earnest, qualified and process-minded.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.nbcsports.com/nfl/profootballtalk/rumor-mill/news/dolphins-oc-frank-smith-devon-achane-ready-for-bigger-workload-doing-a-great-job-with-it",
+      "publisher": "Pro Football Talk (NBC Sports), Josh Alper",
+      "published": "2024-11-22",
+      "accessed": "2026-11-04",
+      "summary": "He says Achane has handled a much bigger 2024 workload professionally and that a rookie season is usually the hardest adjustment. Short news item; shows how he talks up a young player, little else.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

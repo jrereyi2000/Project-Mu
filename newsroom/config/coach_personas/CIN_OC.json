@@ -1,0 +1,186 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:CIN:OC",
+  "name": "Dan Pitcher",
+  "role": "OC",
+  "team": "CIN",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "CIN",
+    "role": "OC",
+    "name": "Dan Pitcher"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 6,
+    "openness": 5,
+    "warmth": 5,
+    "drive": 6
+  },
+  "slider_evidence": {
+    "confidence": [
+      "E5"
+    ],
+    "drive": [
+      "E3",
+      "E2"
+    ]
+  },
+  "traits": [
+    "QB_WHISPERER",
+    "LOYAL",
+    "FILM_ROOM_RAT"
+  ],
+  "trait_evidence": {
+    "QB_WHISPERER": [
+      "E2",
+      "E3"
+    ],
+    "LOYAL": [
+      "E2",
+      "E4"
+    ],
+    "FILM_ROOM_RAT": [
+      "E3",
+      "E2"
+    ]
+  },
+  "views": [
+    {
+      "text": "A quarterback's growth comes from a relationship built over years, not a season of tips.",
+      "when": [
+        "QB",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "Continuity is an offense's head start, and a group that has it should use it rather than downplay it.",
+      "when": [
+        "OFFSEASON",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "A stable, winning organization is worth more than a bigger title on a rebuilding team.",
+      "when": [
+        "COACHING",
+        "FRONT_OFFICE"
+      ]
+    },
+    {
+      "text": "An offense with several big-play receivers should spread the threats, not lean on one.",
+      "when": [
+        "SCHEME",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "A backup quarterback can play well when the system is built to put him in good positions.",
+      "when": [
+        "QB",
+        "INJURY"
+      ]
+    },
+    {
+      "text": "Coaches put players in position; the result still depends on execution.",
+      "when": [
+        "GAME_REVIEW",
+        "BAD_GAME"
+      ]
+    }
+  ],
+  "signatures": [
+    "talks about the quarterback as a partner he has grown with since the player's rookie year",
+    "praises each pass catcher's specific skill when asked about the group",
+    "mentions the organization's stability when asked why he stayed"
+  ],
+  "want": "to show that the quarterback whisperer can run a whole offense and help win a title with the player he helped build",
+  "fear": "that the offense's success keeps being credited to the quarterback and the head coach, never to him",
+  "voice": "Upbeat, earnest and team-first; he speaks enthusiastically about players and continuity and can turn emphatic when urging the group on. He is loyal to the organization and credits the quarterback relationship above all. Public coverage of his personality is thin, so his voice rests on a few pressers and statements.",
+  "ties": [
+    {
+      "target": {
+        "kind": "player",
+        "name": "Joe Burrow",
+        "team_2026": "CIN"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E2",
+        "E3",
+        "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "CIN",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E4"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://africa.espn.com/nfl/story/_/id/39380068/sources-bengals-promote-qbs-coach-dan-pitcher-oc",
+      "publisher": "ESPN, Ben Baby",
+      "published": "2024-01-24",
+      "accessed": "2026-11-04",
+      "summary": "Promotion report: quarterbacks coach since 2020 and on staff since 2016, elevated a day after Callahan left for Tennessee; Taylor praises his five years developing quarterbacks and says his scheme role will grow. Facts and a statement.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.bengals.com/news/dan-pitcher-offensive-coordinator-quarterbacks-coach-promotion",
+      "publisher": "Cincinnati Bengals (club press release)",
+      "published": "2024-01-25",
+      "accessed": "2026-11-04",
+      "summary": "Release: played quarterback at Division III Cortland, four years in Colts player personnel, offensive assistant, assistant quarterbacks coach and quarterbacks coach in Cincinnati, worked with Browning's 2023 starts. He sounds grateful and loyal; Burrow credits much of his own success to Pitcher's work ethic and passion.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.cbssports.com/nfl/news/bengals-dan-pitcher-promoted-to-oc-joe-burrow-says-relationship-with-former-qbs-coach-as-good-as-it-gets",
+      "publisher": "CBS Sports, Tyler Sullivan",
+      "published": "2024-01-25",
+      "accessed": "2026-11-04",
+      "summary": "Burrow calls their relationship as good as it gets, credits Pitcher for the player he became and praises his dedication and energy; Taylor cites his quarterback development and scheme work. Statements around a promotion.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.si.com/nfl/bengals/news/key-takeaways-bengals-introduce-new-offensive-coordinator-dan-pitcher",
+      "publisher": "Sports Illustrated (Bengals On SI), James Rapien",
+      "published": "2024-01-25",
+      "accessed": "2026-11-04",
+      "summary": "At his introduction he says he weighed other offers but saw Cincinnati as the clear first choice over rebuilding teams, and calls Burrow elite and special; Taylor calls the promotion a natural step. Little on his coaching style.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.si.com/nfl/bengals/take-the-damn-head-start-and-use-it-bengals-oc-dan-pitcher-says-offense-has-advantage-on-other-teams-01jxg878cg2a",
+      "publisher": "Sports Illustrated (Bengals On SI), Jay Morrison",
+      "published": "2025-06-11",
+      "accessed": "2026-11-04",
+      "summary": "He praises Chase, Higgins, Iosivas, Gesicki and Chase Brown by skill and argues the offense's continuity is an edge to use, ending emphatically. Writer calls his tone upbeat, confident and motivational.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}
