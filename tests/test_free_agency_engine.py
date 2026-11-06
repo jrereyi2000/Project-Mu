@@ -358,3 +358,30 @@ def test_canonical_order_makes_retries_identical_and_order_stays_significant():
     flipped = run_wave(players, rev, 3, "s")
     # documented: index-seeded choice noise keeps raw offer order significant (no permutation invariance)
     assert [(d["player_id"], d["team_id"]) for d in plain] != [(d["player_id"], d["team_id"]) for d in flipped]
+
+
+# ------------------------------------------------- counter_options (agent loops U2) ----
+def test_counter_options_first_equals_counter_and_all_clear_in_order():
+    from engines.free_agency_engine import _counter, accept_bar, counter_options
+    p = player(ovr=85)
+    o = dict(offer(p, mult=0.8), team_id=3)
+    bar = accept_bar(p, False)
+    opts = counter_options(o, p, REBUILDER, MARKET, bar)
+    assert 1 <= len(opts) <= 3
+    assert opts[0] == _counter(o, p, REBUILDER, MARKET, bar)
+    totals = [c["total_value"] for c in opts]
+    assert totals == sorted(totals) and len(set(totals)) == len(totals)
+    for c in opts:
+        assert set(c) == {"years", "total_value", "bonus", "guaranteed"}
+        assert offer_utility(dict(o, **c), p, REBUILDER, MARKET)["utility"] >= bar
+    assert len(counter_options(o, p, REBUILDER, MARKET, bar, k=5)) >= len(opts)
+    assert counter_options(offer(p, mult=0.3), p, REBUILDER, MARKET, bar) == []
+    assert _counter(offer(p, mult=0.3), p, REBUILDER, MARKET, bar) is None
+
+
+def test_counter_options_leave_acceptance_unchanged():
+    p = player(ovr=85)
+    o = dict(offer(p, mult=0.8), team_id=3)
+    status, counter = decide(o, p, REBUILDER)
+    from engines.free_agency_engine import accept_bar, counter_options
+    assert status == "COUNTER" and counter == counter_options(o, p, REBUILDER, MARKET, accept_bar(p, False))[0]

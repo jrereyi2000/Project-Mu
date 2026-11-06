@@ -28,6 +28,8 @@ sha256 of a seed string (no global random state), so a run is reproducible for i
                  (depth 3+) REJECTs unless the AAV is >= 1.5 W (STAR_BACKUP_PREMIUM) and the bar is met. Otherwise
                  the smallest raise (5% steps, at most +35%, at his ideal term and guarantee share) that clears the
                  bar is a COUNTER {years, total_value, bonus, guaranteed}; none -> REJECT.
+  counter_options  the first clearing step and the next k - 1 steps that still clear (default k 3), for the
+                 player agent loop's choice of ask (engines/agent_loops/player.py); the first equals _counter's.
   waves          offseason: 1 superstars (OVR >= 85), 2 quality starters (>= 75), 3 depth. Wave n considers every
                  unsigned player of tier <= n; a player past his tier's wave lowers his bar 0.03 a wave (market
                  cools). Each player gets one decision: offers ranked by U plus seeded noise (+-0.03), the first
@@ -253,10 +255,9 @@ def accept_bar(player, in_season):
     return bar - (IN_SEASON_DISCOUNT if in_season else 0.0)
 
 
-def _counter(offer, player, team, market, bar, *, persona=None, contract_context=None, policy=None, trace=None):
-    """The smallest raise (COUNTER_STEP steps up to COUNTER_MAX_RAISE) at his ideal term and guarantee share that
-    clears the bar, or None. Every candidate is rescored with the same frozen persona/context/policy; a trace dict
-    receives every attempt and the first clearing step."""
+def _counter_candidates(offer, player):
+    """(raise step, candidate offer) for every COUNTER_STEP step up to COUNTER_MAX_RAISE, at his ideal term and
+    guarantee share (veterans keep a longer offered term)."""
     vet = (player.get("age") or 27) >= VET_AGE
     years = max(offer.get("years") or 1, ideal_years(player.get("age"))) if vet else ideal_years(player.get("age"))
     share = max(_guar_share(offer), GUAR_TARGET_VET if vet else GUAR_TARGET)
@@ -265,19 +266,46 @@ def _counter(offer, player, team, market, bar, *, persona=None, contract_context
     steps = int(round(COUNTER_MAX_RAISE / COUNTER_STEP))
     for k in range(steps + 1):
         total = int(round(base_aav * (1 + k * COUNTER_STEP) * years))
-        c = {"team_id": offer.get("team_id"), "player_id": offer.get("player_id"), "years": years,
-             "total_value": total, "bonus": int(round(total * bonus_share)), "guaranteed": int(round(total * share)),
-             "projected_depth": offer.get("projected_depth")}
+        yield k, {"team_id": offer.get("team_id"), "player_id": offer.get("player_id"), "years": years,
+                  "total_value": total, "bonus": int(round(total * bonus_share)),
+                  "guaranteed": int(round(total * share)), "projected_depth": offer.get("projected_depth")}
+
+
+def _counter_terms(c):
+    return {"years": c["years"], "total_value": c["total_value"], "bonus": c["bonus"], "guaranteed": c["guaranteed"]}
+
+
+def _counter(offer, player, team, market, bar, *, persona=None, contract_context=None, policy=None, trace=None):
+    """The smallest raise (COUNTER_STEP steps up to COUNTER_MAX_RAISE) at his ideal term and guarantee share that
+    clears the bar, or None. Every candidate is rescored with the same frozen persona/context/policy; a trace dict
+    receives every attempt and the first clearing step."""
+    for k, c in _counter_candidates(offer, player):
         u = offer_utility(c, player, team, market, persona, contract_context=contract_context,
                           policy=policy)["utility"]
         if trace is not None:
-            trace.setdefault("counter_attempts", []).append({"raise_step": k, "total_value": total, "utility": u})
+            trace.setdefault("counter_attempts", []).append({"raise_step": k, "total_value": c["total_value"],
+                                                             "utility": u})
         if u >= bar:
             if trace is not None:
                 trace["counter_clearing_step"] = k
-            return {"years": c["years"], "total_value": c["total_value"], "bonus": c["bonus"],
-                    "guaranteed": c["guaranteed"]}
+            return _counter_terms(c)
     return None
+
+
+def counter_options(offer, player, team, market, bar, k=3, *, persona=None, contract_context=None, policy=None):
+    """The engine's clearing counters at a few ask levels (COACH_PLAYER_AGENT_LOOPS_PLAN.md §2.3): the first
+    clearing raise step (exactly _counter's counter) and the next k - 1 steps up to COUNTER_MAX_RAISE that still
+    clear, in raise order, each {years, total_value, bonus, guaranteed}; [] when none clears. Acceptance stays
+    acceptance(): the player loop only chooses which of these is put to the team."""
+    out = []
+    for _, c in _counter_candidates(offer, player):
+        if len(out) >= k:
+            break
+        u = offer_utility(c, player, team, market, persona, contract_context=contract_context,
+                          policy=policy)["utility"]
+        if u >= bar:
+            out.append(_counter_terms(c))
+    return out
 
 
 def acceptance(best, player, in_season, *, persona=None, contract_context=None, policy=None, trace=None):
