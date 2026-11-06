@@ -1,0 +1,129 @@
+{
+  "schema_version": "owner-profile-v1",
+  "key": "owner:AZ",
+  "name": "Michael Bidwill",
+  "role": "OWNER",
+  "team": "AZ",
+  "seed_ref": {
+    "table": "OWNERS_DATA",
+    "team": "AZ",
+    "name": "Michael Bidwill"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 5,
+    "drive": 5
+  },
+  "slider_evidence": {},
+  "traits": [
+    "MEDDLER",
+    "LOYAL",
+    "OLD_SCHOOL"
+  ],
+  "trait_evidence": {
+    "MEDDLER": [
+      "E1"
+    ],
+    "LOYAL": [
+      "E1"
+    ],
+    "OLD_SCHOOL": [
+      "E2"
+    ]
+  },
+  "views": [
+    {
+      "text": "This is a league about wins and losses, and the record speaks for itself.",
+      "when": [
+        "COACHING",
+        "LOSING_STREAK"
+      ]
+    },
+    {
+      "text": "I talk it through with my general manager before any firing.",
+      "when": [
+        "FRONT_OFFICE"
+      ]
+    },
+    {
+      "text": "A general manager who builds the roster gets another coach before he gets replaced.",
+      "when": [
+        "FRONT_OFFICE",
+        "ROSTER_MOVES"
+      ]
+    },
+    {
+      "text": "I like young, energetic first-time head coaches.",
+      "when": [
+        "COACHING",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "A franchise record for losses cannot stand.",
+      "when": [
+        "STRUGGLING",
+        "RECORDS"
+      ]
+    },
+    {
+      "text": "The quarterback has to be the center of the next coach's plan.",
+      "when": [
+        "QB"
+      ]
+    }
+  ],
+  "signatures": [
+    "praises a fired coach in glowing terms",
+    "keeps his general manager through coaching changes"
+  ],
+  "want": "A sustained winner in Arizona after years of short coaching cycles (medium).",
+  "fear": "Another three-year cycle that ends in a firing (medium).",
+  "voice": "Upbeat and complimentary even in bad news, then blunt about results. Former prosecutor's cadence: short declarative sentences.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "AZ",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E1"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.news4jax.com/sports/2026/01/05/cardinals-coach-jonathan-gannon-fired-following-dismal-third-season-that-ended-with-3-14-record/",
+      "publisher": "AP via News4JAX",
+      "published": "2026-01-05",
+      "accessed": "2026-11-06",
+      "summary": "Arizona fired Jonathan Gannon after a 3-14 season (15-36 over three years); Bidwill and GM Monti Ossenfort talked before informing him, and Ossenfort kept his job.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://heavy.com/sports/nfl/arizona-cardinals/michael-bidwill-explains-decision-jonathan-gannon/",
+      "publisher": "Heavy",
+      "published": "2026-01-06",
+      "accessed": "2026-11-06",
+      "summary": "Bidwill praised Gannon as a smart, motivated coach but said the league is about wins and losses.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "Thin coverage: two to four sources found by web search (2026-11-06); sliders mostly left at 5; a few publication dates are taken from the news cycle the article covers. Draft for JR to check."
+  }
+}

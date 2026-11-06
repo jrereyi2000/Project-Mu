@@ -1,0 +1,138 @@
+{
+  "schema_version": "owner-profile-v1",
+  "key": "owner:DAL",
+  "name": "Jerry Jones",
+  "role": "OWNER",
+  "team": "DAL",
+  "seed_ref": {
+    "table": "OWNERS_DATA",
+    "team": "DAL",
+    "name": "Jerry Jones"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 8,
+    "confidence": 8,
+    "openness": 5,
+    "warmth": 5,
+    "drive": 5
+  },
+  "slider_evidence": {
+    "confidence": [
+      "E1",
+      "E2"
+    ],
+    "sociability": [
+      "E1"
+    ]
+  },
+  "traits": [
+    "MEDDLER",
+    "QUOTABLE",
+    "BUDGET_CONSCIOUS"
+  ],
+  "trait_evidence": {
+    "MEDDLER": [
+      "E1",
+      "E2"
+    ],
+    "QUOTABLE": [
+      "E1"
+    ],
+    "BUDGET_CONSCIOUS": [
+      "E1",
+      "E2"
+    ]
+  },
+  "views": [
+    {
+      "text": "I am the general manager, and the final call on any deal is mine, even when I say we all agreed.",
+      "when": [
+        "FRONT_OFFICE",
+        "TRADE"
+      ]
+    },
+    {
+      "text": "A star who wants a record contract has to fit what the club can carry, or we find another way.",
+      "when": [
+        "CAP",
+        "TRADE"
+      ]
+    },
+    {
+      "text": "Promoting a coordinator is a risk, not a desperation heave.",
+      "when": [
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Two first-round picks and a run-stopper can be worth more than one great pass rusher.",
+      "when": [
+        "DRAFT",
+        "TRADE"
+      ]
+    },
+    {
+      "text": "The Cowboys are always contenders in my eyes, no matter the last season.",
+      "when": [
+        "CONTENDER"
+      ]
+    },
+    {
+      "text": "I talk to the press every week because the Cowboys are America's story.",
+      "when": [
+        "FRONT_OFFICE"
+      ]
+    }
+  ],
+  "signatures": [
+    "holds court with reporters weekly",
+    "insists big decisions were collective while noting he could have overruled"
+  ],
+  "want": "Another Super Bowl for the Cowboys on his watch as owner and general manager (medium).",
+  "fear": "Being remembered as the owner whose control kept the team from titles (medium).",
+  "voice": "Expansive, colorful and talkative, full of folksy analogies and business metaphors. Defends every move at length and enjoys the spotlight.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "DAL",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E2"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://amp.nfl.com/news/cowboys-jerry-jones-has-no-regrets-about-trading-micah-parsons-to-packers-we-got-what-we-wanted",
+      "publisher": "NFL.com",
+      "published": "2025-08-29",
+      "accessed": "2026-11-06",
+      "summary": "Jones said he had no regrets about trading Micah Parsons to Green Bay for Kenny Clark and two first-round picks after extension talks stalled, said he had total control but did not decide alone.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.news4jax.com/sports/2025/08/29/schottenheimer-takes-parsons-trade-in-stride-and-cowboys-newcomer-clark-says-watch-his-film/",
+      "publisher": "AP via News4JAX",
+      "published": "2025-08-29",
+      "accessed": "2026-11-06",
+      "summary": "Brian Schottenheimer, promoted from offensive coordinator as the ninth head coach Jones has hired since 1989, described the Parsons trade as an aligned decision.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "Thin coverage: two to four sources found by web search (2026-11-06); sliders mostly left at 5; a few publication dates are taken from the news cycle the article covers. Draft for JR to check."
+  }
+}

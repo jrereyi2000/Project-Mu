@@ -1,0 +1,138 @@
+{
+  "schema_version": "owner-profile-v1",
+  "key": "owner:MIN",
+  "name": "Zygi Wilf",
+  "role": "OWNER",
+  "team": "MIN",
+  "seed_ref": {
+    "table": "OWNERS_DATA",
+    "team": "MIN",
+    "name": "Zygi Wilf"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 5,
+    "drive": 5
+  },
+  "slider_evidence": {},
+  "traits": [
+    "ANALYTICS_BELIEVER",
+    "MEDDLER",
+    "PATIENT_BUILDER"
+  ],
+  "trait_evidence": {
+    "ANALYTICS_BELIEVER": [
+      "E1"
+    ],
+    "MEDDLER": [
+      "E3"
+    ],
+    "PATIENT_BUILDER": [
+      "E2"
+    ]
+  },
+  "views": [
+    {
+      "text": "A front office that thinks in probabilities and risk can find edges others miss.",
+      "when": [
+        "FRONT_OFFICE",
+        "DRAFT"
+      ]
+    },
+    {
+      "text": "When the coach and general manager are aligned, keep their contracts in sync for the long term.",
+      "when": [
+        "FRONT_OFFICE",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Firing a general manager is an ownership decision, fully ours.",
+      "when": [
+        "FRONT_OFFICE"
+      ]
+    },
+    {
+      "text": "The next general manager should have personnel power, with heavy input from the coach.",
+      "when": [
+        "FRONT_OFFICE",
+        "ROSTER_MOVES"
+      ]
+    },
+    {
+      "text": "A fourteen-win season that ends early is not enough.",
+      "when": [
+        "PLAYOFFS",
+        "CONTENDER"
+      ]
+    },
+    {
+      "text": "The quarterback plan has to be settled before anything else.",
+      "when": [
+        "QB"
+      ]
+    }
+  ],
+  "signatures": [
+    "speaks with his brother as a joint ownership voice",
+    "frames football hires as a bold experiment"
+  ],
+  "want": "A first Super Bowl title for the Vikings (medium).",
+  "fear": "Another near-miss era that ends without a championship (medium).",
+  "voice": "Businesslike and courteous, a real-estate developer's talk of structure and alignment. Owns ownership decisions plainly and keeps football detail to the staff.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "MIN",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "support",
+      "outcome": "positive",
+      "evidence": [
+        "E2"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.startribune.com/vikings-general-manager-kwesi-adofo-mensah-analytics-coach-search-chip-scoggins/600139941",
+      "publisher": "Star Tribune",
+      "published": "2022-01-26",
+      "accessed": "2026-11-06",
+      "summary": "Column on the Wilfs hiring Kwesi Adofo-Mensah, the first GM hired mainly for an analytics background.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.keyc.com/2025/05/30/vikings-sign-gm-adofo-mensah-extension-keeping-his-contract-sync-with-oconnells/",
+      "publisher": "AP via KEYC",
+      "published": "2025-05-30",
+      "accessed": "2026-11-06",
+      "summary": "Minnesota extended Adofo-Mensah months after extending Kevin O'Connell, keeping the contracts in sync.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.tsn.ca/nfl/article/vikings-fire-gm-kwesi-adofo-mensah-after-four-seasons-n1-47779886/",
+      "publisher": "TSN",
+      "published": "2026-01-20",
+      "accessed": "2026-11-06",
+      "summary": "The Vikings fired Adofo-Mensah after four seasons and a missed playoff berth; Wilf called it entirely an ownership decision and favoured a traditional structure with heavy coach input.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "Thin coverage: two to four sources found by web search (2026-11-06); sliders mostly left at 5; a few publication dates are taken from the news cycle the article covers. Draft for JR to check."
+  }
+}

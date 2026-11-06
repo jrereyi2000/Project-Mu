@@ -1,0 +1,127 @@
+{
+  "schema_version": "owner-profile-v1",
+  "key": "owner:CHI",
+  "name": "George McCaskey",
+  "role": "OWNER",
+  "team": "CHI",
+  "seed_ref": {
+    "table": "OWNERS_DATA",
+    "team": "CHI",
+    "name": "George McCaskey"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 5,
+    "drive": 5
+  },
+  "slider_evidence": {},
+  "traits": [
+    "HANDS_OFF",
+    "HEADLINE_HUNTER",
+    "PEACEMAKER"
+  ],
+  "trait_evidence": {
+    "HANDS_OFF": [
+      "E1"
+    ],
+    "HEADLINE_HUNTER": [
+      "E2"
+    ],
+    "PEACEMAKER": [
+      "E1"
+    ]
+  },
+  "views": [
+    {
+      "text": "When my general manager names the coach he wants, my job is to tell him to go get him.",
+      "when": [
+        "COACHING",
+        "FRONT_OFFICE"
+      ]
+    },
+    {
+      "text": "We said we would hire the best coach available, and we did.",
+      "when": [
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Football operations belong to football people; the business side is separate.",
+      "when": [
+        "FRONT_OFFICE"
+      ]
+    },
+    {
+      "text": "This franchise's century of history is a responsibility, not a trophy case.",
+      "when": [
+        "HISTORY"
+      ]
+    },
+    {
+      "text": "Beating our division rivals is the measure of a turnaround.",
+      "when": [
+        "CONTENDER"
+      ]
+    },
+    {
+      "text": "A young quarterback needs the right offensive mind around him.",
+      "when": [
+        "QB",
+        "YOUTH"
+      ]
+    }
+  ],
+  "signatures": [
+    "clarifies who reports to whom",
+    "speaks about the family's history with the club"
+  ],
+  "want": "Bring the Bears back to the top under the family's stewardship (medium).",
+  "fear": "Another false start that wastes a young quarterback (medium).",
+  "voice": "Soft-spoken and formal, deferential to his executives, careful with words. Talks about family, history and process more than football.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "CHI",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "support",
+      "outcome": "positive",
+      "evidence": [
+        "E1"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.marqueesportsnetwork.com/ryan-poles-kevin-warren-george-mccaskey-detail-how-bears-acquired-ben-johnson/",
+      "publisher": "Marquee Sports Network",
+      "published": "2025-01-22",
+      "accessed": "2026-11-06",
+      "summary": "McCaskey said GM Ryan Poles identified Ben Johnson and he told Poles to go get him; McCaskey reassured Johnson that football operations were not in president Kevin Warren's purview.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.audacy.com/wbbm780/sports/chicago-bears/bears-deliver-on-vow-to-hire-top-coach-available-ben-johnson",
+      "publisher": "WBBM / Audacy",
+      "published": "2025-01-21",
+      "accessed": "2026-11-06",
+      "summary": "The Bears hired Lions OC Ben Johnson, the most sought-after candidate, delivering on a vow to land the top coach available.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "Thin coverage: two to four sources found by web search (2026-11-06); sliders mostly left at 5; a few publication dates are taken from the news cycle the article covers. Draft for JR to check."
+  }
+}

@@ -1,0 +1,138 @@
+{
+  "schema_version": "owner-profile-v1",
+  "key": "owner:SF",
+  "name": "Jed York",
+  "role": "OWNER",
+  "team": "SF",
+  "seed_ref": {
+    "table": "OWNERS_DATA",
+    "team": "SF",
+    "name": "Jed York"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 5,
+    "drive": 5
+  },
+  "slider_evidence": {},
+  "traits": [
+    "PATIENT_BUILDER",
+    "HANDS_OFF",
+    "BUDGET_CONSCIOUS"
+  ],
+  "trait_evidence": {
+    "PATIENT_BUILDER": [
+      "E1"
+    ],
+    "HANDS_OFF": [
+      "E1"
+    ],
+    "BUDGET_CONSCIOUS": [
+      "E3"
+    ]
+  },
+  "views": [
+    {
+      "text": "A coach and general manager who have taken us deep in the playoffs are not going anywhere after one bad year.",
+      "when": [
+        "COACHING",
+        "LOSING_STREAK"
+      ]
+    },
+    {
+      "text": "We will do everything we can to keep our quarterback for a long time.",
+      "when": [
+        "QB",
+        "CAP"
+      ]
+    },
+    {
+      "text": "Some offseasons are about discipline with money so the core can be paid.",
+      "when": [
+        "CAP",
+        "ROSTER_MOVES"
+      ]
+    },
+    {
+      "text": "Being called cheap after a roster reset does not bother me.",
+      "when": [
+        "FRONT_OFFICE"
+      ]
+    },
+    {
+      "text": "The goal every year is the Super Bowl.",
+      "when": [
+        "CONTENDER",
+        "PLAYOFFS"
+      ]
+    },
+    {
+      "text": "I trust my football people to build the roster.",
+      "when": [
+        "FRONT_OFFICE"
+      ]
+    }
+  ],
+  "signatures": [
+    "affirms his coach and GM at season's end",
+    "talks about cap discipline openly"
+  ],
+  "want": "Finally win a sixth Super Bowl in the Shanahan-Lynch era (medium).",
+  "fear": "Letting the window close through bad contracts (medium).",
+  "voice": "Confident, practical and occasionally defensive about money. Speaks plainly about trust in his staff and the business side of the cap.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "SF",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "support",
+      "outcome": "positive",
+      "evidence": [
+        "E1"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://thescore.com/nfl/news/3175342/49-ers-owner-shanahan-lynch-not-going-anywhere",
+      "publisher": "theScore",
+      "published": "2025-01-02",
+      "accessed": "2026-11-06",
+      "summary": "After a losing 2024 season York said Kyle Shanahan and John Lynch were not going anywhere.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.washingtontimes.com/news/2025/feb/10/49ers-owner-jed-york-wants-keep-qb-brock-purdy/",
+      "publisher": "AP via Washington Times",
+      "published": "2025-02-10",
+      "accessed": "2026-11-06",
+      "summary": "York said the team would do everything it could to keep Brock Purdy for a long time.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://sfstandard.com/2025/04/01/49ers-owner-jed-york-brock-purdy-contract/",
+      "publisher": "The San Francisco Standard",
+      "published": "2025-04-01",
+      "accessed": "2026-11-06",
+      "summary": "York framed the 2025 offseason as one of spending restraint around Purdy's pending deal and responded to being called cheap.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "Thin coverage: two to four sources found by web search (2026-11-06); sliders mostly left at 5; a few publication dates are taken from the news cycle the article covers. Draft for JR to check."
+  }
+}

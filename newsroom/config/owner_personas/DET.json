@@ -1,0 +1,139 @@
+{
+  "schema_version": "owner-profile-v1",
+  "key": "owner:DET",
+  "name": "Sheila Ford Hamp",
+  "role": "OWNER",
+  "team": "DET",
+  "seed_ref": {
+    "table": "OWNERS_DATA",
+    "team": "DET",
+    "name": "Sheila Ford Hamp"
+  },
+  "sliders": {
+    "temperament": 3,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 7,
+    "drive": 5
+  },
+  "slider_evidence": {
+    "warmth": [
+      "E1",
+      "E2"
+    ],
+    "temperament": [
+      "E1"
+    ]
+  },
+  "traits": [
+    "PATIENT_BUILDER",
+    "HANDS_OFF",
+    "LOYAL"
+  ],
+  "trait_evidence": {
+    "PATIENT_BUILDER": [
+      "E1"
+    ],
+    "HANDS_OFF": [
+      "E1"
+    ],
+    "LOYAL": [
+      "E2"
+    ]
+  },
+  "views": [
+    {
+      "text": "A rebuild requires patience, even when I am frustrated.",
+      "when": [
+        "STRUGGLING",
+        "LOSING_STREAK"
+      ]
+    },
+    {
+      "text": "I trust the process that brought my coach and general manager here more than any one result.",
+      "when": [
+        "FRONT_OFFICE",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "When people build what they promised, you extend them.",
+      "when": [
+        "FRONT_OFFICE",
+        "CONTENDER"
+      ]
+    },
+    {
+      "text": "The draft is how this team was rebuilt, and how it will stay good.",
+      "when": [
+        "DRAFT",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "This city waited a long time; a contender is the least it deserves.",
+      "when": [
+        "CONTENDER",
+        "HISTORY"
+      ]
+    },
+    {
+      "text": "I leave the play-calling arguments to the football people.",
+      "when": [
+        "SCHEME",
+        "COACHING"
+      ]
+    }
+  ],
+  "signatures": [
+    "publicly backs her staff during losing streaks",
+    "calls her coach and GM the driving force of the rebuild"
+  ],
+  "want": "A first Super Bowl for Detroit and her family's ownership (medium).",
+  "fear": "Losing the leaders who finally turned the franchise around (medium).",
+  "voice": "Warm, steady and candid about frustration without anger. Speaks of trust, patience and the fans, and lets the football people explain football.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "DET",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "support",
+      "outcome": "positive",
+      "evidence": [
+        "E2"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://nfl.com/_amp/lions-owner-expresses-support-for-hc-dan-campbell-gm-brad-holmes-following-1-5-s",
+      "publisher": "NFL.com",
+      "published": "2022-10-24",
+      "accessed": "2026-11-06",
+      "summary": "After a 1-5 start Hamp said neither Dan Campbell nor Brad Holmes was on the hot seat, that a rebuild requires patience, and that she trusted the process that hired them.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.clickondetroit.com/sports/2024/03/14/lions-extend-the-contracts-of-coach-dan-campbell-and-general-manager-brad-holmes/",
+      "publisher": "AP via ClickOnDetroit",
+      "published": "2024-03-14",
+      "accessed": "2026-11-06",
+      "summary": "The Lions extended Campbell and Holmes through 2027; Hamp called them the driving force behind the rebuild.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "Thin coverage: two to four sources found by web search (2026-11-06); sliders mostly left at 5; a few publication dates are taken from the news cycle the article covers. Draft for JR to check."
+  }
+}

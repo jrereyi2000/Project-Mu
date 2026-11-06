@@ -1,0 +1,134 @@
+{
+  "schema_version": "owner-profile-v1",
+  "key": "owner:LAR",
+  "name": "Stan Kroenke",
+  "role": "OWNER",
+  "team": "LAR",
+  "seed_ref": {
+    "table": "OWNERS_DATA",
+    "team": "LAR",
+    "name": "Stan Kroenke"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 2,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 5,
+    "drive": 5
+  },
+  "slider_evidence": {
+    "sociability": [
+      "E1"
+    ]
+  },
+  "traits": [
+    "DEEP_POCKETS",
+    "GUARDED",
+    "LEGACY_BUILDER"
+  ],
+  "trait_evidence": {
+    "DEEP_POCKETS": [
+      "E1",
+      "E2"
+    ],
+    "GUARDED": [
+      "E1"
+    ],
+    "LEGACY_BUILDER": [
+      "E1"
+    ]
+  },
+  "views": [
+    {
+      "text": "Build the stadium yourself and you control the future of the franchise.",
+      "when": [
+        "FRONT_OFFICE"
+      ]
+    },
+    {
+      "text": "I let my football people run football.",
+      "when": [
+        "FRONT_OFFICE",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Winning speaks louder than anything I could say.",
+      "when": [
+        "CONTENDER"
+      ]
+    },
+    {
+      "text": "Trading picks for stars is fine when it brings a title.",
+      "when": [
+        "TRADE",
+        "DRAFT"
+      ]
+    },
+    {
+      "text": "A long-term vision outlasts a bad season.",
+      "when": [
+        "LOSING_STREAK",
+        "STRUGGLING"
+      ]
+    },
+    {
+      "text": "Los Angeles is a market you earn with championships.",
+      "when": [
+        "CONTENDER",
+        "PLAYOFFS"
+      ]
+    }
+  ],
+  "signatures": [
+    "rarely speaks in public",
+    "lets executives speak for the club"
+  ],
+  "want": "A lasting legacy in Los Angeles anchored by the stadium and titles (medium).",
+  "fear": "Investing billions without the Rams staying a contender (medium).",
+  "voice": "Almost silent in public; when he speaks it is short, guarded and about long-term vision. Lets results and his executives talk.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "LAR",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "support",
+      "outcome": "positive",
+      "evidence": [
+        "E2"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.bloombergquint.com/pursuits/rams-owner-stan-kroenke-debuts-his-5-5-billion-dream-stadium",
+      "publisher": "Bloomberg",
+      "published": "2020-09-08",
+      "accessed": "2026-11-06",
+      "summary": "Profile of Kroenke opening his privately financed, roughly $5.5 billion SoFi Stadium; notes the \"Silent Stan\" nickname for rarely speaking or celebrating in public.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.audacy.com/1010wins/articles/ap-news/innovative-ultramodern-sofi-stadium-ready-to-welcome-nfl",
+      "publisher": "AP via Audacy",
+      "published": "2020-09-07",
+      "accessed": "2026-11-06",
+      "summary": "AP on SoFi Stadium's opening, built by Kroenke without government financing; executives such as COO Kevin Demoff speak for the club.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "Thin coverage: two to four sources found by web search (2026-11-06); sliders mostly left at 5; a few publication dates are taken from the news cycle the article covers. Draft for JR to check."
+  }
+}
