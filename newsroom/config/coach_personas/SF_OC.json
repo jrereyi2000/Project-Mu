@@ -1,0 +1,194 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:SF:OC",
+  "name": "Klay Kubiak",
+  "role": "OC",
+  "team": "SF",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "SF",
+    "role": "OC",
+    "name": "Klay Kubiak"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 6,
+    "warmth": 6,
+    "drive": 5
+  },
+  "slider_evidence": {
+    "openness": [
+      "E1",
+      "E5"
+    ],
+    "warmth": [
+      "E5"
+    ]
+  },
+  "traits": [
+    "SCHEME_NERD",
+    "QB_WHISPERER",
+    "MEASURED"
+  ],
+  "trait_evidence": {
+    "SCHEME_NERD": [
+      "E1",
+      "E2"
+    ],
+    "QB_WHISPERER": [
+      "E5"
+    ],
+    "MEASURED": [
+      "E5"
+    ]
+  },
+  "views": [
+    {
+      "text": "The pass game and the run game share formations and play-action, so nobody coaches one in isolation.",
+      "when": [
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Install in the spring what you will actually run in the fall.",
+      "when": [
+        "OFFSEASON",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "A quarterback room gets better when the starter shares his preparation with the backups.",
+      "when": [
+        "QB",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "A rookie's ups and downs are normal growth, not a reason to panic.",
+      "when": [
+        "YOUTH",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "Staying on the field matters, but a run game that does not produce yards still has to get better.",
+      "when": [
+        "STRUGGLING",
+        "GAME_REVIEW"
+      ]
+    },
+    {
+      "text": "Game plans are built together; the head coach has the last word.",
+      "when": [
+        "COACHING",
+        "SCHEME"
+      ]
+    }
+  ],
+  "signatures": [
+    "credits teammates and fellow coaches by name before talking about his own part",
+    "gives an honest assessment of what is not working without sounding alarmed"
+  ],
+  "want": "to prove he earned the coordinator title on his own work, not on the Kubiak name",
+  "fear": "that he stays the next-in-line assistant while others in the family run offenses",
+  "voice": "Upbeat, measured and collaborative, a former quarterback who talks in plain terms about formations and preparation. He praises players' toughness and growth, credits colleagues freely, and is candid but calm about what needs fixing.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "SF",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E2"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "NO",
+          "role": "OC"
+        }
+      },
+      "relationship_kind": "support",
+      "outcome": "positive",
+      "evidence": [
+        "E1"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Brock Purdy",
+        "team_2026": "SF"
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E5"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.si.com/nfl/49ers/news/klay-kubiak-explains-his-role-as-the-49ers-pass-game-coordinator-01hynzqzpfm1",
+      "publisher": "Sports Illustrated (49ers On SI), Grant Cohn",
+      "published": "2024-05-24",
+      "accessed": "2026-11-05",
+      "summary": "Taking over his brother Klint's pass game role, he says it broadens his duties to all skill groups, that he and Klint worked very closely, that the run game and passing concepts are linked, and that the spring install should match the season. His words.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.si.com/nfl/49ers/news/kyle-shanahan-says-how-49ers-oc-klay-kubiak-will-help-him-call-plays-01jh5xgh12bh",
+      "publisher": "Sports Illustrated (49ers On SI), Grant Cohn",
+      "published": "2025-01-09",
+      "accessed": "2026-11-05",
+      "summary": "Shanahan calls Kubiak a close partner in building game plans over two seasons and says the same collaborative approach applied when Kubiak helped call plays against Arizona; Shanahan keeps play-calling. Shanahan's account.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.ksl.com/article/51261816/49ers-promote-klay-kubiak-to-offensive-coordinator-and-replace-brian-griese-as-qbs-coach",
+      "publisher": "Associated Press (Josh Dubow) via KSL",
+      "published": "2025-02-25",
+      "accessed": "2026-11-05",
+      "summary": "The 49ers name Kubiak offensive coordinator, a title vacant for two years, as part of wider staff changes including Saleh returning as DC. So in 2024 he was pass game specialist, not OC. Facts only.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.si.com/nfl/49ers/news/why-49ers-promoted-klay-kubiak-instead-brian-griese",
+      "publisher": "Sports Illustrated (49ers On SI), Grant Cohn",
+      "published": "2025-04-20",
+      "accessed": "2026-11-05",
+      "summary": "Columnist argues Kubiak was on Shanahan's play-caller development track since starting in defensive quality control in 2021 and was promoted partly so other teams would not take him. Analysis without team quotes.",
+      "confidence": "low"
+    },
+    {
+      "id": "E5",
+      "url": "https://49ers.1rmg.com/transcripts/offensive-coordinator-klay-kubiak-press-conference-10-9-25/",
+      "publisher": "San Francisco 49ers press conference transcript",
+      "published": "2025-10-09",
+      "accessed": "2026-11-05",
+      "summary": "In a weekly presser he backs the backup quarterback, notes Purdy shares his prep routine with the others, praises Mac Jones's toughness, treats a rookie lineman's swings as normal, and admits the run game is not producing enough yards. Transcript of his own words.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

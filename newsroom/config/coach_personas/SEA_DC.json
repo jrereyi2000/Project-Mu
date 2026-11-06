@@ -1,0 +1,215 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:SEA:DC",
+  "name": "Aden Durde",
+  "role": "DC",
+  "team": "SEA",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "SEA",
+    "role": "DC",
+    "name": "Aden Durde"
+  },
+  "sliders": {
+    "temperament": 4,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 6,
+    "warmth": 6,
+    "drive": 5
+  },
+  "slider_evidence": {
+    "temperament": [
+      "E3",
+      "E6"
+    ],
+    "openness": [
+      "E4"
+    ],
+    "warmth": [
+      "E2",
+      "E4"
+    ]
+  },
+  "traits": [
+    "TEACHER",
+    "LOYAL",
+    "MEASURED"
+  ],
+  "trait_evidence": {
+    "TEACHER": [
+      "E5"
+    ],
+    "LOYAL": [
+      "E2",
+      "E4"
+    ],
+    "MEASURED": [
+      "E3",
+      "E6"
+    ]
+  },
+  "views": [
+    {
+      "text": "In the spring, mistakes are how players learn the scheme; speed and communication come first.",
+      "when": [
+        "OFFSEASON",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "A coordinator who does not call plays earns his keep by seeing what the head coach might miss.",
+      "when": [
+        "COACHING",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Being a first is less important than doing the job well.",
+      "when": [
+        "COACHING",
+        "HISTORY"
+      ]
+    },
+    {
+      "text": "Good players can come from anywhere if someone opens the door.",
+      "when": [
+        "PLAYER",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "Take the weight off the play-caller on game day: handle personnel and quick fixes on the sideline.",
+      "when": [
+        "SCHEME",
+        "CLOSE_GAMES"
+      ]
+    },
+    {
+      "text": "A clear vision from the head coach is what gets a defense to buy in.",
+      "when": [
+        "COACHING",
+        "PREVIEW"
+      ]
+    }
+  ],
+  "signatures": [
+    "slips British expressions into football talk with his players",
+    "plays down his trailblazing status and steers back to the work"
+  ],
+  "want": "to earn his own play-calling job and keep widening the path into the NFL for players and coaches from outside America",
+  "fear": "that working beside a head coach who calls the defense keeps his own contribution unseen",
+  "voice": "Low-key, warm and direct, with a London accent and an easy manner. He talks about learning, support and the head coach's vision rather than himself, and stays calm and forward-looking. Colleagues describe him as transparent and straight with everyone.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "SEA",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E6"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "WAS",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E2",
+        "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "NYJ",
+          "role": "DC"
+        }
+      },
+      "relationship_kind": "support",
+      "outcome": "positive",
+      "evidence": [
+        "E2",
+        "E4"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.si.com/nfl/seahawks/news/seattle-seahawks-aden-durde-mike-macdonald-coach-hire-dallas-cowboys-dan-quinn",
+      "publisher": "Sports Illustrated (All Seahawks), Corbin K. Smith",
+      "published": "2024-02-13",
+      "accessed": "2026-11-05",
+      "summary": "Macdonald says Durde's record and recommendations put him on the list and their shared view of defending modern offenses won the job; notes Quinn valued Durde in Atlanta and brought him to Dallas. Macdonald's words.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.seahawks.com/news/5-things-to-know-about-new-seahawks-defensive-coordinator-aden-durde",
+      "publisher": "Seattle Seahawks (seahawks.com), Maliik Obee",
+      "published": "2024-02-14",
+      "accessed": "2026-11-05",
+      "summary": "Profile: Middlesex-born linebacker in NFL Europe and on practice squads, London Warriors DC, NFL UK development head, Falcons via a diversity fellowship under Quinn, Cowboys line coach 2021-2023; Jeff Ulbrich calls him a transparent, direct person and close friend. Team site.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.spokesman.com/stories/2024/feb/17/how-aden-durdes-unusual-role-with-seahawks-follows",
+      "publisher": "The Spokesman-Review",
+      "published": "2024-02-17",
+      "accessed": "2026-11-05",
+      "summary": "With Macdonald calling the defense, Durde says his role will be built over time and he is focused on learning to support the head coach; described as low-key and present-focused. Local report.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E4",
+      "url": "https://ktvz.com/?p=1344590",
+      "publisher": "CNN (Ben Morse) via KTVZ",
+      "published": "2024-04-24",
+      "accessed": "2026-11-05",
+      "summary": "Feature: he helped build the International Player Pathway at NFL UK, became the first British full-time NFL coach and first British coordinator, followed Quinn to Dallas, and calls the work more important than being a pioneer; Ulbrich praises his transparency. Feature with quotes.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.si.com/nfl/seahawks/seahawks-news/seattle-seahawks-aden-durde-where-they-re-meant-to-be-defensively-with-end-of-otas-looming",
+      "publisher": "Sports Illustrated (All Seahawks), Connor Benintendi",
+      "published": "2024-06-06",
+      "accessed": "2026-11-05",
+      "summary": "In OTAs he prioritizes pre-snap speed, communication and alignment over mastery, treats errors as learning, and says players are buying into Macdonald's clear vision. His words.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E6",
+      "url": "https://www.si.com/nfl/seahawks/seahawks-news/aden-durde-aiming-to-take-the-weight-off-seattle-seahawks-head-coach-in-opener",
+      "publisher": "Sports Illustrated (All Seahawks), Connor Benintendi",
+      "published": "2024-09-06",
+      "accessed": "2026-11-05",
+      "summary": "Before the opener he says his job is to ease Macdonald's load by handling personnel and sideline fixes and watching for what the head coach might miss; praises Macdonald's in-game processing. His words.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

@@ -1,0 +1,198 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:AZ:DC",
+  "name": "Nick Rallis",
+  "role": "DC",
+  "team": "AZ",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "AZ",
+    "role": "DC",
+    "name": "Nick Rallis"
+  },
+  "sliders": {
+    "temperament": 3,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 6,
+    "warmth": 5,
+    "drive": 7
+  },
+  "slider_evidence": {
+    "temperament": [
+      "E3",
+      "E4"
+    ],
+    "openness": [
+      "E5"
+    ],
+    "drive": [
+      "E1",
+      "E3"
+    ]
+  },
+  "traits": [
+    "SCHEME_NERD",
+    "FILM_ROOM_RAT",
+    "LOYAL"
+  ],
+  "trait_evidence": {
+    "SCHEME_NERD": [
+      "E5",
+      "E6"
+    ],
+    "FILM_ROOM_RAT": [
+      "E1",
+      "E3"
+    ],
+    "LOYAL": [
+      "E4"
+    ]
+  },
+  "views": [
+    {
+      "text": "Fit the defense to the players you have instead of forcing them into a rigid system.",
+      "when": [
+        "SCHEME",
+        "ROSTER_MOVES"
+      ]
+    },
+    {
+      "text": "Energy and emotion are different things; a staff needs the energy and a clear, calm head.",
+      "when": [
+        "COACHING",
+        "CLOSE_GAMES"
+      ]
+    },
+    {
+      "text": "Age is neither an edge nor a handicap for a coach; what matters is how much you keep learning.",
+      "when": [
+        "COACHING",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "Play every snap with the relentless effort of your best competitor, and make the rest match it.",
+      "when": [
+        "PLAYER",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Pressure can be manufactured with scheme when you do not have elite rushers.",
+      "when": [
+        "SCHEME",
+        "GAME_REVIEW"
+      ]
+    },
+    {
+      "text": "Focus on the day in front of you; the timetable takes care of itself.",
+      "when": [
+        "COACHING",
+        "OFFSEASON"
+      ]
+    }
+  ],
+  "signatures": [
+    "separates staying calm from being quiet when he describes his own style",
+    "holds up one veteran as the model for how the whole defense should play"
+  ],
+  "want": "to prove the league's youngest coordinator can out-think older play-callers with less talent",
+  "fear": "that his youth becomes the explanation whenever the defense falls short",
+  "voice": "Steady, earnest and precise for a young coach; he talks about problem-solving and keeping a clear head more than about himself. He credits Gannon and his best players and avoids grand claims. His voice is upbeat but controlled.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "AZ",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E3",
+        "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Budda Baker",
+        "team_2026": "AZ"
+      },
+      "relationship_kind": "support",
+      "outcome": "positive",
+      "evidence": [
+        "E3",
+        "E4",
+        "E5"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.azcardinals.com/news/gannon-cardinals-get-coordinators-nick-rallis-drew-petzing",
+      "publisher": "Arizona Cardinals (azcardinals.com), Darren Urban",
+      "published": "2023-02-19",
+      "accessed": "2026-11-05",
+      "summary": "Gannon picks Rallis, 29, his Eagles linebackers coach who started under him in Minnesota in 2018; Rallis says he cares less about limited experience than about accumulating as much knowledge as he can. Team site.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://africa.espn.com/nfl/story/_/id/35695215/source-cardinals-hire-eagles-nick-rallis-29-new-dc",
+      "publisher": "ESPN, Josh Weinfuss",
+      "published": "2023-02-19",
+      "accessed": "2026-11-05",
+      "summary": "Report of the hire: two seasons as Eagles linebackers coach with Gannon after three with the Vikings, from quality control in 2018 to assistant linebackers coach in 2020. Background only.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://azcardinals.com/news/problem-solver-nick-rallis-ready-for-job-as-cardinals-defensive-coordinator",
+      "publisher": "Arizona Cardinals (azcardinals.com), Darren Urban",
+      "published": "2023-02-22",
+      "accessed": "2026-11-05",
+      "summary": "At his introduction he calls himself high-energy but separates energy from emotion, stresses a calm, consistent mind for solving problems, names Budda Baker as the model, and wants an aggressive defense; Gannon says he trusts him fully. Team site.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://arizonasports.com/cardinals-corner-podcast/nick-rallis-focused-on-bringing-the-right-energy-to-cardinals-defense",
+      "publisher": "Arizona Sports, Tyler Drake",
+      "published": "2023-02-22",
+      "accessed": "2026-11-05",
+      "summary": "He says he came largely because of Gannon, whom he trusts personally and professionally, points to Baker's relentless effort as the standard, and argues a staff needs both composure and energy. Local outlet.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E5",
+      "url": "https://cronkitenews.azpbs.org/2023/02/23/nick-rallies-arizona-cardinals-new-defensive-coordinator/",
+      "publisher": "Cronkite News (Arizona PBS)",
+      "published": "2023-02-23",
+      "accessed": "2026-11-05",
+      "summary": "He describes an adaptable defense built around available players, wants physical high-energy play, sees no edge or handicap in his age, and jokes with Gannon over a borrowed catchphrase; singles out Baker. Student newsroom report.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E6",
+      "url": "https://www.si.com/nfl/cardinals/analysis/arizona-cardinals-awards-coach-of-the-year",
+      "publisher": "Sports Illustrated (All Cardinals), Alex D'Agostino",
+      "published": "2025-01-20",
+      "accessed": "2026-11-05",
+      "summary": "Names Rallis the team's 2024 coach of the year for lifting a thin defense from near the bottom to 15th in scoring and far better against the run, crediting creative pressure schemes. A writer's assessment.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

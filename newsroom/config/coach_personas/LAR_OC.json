@@ -1,0 +1,216 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:LAR:OC",
+  "name": "Mike LaFleur",
+  "role": "OC",
+  "team": "LAR",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "LAR",
+    "role": "OC",
+    "name": "Mike LaFleur"
+  },
+  "sliders": {
+    "temperament": 6,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 6,
+    "warmth": 5,
+    "drive": 6
+  },
+  "slider_evidence": {
+    "temperament": [
+      "E4"
+    ],
+    "openness": [
+      "E2",
+      "E3"
+    ],
+    "drive": [
+      "E4"
+    ]
+  },
+  "traits": [
+    "SCHEME_NERD",
+    "YOUTH_DEVELOPER",
+    "FILM_ROOM_RAT"
+  ],
+  "trait_evidence": {
+    "SCHEME_NERD": [
+      "E4"
+    ],
+    "YOUTH_DEVELOPER": [
+      "E2",
+      "E4"
+    ],
+    "FILM_ROOM_RAT": [
+      "E2"
+    ]
+  },
+  "views": [
+    {
+      "text": "Attack before the snap with motion, formations and tempo, then make the run and pass look alike.",
+      "when": [
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "A young roster needs coaches to teach habits off the field too: sleep, food, routine.",
+      "when": [
+        "YOUTH",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Players can teach coaches as much as coaches teach players, especially a veteran quarterback.",
+      "when": [
+        "QB",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "A season that unravels late is still a lesson worth keeping.",
+      "when": [
+        "STRUGGLING",
+        "HISTORY"
+      ]
+    },
+    {
+      "text": "Not calling plays is fine; building the foundation of the offense is the job.",
+      "when": [
+        "COACHING",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Every scheme borrows from somewhere, but it has to be tailored to the players you actually have.",
+      "when": [
+        "SCHEME",
+        "ROSTER_MOVES"
+      ]
+    }
+  ],
+  "signatures": [
+    "traces his ideas back to the film rooms where he learned from his brother, Shanahan and McVay",
+    "speaks about the Jets years without bitterness, as a lesson he would not trade"
+  ],
+  "want": "to get back to calling plays and earn a head job on the strength of the Rams offense",
+  "fear": "that he is seen as a well-connected assistant who only thrives in other people's systems",
+  "voice": "Energetic and a little feisty, he talks quickly about aggression, motion and blending the run and pass. He is open about what the Jets taught him and humble about not calling plays. He credits his mentors freely.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "LAR",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E2",
+        "E5"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "SF",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "GB",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "support",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E2"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Matthew Stafford",
+        "team_2026": "LAR"
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E3",
+        "E5"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://nbcsports.com/nfl/profootballtalk/rumor-mill/news/rams-announce-mike-lafleur-hiring",
+      "publisher": "NBC Sports (ProFootballTalk), Charean Williams",
+      "published": "2023-01-27",
+      "accessed": "2026-11-05",
+      "summary": "The Rams hire LaFleur after two seasons running the Jets' offense under Saleh; earlier he was San Francisco's pass game coordinator under Shanahan (2017-2020). His brother Matt was McVay's first offensive coordinator. Facts only.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.therams.com/news/once-learning-from-sean-mcvay-mike-lafleur-now-gets-to-work-with-him-first-time",
+      "publisher": "Los Angeles Rams (therams.com), Stu Jackson",
+      "published": "2023-02-07",
+      "accessed": "2026-11-05",
+      "summary": "He recalls spending college-coaching breaks in Washington's film rooms learning from Matt, Shanahan and McVay, says the young Jets roster taught him to coach habits like sleep and nutrition, and expects to learn from Stafford, Kupp and Higbee while McVay calls plays. Team site.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://amp.nfl.com/news/new-rams-oc-mike-lafleur-i-can-t-wait-to-start-building-relationship-with-qb-mat",
+      "publisher": "NFL.com, Bobby Kownack",
+      "published": "2023-02-08",
+      "accessed": "2026-11-05",
+      "summary": "At his introduction he praises the Rams' culture, is eager to build a relationship with Stafford, believes players can teach coaches, and says not calling plays does not bother him. His words.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://amp.foxsports.com/stories/nfl/new-rams-oc-mike-lafleur-focused-on-bringing-big-play-offense-back-to-l-a",
+      "publisher": "Fox Sports, Eric D. Williams",
+      "published": "2023-02-15",
+      "accessed": "2026-11-05",
+      "summary": "He centers his philosophy on pre-snap aggression and making run and pass look alike, says every scheme must fit its personnel, acknowledges overlap with Shanahan, and calls the Jets years a valuable lesson that unraveled late. Writer expects him to bring some feistiness.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.si.com/nfl/rams/onsi/los-angeles-mike-lafleur-saves-day-against-cardinals",
+      "publisher": "Sports Illustrated (Rams On SI), Brock Vierra",
+      "published": "2025-12-09",
+      "accessed": "2026-11-05",
+      "summary": "With McVay ill, LaFleur relays the play calls to Stafford for the first time since 2022 and McVay praises his decisions afterward. Fan-network writeup.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

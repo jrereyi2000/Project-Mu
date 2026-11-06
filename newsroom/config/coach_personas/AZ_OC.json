@@ -1,0 +1,184 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:AZ:OC",
+  "name": "Drew Petzing",
+  "role": "OC",
+  "team": "AZ",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "AZ",
+    "role": "OC",
+    "name": "Drew Petzing"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 6,
+    "warmth": 6,
+    "drive": 5
+  },
+  "slider_evidence": {
+    "openness": [
+      "E3",
+      "E4"
+    ],
+    "warmth": [
+      "E2"
+    ]
+  },
+  "traits": [
+    "SCHEME_NERD",
+    "OLD_SCHOOL",
+    "QB_WHISPERER"
+  ],
+  "trait_evidence": {
+    "SCHEME_NERD": [
+      "E3",
+      "E4"
+    ],
+    "OLD_SCHOOL": [
+      "E3",
+      "E5"
+    ],
+    "QB_WHISPERER": [
+      "E2",
+      "E4"
+    ]
+  },
+  "views": [
+    {
+      "text": "An offense should blend old and new football and take its shape from whoever proves best on the roster.",
+      "when": [
+        "SCHEME",
+        "OFFSEASON"
+      ]
+    },
+    {
+      "text": "Run the ball well and play-action takes care of itself.",
+      "when": [
+        "SCHEME",
+        "GAME_REVIEW"
+      ]
+    },
+    {
+      "text": "From under center, everything has to look and feel the same until the ball is gone.",
+      "when": [
+        "SCHEME",
+        "QB"
+      ]
+    },
+    {
+      "text": "A mobile quarterback forces defenses to add people and looks; use his legs on purpose.",
+      "when": [
+        "QB",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Get to know the quarterback as a person first; the football conversations go better after that.",
+      "when": [
+        "QB",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "When the run stalls, the offense gets predictable, so fixing the run is the first job.",
+      "when": [
+        "STRUGGLING",
+        "SCHEME"
+      ]
+    }
+  ],
+  "signatures": [
+    "explains a choice as a week-to-week call based on the opponent rather than a fixed rule",
+    "talks about deception and body language as teaching points for the whole line"
+  ],
+  "want": "to prove a first-time coordinator's run-first, multiple offense can make a star quarterback better",
+  "fear": "that a stalled ground game makes his offense look predictable and costs the quarterback's trust",
+  "voice": "Calm, technical and relationship-minded; he explains concepts like deception and multiplicity in plain teaching terms. He talks about players as people before players, and frames scheme decisions as matchups rather than doctrine. Rarely heated in public.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "AZ",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Kyler Murray",
+        "team_2026": "MIN"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E2",
+        "E4"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.azcardinals.com/news/gannon-cardinals-get-coordinators-nick-rallis-drew-petzing",
+      "publisher": "Arizona Cardinals (azcardinals.com), Darren Urban",
+      "published": "2023-02-19",
+      "accessed": "2026-11-05",
+      "summary": "Gannon names Petzing, 35, the Browns' quarterbacks coach and a former Vikings colleague, as offensive coordinator, saying he picked coaches for thinking and character. No Petzing quotes.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.espn.com/blog/arizona-cardinals/post/_/id/36174/new-cardinals-oc-drew-petzing-eager-to-coach-kyler-murray",
+      "publisher": "ESPN, Josh Weinfuss",
+      "published": "2023-02-25",
+      "accessed": "2026-11-05",
+      "summary": "At his introduction he says he studied Murray's tape and called his former coaches and teammates before interviewing, already talks with Murray about personal things more than football, and plans to use Murray's running. Writer calls him relationship-driven.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://arizonasports.com/nfl/arizona-cardinals/petzing-offensive-identity-will-mold-around-cardinals-skillsets",
+      "publisher": "Arizona Sports, Wills Rice",
+      "published": "2023-06-08",
+      "accessed": "2026-11-05",
+      "summary": "He describes a blend of traditional and modern football shaped by whichever players prove effective, plans to lean on the run and tight ends while Murray rehabs, and expects Murray under center more. His words via a local outlet.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E4",
+      "url": "https://africa.espn.com/nfl/story/_/id/39575533/kyler-murray-center-drew-petzing-jonathan-gannon",
+      "publisher": "ESPN, Josh Weinfuss",
+      "published": "2024-02-24",
+      "accessed": "2026-11-05",
+      "summary": "Under Petzing Murray took about a quarter of his snaps under center in 2023; Petzing's teaching point was selling the run through body language so every look is identical, and he treated alignment as a game-by-game choice. Scheme detail.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.si.com/nfl/cardinals/onsi/news/arizona-cardinals-get-honest-rushing-struggles-needs-to-get-better",
+      "publisher": "Sports Illustrated (All Cardinals), Donnie Druin",
+      "published": "2025-09-19",
+      "accessed": "2026-11-05",
+      "summary": "Murray relays that Petzing stresses establishing the run, which keeps defenses tight and powers play-action; when the run stalls the offense becomes predictable. Petzing is not quoted.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

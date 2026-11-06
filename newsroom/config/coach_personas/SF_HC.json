@@ -1,0 +1,267 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:SF:HC",
+  "name": "Kyle Shanahan",
+  "role": "HC",
+  "team": "SF",
+  "seed_ref": {
+    "table": "COACHES_DATA",
+    "team": "SF",
+    "role": "HC",
+    "name": "Kyle Shanahan"
+  },
+  "sliders": {
+    "temperament": 6,
+    "sociability": 4,
+    "confidence": 7,
+    "openness": 6,
+    "warmth": 5,
+    "drive": 8
+  },
+  "slider_evidence": {
+    "temperament": [
+      "E1"
+    ],
+    "sociability": [
+      "E1"
+    ],
+    "confidence": [
+      "E3",
+      "E7"
+    ],
+    "openness": [
+      "E4",
+      "E7"
+    ],
+    "drive": [
+      "E3",
+      "E4"
+    ]
+  },
+  "traits": [
+    "SCHEME_NERD",
+    "PERFECTIONIST",
+    "TEACHER",
+    "QB_WHISPERER"
+  ],
+  "trait_evidence": {
+    "SCHEME_NERD": [
+      "E3",
+      "E7"
+    ],
+    "PERFECTIONIST": [
+      "E3",
+      "E4"
+    ],
+    "TEACHER": [
+      "E4"
+    ],
+    "QB_WHISPERER": [
+      "E6"
+    ]
+  },
+  "views": [
+    {
+      "text": "Show your assistants how you think in game-plan meetings; that is how you build the next play-callers.",
+      "when": [
+        "COACHING",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Promote from inside when a coach knows the scheme and the players already trust him.",
+      "when": [
+        "COACHING",
+        "ROSTER_MOVES"
+      ]
+    },
+    {
+      "text": "A quarterback who is hard on himself is better than one who is not.",
+      "when": [
+        "QB",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "The head coach owns every result, the near misses included.",
+      "when": [
+        "PLAYOFFS",
+        "BAD_GAME"
+      ]
+    },
+    {
+      "text": "Play-calling is a team effort during the week even if one voice talks to the quarterback on Sunday.",
+      "when": [
+        "SCHEME",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Getting close is not the goal; the only standard is finishing.",
+      "when": [
+        "PLAYOFFS",
+        "CONTENDER"
+      ]
+    },
+    {
+      "text": "Say less about a quarterback's future in public than you are thinking.",
+      "when": [
+        "QB",
+        "TRADE"
+      ]
+    }
+  ],
+  "signatures": [
+    "defends his quarterback's competitiveness when a question implies doubt",
+    "describes in detail who contributes to the game plan before admitting he makes the final call",
+    "turns blunt and visibly frustrated when pressed on roster speculation"
+  ],
+  "want": "to win the championship that has slipped away in the final moments more than once",
+  "fear": "that he is remembered for blown leads in the biggest games rather than for the offenses he designed",
+  "voice": "Blunt, quick and deeply technical; he can be sharp with reporters on sensitive topics and plain about what went wrong. He talks schemes and process at length, credits his assistants, and backs his players publicly. He holds himself to the same exacting standard as everyone else.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "SF",
+          "role": "OC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E7"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "NO",
+          "role": "OC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "LAR",
+          "role": "OC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E2"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "LAR",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E2"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Brock Purdy",
+        "team_2026": "SF"
+      },
+      "relationship_kind": "support",
+      "outcome": "positive",
+      "evidence": [
+        "E6"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.si.com/nfl/49ers/news/is-49ers-hc-kyle-shanahan-handling-the-media-better-this-year",
+      "publisher": "Sports Illustrated (49ers On SI), Waruna Perera",
+      "published": "2021-08-01",
+      "accessed": "2026-11-05",
+      "summary": "Opinion piece: his press remarks on Garoppolo's future after a trade-up showed open frustration and arguably hurt trade leverage; by camp he answered more carefully. A writer's critique of his media handling.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.therams.com/news/once-learning-from-sean-mcvay-mike-lafleur-now-gets-to-work-with-him-first-time",
+      "publisher": "Los Angeles Rams (therams.com), Stu Jackson",
+      "published": "2023-02-07",
+      "accessed": "2026-11-05",
+      "summary": "Mike LaFleur recalls learning in Washington's film rooms in 2010-11 from Shanahan, McVay and his brother Matt, who then shared that staff. Shows the coaching-tree link, not current ties.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.theringer.com/nfl/2024/2/6/24063078/kyle-shanahan-super-bowl-san-francisco-49ers-legacy",
+      "publisher": "The Ringer",
+      "published": "2024-02-06",
+      "accessed": "2026-11-05",
+      "summary": "Pre-Super Bowl feature: took over a 2-14 team in 2017, four NFC title games in five years, but also blown leads in two Super Bowls; players call him brilliant, his assistants became head coaches, and he is known for blunt candor, owning results and perfectionism. Feature writer's synthesis.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E4",
+      "url": "https://sports.yahoo.com/klint-kubiak-reflects-eye-opening-184434554.html",
+      "publisher": "Saints Wire (USA Today) via Yahoo Sports, John Sigler",
+      "published": "2024-02-14",
+      "accessed": "2026-11-05",
+      "summary": "Klint Kubiak, his 2023 pass game specialist, calls the year eye-opening: Shanahan shared his reasoning openly in game-plan meetings but pushed his staff hard. An assistant's account.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.si.com/nfl/49ers/why-49ers-promoted-nick-sorensen-defensive-coordinator",
+      "publisher": "Sports Illustrated (49ers On SI), Jose Sanchez",
+      "published": "2024-03-27",
+      "accessed": "2026-11-05",
+      "summary": "Shanahan explains promoting Sorensen: he knows the scheme after two seasons, players are comfortable with him from weekly team talks, and he was nearly ready a year earlier. Shanahan's reasoning plus the writer's view.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E6",
+      "url": "https://www.si.com/nfl/49ers/news/kyle-shanahan-says-49ers-qb-brock-purdy-is-being-too-hard-on-himself-01jfn9jbv6pm",
+      "publisher": "Sports Illustrated (49ers On SI), Grant Cohn",
+      "published": "2024-12-21",
+      "accessed": "2026-11-05",
+      "summary": "After Purdy says he needs to find his old fire, Shanahan counters that Purdy's competitiveness matches anyone he has coached and suggests he was just answering a question. Columnist adds his own read.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E7",
+      "url": "https://www.si.com/nfl/49ers/news/kyle-shanahan-says-how-49ers-oc-klay-kubiak-will-help-him-call-plays-01jh5xgh12bh",
+      "publisher": "Sports Illustrated (49ers On SI), Grant Cohn",
+      "published": "2025-01-09",
+      "accessed": "2026-11-05",
+      "summary": "He will keep calling plays after promoting Klay Kubiak, calls Kubiak a close game-planning partner for two years, keeps final say and sole contact with the quarterback, and leans on several assistants during games. His description.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

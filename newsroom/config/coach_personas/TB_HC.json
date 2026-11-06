@@ -1,0 +1,249 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:TB:HC",
+  "name": "Todd Bowles",
+  "role": "HC",
+  "team": "TB",
+  "seed_ref": {
+    "table": "COACHES_DATA",
+    "team": "TB",
+    "role": "HC",
+    "name": "Todd Bowles"
+  },
+  "sliders": {
+    "temperament": 2,
+    "sociability": 4,
+    "confidence": 6,
+    "openness": 5,
+    "warmth": 6,
+    "drive": 6
+  },
+  "slider_evidence": {
+    "temperament": [
+      "E1",
+      "E6"
+    ],
+    "sociability": [
+      "E6"
+    ],
+    "confidence": [
+      "E1",
+      "E4"
+    ],
+    "warmth": [
+      "E2",
+      "E3"
+    ],
+    "drive": [
+      "E4"
+    ]
+  },
+  "traits": [
+    "SCHEME_NERD",
+    "MEASURED",
+    "PLAYERS_COACH",
+    "LOYAL"
+  ],
+  "trait_evidence": {
+    "SCHEME_NERD": [
+      "E4",
+      "E8"
+    ],
+    "MEASURED": [
+      "E5",
+      "E6"
+    ],
+    "PLAYERS_COACH": [
+      "E2",
+      "E3"
+    ],
+    "LOYAL": [
+      "E1",
+      "E8"
+    ]
+  },
+  "views": [
+    {
+      "text": "A coordinator's scheme matters less than whether he can adjust when the other side takes it away.",
+      "when": [
+        "SCHEME",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Keep scoring with a big lead late; an offense should not play to run out the clock.",
+      "when": [
+        "SCHEME",
+        "BLOWOUT"
+      ]
+    },
+    {
+      "text": "Talented players make coaches look good, and a coach's job is to make every level of player better.",
+      "when": [
+        "PLAYER",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "The first time as a head coach, he did not trust his own way enough; he will not make that mistake twice.",
+      "when": [
+        "COACHING",
+        "HISTORY"
+      ]
+    },
+    {
+      "text": "When an assistant leaves for a bigger job, you wish him well and go hire the next one.",
+      "when": [
+        "COACHING",
+        "FRONT_OFFICE"
+      ]
+    },
+    {
+      "text": "A division title is earned by closing games out; toughness in the fourth quarter is the point.",
+      "when": [
+        "CONTENDER",
+        "CLOSE_GAMES"
+      ]
+    },
+    {
+      "text": "The head coach keeps the final word on fourth downs, two-minute and the red zone.",
+      "when": [
+        "CLOSE_GAMES",
+        "SCHEME"
+      ]
+    }
+  ],
+  "signatures": [
+    "answers a pointed question with a deadpan one-liner, then moves on",
+    "keeps his voice level whether the team won or lost",
+    "declines to assign blame publicly when a staff departure or loss is messy"
+  ],
+  "want": "to win in Tampa Bay on his own terms and show that his quiet style can build a lasting contender",
+  "fear": "that his calm is read as a lack of fire whenever the team stumbles",
+  "voice": "Stoic, dry and unhurried; he rarely raises his voice and lets short, deadpan answers do the work, sometimes with a sly joke. He talks schemes and adjustments readily, praises players' toughness, and refuses to air grievances with departed assistants or critics. Emotion shows mostly behind closed doors.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "TB",
+          "role": "DC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E8"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "TB",
+          "role": "OC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "mixed",
+      "evidence": [
+        "E4",
+        "E5"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Baker Mayfield",
+        "team_2026": "TB"
+      },
+      "relationship_kind": "support",
+      "outcome": "positive",
+      "evidence": [
+        "E6"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.news4jax.com/sports/2022/03/31/todd-bowles-calls-replacing-bruce-arians-bittersweet/",
+      "publisher": "Associated Press (Rob Maaddi) via News4JAX",
+      "published": "2022-03-31",
+      "accessed": "2026-11-05",
+      "summary": "At his introduction he calls replacing longtime mentor Arians bittersweet, says he will lead his own way, regrets not trusting his approach in a 24-40 Jets stint, jokes that baldness is all he shares with Arians, and says talented players make coaches look good. His words.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.si.com/nfl/buccaneers/news/lots-of-love-for-head-coach-todd-bowles-as-buccaneers-arrive-in-tampa",
+      "publisher": "Sports Illustrated (Bucs Gameday), David Harrison",
+      "published": "2022-04-14",
+      "accessed": "2026-11-05",
+      "summary": "Lavonte David says Bowles puts team and players first and is a coach players play hard for all game; Keanu Neal calls him a brilliant strategist. Early player praise.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.si.com/nfl/buccaneers/news/buccaneers-head-coach-todd-bowles-juiced-up-following-divisional-win-over-falcons",
+      "publisher": "Sports Illustrated (Bucs Gameday), Collin Haalboom",
+      "published": "2023-12-11",
+      "accessed": "2026-11-05",
+      "summary": "A team video shows him celebrating energetically and praising players' toughness after a win that took first place; the writer argues it counters the idea that he lacks fire. Opinion framing over a team clip.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.buccaneers.com/news/todd-bowles-new-oc-liam-coen-will-have-play-calling-leeway",
+      "publisher": "Tampa Bay Buccaneers (buccaneers.com), Scott Smith",
+      "published": "2024-02-27",
+      "accessed": "2026-11-05",
+      "summary": "He explains hiring Coen after seven interviews: a scheme matters less than adjusting when opponents counter it and fitting the culture; Coen calls plays but Bowles keeps fourth downs, two-minute and red zone, and wants the offense to keep scoring with a lead. His stated approach.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.si.com/nfl/buccaneers/news/tampa-bay-buccaneers-hc-todd-bowles-opens-up-on-liam-coen-departure-to-jacksonville-jaguars",
+      "publisher": "Sports Illustrated (Bucs Gameday), River Wells",
+      "published": "2025-03-01",
+      "accessed": "2026-11-05",
+      "summary": "On Coen leaving for Jacksonville after a reported verbal agreement to stay, Bowles says it did not change his task of finding a coordinator, says Coen chose what suited him, and shows no resentment. Calm and pragmatic per the writer.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E6",
+      "url": "https://www.cbssports.com/nfl/news/todd-bowles-has-more-in-common-with-buccaneers-qb-baker-mayfield-than-some-think-calls-him-fraternal-twin",
+      "publisher": "CBS Sports, Shanna McCarriston",
+      "published": "2025-06-03",
+      "accessed": "2026-11-05",
+      "summary": "Bowles calls himself and Mayfield fraternal twins: he is the calmer one, Mayfield acts on thoughts Bowles keeps to himself. His self-description.",
+      "confidence": "high"
+    },
+    {
+      "id": "E7",
+      "url": "https://www.si.com/nfl/todd-bowles-gave-one-wildest-press-conference-answers-ever",
+      "publisher": "Sports Illustrated, Stephen Douglas",
+      "published": "2025-09-22",
+      "accessed": "2026-11-05",
+      "summary": "After a 3-0 start he answers a question about a tunnel moment with a tight end with a deadpan joke about a secret bond, drawing laughs. One playful exchange.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E8",
+      "url": "https://www.profootballrumors.com/2022/03/latest-on-buccaneers-defensive-staff",
+      "publisher": "Pro Football Rumors, Adam La Rose",
+      "published": "2022-03-31",
+      "accessed": "2026-11-05",
+      "summary": "Bowles keeps calling the defense and splits the coordinator title between Kacy Rodgers, who followed him from the Jets in 2019, and Larry Foote. Staffing facts.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}
