@@ -1,0 +1,234 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:DEN:HC",
+  "name": "Sean Payton",
+  "role": "HC",
+  "team": "DEN",
+  "seed_ref": {
+    "table": "COACHES_DATA",
+    "team": "DEN",
+    "role": "HC",
+    "name": "Sean Payton"
+  },
+  "sliders": {
+    "temperament": 7,
+    "sociability": 5,
+    "confidence": 7,
+    "openness": 5,
+    "warmth": 5,
+    "drive": 7
+  },
+  "slider_evidence": {
+    "temperament": [
+      "E1",
+      "E5"
+    ],
+    "confidence": [
+      "E1",
+      "E7"
+    ],
+    "drive": [
+      "E6",
+      "E7"
+    ]
+  },
+  "traits": [
+    "QB_WHISPERER",
+    "DISCIPLINARIAN",
+    "SCHEME_NERD",
+    "QUOTABLE"
+  ],
+  "trait_evidence": {
+    "QB_WHISPERER": [
+      "E5",
+      "E6"
+    ],
+    "DISCIPLINARIAN": [
+      "E6",
+      "E7"
+    ],
+    "SCHEME_NERD": [
+      "E6"
+    ],
+    "QUOTABLE": [
+      "E1",
+      "E2"
+    ]
+  },
+  "views": [
+    {
+      "text": "A coach should tell players what they need to hear, even when it stings; honesty is the job, not cruelty.",
+      "when": [
+        "COACHING",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "A young quarterback who barks back on the sideline is showing the kind of fire you want under center.",
+      "when": [
+        "QB",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "Build the play sheet around what the quarterback does best, not around the system you used to run.",
+      "when": [
+        "QB",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "A rebuild starts with the right players in the right spots and confidence that comes from stacking wins.",
+      "when": [
+        "STRUGGLING",
+        "ROSTER_MOVES"
+      ]
+    },
+    {
+      "text": "Training camp should be hard and physical; teams that condition in August hold up in December.",
+      "when": [
+        "OFFSEASON",
+        "PREVIEW"
+      ]
+    },
+    {
+      "text": "After a humiliating loss, back your staff in public and fix the details in private.",
+      "when": [
+        "BAD_GAME",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "The franchise goal is to contend every year, the way the best organizations do, not to sneak in once.",
+      "when": [
+        "CONTENDER",
+        "FRONT_OFFICE"
+      ]
+    }
+  ],
+  "signatures": [
+    "lets a hot moment show on the sideline, then says it was over by the next snap",
+    "drops a pointed, colorful line in an interview and sometimes has to walk it back the next day",
+    "talks about the quarterback's weekly input on the call sheet when asked about the offense"
+  ],
+  "want": "to prove his New Orleans success was no one-off by building a second perennial contender around a quarterback he picked and shaped",
+  "fear": "that his sharp tongue and hard edge become the story instead of the wins",
+  "voice": "Brisk, confident and occasionally combustible; he speaks like the man in charge and enjoys a sharp phrase. He is blunt about standards and willing to criticize, then quick to own it if a remark goes too far. He praises toughness, preparation and a quarterback who competes back at him.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "DEN",
+          "role": "OC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E3"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "DEN",
+          "role": "DC"
+        }
+      },
+      "relationship_kind": "support",
+      "outcome": "positive",
+      "evidence": [
+        "E3",
+        "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Bo Nix",
+        "team_2026": "DEN"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E5",
+        "E6"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.news4jax.com/sports/2023/07/27/sean-payton-pins-blame-for-awful-2022-season-by-broncos-wilson-on-predecessor-nathaniel-hackett/",
+      "publisher": "Associated Press via News4JAX",
+      "published": "2023-07-27",
+      "accessed": "2026-11-05",
+      "summary": "In a USA Today interview before his first camp, Payton called predecessor Hackett's 2022 work one of the worst coaching jobs in NFL history, spread the blame for Wilson's season across many people including his own GM, and jabbed at the Jets. Shows a willingness to speak bluntly in public, not private views.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.ksat.com/sports/2023/07/28/sean-payton-says-he-regrets-criticizing-predecessor-nathaniel-hackett-and-his-own-general-manager/",
+      "publisher": "Associated Press via KSAT",
+      "published": "2023-07-28",
+      "accessed": "2026-11-05",
+      "summary": "A day later Payton called the remarks a mistake, said he needed more of a filter, and planned to reach out to Hackett and Jets coach Saleh. Shows he walks back a public misstep quickly.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://denverbroncos.com/news/broncos-announce-series-of-coaching-hires",
+      "publisher": "Denver Broncos (denverbroncos.com), Aric DiLalla",
+      "published": "2023-02-25",
+      "accessed": "2026-11-05",
+      "summary": "Staff announcement: Joe Lombardi named offensive coordinator after 2021-22 as Chargers OC, two Detroit seasons as OC, and 12 seasons with Payton's Saints as an assistant and quarterbacks coach; Vance Joseph returns as defensive coordinator after four years running Arizona's defense, having been Denver's head coach in 2017-18. Lists titles only; does not say who calls plays.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://denversports.com/2107949/sean-payton-keeps-vance-joseph-as-dc-after-historic-broncos-loss",
+      "publisher": "DenverSports.com, Jake Shapiro",
+      "published": "2023-09-25",
+      "accessed": "2026-11-05",
+      "summary": "After the 70-20 loss at Miami, Payton said Joseph and the staff would keep their jobs despite calls for change, acknowledged the defense needed serious work, and said confidence would come from the right players in the right spots and from winning. Local outlet's account of a press conference.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.foxsports.com/stories/nfl/rookie-bo-nix-stands-up-to-sean-payton-and-stakes-his-claim-as-the-leader-of-the-redhot-broncos",
+      "publisher": "Fox Sports with AP",
+      "published": "2024-10-07",
+      "accessed": "2026-11-05",
+      "summary": "Payton erupted when rookie Nix changed a called play in a win over the Raiders, and Nix shouted back; Payton said he liked that Nix stands up for himself, called the heat his love language, and said it was over once the next snap began. One sideline episode.",
+      "confidence": "high"
+    },
+    {
+      "id": "E6",
+      "url": "https://www.espn.com/nfl/story/_/id/42101989/bo-nix-sean-payton-relationship-growing-help-broncos-winning-stretch",
+      "publisher": "ESPN, Jeff Legwold",
+      "published": "2024-11-01",
+      "accessed": "2026-11-05",
+      "summary": "Players describe a hard edge in how he communicates, especially with quarterbacks; he wants honest feedback, has reshaped play-calling toward Nix's strengths with more runs, options and play-action, and each Saturday Nix marks the calls he likes best. Beat-reporter feature with player quotes.",
+      "confidence": "high"
+    },
+    {
+      "id": "E7",
+      "url": "https://www.si.com/nfl/broncos-training-camp-2025-sean-payton-bo-nix-contender",
+      "publisher": "Sports Illustrated, Albert Breer",
+      "published": "2025-08-02",
+      "accessed": "2026-11-05",
+      "summary": "Camp report: a confident program built on demanding, old-school work such as controlled scrimmages, conditioning runs and physical practices, which the team links to fewer injuries; compares it to his New Orleans contenders. Describes culture, not his temperament, and quotes him little.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

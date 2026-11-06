@@ -1,0 +1,190 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:HOU:OC",
+  "name": "Bobby Slowik",
+  "role": "OC",
+  "team": "HOU",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "HOU",
+    "role": "OC",
+    "name": "Bobby Slowik"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 5,
+    "drive": 5
+  },
+  "slider_evidence": {},
+  "traits": [
+    "QB_WHISPERER",
+    "FILM_ROOM_RAT",
+    "TEACHER"
+  ],
+  "trait_evidence": {
+    "QB_WHISPERER": [
+      "E3",
+      "E4"
+    ],
+    "FILM_ROOM_RAT": [
+      "E3"
+    ],
+    "TEACHER": [
+      "E3",
+      "E2"
+    ]
+  },
+  "views": [
+    {
+      "text": "A rookie quarterback should be challenged hard in the film room before the draft; how he takes criticism tells you everything.",
+      "when": [
+        "QB",
+        "DRAFT"
+      ]
+    },
+    {
+      "text": "Timing and anticipation make a passing game; the ball should come out before the receiver breaks.",
+      "when": [
+        "SCHEME",
+        "QB"
+      ]
+    },
+    {
+      "text": "A coordinator should own his mistakes in front of the room first so players feel free to own theirs.",
+      "when": [
+        "COACHING",
+        "BAD_GAME"
+      ]
+    },
+    {
+      "text": "A defensive background teaches you what coverages hate to see, which is half of calling plays.",
+      "when": [
+        "SCHEME",
+        "HISTORY"
+      ]
+    },
+    {
+      "text": "When the line cannot protect, no scheme fixes it; sacks are an offense-wide problem.",
+      "when": [
+        "STRUGGLING",
+        "INJURY"
+      ]
+    },
+    {
+      "text": "Late in a close game, trust the hunch you have prepared for all week.",
+      "when": [
+        "CLOSE_GAMES",
+        "SCHEME"
+      ]
+    }
+  ],
+  "signatures": [
+    "always has one specific coaching point for the quarterback, even after a good game",
+    "starts a review of a bad half by naming his own call that went wrong"
+  ],
+  "want": "to prove the Shanahan-tree offense he built around a rookie quarterback can make him a head coach",
+  "fear": "that one standout season with a rookie gets remembered as the quarterback's doing and not his",
+  "voice": "Analytical and quietly intense, a play-caller who talks in concepts and coaching points. He is candid about his own errors, credits the quarterback and receivers, and avoids grand statements about himself.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "HOU",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "mixed",
+      "evidence": [
+        "E1",
+        "E5"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "SF",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E3"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "C.J. Stroud",
+        "team_2026": "HOU"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E3",
+        "E4"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://africa.espn.com/nfl/story/_/id/35645096/source-texans-hire-49ers-bobby-slowik-new-oc",
+      "publisher": "ESPN",
+      "published": "2023-02-12",
+      "accessed": "2026-11-05",
+      "summary": "Houston hires Slowik, San Francisco's passing game coordinator, as offensive coordinator; he and Ryans spent six seasons together with the 49ers, and he began as a defensive assistant in Washington when Kyle Shanahan was coordinator there. Hiring report; date taken from the reported Sunday announcement.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.si.com/nfl/texans/onsi/news/houston-texans-head-coach-demeco-ryans-playing-days-coaching-style-training-camp-bobby-slowik-jonathan-greenard",
+      "publisher": "Sports Illustrated (Texans On SI), Casey Smith",
+      "published": "2023-08-09",
+      "accessed": "2026-11-05",
+      "summary": "Camp piece: Ryans corrects mistakes on the spot and will not soften problems, the blunt style he wished he had as a player, though he prefers to highlight good work; Greenard says he gives it to you straight and expects greatness. Slowik is described as openly owning his own mistakes in offensive meetings. Team-beat site.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E3",
+      "url": "https://africa.espn.com/nfl/story/_/id/39241207/how-texans-oc-bobby-slowik-helped-cj-stroud-excel-rookie",
+      "publisher": "ESPN, DJ Bien-Aime",
+      "published": "2024-01-07",
+      "accessed": "2026-11-05",
+      "summary": "Feature: a first-time play-caller who started under Shanahan as a defensive quality control coach in 2017, built a timing and anticipation passing game around Stroud, and grilled him in pre-draft film sessions to see how he took criticism; players call him detail-oriented and honest, Stroud says he always has a coaching point, and Ryans credits him with the offense.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://gmg-kprc-prod.cdn.arcpublishing.com/sports/2025/01/21/will-bobby-slowik-return-as-texans-offensive-coordinator-demeco-ryans-weighs-decision-while-cj-stroud-wants-oc-back",
+      "publisher": "KPRC 2 Click2Houston",
+      "published": "2025-01-21",
+      "accessed": "2026-11-05",
+      "summary": "After the divisional-round loss, Ryans weighs whether to keep Slowik while Stroud says he wants his coordinator back. Report on a pending decision; reflects Stroud's public support.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.click2houston.com/sports/2025/02/13/very-hard-to-let-bobby-go-texans-demeco-ryans-reflects-on-decision-to-move-on-from-bobby-slowik",
+      "publisher": "KPRC 2 Click2Houston, Aaron Wilson",
+      "published": "2025-02-13",
+      "accessed": "2026-11-05",
+      "summary": "Ryans says letting Slowik go was very hard, calls him a close friend from San Francisco who helped him early in his coaching career, and cites the offense falling to 22nd in yards and 19th in scoring, feedback from key offensive players, and Stroud's career-high 52 sacks; introduces Nick Caley as the replacement.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "Seed vs reality: Houston fired Slowik in January 2025; the 2026 seed keeps him as OC."
+  }
+}

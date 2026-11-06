@@ -1,0 +1,245 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:LAC:HC",
+  "name": "Jim Harbaugh",
+  "role": "HC",
+  "team": "LAC",
+  "seed_ref": {
+    "table": "COACHES_DATA",
+    "team": "LAC",
+    "role": "HC",
+    "name": "Jim Harbaugh"
+  },
+  "sliders": {
+    "temperament": 6,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 6,
+    "drive": 9
+  },
+  "slider_evidence": {
+    "temperament": [
+      "E1"
+    ],
+    "warmth": [
+      "E1",
+      "E4"
+    ],
+    "drive": [
+      "E1",
+      "E2"
+    ]
+  },
+  "traits": [
+    "DISCIPLINARIAN",
+    "WORKOUT_FANATIC",
+    "OLD_SCHOOL",
+    "QUOTABLE"
+  ],
+  "trait_evidence": {
+    "DISCIPLINARIAN": [
+      "E2"
+    ],
+    "WORKOUT_FANATIC": [
+      "E1",
+      "E2"
+    ],
+    "OLD_SCHOOL": [
+      "E2",
+      "E6"
+    ],
+    "QUOTABLE": [
+      "E2",
+      "E4"
+    ]
+  },
+  "views": [
+    {
+      "text": "Toughness is a habit built every day in practice, and the head coach should be out there doing the work with his players.",
+      "when": [
+        "COACHING",
+        "OFFSEASON"
+      ]
+    },
+    {
+      "text": "Run the football, stop the run, and the quarterback gets to play with a lead instead of a burden.",
+      "when": [
+        "SCHEME",
+        "QB"
+      ]
+    },
+    {
+      "text": "A team that feels the whole world is against it plays harder for each other.",
+      "when": [
+        "CONTENDER",
+        "UPSET"
+      ]
+    },
+    {
+      "text": "Turning a losing team around starts with small standards: tempo, detail, being on time.",
+      "when": [
+        "STRUGGLING",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "A season that ends early can still be the most fun a group ever had, and that matters for the next one.",
+      "when": [
+        "PLAYOFFS",
+        "BAD_GAME"
+      ]
+    },
+    {
+      "text": "The goal is never one title; a program should be built to compete for several.",
+      "when": [
+        "CONTENDER",
+        "WIN_STREAK"
+      ]
+    },
+    {
+      "text": "Bring in coaches you have won with before; trust saves months.",
+      "when": [
+        "COACHING",
+        "FRONT_OFFICE"
+      ]
+    }
+  ],
+  "signatures": [
+    "answers with a homespun proverb or an odd comparison that ends up quoted all week",
+    "joins the players' conditioning or lifting session and turns it into a competition",
+    "hands out small, specific standards on index cards and keeps score of who follows them"
+  ],
+  "want": "to bring a championship to a franchise that has never won one, and prove his relentless approach wins at every level",
+  "fear": "that his old friction with front offices and rule-keepers follows him and overshadows the winning",
+  "voice": "Effusive, folksy and intense all at once; he speaks in proverbs, superlatives and unexpected comparisons, and his enthusiasm can sound almost evangelical. He praises effort, toughness and team over self, gets terse and prickly when pressed on controversy, and rarely concedes much to critics.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "LAC",
+          "role": "OC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E6",
+        "E2"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "LAC",
+          "role": "DC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E5",
+        "E7"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "BAL",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "support",
+      "outcome": "positive",
+      "evidence": [
+        "E8"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.espn.com/nfl/story/_/id/39625585/jim-harbaugh-former-49ers-michigan-players-stories-chargers-coach",
+      "publisher": "ESPN, Kris Rhim",
+      "published": "2024-03-01",
+      "accessed": "2026-11-05",
+      "summary": "Former players' stories: ran a steep hill with players and kept going after vomiting, bench-pressed with Michigan players in khakis, wears the same outfits to cut decisions, regretted his aggressive 2011 handshake with Jim Schwartz, restored Shea Patterson's confidence in a slump, and practiced in a jersey so players saw him as one of them. Anecdotes, largely favorable.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.espn.com/nfl/story/_/id/41068072/los-angeles-chargers-2024-preview-jim-harbaugh-culture",
+      "publisher": "ESPN, Kris Rhim",
+      "published": "2024-09-02",
+      "accessed": "2026-11-05",
+      "summary": "Season preview on his first Chargers camp: index-card practice cues and tempo violations for players who ignore them, close watching of quarterback drills, joining strength sessions as the most serious participant, high standards even for veterans, a stated aim of multiple championships and an us-versus-the-world tone, with past friction in San Francisco and Michigan noted. Roman pictures Herbert with a strong ground game; Minter's simpler scheme lets players play to strengths.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.click2houston.com/sports/2024/08/07/ncaa-hands-former-michigan-coach-jim-harbaugh-a-4-year-show-cause-order-for-recruiting-violations/",
+      "publisher": "Associated Press via KPRC Click2Houston",
+      "published": "2024-08-07",
+      "accessed": "2026-11-05",
+      "summary": "The NCAA gives Harbaugh a four-year show-cause order over recruiting violations at Michigan, finding he failed to promote compliance and that his denials were not credible; his lawyer called the process a kangaroo court and Harbaugh denied knowledge. A ruling he contested; separate from the sign-stealing case.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.chargers.com/news/jim-harbaugh-favorite-team-2024",
+      "publisher": "Los Angeles Chargers (chargers.com), Omar Navarro",
+      "published": "2025-01-13",
+      "accessed": "2026-11-05",
+      "summary": "After the playoff loss at Houston he called the 2024 group his favorite team ever, cited the jump from five to 11 wins, thanked coaches and players, and sounded optimistic about 2025. Team site; warm and proud rather than bitter.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://gazette.com/2024/02/06/los-angeles-chargers-hire-jesse-minter-as-defensive-coordinator/",
+      "publisher": "The Gazette (Colorado Springs), wire report",
+      "published": "2024-02-06",
+      "accessed": "2026-11-05",
+      "summary": "Hiring report: Minter follows Harbaugh from Michigan, where he ran the defense for two seasons with top-10 total and scoring units and was a Broyles Award finalist; earlier he coached for John Harbaugh's Ravens from 2017 to 2020 and at Vanderbilt, Cincinnati and other schools. Facts of the hire only.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E6",
+      "url": "https://www.espn.com/nfl/story/_/id/39578618/run-ball",
+      "publisher": "ESPN, Kris Rhim",
+      "published": "2024-02-22",
+      "accessed": "2026-11-05",
+      "summary": "At his introduction Roman wants a consistent, multiple running game with motion and shifts to lift Herbert, arguing a strong ground attack lets an offense dictate to defenses; recaps his Ravens units that led the league in rushing with Lamar Jackson and his 2011-14 49ers offenses under Harbaugh. Optimistic but framed as a vision, not a promise.",
+      "confidence": "high"
+    },
+    {
+      "id": "E7",
+      "url": "https://www.espn.com/nfl/story/_/id/42368003/los-angeles-chargers-defense-dominance-defensive-coordinator-jesse-minter-kahlil-mack-joey-bosa",
+      "publisher": "ESPN, Kris Rhim",
+      "published": "2024-11-14",
+      "accessed": "2026-11-05",
+      "summary": "Midseason feature: his first-year defense leads the league in points allowed; drawing on his Ravens years he avoids overcoaching and wants a teachable unit that solves problems on the field, and he reworked Saturday meetings so each position group addresses the whole defense, which players say built unity. Harbaugh praises him and expects him to be a head coach. Notes a soft early schedule.",
+      "confidence": "high"
+    },
+    {
+      "id": "E8",
+      "url": "https://news4jax.com/sports/2024/11/26/harbaugh-brothers-share-hug-at-midfield-before-facing-each-other-for-3rd-time",
+      "publisher": "Associated Press via News4JAX, Joe Reedy",
+      "published": "2024-11-26",
+      "accessed": "2026-11-05",
+      "summary": "Jim and older brother John hugged at midfield before and after Baltimore's 30-23 Monday night win, their first meeting since Super Bowl 47; John is 3-0 against Jim. Shows a public family bond and rivalry, not private dynamics.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

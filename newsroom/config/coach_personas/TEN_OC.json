@@ -1,0 +1,152 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:TEN:OC",
+  "name": "Nick Holz",
+  "role": "OC",
+  "team": "TEN",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "TEN",
+    "role": "OC",
+    "name": "Nick Holz"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 5,
+    "drive": 5
+  },
+  "slider_evidence": {},
+  "traits": [
+    "LOYAL",
+    "SCHEME_NERD",
+    "MEASURED"
+  ],
+  "trait_evidence": {
+    "LOYAL": [
+      "E1",
+      "E2"
+    ],
+    "SCHEME_NERD": [
+      "E3"
+    ],
+    "MEASURED": [
+      "E3"
+    ]
+  },
+  "views": [
+    {
+      "text": "When the head coach calls the plays, the coordinator's job is building the plan and owning the base downs.",
+      "when": [
+        "COACHING",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "A collaborative game-plan room beats one voice deciding everything.",
+      "when": [
+        "SCHEME",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "A rookie quarterback needs the same message from every coach in the building.",
+      "when": [
+        "QB",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "Stops in college and as a position coach teach a coordinator to build from the players up.",
+      "when": [
+        "HISTORY",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Changing who calls plays is less important than fixing protection and execution.",
+      "when": [
+        "STRUGGLING",
+        "BAD_GAME"
+      ]
+    },
+    {
+      "text": "Old relationships are a reason to trust someone, not a reason to keep a bad plan.",
+      "when": [
+        "COACHING",
+        "FRONT_OFFICE"
+      ]
+    }
+  ],
+  "signatures": [
+    "keeps his answers about the offense collaborative, crediting the head coach and the quarterback room",
+    "avoids public comment on who calls the plays"
+  ],
+  "want": "to earn play-calling duties of his own after years as a trusted planner behind other play-callers",
+  "fear": "that he is seen as the head coach's old friend rather than a coordinator who earned the job",
+  "voice": "Low-profile and process-focused; he speaks briefly about the game plan, defers to the head coach on play-calling and strategy, and praises the quarterbacks' preparation.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "TEN",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E2"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.cbssports.com/nfl/news/titans-hire-jaguars-passing-game-coordinator-nick-holz-as-new-offensive-coordinator-per-report/",
+      "publisher": "CBS Sports, Jeff Kerr",
+      "published": "2024-02-02",
+      "accessed": "2026-11-05",
+      "summary": "Tennessee reportedly hires Holz, a former Colorado receiver who spent 2012-21 with the Raiders, was UNLV's coordinator in 2022 and Jacksonville's passing game coordinator; he worked with Callahan on the 2018 Raiders staff and was his high school teammate. Hiring report.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://tennesseetitans.com/news/titans-hire-nick-holz-as-offensive-coordinator-dennard-wilson-as-defensive-coordinator",
+      "publisher": "Tennessee Titans (tennesseetitans.com), Jim Wyatt",
+      "published": "2024-02-05",
+      "accessed": "2026-11-05",
+      "summary": "Staff announcement: Holz, Jacksonville's 2023 passing game coordinator and UNLV's 2022 coordinator, spent nearly a decade with the Raiders, worked with Callahan in 2018, is his high school classmate, and once worked for Callahan's father at Nebraska; Wilson comes from one season as Baltimore's secondary coach after defensive-back jobs with the Rams, Jets and Eagles. Callahan plans to call plays; Holz will help develop Will Levis.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://africa.espn.com/nfl/story/_/id/46356186/titans-callahan-relinquishes-play-calling-duties-qb-coach",
+      "publisher": "ESPN, Turron Davenport",
+      "published": "2025-09-23",
+      "accessed": "2026-11-05",
+      "summary": "After an 0-3 start Callahan hands play-calling to quarterbacks coach Bo Hardegree to be more present as head coach, choosing him over Holz because of Hardegree's interim-coordinator experience; Holz keeps game-plan work and base downs, the process stays collaborative, and all three meet with rookie Cam Ward.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.news4jax.com/sports/2025/10/13/titans-fire-coach-brian-callahan-after-4-19-record-and-1-5-start-to-second-season/",
+      "publisher": "Associated Press via News4JAX, Teresa M. Walker",
+      "published": "2025-10-13",
+      "accessed": "2026-11-05",
+      "summary": "Tennessee fires Callahan after 4-19 and a 1-5 start, the first coach fired that season; team president Chad Brinker says the team had not shown the growth it preached; the offense averaged 3.94 yards per play and Ward was sacked a league-high 25 times even after Callahan gave up play-calling.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "Thin coverage: four sources, mostly staffing; Holz never called plays in Tennessee. Sliders neutral; traits are narrow inferences."
+  }
+}

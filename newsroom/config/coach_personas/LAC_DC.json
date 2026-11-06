@@ -1,0 +1,174 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:LAC:DC",
+  "name": "Jesse Minter",
+  "role": "DC",
+  "team": "LAC",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "LAC",
+    "role": "DC",
+    "name": "Jesse Minter"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 6,
+    "confidence": 6,
+    "openness": 5,
+    "warmth": 6,
+    "drive": 5
+  },
+  "slider_evidence": {
+    "sociability": [
+      "E4"
+    ],
+    "confidence": [
+      "E4"
+    ],
+    "warmth": [
+      "E3",
+      "E4"
+    ]
+  },
+  "traits": [
+    "TEACHER",
+    "SCHEME_NERD",
+    "YOUTH_DEVELOPER"
+  ],
+  "trait_evidence": {
+    "TEACHER": [
+      "E3",
+      "E2"
+    ],
+    "SCHEME_NERD": [
+      "E4",
+      "E5"
+    ],
+    "YOUTH_DEVELOPER": [
+      "E5",
+      "E4"
+    ]
+  },
+  "views": [
+    {
+      "text": "Simple calls that players truly own beat a thick playbook every week.",
+      "when": [
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "A great defense is a team defense; it should never depend on one star staying healthy.",
+      "when": [
+        "INJURY",
+        "PERFORMANCE"
+      ]
+    },
+    {
+      "text": "Build the plan around who is actually available this week, not the roster on paper.",
+      "when": [
+        "SCHEME",
+        "INJURY"
+      ]
+    },
+    {
+      "text": "After a blowout, change the picture: new fronts, new roles, and let the film from the bad day go.",
+      "when": [
+        "BAD_GAME",
+        "STRUGGLING"
+      ]
+    },
+    {
+      "text": "When every position group knows the whole defense, players can solve problems on the field without waiting for a call.",
+      "when": [
+        "COACHING",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "Leading the league in points allowed is a team stat, and it is the only one that matters to a defense.",
+      "when": [
+        "RANKINGS",
+        "CONTENDER"
+      ]
+    }
+  ],
+  "signatures": [
+    "celebrates a big defensive play on the sideline as if he made it himself",
+    "credits the whole unit rather than a single player when asked about a star"
+  ],
+  "want": "to prove the coaching lessons he gathered from his father, the Ravens and Michigan add up to a head-coaching career of his own",
+  "fear": "that his defense gets labeled a product of a soft schedule rather than real teaching",
+  "voice": "Upbeat, confident and plain-spoken; he sounds like a teacher explaining why something works. He spreads credit across the unit, avoids hype about himself, and talks about adjustments in practical terms.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "LAC",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E3",
+        "E5"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://gazette.com/2024/02/06/los-angeles-chargers-hire-jesse-minter-as-defensive-coordinator/",
+      "publisher": "The Gazette (Colorado Springs), wire report",
+      "published": "2024-02-06",
+      "accessed": "2026-11-05",
+      "summary": "Hiring report: Minter follows Harbaugh from Michigan, where he ran the defense for two seasons with top-10 total and scoring units and was a Broyles Award finalist; earlier he coached for John Harbaugh's Ravens from 2017 to 2020 and at Vanderbilt, Cincinnati and other schools. Facts of the hire only.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.espn.com/nfl/story/_/id/41068072/los-angeles-chargers-2024-preview-jim-harbaugh-culture",
+      "publisher": "ESPN, Kris Rhim",
+      "published": "2024-09-02",
+      "accessed": "2026-11-05",
+      "summary": "Season preview on his first Chargers camp: index-card practice cues and tempo violations for players who ignore them, close watching of quarterback drills, joining strength sessions as the most serious participant, high standards even for veterans, a stated aim of multiple championships and an us-versus-the-world tone, with past friction in San Francisco and Michigan noted. Roman pictures Herbert with a strong ground game; Minter's simpler scheme lets players play to strengths.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.espn.com/nfl/story/_/id/42368003/los-angeles-chargers-defense-dominance-defensive-coordinator-jesse-minter-kahlil-mack-joey-bosa",
+      "publisher": "ESPN, Kris Rhim",
+      "published": "2024-11-14",
+      "accessed": "2026-11-05",
+      "summary": "Midseason feature: his first-year defense leads the league in points allowed; drawing on his Ravens years he avoids overcoaching and wants a teachable unit that solves problems on the field, and he reworked Saturday meetings so each position group addresses the whole defense, which players say built unity. Harbaugh praises him and expects him to be a head coach. Notes a soft early schedule.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.foxsports.com/stories/nfl/meet-man-who-has-chargers-playing-historically-stingy-defense",
+      "publisher": "Fox Sports, Eric D. Williams",
+      "published": "2024-11-15",
+      "accessed": "2026-11-05",
+      "summary": "Profile: energetic and confident, celebrates big plays as if on the field; Perryman says he simplifies complex schemes; Derwin James calls him consistent and confident without arrogance; the defense is reshaped each week around available personnel. Son of longtime coach Rick Minter; Harbaugh calls him intuitive and says he knows offense almost as well as defense.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.espn.com/nfl/story/_/id/47310139/los-angeles-chargers-defense-improvement-coordinator-jesse-minter",
+      "publisher": "ESPN, Kris Rhim",
+      "published": "2025-12-15",
+      "accessed": "2026-11-05",
+      "summary": "After a 35-6 loss to Jacksonville, Minter overhauled the defense with fronts unused all season and new roles such as Henley at outside linebacker; opponents were held to season lows, Harbaugh credited his adjustments and called himself a big supporter, and Derwin James called it the best defense he has played on.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

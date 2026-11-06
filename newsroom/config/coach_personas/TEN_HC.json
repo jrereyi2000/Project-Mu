@@ -1,0 +1,198 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:TEN:HC",
+  "name": "Brian Callahan",
+  "role": "HC",
+  "team": "TEN",
+  "seed_ref": {
+    "table": "COACHES_DATA",
+    "team": "TEN",
+    "role": "HC",
+    "name": "Brian Callahan"
+  },
+  "sliders": {
+    "temperament": 6,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 5,
+    "drive": 5
+  },
+  "slider_evidence": {
+    "temperament": [
+      "E2",
+      "E4"
+    ]
+  },
+  "traits": [
+    "QB_WHISPERER",
+    "GUARDED",
+    "DISCIPLINARIAN"
+  ],
+  "trait_evidence": {
+    "QB_WHISPERER": [
+      "E1"
+    ],
+    "GUARDED": [
+      "E3"
+    ],
+    "DISCIPLINARIAN": [
+      "E2",
+      "E4"
+    ]
+  },
+  "views": [
+    {
+      "text": "A quarterback is held to a standard; when he puts the team in bad spots, he sits, and that is about this week, not his career.",
+      "when": [
+        "QB",
+        "BAD_GAME"
+      ]
+    },
+    {
+      "text": "Losing games does not make a team soft; anyone who says so is not watching the tape.",
+      "when": [
+        "LOSING_STREAK",
+        "STRUGGLING"
+      ]
+    },
+    {
+      "text": "Self-inflicted mistakes, penalties and turnovers, lose more games than the opponent does.",
+      "when": [
+        "BAD_GAME",
+        "GAME_REVIEW"
+      ]
+    },
+    {
+      "text": "A head coach sometimes has to hand off what he loves, like calling plays, to see the whole team.",
+      "when": [
+        "COACHING"
+      ]
+    },
+    {
+      "text": "A rookie quarterback needs stability above everything, including from the people around him.",
+      "when": [
+        "QB",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "He learned the job watching great quarterbacks prepare; that is what he looks for in his own.",
+      "when": [
+        "QB",
+        "HISTORY"
+      ]
+    }
+  ],
+  "signatures": [
+    "states the decision flatly and declines to make proclamations about the future",
+    "lets real anger show when the team's toughness is questioned, then returns to the tape",
+    "calls a careless turnover what it is in public, then reaffirms confidence in the player"
+  ],
+  "want": "to prove the quarterback-development reputation he built as a coordinator can carry a whole franchise",
+  "fear": "that his first head-coaching job ends before a young quarterback and roster can grow into his plan",
+  "voice": "Usually measured and matter-of-fact, a quarterback coach's son who explains decisions in plain football terms. He keeps future plans close and gives short answers on personnel, but he can flash a hot, profane temper when he feels his players are being unfairly judged.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "TEN",
+          "role": "OC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E7"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "TEN",
+          "role": "DC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E7"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.news4jax.com/sports/2024/01/24/titans-hire-bengals-offensive-coordinator-brian-callahan-as-their-head-coach/",
+      "publisher": "Associated Press via News4JAX, Teresa M. Walker",
+      "published": "2024-01-24",
+      "accessed": "2026-11-05",
+      "summary": "Tennessee hires the 39-year-old Bengals coordinator, son of former Raiders coach Bill Callahan, a former UCLA quarterback who was in Denver for the Manning title, coached Stafford in Detroit and Carr in Las Vegas, and is credited with helping develop Joe Burrow. Owner Amy Adams Strunk cites his football knowledge, enthusiasm and leadership.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.cbssports.com/nfl/news/titans-brian-callahan-goes-on-epic-rant-when-asked-about-teams-toughness-complete-and-total-bulls-t",
+      "publisher": "CBS Sports, Jordan Dajani",
+      "published": "2024-12-18",
+      "accessed": "2026-11-05",
+      "summary": "Days after benching Levis, Callahan bristles when asked if the team is soft, says players compete daily and losing does not make a team soft, tells critics they are not watching the tape, and ends with a profane dismissal. Visibly angry; one press conference.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.espn.co.uk/nfl/story/_/id/42988068/titans-bench-levis-3-ints-turn-mason-rudolph",
+      "publisher": "ESPN, Turron Davenport",
+      "published": "2024-12-15",
+      "accessed": "2026-11-05",
+      "summary": "After Levis's turnovers against Cincinnati, Callahan says it was not his day and that bad picks put the team in tough spots, so he sat him; frames it around the offense's need for steady production and will not name the next starter. Measured rather than harsh.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.thescore.com/nfl/news/3076181/titans-callahan-irritated-by-levis-costly-turnovers-he-knows-better",
+      "publisher": "theScore, Matthew Washington",
+      "published": "2024-09-15",
+      "accessed": "2026-11-05",
+      "summary": "After a loss to the Jets, Callahan calls Levis's red-zone lateral attempt dumb and says he knows better, while saying he still has plenty of confidence in him. Page undated; dated to the game.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E5",
+      "url": "https://africa.espn.com/nfl/story/_/id/46356186/titans-callahan-relinquishes-play-calling-duties-qb-coach",
+      "publisher": "ESPN, Turron Davenport",
+      "published": "2025-09-23",
+      "accessed": "2026-11-05",
+      "summary": "After an 0-3 start Callahan hands play-calling to quarterbacks coach Bo Hardegree to be more present as head coach, choosing him over Holz because of Hardegree's interim-coordinator experience; Holz keeps game-plan work and base downs, the process stays collaborative, and all three meet with rookie Cam Ward.",
+      "confidence": "high"
+    },
+    {
+      "id": "E6",
+      "url": "https://www.news4jax.com/sports/2025/10/13/titans-fire-coach-brian-callahan-after-4-19-record-and-1-5-start-to-second-season/",
+      "publisher": "Associated Press via News4JAX, Teresa M. Walker",
+      "published": "2025-10-13",
+      "accessed": "2026-11-05",
+      "summary": "Tennessee fires Callahan after 4-19 and a 1-5 start, the first coach fired that season; team president Chad Brinker says the team had not shown the growth it preached; the offense averaged 3.94 yards per play and Ward was sacked a league-high 25 times even after Callahan gave up play-calling.",
+      "confidence": "high"
+    },
+    {
+      "id": "E7",
+      "url": "https://tennesseetitans.com/news/titans-hire-nick-holz-as-offensive-coordinator-dennard-wilson-as-defensive-coordinator",
+      "publisher": "Tennessee Titans (tennesseetitans.com), Jim Wyatt",
+      "published": "2024-02-05",
+      "accessed": "2026-11-05",
+      "summary": "Staff announcement: Holz, Jacksonville's 2023 passing game coordinator and UNLV's 2022 coordinator, spent nearly a decade with the Raiders, worked with Callahan in 2018, is his high school classmate, and once worked for Callahan's father at Nebraska; Wilson comes from one season as Baltimore's secondary coach after defensive-back jobs with the Rams, Jets and Eagles. Callahan plans to call plays; Holz will help develop Will Levis.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "Seed vs reality: Tennessee fired Callahan in October 2025; the 2026 seed keeps him as HC."
+  }
+}

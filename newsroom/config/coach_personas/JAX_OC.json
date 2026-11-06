@@ -1,0 +1,184 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:JAX:OC",
+  "name": "Press Taylor",
+  "role": "OC",
+  "team": "JAX",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "JAX",
+    "role": "OC",
+    "name": "Press Taylor"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 6,
+    "openness": 6,
+    "warmth": 5,
+    "drive": 8
+  },
+  "slider_evidence": {
+    "confidence": [
+      "E1"
+    ],
+    "openness": [
+      "E1"
+    ],
+    "drive": [
+      "E1"
+    ]
+  },
+  "traits": [
+    "FILM_ROOM_RAT",
+    "LOYAL",
+    "SCHEME_NERD"
+  ],
+  "trait_evidence": {
+    "FILM_ROOM_RAT": [
+      "E1"
+    ],
+    "LOYAL": [
+      "E2"
+    ],
+    "SCHEME_NERD": [
+      "E1",
+      "E4"
+    ]
+  },
+  "views": [
+    {
+      "text": "Play to win instead of playing not to lose; aggressive football is a choice you make every week.",
+      "when": [
+        "SCHEME",
+        "CLOSE_GAMES"
+      ]
+    },
+    {
+      "text": "If the quarterback does not believe in a call, it does not belong on the sheet.",
+      "when": [
+        "QB",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Online criticism is noise; results end the argument.",
+      "when": [
+        "STRUGGLING",
+        "BAD_GAME"
+      ]
+    },
+    {
+      "text": "Change is how a coach grows; last year's offense should not be this year's.",
+      "when": [
+        "OFFSEASON",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "The best trick plays are drawn up by assistants who live in the building.",
+      "when": [
+        "SCHEME",
+        "HISTORY"
+      ]
+    },
+    {
+      "text": "Winning is the only thing that matters; everything else, including who calls plays, serves that.",
+      "when": [
+        "COACHING",
+        "CONTENDER"
+      ]
+    }
+  ],
+  "signatures": [
+    "mentions the hours and the reading he puts into the job when asked about pressure",
+    "credits the quarterback's input on the call sheet when a game plan works"
+  ],
+  "want": "to prove he is a play-caller in his own right and not only Pederson's long-time protege",
+  "fear": "that he is remembered as the coordinator whose struggles got his mentor fired",
+  "voice": "Intense and earnest, with a younger coach's conviction; he speaks about aggression, growth and winning, brushes off criticism without heat, and spreads credit across the staff and the quarterback.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "JAX",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E2",
+        "E3"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Trevor Lawrence",
+        "team_2026": "JAX"
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "mixed",
+      "evidence": [
+        "E1",
+        "E4"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.golongtd.com/p/lets-be-bold-inside-press-taylors",
+      "publisher": "Go Long (Tyler Dunne)",
+      "published": "2024-08-16",
+      "accessed": "2026-11-05",
+      "summary": "Office visit with Taylor: football and leadership books, roughly 100-hour weeks in season, helped draw up the Philly Special as Eagles assistant quarterbacks coach, wants a team that plays to win rather than avoids mistakes, shrugs off online criticism; describes a collaborative call sheet where Pederson and assistants weigh in and Lawrence ranks plays he believes in. Independent newsletter; his self-description.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.foxsports.com/stories/nfl/is-jaguars-coach-doug-pederson-making-a-mistake-backing-oc-press-taylor",
+      "publisher": "Fox Sports, Ben Arthur",
+      "published": "2024-01-10",
+      "accessed": "2026-11-05",
+      "summary": "Pederson keeps Taylor as play-caller after the offense regressed in 2023, saying it can be better and blaming mainly execution, including Lawrence's 21 turnovers; Taylor has been on every Pederson staff since 2016, and Pederson reportedly wanted to promote him to coordinator in Philadelphia. Opinion framing; the writer thinks it is risky.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://ca.sports.yahoo.com/news/doug-pederson-defends-jaguars-oc-press-taylor-after-loss-to-texans-drops-them-to-0-4-as-coaches-we-cant-make-the-plays-013030702.html",
+      "publisher": "Yahoo Sports, Jason Owens",
+      "published": "2024-09-30",
+      "accessed": "2026-11-05",
+      "summary": "After a 24-20 loss at Houston dropped the team to 0-4, Pederson refuses to take play-calling back from Taylor, says Taylor called a strong game and that coaches cannot make the plays, then redirects criticism to himself. Firm and protective of his staff.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://news4jax.com/sports/2024/05/29/jaguars-look-for-offensive-stability-no-decision-on-play-calling-duties",
+      "publisher": "WJXT News4JAX, Kailey Schuchts",
+      "published": "2024-05-29",
+      "accessed": "2026-11-05",
+      "summary": "After a late 2023 fade, first-time play-caller Taylor took much of the blame; he says winning comes first and frames possible changes around helping the team improve, pointing to Lawrence and offseason physical growth; Pederson says the roster needed fixing; no decision yet on who calls plays.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.news4jax.com/sports/2025/01/06/jaguars-fire-coach-doug-pederson-keep-gm-trent-baalke-after-best-team-assembled-wins-just-4-games/",
+      "publisher": "Associated Press via News4JAX, Mark Long",
+      "published": "2025-01-06",
+      "accessed": "2026-11-05",
+      "summary": "Jacksonville fires Pederson after 4-13, its 18th loss in 23 games; owner Shad Khan cites predictability on both sides of the ball and a 3-10 record in one-score games; Pederson made the playoffs in year one but did not develop Lawrence or build an identity, and kept Taylor calling plays against Khan's wishes; Christian Kirk says Pederson made him a better player and man.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

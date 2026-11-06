@@ -1,0 +1,152 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:HOU:DC",
+  "name": "Matt Burke",
+  "role": "DC",
+  "team": "HOU",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "HOU",
+    "role": "DC",
+    "name": "Matt Burke"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 5,
+    "drive": 5
+  },
+  "slider_evidence": {},
+  "traits": [
+    "LOYAL",
+    "SCHEME_NERD",
+    "MEASURED"
+  ],
+  "trait_evidence": {
+    "LOYAL": [
+      "E2"
+    ],
+    "SCHEME_NERD": [
+      "E3",
+      "E4"
+    ],
+    "MEASURED": [
+      "E2",
+      "E1"
+    ]
+  },
+  "views": [
+    {
+      "text": "A coordinator's job under a defensive head coach is to serve his plan and take things off his plate.",
+      "when": [
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Game plans are built together; the voice on the headset matters less than the work behind it.",
+      "when": [
+        "SCHEME",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Fundamentals and energy produce shutouts more often than exotic calls do.",
+      "when": [
+        "PERFORMANCE",
+        "GAME_REVIEW"
+      ]
+    },
+    {
+      "text": "A defense that was last against the run fixes it with effort at the point of attack before anything fancy.",
+      "when": [
+        "STRUGGLING",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Past stops that went badly are lessons, not labels.",
+      "when": [
+        "HISTORY",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "When the play-calling changes hands, the players should notice nothing but better execution.",
+      "when": [
+        "COACHING",
+        "PERFORMANCE"
+      ]
+    }
+  ],
+  "signatures": [
+    "credits the head coach and the staff collectively when asked about a good defensive day",
+    "keeps his public answers short and process-focused"
+  ],
+  "want": "to show that a coordinator whose first defense struggled can run a top unit when given trust",
+  "fear": "that he remains seen as a placeholder beside a head coach who can always take the call sheet back",
+  "voice": "Low-key, humble and team-first; he speaks briefly about process, credits the head coach and players, and avoids self-promotion.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "HOU",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E2",
+        "E4"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.espn.com/nfl/story/_/id/35630917",
+      "publisher": "ESPN, DJ Bien-Aime",
+      "published": "2023-02-10",
+      "accessed": "2026-11-05",
+      "summary": "Houston agrees to hire Burke, Arizona's defensive line coach in 2022 and Miami's coordinator in 2017-18 under Adam Gase, when his units never ranked better than 27th in scoring; unclear whether he or Ryans will call plays. Hiring report.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://sports.yahoo.com/texans-dc-matt-burke-appreciative-224342852.html",
+      "publisher": "Texans Wire via Yahoo Sports, Mark Lane",
+      "published": "2023-03-09",
+      "accessed": "2026-11-05",
+      "summary": "Burke says he is grateful for Ryans's trust, calls his approach impeccable, describes his role as serving the head coach and lightening his load, and frames the partnership as mutual learning. Humble, team-first comments; fan-network write-up.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.click2houston.com/sports/2023/08/22/texans-defensive-coordinator-matt-burke-calling-plays-during-preseason-been-running-fairly-smoothly",
+      "publisher": "KPRC 2 Click2Houston, Aaron Wilson",
+      "published": "2023-08-21",
+      "accessed": "2026-11-05",
+      "summary": "Burke calls defensive plays in both preseason games and in practice; Ryans says it has run fairly smoothly, shares game-plan work with Burke, and uses the setup to manage the game. No quotes from Burke.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.click2houston.com/sports/2025/09/30/how-texans-defense-pitched-a-shutout-with-matt-burke-calling-the-plays-did-a-really-nice-job",
+      "publisher": "KPRC 2 Click2Houston, Aaron Wilson",
+      "published": "2025-09-30",
+      "accessed": "2026-11-05",
+      "summary": "In Burke's first regular-season game calling the defense, Houston shuts out Tennessee 26-0, its first shutout under Ryans; Ryans says the staff built the plan together and Burke did a really nice job, and Will Anderson Jr. credits fundamentals and energy.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "Thin coverage: Ryans called the defense through 2024; four sources, sliders neutral."
+  }
+}
