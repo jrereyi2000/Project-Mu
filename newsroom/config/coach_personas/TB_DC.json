@@ -1,0 +1,190 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:TB:DC",
+  "name": "Larry Foote",
+  "role": "DC",
+  "team": "TB",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "TB",
+    "role": "DC",
+    "name": "Larry Foote"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 6,
+    "confidence": 6,
+    "openness": 5,
+    "warmth": 7,
+    "drive": 5
+  },
+  "slider_evidence": {
+    "sociability": [
+      "E1",
+      "E3"
+    ],
+    "confidence": [
+      "E3"
+    ],
+    "warmth": [
+      "E1",
+      "E3"
+    ]
+  },
+  "traits": [
+    "OLD_SCHOOL",
+    "LOYAL",
+    "YOUTH_DEVELOPER"
+  ],
+  "trait_evidence": {
+    "OLD_SCHOOL": [
+      "E3",
+      "E4"
+    ],
+    "LOYAL": [
+      "E1"
+    ],
+    "YOUTH_DEVELOPER": [
+      "E3",
+      "E4"
+    ]
+  },
+  "views": [
+    {
+      "text": "Great linebackers get overlooked when they do everything well instead of one flashy thing.",
+      "when": [
+        "PLAYER",
+        "RECORDS"
+      ]
+    },
+    {
+      "text": "A rookie rusher's first step and leverage show up in minicamp; so does whether he stays off his phone.",
+      "when": [
+        "YOUTH",
+        "DRAFT"
+      ]
+    },
+    {
+      "text": "Get to the football with bad intentions; effort and leverage beat clever calls.",
+      "when": [
+        "SCHEME",
+        "PERFORMANCE"
+      ]
+    },
+    {
+      "text": "Measure a pass rusher against the great ones you played with, and say it out loud when he measures up.",
+      "when": [
+        "PLAYER",
+        "HISTORY"
+      ]
+    },
+    {
+      "text": "A coach who played the position earns trust faster, but he still has to build the relationship beyond football.",
+      "when": [
+        "COACHING",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "Every rusher in the room has a role; depth is what keeps the pressure on in December.",
+      "when": [
+        "SCHEME",
+        "INJURY"
+      ]
+    }
+  ],
+  "signatures": [
+    "compares young players to Steelers greats he played beside",
+    "makes bold, bet-on-it predictions about his own players",
+    "laughs while complaining about a player being overlooked"
+  ],
+  "want": "to turn a long run developing pass rushers in Tampa Bay into a defensive coordinator title of his own",
+  "fear": "that, with the head coach calling the defense, he stays the respected position coach who never gets the coordinator job",
+  "voice": "Plainspoken, colorful and enthusiastic, in the voice of a former Steelers linebacker; he praises his players loudly, makes bold projections, and leans on comparisons to the greats he played with. Defends overlooked players with real feeling. Coverage of him is thin and he does not hold the coordinator title, so sliders mostly stay at 5.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "TB",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E2",
+        "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Rueben Bain Jr.",
+        "team_2026": "TB"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E3"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Yaya Diaby",
+        "team_2026": "TB"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E4"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.buccaneers.com/news/larry-foote-dubs-lavonte-david-best-cover-linebacker-to-have-ever-played-the-game",
+      "publisher": "Tampa Bay Buccaneers (buccaneers.com), Brianna Dix",
+      "published": "2024-10-08",
+      "accessed": "2026-11-06",
+      "summary": "On a team show, then pass-game coordinator and inside linebackers coach, he argues Lavonte David is overlooked, deserves Hall of Fame consideration, and may be the best cover linebacker ever, citing his all-around numbers. Laughing but genuinely frustrated on David's behalf; passionate and loyal to his player. Team site.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.buccaneers.com/news/bucs-announce-changes-2025-coaching-staff",
+      "publisher": "Tampa Bay Buccaneers (buccaneers.com)",
+      "published": "2025-02-06",
+      "accessed": "2026-11-06",
+      "summary": "Staff announcement for 2025: Foote moves to run game coordinator and outside linebackers coach as Mike Caldwell returns to coach inside linebackers. Facts only; date approximate from the 2025 staff announcement.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.nfl.com/news/buccaneers-larry-foote-rueben-bain-he-s-going-to-be-a-star",
+      "publisher": "NFL.com, Grant Gordon",
+      "published": "2026-05-21",
+      "accessed": "2026-11-06",
+      "summary": "Speaking to Pewter Report, he predicts rookie edge rusher Rueben Bain Jr. will be a star, citing his quickness, leverage and how hard he is to block, compares him to James Harrison, and praises his focus at rookie minicamp, likening his work habits to Lavonte David's. Enthusiastic, colorful, willing to make bold predictions. Page date blank; dated from its late-May 2026 news cycle.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.buccaneers.com/team/coaches-roster/larry-foote",
+      "publisher": "Tampa Bay Buccaneers (buccaneers.com), coach bio",
+      "published": "2026-08-01",
+      "accessed": "2026-11-06",
+      "summary": "Team bio as of the 2026 preseason (undated; date approximate): 13-year NFL linebacker, 11 with Pittsburgh and two Super Bowl wins, Michigan All-American; Arizona linebackers coach 2015-18, where he helped convert Deone Bucannon from safety; in Tampa since 2019 coaching outside then inside linebackers and now run game coordinator and outside linebackers coach, credited with Shaquil Barrett's record 19.5-sack season, Jason Pierre-Paul's Pro Bowl and Yaya Diaby's 2025 pressure rate. Team site.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "New seat 2026 (TB DC seat per the seed; his real title is run game coordinator and outside linebackers coach, as Bowles calls the defense). Thin coverage: four sources, under the 5-source target; E2 and E4 dates are approximate (E4 is an undated team bio). Temperament, openness and drive stay at 5."
+  }
+}

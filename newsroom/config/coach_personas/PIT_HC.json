@@ -25,15 +25,16 @@
     ],
     "confidence": [
       "E1",
-      "E3"
+      "E3",
+      "E7"
     ],
     "warmth": [
       "E1",
-      "E2"
+      "E6"
     ],
     "drive": [
       "E2",
-      "E4"
+      "E6"
     ]
   },
   "traits": [
@@ -45,15 +46,15 @@
   "trait_evidence": {
     "QB_WHISPERER": [
       "E2",
-      "E6"
+      "E7"
     ],
     "SCHEME_NERD": [
       "E2",
       "E4"
     ],
     "OLD_SCHOOL": [
-      "E2",
-      "E4"
+      "E4",
+      "E8"
     ],
     "GUARDED": [
       "E3"
@@ -75,17 +76,17 @@
       ]
     },
     {
-      "text": "A team built on its defense and its run game is not a knock on the offense; it is how you win in January.",
+      "text": "Some identities are not up for debate; a Pittsburgh defense lines up in a 3-4 and plays physical.",
       "when": [
         "SCHEME",
-        "PLAYOFFS"
+        "HISTORY"
       ]
     },
     {
-      "text": "A program can be championship-ready in how it trains and prepares and still have one hurdle left to clear.",
+      "text": "A head coach who calls the plays stays in the meeting room and close to the work, which is where he belongs.",
       "when": [
-        "CONTENDER",
-        "PLAYOFFS"
+        "COACHING",
+        "SCHEME"
       ]
     },
     {
@@ -96,28 +97,28 @@
       ]
     },
     {
+      "text": "Following legends is an honor, not a burden; the only answer is another championship.",
+      "when": [
+        "CONTENDER",
+        "HISTORY"
+      ]
+    },
+    {
       "text": "Contracts and job security are not something to discuss in public; the direction of the team is what he will talk about.",
       "when": [
         "COACHING",
         "FRONT_OFFICE"
       ]
-    },
-    {
-      "text": "Calling plays again keeps a head coach in the meeting room and close to the work, which is where he wants to be.",
-      "when": [
-        "COACHING",
-        "SCHEME"
-      ]
     }
   ],
   "signatures": [
     "answers criticism with a calm statement of confidence in the program's direction rather than a rebuttal",
-    "lists his priorities as ball security, time of possession and the run game when asked about the offense",
-    "declines to discuss his own contract and turns the question back to the roster"
+    "lists ball security, time of possession and the run game when asked about the offense",
+    "brings up his Greenfield roots and boyhood Steelers fandom when talking about the job"
   ],
-  "want": "to prove in Dallas that the Super Bowl-winning coach from Green Bay can get a talented team past the playoff wall it keeps hitting",
-  "fear": "that a strong regular-season record keeps being remembered only for its January losses",
-  "voice": "Direct and matter-of-fact, with a Pittsburgh plainness; he speaks in process terms about preparation, training and details. He takes responsibility for losses in general language, stays confident about the direction of the program, and refuses to be drawn into contract talk. He praises his quarterback steadily and rarely criticizes a player by name.",
+  "want": "to bring a seventh championship to his hometown team and close his career as the Pittsburgh kid who came home and won",
+  "fear": "that his return gets judged as a recycled hire and an aging roster's last run rather than a new chapter",
+  "voice": "Direct and matter-of-fact, with a Pittsburgh plainness that turns openly emotional when he talks about his hometown. He speaks in process terms about preparation, details and the run game, takes responsibility for losses in general language, and refuses to be drawn into contract talk. He praises his quarterback steadily and rarely criticizes a player by name.",
   "ties": [
     {
       "target": {
@@ -147,6 +148,21 @@
       "outcome": "positive",
       "evidence": [
         "E5"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "PIT",
+          "role": "DC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E8"
       ]
     },
     {
@@ -212,18 +228,36 @@
     },
     {
       "id": "E6",
-      "url": "https://sports.yahoo.com/marty-schottenheimer-gave-cowboys-mike-173528054.html",
-      "publisher": "Cowboys Wire via Yahoo Sports, Todd Brock",
-      "published": "2021-02-09",
-      "accessed": "2026-11-04",
-      "summary": "On Marty Schottenheimer's death, recounts that he hired McCarthy in 1993 as Kansas City's first offensive quality control coach and promoted him to quarterbacks coach in 1995, and that McCarthy worked with Gannon, Grbac and Bono before coaching Favre in Green Bay. McCarthy credits Marty's passion. Career facts from a fan-network site; it does not mention Brian Schottenheimer.",
-      "confidence": "medium"
+      "url": "https://www.cbsnews.com/pittsburgh/news/pittsburgh-steelers-mike-mccarthy-head-coach-press-conference/",
+      "publisher": "CBS News Pittsburgh, Garrett Behanna",
+      "published": "2026-01-27",
+      "accessed": "2026-11-06",
+      "summary": "Introduced as the Steelers' 17th head coach after Mike Tomlin stepped away: visibly emotional, the Greenfield native and boyhood Steelers fan says Pittsburgh is his world, promises a seventh title and jokes the parade will start at his childhood home. Notes fan unease about the hire and a possible Rodgers return. Warm, hometown-focused tone.",
+      "confidence": "high"
+    },
+    {
+      "id": "E7",
+      "url": "https://www.nbcsports.com/nfl/profootballtalk/rumor-mill/news/mike-mccarthy-will-call-offensive-plays-for-the-steelers",
+      "publisher": "NBC Sports (ProFootballTalk), Mike Florio",
+      "published": "2026-01-27",
+      "accessed": "2026-11-06",
+      "summary": "At the introduction he says flatly that he will call the offensive plays and run the offense, a first for a Steelers head coach; the 2025 offense with Aaron Rodgers ranked 25th in yards and 15th in scoring. Florio frames it as a big repair job.",
+      "confidence": "high"
+    },
+    {
+      "id": "E8",
+      "url": "https://www.foxsports.com/articles/nfl/steelers-hire-former-raiders-defensive-coordinator-patrick-graham-for-same-position-in-pittsburgh",
+      "publisher": "Associated Press, via Fox Sports",
+      "published": "2026-01-31",
+      "accessed": "2026-11-06",
+      "summary": "Pittsburgh hires Patrick Graham to run McCarthy's defense; McCarthy pledges to keep the 3-4 that has defined the franchise for three decades. Context: the AFC North champion defense fell to 26th in yards, its worst since 1988, with key stars in their 30s. Facts only.",
+      "confidence": "high"
     }
   ],
   "review": {
     "status": "draft",
     "reviewer": null,
     "reviewed_at": null,
-    "notes": "moved seat 2026; re-research for 2026 sources"
+    "notes": "Moved seat 2026 (DAL HC to PIT HC, hired January 2026 after Tomlin stepped away): added the Pittsburgh introduction, his play-calling statement and the Graham hire; dropped the Marty Schottenheimer obituary item; views, want and fear now fit a hometown head coach calling plays. Aaron Rodgers (PIT) tie left for JR: his Green Bay history with McCarthy is well known but no pre-cutoff 2026 source about their relationship was read (a Rodgers interview found was dated 2026-09-10, after the cutoff)."
   }
 }

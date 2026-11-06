@@ -16,15 +16,19 @@
     "confidence": 5,
     "openness": 7,
     "warmth": 5,
-    "drive": 5
+    "drive": 6
   },
   "slider_evidence": {
     "temperament": [
-      "E3"
+      "E2"
     ],
     "openness": [
       "E1",
-      "E3"
+      "E2"
+    ],
+    "drive": [
+      "E5",
+      "E8"
     ]
   },
   "traits": [
@@ -35,15 +39,17 @@
   "trait_evidence": {
     "SCHEME_NERD": [
       "E1",
-      "E3"
+      "E2"
     ],
     "QB_WHISPERER": [
+      "E2",
       "E3",
-      "E4"
+      "E8"
     ],
     "MEASURED": [
-      "E3",
-      "E5"
+      "E2",
+      "E4",
+      "E8"
     ]
   },
   "views": [
@@ -62,40 +68,55 @@
       ]
     },
     {
-      "text": "A quarterback should take ownership of a new system until it feels like his own.",
+      "text": "A young quarterback earns the job by getting better every week; once he has it, build the plan around what he does well.",
       "when": [
-        "QB"
+        "QB",
+        "YOUTH"
       ]
     },
     {
-      "text": "When a short-yardage call fails, the coordinator owns not putting the offense in the right spot.",
+      "text": "When a short-yardage call fails, the play-caller owns not putting the offense in the right spot.",
       "when": [
         "BAD_GAME",
         "GAME_REVIEW"
       ]
     },
     {
-      "text": "Balance between run and pass, built around the best players, matters more than a signature style.",
+      "text": "A losing first season is a foundation if the young players got better; the record still was not good enough.",
       "when": [
-        "SCHEME",
-        "CONTENDER"
+        "STRUGGLING",
+        "LOSING_STREAK"
       ]
     },
     {
-      "text": "Play-calling is a staff effort, with every assistant feeding in from his own area.",
+      "text": "Hire people you already trust, let them be their best, and make play-calling a staff effort.",
       "when": [
         "COACHING"
+      ]
+    },
+    {
+      "text": "The offseason is for patience and evaluation, not for promises.",
+      "when": [
+        "OFFSEASON",
+        "PREVIEW"
+      ]
+    },
+    {
+      "text": "Smart, fast and physical beats any signature style.",
+      "when": [
+        "SCHEME",
+        "CONTENDER"
       ]
     }
   ],
   "signatures": [
     "keeps the same even expression on the sideline whether the offense is rolling or stalling",
     "credits players for ideas that turned into big plays",
-    "describes the offense as an evolving collaboration rather than his own system"
+    "answers questions about the future with a short, calm line about patience"
   ],
-  "want": "to prove the former record-setting college quarterback is a complete play-caller who can lead a team of his own",
-  "fear": "that he is remembered as the coordinator Dallas let go rather than for what his offenses did afterward",
-  "voice": "Calm, quiet and precise; he answers in short, practical sentences without boasts. He talks about systems, terminology and staff collaboration, shares blame readily, and praises players for their input. He rarely shows emotion in public.",
+  "want": "to build New Orleans into a contender around a young quarterback he developed, proving the former record-setting college passer can run a whole program",
+  "fear": "that a slow rebuild and a youthful staff get read as a coach in over his head rather than one building patiently",
+  "voice": "Calm, quiet and precise; he answers in short, practical sentences without boasts. He talks about systems, development and staff collaboration, shares blame readily, and praises players for their growth and input. He rarely shows emotion in public and counsels patience when asked about the future.",
   "ties": [
     {
       "target": {
@@ -109,7 +130,7 @@
       "relationship_kind": "collaboration",
       "outcome": "positive",
       "evidence": [
-        "E5"
+        "E4"
       ]
     },
     {
@@ -124,7 +145,39 @@
       "relationship_kind": "collaboration",
       "outcome": "mixed",
       "evidence": [
-        "E4"
+        "E3"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "NO",
+          "role": "OC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E2",
+        "E6"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "NO",
+          "role": "DC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E6",
+        "E7"
       ]
     },
     {
@@ -136,7 +189,7 @@
       "relationship_kind": "mentorship",
       "outcome": "positive",
       "evidence": [
-        "E4"
+        "E3"
       ]
     },
     {
@@ -148,7 +201,19 @@
       "relationship_kind": "collaboration",
       "outcome": "positive",
       "evidence": [
-        "E3"
+        "E2"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Tyler Shough",
+        "team_2026": "NO"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E8"
       ]
     }
   ],
@@ -164,15 +229,6 @@
     },
     {
       "id": "E2",
-      "url": "https://www.foxsports.com/stories/nfl/jalen-hurts-kellen-moores-eagles-offense-95-percent-new",
-      "publisher": "FOX Sports",
-      "published": "2024-06-06",
-      "accessed": "2026-11-04",
-      "summary": "Hurts says roughly 95 percent of the offense is new and that his aim is to master it and make it his own. Notes Moore has adapted to offensive-minded head coaches before. No Moore quotes; little on their working relationship.",
-      "confidence": "medium"
-    },
-    {
-      "id": "E3",
       "url": "https://neworleans.football/article/what-eagles-say-about-kellen-moore",
       "publisher": "NewOrleans.Football, Mike Triplett",
       "published": "2025-02-03",
@@ -181,7 +237,7 @@
       "confidence": "high"
     },
     {
-      "id": "E4",
+      "id": "E3",
       "url": "https://www.dallascowboys.com/news/cowboys-mutually-part-ways-with-kellen-moore",
       "publisher": "Dallas Cowboys (dallascowboys.com)",
       "published": "2023-01-29",
@@ -190,12 +246,48 @@
       "confidence": "medium"
     },
     {
-      "id": "E5",
+      "id": "E4",
       "url": "https://www.inquirer.com/eagles/eagles-saints-nick-sirianni-kellen-moore-play-calling-vic-fangio-20240924.html",
       "publisher": "Philadelphia Inquirer, Olivia Reiner",
       "published": "2024-09-24",
       "accessed": "2026-11-04",
       "summary": "After a failed fourth-and-1, Moore takes blame alongside Sirianni, saying it was on him to put the offense in the right spot. He describes a collaborative staff with Sirianni heavily involved and calls the process excellent and similar to his earlier stops.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.neworleanssaints.com/news/kellen-moore-prepared-to-call-shots-for-new-orleans-saints-as-19th-coach-in-franchise-history",
+      "publisher": "New Orleans Saints (neworleanssaints.com)",
+      "published": "2025-02-13",
+      "accessed": "2026-11-06",
+      "summary": "Introduced as the Saints' 19th head coach at 36, the league's youngest, after the Eagles' Super Bowl win; he will call the offensive plays himself, wants a smart, fast, physical team fans can rally behind and an environment where every player, coach and staffer can be his best, says everyone will be evaluated, sets no deadline for hiring coordinators and believes the team can compete right away. Team site.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E6",
+      "url": "https://africa.espn.com/nfl/story/_/id/43953844/sources-saints-hiring-ex-chargers-coach-brandon-staley-dc",
+      "publisher": "ESPN, Katherine Terrell",
+      "published": "2025-02-21",
+      "accessed": "2026-11-06",
+      "summary": "His staff takes shape: Brandon Staley, who hired Moore as Chargers coordinator in 2023, becomes defensive coordinator, and Eagles quarterbacks coach Doug Nussmeier, from his Dallas, Chargers and Philadelphia staffs, is expected as offensive coordinator. Shows he hired people he already knew. Facts only.",
+      "confidence": "high"
+    },
+    {
+      "id": "E7",
+      "url": "https://www.neworleanssaints.com/news/brandon-staley-new-orleans-saints-defensive-coordinator-coaching-staff-2025-personnel-scheme",
+      "publisher": "New Orleans Saints (neworleanssaints.com), John DeShazier",
+      "published": "2025-03-10",
+      "accessed": "2026-11-06",
+      "summary": "Staley says he believes in Moore as much as anyone he has worked with, praising his flexibility and teaching and calling him a winner; Moore hired Staley partly for his versatility. Staley's view of Moore. Team site.",
+      "confidence": "high"
+    },
+    {
+      "id": "E8",
+      "url": "https://www.audacy.com/wwl/local-sports/saints/top-13-quotes-from-loomis-kellen-moore-to-end-saints-season",
+      "publisher": "WWL (Audacy), Jeff Nowak",
+      "published": "2026-01-08",
+      "accessed": "2026-11-06",
+      "summary": "End of a 6-11 first season: upbeat and appreciative but measured, he says the team feels great about rookie Tyler Shough as the starter after he improved a great deal, explains that Spencer Rattler earned the early starts, admits the team did not win enough and must improve in all three phases, and counsels patience in the offseason. Loomis praises the staff for the late defensive improvement.",
       "confidence": "high"
     }
   ],
@@ -203,6 +295,6 @@
     "status": "draft",
     "reviewer": null,
     "reviewed_at": null,
-    "notes": "moved seat 2026; re-research for 2026 sources"
+    "notes": "Moved seat 2026 (PHI OC to NO HC, hired February 2025; 6-11 in 2025): added the Saints introduction, the Staley and Nussmeier hires, Staley's view of him and the end-of-season press conference; dropped the Hurts 95-percent-new item; drive moved to 6; views, want and fear now fit a second-year head coach; added ties to Nussmeier, Staley and Tyler Shough."
   }
 }

@@ -1,0 +1,228 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:PHI:OC",
+  "name": "Sean Mannion",
+  "role": "OC",
+  "team": "PHI",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "PHI",
+    "role": "OC",
+    "name": "Sean Mannion"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 6,
+    "openness": 6,
+    "warmth": 6,
+    "drive": 8
+  },
+  "slider_evidence": {
+    "confidence": [
+      "E4"
+    ],
+    "openness": [
+      "E1",
+      "E5"
+    ],
+    "warmth": [
+      "E4"
+    ],
+    "drive": [
+      "E4",
+      "E5"
+    ]
+  },
+  "traits": [
+    "QB_WHISPERER",
+    "FILM_ROOM_RAT",
+    "SCHEME_NERD",
+    "PLAYERS_COACH"
+  ],
+  "trait_evidence": {
+    "QB_WHISPERER": [
+      "E1",
+      "E4"
+    ],
+    "FILM_ROOM_RAT": [
+      "E5"
+    ],
+    "SCHEME_NERD": [
+      "E1",
+      "E5"
+    ],
+    "PLAYERS_COACH": [
+      "E4"
+    ]
+  },
+  "views": [
+    {
+      "text": "Motion and under-center play-action make the run and the pass look the same; that is where a defense breaks.",
+      "when": [
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Build the personal connection with a quarterback first; the football relationship grows out of it.",
+      "when": [
+        "QB",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "A great quarterback keeps asking for more; feed that hunger with details on timing and the system.",
+      "when": [
+        "QB",
+        "PERFORMANCE"
+      ]
+    },
+    {
+      "text": "Nine years watching from the backup's chair is its own coaching education.",
+      "when": [
+        "COACHING",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "A first-time play-caller has to have the call sheet ready before the situation arrives, not after.",
+      "when": [
+        "COACHING",
+        "PREVIEW"
+      ]
+    },
+    {
+      "text": "Bring your system, but keep what already works for the players in the room.",
+      "when": [
+        "SCHEME",
+        "OFFSEASON"
+      ]
+    },
+    {
+      "text": "An offense that stalls needs better fundamentals and timing before it needs new plays.",
+      "when": [
+        "STRUGGLING",
+        "BAD_GAME"
+      ]
+    }
+  ],
+  "signatures": [
+    "praises the quarterback's questions in meetings as much as his throws",
+    "mentions the McVay and Shanahan offenses as the roots of his system",
+    "talks about having planned to coach since childhood"
+  ],
+  "want": "to prove a career backup with two years of coaching can call a Super Bowl offense around Jalen Hurts",
+  "fear": "that he becomes the next one-and-done coordinator in Philadelphia's revolving door",
+  "voice": "Confident, composed and analytical, in the even tone of a long-time backup quarterback who studied every room he was in. He talks about connection with players, timing and fundamentals, praises his quarterback's work habits, and credits the coaching trees he came from. He has never called plays, so the record behind his voice is short.",
+  "ties": [
+    {
+      "target": {
+        "kind": "player",
+        "name": "Jalen Hurts",
+        "team_2026": "PHI"
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "PHI",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E5"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "GB",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E3"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Jordan Love",
+        "team_2026": "GB"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E1"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.philadelphiaeagles.com/news/eagles-sean-mannion-offensive-coordinator-hire",
+      "publisher": "Philadelphia Eagles (philadelphiaeagles.com), Dave Spadaro",
+      "published": "2026-01-29",
+      "accessed": "2026-11-06",
+      "summary": "Hire announcement: a record-setting Oregon State passer who spent nine NFL seasons as a backup with the Rams, Vikings and Seahawks, around Goff, Cousins, Wilson, Geno Smith and Foles, then went straight into coaching in Green Bay in 2024 and became quarterbacks coach in 2025, working with Jordan Love and Malik Willis in a Shanahan-style system. Sirianni calls him bright and praises his systematic, strategic view of offense. Team site.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.foxsports.com/articles/nfl/eagles-hire-packers-qbs-coach-sean-mannion-as-their-5th-offensive-coordinator-in-5-seasons",
+      "publisher": "Associated Press, via Fox Sports",
+      "published": "2026-01-29",
+      "accessed": "2026-11-06",
+      "summary": "AP: at 33 he becomes Philadelphia's fifth offensive coordinator in five seasons, replacing Kevin Patullo after an offense that finished 24th in yards and 19th in scoring. Sirianni describes a patient, open-minded search of veterans and rising coaches. Facts and Sirianni's words.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.inquirer.com/eagles/offensive-coordinator-sean-mannion-jalen-hurts-whisperer-play-calling-20260129.html",
+      "publisher": "Philadelphia Inquirer, David Murphy (column)",
+      "published": "2026-01-29",
+      "accessed": "2026-11-06",
+      "summary": "Column: an under-the-radar position coach who has never called plays, but who played under McVay and O'Connell and coached under Matt LaFleur, a near-ideal profile for two years of coaching; the offense's direction depends on Hurts handling pocket reads better than in 2025. Opinion; little on personality.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E4",
+      "url": "https://6abc.com/post/new-eagles-oc-mannion-starting-optimistic-note-hurts/19151064/",
+      "publisher": "ESPN, Tim McManus, via 6abc",
+      "published": "2026-05-22",
+      "accessed": "2026-11-06",
+      "summary": "First Philadelphia press conference: he praises Hurts's accuracy, athleticism, attention to detail and probing questions, says Hurts keeps asking for more work, and expects a McVay/Shanahan-style system with more motion and under-center play to fit him. Confident; says he has long known he would coach and planned for it, a coach's son drawing plays at six, and that personal connection with players comes before the football relationship.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.si.com/nfl/eagles/onsi/betting-big-on-upside-how-the-eagles-plan-to-give-sean-mannion-time-to-grow-01kyjg731hxz",
+      "publisher": "Sports Illustrated (Eagles Today), John McMullen",
+      "published": "2026-07-27",
+      "accessed": "2026-11-06",
+      "summary": "Camp preview: Sirianni says Mannion beats him to the building, once drove through a spring snowstorm in Green Bay to not miss a day, and is obsessed with his craft; Sirianni springs surprise situational quizzes on him in practice to build his call sheet and wants to keep some older concepts. Jordan Mailata calls him an evil genius. Expected scheme: more under-center, wide zone and play-action.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "New seat 2026 (PHI OC, hired January 2026, first-time play-caller). Five sources, 2026-01-29 to 2026-07-27; temperament and sociability stay at 5. Traits rest mostly on Sirianni's and players' descriptions plus his first press conference."
+  }
+}

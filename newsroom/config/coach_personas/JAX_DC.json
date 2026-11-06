@@ -1,0 +1,197 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:JAX:DC",
+  "name": "Anthony Campanile",
+  "role": "DC",
+  "team": "JAX",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "JAX",
+    "role": "DC",
+    "name": "Anthony Campanile"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 6,
+    "warmth": 6,
+    "drive": 7
+  },
+  "slider_evidence": {
+    "openness": [
+      "E1",
+      "E3"
+    ],
+    "warmth": [
+      "E1"
+    ],
+    "drive": [
+      "E1",
+      "E3"
+    ]
+  },
+  "traits": [
+    "SCHEME_NERD",
+    "DISCIPLINARIAN",
+    "FAMILY_MAN"
+  ],
+  "trait_evidence": {
+    "SCHEME_NERD": [
+      "E2",
+      "E3"
+    ],
+    "DISCIPLINARIAN": [
+      "E1"
+    ],
+    "FAMILY_MAN": [
+      "E1",
+      "E3"
+    ]
+  },
+  "views": [
+    {
+      "text": "Playstyle beats scheme: the question is who plays violently at the point of attack.",
+      "when": [
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Fronts labeled 4-3 or 3-4 are an old argument; be multiple and let the opponent guess.",
+      "when": [
+        "SCHEME",
+        "GAME_REVIEW"
+      ]
+    },
+    {
+      "text": "Mix the coverages and disguises week to week so a quarterback never sees the same picture twice.",
+      "when": [
+        "SCHEME",
+        "PERFORMANCE"
+      ]
+    },
+    {
+      "text": "Build a room of fierce competitors who are also caring people, held together by honesty and accountability.",
+      "when": [
+        "COACHING",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "Last year's success guarantees nothing; know why it worked and keep doing that.",
+      "when": [
+        "WIN_STREAK",
+        "OFFSEASON"
+      ]
+    },
+    {
+      "text": "Habits come from repetition; continuity lets a defense start fast instead of starting over.",
+      "when": [
+        "OFFSEASON",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "A defense that runs and hits and refuses to stay blocked travels through any rough stretch.",
+      "when": [
+        "INJURY",
+        "STRUGGLING"
+      ]
+    }
+  ],
+  "signatures": [
+    "asks who is playing violently at the point of attack when grading a game",
+    "talks about relationships and caring for people in the same breath as toughness",
+    "answers with a wry one-liner before getting technical"
+  ],
+  "want": "to turn Jacksonville's defensive turnaround into a head-coaching job, carrying on a family coaching tradition",
+  "fear": "that his first-year jump in takeaways is treated as a fluke and a regression in 2026 costs him his shot",
+  "voice": "Intense, passionate and direct, with a New Jersey coaching family's bluntness softened by talk of caring for people. He speaks in vivid terms about violence at the point of attack, honesty and accountability, and is wary of reading too much into a good season. A first-time NFL coordinator, so his public record is short.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "JAX",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "MIA",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E3"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.jaguars.com/news/k000147-toughness-honesty-and-accountability-first-year-defensive-coordinator-anthony-campanile-knows-he-is-ready-for-the-challenge",
+      "publisher": "Jacksonville Jaguars (jaguars.com), John Oehser",
+      "published": "2025-02-05",
+      "accessed": "2026-11-06",
+      "summary": "First press conference as a first-time NFL coordinator: he values playstyle over scheme, asks who plays violently at the point of attack, calls the defense multiple and the 4-3 versus 3-4 label dated, wants a run-and-hit unit that refuses to stay blocked, and wants a culture of honesty, accountability, fierce competitors and compassionate people. Built Green Bay's 2024 system with Jeff Hafley; called plays at Boston College in 2018. Passionate and direct. Team site.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.actionnewsjax.com/news/local/week-one-provides-insight-into-anthony-campaniles-defense/RHKQYAVW6JDL7ARHVA32AHV7GQ/",
+      "publisher": "Action News Jax, Daniel Griffis",
+      "published": "2025-09-11",
+      "accessed": "2026-11-06",
+      "summary": "Week 1 film and data analysis: a Fangio-influenced approach with dime personnel at the second-highest rate in the league, far more zone than the 2024 man-heavy scheme, more blitzes and stunts, and pressure on 40% of dropbacks. A contributor's analysis of one game; no quotes.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.baltimoreravens.com/news/anthony-campanile-five-things-to-know-ravens-head-coach-interview",
+      "publisher": "Baltimore Ravens (baltimoreravens.com), Ryan Mink",
+      "published": "2026-01-20",
+      "accessed": "2026-11-06",
+      "summary": "Ahead of a head-coaching interview: Jacksonville went from 27th to eighth in points allowed with the top run defense; his scheme mixed zone and man week to week with varied blitzes and disguises. From an Italian family in northern New Jersey, son of a high school coach with two coaching brothers, a former Rutgers player; Miami linebackers coach 2020-23; Hafley calls him a star; once coached tight ends and receivers at Rutgers. Another team's site.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://gmg-wjxt-prod.cdn.arcpublishing.com/sports/2026/01/27/grant-udinski-anthony-campanile-both-returning-to-jaguars-after-head-coach-interest",
+      "publisher": "News4JAX, Justin Barney",
+      "published": "2026-01-27",
+      "accessed": "2026-11-06",
+      "summary": "After interviews with Baltimore, Miami and Arizona, he returns to Jacksonville for 2026. The 2025 defense led the NFL in takeaways (31) and run defense. No quotes.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.jaguars.com/news/anthony-campanile-talks-building-a-tough-defense-in-2026-on-the-o-zone-podcast",
+      "publisher": "Jacksonville Jaguars (jaguars.com), John Oehser",
+      "published": "2026-05-05",
+      "accessed": "2026-11-06",
+      "summary": "Second offseason: he says continuity lets the unit start faster and habits come from repetition, warns against assuming past success repeats, and wants the staff to study why things worked. Jokes that muscles are dumb and need the reps. Mentions meeting many good people in his head-coaching interviews. Reflective, good-humored. Team site.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "New seat 2026 (JAX DC since 2025, retained January 2026 after head-coaching interviews). Five sources, 2025-02-05 to 2026-05-05; temperament, sociability and confidence stay at 5. DISCIPLINARIAN rests on one source (his stated honesty-and-accountability culture). Mentor tie to Jeff Hafley (MIA HC in the seed) rests on their shared 2024 Green Bay system and Hafley's praise."
+  }
+}

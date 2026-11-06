@@ -15,8 +15,8 @@
     "sociability": 5,
     "confidence": 5,
     "openness": 6,
-    "warmth": 5,
-    "drive": 6
+    "warmth": 6,
+    "drive": 7
   },
   "slider_evidence": {
     "temperament": [
@@ -24,10 +24,15 @@
     ],
     "openness": [
       "E2",
-      "E3"
+      "E3",
+      "E7"
+    ],
+    "warmth": [
+      "E6"
     ],
     "drive": [
-      "E4"
+      "E4",
+      "E6"
     ]
   },
   "traits": [
@@ -37,7 +42,8 @@
   ],
   "trait_evidence": {
     "SCHEME_NERD": [
-      "E4"
+      "E4",
+      "E7"
     ],
     "YOUTH_DEVELOPER": [
       "E2",
@@ -55,6 +61,13 @@
       ]
     },
     {
+      "text": "Every scheme borrows from somewhere, but this one has to become its own thing, fitted to the players actually in the building.",
+      "when": [
+        "SCHEME",
+        "ROSTER_MOVES"
+      ]
+    },
+    {
       "text": "A young roster needs coaches to teach habits off the field too: sleep, food, routine.",
       "when": [
         "YOUTH",
@@ -69,6 +82,13 @@
       ]
     },
     {
+      "text": "Contract business is business; what matters is that the quarterback knows the standard and keeps talking.",
+      "when": [
+        "QB",
+        "ROSTER_MOVES"
+      ]
+    },
+    {
       "text": "A season that unravels late is still a lesson worth keeping.",
       "when": [
         "STRUGGLING",
@@ -76,27 +96,29 @@
       ]
     },
     {
-      "text": "Not calling plays is fine; building the foundation of the offense is the job.",
+      "text": "A rebuilding team starts with togetherness: players who feel like family will fight for each other.",
       "when": [
         "COACHING",
-        "SCHEME"
+        "PLAYER"
       ]
     },
     {
-      "text": "Every scheme borrows from somewhere, but it has to be tailored to the players you actually have.",
+      "text": "Calling plays as a head coach means trusting your coordinators to carry the building around you.",
       "when": [
-        "SCHEME",
-        "ROSTER_MOVES"
+        "COACHING",
+        "SCHEME"
       ]
     }
   ],
   "signatures": [
     "traces his ideas back to the film rooms where he learned from his brother, Shanahan and McVay",
-    "speaks about the Jets years without bitterness, as a lesson he would not trade"
+    "speaks about the Jets years without bitterness, as a lesson he would not trade",
+    "returns player calls and texts immediately and mentions it as part of the job",
+    "keeps contract questions short and calm, offering no details"
   ],
-  "want": "to get back to calling plays and earn a head job on the strength of the Rams offense",
-  "fear": "that he is seen as a well-connected assistant who only thrives in other people's systems",
-  "voice": "Energetic and a little feisty, he talks quickly about aggression, motion and blending the run and pass. He is open about what the Jets taught him and humble about not calling plays. He credits his mentors freely.",
+  "want": "to turn around a rebuilding Arizona team with an offense that is recognizably his own rather than a copy of his mentors'",
+  "fear": "that he is seen as a well-connected assistant from a famous coaching family who only thrives in other people's systems",
+  "voice": "Energetic, passionate and a little feisty, he talks quickly about aggression, motion and blending the run and pass, and leans on words like family and togetherness with players. He is open about what the Jets taught him and credits his mentors freely, but insists his team will build its own identity. On contracts and roster disputes he turns calm and brief.",
   "ties": [
     {
       "target": {
@@ -142,8 +164,23 @@
       "relationship_kind": "support",
       "outcome": "positive",
       "evidence": [
-        "E1",
-        "E2"
+        "E2",
+        "E6"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "AZ",
+          "role": "OC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E7"
       ]
     },
     {
@@ -205,12 +242,39 @@
       "accessed": "2026-11-05",
       "summary": "With McVay ill, LaFleur relays the play calls to Stafford for the first time since 2022 and McVay praises his decisions afterward. Fan-network writeup.",
       "confidence": "medium"
+    },
+    {
+      "id": "E6",
+      "url": "https://www.azcardinals.com/news/as-relationships-start-forming-player-support-for-mike-lafleur-becomes-evident/",
+      "publisher": "Arizona Cardinals (azcardinals.com), Zach Gershman",
+      "published": "2026-02-03",
+      "accessed": "2026-11-06",
+      "summary": "Introduction day: nearly 20 players attend and many FaceTimed him; Mack Wilson Sr. says LaFleur called him straight back after a text, which showed he cares, and Michael Wilson calls him extremely passionate. He stresses family and togetherness and promises to pour everything into the team daily. His brother Matt attends. Team site; early-days goodwill.",
+      "confidence": "high"
+    },
+    {
+      "id": "E7",
+      "url": "https://arizonasports.com/?p=3612149",
+      "publisher": "Arizona Sports (ArizonaSports.com), Tyler Drake",
+      "published": "2026-02-19",
+      "accessed": "2026-11-06",
+      "summary": "He says the offense will copy neither Green Bay, the Rams nor San Francisco but become its own thing, that Hackett was his only choice for coordinator, and that he will call plays himself, though he has not called them regularly since the Giants years. Hackett frames the plan around explosives, efficiency and evolving. Beat reporting with both men's words; expects first-year growing pains.",
+      "confidence": "high"
+    },
+    {
+      "id": "E8",
+      "url": "https://www.espn.ph/nfl/story/_/id/48714491/cards-not-falling-jacoby-brissett-absent-coach-says",
+      "publisher": "ESPN, Josh Weinfuss",
+      "published": "2026-05-09",
+      "accessed": "2026-11-06",
+      "summary": "With Jacoby Brissett skipping voluntary work for a reworked contract after Kyler Murray's March release, LaFleur says the team is not behind, that Brissett communicates and knows the expectation, and that talks continue. Calm, matter-of-fact tone, few details offered; a source says Arizona told Brissett he is the starter.",
+      "confidence": "high"
     }
   ],
   "review": {
     "status": "draft",
     "reviewer": null,
     "reviewed_at": null,
-    "notes": "moved seat 2026; re-research for 2026 sources"
+    "notes": "Moved seat 2026 (LAR OC to AZ HC, hired February 2026): added the introduction-day player reaction, the February offense/Hackett piece and the May Brissett coverage; warmth and drive raised on that evidence; views, want and fear now fit a first-time head coach rebuilding Arizona; added a tie to Hackett."
   }
 }

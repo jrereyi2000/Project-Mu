@@ -23,8 +23,8 @@
       "E1"
     ],
     "openness": [
-      "E3",
-      "E4"
+      "E4",
+      "E7"
     ],
     "warmth": [
       "E1",
@@ -50,7 +50,8 @@
       "E2"
     ],
     "LOYAL": [
-      "E2"
+      "E2",
+      "E5"
     ]
   },
   "views": [
@@ -69,7 +70,14 @@
       ]
     },
     {
-      "text": "Defensive linemen are fresher and better on fewer snaps, so rotate them.",
+      "text": "Be multiple enough to fit the players you have instead of chasing a prototype that does not exist.",
+      "when": [
+        "SCHEME",
+        "ROSTER_MOVES"
+      ]
+    },
+    {
+      "text": "Pass rushers are fresher and better on fewer snaps, so rotate them and keep the pressure coming.",
       "when": [
         "SCHEME",
         "INJURY"
@@ -95,16 +103,23 @@
         "ROSTER_MOVES",
         "DRAFT"
       ]
+    },
+    {
+      "text": "A young defense that finishes a season strong has earned the right to be built on, not torn down.",
+      "when": [
+        "YOUTH",
+        "WIN_STREAK"
+      ]
     }
   ],
   "signatures": [
     "saves his loudest energy for celebrating good plays rather than yelling at bad ones",
-    "praises specific players' competitiveness by name when asked about the unit",
-    "credits the head coach who gave him his chance when talking about his career"
+    "praises specific players' competitiveness and character by name when asked about the unit",
+    "admits a record was not good enough before turning to what the unit built"
   ],
-  "want": "to be the gritty former backup who becomes a head coach on the strength of a tough, simple defense",
-  "fear": "that a season of struggles makes people forget the defenses he built",
-  "voice": "Intense but not a yeller; he speaks with the conviction of a ten-year special-teams linebacker and players listen. He is enthusiastic, quick to praise players and humble about coaches' responsibility for mistakes. He talks in terms of toughness, simplicity and honest self-evaluation.",
+  "want": "to turn a record-setting pass rush into a defense that carries Atlanta back to the playoffs, and to earn a second, permanent shot at a head-coaching job",
+  "fear": "that a disappointing win total buries the defensive turnaround he built, as the 2024 Jets season once did",
+  "voice": "Intense but not a yeller; he speaks with the conviction of a long-time special-teams linebacker and players listen. He is enthusiastic, candid about what went wrong and quick to praise players by name, often for character as much as talent. He talks in terms of toughness, flexibility and honest self-evaluation.",
   "ties": [
     {
       "target": {
@@ -120,6 +135,22 @@
       "evidence": [
         "E2",
         "E1"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "ATL",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E6",
+        "E7"
       ]
     }
   ],
@@ -162,18 +193,36 @@
     },
     {
       "id": "E5",
-      "url": "https://www.si.com/nfl/aaron-rodgers-supportive-jets-strip-nathaniel-hackett-play-calling",
-      "publisher": "Sports Illustrated, Tim Capurso",
-      "published": "2024-10-10",
-      "accessed": "2026-11-04",
-      "summary": "As interim head coach he moves offensive play-calling from Hackett to Downing and says Rodgers backed it. Shows a decisive staff move; it postdates the seed's frame, where he is still defensive coordinator.",
+      "url": "https://www.foxsports.com/articles/nfl/improved-pass-rush-helps-falcons-defensive-coordinator-ulbrich-stay-on-new-coach-stefanskis-staff",
+      "publisher": "Associated Press, via Fox Sports",
+      "published": "2026-01-19",
+      "accessed": "2026-11-06",
+      "summary": "Atlanta keeps him as defensive coordinator under new head coach Stefanski, after owner Arthur Blank said he would recommend it. In his 2025 return to the Falcons the defense set a franchise record with 57 sacks, second in the league. Recaps his 2015-20 Atlanta stint, the Jets coordinator job from 2021 and the 2024 interim head-coach role.",
+      "confidence": "high"
+    },
+    {
+      "id": "E6",
+      "url": "https://www.si.com/nfl/falcons/onsi/news/why-kevin-stefanski-made-jeff-ulbrich-his-first-priority-in-atlanta",
+      "publisher": "Sports Illustrated (Falcon Report), Garrett Chapman",
+      "published": "2026-01-28",
+      "accessed": "2026-11-06",
+      "summary": "Stefanski calls keeping him his first priority, cites a shared, demanding view of players and tape of his work with young defenders; the Falcons blocked Dallas from interviewing him. The defense rose from near the bottom in sacks to second and finished top half in total and pass defense. Says little about his personality directly.",
       "confidence": "medium"
+    },
+    {
+      "id": "E7",
+      "url": "https://www.atlantafalcons.com/news/coordinators-tommy-rees-jeff-ulbrich-craig-aukerman",
+      "publisher": "Atlanta Falcons (atlantafalcons.com), Tori McElhaney",
+      "published": "2026-02-12",
+      "accessed": "2026-11-06",
+      "summary": "Coordinator press conferences: he reads his retention as belief in what Year 1 built despite a disappointing record, praises Stefanski's clear vision, says the 2025 defense became more multiple in fronts and coverages than he planned, and wants flexibility to fit the talent rather than chase prototypes. He wants Kaden Elliss back and praises his character and versatility. Direct, candid about shortcomings, upbeat about the future. Team site.",
+      "confidence": "high"
     }
   ],
   "review": {
     "status": "draft",
     "reviewer": null,
     "reviewed_at": null,
-    "notes": "moved seat 2026; re-research for 2026 sources"
+    "notes": "Moved seat 2026 (NYJ DC to ATL DC; he returned to Atlanta in 2025 and was retained by Stefanski in January 2026): added the AP retention story, the Stefanski first-priority piece and the February 2026 coordinator press conference; dropped the 2024 Jets play-calling source; views and want/fear now fit Atlanta; added a tie to Stefanski."
   }
 }
