@@ -1,6 +1,6 @@
 # Project Mu: Personality Evolution Plan
 
-**Status:** approved by JR (2026-11-03), Q1–Q3 settled as recommended (§8); not built. Queued: JR wants every personality sub-plan written and approved before more building (2026-11-03). The other plans' pointers were updated at approval (§7).
+**Status:** approved by JR (2026-11-03), Q1–Q3 settled as recommended (§8); building, wave 1 of 3 (2026-11-05). The other plans' pointers were updated at approval (§7).
 **Builds on:** [`PERSONALITY_PLAN.md`](../in_progress/PERSONALITY_PLAN.md) §5 ("Change over time", steps 4–5), D4, D6; [`PERSONALITY_GENERATED_EFFECTS_DESIGN.md`](../in_progress/PERSONALITY_GENERATED_EFFECTS_DESIGN.md) §4 step 6; [`personality/README.md`](../../personality/README.md) (evolution boundary); [`PERSONALITY_CORE_EXTENSIONS_PLAN.md`](../done/PERSONALITY_CORE_EXTENSIONS_PLAN.md) (`kind 'evolution'`, overrides, `history`); [`PERSONALITY_RELATIONSHIPS_PLAN.md`](../done/PERSONALITY_RELATIONSHIPS_PLAN.md) §2.5 (external candidates); [`RELATIONSHIP_EVENT_PRODUCERS_PLAN.md`](../done/RELATIONSHIP_EVENT_PRODUCERS_PLAN.md) (the event inputs); [`REAL_COACH_PROFILES_PLAN.md`](../in_progress/REAL_COACH_PROFILES_PLAN.md) (`persona_for`).
 
 **Goal:** Let big simulated events slowly change who players and coaches are, the way Sims aspirations do. A title can turn a Ring Chaser into a Legacy Builder, a firing can raise a coach's temper, a mentor's retirement can turn a veteran into a Mentor. Each change has its cause logged, so writers can tell the story. At most one change per person per season (D6), decided by fixed rules and a seeded draw, and you can undo any of them.
@@ -166,7 +166,7 @@ python -m personality.evolution_run revert --candidate ID --reason TEXT [--dsn D
 
 **Revert** is a JR override back to the before-state (core extensions `store.override`, actor JR), and marks the candidate `reverted`. It never deletes the evolution receipt.
 
-**Watcher step:** on the OFFSEASON_START ingest (tick 24), `step_personality_evolution(season)` runs after the producers step and before the league office, when the switchboard's `evolution` mode allows it ([activation plan](PERSONALITY_ACTIVATION_PLAN.md); `MU_PERSONALITY_EVOLUTION=off` stays as a kill switch). It never fails the ingest, and it notifies "Mu: N personality changes in <season>", with the report path.
+**Watcher step:** on the OFFSEASON_START ingest (tick 24), `step_personality_evolution(season)` runs after the producers step and before the league office, when the switchboard's `evolution` mode allows it ([activation plan](../not_started/PERSONALITY_ACTIVATION_PLAN.md); `MU_PERSONALITY_EVOLUTION=off` stays as a kill switch). It never fails the ingest, and it notifies "Mu: N personality changes in <season>", with the report path.
 
 ## 3. Risks and unknowns
 
@@ -281,3 +281,8 @@ JR approved all three recommendations on 2026-11-03.
 | Q1 | Are the starting chances right (for example 35% that a Ring Chaser who wins it all becomes a Legacy Builder, 50% that a fired coach's temper rises)? | Use them as review-only starting points. The first dry-run report shows how many changes a season they produce, and you tune from there. |
 | Q2 | When a person qualifies for two changes in one season, which wins? | The rule's priority first (a title or a firing beats a slow drift like a veteran becoming a Mentor), then the lower draw. |
 | Q3 | Should a reverted change come back as a candidate the next season? | No. A revert marks that rule's candidate for that season only; next season's facts decide afresh, without remembering the revert. |
+
+## 9. Build log
+
+| Unit | Wave | Branch | Worktree | Result | Merge |
+|---|---|---|---|---|---|
