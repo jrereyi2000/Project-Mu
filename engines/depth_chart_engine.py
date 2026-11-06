@@ -23,6 +23,9 @@ How a slot is scored for a player:
     (SCHEME_ARCHETYPES; e.g. Wide Zone West Coast likes agile linemen, 3-4 likes nose tackles).
   * Coach trust (youth vs veterans): computed from coach["youth_trust"] / coach["veteran_trust"] but scaled by
     COACH_TRUST_SCALE = 0.0 (plan D4: coach traits ship at 0), so it never changes a chart yet.
+  * Score adjustments (PERSONALITY_DEVELOPMENT_COACHING_PLAN U4): optional `score_adjustments={slot: {player_id:
+    float}}` (from engines/personality_coaching.opportunity_adjustments) adds a bounded, validated per-slot input
+    before ranking. None/empty/zero gives the identical chart; production callers pass none.
   Ties: higher overall, then higher stamina, then lower player_id.
 
 Starting conflicts: the base positions (BASE_SLOTS) take their starters (WR 3, CB 2, DT 2 in a 4-3 or 1 in a
@@ -166,6 +169,9 @@ MAN_COVERAGE_ARCHETYPES = {"High": {"CB_MantoMan"}, "Low": {"CB_Zone", "S_Zone"}
 # COACH_TRUST_SCALE * (youth_trust * youth(age) + veteran_trust * veteran(age)).
 COACH_TRUST_SCALE = 0.0
 YOUTH_AGE = 24
+# Validation bound for staff_depth_chart(score_adjustments=...): an absolute safety limit, not a
+# coefficient. The policy cap lives in personality_coaching.CoachingConfig.max_depth_score_shift.
+MAX_SCORE_ADJUSTMENT = 10.0
 VETERAN_AGE = 30
 
 _DEFAULT = object()
@@ -315,27 +321,60 @@ def starter_counts(scheme):
     return counts
 
 
-def _ranked(slot, players, scheme, coach, weights):
+def validate_score_adjustments(score_adjustments, roster):
+    """{slot: {player_id: float}} cleaned of zeros; refuses unknown slots/players, ineligible pairs,
+    non-finite values and anything beyond MAX_SCORE_ADJUSTMENT."""
+    import math
+    if not score_adjustments:
+        return {}
+    if not isinstance(score_adjustments, dict):
+        raise ValueError("score_adjustments must be {slot: {player_id: float}}")
+    players = {p["player_id"]: p for p in roster}
+    clean = {}
+    for slot, row in score_adjustments.items():
+        if slot not in POSITION_SLOTS:
+            raise ValueError(f"score_adjustments: not a depth chart position: {slot!r}")
+        if not isinstance(row, dict):
+            raise ValueError("score_adjustments rows must be {player_id: float}")
+        for pid, value in row.items():
+            if pid not in players:
+                raise ValueError(f"score_adjustments: unknown player {pid!r}")
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+                raise ValueError("score_adjustments values must be finite numbers")
+            if abs(value) > MAX_SCORE_ADJUSTMENT:
+                raise ValueError(f"score_adjustments: {value} exceeds +/-{MAX_SCORE_ADJUSTMENT}")
+            if eligibility_penalty(slot, players[pid].get("position")) is None:
+                raise ValueError(f"score_adjustments: player {pid} is not eligible at {slot}")
+            if value:
+                clean.setdefault(slot, {})[pid] = float(value)
+    return clean
+
+
+def _ranked(slot, players, scheme, coach, weights, adjustments=None):
     out = []
+    extra = (adjustments or {}).get(slot) or {}
     for p in players:
         s = slot_score(p, slot, scheme, coach, weights)
         if s is not None:
-            out.append((s, p))
+            out.append((s + extra.get(p["player_id"], 0.0), p))
     out.sort(key=lambda sp: _key(*sp))
     return out
 
 
-def staff_depth_chart(roster, scheme, injuries, coach=None, *, weights=_DEFAULT):
+def staff_depth_chart(roster, scheme, injuries, coach=None, *, weights=_DEFAULT, score_adjustments=None):
     """{slot: [player_id, ... up to 6]} best first for all 35 POSITION_SLOTS. Pure: no DB.
 
     roster: [{player_id, position, archetype, overall, ratings: {Rating: int}, age, stamina?}]
     scheme: {"offense": ..., "defense": ..., "man_coverage": ...} (coach_profile keys also accepted; may be empty)
     injuries: {player_id: {"out": bool, "weeks": int}}
     coach: optional {"youth_trust", "veteran_trust"}; the trust terms are 0 under plan D4.
-    weights: an ovr_weights document (default: engines/ovr_weights_m27.json), None to grade by overall only."""
+    weights: an ovr_weights document (default: engines/ovr_weights_m27.json), None to grade by overall only.
+    score_adjustments: optional {slot: {player_id: float}} bounded opportunity inputs (validated; out players
+    are simply absent; the fallback for an empty slot ignores them)."""
     scheme = scheme or {}
+    adjustments = validate_score_adjustments(score_adjustments, roster)
     healthy = [p for p in roster if not is_out(p["player_id"], injuries)]
-    ranked = {slot: _ranked(slot, healthy, scheme, coach, weights) for slot in POSITION_SLOTS}
+    ranked = {slot: _ranked(slot, healthy, scheme, coach, weights, adjustments) for slot in POSITION_SLOTS}
 
     # Base starters: one greedy pass over every (player, base slot) pair, best first; a player starts once.
     counts = starter_counts(scheme)
