@@ -1,0 +1,145 @@
+{
+  "schema_version": "owner-profile-v1",
+  "key": "owner:BUF",
+  "name": "Terry Pegula",
+  "role": "OWNER",
+  "team": "BUF",
+  "seed_ref": {
+    "table": "OWNERS_DATA",
+    "team": "BUF",
+    "name": "Terry Pegula"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 5,
+    "drive": 7
+  },
+  "slider_evidence": {
+    "drive": [
+      "E1",
+      "E2"
+    ]
+  },
+  "traits": [
+    "PATIENT_BUILDER",
+    "MEDDLER",
+    "RING_CHASER"
+  ],
+  "trait_evidence": {
+    "PATIENT_BUILDER": [
+      "E2"
+    ],
+    "MEDDLER": [
+      "E2",
+      "E3"
+    ],
+    "RING_CHASER": [
+      "E1",
+      "E2"
+    ]
+  },
+  "views": [
+    {
+      "text": "Nine seasons with one coach shows I give people time, but time runs out when the same playoff ending keeps coming back.",
+      "when": [
+        "COACHING",
+        "PLAYOFFS"
+      ]
+    },
+    {
+      "text": "I want my football people to sit at one table, and if the structure is wrong I will change the structure.",
+      "when": [
+        "FRONT_OFFICE"
+      ]
+    },
+    {
+      "text": "A regular season full of wins means little to this city if January ends the same way.",
+      "when": [
+        "CONTENDER",
+        "PLAYOFFS"
+      ]
+    },
+    {
+      "text": "A bad draft pick has a history, and I will say out loud who pushed for it.",
+      "when": [
+        "DRAFT"
+      ]
+    },
+    {
+      "text": "With a franchise quarterback in his prime, every season is one we cannot waste.",
+      "when": [
+        "QB",
+        "CONTENDER"
+      ]
+    },
+    {
+      "text": "A slump in November does not scare me; a slump in the playoffs does.",
+      "when": [
+        "LOSING_STREAK",
+        "PLAYOFFS"
+      ]
+    }
+  ],
+  "signatures": [
+    "measures every season against the last playoff exit",
+    "reorganizes the front office rather than replacing it wholesale"
+  ],
+  "want": "A championship for Buffalo while his quarterback is in his prime (medium confidence reading of his firing rationale).",
+  "fear": "Another year of the same playoff heartbreak, and being blamed for wasting a great quarterback (medium).",
+  "voice": "Plain-spoken and brief at the podium, prone to naming specifics other owners would leave alone. Frames decisions through the fan base and the playoff record. Defers to his general manager on process but makes the biggest calls himself.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "BUF",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E1"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.bostonglobe.com/2026/01/27/sports/bills-joe-brady-head-coach/",
+      "publisher": "The Boston Globe",
+      "published": "2026-01-27",
+      "accessed": "2026-11-06",
+      "summary": "Reports the Bills promoted offensive coordinator Joe Brady to head coach on a five-year deal after firing Sean McDermott following a divisional-round overtime loss; Brady keeps play-calling.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.news4jax.com/sports/2026/01/21/bills-owner-feels-team-hit-proverbial-wall-after-latest-playoff-loss/",
+      "publisher": "AP via News4JAX",
+      "published": "2026-01-21",
+      "accessed": "2026-11-06",
+      "summary": "AP account of the press conference: Pegula said he decided to fire McDermott right after the playoff loss, citing repeated postseason exits; Brandon Beane was promoted to president of football operations while staying general manager.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://thescore.com/nfl/news/3460909",
+      "publisher": "theScore",
+      "published": "2026-01-21",
+      "accessed": "2026-11-06",
+      "summary": "Pegula explained the firing and said the 2024 Keon Coleman pick came mainly from coaches rather than the general manager, which commentators read as implicating the fired coach.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "Thin coverage: two to four sources found by web search (2026-11-06); sliders mostly left at 5; a few publication dates are taken from the news cycle the article covers. Draft for JR to check."
+  }
+}

@@ -1,0 +1,138 @@
+{
+  "schema_version": "owner-profile-v1",
+  "key": "owner:MIA",
+  "name": "Stephen Ross",
+  "role": "OWNER",
+  "team": "MIA",
+  "seed_ref": {
+    "table": "OWNERS_DATA",
+    "team": "MIA",
+    "name": "Stephen Ross"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 5,
+    "drive": 5
+  },
+  "slider_evidence": {},
+  "traits": [
+    "HEADLINE_HUNTER",
+    "MEDDLER",
+    "DEEP_POCKETS"
+  ],
+  "trait_evidence": {
+    "HEADLINE_HUNTER": [
+      "E1"
+    ],
+    "MEDDLER": [
+      "E1"
+    ],
+    "DEEP_POCKETS": [
+      "E3"
+    ]
+  },
+  "views": [
+    {
+      "text": "A star quarterback or a famous coach can change a franchise overnight, and I am willing to chase one.",
+      "when": [
+        "QB",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "I bet on young, first-time head coaches; one of them will be the one who sticks.",
+      "when": [
+        "COACHING",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "The building, the fan experience and the brand matter as much as the roster to what this franchise becomes.",
+      "when": [
+        "FRONT_OFFICE"
+      ]
+    },
+    {
+      "text": "When a reset is needed, I change the general manager and the coach together and start clean.",
+      "when": [
+        "FRONT_OFFICE",
+        "ROSTER_MOVES"
+      ]
+    },
+    {
+      "text": "A winning season that ends early is not the sustained success I promised Miami.",
+      "when": [
+        "CONTENDER",
+        "PLAYOFFS"
+      ]
+    },
+    {
+      "text": "League rules are a cost of doing business; I accept a penalty and move on.",
+      "when": [
+        "OFFSEASON"
+      ]
+    }
+  ],
+  "signatures": [
+    "promises sustained success at every new hire",
+    "talks about the stadium and events before the football"
+  ],
+  "want": "To turn the Dolphins into a lasting winner that matches the stadium and events business he built (medium).",
+  "fear": "Another cycle of coaching hires that never reach the top of the AFC (medium).",
+  "voice": "A businessman's register: upbeat, big-picture, comfortable talking about investment and brand. Rarely discusses football detail. Accepts setbacks in a sentence and pivots to the next plan.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "MIA",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E2"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.fox8live.com/2022/08/02/nfl-suspends-dolphins-owner-tampering-with-sean-payton-tom-brady/",
+      "publisher": "AP via FOX 8",
+      "published": "2022-08-02",
+      "accessed": "2026-11-06",
+      "summary": "The NFL suspended Ross and fined him $1.5 million after an investigation found the team had improper contact with Tom Brady and Sean Payton; Miami forfeited a 2023 first-round and a 2024 third-round pick.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.wcjb.com/2026/01/20/dolphins-hire-former-packers-defensive-coordinator-jeff-hafley-head-coach/",
+      "publisher": "AP via WCJB",
+      "published": "2026-01-20",
+      "accessed": "2026-11-06",
+      "summary": "Miami hired Packers defensive coordinator Jeff Hafley after firing Mike McDaniel (35-33 in four seasons); general manager Chris Grier had been fired during the season and Jon-Eric Sullivan is the new GM. Ross has hired first-time head coaches throughout his ownership.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://footballstadiumdigest.com/2019/10/hard-rock-stadium-moves-toward-hosting-f-1-race/",
+      "publisher": "Football Stadium Digest",
+      "published": "2019-10-16",
+      "accessed": "2026-11-06",
+      "summary": "Describes Ross privately financing large Hard Rock Stadium improvements and agreeing to stage a Formula 1 race around the stadium.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "Thin coverage: two to four sources found by web search (2026-11-06); sliders mostly left at 5; a few publication dates are taken from the news cycle the article covers. Draft for JR to check."
+  }
+}

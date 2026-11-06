@@ -1,0 +1,129 @@
+{
+  "schema_version": "owner-profile-v1",
+  "key": "owner:IND",
+  "name": "Carlie Irsay-Gordon",
+  "role": "OWNER",
+  "team": "IND",
+  "seed_ref": {
+    "table": "OWNERS_DATA",
+    "team": "IND",
+    "name": "Carlie Irsay-Gordon"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 5,
+    "drive": 5
+  },
+  "slider_evidence": {},
+  "traits": [
+    "PATIENT_BUILDER",
+    "GUARDED",
+    "MEASURED"
+  ],
+  "trait_evidence": {
+    "PATIENT_BUILDER": [
+      "E1"
+    ],
+    "GUARDED": [
+      "E2"
+    ],
+    "MEASURED": [
+      "E1"
+    ]
+  },
+  "views": [
+    {
+      "text": "A strong start and a collapse both count; I judge the whole season before deciding.",
+      "when": [
+        "COACHING",
+        "LOSING_STREAK"
+      ]
+    },
+    {
+      "text": "Keeping a coach and general manager means the urgency on them has never been higher.",
+      "when": [
+        "FRONT_OFFICE",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "I will not discuss a player's injury or contract in public before the football people decide.",
+      "when": [
+        "INJURY",
+        "QB"
+      ]
+    },
+    {
+      "text": "I explain my decisions to fans directly, in my own words.",
+      "when": [
+        "FRONT_OFFICE"
+      ]
+    },
+    {
+      "text": "The goal is to recapture what worked and fix what broke late in the year.",
+      "when": [
+        "STRUGGLING",
+        "CONTENDER"
+      ]
+    },
+    {
+      "text": "My sisters and I make these decisions together.",
+      "when": [
+        "OFFSEASON"
+      ]
+    }
+  ],
+  "signatures": [
+    "writes letters to fans after major decisions",
+    "pairs patience with a public deadline"
+  ],
+  "want": "To prove the next generation of Irsay ownership can build a winner on its own terms (medium).",
+  "fear": "Being seen as too patient with a front office that does not deliver (medium).",
+  "voice": "Composed and careful, explains her reasoning in full sentences and declines to speculate. Mixes empathy for players with clear expectations of the staff.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "IND",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "support",
+      "outcome": "mixed",
+      "evidence": [
+        "E1"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.colts.com/news/carlie-irsay-gordon-saw-progress-from-chris-ballard-shane-steichen-in-2025-but-expects-colts-to-better-overcome-adversity-in-2026",
+      "publisher": "Indianapolis Colts",
+      "published": "2026-01-07",
+      "accessed": "2026-11-06",
+      "summary": "Irsay-Gordon kept GM Chris Ballard and coach Shane Steichen after an 8-9 season that collapsed late, saying she saw progress and expected them to handle adversity better.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.nbcsports.com/nfl/profootballtalk/rumor-mill/news/carlie-irsay-gordon-sense-or-urgency-for-chris-ballard-shane-steichen-has-never-been-higher",
+      "publisher": "ProFootballTalk",
+      "published": "2026-01-07",
+      "accessed": "2026-11-06",
+      "summary": "She said the urgency on Ballard and Steichen had never been higher, made no commitment to Daniel Jones and declined to discuss his Achilles injury.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "Thin coverage: two to four sources found by web search (2026-11-06); sliders mostly left at 5; a few publication dates are taken from the news cycle the article covers. Draft for JR to check."
+  }
+}

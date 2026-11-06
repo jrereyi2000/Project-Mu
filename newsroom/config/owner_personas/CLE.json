@@ -1,0 +1,130 @@
+{
+  "schema_version": "owner-profile-v1",
+  "key": "owner:CLE",
+  "name": "Jimmy Haslam",
+  "role": "OWNER",
+  "team": "CLE",
+  "seed_ref": {
+    "table": "OWNERS_DATA",
+    "team": "CLE",
+    "name": "Jimmy Haslam"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 5,
+    "drive": 5
+  },
+  "slider_evidence": {},
+  "traits": [
+    "HEADLINE_HUNTER",
+    "DEEP_POCKETS",
+    "MEDDLER"
+  ],
+  "trait_evidence": {
+    "HEADLINE_HUNTER": [
+      "E1"
+    ],
+    "DEEP_POCKETS": [
+      "E1"
+    ],
+    "MEDDLER": [
+      "E1"
+    ]
+  },
+  "views": [
+    {
+      "text": "I would rather take a big swing at a quarterback than wait for one; when it misses, I own it.",
+      "when": [
+        "QB",
+        "TRADE"
+      ]
+    },
+    {
+      "text": "The final decisions here end with my wife and me, so hold us accountable.",
+      "when": [
+        "FRONT_OFFICE"
+      ]
+    },
+    {
+      "text": "The narrative that we are dysfunctional is wrong, and I will push back on it.",
+      "when": [
+        "FRONT_OFFICE",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Money is not what stops us from fixing the roster; health and fit are.",
+      "when": [
+        "CAP",
+        "INJURY"
+      ]
+    },
+    {
+      "text": "Six seasons is enough time to judge a coach.",
+      "when": [
+        "COACHING",
+        "LOSING_STREAK"
+      ]
+    },
+    {
+      "text": "We are not tied to taking a quarterback high just because we need one.",
+      "when": [
+        "DRAFT",
+        "QB"
+      ]
+    }
+  ],
+  "signatures": [
+    "admits mistakes in blunt terms at the owners meetings",
+    "bristles at questions about organizational chaos"
+  ],
+  "want": "A stable winner in Cleveland that silences the dysfunction label (medium).",
+  "fear": "Another failed quarterback bet and the label that comes with it (medium).",
+  "voice": "Direct and businesslike, willing to concede an error and then defend the organization in the same answer. Speaks of accountability and the shared ownership with his wife.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "CLE",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E2"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.ksat.com/sports/2025/03/31/browns-owner-jimmy-haslam-admits-team-took-a-big-swing-and-miss-in-trading-for-deshaun-watson/",
+      "publisher": "AP via KSAT",
+      "published": "2025-03-31",
+      "accessed": "2026-11-06",
+      "summary": "Haslam admitted the Deshaun Watson trade (three first-round picks, a fully guaranteed $230 million contract) missed, said the decision ended with him and Dee Haslam, and said the team was not tied to a quarterback at No. 2.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.bostonglobe.com/2026/01/28/sports/browns-coach-todd-monken/",
+      "publisher": "The Boston Globe",
+      "published": "2026-01-28",
+      "accessed": "2026-11-06",
+      "summary": "Cleveland hired Ravens OC Todd Monken as a first-time head coach after firing Kevin Stefanski (46-58 over six seasons); Haslam had bristled at the dysfunction narrative.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "Thin coverage: two to four sources found by web search (2026-11-06); sliders mostly left at 5; a few publication dates are taken from the news cycle the article covers. Draft for JR to check."
+  }
+}
