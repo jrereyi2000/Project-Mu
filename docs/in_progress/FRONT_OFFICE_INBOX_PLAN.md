@@ -403,7 +403,7 @@ A vision is the coach and the GM agreeing on three settings. Each option is one 
 |---|---|---|
 | Direction | CONTEND / RETOOL / REBUILD, minus `assign_directions`' overrides (projected wins ≥ 10.5 → only CONTEND; over the cap → no REBUILD) | `gm_direction.compute` uses the pinned direction for that team and season, at any week, and the overrides still win. Direction feeds trade proposals, needs (the expiring multiplier) and the hot seat's expected wins. |
 | Emphasis | OFFENSE / DEFENSE / BALANCED | `positional_needs(..., emphasis=)` multiplies the emphasised side's group scores by `VISION_EMPHASIS_WEIGHT = 1.15` (offense: QB, RB, WR, TE, OT, IOL; defense: EDGE, DT, LB, CB, S) |
-| Playing time | YOUTH / VETERANS / MERIT | Stored only. Its eventual consumer (depth-chart score adjustments) is owned by [`PERSONALITY_DEVELOPMENT_COACHING_PLAN.md`](PERSONALITY_DEVELOPMENT_COACHING_PLAN.md), not this plan (O1). |
+| Playing time | YOUTH / VETERANS / MERIT | Stored only. Its eventual consumer (depth-chart score adjustments) is owned by [`PERSONALITY_DEVELOPMENT_COACHING_PLAN.md`](../done/PERSONALITY_DEVELOPMENT_COACHING_PLAN.md), not this plan (O1). |
 
 ```python
 VISION_MARGIN = 0.5                    # D-score units; estimate
@@ -681,7 +681,7 @@ No path appears twice.
 
 | # | Question | Recommendation |
 |---|---|---|
-| O1 | The vision's playing-time setting has no consumer because `COACH_TRUST_SCALE` is 0 (depth-chart plan D4). | Settled: stored only here. Its eventual consumer (depth-chart score adjustments) is owned by [`PERSONALITY_DEVELOPMENT_COACHING_PLAN.md`](PERSONALITY_DEVELOPMENT_COACHING_PLAN.md), not this plan. |
+| O1 | The vision's playing-time setting has no consumer because `COACH_TRUST_SCALE` is 0 (depth-chart plan D4). | Settled: stored only here. Its eventual consumer (depth-chart score adjustments) is owned by [`PERSONALITY_DEVELOPMENT_COACHING_PLAN.md`](../done/PERSONALITY_DEVELOPMENT_COACHING_PLAN.md), not this plan. |
 | O2 | A pinned direction changes the hot seat's expected wins (R7). Keep that link? | Yes. A coach who asks to rebuild is judged as a rebuilding coach. The vision template says so. |
 | O3 | Trust bounds: 0.03 per exchange and 0.06 per promise. | Settled by D15: suggested starting values for the relationships plan's policy, not a calculation in this plan. |
 | O4 | Wave 3 holds only the API to keep three units per wave. Allow four units in wave 2 instead? | Yes, if JR doesn't mind four parallel agents; it saves a wave. |
