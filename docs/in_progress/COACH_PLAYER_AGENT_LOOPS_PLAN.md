@@ -1,6 +1,7 @@
 # Project Mu: Coach and Player Agent Loops Plan
 
-**Status:** approved by JR (2026-11-03), Q1–Q3 settled as recommended (§8); building, wave 1 of 2 (U3 held until the inbox `CONTRACT`/`ROLE_TALK` kinds and trade talks U6, PERSONALITY_PLAN §5.3). The other plans were updated at approval (§7).
+**Status:** approved by JR (2026-11-03), Q1–Q3 settled as recommended (§8); building, wave 1 of 2 done (U3 held until the inbox `CONTRACT`/`ROLE_TALK` kinds and trade talks U6, PERSONALITY_PLAN §5.3). The other plans were updated at approval (§7).
+- **As built (U1):** `decide` takes `marquee=` beside `seen` (a marquee CPU case uses the model only while the week's `MARQUEE_PER_WEEK` budget lasts; the budget counts model-backed `CHART`/`PROMISE`/`CONTRACT` rows in the table) and `store=` (`MemoryStore` for tests and previews, `SqlStore(cur)` by default). A failed or missing model call leaves the policy's choice as `POLICY`; a rejected key's text is dropped. Chart variants swap a base-slot starter with the first man behind him (the promoted man may not start at another base slot). Promise envelopes need resolved PersonRefs from the caller (`resolve_person`); without them the decision stands with no event. Injured or unread at review is a `DEFER` review, re-reviewed once a week later (then `unknown`), so each promise gets exactly one `promise_resolved`. `review_promises` returns review dicts `{promise_id, resolution, decision, event}` and takes `chart_depth`/`injured` callables.
 **Builds on:**
 - [`PERSONALITY_PLAN.md`](../in_progress/PERSONALITY_PLAN.md) §8: agentic loops; the player negotiates for himself, with no hired agent.
 - [`TRADE_NEGOTIATIONS_PLAN.md`](../not_started/TRADE_NEGOTIATIONS_PLAN.md) §2.1, §2.3: the GM loop pattern (legal options, persona policy, model choice with fallback, record don't replay).
@@ -289,4 +290,5 @@ JR approved all three recommendations on 2026-11-03.
 
 | Unit | Wave | Branch | Worktree | Result | Merge |
 |---|---|---|---|---|---|
+| U1 | 1 | build/loops-u1 | .claude/worktrees/loops-u1 | merged | cee83a5 |
 | U3 | 3 | — | — | held (PERSONALITY_PLAN §5.3) | — |
