@@ -51,6 +51,11 @@ export const NEG_CSS = `
 .fr-u-contention { background: #8d8a83; }
 .fr-u-scheme { background: #c9b26b; }
 .fr-u-persona { background: #6b8fc9; }
+.fr-u-persona-neg { background: repeating-linear-gradient(135deg, var(--red) 0 3px, transparent 3px 6px); }
+.fr-ubar .fr-u-cut { position: absolute; top: 0; bottom: 0; }
+.fr-ubar em.fr-over { position: absolute; right: 2px; top: 2px; color: var(--white); font: 700 7px var(--font-mono); font-style: normal; }
+.fr-policy { margin-top: 8px; color: #55575d; font: 600 9px/1.5 var(--font-mono); }
+.fr-policy strong { color: var(--ink); }
 .fr-terms { margin: 0 0 12px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .fr-terms div { padding: 10px 12px; background: var(--paper); display: flex; flex-direction: column; gap: 4px; }
 .fr-terms span { color: var(--gray-500); font: 700 7px var(--font-mono); letter-spacing: .07em; text-transform: uppercase; }
@@ -119,30 +124,62 @@ export function TermsForm({ seed, submitLabel, busy, onSubmit, onCancel }: {
 }
 
 const PART_LABEL: Record<keyof UtilityParts, string> = {
-  financial: "Money", opportunity: "Role", contention: "Contender", scheme: "Scheme fit", persona: "Persona",
+  financial: "Money", opportunity: "Role", contention: "Contender", scheme: "Scheme fit", persona: "Personality",
 };
 
-/** Stacked weighted parts of U (0..1 across), with his acceptance bar as a marker. */
+/** "+0.03" / "−0.03" / "0.00": a signed number that never loses its sign in text. */
+export const signed = (v: number) => (v > 0 ? `+${v.toFixed(2)}` : v < 0 ? `−${Math.abs(v).toFixed(2)}` : "0.00");
+
+/**
+ * Stacked weighted parts of U with his acceptance bar as a marker. The personality adjustment is signed: a positive
+ * one adds a segment, a negative one is drawn as a hatched cut over the end of the base parts (never a negative
+ * width). The track shows 0..1; a total above 1 is clipped in the drawing only and labelled.
+ */
 export function UtilityBar({ parts, utility, bar }: { parts: UtilityParts; utility: number; bar: number | null }) {
   const segs = (Object.keys(OFFER_WEIGHTS) as (keyof typeof OFFER_WEIGHTS)[]).map((k) => ({
     k, score: parts[k], width: Math.max(0, parts[k] * OFFER_WEIGHTS[k]),
   }));
   const persona = parts.persona;
-  const pct = (v: number) => `${Math.max(0, Math.min(1, v)) * 100}%`;
+  const base = segs.reduce((a, s) => a + s.width, 0);
+  const clip = (v: number) => Math.max(0, Math.min(1, v));
+  const pct = (v: number) => `${clip(v) * 100}%`;
+  const cutFrom = clip(base + Math.min(0, persona));
+  const cutWidth = clip(base) - cutFrom;
   return (
     <div>
-      <div className="fr-ubar" role="img" aria-label={`Offer utility ${utility.toFixed(2)}${bar === null ? "" : ` against a bar of ${bar.toFixed(2)}`}`}>
+      <div className="fr-ubar" role="img" aria-label={`Offer utility ${utility.toFixed(2)}${persona !== 0 ? ` (personality ${signed(persona)})` : ""}${bar === null ? "" : ` against a bar of ${bar.toFixed(2)}`}`}>
         {segs.map((s) => <i key={s.k} className={`fr-u-${s.k}`} style={{ width: pct(s.width) }} title={`${PART_LABEL[s.k]} ${s.score.toFixed(2)} × ${OFFER_WEIGHTS[s.k]}`} />)}
-        {persona > 0 && <i className="fr-u-persona" style={{ width: pct(persona) }} title={`Persona +${persona.toFixed(2)}`} />}
+        {persona > 0 && <i className="fr-u-persona" style={{ width: pct(persona) }} title={`Personality ${signed(persona)}`} />}
+        {persona < 0 && cutWidth > 0 && <i className="fr-u-cut fr-u-persona-neg" style={{ left: pct(cutFrom), width: pct(cutWidth) }} title={`Personality ${signed(persona)}`} />}
+        {utility > 1 && <em className="fr-over">{utility.toFixed(2)} &gt; 1</em>}
         {bar !== null && <b style={{ left: pct(bar) }} data-label={`bar ${bar.toFixed(2)}`} />}
       </div>
       <div className="fr-ulegend">
         {segs.map((s) => (
           <span key={s.k}><i className={`fr-u-${s.k}`} />{PART_LABEL[s.k]} {s.score.toFixed(2)} <em>×{OFFER_WEIGHTS[s.k]}</em></span>
         ))}
-        <span><i className="fr-u-persona" />Persona {persona >= 0 ? "+" : ""}{persona.toFixed(2)}</span>
+        <span><i className={persona < 0 ? "fr-u-persona-neg" : "fr-u-persona"} />{PART_LABEL.persona} {signed(persona)}</span>
       </div>
     </div>
+  );
+}
+
+const REASON_TEXT: Record<string, string> = {
+  money_first: "money first", ring_chaser: "chasing a ring", hometown_match: "close to home",
+  grudge_certified: "holds a grudge here", profile_missing: "no profile on record", mode_off: "off",
+  ambition_conflict: "conflicting ambitions", relationships_disabled: "relationship effects not enabled",
+  no_contract_traits: "no contract traits",
+};
+
+/** One line under the bar: base → final with the signed adjustment, or the neutral reason. */
+export function PolicyLine({ p }: { p: NonNullable<NegotiationResponse["policy_explanation"]> }) {
+  const why = p.reasons.map((r) => REASON_TEXT[r] ?? r.replace(/_/g, " ")).join(", ");
+  return (
+    <p className="fr-policy">
+      Personality{p.mode === "shadow" ? " (shadow, not applied)" : ""}: <strong>{signed(p.delta)}</strong>
+      {" "}(U {p.base_utility.toFixed(2)} → {p.adjusted_utility.toFixed(2)}{p.cap_applied ? ", capped" : ""})
+      {why ? ` · ${why}` : ""}
+    </p>
   );
 }
 
@@ -167,10 +204,11 @@ export function NegotiationResult({ r, onUseCounter }: { r: NegotiationResponse;
         <span className={`fr-verdict ${r.status}`}>{STATUS_TEXT[r.status]}</span>
         <strong>U = {r.utility.toFixed(2)}</strong>
         {r.bar !== null && <small>needs {r.bar.toFixed(2)} to accept</small>}
-        <small>offer #{r.offer_id}</small>
+        {r.offer_id !== null && <small>offer #{r.offer_id}</small>}
       </header>
       {r.note && <p className="fr-quote">“{r.note}”</p>}
       <UtilityBar parts={r.parts} utility={r.utility} bar={r.bar} />
+      {r.policy_explanation && <PolicyLine p={r.policy_explanation} />}
       {r.counter && (
         <>
           <h4>His counter</h4>

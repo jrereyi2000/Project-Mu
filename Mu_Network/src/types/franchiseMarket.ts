@@ -15,6 +15,7 @@
  *                                                                  RestructureRequest -> RestructurePreview
  *   GET  /api/franchise/{abbr}/picks?seasons=3                     -> PicksResponse   (not in the §2.7 table yet)
  *   POST /api/franchise/{abbr}/trades/evaluate                     TradeRequest -> TradeEvaluation
+ *   GET  /api/franchise/offers/{offer_id}/policy                   -> PolicyReceipt (contract-policy receipt)
  *
  * The Trade Machine also reads `GET /api/franchise/{abbr}/roster` (RosterResponse, §2.7a) for both teams.
  */
@@ -40,8 +41,9 @@ export type ContractTerms = {
 };
 
 /**
- * `free_agency_engine.offer_utility` scores, each 0..1 except `persona` (an additive ε, 0 until traits ship).
- * U = 0.45·financial + 0.25·opportunity + 0.20·contention + 0.10·scheme + persona (OFFER_WEIGHTS).
+ * `free_agency_engine.offer_utility` scores, each 0..1 except `persona`: the signed personality adjustment
+ * (PERSONALITY_CONTRACT_POLICY_PLAN), 0 unless the contract policy is active; it can be negative.
+ * U = 0.45·financial + 0.25·opportunity + 0.20·contention + 0.10·scheme + persona (OFFER_WEIGHTS). U can exceed 1.
  */
 export type UtilityParts = {
   financial: number;
@@ -56,14 +58,46 @@ export const OFFER_WEIGHTS: Record<Exclude<keyof UtilityParts, "persona">, numbe
   financial: 0.45, opportunity: 0.25, contention: 0.2, scheme: 0.1,
 };
 
+/**
+ * The server's explanation of the personality adjustment (present only while the contract policy is shadow or
+ * active). `delta` is signed and already capped; in shadow it is computed but not applied (`applied` false).
+ */
+export type PolicyExplanation = {
+  mode: "shadow" | "active";
+  applied: boolean;
+  base_utility: number;
+  adjusted_utility: number;
+  delta: number;                       // signed, capped (± aggregate cap)
+  raw_delta: number;
+  cap_applied: boolean;
+  terms: { ambition: number; attachment: number; home: number; grudge: number };   // grudge <= 0
+  reasons: string[];                   // e.g. money_first, ring_gate_secure_unknown, profile_missing
+  policy_version: string;
+  fingerprint: string;                 // send back as expected_fingerprint; a mismatch answers 409 + result
+};
+
 export type NegotiationResponse = {
-  offer_id: number;                    // contract_offers row
+  offer_id: number | null;             // contract_offers row (null only in a 409 refreshed result)
   status: NegotiationStatus;
-  utility: number;                     // 0..1(ish), the weighted total
+  utility: number;                     // the weighted total; may exceed 1
   bar: number | null;                  // acceptance bar he measured it against (0.55..0.80), null if not reported
   parts: UtilityParts;
   counter: ContractTerms | null;       // set when status = COUNTER
   note: string | null;                 // one line from the agent ("He wants to be a starter."), null if none
+  policy_explanation?: PolicyExplanation;
+};
+
+/** GET /offers/{offer_id}/policy: the immutable contract-policy receipt (JR's teams only). */
+export type PolicyReceipt = {
+  offer_id: number;
+  decision_id: string;
+  mode: "off" | "shadow" | "active";
+  policy_version: string;
+  input_hash: string;
+  persona_id: string | null;
+  revision: number | null;
+  snapshot: Record<string, unknown>;
+  result: Record<string, unknown>;
 };
 
 // ---- Free agency ----------------------------------------------------------------------------------------------
@@ -88,7 +122,7 @@ export type FreeAgentsResponse = {
 };
 
 /** POST /{abbr}/offers. Scored and stored as a contract_offers row; not a signing (the league office decides). */
-export type OfferRequest = ContractTerms & { player_id: number };
+export type OfferRequest = ContractTerms & { player_id: number; expected_fingerprint?: string };
 
 // ---- Contract room --------------------------------------------------------------------------------------------
 
@@ -112,7 +146,7 @@ export type ExpiringPlayer = {
 export type ExpiringResponse = { team: string; season: number; week: number; players: ExpiringPlayer[] };
 
 /** POST /{abbr}/contracts/{player_id}/propose: an extension offer; answer is a NegotiationResponse. */
-export type ProposeRequest = ContractTerms;
+export type ProposeRequest = ContractTerms & { expected_fingerprint?: string };
 
 /** POST /{abbr}/contracts/{player_id}/restructure-preview: convert `amount` of this year's base into bonus. */
 export type RestructureRequest = { amount: number };

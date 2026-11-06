@@ -25,10 +25,14 @@ class FakeCursor:
         self._row = None
         self.next_move = 100
         self.next_offer = 500
+        self.answers = {}                      # SQL substring -> the row fetchone answers
 
     def execute(self, sql, params=None):
         self.executed.append((sql, params))
-        if "INSERT INTO franchise_pending_moves" in sql:
+        hit = next((row for key, row in self.answers.items() if key in sql), None)
+        if hit is not None:
+            self._row = hit(params) if callable(hit) else hit
+        elif "INSERT INTO franchise_pending_moves" in sql:
             self.next_move += 1
             self._row = (self.next_move, params[1], "PENDING", NOW, json.loads(params[2]))
         elif "INSERT INTO contract_offers" in sql:
@@ -689,3 +693,157 @@ class NoSaveWritesTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ------------------------------------------------ personality contract policy (U4) ----
+from engines import personality_contract_policy as cpol                                  # noqa: E402
+
+UNIVERSE = {"universe_id": "mu:test", "league_id": "1", "pgid_lifetime": "1"}
+
+
+def policy_view(traits, revision=1):
+    return {"status": "stored", "origin": "generated", "sliders": {}, "traits": list(traits), "revision": revision,
+            "persona_id": "p-50", "catalogue_version": "c", "core_version": "v", "view_version": "views-v2"}
+
+
+class PolicyTest(ApiTest):
+    FA = dict(MarketTest.FA, is_free_agent=True)
+    BODY = {"player_id": 50, "years": 2, "total_value": 6_000_000, "bonus": 1_000_000, "guaranteed": 2_000_000}
+
+    def setUp(self):
+        super().setUp()
+        self.mode = "active"
+        self.traits = ["MONEY_FIRST"]
+        self.receipts, self.events, self.loads = [], [], []
+        test = self
+
+        def load(cur, **kw):
+            deps = kw["dependencies"]
+            test.loads.append(dict(kw, current_team=deps["current_team"](kw["player_id"], kw["as_of"]),
+                                   career=deps["career"](kw["player_id"], kw["as_of"])))
+            view = policy_view(test.traits)
+            ctx = cpol.neutral_context(kw["universe_id"], kw["player_id"], kw["as_of"], kw["batch_id"],
+                                       persona_id="p-50", revision=1, team_ids=kw["team_ids"])
+            return view, ctx
+
+        def record(cur, receipt):
+            test.receipts.append((receipt, test.conn.commits))
+            return dict(receipt, input_hash="h", status="recorded")
+
+        def enqueue(cur, receipt, facts):
+            test.events.append(facts)
+            return [f"{receipt['decision_id']}:{f['kind']}" for f in facts]
+
+        for target, name, value in (
+                (fa, "franchise_universe", lambda cur: UNIVERSE), (fa, "player_pgid", lambda cur, pid: 7001),
+                (fa.pcs, "read_contract_activation",
+                 lambda cur, uid: {"config": cpol.trial_config(mode=test.mode), "source": "switchboard",
+                                   "families": {}}),
+                (fa.pcc, "load_contract_context", load), (fa.pcs, "record_contract_decision", record),
+                (fa.pcs, "enqueue_contract_events", enqueue),
+                (fa, "free_agent", lambda cur, s, pid: dict(test.FA))):
+            patcher = mock.patch.object(target, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def offer(self, **extra):
+        return self.client.post("/api/franchise/CAR/offers", json=dict(self.BODY, **extra))
+
+    def test_active_offer_explains_signed_delta_and_records_receipt_atomically(self):
+        r = self.offer()
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        self.assertEqual(set(body), NEGOTIATION_KEYS | {"policy_explanation"})
+        pe = body["policy_explanation"]
+        self.assertEqual(pe["mode"], "active")
+        self.assertTrue(pe["applied"])
+        self.assertEqual(body["parts"]["persona"], pe["delta"])
+        self.assertAlmostEqual(body["utility"], pe["adjusted_utility"])
+        self.assertAlmostEqual(pe["adjusted_utility"], round(pe["base_utility"] + pe["delta"], 4), places=3)
+        (receipt, commits_then), = self.receipts
+        self.assertEqual(commits_then, 0)                          # inside the offer's transaction
+        self.assertEqual(self.conn.commits, 1)
+        self.assertEqual(receipt["decision_id"], "offer:501")
+        self.assertEqual(receipt["result"]["offer_id"], 501)
+        self.assertIsNone(receipt["result"]["execution_id"])       # an accepted offer isn't an executed contract
+        self.assertEqual(receipt["snapshot"]["view"]["traits"], ["MONEY_FIRST"])
+        self.assertEqual([f["kind"] for f in self.events[0]],
+                         ["CONTRACT_OFFER_SUBMITTED", "CONTRACT_RESPONSE_RECORDED"])
+        self.assertIsNone(self.loads[0]["current_team"])           # a free agent has no current team
+        self.assertEqual(self.loads[0]["alias_namespace"], "save-pgid:1")
+
+    def test_shadow_keeps_baseline_answer(self):
+        self.mode = "shadow"
+        body = self.offer().json()
+        pe = body["policy_explanation"]
+        self.assertFalse(pe["applied"])
+        self.assertEqual(body["utility"], pe["base_utility"])
+        self.assertEqual(body["parts"]["persona"], 0.0)
+        self.mode = "off"
+        self.cur.next_offer = 500
+        off = self.offer().json()
+        self.assertEqual((off["status"], off["utility"]), (body["status"], body["utility"]))
+        self.assertNotIn("policy_explanation", off)
+
+    def test_off_mode_is_the_original_path(self):
+        self.mode = "off"
+        body = self.offer().json()
+        self.assertEqual(set(body), NEGOTIATION_KEYS)
+        self.assertEqual(self.receipts, [])
+        self.assertEqual(self.loads, [])
+
+    def test_stale_fingerprint_409_with_refreshed_result_and_nothing_stored(self):
+        r = self.offer(expected_fingerprint="stale")
+        self.assertEqual(r.status_code, 409)
+        body = r.json()
+        self.assertIn("changed", body["detail"])
+        self.assertIn("policy_explanation", body["result"])
+        self.assertEqual(self.cur.writes("contract_offers"), [])
+        self.assertEqual(self.receipts, [])
+        fresh = body["result"]["policy_explanation"]["fingerprint"]
+        self.assertEqual(self.offer(expected_fingerprint=fresh).status_code, 200)
+
+    def test_client_cannot_set_the_policy(self):
+        self.mode = "off"
+        r = self.offer(policy={"mode": "active", "coefficient": 0.19}, mode="active")
+        self.assertEqual(r.status_code, 200)
+        self.assertNotIn("policy_explanation", r.json())
+
+    def test_negative_delta_in_response(self):
+        self.mode = "shadow"
+        self.traits = ["RING_CHASER"]
+        body = self.offer().json()
+        self.assertEqual(body["policy_explanation"]["delta"], 0.0)          # gates unknown: neutral with reasons
+        self.assertTrue(any(x.startswith("ring_gate_") for x in body["policy_explanation"]["reasons"]))
+
+    def test_receipt_failure_rolls_back_the_offer(self):
+        def boom(cur, receipt):
+            raise RuntimeError("receipt write failed")
+        with mock.patch.object(fa.pcs, "record_contract_decision", boom):
+            with self.assertRaises(RuntimeError):
+                self.offer()
+        self.assertEqual(self.conn.commits, 0)
+
+    def test_propose_route_uses_the_same_adapter(self):
+        r = self.client.post("/api/franchise/CAR/contracts/6/propose",
+                             json={"years": 2, "total_value": 8_000_000, "bonus": 2_000_000, "guaranteed": 4_000_000})
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertIn("policy_explanation", r.json())
+        self.assertEqual(self.loads[0]["current_team"], CAR)
+        self.assertEqual(self.loads[0]["career"]["established"], True)       # VET: 10 seasons
+        self.assertEqual(self.receipts[0][0]["result"]["kind"], "RESIGN")
+
+    def test_receipt_endpoint_authorized_by_offer_team(self):
+        stored = {"decision_id": "offer:9", "mode": "active", "policy_version": "v", "input_hash": "h",
+                  "persona_id": "p-50", "revision": 1, "snapshot": {"view": {}}, "result": {"offer_id": 9}}
+        self.cur.answers["FROM contract_offers o JOIN teams t"] = lambda params: (
+            {9: ("CAR",), 10: ("ATL",), 12: ("CAR",)}.get(params[0]))
+        with mock.patch.object(fa, "_regclass", lambda cur, t: True), \
+                mock.patch.object(fa.pcs, "read_contract_decision",
+                                  lambda cur, uid, did: stored if did == "offer:9" else None):
+            ok = self.client.get("/api/franchise/offers/9/policy")
+            self.assertEqual(ok.status_code, 200, ok.text)
+            self.assertEqual(ok.json()["decision_id"], "offer:9")
+            self.assertEqual(self.client.get("/api/franchise/offers/10/policy").status_code, 403)
+            self.assertEqual(self.client.get("/api/franchise/offers/11/policy").status_code, 404)   # no offer
+            self.assertEqual(self.client.get("/api/franchise/offers/12/policy").status_code, 404)   # no receipt
