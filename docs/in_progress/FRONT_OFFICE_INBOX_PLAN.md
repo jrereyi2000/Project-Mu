@@ -109,7 +109,7 @@ Engines decide every outcome. The agent on the other side answers in its own voi
 - Press conferences (V2.2), prospect interviews and scouts (V2.10), leaks, posture, CPU-to-CPU talks and queuing agreed trades (V2.11).
 - Writers quoting JR's answers (V2.2 reads `jr_statements`).
 - Computing or writing trust (the relationships plan's policy), and any effect of trust on a sim number.
-- Holdouts and trade requests ([`PERSONALITY_TRADE_REQUESTS_PLAN.md`](../not_started/PERSONALITY_TRADE_REQUESTS_PLAN.md) consumes the `promise_made` / `promise_resolved` events).
+- Holdouts and trade requests ([`PERSONALITY_TRADE_REQUESTS_PLAN.md`](../in_progress/PERSONALITY_TRADE_REQUESTS_PLAN.md) consumes the `promise_made` / `promise_resolved` events).
 - National insiders messaging JR.
 
 ## 2. Design

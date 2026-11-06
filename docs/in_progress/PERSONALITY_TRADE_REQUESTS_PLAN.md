@@ -1,6 +1,7 @@
 # Project Mu: Player Dissatisfaction and Trade Requests Plan
 
-**Status:** approved by JR (2026-11-03), Q1–Q4 settled as recommended (§8); not built. Approval covers building the units; production policy, migration and activation each still need JR's separate go-ahead (§6 gates G3–G5).
+**Status:** approved by JR (2026-11-03), Q1–Q4 settled as recommended (§8); building, wave 1 of 2. Approval covers building the units; production policy, migration and activation each still need JR's separate go-ahead (§6 gates G3–G5).
+- **As built (wave 0, spike):** answered offline from source, no database. Clock: the relationships calendar's TimePoint {season, tick} (32 ticks a season, `engines/relationship_producers/calendar.py`); `RequestClock.ordinal` = `season * 1000 + tick` (`clock_ordinal`), so it is monotonic across seasons and offseason ticks. Incidents: the relationships plan built reactions and breach states but no incident ledger, so U1 adds a pure adapter `incidents_from_shared(events, relationship_state, reaction_result, ...)` that maps the shared outputs without re-deciding them: a sustained-role `frustrated` reaction → `LOST_ROLE` (observations = its contiguous unsatisfied `role_window` run), an unresolved material breach (`dismissal`/`disrespect` treatment, `broken` promise) → `TREATMENT`/`BROKEN_PROMISE` (observations = contiguous known role windows on that team since the breach), a breach closed by the relationships repair rules or a role run ended by satisfied windows → `REPAIRED` (repair IDs = the closing repairs / satisfied windows; observations counted after them). A reaction result in `off` mode yields no incidents (neutral, deferred). Incident IDs (`inc:<kind>:<team_key>:<first source>`) are the contribution keys; their source IDs are the relationship breach source IDs the contract policy already keys on. Identity: core `persona_id` through verified `db-player` aliases. Teams: the real PK is `teams.id` (not `team_id`), team key `team:<teams.id>`. Authority: `control_context(team_id, user_team_ids, suggestions_on)` — JR's teams from the franchise registry's `user_teams` (abbreviations mapped to ids by the caller), never Madden's ALLUSER flag; `user_team_ids=None` gives `UNKNOWN`. GM handoff: `gm_request_signal(episode)` returns the activation plan's `{request_id, persona_id, team_id, status, cause_codes, actionable}`; scheduling and `gm_trade_engine` edits stay with the activation plan's U3.
 **JR decisions this plan follows (2026-11-03, PERSONALITY_PLAN §5.1, D8–D13):** every player has a generated profile (the 2026 roster at the league start, prospects at class entry), editable by JR; players named after real people are fictional characters inspired by them. The relationships plan owns one-way trust, and its `promise_made`/`promise_resolved` records (including promises from V2.9 inbox role talks) are this plan's broken-promise source.
 **Builds on:** PROJECT_SPEC §2.17, §2.17a–d, §3.3f, §7.11; [PERSONALITY_PLAN.md](../in_progress/PERSONALITY_PLAN.md) §4.6–4.8, §5.2; [PERSONALITY_GENERATED_EFFECTS_DESIGN.md](../in_progress/PERSONALITY_GENERATED_EFFECTS_DESIGN.md) §3–5.
 
@@ -229,7 +230,7 @@ Shared coordinator files, never unit-owned: `PROJECT_SPEC.md`, this plan, `CLAUD
 
 Every path appears once. No unit owns relationship/core/contract/GM shared files.
 
-**Gates:** G0 JR approval (done 2026-11-03) + interface reconciliation; G1 disabled exact neutral control and pure tests; G2 persistence/replay/repair/privacy tests pass; G3 JR reviews sensitivity and chooses production policy; G4 separately scoped identity/producer/scheduler/control/contract integration proves neutral controls and incident deduplication (the scheduler and GM handoff are the [activation plan](PERSONALITY_ACTIVATION_PLAN.md)'s U3); G5 explicit migration/activation authorization for a selected franchise/checkpoint. U1–U3 do not deliver G4/G5. No live integration or migration application is in these waves.
+**Gates:** G0 JR approval (done 2026-11-03) + interface reconciliation; G1 disabled exact neutral control and pure tests; G2 persistence/replay/repair/privacy tests pass; G3 JR reviews sensitivity and chooses production policy; G4 separately scoped identity/producer/scheduler/control/contract integration proves neutral controls and incident deduplication (the scheduler and GM handoff are the [activation plan](../not_started/PERSONALITY_ACTIVATION_PLAN.md)'s U3); G5 explicit migration/activation authorization for a selected franchise/checkpoint. U1–U3 do not deliver G4/G5. No live integration or migration application is in these waves.
 
 ## 7. Spec changes when built
 
@@ -255,3 +256,10 @@ JR approved all four recommendations on 2026-11-03.
 | Q4 | Include numeric extension unwillingness or GM search activation in this first build? | No. Deliver request/reconciliation state and offline evidence first; owning policies integrate later with incident deduplication and separate activation review. |
 
 **Review boundary:** plan approval sets no production policy and applies no migration; those are gates G3–G5.
+
+## 9. Build log
+
+Units built one at a time by the orchestrator in their own worktrees (no subagents).
+
+| Unit | Wave | Branch | Worktree | Result | Merge |
+|---|---|---|---|---|---|
