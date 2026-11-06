@@ -403,3 +403,32 @@ def store_all_pro_teams(cur, season: int, week: int, article_id: int, persona: s
     """, rows)
 
     return len(rows)
+
+
+# ----------------------------------------------------------------------------------------------------------------
+# Media voters (docs/in_progress/OWNERS_SCOUTS_VOTERS_PLAN.md §2.5, D5): when the panel's ballots decide the All-Pro
+# teams (newsroom/award_ballots.py store_all_pro), the Week 19 article reports them and is checked against them here.
+
+def load_stored_teams(cur, season: int) -> list:
+    """[{award_type, slot, player_id, player_name, team_id}] for the season's stored All-Pro rows."""
+    cur.execute("""
+        SELECT award_type, position, player_id, player_name, team_id FROM awards
+        WHERE season = %s AND award_type IN ('First Team All-Pro', 'Second Team All-Pro')
+    """, (season,))
+    return [{"award_type": a, "slot": s, "player_id": p, "player_name": n, "team_id": t}
+            for a, s, p, n, t in cur.fetchall()]
+
+
+def check_against_stored(text: str, stored: list, roster_index: dict) -> list:
+    """Errors when the article's teams differ from the stored teams (parse errors first); [] when they match."""
+    records, errors = parse_all_pro(text, roster_index)
+    if errors:
+        return errors
+    want = Counter((r["award_type"], r["slot"], r["player_id"]) for r in stored)
+    got = Counter((r["award_type"], r["slot"], r["player_id"]) for r in records)
+    names = {r["player_id"]: r.get("player_name") for r in list(stored) + list(records)}
+    for (level, slot, pid), n in sorted((want - got).items(), key=str):
+        errors.append(f"{level}: {names.get(pid)} at {slot} was voted in by the media panel but is missing")
+    for (level, slot, pid), n in sorted((got - want).items(), key=str):
+        errors.append(f"{level}: {names.get(pid)} at {slot} was not voted in by the media panel")
+    return errors

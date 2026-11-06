@@ -421,3 +421,53 @@ def store_sb_mvp(cur, season: int, week: int, article_id: int, persona: str, ent
         VALUES (%s, 'SBMVP', %s, %s, %s, %s)
     """, (season, entry["player_id"], entry["player_name"], entry["team_id"], entry["position"]))
     return 1
+
+
+# ----------------------------------------------------------------------------------------------------------------
+# Media voters (docs/in_progress/OWNERS_SCOUTS_VOTERS_PLAN.md §2.5, D4): when the panel's ballots decide the awards
+# (newsroom/award_ballots.py), the Week 22 article reports the stored winners instead of choosing them, and is
+# checked against them here. Parsing and storing from the article (above) stays the path while `media_voters` is off.
+
+def load_stored_winners(cur, season: int) -> dict:
+    """{award: {"player_id"| "coach_id": id, "name": str, "team_id": int}} for the season's six stored winners."""
+    cur.execute("""
+        SELECT award_type, player_id, coach_id, COALESCE(player_name, coach_name), team_id
+        FROM awards WHERE season = %s AND award_type IN ('MVP', 'OPOY', 'OROY', 'DPOY', 'DROY', 'COTY')
+    """, (season,))
+    out = {}
+    for award, pid, cid, name, tid in cur.fetchall():
+        out[award] = {"coach_id": cid, "name": name, "team_id": tid} if award == "COTY" else \
+            {"player_id": pid, "name": name, "team_id": tid}
+    return out
+
+
+def check_against_stored(text: str, stored: dict, roster_index: dict, coach_index: dict) -> list:
+    """Errors when the article does not name every stored winner (parse errors included); [] when it does."""
+    entries, errors = parse_award_winners(text, roster_index, coach_index)
+    by_award = {e["award_type"]: e for e in entries}
+    for award in AWARD_KEYS:
+        want = stored.get(award)
+        if want is None:
+            continue
+        got = by_award.get(award)
+        if got is None:
+            continue                      # parse_award_winners already reported the missing or unresolved header
+        key = "coach_id" if award == "COTY" else "player_id"
+        if got.get(key) != want.get(key):
+            errors.append(f"{award}: the article names {got.get('coach_name') or got.get('player_name')}, but the "
+                          f"media panel's ballots chose {want.get('name')}")
+    return errors
+
+
+def stored_winners_fix_prompt(errors: list, stored: dict) -> str:
+    """Rewrite prompt when the article misreports the panel's stored winners."""
+    err_list = "\n".join(f"- {e}" for e in errors)
+    winners = "\n".join(f"- {a}: {stored[a].get('name')}" for a in AWARD_KEYS if a in stored)
+    return f"""The award winners are decided by the media panel's ballots, and your article does not match them:
+
+{err_list}
+
+The winners are:
+{winners}
+
+Rewrite the article with these exact winners under the required ## headers (## MVP: [Player], [Position], [Team] ...)."""
