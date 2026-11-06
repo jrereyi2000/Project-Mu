@@ -1,6 +1,6 @@
 # Project Mu: Personality Development and Coaching Plan
 
-**Status:** approved by JR (2026-11-03), Q1–Q4 settled as recommended (§8); not built. Approval covers building the units; enabled configs and each activation (learning, then opportunities) still need JR's separate go-ahead (§2.7 gates G3–G5).
+**Status:** approved by JR (2026-11-03), Q1–Q4 settled as recommended (§8); building, wave 1 of 3 (2026-11-06). Approval covers building the units; enabled configs and each activation (learning, then opportunities) still need JR's separate go-ahead (§2.7 gates G3–G5).
 **JR decisions this plan follows (2026-11-03, PERSONALITY_PLAN §5.1, D11–D13):** every player has a generated profile (the 2026 roster at the league start, prospects at class entry), editable by JR. Existing real coaches get reviewed profiles from a separate workstream; personas named after real people are fictional characters inspired by them. This plan also owns the eventual consumer of the V2.9 inbox's team-vision playing-time setting (§2.5).
 **Builds on:** PROJECT_SPEC §§2.17c, 2.19, 2.21, 3.3n, 3.3p, 7.11; [core README](../../personality/README.md); [PERSONALITY_PLAN.md](../in_progress/PERSONALITY_PLAN.md) §§5.1–5.2; [generated-effects design](../in_progress/PERSONALITY_GENERATED_EFFECTS_DESIGN.md). Active progression implementation owns the current entitlement/state system; reconcile interfaces before integrating.
 
@@ -175,7 +175,7 @@ Scheme advice ranks only caller-supplied legal choices. Neutral ordering changes
 
 Receipts can supply verified source IDs for later reviewed sustained preparation, development milestones or mentoring events. One good week or invented practice prose cannot change a profile. Core owns revision/annual limits; a cross-feature coordinator arbitrates its single annual change slot: the arbiter in the [personality evolution plan](../done/PERSONALITY_EVOLUTION_PLAN.md), which takes this plan's candidates as `source 'DEVELOPMENT'`. unknowns need classification; slider changes wait for both band migrations.
 
-Later hiring preferences belong in `coaching_carousel.opening_appeal`/`pick`; owner patience belongs in existing hot-seat policy. Both are planned in the [owners, scouts and voters plan](OWNERS_SCOUTS_VOTERS_PLAN.md). Preserve one hiring cycle, user-team restrictions, tenure/championship protections, firing budgets and recorded moves. Do not infer teaching quality from win totals, count churn twice, add an owner scalar store or build a parallel hiring engine. These are dependency notes, not implementation units.
+Later hiring preferences belong in `coaching_carousel.opening_appeal`/`pick`; owner patience belongs in existing hot-seat policy. Both are planned in the [owners, scouts and voters plan](../not_started/OWNERS_SCOUTS_VOTERS_PLAN.md). Preserve one hiring cycle, user-team restrictions, tenure/championship protections, firing budgets and recorded moves. Do not infer teaching quality from win totals, count churn twice, add an owner scalar store or build a parallel hiring engine. These are dependency notes, not implementation units.
 
 ### 2.7 CLI, visibility and activation gates
 
@@ -319,3 +319,8 @@ JR approved all four recommendations on 2026-11-03. Numerical tuning is a later 
 | Q4 | Require reviewed configs/multi-season paired reports and both rating-point/OVR caps, rather than treating ±1.5 OVR as approved? | Yes. Off/zero defaults; prove annual reconciliation before activation. Architecture approval selects no coefficients. |
 
 **Review boundary:** plan approval selects no coefficients and activates nothing; enabled configs and activation are gates G3–G5.
+
+## 9. Build log
+
+| Unit | Wave | Branch | Worktree | Result | Merge |
+|---|---|---|---|---|---|
