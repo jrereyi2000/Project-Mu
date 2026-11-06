@@ -1,6 +1,6 @@
 # Project Mu: Real-Coach Profiles Plan
 
-**Status:** approved by JR (2026-11-03); all 3 waves built on main (2026-11-05): 96 profiles validate; CAR_HC reviewed, the other 95 are drafts awaiting JR's review (the post-build gate, review pages in `verify_output/coach_review/batch_U2..U5_*.md`)
+**Status:** approved by JR (2026-11-03); all 3 waves built on main (2026-11-05). Re-seated to the 2026 staffs (2026-11-06): 63 profiles validate (31 same seat, 32 moved and back to draft), 33 new seats have no profile yet and need research; CAR_HC reviewed, the other 62 are drafts awaiting JR's review (review pages in `verify_output/coach_review/batch_U2..U5_*.md` predate the re-seat)
 - As built (U1): `seed_index` parses `db/seed_clean_db.py` with `ast` instead of importing it, so no psycopg import.
 - As built (U1): `load_profiles` adds an in-memory `_file` (base name) that `validate_profile_file` checks against team and role; `_`-keys are never written. `validate` and `report` also take `--file PATH ...` (used for the template), and `validate` lists missing team files without failing.
 - As built (U1): a tie's `opportunity_ref` is `coach-profile:<key>:tie:<n>`, not null: the relationships-v1 contract requires nonempty text there. `file_sha256` in the review receipt is the SHA-256 of the file's canonical JSON (sorted keys).
@@ -8,7 +8,8 @@
 - As built (U1 follow-up, 2026-11-04): the review page cites sources by ID, link and confidence on each slider, trait and tie; each summary appears once, in the Sources table (JR: shorten the page).
 - Spike (2026-11-04): `CAR_HC.json` written from 7 sources (2024-01-25 to 2025-07-24); JR approved it with one edit, recorded by `apply-review` as status `edited`, reviewer JR, 2026-11-04: the Bryce Young tie is mentorship, positive, citing E6, E7 and a new E8 (AP column, 2024-12-03: Young improved steadily after returning from the benching). Now 8 sources. Review page at `verify_output/coach_review/spike_CAR.md` (gitignored). Pete Carroll (LV in the real 2025, not in the 2026 seed) gets no tie, per Q3.
 - As built (U2–U5, 2026-11-05): the 95 drafts were written by four research agents (U2–U4 in parallel, U5 after U2 merged), each in its own worktree cut from local main and merged by the orchestrator. All 96 pass `validate`. Thin coverage (sliders mostly at 5, said so in the voice or review notes): Babich, Covington, Frank Smith, Pitcher, Austin (U2); Lombardi, Holz, Getsy, Burke, Cooter, Nielsen, Roman (U3); Bowen, Kafka, Whitt, W. Phillips, E. Washington, and Stenavich with 3 sources, under the 5-source rule (U4); Lake, Idzik, Woods, Rodgers, Petzing, Klay Kubiak, Rallis (U5).
-- As built (U2–U5): the seed is the 2024 staffs; profiles keep the seed's names and roles, and later real moves (Saleh, Eberflus, Waldron, Allen, Pierce firings; Mayo's staff leaving NE; Klay Kubiak OC only from 2025; Kacy Rodgers a co-DC) appear only as dated source context. Player ties use `team_2026` from `data/history/rosters_2026.csv`; ties to people not in it (Derek Carr) are dropped per Q3. Negative ties for JR to check: Arthur Smith → Dennis Allen, Flores → Tagovailoa. Some drafts carry `review.notes` flagging thin coverage; a few undated pages are dated from the news cycle at medium confidence.
+- As built (U2–U5, superseded 2026-11-06 by the next bullet): the seed was the 2024 staffs; profiles keep the seed's names and roles, and later real moves (Saleh, Eberflus, Waldron, Allen, Pierce firings; Mayo's staff leaving NE; Klay Kubiak OC only from 2025; Kacy Rodgers a co-DC) appear only as dated source context. Player ties use `team_2026` from `data/history/rosters_2026.csv`; ties to people not in it (Derek Carr) are dropped per Q3. Negative ties for JR to check: Arthur Smith → Dennis Allen, Flores → Tagovailoa. Some drafts carry `review.notes` flagging thin coverage; a few undated pages are dated from the news cycle at medium confidence.
+- As built (JR decision, 2026-11-06): the starting data uses the staffs as they stood on the eve of the 2026 season (opener 2026-09-09, including the Jan–Aug 2026 hires), matching Madden 27's starting staffs. `COACHES_DATA` / `COORDINATORS_DATA` now hold those staffs (one titled OC and DC per team; TB has no titled DC since Bowles calls the defense, so run game coordinator Larry Foote fills the seat; head coaches who call plays keep their titled coordinator), and `SOURCE_CUTOFF` moved from 2025-12-31 to 2026-09-08. The 96 profiles were classified by person: 31 SAME (kept), 32 MOVED (`git mv` to the new `<TEAM>_<ROLE>`, key/team/role/`seed_ref` updated, review reset to draft with the note "moved seat 2026; re-research for 2026 sources"), 33 GONE (no longer an HC/OC/DC; deleted, recoverable from git history), 33 NEW seats with no file yet: ATL_OC Rees, BAL_OC Doyle, BUF_OC Carmichael, BUF_DC Leonhard, CIN_DC Golden, CLE_OC Switzer, CLE_DC Rutenberg, DAL_OC Adams, DAL_DC Parker, DEN_OC Webb, DET_DC Sheppard, HOU_OC Caley, JAX_OC Udinski, JAX_DC Campanile, KC_OC Bieniemy, LAC_DC O'Leary, LAR_OC Scheelhaase, LV_OC Janocko, LV_DC Leonard, MIA_DC Duggan, NE_HC Vrabel, NE_OC McDaniels, NE_DC Kuhr, NO_OC Nussmeier, NO_DC Staley, NYJ_OC Reich, NYJ_DC Duker, PHI_OC Mannion, PIT_OC Angelichio, SEA_OC Fleury, TB_DC Foote, WAS_OC Blough, WAS_DC Jones. Coach ties were re-pointed by person (a tie's `seed_ref` names a seat); 17 ties to departed coaches were dropped (Q3). CAR_HC (Canales, SAME) kept its review.
 **Builds on:** [`PERSONALITY_PLAN.md`](../in_progress/PERSONALITY_PLAN.md) §4.3–§4.5, §5.1 (coach scope), D5, D11, D13; [`PERSONALITY_PANTHERS_SAMPLE.md`](../in_progress/PERSONALITY_PANTHERS_SAMPLE.md) (the reviewed-evidence method); [`PERSONALITY_CORE_EXTENSIONS_PLAN.md`](../done/PERSONALITY_CORE_EXTENSIONS_PLAN.md) D1 (full reads of reviewed real profiles); [`PERSONALITY_DRAFT_INTEGRATION_PLAN.md`](../done/PERSONALITY_DRAFT_INTEGRATION_PLAN.md) §2.1, §2.5 (identity registration and reviewed manifests); [`PERSONALITY_RELATIONSHIPS_PLAN.md`](../done/PERSONALITY_RELATIONSHIPS_PLAN.md) §2.2–§2.3 (`reviewed_evidence` starting ties); PROJECT_SPEC §3.3a, §3.3p, §7.11.
 
 **Goal:** Give every real head coach and coordinator in the 2026 save a personality shaped to his real counterpart, as a fictional character inspired by him (D13). Many of them will still be in the league in 2034, and today they have no persona at all, so pressers and inbox talks give every coach the same neutral voice. Each profile is a full character like the writer personas: sliders, traits, football views, a want and a fear, a voice, signature habits and a few reviewed starting relationships. Every claim cites a dated public source, and JR reviews each one before it counts.
@@ -93,7 +94,7 @@
 - **Traits:** 3–5. Each cites evidence, is eligible for role `coach`, and passes the conflict and two-per-category rules (through `personality.core.validate_profile`).
 - **Views:** 6–10, each with 1–3 `when` tags from `newsroom.personas.ALL_TAGS`. `signatures` 2–5. `want`, `fear` and `voice` are non-empty.
 - **Evidence:**
-  - `published` ≤ `SOURCE_CUTOFF = 2025-12-31` (§8 Q1), with a URL and publisher;
+  - `published` ≤ `SOURCE_CUTOFF = 2026-09-08` (§8 Q1; was 2025-12-31 until JR's 2026-11-06 decision), with a URL and publisher;
   - confidence `low`, `medium` or `high`;
   - a `low` source can support only views, voice or signatures, never a slider or trait;
   - no field quotes more than `MAX_QUOTE_WORDS = 15` consecutive words from a source `summary`, as a check against copying.
@@ -103,7 +104,7 @@
 ### 2.2 Module (`personality/coach_profiles.py`, pure apart from reading files)
 
 ```python
-SCHEMA_VERSION = 'coach-profile-v1'; SOURCE_CUTOFF = '2025-12-31'; MAX_QUOTE_WORDS = 15
+SCHEMA_VERSION = 'coach-profile-v1'; SOURCE_CUTOFF = '2026-09-08'; MAX_QUOTE_WORDS = 15
 PROFILE_DIR = 'newsroom/config/coach_personas'
 def seed_index() -> dict                                   # {(table, team, role): row} from db.seed_clean_db
 def load_profiles(directory=PROFILE_DIR, *, teams=None) -> list[dict]
@@ -161,7 +162,7 @@ python -m tools.coach_profile_review apply-review --decisions PATH [--dir DIR]
 ### 2.4 Research batches (build-time work, D1)
 
 Each research agent handles one batch of 8 teams (24 coaches). For every coach it:
-1. finds 3–8 dated public sources through 2025 (team sites, major outlets, coaching-tree records, long interviews);
+1. finds 3–8 dated public sources through the eve of the 2026 season, 2026-09-08 (team sites, major outlets, coaching-tree records, long interviews);
 2. paraphrases what each shows, and what it doesn't;
 3. maps the evidence to sliders, traits, views, want/fear, voice, signatures and ties under §2.1;
 4. leaves a slider at 5 when nothing supports moving it.
@@ -287,7 +288,7 @@ JR approved all three recommendations on 2026-11-03.
 
 | # | Question | Decision (JR, 2026-11-03) |
 |---|---|---|
-| Q1 | How recent can sources be? | Through the end of 2025 (`SOURCE_CUTOFF`), matching the clean database's history and the Panthers sample. From 2026 the simulation is the history. |
+| Q1 | How recent can sources be? | Through the end of 2025 (`SOURCE_CUTOFF`), matching the clean database's history and the Panthers sample. From 2026 the simulation is the history. **Changed 2026-11-06 (JR):** through 2026-09-08, the eve of the 2026 season, since the seed now uses the staffs as of that date. |
 | Q2 | How do you review? | One page per batch of 24 coaches, with every claim and its linked source. You reply approve, edit or reject per coach, and I record it with `apply-review`. Start with the single spike page to settle the format. |
 | Q3 | What happens to a tie whose other person isn't in the 2026 league as the same person (for example a GM persona with a different name)? | Drop it and list it in the report. A tie only counts between people who are both actually in the league. |
 | Q4 | Is the spike's format and method right for the other 95? (asked after the spike, 2026-11-04) | JR approved CAR_HC with the Young edit and asked for a shorter page (built as the U1 follow-up). The Canales method applies to the other 95: 5–8 dated sources each, sliders left at 5 without evidence, 3–4 traits. |
