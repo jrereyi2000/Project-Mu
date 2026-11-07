@@ -1,4 +1,4 @@
-"""Review tool for coaching trees (docs/in_progress/COACHING_TREES_PLAN.md §2.5). Offline: no database, network
+"""Review tool for coaching trees (docs/done/COACHING_TREES_PLAN.md §2.5). Offline: no database, network
 or model calls.
 
   python3 -m tools.coaching_tree_review validate [--dir DIR] [--batch A|B|C|registry]

@@ -1,4 +1,4 @@
-"""Coaching trees (docs/in_progress/COACHING_TREES_PLAN.md §2.2-§2.3): reviewed, cited mentor -> protégé edges for
+"""Coaching trees (docs/done/COACHING_TREES_PLAN.md §2.2-§2.3): reviewed, cited mentor -> protégé edges for
 the 2026 staffs, named-tree memberships, the in-sim protégé rule and the lineage label writers use.
 
 Pure apart from reading the `coaching-trees-v1` files in newsroom/config/coaching_trees/:

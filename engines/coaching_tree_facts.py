@@ -1,4 +1,4 @@
-"""Coaching-tree database reads (docs/in_progress/COACHING_TREES_PLAN.md §2.4) for writers, producers and the
+"""Coaching-tree database reads (docs/done/COACHING_TREES_PLAN.md §2.4) for writers, producers and the
 carousel.
 
   staff_seasons(cur, through=...)      one row per (season, team, seat) from coach_tenures / coordinator_tenures

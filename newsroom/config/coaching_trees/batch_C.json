@@ -1,3023 +1,3023 @@
 {
- "schema_version": "coaching-trees-v1",
- "kind": "batch",
- "batch": "C",
- "members": [
-  {
-   "person": {
-    "table": "COACHES_DATA",
-    "team": "GB",
-    "role": "HC"
-   },
-   "trees": [
-    "shanahan",
-    "mcvay"
-   ],
-   "evidence": [
-    "E1",
-    "E2"
-   ],
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "person": {
-    "table": "COORDINATORS_DATA",
-    "team": "GB",
-    "role": "OC"
-   },
-   "trees": [
-    "shanahan",
-    "lafleur"
-   ],
-   "evidence": [
-    "E6",
-    "E7"
-   ],
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "person": {
-    "table": "COACHES_DATA",
-    "team": "MIN",
-    "role": "HC"
-   },
-   "trees": [
-    "mcvay"
-   ],
-   "evidence": [
-    "E10",
-    "E11"
-   ],
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "person": {
-    "table": "COORDINATORS_DATA",
-    "team": "MIN",
-    "role": "OC"
-   },
-   "trees": [
-    "mcvay"
-   ],
-   "evidence": [
-    "E13",
-    "E12"
-   ],
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "person": {
-    "table": "COORDINATORS_DATA",
-    "team": "MIN",
-    "role": "DC"
-   },
-   "trees": [
-    "belichick",
-    "tomlin"
-   ],
-   "evidence": [
-    "E18",
-    "E17",
-    "E15"
-   ],
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "person": {
-    "table": "COACHES_DATA",
-    "team": "ATL",
-    "role": "HC"
-   },
-   "trees": [
-    "kubiak"
-   ],
-   "evidence": [
-    "E19",
-    "E20"
-   ],
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "person": {
-    "table": "COACHES_DATA",
-    "team": "CAR",
-    "role": "HC"
-   },
-   "trees": [
-    "carroll"
-   ],
-   "evidence": [
-    "E26",
-    "E27"
-   ],
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "person": {
-    "table": "COORDINATORS_DATA",
-    "team": "CAR",
-    "role": "DC"
-   },
-   "trees": [
-    "mcvay"
-   ],
-   "evidence": [
-    "E33",
-    "E30"
-   ],
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "person": {
-    "table": "COORDINATORS_DATA",
-    "team": "NO",
-    "role": "DC"
-   },
-   "trees": [
-    "fangio",
-    "mcvay"
-   ],
-   "evidence": [
-    "E38",
-    "E39"
-   ],
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "person": {
-    "table": "COACHES_DATA",
-    "team": "TB",
-    "role": "HC"
-   },
-   "trees": [
-    "parcells",
-    "arians"
-   ],
-   "evidence": [
-    "E41",
-    "E42",
-    "E43"
-   ],
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "person": {
-    "table": "COORDINATORS_DATA",
-    "team": "TB",
-    "role": "DC"
-   },
-   "trees": [
-    "arians"
-   ],
-   "evidence": [
-    "E44",
-    "E45"
-   ],
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "person": {
-    "table": "COORDINATORS_DATA",
-    "team": "TB",
-    "role": "OC"
-   },
-   "trees": [
-    "mcvay"
-   ],
-   "evidence": [
-    "E46",
-    "E47"
-   ],
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "person": {
-    "table": "COACHES_DATA",
-    "team": "AZ",
-    "role": "HC"
-   },
-   "trees": [
-    "shanahan",
-    "mcvay"
-   ],
-   "evidence": [
-    "E50",
-    "E49",
-    "E48"
-   ],
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "person": {
-    "table": "COORDINATORS_DATA",
-    "team": "AZ",
-    "role": "OC"
-   },
-   "trees": [
-    "lafleur"
-   ],
-   "evidence": [
-    "E52",
-    "E53"
-   ],
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "person": {
-    "table": "COACHES_DATA",
-    "team": "LAR",
-    "role": "HC"
-   },
-   "trees": [
-    "shanahan",
-    "gruden"
-   ],
-   "evidence": [
-    "E57",
-    "E58",
-    "E59"
-   ],
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "person": {
-    "table": "COORDINATORS_DATA",
-    "team": "LAR",
-    "role": "OC"
-   },
-   "trees": [
-    "mcvay"
-   ],
-   "evidence": [
-    "E60",
-    "E61"
-   ],
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "person": {
-    "table": "COORDINATORS_DATA",
-    "team": "LAR",
-    "role": "DC"
-   },
-   "trees": [
-    "mcvay"
-   ],
-   "evidence": [
-    "E62",
-    "E63"
-   ],
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "person": {
-    "table": "COORDINATORS_DATA",
-    "team": "SF",
-    "role": "OC"
-   },
-   "trees": [
-    "shanahan"
-   ],
-   "evidence": [
-    "E64",
-    "E65"
-   ],
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "person": {
-    "table": "COACHES_DATA",
-    "team": "SF",
-    "role": "HC"
-   },
-   "trees": [
-    "shanahan"
-   ],
-   "evidence": [
-    "E57",
-    "E5"
-   ],
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "person": {
-    "table": "COORDINATORS_DATA",
-    "team": "SF",
-    "role": "DC"
-   },
-   "trees": [
-    "mcvay"
-   ],
-   "evidence": [
-    "E62",
-    "E66",
-    "E33"
-   ],
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "person": {
-    "table": "COACHES_DATA",
-    "team": "SEA",
-    "role": "HC"
-   },
-   "trees": [
-    "harbaugh"
-   ],
-   "evidence": [
-    "E67",
-    "E69"
-   ],
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "person": {
-    "table": "COORDINATORS_DATA",
-    "team": "SEA",
-    "role": "OC"
-   },
-   "trees": [
-    "shanahan"
-   ],
-   "evidence": [
-    "E71",
-    "E70"
-   ],
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  }
- ],
- "edges": [
-  {
-   "key": "coach:SF:HC>coach:GB:HC",
-   "mentor": {
-    "table": "COACHES_DATA",
-    "team": "SF",
-    "role": "HC"
-   },
-   "protege": {
-    "table": "COACHES_DATA",
-    "team": "GB",
-    "role": "HC"
-   },
-   "stints": [
+  "schema_version": "coaching-trees-v1",
+  "kind": "batch",
+  "batch": "C",
+  "members": [
     {
-     "team": "WAS",
-     "first_season": 2010,
-     "last_season": 2013,
-     "mentor_role": "offensive coordinator",
-     "protege_role": "quarterbacks coach"
+      "person": {
+        "table": "COACHES_DATA",
+        "team": "GB",
+        "role": "HC"
+      },
+      "trees": [
+        "shanahan",
+        "mcvay"
+      ],
+      "evidence": [
+        "E1",
+        "E2"
+      ],
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
     },
     {
-     "team": "ATL",
-     "first_season": 2015,
-     "last_season": 2016,
-     "mentor_role": "offensive coordinator",
-     "protege_role": "quarterbacks coach"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E1",
-    "E2",
-    "E3"
-   ],
-   "notes": "Kyle Shanahan was Washington OC 2010-13 over QB coach LaFleur and Falcons OC 2015-16; ESPN says LaFleur 'learned under' him.",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:WAS:HC>coach:GB:HC",
-   "mentor": {
-    "table": "COACHES_DATA",
-    "team": "WAS",
-    "role": "HC"
-   },
-   "protege": {
-    "table": "COACHES_DATA",
-    "team": "GB",
-    "role": "HC"
-   },
-   "stints": [
-    {
-     "team": "ATL",
-     "first_season": 2015,
-     "last_season": 2016,
-     "mentor_role": "HC",
-     "protege_role": "quarterbacks coach"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E3",
-    "E2"
-   ],
-   "notes": "Packers bio gives two Falcons seasons as QB coach; Quinn was HC both years.",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:SF:HC>coach:GB:OC",
-   "mentor": {
-    "table": "COACHES_DATA",
-    "team": "SF",
-    "role": "HC"
-   },
-   "protege": {
-    "table": "COORDINATORS_DATA",
-    "team": "GB",
-    "role": "OC"
-   },
-   "stints": [
-    {
-     "team": "SF",
-     "first_season": 2017,
-     "last_season": 2018,
-     "mentor_role": "HC",
-     "protege_role": "assistant offensive line coach"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E6",
-    "E7"
-   ],
-   "notes": "",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:GB:HC>coach:GB:OC",
-   "mentor": {
-    "table": "COACHES_DATA",
-    "team": "GB",
-    "role": "HC"
-   },
-   "protege": {
-    "table": "COORDINATORS_DATA",
-    "team": "GB",
-    "role": "OC"
-   },
-   "stints": [
-    {
-     "team": "GB",
-     "first_season": 2019,
-     "last_season": 2025,
-     "mentor_role": "HC",
-     "protege_role": "offensive line coach / offensive coordinator"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E6",
-    "E7"
-   ],
-   "notes": "OL coach 2019-21 (run game coordinator 2021), OC from 2022 under LaFleur.",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:AZ:OC>coach:GB:OC",
-   "mentor": {
-    "table": "COORDINATORS_DATA",
-    "team": "AZ",
-    "role": "OC"
-   },
-   "protege": {
-    "table": "COORDINATORS_DATA",
-    "team": "GB",
-    "role": "OC"
-   },
-   "stints": [
-    {
-     "team": "GB",
-     "first_season": 2019,
-     "last_season": 2021,
-     "mentor_role": "offensive coordinator",
-     "protege_role": "offensive line coach"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E6",
-    "E7"
-   ],
-   "notes": "Nathaniel Hackett was Packers OC 2019-21 while Stenavich coached the OL.",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:NYJ:OC>coach:GB:DC",
-   "mentor": {
-    "table": "COORDINATORS_DATA",
-    "team": "NYJ",
-    "role": "OC"
-   },
-   "protege": {
-    "table": "COORDINATORS_DATA",
-    "team": "GB",
-    "role": "DC"
-   },
-   "stints": [
-    {
-     "team": "IND",
-     "first_season": 2018,
-     "last_season": 2020,
-     "mentor_role": "HC",
-     "protege_role": "cornerbacks coach"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E9",
-    "E8"
-   ],
-   "notes": "Frank Reich (now NYJ OC) was Colts HC.",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:PHI:HC>coach:GB:DC",
-   "mentor": {
-    "table": "COACHES_DATA",
-    "team": "PHI",
-    "role": "HC"
-   },
-   "protege": {
-    "table": "COORDINATORS_DATA",
-    "team": "GB",
-    "role": "DC"
-   },
-   "stints": [
-    {
-     "team": "PHI",
-     "first_season": 2021,
-     "last_season": 2022,
-     "mentor_role": "HC",
-     "protege_role": "defensive coordinator"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E9",
-    "E8"
-   ],
-   "notes": "",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:WAS:HC>coach:SF:HC",
-   "mentor": {
-    "table": "COACHES_DATA",
-    "team": "WAS",
-    "role": "HC"
-   },
-   "protege": {
-    "table": "COACHES_DATA",
-    "team": "SF",
-    "role": "HC"
-   },
-   "stints": [
-    {
-     "team": "ATL",
-     "first_season": 2015,
-     "last_season": 2016,
-     "mentor_role": "HC",
-     "protege_role": "offensive coordinator"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E4",
-    "E3",
-    "E5"
-   ],
-   "notes": "",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:LAR:HC>coach:MIN:HC",
-   "mentor": {
-    "table": "COACHES_DATA",
-    "team": "LAR",
-    "role": "HC"
-   },
-   "protege": {
-    "table": "COACHES_DATA",
-    "team": "MIN",
-    "role": "HC"
-   },
-   "stints": [
-    {
-     "team": "LAR",
-     "first_season": 2020,
-     "last_season": 2021,
-     "mentor_role": "HC",
-     "protege_role": "offensive coordinator"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E10",
-    "E11"
-   ],
-   "notes": "",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:LAR:HC>coach:MIN:OC",
-   "mentor": {
-    "table": "COACHES_DATA",
-    "team": "LAR",
-    "role": "HC"
-   },
-   "protege": {
-    "table": "COORDINATORS_DATA",
-    "team": "MIN",
-    "role": "OC"
-   },
-   "stints": [
-    {
-     "team": "WAS",
-     "first_season": 2014,
-     "last_season": 2016,
-     "mentor_role": "offensive coordinator",
-     "protege_role": "tight ends coach"
+      "person": {
+        "table": "COORDINATORS_DATA",
+        "team": "GB",
+        "role": "OC"
+      },
+      "trees": [
+        "shanahan",
+        "lafleur"
+      ],
+      "evidence": [
+        "E6",
+        "E7"
+      ],
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
     },
     {
-     "team": "LAR",
-     "first_season": 2019,
-     "last_season": 2021,
-     "mentor_role": "HC",
-     "protege_role": "tight ends coach / passing game coordinator"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E13",
-    "E12",
-    "E14"
-   ],
-   "notes": "",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:MIN:HC>coach:MIN:OC",
-   "mentor": {
-    "table": "COACHES_DATA",
-    "team": "MIN",
-    "role": "HC"
-   },
-   "protege": {
-    "table": "COORDINATORS_DATA",
-    "team": "MIN",
-    "role": "OC"
-   },
-   "stints": [
-    {
-     "team": "LAR",
-     "first_season": 2020,
-     "last_season": 2021,
-     "mentor_role": "offensive coordinator",
-     "protege_role": "tight ends coach / passing game coordinator"
+      "person": {
+        "table": "COACHES_DATA",
+        "team": "MIN",
+        "role": "HC"
+      },
+      "trees": [
+        "mcvay"
+      ],
+      "evidence": [
+        "E10",
+        "E11"
+      ],
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
     },
     {
-     "team": "MIN",
-     "first_season": 2022,
-     "last_season": 2025,
-     "mentor_role": "HC",
-     "protege_role": "offensive coordinator"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E12",
-    "E14"
-   ],
-   "notes": "MIN 2022-25 stint from the seed seat history (OC since 2022).",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:MIN:HC>coach:MIN:DC",
-   "mentor": {
-    "table": "COACHES_DATA",
-    "team": "MIN",
-    "role": "HC"
-   },
-   "protege": {
-    "table": "COORDINATORS_DATA",
-    "team": "MIN",
-    "role": "DC"
-   },
-   "stints": [
-    {
-     "team": "MIN",
-     "first_season": 2023,
-     "last_season": 2025,
-     "mentor_role": "HC",
-     "protege_role": "defensive coordinator"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E15",
-    "E16"
-   ],
-   "notes": "Stint end from the seed seat history (DC since 2023).",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:ATL:HC>coach:ATL:OC",
-   "mentor": {
-    "table": "COACHES_DATA",
-    "team": "ATL",
-    "role": "HC"
-   },
-   "protege": {
-    "table": "COORDINATORS_DATA",
-    "team": "ATL",
-    "role": "OC"
-   },
-   "stints": [
-    {
-     "team": "CLE",
-     "first_season": 2024,
-     "last_season": 2025,
-     "mentor_role": "HC",
-     "protege_role": "tight ends coach / pass game specialist, then offensive coordinator"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E21",
-    "E22"
-   ],
-   "notes": "",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:WAS:HC>coach:ATL:DC",
-   "mentor": {
-    "table": "COACHES_DATA",
-    "team": "WAS",
-    "role": "HC"
-   },
-   "protege": {
-    "table": "COORDINATORS_DATA",
-    "team": "ATL",
-    "role": "DC"
-   },
-   "stints": [
-    {
-     "team": "ATL",
-     "first_season": 2015,
-     "last_season": 2020,
-     "mentor_role": "HC",
-     "protege_role": "linebackers coach"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E23",
-    "E24",
-    "E3"
-   ],
-   "notes": "Quinn was fired five games into 2020; Ulbrich was LB coach 2015-19.",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:TEN:HC>coach:ATL:DC",
-   "mentor": {
-    "table": "COACHES_DATA",
-    "team": "TEN",
-    "role": "HC"
-   },
-   "protege": {
-    "table": "COORDINATORS_DATA",
-    "team": "ATL",
-    "role": "DC"
-   },
-   "stints": [
-    {
-     "team": "NYJ",
-     "first_season": 2021,
-     "last_season": 2024,
-     "mentor_role": "HC",
-     "protege_role": "defensive coordinator"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E23",
-    "E24"
-   ],
-   "notes": "Confirms the existing profile tie ATL_DC (Ulbrich) - TEN_HC (Saleh); Saleh was fired five games into 2024.",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:SF:DC>coach:ATL:DC",
-   "mentor": {
-    "table": "COORDINATORS_DATA",
-    "team": "SF",
-    "role": "DC"
-   },
-   "protege": {
-    "table": "COORDINATORS_DATA",
-    "team": "ATL",
-    "role": "DC"
-   },
-   "stints": [
-    {
-     "team": "ATL",
-     "first_season": 2020,
-     "last_season": 2020,
-     "mentor_role": "interim HC",
-     "protege_role": "defensive coordinator"
+      "person": {
+        "table": "COORDINATORS_DATA",
+        "team": "MIN",
+        "role": "OC"
+      },
+      "trees": [
+        "mcvay"
+      ],
+      "evidence": [
+        "E13",
+        "E12"
+      ],
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
     },
     {
-     "team": "ATL",
-     "first_season": 2025,
-     "last_season": 2025,
-     "mentor_role": "HC",
-     "protege_role": "defensive coordinator"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E23",
-    "E24"
-   ],
-   "notes": "2020 was 11 games under interim HC Morris plus full 2025; borderline two seasons summed, JR to judge.",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:DAL:HC>coach:CAR:HC",
-   "mentor": {
-    "table": "COACHES_DATA",
-    "team": "DAL",
-    "role": "HC"
-   },
-   "protege": {
-    "table": "COACHES_DATA",
-    "team": "CAR",
-    "role": "HC"
-   },
-   "stints": [
-    {
-     "team": "SEA",
-     "first_season": 2018,
-     "last_season": 2020,
-     "mentor_role": "offensive coordinator",
-     "protege_role": "quarterbacks coach / passing game coordinator"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E26",
-    "E27",
-    "E25"
-   ],
-   "notes": "Brian Schottenheimer (now DAL HC) was Seahawks OC 2018-20.",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:CAR:HC>coach:CAR:OC",
-   "mentor": {
-    "table": "COACHES_DATA",
-    "team": "CAR",
-    "role": "HC"
-   },
-   "protege": {
-    "table": "COORDINATORS_DATA",
-    "team": "CAR",
-    "role": "OC"
-   },
-   "stints": [
-    {
-     "team": "TB",
-     "first_season": 2023,
-     "last_season": 2023,
-     "mentor_role": "offensive coordinator",
-     "protege_role": "wide receivers coach"
+      "person": {
+        "table": "COORDINATORS_DATA",
+        "team": "MIN",
+        "role": "DC"
+      },
+      "trees": [
+        "belichick",
+        "tomlin"
+      ],
+      "evidence": [
+        "E18",
+        "E17",
+        "E15"
+      ],
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
     },
     {
-     "team": "CAR",
-     "first_season": 2024,
-     "last_season": 2025,
-     "mentor_role": "HC",
-     "protege_role": "offensive coordinator"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E28",
-    "E29"
-   ],
-   "notes": "Also worked under Canales in Seattle 2019-22 when Canales was QB coach/passing game coordinator (not counted).",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:LAC:HC>coach:CAR:DC",
-   "mentor": {
-    "table": "COACHES_DATA",
-    "team": "LAC",
-    "role": "HC"
-   },
-   "protege": {
-    "table": "COORDINATORS_DATA",
-    "team": "CAR",
-    "role": "DC"
-   },
-   "stints": [
-    {
-     "team": "SF",
-     "first_season": 2011,
-     "last_season": 2014,
-     "mentor_role": "HC",
-     "protege_role": "quality control / offensive assistant / defensive assistant"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E30",
-    "E31"
-   ],
-   "notes": "Jim Harbaugh was 49ers HC 2011-14; Evero stayed through 2015.",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:LAR:HC>coach:CAR:DC",
-   "mentor": {
-    "table": "COACHES_DATA",
-    "team": "LAR",
-    "role": "HC"
-   },
-   "protege": {
-    "table": "COORDINATORS_DATA",
-    "team": "CAR",
-    "role": "DC"
-   },
-   "stints": [
-    {
-     "team": "LAR",
-     "first_season": 2017,
-     "last_season": 2021,
-     "mentor_role": "HC",
-     "protege_role": "safeties coach / secondary coach and pass game coordinator"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E33",
-    "E31",
-    "E30"
-   ],
-   "notes": "",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:SF:DC>coach:CAR:DC",
-   "mentor": {
-    "table": "COORDINATORS_DATA",
-    "team": "SF",
-    "role": "DC"
-   },
-   "protege": {
-    "table": "COORDINATORS_DATA",
-    "team": "CAR",
-    "role": "DC"
-   },
-   "stints": [
-    {
-     "team": "TB",
-     "first_season": 2009,
-     "last_season": 2009,
-     "mentor_role": "HC",
-     "protege_role": "defensive quality control coach"
+      "person": {
+        "table": "COACHES_DATA",
+        "team": "ATL",
+        "role": "HC"
+      },
+      "trees": [
+        "kubiak"
+      ],
+      "evidence": [
+        "E19",
+        "E20"
+      ],
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
     },
     {
-     "team": "LAR",
-     "first_season": 2021,
-     "last_season": 2021,
-     "mentor_role": "defensive coordinator",
-     "protege_role": "secondary coach / pass game coordinator"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E32",
-    "E31",
-    "E33"
-   ],
-   "notes": "Morris was Bucs HC in 2009 (Evero Bucs QC 2007-09; sources give the years but do not name Morris for 2009) and Rams DC over Evero in 2021.",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:NO:HC>coach:NO:OC",
-   "mentor": {
-    "table": "COACHES_DATA",
-    "team": "NO",
-    "role": "HC"
-   },
-   "protege": {
-    "table": "COORDINATORS_DATA",
-    "team": "NO",
-    "role": "OC"
-   },
-   "stints": [
-    {
-     "team": "DAL",
-     "first_season": 2019,
-     "last_season": 2022,
-     "mentor_role": "offensive coordinator",
-     "protege_role": "tight ends coach / quarterbacks coach"
+      "person": {
+        "table": "COACHES_DATA",
+        "team": "CAR",
+        "role": "HC"
+      },
+      "trees": [
+        "carroll"
+      ],
+      "evidence": [
+        "E26",
+        "E27"
+      ],
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
     },
     {
-     "team": "LAC",
-     "first_season": 2023,
-     "last_season": 2023,
-     "mentor_role": "offensive coordinator",
-     "protege_role": "quarterbacks coach"
+      "person": {
+        "table": "COORDINATORS_DATA",
+        "team": "CAR",
+        "role": "DC"
+      },
+      "trees": [
+        "mcvay"
+      ],
+      "evidence": [
+        "E33",
+        "E30"
+      ],
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
     },
     {
-     "team": "PHI",
-     "first_season": 2024,
-     "last_season": 2024,
-     "mentor_role": "offensive coordinator",
-     "protege_role": "quarterbacks coach"
+      "person": {
+        "table": "COORDINATORS_DATA",
+        "team": "NO",
+        "role": "DC"
+      },
+      "trees": [
+        "fangio",
+        "mcvay"
+      ],
+      "evidence": [
+        "E38",
+        "E39"
+      ],
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
     },
     {
-     "team": "NO",
-     "first_season": 2025,
-     "last_season": 2025,
-     "mentor_role": "HC",
-     "protege_role": "offensive coordinator"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E34",
-    "E35"
-   ],
-   "notes": "Seven straight seasons on Moore's side of the ball.",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:PIT:HC>coach:NO:OC",
-   "mentor": {
-    "table": "COACHES_DATA",
-    "team": "PIT",
-    "role": "HC"
-   },
-   "protege": {
-    "table": "COORDINATORS_DATA",
-    "team": "NO",
-    "role": "OC"
-   },
-   "stints": [
-    {
-     "team": "DAL",
-     "first_season": 2020,
-     "last_season": 2022,
-     "mentor_role": "HC",
-     "protege_role": "quarterbacks coach"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E35",
-    "E37"
-   ],
-   "notes": "Mike McCarthy (now PIT HC) was Cowboys HC 2020-22; Nussmeier sources give the QB-coach years, the McCarthy source does not name Nussmeier.",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:PIT:HC>coach:NO:HC",
-   "mentor": {
-    "table": "COACHES_DATA",
-    "team": "PIT",
-    "role": "HC"
-   },
-   "protege": {
-    "table": "COACHES_DATA",
-    "team": "NO",
-    "role": "HC"
-   },
-   "stints": [
-    {
-     "team": "DAL",
-     "first_season": 2020,
-     "last_season": 2022,
-     "mentor_role": "HC",
-     "protege_role": "offensive coordinator"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E37",
-    "E36"
-   ],
-   "notes": "",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:PHI:DC>coach:NO:DC",
-   "mentor": {
-    "table": "COORDINATORS_DATA",
-    "team": "PHI",
-    "role": "DC"
-   },
-   "protege": {
-    "table": "COORDINATORS_DATA",
-    "team": "NO",
-    "role": "DC"
-   },
-   "stints": [
-    {
-     "team": "CHI",
-     "first_season": 2017,
-     "last_season": 2018,
-     "mentor_role": "defensive coordinator",
-     "protege_role": "outside linebackers coach"
+      "person": {
+        "table": "COACHES_DATA",
+        "team": "TB",
+        "role": "HC"
+      },
+      "trees": [
+        "parcells",
+        "arians"
+      ],
+      "evidence": [
+        "E41",
+        "E42",
+        "E43"
+      ],
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
     },
     {
-     "team": "DEN",
-     "first_season": 2019,
-     "last_season": 2019,
-     "mentor_role": "HC",
-     "protege_role": "outside linebackers coach"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E38",
-    "E39",
-    "E40"
-   ],
-   "notes": "Vic Fangio (now PHI DC); sources use learned-from/tutelage language.",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:TB:HC>coach:TB:DC",
-   "mentor": {
-    "table": "COACHES_DATA",
-    "team": "TB",
-    "role": "HC"
-   },
-   "protege": {
-    "table": "COORDINATORS_DATA",
-    "team": "TB",
-    "role": "DC"
-   },
-   "stints": [
-    {
-     "team": "TB",
-     "first_season": 2019,
-     "last_season": 2021,
-     "mentor_role": "defensive coordinator",
-     "protege_role": "outside linebackers coach"
+      "person": {
+        "table": "COORDINATORS_DATA",
+        "team": "TB",
+        "role": "DC"
+      },
+      "trees": [
+        "arians"
+      ],
+      "evidence": [
+        "E44",
+        "E45"
+      ],
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
     },
     {
-     "team": "TB",
-     "first_season": 2022,
-     "last_season": 2025,
-     "mentor_role": "HC",
-     "protege_role": "inside linebackers coach / co-defensive coordinator"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E44",
-    "E45"
-   ],
-   "notes": "Bowles called the defense himself while Foote was co-DC.",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:LAR:HC>coach:TB:OC",
-   "mentor": {
-    "table": "COACHES_DATA",
-    "team": "LAR",
-    "role": "HC"
-   },
-   "protege": {
-    "table": "COORDINATORS_DATA",
-    "team": "TB",
-    "role": "OC"
-   },
-   "stints": [
-    {
-     "team": "LAR",
-     "first_season": 2019,
-     "last_season": 2023,
-     "mentor_role": "HC",
-     "protege_role": "assistant quarterbacks coach / quarterbacks coach / pass game coordinator"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E46",
-    "E47"
-   ],
-   "notes": "Confirms the existing profile ties LAR_HC - TB_OC and TB_OC - LAR_HC (same pair listed twice).",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:SF:DC>coach:TB:OC",
-   "mentor": {
-    "table": "COORDINATORS_DATA",
-    "team": "SF",
-    "role": "DC"
-   },
-   "protege": {
-    "table": "COORDINATORS_DATA",
-    "team": "TB",
-    "role": "OC"
-   },
-   "stints": [
-    {
-     "team": "ATL",
-     "first_season": 2024,
-     "last_season": 2025,
-     "mentor_role": "HC",
-     "protege_role": "offensive coordinator"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E46",
-    "E47"
-   ],
-   "notes": "Raheem Morris (now SF DC) was Falcons HC.",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:SF:HC>coach:AZ:HC",
-   "mentor": {
-    "table": "COACHES_DATA",
-    "team": "SF",
-    "role": "HC"
-   },
-   "protege": {
-    "table": "COACHES_DATA",
-    "team": "AZ",
-    "role": "HC"
-   },
-   "stints": [
-    {
-     "team": "CLE",
-     "first_season": 2014,
-     "last_season": 2014,
-     "mentor_role": "offensive coordinator",
-     "protege_role": "offensive coaching intern"
+      "person": {
+        "table": "COORDINATORS_DATA",
+        "team": "TB",
+        "role": "OC"
+      },
+      "trees": [
+        "mcvay"
+      ],
+      "evidence": [
+        "E46",
+        "E47"
+      ],
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
     },
     {
-     "team": "ATL",
-     "first_season": 2015,
-     "last_season": 2016,
-     "mentor_role": "offensive coordinator",
-     "protege_role": "offensive assistant"
+      "person": {
+        "table": "COACHES_DATA",
+        "team": "AZ",
+        "role": "HC"
+      },
+      "trees": [
+        "shanahan",
+        "mcvay"
+      ],
+      "evidence": [
+        "E50",
+        "E49",
+        "E48"
+      ],
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
     },
     {
-     "team": "SF",
-     "first_season": 2017,
-     "last_season": 2020,
-     "mentor_role": "HC",
-     "protege_role": "wide receivers coach / passing game coordinator"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E50",
-    "E48",
-    "E3",
-    "E49"
-   ],
-   "notes": "Confirms the existing profile ties AZ_HC - SF_HC and SF_HC - AZ_HC (same pair listed twice).",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:WAS:HC>coach:AZ:HC",
-   "mentor": {
-    "table": "COACHES_DATA",
-    "team": "WAS",
-    "role": "HC"
-   },
-   "protege": {
-    "table": "COACHES_DATA",
-    "team": "AZ",
-    "role": "HC"
-   },
-   "stints": [
-    {
-     "team": "ATL",
-     "first_season": 2015,
-     "last_season": 2016,
-     "mentor_role": "HC",
-     "protege_role": "offensive assistant"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E48",
-    "E3"
-   ],
-   "notes": "",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:TEN:HC>coach:AZ:HC",
-   "mentor": {
-    "table": "COACHES_DATA",
-    "team": "TEN",
-    "role": "HC"
-   },
-   "protege": {
-    "table": "COACHES_DATA",
-    "team": "AZ",
-    "role": "HC"
-   },
-   "stints": [
-    {
-     "team": "NYJ",
-     "first_season": 2021,
-     "last_season": 2022,
-     "mentor_role": "HC",
-     "protege_role": "offensive coordinator"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E51",
-    "E50",
-    "E54"
-   ],
-   "notes": "Robert Saleh (now TEN HC).",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:LAR:HC>coach:AZ:HC",
-   "mentor": {
-    "table": "COACHES_DATA",
-    "team": "LAR",
-    "role": "HC"
-   },
-   "protege": {
-    "table": "COACHES_DATA",
-    "team": "AZ",
-    "role": "HC"
-   },
-   "stints": [
-    {
-     "team": "LAR",
-     "first_season": 2023,
-     "last_season": 2025,
-     "mentor_role": "HC",
-     "protege_role": "offensive coordinator"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E49",
-    "E50"
-   ],
-   "notes": "",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:GB:HC>coach:AZ:OC",
-   "mentor": {
-    "table": "COACHES_DATA",
-    "team": "GB",
-    "role": "HC"
-   },
-   "protege": {
-    "table": "COORDINATORS_DATA",
-    "team": "AZ",
-    "role": "OC"
-   },
-   "stints": [
-    {
-     "team": "GB",
-     "first_season": 2019,
-     "last_season": 2021,
-     "mentor_role": "HC",
-     "protege_role": "offensive coordinator"
+      "person": {
+        "table": "COORDINATORS_DATA",
+        "team": "AZ",
+        "role": "OC"
+      },
+      "trees": [
+        "lafleur"
+      ],
+      "evidence": [
+        "E52",
+        "E53"
+      ],
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
     },
     {
-     "team": "GB",
-     "first_season": 2025,
-     "last_season": 2025,
-     "mentor_role": "HC",
-     "protege_role": "defensive analyst"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E52",
-    "E53"
-   ],
-   "notes": "",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:TEN:HC>coach:AZ:OC",
-   "mentor": {
-    "table": "COACHES_DATA",
-    "team": "TEN",
-    "role": "HC"
-   },
-   "protege": {
-    "table": "COORDINATORS_DATA",
-    "team": "AZ",
-    "role": "OC"
-   },
-   "stints": [
-    {
-     "team": "NYJ",
-     "first_season": 2023,
-     "last_season": 2024,
-     "mentor_role": "HC",
-     "protege_role": "offensive coordinator"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E54",
-    "E52"
-   ],
-   "notes": "Saleh was fired five games into 2024 (about 1.3 seasons together); borderline for the 2-season rule.",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:GB:DC>coach:AZ:DC",
-   "mentor": {
-    "table": "COORDINATORS_DATA",
-    "team": "GB",
-    "role": "DC"
-   },
-   "protege": {
-    "table": "COORDINATORS_DATA",
-    "team": "AZ",
-    "role": "DC"
-   },
-   "stints": [
-    {
-     "team": "PHI",
-     "first_season": 2021,
-     "last_season": 2022,
-     "mentor_role": "defensive coordinator",
-     "protege_role": "linebackers coach"
+      "person": {
+        "table": "COACHES_DATA",
+        "team": "LAR",
+        "role": "HC"
+      },
+      "trees": [
+        "shanahan",
+        "gruden"
+      ],
+      "evidence": [
+        "E57",
+        "E58",
+        "E59"
+      ],
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
     },
     {
-     "team": "AZ",
-     "first_season": 2023,
-     "last_season": 2025,
-     "mentor_role": "HC",
-     "protege_role": "defensive coordinator"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E55",
-    "E56"
-   ],
-   "notes": "Confirms the existing profile ties AZ_DC - GB_DC and GB_DC - AZ_DC (same pair listed twice).",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:PHI:HC>coach:AZ:DC",
-   "mentor": {
-    "table": "COACHES_DATA",
-    "team": "PHI",
-    "role": "HC"
-   },
-   "protege": {
-    "table": "COORDINATORS_DATA",
-    "team": "AZ",
-    "role": "DC"
-   },
-   "stints": [
-    {
-     "team": "PHI",
-     "first_season": 2021,
-     "last_season": 2022,
-     "mentor_role": "HC",
-     "protege_role": "linebackers coach"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E56",
-    "E55"
-   ],
-   "notes": "",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:SF:HC>coach:LAR:HC",
-   "mentor": {
-    "table": "COACHES_DATA",
-    "team": "SF",
-    "role": "HC"
-   },
-   "protege": {
-    "table": "COACHES_DATA",
-    "team": "LAR",
-    "role": "HC"
-   },
-   "stints": [
-    {
-     "team": "WAS",
-     "first_season": 2010,
-     "last_season": 2013,
-     "mentor_role": "offensive coordinator",
-     "protege_role": "offensive assistant / tight ends coach"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E57",
-    "E58"
-   ],
-   "notes": "",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:LAR:HC>coach:LAR:OC",
-   "mentor": {
-    "table": "COACHES_DATA",
-    "team": "LAR",
-    "role": "HC"
-   },
-   "protege": {
-    "table": "COORDINATORS_DATA",
-    "team": "LAR",
-    "role": "OC"
-   },
-   "stints": [
-    {
-     "team": "LAR",
-     "first_season": 2024,
-     "last_season": 2025,
-     "mentor_role": "HC",
-     "protege_role": "pass game specialist / passing game coordinator"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E60",
-    "E61"
-   ],
-   "notes": "Confirms the existing profile tie LAR_OC - LAR_HC.",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:AZ:HC>coach:LAR:OC",
-   "mentor": {
-    "table": "COACHES_DATA",
-    "team": "AZ",
-    "role": "HC"
-   },
-   "protege": {
-    "table": "COORDINATORS_DATA",
-    "team": "LAR",
-    "role": "OC"
-   },
-   "stints": [
-    {
-     "team": "LAR",
-     "first_season": 2024,
-     "last_season": 2025,
-     "mentor_role": "offensive coordinator",
-     "protege_role": "pass game specialist / passing game coordinator"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E61",
-    "E60"
-   ],
-   "notes": "Mike LaFleur (now AZ HC) was Rams OC 2023-25.",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:LAR:HC>coach:LAR:DC",
-   "mentor": {
-    "table": "COACHES_DATA",
-    "team": "LAR",
-    "role": "HC"
-   },
-   "protege": {
-    "table": "COORDINATORS_DATA",
-    "team": "LAR",
-    "role": "DC"
-   },
-   "stints": [
-    {
-     "team": "LAR",
-     "first_season": 2017,
-     "last_season": 2025,
-     "mentor_role": "HC",
-     "protege_role": "linebackers coach / pass game coordinator / defensive coordinator"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E63",
-    "E62"
-   ],
-   "notes": "",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:SF:DC>coach:LAR:DC",
-   "mentor": {
-    "table": "COORDINATORS_DATA",
-    "team": "SF",
-    "role": "DC"
-   },
-   "protege": {
-    "table": "COORDINATORS_DATA",
-    "team": "LAR",
-    "role": "DC"
-   },
-   "stints": [
-    {
-     "team": "LAR",
-     "first_season": 2021,
-     "last_season": 2023,
-     "mentor_role": "defensive coordinator",
-     "protege_role": "linebackers coach / DB coach and pass game coordinator / pass rush coordinator"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E62",
-    "E63"
-   ],
-   "notes": "Raheem Morris was Rams DC 2021-23 over Shula.",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:SF:HC>coach:SF:OC",
-   "mentor": {
-    "table": "COACHES_DATA",
-    "team": "SF",
-    "role": "HC"
-   },
-   "protege": {
-    "table": "COORDINATORS_DATA",
-    "team": "SF",
-    "role": "OC"
-   },
-   "stints": [
-    {
-     "team": "SF",
-     "first_season": 2021,
-     "last_season": 2025,
-     "mentor_role": "HC",
-     "protege_role": "defensive QC / assistant QB coach / passing game specialist / offensive coordinator"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E64",
-    "E65"
-   ],
-   "notes": "",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:WAS:HC>coach:SF:DC",
-   "mentor": {
-    "table": "COACHES_DATA",
-    "team": "WAS",
-    "role": "HC"
-   },
-   "protege": {
-    "table": "COORDINATORS_DATA",
-    "team": "SF",
-    "role": "DC"
-   },
-   "stints": [
-    {
-     "team": "ATL",
-     "first_season": 2015,
-     "last_season": 2020,
-     "mentor_role": "HC",
-     "protege_role": "assistant HC / passing game coordinator / defensive coordinator"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E48",
-    "E3",
-    "E23"
-   ],
-   "notes": "Quinn was fired five games into 2020, after which Morris became interim HC.",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:LAR:HC>coach:SF:DC",
-   "mentor": {
-    "table": "COACHES_DATA",
-    "team": "LAR",
-    "role": "HC"
-   },
-   "protege": {
-    "table": "COORDINATORS_DATA",
-    "team": "SF",
-    "role": "DC"
-   },
-   "stints": [
-    {
-     "team": "LAR",
-     "first_season": 2021,
-     "last_season": 2023,
-     "mentor_role": "HC",
-     "protege_role": "defensive coordinator"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E62",
-    "E33",
-    "E66"
-   ],
-   "notes": "",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:NYG:HC>coach:SEA:HC",
-   "mentor": {
-    "table": "COACHES_DATA",
-    "team": "NYG",
-    "role": "HC"
-   },
-   "protege": {
-    "table": "COACHES_DATA",
-    "team": "SEA",
-    "role": "HC"
-   },
-   "stints": [
-    {
-     "team": "BAL",
-     "first_season": 2014,
-     "last_season": 2020,
-     "mentor_role": "HC",
-     "protege_role": "intern / defensive assistant / DB coach / linebackers coach"
+      "person": {
+        "table": "COORDINATORS_DATA",
+        "team": "LAR",
+        "role": "OC"
+      },
+      "trees": [
+        "mcvay"
+      ],
+      "evidence": [
+        "E60",
+        "E61"
+      ],
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
     },
     {
-     "team": "BAL",
-     "first_season": 2022,
-     "last_season": 2023,
-     "mentor_role": "HC",
-     "protege_role": "defensive coordinator"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E67",
-    "E68",
-    "E69"
-   ],
-   "notes": "Confirms the existing profile tie SEA_HC - NYG_HC (John Harbaugh).",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:LAC:HC>coach:SEA:HC",
-   "mentor": {
-    "table": "COACHES_DATA",
-    "team": "LAC",
-    "role": "HC"
-   },
-   "protege": {
-    "table": "COACHES_DATA",
-    "team": "SEA",
-    "role": "HC"
-   },
-   "stints": [
-    {
-     "team": "Michigan",
-     "first_season": 2021,
-     "last_season": 2021,
-     "mentor_role": "HC",
-     "protege_role": "defensive coordinator"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E67",
-    "E69"
-   ],
-   "notes": "One season plus a source in which Macdonald says what he learned from both Harbaughs; confirms the existing profile tie SEA_HC - LAC_HC (Jim Harbaugh).",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:SF:HC>coach:SEA:OC",
-   "mentor": {
-    "table": "COACHES_DATA",
-    "team": "SF",
-    "role": "HC"
-   },
-   "protege": {
-    "table": "COORDINATORS_DATA",
-    "team": "SEA",
-    "role": "OC"
-   },
-   "stints": [
-    {
-     "team": "SF",
-     "first_season": 2019,
-     "last_season": 2025,
-     "mentor_role": "HC",
-     "protege_role": "defensive QC / offensive QC / tight ends coach / run game coordinator"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E70",
-    "E71"
-   ],
-   "notes": "Confirms the existing profile tie SEA_OC - SF_HC; AP quotes Fleury on what he learned under Shanahan.",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:TEN:HC>coach:SEA:OC",
-   "mentor": {
-    "table": "COACHES_DATA",
-    "team": "TEN",
-    "role": "HC"
-   },
-   "protege": {
-    "table": "COORDINATORS_DATA",
-    "team": "SEA",
-    "role": "OC"
-   },
-   "stints": [
-    {
-     "team": "SF",
-     "first_season": 2019,
-     "last_season": 2019,
-     "mentor_role": "defensive coordinator",
-     "protege_role": "defensive quality control coach"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E72",
-    "E71"
-   ],
-   "notes": "Robert Saleh was 49ers DC in 2019; one season plus AP naming Saleh among Fleury's mentors. Sources do not name Saleh as DC in 2019 explicitly.",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:WAS:HC>coach:SEA:DC",
-   "mentor": {
-    "table": "COACHES_DATA",
-    "team": "WAS",
-    "role": "HC"
-   },
-   "protege": {
-    "table": "COORDINATORS_DATA",
-    "team": "SEA",
-    "role": "DC"
-   },
-   "stints": [
-    {
-     "team": "ATL",
-     "first_season": 2018,
-     "last_season": 2020,
-     "mentor_role": "HC",
-     "protege_role": "defensive assistant / outside linebackers coach"
+      "person": {
+        "table": "COORDINATORS_DATA",
+        "team": "LAR",
+        "role": "DC"
+      },
+      "trees": [
+        "mcvay"
+      ],
+      "evidence": [
+        "E62",
+        "E63"
+      ],
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
     },
     {
-     "team": "DAL",
-     "first_season": 2021,
-     "last_season": 2023,
-     "mentor_role": "defensive coordinator",
-     "protege_role": "defensive line coach"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E73",
-    "E74"
-   ],
-   "notes": "Confirms the existing profile tie SEA_DC - WAS_HC (Dan Quinn).",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:SEA:HC>coach:SEA:DC",
-   "mentor": {
-    "table": "COACHES_DATA",
-    "team": "SEA",
-    "role": "HC"
-   },
-   "protege": {
-    "table": "COORDINATORS_DATA",
-    "team": "SEA",
-    "role": "DC"
-   },
-   "stints": [
+      "person": {
+        "table": "COORDINATORS_DATA",
+        "team": "SF",
+        "role": "OC"
+      },
+      "trees": [
+        "shanahan"
+      ],
+      "evidence": [
+        "E64",
+        "E65"
+      ],
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
     {
-     "team": "SEA",
-     "first_season": 2024,
-     "last_season": 2025,
-     "mentor_role": "HC",
-     "protege_role": "defensive coordinator"
-    }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E73",
-    "E74"
-   ],
-   "notes": "Stint end from the seed seat history (DC since 2024).",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  },
-  {
-   "key": "coach:PIT:HC>coach:SEA:DC",
-   "mentor": {
-    "table": "COACHES_DATA",
-    "team": "PIT",
-    "role": "HC"
-   },
-   "protege": {
-    "table": "COORDINATORS_DATA",
-    "team": "SEA",
-    "role": "DC"
-   },
-   "stints": [
+      "person": {
+        "table": "COACHES_DATA",
+        "team": "SF",
+        "role": "HC"
+      },
+      "trees": [
+        "shanahan"
+      ],
+      "evidence": [
+        "E57",
+        "E5"
+      ],
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
     {
-     "team": "DAL",
-     "first_season": 2021,
-     "last_season": 2023,
-     "mentor_role": "HC",
-     "protege_role": "defensive line coach"
+      "person": {
+        "table": "COORDINATORS_DATA",
+        "team": "SF",
+        "role": "DC"
+      },
+      "trees": [
+        "mcvay"
+      ],
+      "evidence": [
+        "E62",
+        "E66",
+        "E33"
+      ],
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "person": {
+        "table": "COACHES_DATA",
+        "team": "SEA",
+        "role": "HC"
+      },
+      "trees": [
+        "harbaugh"
+      ],
+      "evidence": [
+        "E67",
+        "E69"
+      ],
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "person": {
+        "table": "COORDINATORS_DATA",
+        "team": "SEA",
+        "role": "OC"
+      },
+      "trees": [
+        "shanahan"
+      ],
+      "evidence": [
+        "E71",
+        "E70"
+      ],
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
     }
-   ],
-   "outcome": "positive",
-   "evidence": [
-    "E73",
-    "E37"
-   ],
-   "notes": "Mike McCarthy (now PIT HC) was Cowboys HC 2020-23; the Durde sources give the years but name only Quinn.",
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  }
- ],
- "proposed_trees": [
-  {
-   "key": "arians",
-   "label": "Bruce Arians tree",
-   "root": "arians",
-   "parent": null,
-   "summary": "Bruce Arians (Temple, Steelers, Colts, Cardinals and Buccaneers HC) and the assistants he hired and promoted, notably Todd Bowles (his Cardinals and Buccaneers DC and hand-picked Tampa Bay successor) and Larry Foote (Cardinals and Buccaneers linebackers coach).",
-   "evidence": [
-    "E43",
-    "E44"
-   ],
-   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": ""
-   }
-  }
- ],
- "evidence": [
-  {
-   "id": "E1",
-   "url": "https://www.espn.com/blog/green-bay-packers/post/_/id/46667/matt-lafleurs-time-with-mcvay-shanahan-will-help-aaron-rodgers",
-   "publisher": "ESPN",
-   "published": "2019-01-07",
-   "accessed": "2026-11-07",
-   "summary": "On the Packers hiring Matt LaFleur: he learned under Falcons OC Kyle Shanahan in Atlanta, then was Sean McVay's non-play-calling offensive coordinator with the Rams before calling plays for Mike Vrabel's Titans.",
-   "confidence": "high",
-   "mentorship": true
-  },
-  {
-   "id": "E2",
-   "url": "https://www.packers.com/news/five-things-to-know-about-matt-lafleur",
-   "publisher": "Green Bay Packers",
-   "published": "2019-01-09",
-   "accessed": "2026-11-07",
-   "summary": "Team piece on new HC Matt LaFleur: Texans offensive assistant under Gary Kubiak, Washington QB coach 2010-13 on Mike Shanahan's staff, Notre Dame 2014, Falcons QB coach for two seasons under OC Kyle Shanahan, Rams OC 2017 under Sean McVay, Titans OC 2018.",
-   "confidence": "high"
-  },
-  {
-   "id": "E3",
-   "url": "https://sportstalkatl.com/the-2016-falcons-coaching-staff-was-absolutely-loaded",
-   "publisher": "Sports Talk ATL",
-   "published": "2023-01-20",
-   "accessed": "2026-11-07",
-   "summary": "Lists the 2016 Falcons staff under HC Dan Quinn: Raheem Morris assistant HC/passing game coordinator/WR coach, Kyle Shanahan OC, Matt LaFleur QB coach, Mike LaFleur and Mike McDaniel offensive assistants, Jeff Ulbrich linebackers coach.",
-   "confidence": "medium"
-  },
-  {
-   "id": "E4",
-   "url": "https://www.espn.com/blog/nflnation/post/_/id/159582/falcons-coaching-staff-starting-to-take-form",
-   "publisher": "ESPN",
-   "published": "2015-01-21",
-   "accessed": "2026-11-07",
-   "summary": "Reports Kyle Shanahan as offensive coordinator on Dan Quinn's first Falcons staff, with Quinn to be hired after the Super Bowl.",
-   "confidence": "high"
-  },
-  {
-   "id": "E5",
-   "url": "https://6abc.com/post/kyle-shanahan-takes-49ers-head-coach-job-now-that-falcons-out/1740860/",
-   "publisher": "Associated Press (6abc)",
-   "published": "2017-02-07",
-   "accessed": "2026-11-07",
-   "summary": "AP on the 49ers hiring Falcons offensive coordinator Kyle Shanahan; recounts his Texans, Washington, Cleveland and Atlanta coordinator jobs.",
-   "confidence": "high"
-  },
-  {
-   "id": "E6",
-   "url": "https://www.packers.com/news/packers-promote-adam-stenavich-to-offensive-coordinator",
-   "publisher": "Green Bay Packers",
-   "published": "2022-01-31",
-   "accessed": "2026-11-07",
-   "summary": "Packers promote OL/run game coordinator Adam Stenavich to OC; he joined Matt LaFleur's staff in 2019 as OL coach after two years (2017-18) as 49ers assistant offensive line coach.",
-   "confidence": "high"
-  },
-  {
-   "id": "E7",
-   "url": "https://www.wbay.com/2022/01/31/packers-announce-stenavich-offensive-coordinator",
-   "publisher": "WBAY",
-   "published": "2022-01-31",
-   "accessed": "2026-11-07",
-   "summary": "Reports Stenavich's promotion to Packers OC after coaching the offensive line 2019-21, replacing Nathaniel Hackett who left for Denver; previously 49ers assistant OL coach 2017-18.",
-   "confidence": "medium"
-  },
-  {
-   "id": "E8",
-   "url": "https://www.nbcsportsphiladelphia.com/philadelphia/eagles/5-things-you-should-know-about-new-eagles-dc-jonathan-gannon",
-   "publisher": "NBC Sports Philadelphia",
-   "published": "2021-01-24",
-   "accessed": "2026-11-07",
-   "summary": "Profile of new Eagles DC Jonathan Gannon, hired under Nick Sirianni: Vikings assistant DB coach on Mike Zimmer's staff 2014-17, then worked with Sirianni on Frank Reich's Colts staff.",
-   "confidence": "medium"
-  },
-  {
-   "id": "E9",
-   "url": "https://www.news4jax.com/sports/2023/02/14/cardinals-hire-eagles-coordinator-gannon-as-next-coach/",
-   "publisher": "Associated Press (News4JAX)",
-   "published": "2023-02-14",
-   "accessed": "2026-11-07",
-   "summary": "AP on the Cardinals hiring Gannon: Eagles DC for two seasons (2021-22) under Nick Sirianni after coaching Colts defensive backs/cornerbacks 2018-20.",
-   "confidence": "medium"
-  },
-  {
-   "id": "E10",
-   "url": "https://www.espn.com/nfl/story/_/id/33303864/minnesota-vikings-officially-hire-innovative-kevin-oconnell-new-head-coach",
-   "publisher": "ESPN",
-   "published": "2022-02-16",
-   "accessed": "2026-11-07",
-   "summary": "Vikings officially hire Kevin O'Connell: Browns QB coach 2015, 49ers special projects 2016, Washington QB coach/passing game coordinator/OC 2017-19, Rams OC 2020-21 under Sean McVay.",
-   "confidence": "high"
-  },
-  {
-   "id": "E11",
-   "url": "https://www.clickondetroit.com/sports/2022/02/16/vikings-finalize-hire-of-champion-rams-oc-kevin-oconnell/",
-   "publisher": "Associated Press (ClickOnDetroit)",
-   "published": "2022-02-16",
-   "accessed": "2026-11-07",
-   "summary": "AP: Vikings finalize hiring of Rams offensive coordinator O'Connell, who had just finished his second season (2020-21) on Sean McVay's staff.",
-   "confidence": "medium"
-  },
-  {
-   "id": "E12",
-   "url": "https://www.vikings.com/news/wes-phillips-offensive-coordinator-5-things-to-know",
-   "publisher": "Minnesota Vikings",
-   "published": "2022-02-21",
-   "accessed": "2026-11-07",
-   "summary": "Team bio of new OC Wes Phillips: Cowboys 2007-13, Washington tight ends coach 2014-18, Rams tight ends coach 2019-21 (passing game coordinator 2021), with Kevin O'Connell as his offensive coordinator in 2020-21.",
-   "confidence": "high"
-  },
-  {
-   "id": "E13",
-   "url": "https://therams.com/news/meet-wes-phillips-three-things-to-know-about-the-rams-new-tight-ends-coach",
-   "publisher": "Los Angeles Rams",
-   "published": "2019-02-26",
-   "accessed": "2026-11-07",
-   "summary": "Rams add Wes Phillips as TE coach; he became Washington's tight ends coach when McVay was promoted to OC in 2014 and worked under him for three seasons before McVay left in 2017.",
-   "confidence": "high"
-  },
-  {
-   "id": "E14",
-   "url": "https://www.espn.com/nfl/story/_/id/33341841/minnesota-vikings-hiring-los-angeles-rams-wes-phillips-offensive-coordinator-source-says",
-   "publisher": "ESPN",
-   "published": "2022-02-21",
-   "accessed": "2026-11-07",
-   "summary": "Vikings hire Rams passing game coordinator/TE coach Wes Phillips as OC on Kevin O'Connell's staff; with the Rams since 2019, his role mirrors O'Connell's as Rams OC in 2020-21.",
-   "confidence": "high"
-  },
-  {
-   "id": "E15",
-   "url": "https://vikings.com/news/brian-flores-defensive-coordinator-hired-2023",
-   "publisher": "Minnesota Vikings",
-   "published": "2023-02-06",
-   "accessed": "2026-11-07",
-   "summary": "Vikings hire Brian Flores as DC on Kevin O'Connell's staff; bio lists Patriots roles 2008-18 (safeties coach 2012-15, linebackers coach 2016-18), Dolphins HC 2019-21, Steelers senior defensive assistant/LB coach 2022.",
-   "confidence": "high"
-  },
-  {
-   "id": "E16",
-   "url": "https://www.dakotanewsnow.com/2023/02/07/vikings-hire-brian-flores-new-defensive-coordinator/",
-   "publisher": "Dakota News Now",
-   "published": "2023-02-06",
-   "accessed": "2026-11-07",
-   "summary": "Reports Flores joining head coach Kevin O'Connell's Vikings as defensive coordinator after the 2022 season on the Steelers staff and 2004-18 with the Patriots.",
-   "confidence": "medium"
-  },
-  {
-   "id": "E17",
-   "url": "https://www.si.com/nfl/2022/02/19/steelers-hire-brian-flores-defensive-assistant-coach",
-   "publisher": "Sports Illustrated",
-   "published": "2022-02-19",
-   "accessed": "2026-11-07",
-   "summary": "Mike Tomlin's Steelers hire Flores as senior defensive assistant/linebackers coach; he worked for New England 2004-18, coaching from 2008.",
-   "confidence": "medium"
-  },
-  {
-   "id": "E18",
-   "url": "https://www.bangordailynews.com/2019/02/05/sports/brian-flores-goes-from-super-bowl-champs-to-dolphins/",
-   "publisher": "Associated Press (Bangor Daily News)",
-   "published": "2019-02-05",
-   "accessed": "2026-11-07",
-   "summary": "Dolphins hire Patriots LB coach and defensive play-caller Flores, the ninth former Bill Belichick assistant to become a head coach.",
-   "confidence": "medium"
-  },
-  {
-   "id": "E19",
-   "url": "https://www.theringer.com/nfl/2020/1/12/21062601/cleveland-browns-kevin-stefanski-head-coach",
-   "publisher": "The Ringer",
-   "published": "2020-01-12",
-   "accessed": "2026-11-07",
-   "summary": "On the Browns hiring Stefanski: he worked with Vikings assistant head coach Gary Kubiak to build a Kubiak-style offense blending run and pass.",
-   "confidence": "medium"
-  },
-  {
-   "id": "E20",
-   "url": "https://vikings.com/news/notebook-spielman-says-stefanski-was-biggest-flag-waver-for-gary-kubiak-hire",
-   "publisher": "Minnesota Vikings",
-   "published": "2019-02-27",
-   "accessed": "2026-11-07",
-   "summary": "GM Rick Spielman says OC Kevin Stefanski pushed hardest to add Gary Kubiak to the 2019 staff and that Kubiak wanted to mentor a young coach like Stefanski.",
-   "confidence": "high",
-   "mentorship": true
-  },
-  {
-   "id": "E21",
-   "url": "https://www.atlantanewsfirst.com/2026/01/21/reports-falcons-expected-hire-former-browns-offensive-coordinator-tommy-rees-same-role",
-   "publisher": "Atlanta News First",
-   "published": "2026-01-21",
-   "accessed": "2026-11-07",
-   "summary": "Falcons to hire Tommy Rees as OC, reuniting with Kevin Stefanski: Browns TE coach/pass game specialist 2024 and OC 2025, Alabama OC 2023, Notre Dame 2017-22.",
-   "confidence": "medium"
-  },
-  {
-   "id": "E22",
-   "url": "https://www.atlantafalcons.com/news/tommy-rees-falcons-offensive-coordinator",
-   "publisher": "Atlanta Falcons",
-   "published": "2026-01-22",
-   "accessed": "2026-11-07",
-   "summary": "Team announces Rees as OC; he spent two seasons on Stefanski's Browns staff (2024 TE coach/pass game specialist, 2025 OC) and Stefanski wanted him as his Atlanta play caller.",
-   "confidence": "high"
-  },
-  {
-   "id": "E23",
-   "url": "https://atlantafalcons.com/news/atlanta-falcons-announce-jeff-ulbrich-as-next-defensive-coordinator",
-   "publisher": "Atlanta Falcons",
-   "published": "2025-01-18",
-   "accessed": "2026-11-07",
-   "summary": "Falcons name Jeff Ulbrich DC: linebackers coach 2015-19 under Dan Quinn, DC for the last 11 games of 2020 under interim HC Raheem Morris, Jets DC 2021-24 under Robert Saleh, reuniting with Morris in 2025.",
-   "confidence": "high"
-  },
-  {
-   "id": "E24",
-   "url": "https://www.walb.com/2025/01/19/falcons-hire-jeff-ulbrich-defensive-coordinator",
-   "publisher": "Atlanta News First (WALB)",
-   "published": "2025-01-18",
-   "accessed": "2026-11-07",
-   "summary": "Reports the Ulbrich hire: Falcons LB coach 2015-19, DC in 2020 after Morris became interim HC, Jets DC until promoted to interim HC when Robert Saleh was fired in 2024.",
-   "confidence": "medium"
-  },
-  {
-   "id": "E25",
-   "url": "https://www.wsls.com/sports/2024/01/25/panthers-agree-to-hire-dave-canales-from-the-buccaneers-as-their-new-head-coach-ap-sources-say/",
-   "publisher": "Associated Press (WSLS)",
-   "published": "2024-01-25",
-   "accessed": "2026-11-07",
-   "summary": "AP on the Panthers hiring Bucs OC Dave Canales: 13 Seahawks seasons from 2010 (eight as WR coach, then QB coach and passing game coordinator), then Tampa Bay OC in 2023.",
-   "confidence": "medium"
-  },
-  {
-   "id": "E26",
-   "url": "https://www.heraldnet.com/2018/02/25/seahawks-officially-anounce-their-coaching-staff-for-2018/",
-   "publisher": "The Everett Herald",
-   "published": "2018-02-25",
-   "accessed": "2026-11-07",
-   "summary": "Pete Carroll's 2018 Seahawks staff: Brian Schottenheimer new offensive coordinator, Dave Canales moves from wide receivers coach to quarterbacks coach.",
-   "confidence": "medium"
-  },
-  {
-   "id": "E27",
-   "url": "https://933kjr.iheart.com/content/2020-03-10-report-seahawks-promote-dave-canales-austin-davis-add-three-comp-picks/",
-   "publisher": "KJR 93.3",
-   "published": "2020-03-11",
-   "accessed": "2026-11-07",
-   "summary": "Seahawks promote QB coach Dave Canales, on Pete Carroll's staff since 2010, to passing game coordinator; OC Brian Schottenheimer keeps overseeing the whole offense and the quarterbacks.",
-   "confidence": "low"
-  },
-  {
-   "id": "E28",
-   "url": "https://africa.espn.com/nfl/story/_/id/39422716/sources-brad-idzik-panthers-oc-call-plays",
-   "publisher": "ESPN",
-   "published": "2024-01-30",
-   "accessed": "2026-11-07",
-   "summary": "Panthers hire Brad Idzik as OC under new HC Dave Canales; Idzik was Seahawks assistant WR coach about four seasons and Bucs WR coach in 2023 under OC Canales.",
-   "confidence": "high"
-  },
-  {
-   "id": "E29",
-   "url": "https://panthers.com/news/who-is-brad-idzik-uncovering-the-panthers-offensive-coordinator",
-   "publisher": "Carolina Panthers",
-   "published": "2024-02-21",
-   "accessed": "2026-11-07",
-   "summary": "Team profile: Idzik joined the Seahawks staff in 2019 working under Canales, followed him to Tampa Bay as WR coach and then to Carolina as OC.",
-   "confidence": "high"
-  },
-  {
-   "id": "E30",
-   "url": "https://panthers.com/news/five-things-to-know-about-new-defensive-coordinator-ejiro-evero",
-   "publisher": "Carolina Panthers",
-   "published": "2023-02-05",
-   "accessed": "2026-11-07",
-   "summary": "Evero bio: Bucs defensive QC 2007-09, 49ers 2011-15 (hired by Jim Harbaugh's staff; offensive assistant 2012-13), Packers 2016, Rams safeties coach 2017-20 and secondary/pass game coordinator 2021, Broncos DC 2022.",
-   "confidence": "high"
-  },
-  {
-   "id": "E31",
-   "url": "https://www.colts.com/news/head-coach-interview-ejiro-evero-defensive-coordinator-broncos-rams",
-   "publisher": "Indianapolis Colts",
-   "published": "2023-01-12",
-   "accessed": "2026-11-07",
-   "summary": "Colts HC-interview bio of Evero with year-by-year jobs: Tampa Bay 2007-09, 49ers 2011-15, Green Bay 2016, Rams 2017-21, Denver DC 2022.",
-   "confidence": "high"
-  },
-  {
-   "id": "E32",
-   "url": "https://www.si.com/nfl/2022/02/17/broncos-hire-rams-assistant-ejiro-evero-defensive-coordinator",
-   "publisher": "Sports Illustrated",
-   "published": "2022-02-17",
-   "accessed": "2026-11-07",
-   "summary": "Broncos hire Rams secondary coach Evero as DC; he coached Rams safeties from 2017 and coordinated the pass defense in 2021 under DC Raheem Morris.",
-   "confidence": "medium"
-  },
-  {
-   "id": "E33",
-   "url": "https://www.denverbroncos.com/news/sean-mcvay-broncos-dc-ejiro-evero-has-clear-vision-for-defense-will-do-a-great-j",
-   "publisher": "Denver Broncos",
-   "published": "2022-03-29",
-   "accessed": "2026-11-07",
-   "summary": "Sean McVay praises Evero after years together on his Rams staff, recalling him working with DC Raheem Morris on the defense.",
-   "confidence": "high"
-  },
-  {
-   "id": "E34",
-   "url": "https://africa.espn.com/nfl/story/_/id/43937105/source-saints-expected-hire-eagles-doug-nussmeier-oc",
-   "publisher": "ESPN",
-   "published": "2025-02-20",
-   "accessed": "2026-11-07",
-   "summary": "Saints to hire Eagles QB coach Doug Nussmeier as OC under Kellen Moore; he was Moore's QB coach in Dallas (2019-22, Moore OC) and with the Chargers in 2023.",
-   "confidence": "high"
-  },
-  {
-   "id": "E35",
-   "url": "https://www.bleedinggreennation.com/2025/2/18/24368131/eagles-qb-coach-doug-nussmeier-finalizing-deal-to-become-saints-offensive-coordinator",
-   "publisher": "Bleeding Green Nation",
-   "published": "2025-02-18",
-   "accessed": "2026-11-07",
-   "summary": "Eagles QB coach Nussmeier finalizing deal as Saints OC; Cowboys TE coach from 2018 and QB coach from 2020 with Moore as OC, then Chargers QB coach 2023 and Eagles 2024 alongside Moore.",
-   "confidence": "medium"
-  },
-  {
-   "id": "E36",
-   "url": "https://www.nbcnews.com/sports/nfl/saints-kellen-moore-head-coach-rcna191710",
-   "publisher": "NBC News",
-   "published": "2025-02-11",
-   "accessed": "2026-11-07",
-   "summary": "Moore hired as Saints HC after Cowboys QB coach (2018) and OC (2019-22), Chargers OC 2023 under Staley, and Eagles OC 2024.",
-   "confidence": "medium"
-  },
-  {
-   "id": "E37",
-   "url": "https://www.si.com/nfl/2023/01/30/cowboys-part-ways-with-offensive-coordinator-kellen-moore-mike-mccarthy",
-   "publisher": "Sports Illustrated",
-   "published": "2023-01-30",
-   "accessed": "2026-11-07",
-   "summary": "Cowboys and OC Kellen Moore part ways after four seasons as coordinator; HC Mike McCarthy takes over play-calling.",
-   "confidence": "medium"
-  },
-  {
-   "id": "E38",
-   "url": "https://africa.espn.com/blog/los-angeles-rams/post/_/id/41266/rams-coach-sean-mcvay-makes-bold-bet-on-unproven-defensive-coordinator-brandon-staley",
-   "publisher": "ESPN",
-   "published": "2020-01-14",
-   "accessed": "2026-11-07",
-   "summary": "Rams hire Brandon Staley as DC under McVay; he spent three seasons under Vic Fangio as OLB coach (Bears under DC Fangio, Broncos under HC Fangio), and his tutelage under Fangio shapes his 3-4 scheme. Says McVay wanted a peer rather than a mentor.",
-   "confidence": "high",
-   "mentorship": true
-  },
-  {
-   "id": "E39",
-   "url": "https://www.denverbroncos.com/news/mile-high-morning-how-brandon-staley-learned-from-vic-fangio-on-his-path-to-beco",
-   "publisher": "Denver Broncos",
-   "published": "2020-12-31",
-   "accessed": "2026-11-07",
-   "summary": "How Staley learned from Vic Fangio: on Fangio's staffs in Chicago 2017-18 and as Denver OLB coach in 2019, three years working with him closely.",
-   "confidence": "high",
-   "mentorship": true
-  },
-  {
-   "id": "E40",
-   "url": "https://www.espn.com/blog/denver-broncos/post/_/id/39595/i-knew-brandon-had-special-abilities-as-a-coach-fangio-and-staley-reunited-when-broncos-face-chargers",
-   "publisher": "ESPN",
-   "published": "2021-11-24",
-   "accessed": "2026-11-07",
-   "summary": "Fangio and Staley reunite as opposing head coaches; Staley worked two seasons under DC Fangio in Chicago and 2019 in Denver and has credited Fangio for his development.",
-   "confidence": "high"
-  },
-  {
-   "id": "E41",
-   "url": "https://www.phillymag.com/eagles/2012/10/17/the-bowles-parcells-connection/",
-   "publisher": "Philadelphia Magazine",
-   "published": "2012-10-17",
-   "accessed": "2026-11-07",
-   "summary": "Todd Bowles spent two years as Cowboys secondary coach on Bill Parcells's staff and was Dolphins assistant HC while Parcells ran Miami's football operations; Bowles credits Parcells with teaching him to see the whole game.",
-   "confidence": "medium",
-   "mentorship": true
-  },
-  {
-   "id": "E42",
-   "url": "https://www.dallasnews.com/sports/cowboys/2021/02/02/buccaneers-dc-todd-bowles-is-the-latest-coach-to-make-it-to-the-super-bowl-after-leaving-the-cowboys/",
-   "publisher": "Dallas Morning News",
-   "published": "2021-02-02",
-   "accessed": "2026-11-07",
-   "summary": "Bucs DC Todd Bowles reached the Super Bowl after earlier coaching the Cowboys secondary from 2005 under Bill Parcells.",
-   "confidence": "medium"
-  },
-  {
-   "id": "E43",
-   "url": "https://now.temple.edu/news/2022-04-04/owl-takes-helm-tampa-bay-buccaneers",
-   "publisher": "Temple University",
-   "published": "2022-04-04",
-   "accessed": "2026-11-07",
-   "summary": "Bucs DC Todd Bowles named head coach on March 30, 2022 as Bruce Arians retired; Arians coached him at Temple and Bowles thanked him for four decades of guidance.",
-   "confidence": "medium",
-   "mentorship": true
-  },
-  {
-   "id": "E44",
-   "url": "https://www.nbcsports.com/nfl/profootballtalk/rumor-mill/news/report-larry-foote-kacy-rodgers-likely-to-be-co-defensive-coordinators-for-bucs",
-   "publisher": "ProFootballTalk",
-   "published": "2022-03-31",
-   "accessed": "2026-11-07",
-   "summary": "Larry Foote, Bucs OLB coach for three seasons (2019-21) and previously on Bruce Arians's Arizona staff, likely to become co-DC as DC Todd Bowles moves up to head coach.",
-   "confidence": "medium"
-  },
-  {
-   "id": "E45",
-   "url": "https://www.prideofdetroit.com/2025/1/23/24350502/detroit-lions-interviewing-larry-foote-defensive-coordinator-position",
-   "publisher": "Pride of Detroit",
-   "published": "2025-01-23",
-   "accessed": "2026-11-07",
-   "summary": "Lions interview Bucs co-defensive coordinator/LB coach Larry Foote, on Todd Bowles's Tampa Bay staff since 2019, for their DC job.",
-   "confidence": "low"
-  },
-  {
-   "id": "E46",
-   "url": "https://www.buccaneers.com/news/zac-robinson-hired-bucs-offensive-coordinator",
-   "publisher": "Tampa Bay Buccaneers",
-   "published": "2026-01-24",
-   "accessed": "2026-11-07",
-   "summary": "Bucs hire Zac Robinson as OC: Rams 2019-23 under Sean McVay (assistant QB, assistant WR, QB coach, then pass game coordinator/QB coach 2022-23), Falcons OC 2024-25 under Raheem Morris.",
-   "confidence": "high"
-  },
-  {
-   "id": "E47",
-   "url": "https://www.news4jax.com/sports/2026/01/22/the-buccaneers-are-hiring-zac-robinson-to-be-their-offensive-coordinator-ap-source-says/",
-   "publisher": "Associated Press (News4JAX)",
-   "published": "2026-01-22",
-   "accessed": "2026-11-07",
-   "summary": "AP: Bucs hiring Zac Robinson, Falcons OC the past two seasons (2024-25) after two seasons as Rams pass game coordinator/QB coach.",
-   "confidence": "medium"
-  },
-  {
-   "id": "E48",
-   "url": "https://atlantafalcons.com/news/falcons-announce-several-assistant-coaches-14878214",
-   "publisher": "Atlanta Falcons",
-   "published": "2015-02-03",
-   "accessed": "2026-11-07",
-   "summary": "Falcons announce assistants on Dan Quinn's first staff: Kyle Shanahan OC, Raheem Morris assistant HC/defensive passing game coordinator, Mike LaFleur offensive assistant (after a 2014 Browns internship).",
-   "confidence": "high"
-  },
-  {
-   "id": "E49",
-   "url": "https://www.espn.com/nfl/story/_/id/47800131/sources-cardinals-set-hire-rams-mike-lafleur-head-coach",
-   "publisher": "ESPN",
-   "published": "2026-02-01",
-   "accessed": "2026-11-07",
-   "summary": "Cardinals hire Rams OC Mike LaFleur as HC: Rams OC 2023-25 under Sean McVay, Jets OC 2021-22, 49ers 2017-20.",
-   "confidence": "high"
-  },
-  {
-   "id": "E50",
-   "url": "https://www.news4jax.com/sports/2026/02/01/cardinals-hire-rams-offensive-coordinator-mike-lafleur-as-head-coach/",
-   "publisher": "Associated Press (News4JAX)",
-   "published": "2026-02-01",
-   "accessed": "2026-11-07",
-   "summary": "AP: Cardinals hire Rams OC Mike LaFleur (Rams OC three seasons, Jets OC 2021-22), who worked for Kyle Shanahan for several years in Cleveland, Atlanta and San Francisco.",
-   "confidence": "medium"
-  },
-  {
-   "id": "E51",
-   "url": "https://jetsxfactor.com/2021/01/18/robert-saleh-to-bring-mike-lafleur-john-benton-and-greg-knapp-to-jets-report",
-   "publisher": "Jets X-Factor",
-   "published": "2021-01-18",
-   "accessed": "2026-11-07",
-   "summary": "Report that new Jets HC Robert Saleh is bringing 49ers passing game coordinator Mike LaFleur to New York as offensive coordinator.",
-   "confidence": "low"
-  },
-  {
-   "id": "E52",
-   "url": "https://www.nbcsports.com/nfl/profootballtalk/rumor-mill/news/cardinals-to-hire-nathaniel-hackett-as-offensive-coordinator",
-   "publisher": "ProFootballTalk",
-   "published": "2026-02-04",
-   "accessed": "2026-11-07",
-   "summary": "Cardinals to hire Nathaniel Hackett as OC: Packers OC 2019-21 under Matt LaFleur, Broncos HC 2022, Jets OC 2023-24 after Mike LaFleur, Packers defensive analyst in 2025.",
-   "confidence": "medium"
-  },
-  {
-   "id": "E53",
-   "url": "https://www.foxsports.com/articles/nfl/cardinals-hiring-veteran-coach-nathaniel-hackett-as-offensive-coordinator-ap-source-says",
-   "publisher": "Associated Press (Fox Sports)",
-   "published": "2026-02-04",
-   "accessed": "2026-11-07",
-   "summary": "AP: Cardinals hiring Hackett, Packers OC 2019-21 under Matt LaFleur, who spent 2025 as a Packers defensive analyst again under LaFleur.",
-   "confidence": "medium"
-  },
-  {
-   "id": "E54",
-   "url": "https://www.news4jax.com/sports/2023/01/26/jets-hire-former-broncos-coach-hackett-to-run-offense/",
-   "publisher": "Associated Press (News4JAX)",
-   "published": "2023-01-26",
-   "accessed": "2026-11-07",
-   "summary": "AP: Robert Saleh's Jets hire Hackett as OC, replacing Mike LaFleur; Hackett had been Packers OC 2019-21.",
-   "confidence": "medium"
-  },
-  {
-   "id": "E55",
-   "url": "https://azcardinals.com/news/problem-solver-nick-rallis-ready-for-job-as-cardinals-defensive-coordinator",
-   "publisher": "Arizona Cardinals",
-   "published": "2023-02-22",
-   "accessed": "2026-11-07",
-   "summary": "New Cardinals HC Jonathan Gannon names Nick Rallis DC after Rallis coached under him in Philadelphia the previous two seasons; Gannon voices complete faith in him.",
-   "confidence": "high"
-  },
-  {
-   "id": "E56",
-   "url": "https://www.nbcsportsphiladelphia.com/nfl/philadelphia-eagles/former-eagles-assistant-nick-rallis-outlasts-jonathan-gannon-arizona-cardinals/714362",
-   "publisher": "NBC Sports Philadelphia",
-   "published": "2026-02-13",
-   "accessed": "2026-11-07",
-   "summary": "Rallis: Vikings defensive assistant 2018-20, Eagles LB coach 2021-22 under Nick Sirianni (with Gannon as DC), Cardinals DC for three seasons under Gannon, retained by Mike LaFleur.",
-   "confidence": "medium"
-  },
-  {
-   "id": "E57",
-   "url": "https://www.si.com/nfl/2019/08/23/washington-redskins-2013-coaching-staff-sean-mcvay-kyle-shanahan-matt-lafleur-mike-shanahan-rg3",
-   "publisher": "Sports Illustrated",
-   "published": "2019-08-23",
-   "accessed": "2026-11-07",
-   "summary": "Feature on Mike Shanahan's 2010-13 Washington staff: Kyle Shanahan OC, Sean McVay offensive assistant then on staff to 2016, Matt LaFleur QB coach (came from Houston with Kyle), Mike McDaniel 2011-13.",
-   "confidence": "high"
-  },
-  {
-   "id": "E58",
-   "url": "https://m.washingtontimes.com/news/2017/mar/2/sean-mcvay-kyle-shanahan-each-credit-time-washingt/",
-   "publisher": "Washington Times",
-   "published": "2017-03-02",
-   "accessed": "2026-11-07",
-   "summary": "Sean McVay and Kyle Shanahan each credit their Washington years together, when OC Shanahan hired McVay and later made him tight ends coach, for their growth.",
-   "confidence": "medium"
-  },
-  {
-   "id": "E59",
-   "url": "https://www.upi.com/Sports_News/NFL/2017/01/12/Los-Angeles-Rams-hire-Sean-McVay-youngest-coach-in-NFL-history/9701484257310/",
-   "publisher": "UPI",
-   "published": "2017-01-12",
-   "accessed": "2026-11-07",
-   "summary": "Rams hire Sean McVay, who started as a 2008 offensive assistant on Jon Gruden's Buccaneers, then coached the Florida Tuskers before Washington (assistant, TE coach, OC).",
-   "confidence": "medium"
-  },
-  {
-   "id": "E60",
-   "url": "https://www.espn.ph/nfl/story/_/id/47985549/rams-promote-nate-scheelhaase-oc-sources-say",
-   "publisher": "ESPN",
-   "published": "2026-02-20",
-   "accessed": "2026-11-07",
-   "summary": "Rams promote passing game coordinator Nate Scheelhaase to OC; hired by Sean McVay in 2024 from Iowa State, he replaces Mike LaFleur (Rams OC 2023-25).",
-   "confidence": "high"
-  },
-  {
-   "id": "E61",
-   "url": "https://www.news4jax.com/sports/2026/02/20/rams-promote-nate-scheelhaase-to-offensive-coordinator-ap-source-says/",
-   "publisher": "Associated Press (News4JAX)",
-   "published": "2026-02-20",
-   "accessed": "2026-11-07",
-   "summary": "AP: Rams promote Scheelhaase, who spent two seasons (2024-25) as a top offensive assistant under McVay and OC Mike LaFleur, passing game coordinator in 2025.",
-   "confidence": "medium"
-  },
-  {
-   "id": "E62",
-   "url": "https://africa.espn.com/nfl/story/_/id/39438351/sources-rams-tab-chris-shula-replace-raheem-morris-dc",
-   "publisher": "ESPN",
-   "published": "2024-02-01",
-   "accessed": "2026-11-07",
-   "summary": "Rams tab LB coach/pass rush coordinator Chris Shula, on McVay's staff since 2017, to replace three-year DC Raheem Morris (hired as Falcons HC).",
-   "confidence": "high"
-  },
-  {
-   "id": "E63",
-   "url": "https://www.therams.com/news/rams-promote-chris-shula-to-defensive-coordinator",
-   "publisher": "Los Angeles Rams",
-   "published": "2024-02-02",
-   "accessed": "2026-11-07",
-   "summary": "Shula's Rams roles under McVay: assistant LB 2017-18, OLB 2019-20, LB 2021, DB coach/pass game coordinator 2022, LB/pass rush coordinator 2023, then DC succeeding Raheem Morris.",
-   "confidence": "high"
-  },
-  {
-   "id": "E64",
-   "url": "https://africa.espn.com/nfl/story/_/id/44015081/klay-kubiak-promoted-offensive-coordinator-49ers",
-   "publisher": "ESPN",
-   "published": "2025-02-25",
-   "accessed": "2026-11-07",
-   "summary": "49ers promote Klay Kubiak to OC under Kyle Shanahan: defensive QC 2021, assistant QB coach 2022-23, passing game specialist 2024.",
-   "confidence": "high"
-  },
-  {
-   "id": "E65",
-   "url": "https://www.ksl.com/article/51261816/49ers-promote-klay-kubiak-to-offensive-coordinator-and-replace-brian-griese-as-qbs-coach",
-   "publisher": "Associated Press (KSL)",
-   "published": "2025-02-25",
-   "accessed": "2026-11-07",
-   "summary": "AP: 49ers promote assistant Klay Kubiak to the OC job that had been vacant two seasons; he was offensive passing game specialist in 2024.",
-   "confidence": "medium"
-  },
-  {
-   "id": "E66",
-   "url": "https://www.atlantanewsfirst.com/2026/02/01/49ers-hire-raheem-morris-defensive-coordinator-reports-say/",
-   "publisher": "Atlanta News First",
-   "published": "2026-02-01",
-   "accessed": "2026-11-07",
-   "summary": "49ers hire Raheem Morris as DC: Bucs HC 2009-11, Falcons assistant from 2015 and interim HC 2020, Rams DC 2021-23, Falcons HC 2024-25; worked alongside Kyle Shanahan at three earlier stops.",
-   "confidence": "medium"
-  },
-  {
-   "id": "E67",
-   "url": "https://www.espn.com.au/nfl/story/_/id/39429973/sources-seahawks-hire-ravens-dc-mike-macdonald-coach",
-   "publisher": "ESPN",
-   "published": "2024-02-01",
-   "accessed": "2026-11-07",
-   "summary": "Seahawks hire Ravens DC Mike Macdonald: under John Harbaugh he was coaching intern 2014, defensive assistant 2015-16, DB coach 2017, LB coach 2018-20; Jim Harbaugh hired him as Michigan DC in 2021; Ravens DC 2022-23.",
-   "confidence": "high"
-  },
-  {
-   "id": "E68",
-   "url": "https://krdo.com/news/2024/01/31/seattle-seahawks-to-hire-first-time-head-coach-mike-macdonald-per-multiple-reports/",
-   "publisher": "KRDO",
-   "published": "2024-01-31",
-   "accessed": "2026-11-07",
-   "summary": "Macdonald joined the Ravens as a 2014 intern and held roles until 2021, was Michigan DC in 2021, then Ravens DC for two seasons before the Seahawks hire.",
-   "confidence": "medium"
-  },
-  {
-   "id": "E69",
-   "url": "https://digital-release.koin.com/sports/sports-illustrated/arena-nfl/si-seattle-seahawks-nfl/4b06dd65/mike-macdonald-reveals-the-one-lesson-both-harbaugh-brothers-taught-him",
-   "publisher": "Sports Illustrated (via KOIN)",
-   "published": "2026-09-04",
-   "accessed": "2026-11-07",
-   "summary": "Macdonald describes what he learned about winning while working for both John and Jim Harbaugh, citing their shared core principles and care for players.",
-   "confidence": "medium",
-   "mentorship": true
-  },
-  {
-   "id": "E70",
-   "url": "https://cbssports.com/nfl/news/seahawks-hire-brian-fleury-49ers-offensive-coordinator",
-   "publisher": "CBS Sports",
-   "published": "2026-02-15",
-   "accessed": "2026-11-07",
-   "summary": "Seahawks hire Brian Fleury as OC to replace Klint Kubiak; on the 49ers since 2019, he rose from quality control coach to tight ends coach and then run game coordinator (2025).",
-   "confidence": "medium"
-  },
-  {
-   "id": "E71",
-   "url": "https://www.foxsports.com/articles/nfl/new-seahawks-offensive-coordinator-brian-fleury-eager-for-opportunity",
-   "publisher": "Associated Press (Fox Sports)",
-   "published": "2026-02-19",
-   "accessed": "2026-11-07",
-   "summary": "New Seahawks OC Fleury, ex-49ers TE coach, names DeMeco Ryans, Robert Saleh and Jeff Hafley as mentors and plans to build on what he learned under Kyle Shanahan.",
-   "confidence": "medium",
-   "mentorship": true
-  },
-  {
-   "id": "E72",
-   "url": "https://www.nbcsports.com/nfl/profootballtalk/rumor-mill/news/report-49ers-promote-brian-fleury-to-tight-ends-coach",
-   "publisher": "ProFootballTalk",
-   "published": "2022-02-16",
-   "accessed": "2026-11-07",
-   "summary": "49ers promote Brian Fleury to tight ends coach; he was a defensive quality control coach in 2019 and offensive quality control coach the next two seasons.",
-   "confidence": "medium"
-  },
-  {
-   "id": "E73",
-   "url": "https://africa.espn.com/nfl/story/_/id/39492561/source-seahawks-hire-cowboys-dl-coach-aden-durde-dc",
-   "publisher": "ESPN",
-   "published": "2024-02-09",
-   "accessed": "2026-11-07",
-   "summary": "Seahawks hire Cowboys DL coach Aden Durde as DC under Mike Macdonald; Falcons defensive assistant 2018-19 and OLB coach 2020 under Dan Quinn, then Cowboys DL coach 2021-23 under DC Quinn.",
-   "confidence": "high"
-  },
-  {
-   "id": "E74",
-   "url": "https://www.si.com/nfl/2024/02/09/seattle-seahawks-hire-aden-durde-defensive-coordinator",
-   "publisher": "Sports Illustrated",
-   "published": "2024-02-09",
-   "accessed": "2026-11-07",
-   "summary": "Seahawks to hire Durde, Cowboys DL coach for three seasons since 2021 and previously Falcons defensive QC and OLB coach 2018-20.",
-   "confidence": "medium"
-  }
- ]
+  ],
+  "edges": [
+    {
+      "key": "coach:SF:HC>coach:GB:HC",
+      "mentor": {
+        "table": "COACHES_DATA",
+        "team": "SF",
+        "role": "HC"
+      },
+      "protege": {
+        "table": "COACHES_DATA",
+        "team": "GB",
+        "role": "HC"
+      },
+      "stints": [
+        {
+          "team": "WAS",
+          "first_season": 2010,
+          "last_season": 2013,
+          "mentor_role": "offensive coordinator",
+          "protege_role": "quarterbacks coach"
+        },
+        {
+          "team": "ATL",
+          "first_season": 2015,
+          "last_season": 2016,
+          "mentor_role": "offensive coordinator",
+          "protege_role": "quarterbacks coach"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "notes": "Kyle Shanahan was Washington OC 2010-13 over QB coach LaFleur and Falcons OC 2015-16; ESPN says LaFleur 'learned under' him.",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:WAS:HC>coach:GB:HC",
+      "mentor": {
+        "table": "COACHES_DATA",
+        "team": "WAS",
+        "role": "HC"
+      },
+      "protege": {
+        "table": "COACHES_DATA",
+        "team": "GB",
+        "role": "HC"
+      },
+      "stints": [
+        {
+          "team": "ATL",
+          "first_season": 2015,
+          "last_season": 2016,
+          "mentor_role": "HC",
+          "protege_role": "quarterbacks coach"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E3",
+        "E2"
+      ],
+      "notes": "Packers bio gives two Falcons seasons as QB coach; Quinn was HC both years.",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:SF:HC>coach:GB:OC",
+      "mentor": {
+        "table": "COACHES_DATA",
+        "team": "SF",
+        "role": "HC"
+      },
+      "protege": {
+        "table": "COORDINATORS_DATA",
+        "team": "GB",
+        "role": "OC"
+      },
+      "stints": [
+        {
+          "team": "SF",
+          "first_season": 2017,
+          "last_season": 2018,
+          "mentor_role": "HC",
+          "protege_role": "assistant offensive line coach"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E6",
+        "E7"
+      ],
+      "notes": "",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:GB:HC>coach:GB:OC",
+      "mentor": {
+        "table": "COACHES_DATA",
+        "team": "GB",
+        "role": "HC"
+      },
+      "protege": {
+        "table": "COORDINATORS_DATA",
+        "team": "GB",
+        "role": "OC"
+      },
+      "stints": [
+        {
+          "team": "GB",
+          "first_season": 2019,
+          "last_season": 2025,
+          "mentor_role": "HC",
+          "protege_role": "offensive line coach / offensive coordinator"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E6",
+        "E7"
+      ],
+      "notes": "OL coach 2019-21 (run game coordinator 2021), OC from 2022 under LaFleur.",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:AZ:OC>coach:GB:OC",
+      "mentor": {
+        "table": "COORDINATORS_DATA",
+        "team": "AZ",
+        "role": "OC"
+      },
+      "protege": {
+        "table": "COORDINATORS_DATA",
+        "team": "GB",
+        "role": "OC"
+      },
+      "stints": [
+        {
+          "team": "GB",
+          "first_season": 2019,
+          "last_season": 2021,
+          "mentor_role": "offensive coordinator",
+          "protege_role": "offensive line coach"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E6",
+        "E7"
+      ],
+      "notes": "Nathaniel Hackett was Packers OC 2019-21 while Stenavich coached the OL.",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:NYJ:OC>coach:GB:DC",
+      "mentor": {
+        "table": "COORDINATORS_DATA",
+        "team": "NYJ",
+        "role": "OC"
+      },
+      "protege": {
+        "table": "COORDINATORS_DATA",
+        "team": "GB",
+        "role": "DC"
+      },
+      "stints": [
+        {
+          "team": "IND",
+          "first_season": 2018,
+          "last_season": 2020,
+          "mentor_role": "HC",
+          "protege_role": "cornerbacks coach"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E9",
+        "E8"
+      ],
+      "notes": "Frank Reich (now NYJ OC) was Colts HC.",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:PHI:HC>coach:GB:DC",
+      "mentor": {
+        "table": "COACHES_DATA",
+        "team": "PHI",
+        "role": "HC"
+      },
+      "protege": {
+        "table": "COORDINATORS_DATA",
+        "team": "GB",
+        "role": "DC"
+      },
+      "stints": [
+        {
+          "team": "PHI",
+          "first_season": 2021,
+          "last_season": 2022,
+          "mentor_role": "HC",
+          "protege_role": "defensive coordinator"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E9",
+        "E8"
+      ],
+      "notes": "",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:WAS:HC>coach:SF:HC",
+      "mentor": {
+        "table": "COACHES_DATA",
+        "team": "WAS",
+        "role": "HC"
+      },
+      "protege": {
+        "table": "COACHES_DATA",
+        "team": "SF",
+        "role": "HC"
+      },
+      "stints": [
+        {
+          "team": "ATL",
+          "first_season": 2015,
+          "last_season": 2016,
+          "mentor_role": "HC",
+          "protege_role": "offensive coordinator"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E4",
+        "E3",
+        "E5"
+      ],
+      "notes": "",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:LAR:HC>coach:MIN:HC",
+      "mentor": {
+        "table": "COACHES_DATA",
+        "team": "LAR",
+        "role": "HC"
+      },
+      "protege": {
+        "table": "COACHES_DATA",
+        "team": "MIN",
+        "role": "HC"
+      },
+      "stints": [
+        {
+          "team": "LAR",
+          "first_season": 2020,
+          "last_season": 2021,
+          "mentor_role": "HC",
+          "protege_role": "offensive coordinator"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E10",
+        "E11"
+      ],
+      "notes": "",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:LAR:HC>coach:MIN:OC",
+      "mentor": {
+        "table": "COACHES_DATA",
+        "team": "LAR",
+        "role": "HC"
+      },
+      "protege": {
+        "table": "COORDINATORS_DATA",
+        "team": "MIN",
+        "role": "OC"
+      },
+      "stints": [
+        {
+          "team": "WAS",
+          "first_season": 2014,
+          "last_season": 2016,
+          "mentor_role": "offensive coordinator",
+          "protege_role": "tight ends coach"
+        },
+        {
+          "team": "LAR",
+          "first_season": 2019,
+          "last_season": 2021,
+          "mentor_role": "HC",
+          "protege_role": "tight ends coach / passing game coordinator"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E13",
+        "E12",
+        "E14"
+      ],
+      "notes": "",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:MIN:HC>coach:MIN:OC",
+      "mentor": {
+        "table": "COACHES_DATA",
+        "team": "MIN",
+        "role": "HC"
+      },
+      "protege": {
+        "table": "COORDINATORS_DATA",
+        "team": "MIN",
+        "role": "OC"
+      },
+      "stints": [
+        {
+          "team": "LAR",
+          "first_season": 2020,
+          "last_season": 2021,
+          "mentor_role": "offensive coordinator",
+          "protege_role": "tight ends coach / passing game coordinator"
+        },
+        {
+          "team": "MIN",
+          "first_season": 2022,
+          "last_season": 2025,
+          "mentor_role": "HC",
+          "protege_role": "offensive coordinator"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E12",
+        "E14"
+      ],
+      "notes": "MIN 2022-25 stint from the seed seat history (OC since 2022).",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:MIN:HC>coach:MIN:DC",
+      "mentor": {
+        "table": "COACHES_DATA",
+        "team": "MIN",
+        "role": "HC"
+      },
+      "protege": {
+        "table": "COORDINATORS_DATA",
+        "team": "MIN",
+        "role": "DC"
+      },
+      "stints": [
+        {
+          "team": "MIN",
+          "first_season": 2023,
+          "last_season": 2025,
+          "mentor_role": "HC",
+          "protege_role": "defensive coordinator"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E15",
+        "E16"
+      ],
+      "notes": "Stint end from the seed seat history (DC since 2023).",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:ATL:HC>coach:ATL:OC",
+      "mentor": {
+        "table": "COACHES_DATA",
+        "team": "ATL",
+        "role": "HC"
+      },
+      "protege": {
+        "table": "COORDINATORS_DATA",
+        "team": "ATL",
+        "role": "OC"
+      },
+      "stints": [
+        {
+          "team": "CLE",
+          "first_season": 2024,
+          "last_season": 2025,
+          "mentor_role": "HC",
+          "protege_role": "tight ends coach / pass game specialist, then offensive coordinator"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E21",
+        "E22"
+      ],
+      "notes": "",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:WAS:HC>coach:ATL:DC",
+      "mentor": {
+        "table": "COACHES_DATA",
+        "team": "WAS",
+        "role": "HC"
+      },
+      "protege": {
+        "table": "COORDINATORS_DATA",
+        "team": "ATL",
+        "role": "DC"
+      },
+      "stints": [
+        {
+          "team": "ATL",
+          "first_season": 2015,
+          "last_season": 2020,
+          "mentor_role": "HC",
+          "protege_role": "linebackers coach"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E23",
+        "E24",
+        "E3"
+      ],
+      "notes": "Quinn was fired five games into 2020; Ulbrich was LB coach 2015-19.",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:TEN:HC>coach:ATL:DC",
+      "mentor": {
+        "table": "COACHES_DATA",
+        "team": "TEN",
+        "role": "HC"
+      },
+      "protege": {
+        "table": "COORDINATORS_DATA",
+        "team": "ATL",
+        "role": "DC"
+      },
+      "stints": [
+        {
+          "team": "NYJ",
+          "first_season": 2021,
+          "last_season": 2024,
+          "mentor_role": "HC",
+          "protege_role": "defensive coordinator"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E23",
+        "E24"
+      ],
+      "notes": "Confirms the existing profile tie ATL_DC (Ulbrich) - TEN_HC (Saleh); Saleh was fired five games into 2024.",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:SF:DC>coach:ATL:DC",
+      "mentor": {
+        "table": "COORDINATORS_DATA",
+        "team": "SF",
+        "role": "DC"
+      },
+      "protege": {
+        "table": "COORDINATORS_DATA",
+        "team": "ATL",
+        "role": "DC"
+      },
+      "stints": [
+        {
+          "team": "ATL",
+          "first_season": 2020,
+          "last_season": 2020,
+          "mentor_role": "interim HC",
+          "protege_role": "defensive coordinator"
+        },
+        {
+          "team": "ATL",
+          "first_season": 2025,
+          "last_season": 2025,
+          "mentor_role": "HC",
+          "protege_role": "defensive coordinator"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E23",
+        "E24"
+      ],
+      "notes": "2020 was 11 games under interim HC Morris plus full 2025; borderline two seasons summed, JR to judge.",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:DAL:HC>coach:CAR:HC",
+      "mentor": {
+        "table": "COACHES_DATA",
+        "team": "DAL",
+        "role": "HC"
+      },
+      "protege": {
+        "table": "COACHES_DATA",
+        "team": "CAR",
+        "role": "HC"
+      },
+      "stints": [
+        {
+          "team": "SEA",
+          "first_season": 2018,
+          "last_season": 2020,
+          "mentor_role": "offensive coordinator",
+          "protege_role": "quarterbacks coach / passing game coordinator"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E26",
+        "E27",
+        "E25"
+      ],
+      "notes": "Brian Schottenheimer (now DAL HC) was Seahawks OC 2018-20.",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:CAR:HC>coach:CAR:OC",
+      "mentor": {
+        "table": "COACHES_DATA",
+        "team": "CAR",
+        "role": "HC"
+      },
+      "protege": {
+        "table": "COORDINATORS_DATA",
+        "team": "CAR",
+        "role": "OC"
+      },
+      "stints": [
+        {
+          "team": "TB",
+          "first_season": 2023,
+          "last_season": 2023,
+          "mentor_role": "offensive coordinator",
+          "protege_role": "wide receivers coach"
+        },
+        {
+          "team": "CAR",
+          "first_season": 2024,
+          "last_season": 2025,
+          "mentor_role": "HC",
+          "protege_role": "offensive coordinator"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E28",
+        "E29"
+      ],
+      "notes": "Also worked under Canales in Seattle 2019-22 when Canales was QB coach/passing game coordinator (not counted).",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:LAC:HC>coach:CAR:DC",
+      "mentor": {
+        "table": "COACHES_DATA",
+        "team": "LAC",
+        "role": "HC"
+      },
+      "protege": {
+        "table": "COORDINATORS_DATA",
+        "team": "CAR",
+        "role": "DC"
+      },
+      "stints": [
+        {
+          "team": "SF",
+          "first_season": 2011,
+          "last_season": 2014,
+          "mentor_role": "HC",
+          "protege_role": "quality control / offensive assistant / defensive assistant"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E30",
+        "E31"
+      ],
+      "notes": "Jim Harbaugh was 49ers HC 2011-14; Evero stayed through 2015.",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:LAR:HC>coach:CAR:DC",
+      "mentor": {
+        "table": "COACHES_DATA",
+        "team": "LAR",
+        "role": "HC"
+      },
+      "protege": {
+        "table": "COORDINATORS_DATA",
+        "team": "CAR",
+        "role": "DC"
+      },
+      "stints": [
+        {
+          "team": "LAR",
+          "first_season": 2017,
+          "last_season": 2021,
+          "mentor_role": "HC",
+          "protege_role": "safeties coach / secondary coach and pass game coordinator"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E33",
+        "E31",
+        "E30"
+      ],
+      "notes": "",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:SF:DC>coach:CAR:DC",
+      "mentor": {
+        "table": "COORDINATORS_DATA",
+        "team": "SF",
+        "role": "DC"
+      },
+      "protege": {
+        "table": "COORDINATORS_DATA",
+        "team": "CAR",
+        "role": "DC"
+      },
+      "stints": [
+        {
+          "team": "TB",
+          "first_season": 2009,
+          "last_season": 2009,
+          "mentor_role": "HC",
+          "protege_role": "defensive quality control coach"
+        },
+        {
+          "team": "LAR",
+          "first_season": 2021,
+          "last_season": 2021,
+          "mentor_role": "defensive coordinator",
+          "protege_role": "secondary coach / pass game coordinator"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E32",
+        "E31",
+        "E33"
+      ],
+      "notes": "Morris was Bucs HC in 2009 (Evero Bucs QC 2007-09; sources give the years but do not name Morris for 2009) and Rams DC over Evero in 2021.",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:NO:HC>coach:NO:OC",
+      "mentor": {
+        "table": "COACHES_DATA",
+        "team": "NO",
+        "role": "HC"
+      },
+      "protege": {
+        "table": "COORDINATORS_DATA",
+        "team": "NO",
+        "role": "OC"
+      },
+      "stints": [
+        {
+          "team": "DAL",
+          "first_season": 2019,
+          "last_season": 2022,
+          "mentor_role": "offensive coordinator",
+          "protege_role": "tight ends coach / quarterbacks coach"
+        },
+        {
+          "team": "LAC",
+          "first_season": 2023,
+          "last_season": 2023,
+          "mentor_role": "offensive coordinator",
+          "protege_role": "quarterbacks coach"
+        },
+        {
+          "team": "PHI",
+          "first_season": 2024,
+          "last_season": 2024,
+          "mentor_role": "offensive coordinator",
+          "protege_role": "quarterbacks coach"
+        },
+        {
+          "team": "NO",
+          "first_season": 2025,
+          "last_season": 2025,
+          "mentor_role": "HC",
+          "protege_role": "offensive coordinator"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E34",
+        "E35"
+      ],
+      "notes": "Seven straight seasons on Moore's side of the ball.",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:PIT:HC>coach:NO:OC",
+      "mentor": {
+        "table": "COACHES_DATA",
+        "team": "PIT",
+        "role": "HC"
+      },
+      "protege": {
+        "table": "COORDINATORS_DATA",
+        "team": "NO",
+        "role": "OC"
+      },
+      "stints": [
+        {
+          "team": "DAL",
+          "first_season": 2020,
+          "last_season": 2022,
+          "mentor_role": "HC",
+          "protege_role": "quarterbacks coach"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E35",
+        "E37"
+      ],
+      "notes": "Mike McCarthy (now PIT HC) was Cowboys HC 2020-22; Nussmeier sources give the QB-coach years, the McCarthy source does not name Nussmeier.",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:PIT:HC>coach:NO:HC",
+      "mentor": {
+        "table": "COACHES_DATA",
+        "team": "PIT",
+        "role": "HC"
+      },
+      "protege": {
+        "table": "COACHES_DATA",
+        "team": "NO",
+        "role": "HC"
+      },
+      "stints": [
+        {
+          "team": "DAL",
+          "first_season": 2020,
+          "last_season": 2022,
+          "mentor_role": "HC",
+          "protege_role": "offensive coordinator"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E37",
+        "E36"
+      ],
+      "notes": "",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:PHI:DC>coach:NO:DC",
+      "mentor": {
+        "table": "COORDINATORS_DATA",
+        "team": "PHI",
+        "role": "DC"
+      },
+      "protege": {
+        "table": "COORDINATORS_DATA",
+        "team": "NO",
+        "role": "DC"
+      },
+      "stints": [
+        {
+          "team": "CHI",
+          "first_season": 2017,
+          "last_season": 2018,
+          "mentor_role": "defensive coordinator",
+          "protege_role": "outside linebackers coach"
+        },
+        {
+          "team": "DEN",
+          "first_season": 2019,
+          "last_season": 2019,
+          "mentor_role": "HC",
+          "protege_role": "outside linebackers coach"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E38",
+        "E39",
+        "E40"
+      ],
+      "notes": "Vic Fangio (now PHI DC); sources use learned-from/tutelage language.",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:TB:HC>coach:TB:DC",
+      "mentor": {
+        "table": "COACHES_DATA",
+        "team": "TB",
+        "role": "HC"
+      },
+      "protege": {
+        "table": "COORDINATORS_DATA",
+        "team": "TB",
+        "role": "DC"
+      },
+      "stints": [
+        {
+          "team": "TB",
+          "first_season": 2019,
+          "last_season": 2021,
+          "mentor_role": "defensive coordinator",
+          "protege_role": "outside linebackers coach"
+        },
+        {
+          "team": "TB",
+          "first_season": 2022,
+          "last_season": 2025,
+          "mentor_role": "HC",
+          "protege_role": "inside linebackers coach / co-defensive coordinator"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E44",
+        "E45"
+      ],
+      "notes": "Bowles called the defense himself while Foote was co-DC.",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:LAR:HC>coach:TB:OC",
+      "mentor": {
+        "table": "COACHES_DATA",
+        "team": "LAR",
+        "role": "HC"
+      },
+      "protege": {
+        "table": "COORDINATORS_DATA",
+        "team": "TB",
+        "role": "OC"
+      },
+      "stints": [
+        {
+          "team": "LAR",
+          "first_season": 2019,
+          "last_season": 2023,
+          "mentor_role": "HC",
+          "protege_role": "assistant quarterbacks coach / quarterbacks coach / pass game coordinator"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E46",
+        "E47"
+      ],
+      "notes": "Confirms the existing profile ties LAR_HC - TB_OC and TB_OC - LAR_HC (same pair listed twice).",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:SF:DC>coach:TB:OC",
+      "mentor": {
+        "table": "COORDINATORS_DATA",
+        "team": "SF",
+        "role": "DC"
+      },
+      "protege": {
+        "table": "COORDINATORS_DATA",
+        "team": "TB",
+        "role": "OC"
+      },
+      "stints": [
+        {
+          "team": "ATL",
+          "first_season": 2024,
+          "last_season": 2025,
+          "mentor_role": "HC",
+          "protege_role": "offensive coordinator"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E46",
+        "E47"
+      ],
+      "notes": "Raheem Morris (now SF DC) was Falcons HC.",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:SF:HC>coach:AZ:HC",
+      "mentor": {
+        "table": "COACHES_DATA",
+        "team": "SF",
+        "role": "HC"
+      },
+      "protege": {
+        "table": "COACHES_DATA",
+        "team": "AZ",
+        "role": "HC"
+      },
+      "stints": [
+        {
+          "team": "CLE",
+          "first_season": 2014,
+          "last_season": 2014,
+          "mentor_role": "offensive coordinator",
+          "protege_role": "offensive coaching intern"
+        },
+        {
+          "team": "ATL",
+          "first_season": 2015,
+          "last_season": 2016,
+          "mentor_role": "offensive coordinator",
+          "protege_role": "offensive assistant"
+        },
+        {
+          "team": "SF",
+          "first_season": 2017,
+          "last_season": 2020,
+          "mentor_role": "HC",
+          "protege_role": "wide receivers coach / passing game coordinator"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E50",
+        "E48",
+        "E3",
+        "E49"
+      ],
+      "notes": "Confirms the existing profile ties AZ_HC - SF_HC and SF_HC - AZ_HC (same pair listed twice).",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:WAS:HC>coach:AZ:HC",
+      "mentor": {
+        "table": "COACHES_DATA",
+        "team": "WAS",
+        "role": "HC"
+      },
+      "protege": {
+        "table": "COACHES_DATA",
+        "team": "AZ",
+        "role": "HC"
+      },
+      "stints": [
+        {
+          "team": "ATL",
+          "first_season": 2015,
+          "last_season": 2016,
+          "mentor_role": "HC",
+          "protege_role": "offensive assistant"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E48",
+        "E3"
+      ],
+      "notes": "",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:TEN:HC>coach:AZ:HC",
+      "mentor": {
+        "table": "COACHES_DATA",
+        "team": "TEN",
+        "role": "HC"
+      },
+      "protege": {
+        "table": "COACHES_DATA",
+        "team": "AZ",
+        "role": "HC"
+      },
+      "stints": [
+        {
+          "team": "NYJ",
+          "first_season": 2021,
+          "last_season": 2022,
+          "mentor_role": "HC",
+          "protege_role": "offensive coordinator"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E51",
+        "E50",
+        "E54"
+      ],
+      "notes": "Robert Saleh (now TEN HC).",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:LAR:HC>coach:AZ:HC",
+      "mentor": {
+        "table": "COACHES_DATA",
+        "team": "LAR",
+        "role": "HC"
+      },
+      "protege": {
+        "table": "COACHES_DATA",
+        "team": "AZ",
+        "role": "HC"
+      },
+      "stints": [
+        {
+          "team": "LAR",
+          "first_season": 2023,
+          "last_season": 2025,
+          "mentor_role": "HC",
+          "protege_role": "offensive coordinator"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E49",
+        "E50"
+      ],
+      "notes": "",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:GB:HC>coach:AZ:OC",
+      "mentor": {
+        "table": "COACHES_DATA",
+        "team": "GB",
+        "role": "HC"
+      },
+      "protege": {
+        "table": "COORDINATORS_DATA",
+        "team": "AZ",
+        "role": "OC"
+      },
+      "stints": [
+        {
+          "team": "GB",
+          "first_season": 2019,
+          "last_season": 2021,
+          "mentor_role": "HC",
+          "protege_role": "offensive coordinator"
+        },
+        {
+          "team": "GB",
+          "first_season": 2025,
+          "last_season": 2025,
+          "mentor_role": "HC",
+          "protege_role": "defensive analyst"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E52",
+        "E53"
+      ],
+      "notes": "",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:TEN:HC>coach:AZ:OC",
+      "mentor": {
+        "table": "COACHES_DATA",
+        "team": "TEN",
+        "role": "HC"
+      },
+      "protege": {
+        "table": "COORDINATORS_DATA",
+        "team": "AZ",
+        "role": "OC"
+      },
+      "stints": [
+        {
+          "team": "NYJ",
+          "first_season": 2023,
+          "last_season": 2024,
+          "mentor_role": "HC",
+          "protege_role": "offensive coordinator"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E54",
+        "E52"
+      ],
+      "notes": "Saleh was fired five games into 2024 (about 1.3 seasons together); borderline for the 2-season rule.",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:GB:DC>coach:AZ:DC",
+      "mentor": {
+        "table": "COORDINATORS_DATA",
+        "team": "GB",
+        "role": "DC"
+      },
+      "protege": {
+        "table": "COORDINATORS_DATA",
+        "team": "AZ",
+        "role": "DC"
+      },
+      "stints": [
+        {
+          "team": "PHI",
+          "first_season": 2021,
+          "last_season": 2022,
+          "mentor_role": "defensive coordinator",
+          "protege_role": "linebackers coach"
+        },
+        {
+          "team": "AZ",
+          "first_season": 2023,
+          "last_season": 2025,
+          "mentor_role": "HC",
+          "protege_role": "defensive coordinator"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E55",
+        "E56"
+      ],
+      "notes": "Confirms the existing profile ties AZ_DC - GB_DC and GB_DC - AZ_DC (same pair listed twice).",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:PHI:HC>coach:AZ:DC",
+      "mentor": {
+        "table": "COACHES_DATA",
+        "team": "PHI",
+        "role": "HC"
+      },
+      "protege": {
+        "table": "COORDINATORS_DATA",
+        "team": "AZ",
+        "role": "DC"
+      },
+      "stints": [
+        {
+          "team": "PHI",
+          "first_season": 2021,
+          "last_season": 2022,
+          "mentor_role": "HC",
+          "protege_role": "linebackers coach"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E56",
+        "E55"
+      ],
+      "notes": "",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:SF:HC>coach:LAR:HC",
+      "mentor": {
+        "table": "COACHES_DATA",
+        "team": "SF",
+        "role": "HC"
+      },
+      "protege": {
+        "table": "COACHES_DATA",
+        "team": "LAR",
+        "role": "HC"
+      },
+      "stints": [
+        {
+          "team": "WAS",
+          "first_season": 2010,
+          "last_season": 2013,
+          "mentor_role": "offensive coordinator",
+          "protege_role": "offensive assistant / tight ends coach"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E57",
+        "E58"
+      ],
+      "notes": "",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:LAR:HC>coach:LAR:OC",
+      "mentor": {
+        "table": "COACHES_DATA",
+        "team": "LAR",
+        "role": "HC"
+      },
+      "protege": {
+        "table": "COORDINATORS_DATA",
+        "team": "LAR",
+        "role": "OC"
+      },
+      "stints": [
+        {
+          "team": "LAR",
+          "first_season": 2024,
+          "last_season": 2025,
+          "mentor_role": "HC",
+          "protege_role": "pass game specialist / passing game coordinator"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E60",
+        "E61"
+      ],
+      "notes": "Confirms the existing profile tie LAR_OC - LAR_HC.",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:AZ:HC>coach:LAR:OC",
+      "mentor": {
+        "table": "COACHES_DATA",
+        "team": "AZ",
+        "role": "HC"
+      },
+      "protege": {
+        "table": "COORDINATORS_DATA",
+        "team": "LAR",
+        "role": "OC"
+      },
+      "stints": [
+        {
+          "team": "LAR",
+          "first_season": 2024,
+          "last_season": 2025,
+          "mentor_role": "offensive coordinator",
+          "protege_role": "pass game specialist / passing game coordinator"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E61",
+        "E60"
+      ],
+      "notes": "Mike LaFleur (now AZ HC) was Rams OC 2023-25.",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:LAR:HC>coach:LAR:DC",
+      "mentor": {
+        "table": "COACHES_DATA",
+        "team": "LAR",
+        "role": "HC"
+      },
+      "protege": {
+        "table": "COORDINATORS_DATA",
+        "team": "LAR",
+        "role": "DC"
+      },
+      "stints": [
+        {
+          "team": "LAR",
+          "first_season": 2017,
+          "last_season": 2025,
+          "mentor_role": "HC",
+          "protege_role": "linebackers coach / pass game coordinator / defensive coordinator"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E63",
+        "E62"
+      ],
+      "notes": "",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:SF:DC>coach:LAR:DC",
+      "mentor": {
+        "table": "COORDINATORS_DATA",
+        "team": "SF",
+        "role": "DC"
+      },
+      "protege": {
+        "table": "COORDINATORS_DATA",
+        "team": "LAR",
+        "role": "DC"
+      },
+      "stints": [
+        {
+          "team": "LAR",
+          "first_season": 2021,
+          "last_season": 2023,
+          "mentor_role": "defensive coordinator",
+          "protege_role": "linebackers coach / DB coach and pass game coordinator / pass rush coordinator"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E62",
+        "E63"
+      ],
+      "notes": "Raheem Morris was Rams DC 2021-23 over Shula.",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:SF:HC>coach:SF:OC",
+      "mentor": {
+        "table": "COACHES_DATA",
+        "team": "SF",
+        "role": "HC"
+      },
+      "protege": {
+        "table": "COORDINATORS_DATA",
+        "team": "SF",
+        "role": "OC"
+      },
+      "stints": [
+        {
+          "team": "SF",
+          "first_season": 2021,
+          "last_season": 2025,
+          "mentor_role": "HC",
+          "protege_role": "defensive QC / assistant QB coach / passing game specialist / offensive coordinator"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E64",
+        "E65"
+      ],
+      "notes": "",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:WAS:HC>coach:SF:DC",
+      "mentor": {
+        "table": "COACHES_DATA",
+        "team": "WAS",
+        "role": "HC"
+      },
+      "protege": {
+        "table": "COORDINATORS_DATA",
+        "team": "SF",
+        "role": "DC"
+      },
+      "stints": [
+        {
+          "team": "ATL",
+          "first_season": 2015,
+          "last_season": 2020,
+          "mentor_role": "HC",
+          "protege_role": "assistant HC / passing game coordinator / defensive coordinator"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E48",
+        "E3",
+        "E23"
+      ],
+      "notes": "Quinn was fired five games into 2020, after which Morris became interim HC.",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:LAR:HC>coach:SF:DC",
+      "mentor": {
+        "table": "COACHES_DATA",
+        "team": "LAR",
+        "role": "HC"
+      },
+      "protege": {
+        "table": "COORDINATORS_DATA",
+        "team": "SF",
+        "role": "DC"
+      },
+      "stints": [
+        {
+          "team": "LAR",
+          "first_season": 2021,
+          "last_season": 2023,
+          "mentor_role": "HC",
+          "protege_role": "defensive coordinator"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E62",
+        "E33",
+        "E66"
+      ],
+      "notes": "",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:NYG:HC>coach:SEA:HC",
+      "mentor": {
+        "table": "COACHES_DATA",
+        "team": "NYG",
+        "role": "HC"
+      },
+      "protege": {
+        "table": "COACHES_DATA",
+        "team": "SEA",
+        "role": "HC"
+      },
+      "stints": [
+        {
+          "team": "BAL",
+          "first_season": 2014,
+          "last_season": 2020,
+          "mentor_role": "HC",
+          "protege_role": "intern / defensive assistant / DB coach / linebackers coach"
+        },
+        {
+          "team": "BAL",
+          "first_season": 2022,
+          "last_season": 2023,
+          "mentor_role": "HC",
+          "protege_role": "defensive coordinator"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E67",
+        "E68",
+        "E69"
+      ],
+      "notes": "Confirms the existing profile tie SEA_HC - NYG_HC (John Harbaugh).",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:LAC:HC>coach:SEA:HC",
+      "mentor": {
+        "table": "COACHES_DATA",
+        "team": "LAC",
+        "role": "HC"
+      },
+      "protege": {
+        "table": "COACHES_DATA",
+        "team": "SEA",
+        "role": "HC"
+      },
+      "stints": [
+        {
+          "team": "Michigan",
+          "first_season": 2021,
+          "last_season": 2021,
+          "mentor_role": "HC",
+          "protege_role": "defensive coordinator"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E67",
+        "E69"
+      ],
+      "notes": "One season plus a source in which Macdonald says what he learned from both Harbaughs; confirms the existing profile tie SEA_HC - LAC_HC (Jim Harbaugh).",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:SF:HC>coach:SEA:OC",
+      "mentor": {
+        "table": "COACHES_DATA",
+        "team": "SF",
+        "role": "HC"
+      },
+      "protege": {
+        "table": "COORDINATORS_DATA",
+        "team": "SEA",
+        "role": "OC"
+      },
+      "stints": [
+        {
+          "team": "SF",
+          "first_season": 2019,
+          "last_season": 2025,
+          "mentor_role": "HC",
+          "protege_role": "defensive QC / offensive QC / tight ends coach / run game coordinator"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E70",
+        "E71"
+      ],
+      "notes": "Confirms the existing profile tie SEA_OC - SF_HC; AP quotes Fleury on what he learned under Shanahan.",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:TEN:HC>coach:SEA:OC",
+      "mentor": {
+        "table": "COACHES_DATA",
+        "team": "TEN",
+        "role": "HC"
+      },
+      "protege": {
+        "table": "COORDINATORS_DATA",
+        "team": "SEA",
+        "role": "OC"
+      },
+      "stints": [
+        {
+          "team": "SF",
+          "first_season": 2019,
+          "last_season": 2019,
+          "mentor_role": "defensive coordinator",
+          "protege_role": "defensive quality control coach"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E72",
+        "E71"
+      ],
+      "notes": "Robert Saleh was 49ers DC in 2019; one season plus AP naming Saleh among Fleury's mentors. Sources do not name Saleh as DC in 2019 explicitly.",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:WAS:HC>coach:SEA:DC",
+      "mentor": {
+        "table": "COACHES_DATA",
+        "team": "WAS",
+        "role": "HC"
+      },
+      "protege": {
+        "table": "COORDINATORS_DATA",
+        "team": "SEA",
+        "role": "DC"
+      },
+      "stints": [
+        {
+          "team": "ATL",
+          "first_season": 2018,
+          "last_season": 2020,
+          "mentor_role": "HC",
+          "protege_role": "defensive assistant / outside linebackers coach"
+        },
+        {
+          "team": "DAL",
+          "first_season": 2021,
+          "last_season": 2023,
+          "mentor_role": "defensive coordinator",
+          "protege_role": "defensive line coach"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E73",
+        "E74"
+      ],
+      "notes": "Confirms the existing profile tie SEA_DC - WAS_HC (Dan Quinn).",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:SEA:HC>coach:SEA:DC",
+      "mentor": {
+        "table": "COACHES_DATA",
+        "team": "SEA",
+        "role": "HC"
+      },
+      "protege": {
+        "table": "COORDINATORS_DATA",
+        "team": "SEA",
+        "role": "DC"
+      },
+      "stints": [
+        {
+          "team": "SEA",
+          "first_season": 2024,
+          "last_season": 2025,
+          "mentor_role": "HC",
+          "protege_role": "defensive coordinator"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E73",
+        "E74"
+      ],
+      "notes": "Stint end from the seed seat history (DC since 2024).",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    },
+    {
+      "key": "coach:PIT:HC>coach:SEA:DC",
+      "mentor": {
+        "table": "COACHES_DATA",
+        "team": "PIT",
+        "role": "HC"
+      },
+      "protege": {
+        "table": "COORDINATORS_DATA",
+        "team": "SEA",
+        "role": "DC"
+      },
+      "stints": [
+        {
+          "team": "DAL",
+          "first_season": 2021,
+          "last_season": 2023,
+          "mentor_role": "HC",
+          "protege_role": "defensive line coach"
+        }
+      ],
+      "outcome": "positive",
+      "evidence": [
+        "E73",
+        "E37"
+      ],
+      "notes": "Mike McCarthy (now PIT HC) was Cowboys HC 2020-23; the Durde sources give the years but name only Quinn.",
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    }
+  ],
+  "proposed_trees": [
+    {
+      "key": "arians",
+      "label": "Bruce Arians tree",
+      "root": "arians",
+      "parent": null,
+      "summary": "Bruce Arians (Temple, Steelers, Colts, Cardinals and Buccaneers HC) and the assistants he hired and promoted, notably Todd Bowles (his Cardinals and Buccaneers DC and hand-picked Tampa Bay successor) and Larry Foote (Cardinals and Buccaneers linebackers coach).",
+      "evidence": [
+        "E43",
+        "E44"
+      ],
+      "review": {
+        "status": "approved",
+        "reviewer": "JR",
+        "reviewed_at": "2026-11-07",
+        "notes": "JR approved the coaching trees 2026-11-07."
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.espn.com/blog/green-bay-packers/post/_/id/46667/matt-lafleurs-time-with-mcvay-shanahan-will-help-aaron-rodgers",
+      "publisher": "ESPN",
+      "published": "2019-01-07",
+      "accessed": "2026-11-07",
+      "summary": "On the Packers hiring Matt LaFleur: he learned under Falcons OC Kyle Shanahan in Atlanta, then was Sean McVay's non-play-calling offensive coordinator with the Rams before calling plays for Mike Vrabel's Titans.",
+      "confidence": "high",
+      "mentorship": true
+    },
+    {
+      "id": "E2",
+      "url": "https://www.packers.com/news/five-things-to-know-about-matt-lafleur",
+      "publisher": "Green Bay Packers",
+      "published": "2019-01-09",
+      "accessed": "2026-11-07",
+      "summary": "Team piece on new HC Matt LaFleur: Texans offensive assistant under Gary Kubiak, Washington QB coach 2010-13 on Mike Shanahan's staff, Notre Dame 2014, Falcons QB coach for two seasons under OC Kyle Shanahan, Rams OC 2017 under Sean McVay, Titans OC 2018.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://sportstalkatl.com/the-2016-falcons-coaching-staff-was-absolutely-loaded",
+      "publisher": "Sports Talk ATL",
+      "published": "2023-01-20",
+      "accessed": "2026-11-07",
+      "summary": "Lists the 2016 Falcons staff under HC Dan Quinn: Raheem Morris assistant HC/passing game coordinator/WR coach, Kyle Shanahan OC, Matt LaFleur QB coach, Mike LaFleur and Mike McDaniel offensive assistants, Jeff Ulbrich linebackers coach.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.espn.com/blog/nflnation/post/_/id/159582/falcons-coaching-staff-starting-to-take-form",
+      "publisher": "ESPN",
+      "published": "2015-01-21",
+      "accessed": "2026-11-07",
+      "summary": "Reports Kyle Shanahan as offensive coordinator on Dan Quinn's first Falcons staff, with Quinn to be hired after the Super Bowl.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://6abc.com/post/kyle-shanahan-takes-49ers-head-coach-job-now-that-falcons-out/1740860/",
+      "publisher": "Associated Press (6abc)",
+      "published": "2017-02-07",
+      "accessed": "2026-11-07",
+      "summary": "AP on the 49ers hiring Falcons offensive coordinator Kyle Shanahan; recounts his Texans, Washington, Cleveland and Atlanta coordinator jobs.",
+      "confidence": "high"
+    },
+    {
+      "id": "E6",
+      "url": "https://www.packers.com/news/packers-promote-adam-stenavich-to-offensive-coordinator",
+      "publisher": "Green Bay Packers",
+      "published": "2022-01-31",
+      "accessed": "2026-11-07",
+      "summary": "Packers promote OL/run game coordinator Adam Stenavich to OC; he joined Matt LaFleur's staff in 2019 as OL coach after two years (2017-18) as 49ers assistant offensive line coach.",
+      "confidence": "high"
+    },
+    {
+      "id": "E7",
+      "url": "https://www.wbay.com/2022/01/31/packers-announce-stenavich-offensive-coordinator",
+      "publisher": "WBAY",
+      "published": "2022-01-31",
+      "accessed": "2026-11-07",
+      "summary": "Reports Stenavich's promotion to Packers OC after coaching the offensive line 2019-21, replacing Nathaniel Hackett who left for Denver; previously 49ers assistant OL coach 2017-18.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E8",
+      "url": "https://www.nbcsportsphiladelphia.com/philadelphia/eagles/5-things-you-should-know-about-new-eagles-dc-jonathan-gannon",
+      "publisher": "NBC Sports Philadelphia",
+      "published": "2021-01-24",
+      "accessed": "2026-11-07",
+      "summary": "Profile of new Eagles DC Jonathan Gannon, hired under Nick Sirianni: Vikings assistant DB coach on Mike Zimmer's staff 2014-17, then worked with Sirianni on Frank Reich's Colts staff.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E9",
+      "url": "https://www.news4jax.com/sports/2023/02/14/cardinals-hire-eagles-coordinator-gannon-as-next-coach/",
+      "publisher": "Associated Press (News4JAX)",
+      "published": "2023-02-14",
+      "accessed": "2026-11-07",
+      "summary": "AP on the Cardinals hiring Gannon: Eagles DC for two seasons (2021-22) under Nick Sirianni after coaching Colts defensive backs/cornerbacks 2018-20.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E10",
+      "url": "https://www.espn.com/nfl/story/_/id/33303864/minnesota-vikings-officially-hire-innovative-kevin-oconnell-new-head-coach",
+      "publisher": "ESPN",
+      "published": "2022-02-16",
+      "accessed": "2026-11-07",
+      "summary": "Vikings officially hire Kevin O'Connell: Browns QB coach 2015, 49ers special projects 2016, Washington QB coach/passing game coordinator/OC 2017-19, Rams OC 2020-21 under Sean McVay.",
+      "confidence": "high"
+    },
+    {
+      "id": "E11",
+      "url": "https://www.clickondetroit.com/sports/2022/02/16/vikings-finalize-hire-of-champion-rams-oc-kevin-oconnell/",
+      "publisher": "Associated Press (ClickOnDetroit)",
+      "published": "2022-02-16",
+      "accessed": "2026-11-07",
+      "summary": "AP: Vikings finalize hiring of Rams offensive coordinator O'Connell, who had just finished his second season (2020-21) on Sean McVay's staff.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E12",
+      "url": "https://www.vikings.com/news/wes-phillips-offensive-coordinator-5-things-to-know",
+      "publisher": "Minnesota Vikings",
+      "published": "2022-02-21",
+      "accessed": "2026-11-07",
+      "summary": "Team bio of new OC Wes Phillips: Cowboys 2007-13, Washington tight ends coach 2014-18, Rams tight ends coach 2019-21 (passing game coordinator 2021), with Kevin O'Connell as his offensive coordinator in 2020-21.",
+      "confidence": "high"
+    },
+    {
+      "id": "E13",
+      "url": "https://therams.com/news/meet-wes-phillips-three-things-to-know-about-the-rams-new-tight-ends-coach",
+      "publisher": "Los Angeles Rams",
+      "published": "2019-02-26",
+      "accessed": "2026-11-07",
+      "summary": "Rams add Wes Phillips as TE coach; he became Washington's tight ends coach when McVay was promoted to OC in 2014 and worked under him for three seasons before McVay left in 2017.",
+      "confidence": "high"
+    },
+    {
+      "id": "E14",
+      "url": "https://www.espn.com/nfl/story/_/id/33341841/minnesota-vikings-hiring-los-angeles-rams-wes-phillips-offensive-coordinator-source-says",
+      "publisher": "ESPN",
+      "published": "2022-02-21",
+      "accessed": "2026-11-07",
+      "summary": "Vikings hire Rams passing game coordinator/TE coach Wes Phillips as OC on Kevin O'Connell's staff; with the Rams since 2019, his role mirrors O'Connell's as Rams OC in 2020-21.",
+      "confidence": "high"
+    },
+    {
+      "id": "E15",
+      "url": "https://vikings.com/news/brian-flores-defensive-coordinator-hired-2023",
+      "publisher": "Minnesota Vikings",
+      "published": "2023-02-06",
+      "accessed": "2026-11-07",
+      "summary": "Vikings hire Brian Flores as DC on Kevin O'Connell's staff; bio lists Patriots roles 2008-18 (safeties coach 2012-15, linebackers coach 2016-18), Dolphins HC 2019-21, Steelers senior defensive assistant/LB coach 2022.",
+      "confidence": "high"
+    },
+    {
+      "id": "E16",
+      "url": "https://www.dakotanewsnow.com/2023/02/07/vikings-hire-brian-flores-new-defensive-coordinator/",
+      "publisher": "Dakota News Now",
+      "published": "2023-02-06",
+      "accessed": "2026-11-07",
+      "summary": "Reports Flores joining head coach Kevin O'Connell's Vikings as defensive coordinator after the 2022 season on the Steelers staff and 2004-18 with the Patriots.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E17",
+      "url": "https://www.si.com/nfl/2022/02/19/steelers-hire-brian-flores-defensive-assistant-coach",
+      "publisher": "Sports Illustrated",
+      "published": "2022-02-19",
+      "accessed": "2026-11-07",
+      "summary": "Mike Tomlin's Steelers hire Flores as senior defensive assistant/linebackers coach; he worked for New England 2004-18, coaching from 2008.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E18",
+      "url": "https://www.bangordailynews.com/2019/02/05/sports/brian-flores-goes-from-super-bowl-champs-to-dolphins/",
+      "publisher": "Associated Press (Bangor Daily News)",
+      "published": "2019-02-05",
+      "accessed": "2026-11-07",
+      "summary": "Dolphins hire Patriots LB coach and defensive play-caller Flores, the ninth former Bill Belichick assistant to become a head coach.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E19",
+      "url": "https://www.theringer.com/nfl/2020/1/12/21062601/cleveland-browns-kevin-stefanski-head-coach",
+      "publisher": "The Ringer",
+      "published": "2020-01-12",
+      "accessed": "2026-11-07",
+      "summary": "On the Browns hiring Stefanski: he worked with Vikings assistant head coach Gary Kubiak to build a Kubiak-style offense blending run and pass.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E20",
+      "url": "https://vikings.com/news/notebook-spielman-says-stefanski-was-biggest-flag-waver-for-gary-kubiak-hire",
+      "publisher": "Minnesota Vikings",
+      "published": "2019-02-27",
+      "accessed": "2026-11-07",
+      "summary": "GM Rick Spielman says OC Kevin Stefanski pushed hardest to add Gary Kubiak to the 2019 staff and that Kubiak wanted to mentor a young coach like Stefanski.",
+      "confidence": "high",
+      "mentorship": true
+    },
+    {
+      "id": "E21",
+      "url": "https://www.atlantanewsfirst.com/2026/01/21/reports-falcons-expected-hire-former-browns-offensive-coordinator-tommy-rees-same-role",
+      "publisher": "Atlanta News First",
+      "published": "2026-01-21",
+      "accessed": "2026-11-07",
+      "summary": "Falcons to hire Tommy Rees as OC, reuniting with Kevin Stefanski: Browns TE coach/pass game specialist 2024 and OC 2025, Alabama OC 2023, Notre Dame 2017-22.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E22",
+      "url": "https://www.atlantafalcons.com/news/tommy-rees-falcons-offensive-coordinator",
+      "publisher": "Atlanta Falcons",
+      "published": "2026-01-22",
+      "accessed": "2026-11-07",
+      "summary": "Team announces Rees as OC; he spent two seasons on Stefanski's Browns staff (2024 TE coach/pass game specialist, 2025 OC) and Stefanski wanted him as his Atlanta play caller.",
+      "confidence": "high"
+    },
+    {
+      "id": "E23",
+      "url": "https://atlantafalcons.com/news/atlanta-falcons-announce-jeff-ulbrich-as-next-defensive-coordinator",
+      "publisher": "Atlanta Falcons",
+      "published": "2025-01-18",
+      "accessed": "2026-11-07",
+      "summary": "Falcons name Jeff Ulbrich DC: linebackers coach 2015-19 under Dan Quinn, DC for the last 11 games of 2020 under interim HC Raheem Morris, Jets DC 2021-24 under Robert Saleh, reuniting with Morris in 2025.",
+      "confidence": "high"
+    },
+    {
+      "id": "E24",
+      "url": "https://www.walb.com/2025/01/19/falcons-hire-jeff-ulbrich-defensive-coordinator",
+      "publisher": "Atlanta News First (WALB)",
+      "published": "2025-01-18",
+      "accessed": "2026-11-07",
+      "summary": "Reports the Ulbrich hire: Falcons LB coach 2015-19, DC in 2020 after Morris became interim HC, Jets DC until promoted to interim HC when Robert Saleh was fired in 2024.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E25",
+      "url": "https://www.wsls.com/sports/2024/01/25/panthers-agree-to-hire-dave-canales-from-the-buccaneers-as-their-new-head-coach-ap-sources-say/",
+      "publisher": "Associated Press (WSLS)",
+      "published": "2024-01-25",
+      "accessed": "2026-11-07",
+      "summary": "AP on the Panthers hiring Bucs OC Dave Canales: 13 Seahawks seasons from 2010 (eight as WR coach, then QB coach and passing game coordinator), then Tampa Bay OC in 2023.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E26",
+      "url": "https://www.heraldnet.com/2018/02/25/seahawks-officially-anounce-their-coaching-staff-for-2018/",
+      "publisher": "The Everett Herald",
+      "published": "2018-02-25",
+      "accessed": "2026-11-07",
+      "summary": "Pete Carroll's 2018 Seahawks staff: Brian Schottenheimer new offensive coordinator, Dave Canales moves from wide receivers coach to quarterbacks coach.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E27",
+      "url": "https://933kjr.iheart.com/content/2020-03-10-report-seahawks-promote-dave-canales-austin-davis-add-three-comp-picks/",
+      "publisher": "KJR 93.3",
+      "published": "2020-03-11",
+      "accessed": "2026-11-07",
+      "summary": "Seahawks promote QB coach Dave Canales, on Pete Carroll's staff since 2010, to passing game coordinator; OC Brian Schottenheimer keeps overseeing the whole offense and the quarterbacks.",
+      "confidence": "low"
+    },
+    {
+      "id": "E28",
+      "url": "https://africa.espn.com/nfl/story/_/id/39422716/sources-brad-idzik-panthers-oc-call-plays",
+      "publisher": "ESPN",
+      "published": "2024-01-30",
+      "accessed": "2026-11-07",
+      "summary": "Panthers hire Brad Idzik as OC under new HC Dave Canales; Idzik was Seahawks assistant WR coach about four seasons and Bucs WR coach in 2023 under OC Canales.",
+      "confidence": "high"
+    },
+    {
+      "id": "E29",
+      "url": "https://panthers.com/news/who-is-brad-idzik-uncovering-the-panthers-offensive-coordinator",
+      "publisher": "Carolina Panthers",
+      "published": "2024-02-21",
+      "accessed": "2026-11-07",
+      "summary": "Team profile: Idzik joined the Seahawks staff in 2019 working under Canales, followed him to Tampa Bay as WR coach and then to Carolina as OC.",
+      "confidence": "high"
+    },
+    {
+      "id": "E30",
+      "url": "https://panthers.com/news/five-things-to-know-about-new-defensive-coordinator-ejiro-evero",
+      "publisher": "Carolina Panthers",
+      "published": "2023-02-05",
+      "accessed": "2026-11-07",
+      "summary": "Evero bio: Bucs defensive QC 2007-09, 49ers 2011-15 (hired by Jim Harbaugh's staff; offensive assistant 2012-13), Packers 2016, Rams safeties coach 2017-20 and secondary/pass game coordinator 2021, Broncos DC 2022.",
+      "confidence": "high"
+    },
+    {
+      "id": "E31",
+      "url": "https://www.colts.com/news/head-coach-interview-ejiro-evero-defensive-coordinator-broncos-rams",
+      "publisher": "Indianapolis Colts",
+      "published": "2023-01-12",
+      "accessed": "2026-11-07",
+      "summary": "Colts HC-interview bio of Evero with year-by-year jobs: Tampa Bay 2007-09, 49ers 2011-15, Green Bay 2016, Rams 2017-21, Denver DC 2022.",
+      "confidence": "high"
+    },
+    {
+      "id": "E32",
+      "url": "https://www.si.com/nfl/2022/02/17/broncos-hire-rams-assistant-ejiro-evero-defensive-coordinator",
+      "publisher": "Sports Illustrated",
+      "published": "2022-02-17",
+      "accessed": "2026-11-07",
+      "summary": "Broncos hire Rams secondary coach Evero as DC; he coached Rams safeties from 2017 and coordinated the pass defense in 2021 under DC Raheem Morris.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E33",
+      "url": "https://www.denverbroncos.com/news/sean-mcvay-broncos-dc-ejiro-evero-has-clear-vision-for-defense-will-do-a-great-j",
+      "publisher": "Denver Broncos",
+      "published": "2022-03-29",
+      "accessed": "2026-11-07",
+      "summary": "Sean McVay praises Evero after years together on his Rams staff, recalling him working with DC Raheem Morris on the defense.",
+      "confidence": "high"
+    },
+    {
+      "id": "E34",
+      "url": "https://africa.espn.com/nfl/story/_/id/43937105/source-saints-expected-hire-eagles-doug-nussmeier-oc",
+      "publisher": "ESPN",
+      "published": "2025-02-20",
+      "accessed": "2026-11-07",
+      "summary": "Saints to hire Eagles QB coach Doug Nussmeier as OC under Kellen Moore; he was Moore's QB coach in Dallas (2019-22, Moore OC) and with the Chargers in 2023.",
+      "confidence": "high"
+    },
+    {
+      "id": "E35",
+      "url": "https://www.bleedinggreennation.com/2025/2/18/24368131/eagles-qb-coach-doug-nussmeier-finalizing-deal-to-become-saints-offensive-coordinator",
+      "publisher": "Bleeding Green Nation",
+      "published": "2025-02-18",
+      "accessed": "2026-11-07",
+      "summary": "Eagles QB coach Nussmeier finalizing deal as Saints OC; Cowboys TE coach from 2018 and QB coach from 2020 with Moore as OC, then Chargers QB coach 2023 and Eagles 2024 alongside Moore.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E36",
+      "url": "https://www.nbcnews.com/sports/nfl/saints-kellen-moore-head-coach-rcna191710",
+      "publisher": "NBC News",
+      "published": "2025-02-11",
+      "accessed": "2026-11-07",
+      "summary": "Moore hired as Saints HC after Cowboys QB coach (2018) and OC (2019-22), Chargers OC 2023 under Staley, and Eagles OC 2024.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E37",
+      "url": "https://www.si.com/nfl/2023/01/30/cowboys-part-ways-with-offensive-coordinator-kellen-moore-mike-mccarthy",
+      "publisher": "Sports Illustrated",
+      "published": "2023-01-30",
+      "accessed": "2026-11-07",
+      "summary": "Cowboys and OC Kellen Moore part ways after four seasons as coordinator; HC Mike McCarthy takes over play-calling.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E38",
+      "url": "https://africa.espn.com/blog/los-angeles-rams/post/_/id/41266/rams-coach-sean-mcvay-makes-bold-bet-on-unproven-defensive-coordinator-brandon-staley",
+      "publisher": "ESPN",
+      "published": "2020-01-14",
+      "accessed": "2026-11-07",
+      "summary": "Rams hire Brandon Staley as DC under McVay; he spent three seasons under Vic Fangio as OLB coach (Bears under DC Fangio, Broncos under HC Fangio), and his tutelage under Fangio shapes his 3-4 scheme. Says McVay wanted a peer rather than a mentor.",
+      "confidence": "high",
+      "mentorship": true
+    },
+    {
+      "id": "E39",
+      "url": "https://www.denverbroncos.com/news/mile-high-morning-how-brandon-staley-learned-from-vic-fangio-on-his-path-to-beco",
+      "publisher": "Denver Broncos",
+      "published": "2020-12-31",
+      "accessed": "2026-11-07",
+      "summary": "How Staley learned from Vic Fangio: on Fangio's staffs in Chicago 2017-18 and as Denver OLB coach in 2019, three years working with him closely.",
+      "confidence": "high",
+      "mentorship": true
+    },
+    {
+      "id": "E40",
+      "url": "https://www.espn.com/blog/denver-broncos/post/_/id/39595/i-knew-brandon-had-special-abilities-as-a-coach-fangio-and-staley-reunited-when-broncos-face-chargers",
+      "publisher": "ESPN",
+      "published": "2021-11-24",
+      "accessed": "2026-11-07",
+      "summary": "Fangio and Staley reunite as opposing head coaches; Staley worked two seasons under DC Fangio in Chicago and 2019 in Denver and has credited Fangio for his development.",
+      "confidence": "high"
+    },
+    {
+      "id": "E41",
+      "url": "https://www.phillymag.com/eagles/2012/10/17/the-bowles-parcells-connection/",
+      "publisher": "Philadelphia Magazine",
+      "published": "2012-10-17",
+      "accessed": "2026-11-07",
+      "summary": "Todd Bowles spent two years as Cowboys secondary coach on Bill Parcells's staff and was Dolphins assistant HC while Parcells ran Miami's football operations; Bowles credits Parcells with teaching him to see the whole game.",
+      "confidence": "medium",
+      "mentorship": true
+    },
+    {
+      "id": "E42",
+      "url": "https://www.dallasnews.com/sports/cowboys/2021/02/02/buccaneers-dc-todd-bowles-is-the-latest-coach-to-make-it-to-the-super-bowl-after-leaving-the-cowboys/",
+      "publisher": "Dallas Morning News",
+      "published": "2021-02-02",
+      "accessed": "2026-11-07",
+      "summary": "Bucs DC Todd Bowles reached the Super Bowl after earlier coaching the Cowboys secondary from 2005 under Bill Parcells.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E43",
+      "url": "https://now.temple.edu/news/2022-04-04/owl-takes-helm-tampa-bay-buccaneers",
+      "publisher": "Temple University",
+      "published": "2022-04-04",
+      "accessed": "2026-11-07",
+      "summary": "Bucs DC Todd Bowles named head coach on March 30, 2022 as Bruce Arians retired; Arians coached him at Temple and Bowles thanked him for four decades of guidance.",
+      "confidence": "medium",
+      "mentorship": true
+    },
+    {
+      "id": "E44",
+      "url": "https://www.nbcsports.com/nfl/profootballtalk/rumor-mill/news/report-larry-foote-kacy-rodgers-likely-to-be-co-defensive-coordinators-for-bucs",
+      "publisher": "ProFootballTalk",
+      "published": "2022-03-31",
+      "accessed": "2026-11-07",
+      "summary": "Larry Foote, Bucs OLB coach for three seasons (2019-21) and previously on Bruce Arians's Arizona staff, likely to become co-DC as DC Todd Bowles moves up to head coach.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E45",
+      "url": "https://www.prideofdetroit.com/2025/1/23/24350502/detroit-lions-interviewing-larry-foote-defensive-coordinator-position",
+      "publisher": "Pride of Detroit",
+      "published": "2025-01-23",
+      "accessed": "2026-11-07",
+      "summary": "Lions interview Bucs co-defensive coordinator/LB coach Larry Foote, on Todd Bowles's Tampa Bay staff since 2019, for their DC job.",
+      "confidence": "low"
+    },
+    {
+      "id": "E46",
+      "url": "https://www.buccaneers.com/news/zac-robinson-hired-bucs-offensive-coordinator",
+      "publisher": "Tampa Bay Buccaneers",
+      "published": "2026-01-24",
+      "accessed": "2026-11-07",
+      "summary": "Bucs hire Zac Robinson as OC: Rams 2019-23 under Sean McVay (assistant QB, assistant WR, QB coach, then pass game coordinator/QB coach 2022-23), Falcons OC 2024-25 under Raheem Morris.",
+      "confidence": "high"
+    },
+    {
+      "id": "E47",
+      "url": "https://www.news4jax.com/sports/2026/01/22/the-buccaneers-are-hiring-zac-robinson-to-be-their-offensive-coordinator-ap-source-says/",
+      "publisher": "Associated Press (News4JAX)",
+      "published": "2026-01-22",
+      "accessed": "2026-11-07",
+      "summary": "AP: Bucs hiring Zac Robinson, Falcons OC the past two seasons (2024-25) after two seasons as Rams pass game coordinator/QB coach.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E48",
+      "url": "https://atlantafalcons.com/news/falcons-announce-several-assistant-coaches-14878214",
+      "publisher": "Atlanta Falcons",
+      "published": "2015-02-03",
+      "accessed": "2026-11-07",
+      "summary": "Falcons announce assistants on Dan Quinn's first staff: Kyle Shanahan OC, Raheem Morris assistant HC/defensive passing game coordinator, Mike LaFleur offensive assistant (after a 2014 Browns internship).",
+      "confidence": "high"
+    },
+    {
+      "id": "E49",
+      "url": "https://www.espn.com/nfl/story/_/id/47800131/sources-cardinals-set-hire-rams-mike-lafleur-head-coach",
+      "publisher": "ESPN",
+      "published": "2026-02-01",
+      "accessed": "2026-11-07",
+      "summary": "Cardinals hire Rams OC Mike LaFleur as HC: Rams OC 2023-25 under Sean McVay, Jets OC 2021-22, 49ers 2017-20.",
+      "confidence": "high"
+    },
+    {
+      "id": "E50",
+      "url": "https://www.news4jax.com/sports/2026/02/01/cardinals-hire-rams-offensive-coordinator-mike-lafleur-as-head-coach/",
+      "publisher": "Associated Press (News4JAX)",
+      "published": "2026-02-01",
+      "accessed": "2026-11-07",
+      "summary": "AP: Cardinals hire Rams OC Mike LaFleur (Rams OC three seasons, Jets OC 2021-22), who worked for Kyle Shanahan for several years in Cleveland, Atlanta and San Francisco.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E51",
+      "url": "https://jetsxfactor.com/2021/01/18/robert-saleh-to-bring-mike-lafleur-john-benton-and-greg-knapp-to-jets-report",
+      "publisher": "Jets X-Factor",
+      "published": "2021-01-18",
+      "accessed": "2026-11-07",
+      "summary": "Report that new Jets HC Robert Saleh is bringing 49ers passing game coordinator Mike LaFleur to New York as offensive coordinator.",
+      "confidence": "low"
+    },
+    {
+      "id": "E52",
+      "url": "https://www.nbcsports.com/nfl/profootballtalk/rumor-mill/news/cardinals-to-hire-nathaniel-hackett-as-offensive-coordinator",
+      "publisher": "ProFootballTalk",
+      "published": "2026-02-04",
+      "accessed": "2026-11-07",
+      "summary": "Cardinals to hire Nathaniel Hackett as OC: Packers OC 2019-21 under Matt LaFleur, Broncos HC 2022, Jets OC 2023-24 after Mike LaFleur, Packers defensive analyst in 2025.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E53",
+      "url": "https://www.foxsports.com/articles/nfl/cardinals-hiring-veteran-coach-nathaniel-hackett-as-offensive-coordinator-ap-source-says",
+      "publisher": "Associated Press (Fox Sports)",
+      "published": "2026-02-04",
+      "accessed": "2026-11-07",
+      "summary": "AP: Cardinals hiring Hackett, Packers OC 2019-21 under Matt LaFleur, who spent 2025 as a Packers defensive analyst again under LaFleur.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E54",
+      "url": "https://www.news4jax.com/sports/2023/01/26/jets-hire-former-broncos-coach-hackett-to-run-offense/",
+      "publisher": "Associated Press (News4JAX)",
+      "published": "2023-01-26",
+      "accessed": "2026-11-07",
+      "summary": "AP: Robert Saleh's Jets hire Hackett as OC, replacing Mike LaFleur; Hackett had been Packers OC 2019-21.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E55",
+      "url": "https://azcardinals.com/news/problem-solver-nick-rallis-ready-for-job-as-cardinals-defensive-coordinator",
+      "publisher": "Arizona Cardinals",
+      "published": "2023-02-22",
+      "accessed": "2026-11-07",
+      "summary": "New Cardinals HC Jonathan Gannon names Nick Rallis DC after Rallis coached under him in Philadelphia the previous two seasons; Gannon voices complete faith in him.",
+      "confidence": "high"
+    },
+    {
+      "id": "E56",
+      "url": "https://www.nbcsportsphiladelphia.com/nfl/philadelphia-eagles/former-eagles-assistant-nick-rallis-outlasts-jonathan-gannon-arizona-cardinals/714362",
+      "publisher": "NBC Sports Philadelphia",
+      "published": "2026-02-13",
+      "accessed": "2026-11-07",
+      "summary": "Rallis: Vikings defensive assistant 2018-20, Eagles LB coach 2021-22 under Nick Sirianni (with Gannon as DC), Cardinals DC for three seasons under Gannon, retained by Mike LaFleur.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E57",
+      "url": "https://www.si.com/nfl/2019/08/23/washington-redskins-2013-coaching-staff-sean-mcvay-kyle-shanahan-matt-lafleur-mike-shanahan-rg3",
+      "publisher": "Sports Illustrated",
+      "published": "2019-08-23",
+      "accessed": "2026-11-07",
+      "summary": "Feature on Mike Shanahan's 2010-13 Washington staff: Kyle Shanahan OC, Sean McVay offensive assistant then on staff to 2016, Matt LaFleur QB coach (came from Houston with Kyle), Mike McDaniel 2011-13.",
+      "confidence": "high"
+    },
+    {
+      "id": "E58",
+      "url": "https://m.washingtontimes.com/news/2017/mar/2/sean-mcvay-kyle-shanahan-each-credit-time-washingt/",
+      "publisher": "Washington Times",
+      "published": "2017-03-02",
+      "accessed": "2026-11-07",
+      "summary": "Sean McVay and Kyle Shanahan each credit their Washington years together, when OC Shanahan hired McVay and later made him tight ends coach, for their growth.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E59",
+      "url": "https://www.upi.com/Sports_News/NFL/2017/01/12/Los-Angeles-Rams-hire-Sean-McVay-youngest-coach-in-NFL-history/9701484257310/",
+      "publisher": "UPI",
+      "published": "2017-01-12",
+      "accessed": "2026-11-07",
+      "summary": "Rams hire Sean McVay, who started as a 2008 offensive assistant on Jon Gruden's Buccaneers, then coached the Florida Tuskers before Washington (assistant, TE coach, OC).",
+      "confidence": "medium"
+    },
+    {
+      "id": "E60",
+      "url": "https://www.espn.ph/nfl/story/_/id/47985549/rams-promote-nate-scheelhaase-oc-sources-say",
+      "publisher": "ESPN",
+      "published": "2026-02-20",
+      "accessed": "2026-11-07",
+      "summary": "Rams promote passing game coordinator Nate Scheelhaase to OC; hired by Sean McVay in 2024 from Iowa State, he replaces Mike LaFleur (Rams OC 2023-25).",
+      "confidence": "high"
+    },
+    {
+      "id": "E61",
+      "url": "https://www.news4jax.com/sports/2026/02/20/rams-promote-nate-scheelhaase-to-offensive-coordinator-ap-source-says/",
+      "publisher": "Associated Press (News4JAX)",
+      "published": "2026-02-20",
+      "accessed": "2026-11-07",
+      "summary": "AP: Rams promote Scheelhaase, who spent two seasons (2024-25) as a top offensive assistant under McVay and OC Mike LaFleur, passing game coordinator in 2025.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E62",
+      "url": "https://africa.espn.com/nfl/story/_/id/39438351/sources-rams-tab-chris-shula-replace-raheem-morris-dc",
+      "publisher": "ESPN",
+      "published": "2024-02-01",
+      "accessed": "2026-11-07",
+      "summary": "Rams tab LB coach/pass rush coordinator Chris Shula, on McVay's staff since 2017, to replace three-year DC Raheem Morris (hired as Falcons HC).",
+      "confidence": "high"
+    },
+    {
+      "id": "E63",
+      "url": "https://www.therams.com/news/rams-promote-chris-shula-to-defensive-coordinator",
+      "publisher": "Los Angeles Rams",
+      "published": "2024-02-02",
+      "accessed": "2026-11-07",
+      "summary": "Shula's Rams roles under McVay: assistant LB 2017-18, OLB 2019-20, LB 2021, DB coach/pass game coordinator 2022, LB/pass rush coordinator 2023, then DC succeeding Raheem Morris.",
+      "confidence": "high"
+    },
+    {
+      "id": "E64",
+      "url": "https://africa.espn.com/nfl/story/_/id/44015081/klay-kubiak-promoted-offensive-coordinator-49ers",
+      "publisher": "ESPN",
+      "published": "2025-02-25",
+      "accessed": "2026-11-07",
+      "summary": "49ers promote Klay Kubiak to OC under Kyle Shanahan: defensive QC 2021, assistant QB coach 2022-23, passing game specialist 2024.",
+      "confidence": "high"
+    },
+    {
+      "id": "E65",
+      "url": "https://www.ksl.com/article/51261816/49ers-promote-klay-kubiak-to-offensive-coordinator-and-replace-brian-griese-as-qbs-coach",
+      "publisher": "Associated Press (KSL)",
+      "published": "2025-02-25",
+      "accessed": "2026-11-07",
+      "summary": "AP: 49ers promote assistant Klay Kubiak to the OC job that had been vacant two seasons; he was offensive passing game specialist in 2024.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E66",
+      "url": "https://www.atlantanewsfirst.com/2026/02/01/49ers-hire-raheem-morris-defensive-coordinator-reports-say/",
+      "publisher": "Atlanta News First",
+      "published": "2026-02-01",
+      "accessed": "2026-11-07",
+      "summary": "49ers hire Raheem Morris as DC: Bucs HC 2009-11, Falcons assistant from 2015 and interim HC 2020, Rams DC 2021-23, Falcons HC 2024-25; worked alongside Kyle Shanahan at three earlier stops.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E67",
+      "url": "https://www.espn.com.au/nfl/story/_/id/39429973/sources-seahawks-hire-ravens-dc-mike-macdonald-coach",
+      "publisher": "ESPN",
+      "published": "2024-02-01",
+      "accessed": "2026-11-07",
+      "summary": "Seahawks hire Ravens DC Mike Macdonald: under John Harbaugh he was coaching intern 2014, defensive assistant 2015-16, DB coach 2017, LB coach 2018-20; Jim Harbaugh hired him as Michigan DC in 2021; Ravens DC 2022-23.",
+      "confidence": "high"
+    },
+    {
+      "id": "E68",
+      "url": "https://krdo.com/news/2024/01/31/seattle-seahawks-to-hire-first-time-head-coach-mike-macdonald-per-multiple-reports/",
+      "publisher": "KRDO",
+      "published": "2024-01-31",
+      "accessed": "2026-11-07",
+      "summary": "Macdonald joined the Ravens as a 2014 intern and held roles until 2021, was Michigan DC in 2021, then Ravens DC for two seasons before the Seahawks hire.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E69",
+      "url": "https://digital-release.koin.com/sports/sports-illustrated/arena-nfl/si-seattle-seahawks-nfl/4b06dd65/mike-macdonald-reveals-the-one-lesson-both-harbaugh-brothers-taught-him",
+      "publisher": "Sports Illustrated (via KOIN)",
+      "published": "2026-09-04",
+      "accessed": "2026-11-07",
+      "summary": "Macdonald describes what he learned about winning while working for both John and Jim Harbaugh, citing their shared core principles and care for players.",
+      "confidence": "medium",
+      "mentorship": true
+    },
+    {
+      "id": "E70",
+      "url": "https://cbssports.com/nfl/news/seahawks-hire-brian-fleury-49ers-offensive-coordinator",
+      "publisher": "CBS Sports",
+      "published": "2026-02-15",
+      "accessed": "2026-11-07",
+      "summary": "Seahawks hire Brian Fleury as OC to replace Klint Kubiak; on the 49ers since 2019, he rose from quality control coach to tight ends coach and then run game coordinator (2025).",
+      "confidence": "medium"
+    },
+    {
+      "id": "E71",
+      "url": "https://www.foxsports.com/articles/nfl/new-seahawks-offensive-coordinator-brian-fleury-eager-for-opportunity",
+      "publisher": "Associated Press (Fox Sports)",
+      "published": "2026-02-19",
+      "accessed": "2026-11-07",
+      "summary": "New Seahawks OC Fleury, ex-49ers TE coach, names DeMeco Ryans, Robert Saleh and Jeff Hafley as mentors and plans to build on what he learned under Kyle Shanahan.",
+      "confidence": "medium",
+      "mentorship": true
+    },
+    {
+      "id": "E72",
+      "url": "https://www.nbcsports.com/nfl/profootballtalk/rumor-mill/news/report-49ers-promote-brian-fleury-to-tight-ends-coach",
+      "publisher": "ProFootballTalk",
+      "published": "2022-02-16",
+      "accessed": "2026-11-07",
+      "summary": "49ers promote Brian Fleury to tight ends coach; he was a defensive quality control coach in 2019 and offensive quality control coach the next two seasons.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E73",
+      "url": "https://africa.espn.com/nfl/story/_/id/39492561/source-seahawks-hire-cowboys-dl-coach-aden-durde-dc",
+      "publisher": "ESPN",
+      "published": "2024-02-09",
+      "accessed": "2026-11-07",
+      "summary": "Seahawks hire Cowboys DL coach Aden Durde as DC under Mike Macdonald; Falcons defensive assistant 2018-19 and OLB coach 2020 under Dan Quinn, then Cowboys DL coach 2021-23 under DC Quinn.",
+      "confidence": "high"
+    },
+    {
+      "id": "E74",
+      "url": "https://www.si.com/nfl/2024/02/09/seattle-seahawks-hire-aden-durde-defensive-coordinator",
+      "publisher": "Sports Illustrated",
+      "published": "2024-02-09",
+      "accessed": "2026-11-07",
+      "summary": "Seahawks to hire Durde, Cowboys DL coach for three seasons since 2021 and previously Falcons defensive QC and OLB coach 2018-20.",
+      "confidence": "medium"
+    }
+  ]
 }

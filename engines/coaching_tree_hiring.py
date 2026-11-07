@@ -1,4 +1,4 @@
-"""Coaching-tree hiring (docs/in_progress/COACHING_TREES_PLAN.md §2.8): switchboard feature `coaching_tree_hiring`,
+"""Coaching-tree hiring (docs/done/COACHING_TREES_PLAN.md §2.8): switchboard feature `coaching_tree_hiring`,
 off by default.
 
 When active, engines/coaching_carousel.hiring_cycle adds `candidate_term` to head-coach and coordinator candidates'
