@@ -409,3 +409,11 @@ def test_focus_refresh_follows_evolution_with_its_requirement():
     assert pf.REQUIREMENTS['focus_refresh'] == ('personality.focus_run', '2027_02_03_persona_focus.sql')
     assert (pf.MIGRATIONS / '2027_02_03_persona_focus.sql').exists()
 
+
+
+def test_coaching_tree_hiring_follows_owner_hiring_off_by_default():
+    """COACHING_TREES_PLAN §2.8: coaching_tree_hiring sits right after owner_hiring, needs no migration, reads off."""
+    assert pf.FEATURES.index('coaching_tree_hiring') == pf.FEATURES.index('owner_hiring') + 1
+    assert pf.REQUIREMENTS['coaching_tree_hiring'] == ('engines.coaching_tree_hiring', None)
+    assert pf.installed('coaching_tree_hiring') == (True, None)
+    assert pf._off('coaching_tree_hiring')['mode'] == 'off'
