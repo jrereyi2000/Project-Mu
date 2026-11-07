@@ -71,3 +71,56 @@ class LiveTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RealCareerTest(unittest.TestCase):
+    """Real NFL careers through 2025 count toward career_before (REAL_NFL_HISTORY_PLAN Q3)."""
+
+    def league(self):
+        return {1: {"name": "Vet", "team": "KC", "position": "QB", "games": 17,
+                    "stats": {"pass_yards": (0.0, 4200.0), "pass_tds": (0.0, 30.0)}},
+                2: {"name": "Rookie", "team": "NYJ", "position": "QB", "games": 17,
+                    "stats": {"pass_yards": (0.0, 3000.0), "pass_tds": (0.0, 0.0)}}}
+
+    def test_real_career_counts_toward_career_before_and_since(self):
+        rows = cm.add_real_careers([], self.league(), {1: {"pass_yards": 37000, "pass_tds": 280}}, {1: 2017})
+        vet = {r["stat"]: r for r in rows if r["player_id"] == 1}
+        self.assertEqual(vet["pass_yards"]["career_before"], 37000)
+        self.assertEqual(vet["pass_yards"]["since"], 2017)
+        out = cm.compute(rows, 2026, False, 0)
+        crossed = [(c["name"], c["mark"], c["since"]) for c in out["crossed"]]
+        self.assertIn(("Vet", 40000, 2017), crossed)
+        self.assertIn(("Vet", 300, 2017), crossed)
+
+    def test_unlinked_player_unchanged(self):
+        rows = cm.add_real_careers([], self.league(), {}, {})
+        rookie = {r["stat"]: r for r in rows if r["player_id"] == 2}
+        self.assertEqual(rookie["pass_yards"]["career_before"], 0)
+        self.assertEqual(rookie["pass_yards"]["since"], 2026)
+        self.assertNotIn("pass_tds", rookie)          # nothing before, nothing this season
+
+    def test_season_milestones_reads_real_careers(self):
+        from engines.nfl_history import read as nfl_read
+
+        class Cur:
+            def __init__(self):
+                self.q = []
+
+            def execute(self, sql, params=None):
+                self.q.append(sql)
+
+            def fetchone(self):
+                return (17 * 16, 17 * 16)          # season complete
+
+            def fetchall(self):
+                return [(1, "Vet", "KC", "QB", 17) + tuple(0 for _ in cm.MILESTONES)
+                        + tuple(4200 if s == "pass_yards" else 0 for s in cm.MILESTONES)]
+        orig = (nfl_read.nfl_career_before, nfl_read.nfl_first_seasons)
+        nfl_read.nfl_career_before = lambda cur, ids, stats: {1: {"pass_yards": 37000}}
+        nfl_read.nfl_first_seasons = lambda cur, ids: {1: 2017}
+        try:
+            out = cm.season_milestones(Cur(), 2026)
+        finally:
+            nfl_read.nfl_career_before, nfl_read.nfl_first_seasons = orig
+        self.assertTrue(out["real_career_included"])
+        self.assertEqual([(c["mark"], c["since"]) for c in out["crossed"]], [(40000, 2017)])

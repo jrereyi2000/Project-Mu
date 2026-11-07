@@ -89,6 +89,16 @@ def awards_equity(player_awards: list, season: int) -> float:
     return min(100.0, recent + CAREER_WEIGHT * sum(by_season.values()))
 
 
+def real_nfl_awards(cur, season: int) -> list:
+    """[(player_id, award_season, award_type)] of real NFL awards before `season` (engines.nfl_history.read), [] when
+    the nfl_* tables aren't installed."""
+    from engines.nfl_history import read as nfl_read
+    try:
+        return [a for a in nfl_read.nfl_player_awards(cur) if a[1] < season]
+    except Exception:
+        return []
+
+
 def exposure(appearances: list, current_week: int) -> float:
     """appearances: [(week, raw_E, is_gotw)] for games the player has a stat line in.
     E = Σ w·E·(1 + 0.25·GOTW) / Σ w with w = e^{-0.12 (current_week - week)}."""
@@ -134,6 +144,10 @@ class PlayerPopularityEngine:
                 cur.execute("SELECT player_id, season, award_type FROM awards WHERE season < %s AND player_id IS NOT NULL", (season,))
                 awards = defaultdict(list)
                 for player_id, a_season, atype in cur.fetchall():
+                    awards[player_id].append((a_season, atype))
+                # 2a. Real NFL awards through 2025 for linked players (engines.nfl_history, §3.3x): a 2026 veteran's
+                #     recent MVP counts like a league one; Pro Bowls have no AWARD_POINTS entry, so they score 0
+                for player_id, a_season, atype in real_nfl_awards(cur, season):
                     awards[player_id].append((a_season, atype))
 
                 # 2b. Exposure (E): every game the player has a stat line in, with its raw E and Game-of-the-Week flag

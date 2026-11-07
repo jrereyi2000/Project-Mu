@@ -27,6 +27,29 @@ class AwardsEquityTests(unittest.TestCase):
     def test_coach_award_scores_nothing(self):
         self.assertEqual(awards_equity([(2034, "COTY")], 2035), 0.0)
 
+    def test_real_nfl_awards_from_last_three_seasons_count(self):
+        # REAL_NFL_HISTORY_PLAN Q4: a 2025 real MVP counts fully in 2026, Pro Bowls score 0
+        self.assertAlmostEqual(awards_equity([(2025, "MVP")], 2026), 50 + 0.25 * 50)
+        self.assertAlmostEqual(awards_equity([(2025, "Pro Bowl"), (2024, "Pro Bowl")], 2026), 0.0)
+
+    def test_real_nfl_awards_reader_filters_by_season(self):
+        from engines import player_popularity_engine as ppe
+        from engines.nfl_history import read as nfl_read
+        orig = nfl_read.nfl_player_awards
+        nfl_read.nfl_player_awards = lambda cur: [(7, 2025, "MVP"), (7, 2026, "OPOY")]
+        try:
+            self.assertEqual(ppe.real_nfl_awards(None, 2026), [(7, 2025, "MVP")])
+        finally:
+            nfl_read.nfl_player_awards = orig
+
+        def broken(cur):
+            raise RuntimeError("missing")
+        nfl_read.nfl_player_awards = broken
+        try:
+            self.assertEqual(ppe.real_nfl_awards(None, 2026), [])
+        finally:
+            nfl_read.nfl_player_awards = orig
+
 
 class ExposureTests(unittest.TestCase):
     def test_default_without_games(self):
