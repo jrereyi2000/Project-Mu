@@ -1,7 +1,7 @@
 -- Player trade requests (docs/in_progress/PERSONALITY_TRADE_REQUESTS_PLAN.md §2.6; engines/player_trade_request_store.py).
 -- Requires 2027_01_16_personality_core.sql (persona_core_profiles) and db/init_db.sql (teams, whose primary key is
--- `id`). Additive feature tables only: no core or legacy schema edits, no backfill, no historical requests, not
--- folded into db/init_db.sql.
+-- `id`). Additive feature tables only: no core or legacy schema edits, no backfill, no historical requests; also
+-- mirrored in db/init_db.sql.
 --   player_trade_request_decisions  one row per (universe, persona, season) annual REQUEST/NO_REQUEST draw; never a
 --                                   deferred or ineligible reservation
 --   player_trade_requests           one row per request episode: revision, status and the full episode state

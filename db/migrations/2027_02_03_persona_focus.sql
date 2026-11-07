@@ -7,7 +7,7 @@
 --                       drafted from templates by the offseason refresh or set/reverted by JR; one active row a slot
 --   persona_focus_runs  one row per (universe, season, rules_version) refresh run: input hash, counts, status
 -- Transactional and safe to rerun: an existing table is checked against this definition first, and an
--- incompatible one fails loudly. Seeds nothing. Not folded into db/init_db.sql; applying it is JR's call.
+-- incompatible one fails loudly. Seeds nothing. Mirrored in db/init_db.sql; applying it is JR's call.
 --
 -- Apply with (JR's call):
 --   docker exec -i madden-db psql -U postgres -d <db> -v ON_ERROR_STOP=1 < db/migrations/2027_02_03_persona_focus.sql
