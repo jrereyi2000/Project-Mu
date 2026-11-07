@@ -8,6 +8,9 @@ Offline throughout: no database, network or model calls.
         [--dir DIR] [--file PATH ...]
   python -m tools.coach_profile_review apply-review [--kind coach|owner] --decisions PATH [--dir DIR] [--reviewer JR]
         [--today YYYY-MM-DD]
+  python -m tools.coach_profile_review infer [--kind coach|owner] [--dir DIR] [--teams ...] [--file PATH ...] [--write]
+  python -m tools.coach_profile_review convert-v2 [--kind coach|owner] [--dir DIR] [--teams ...] [--file PATH ...]
+        [--edits PATH] [--write] [--today YYYY-MM-DD]
 
 --kind owner (default coach) works on newsroom/config/owner_personas/<TEAM>.json through personality/owner_profiles.py:
 the same rules, one file per team, keys owner:<TEAM>.
@@ -18,6 +21,13 @@ traits with linked sources, views, want/fear, voice, signatures and ties, each c
 a decision line for JR. apply-review reads {"<key>": {"status": "approved|edited|rejected", "notes": "...",
 "edits": {field: value}}}, applies edits, re-validates and stamps review; nothing is written unless every
 decision is valid (exit 0), otherwise exit 1 with the reasons.
+
+infer (docs/in_progress/INFERRED_SLIDERS_AND_FOCUS_PLAN.md §2.3) prints, per v2 file, each inferred slider with its
+basis (traits and leans, seed step, balancing); --write stores the `slider_inference` block (JR's locked values and
+the review status kept). v1 files are skipped. Exit 0, or 1 when a file fails other validation (not written).
+convert-v2 moves v1 files to v2 mechanically (schema, want/fear -> motivation, focus {want: null, fear: null},
+slider_inference); `--edits` ({key: {motivation, focus}}) supplies the hand-written motivation and focus before
+validation. A reviewed file goes back to draft with a conversion note. --write writes only valid results.
 """
 import argparse
 from datetime import date
@@ -27,10 +37,13 @@ import sys
 
 from newsroom import personas as legacy
 from personality import coach_profiles as cp
+from personality import focus as fo
 from personality import owner_profiles as op
+from personality import slider_inference as si
 
 EDITABLE = ('sliders', 'slider_evidence', 'traits', 'trait_evidence', 'views', 'signatures', 'want', 'fear',
-            'voice', 'ties', 'evidence')
+            'voice', 'ties', 'evidence', 'slider_inference', 'motivation', 'focus')
+CONVERT_EDITABLE = ('motivation', 'focus', 'slider_inference')
 
 
 class _Kind:
@@ -39,6 +52,10 @@ class _Kind:
     def __init__(self, name):
         self.name = name
         self.mod = op if name == 'owner' else cp
+
+    @property
+    def v2_version(self):
+        return self.mod.SCHEMA_VERSION_V2
 
     @property
     def directory(self):
@@ -152,6 +169,59 @@ def _tie_target(target, index):
     return f"{kind} {target.get('name')} ({target.get('team_2026')}); resolved when the lifecycle plan applies"
 
 
+def _slider_sources(doc):
+    """{slider: source label} for the report: evidence (ids), inferred (basis), inferred and balanced, set by JR."""
+    slider_ev = doc.get('slider_evidence') or {}
+    out = {}
+    block = doc.get('slider_inference') if isinstance(doc.get('slider_inference'), dict) else None
+    basis = {}
+    if block is not None:
+        locked = [x for x in (block.get('locked') or []) if x in (block.get('values') or {})]
+        values = block.get('values') or {}
+        try:
+            basis = si.infer_sliders(doc, locked={x: values[x] for x in locked})['basis']
+        except (KeyError, TypeError, ValueError):
+            basis = {}
+    for s in legacy.SLIDERS:
+        if slider_ev.get(s):
+            out[s] = f"evidence ({', '.join(slider_ev[s])})"
+        elif block is not None and s in (block.get('values') or {}):
+            if s in (block.get('locked') or []):
+                out[s] = 'set by JR'
+                continue
+            b = basis.get(s) or {}
+            parts = [f'{t} {v:+d}' for t, v in (b.get('traits') or {}).items()]
+            if b.get('jitter'):
+                parts.append(f"seed {b['jitter']:+d}".replace('-', '\u2212'))
+            label = f"inferred ({', '.join(parts)})" if parts else 'inferred'
+            out[s] = label + (', balanced' if b.get('balanced') else '')
+        else:
+            out[s] = 'none (neutral)'
+    return out
+
+
+def _subject_label(sub, index):
+    if sub.get('kind') == 'coach':
+        ref = sub.get('seed_ref') or {}
+        row = index.get((ref.get('table'), ref.get('team'), ref.get('role')))
+        name = row['name'] if row else ref.get('name') or '?'
+        return name, f"refreshes when {name} leaves the {ref.get('team')} {ref.get('role')} seat"
+    name = sub.get('name') or '?'
+    return name, f"refreshes when {name} leaves {sub.get('team_2026')}, retires or leaves the league"
+
+
+def _focus_line(slot, entry, index):
+    if not isinstance(entry, dict):
+        return f'- {slot.capitalize()}: none (motivation only)'
+    subs = [_subject_label(x, index) for x in entry.get('subjects') or [] if isinstance(x, dict)]
+    line = f"- {slot.capitalize()}: {_md(entry.get('text', ''))}"
+    if subs:
+        line += f" (subjects: {', '.join(n for n, _ in subs)}; {'; '.join(r for _, r in subs)})"
+    if entry.get('until_season'):
+        line += f"; until {entry['until_season']}"
+    return line
+
+
 def _coach_section(doc, catalogue, index, validate=None):
     by_id = {ev.get('id'): ev for ev in doc.get('evidence') or [] if isinstance(ev, dict)}
     review = doc.get('review') or {}
@@ -165,14 +235,18 @@ def _coach_section(doc, catalogue, index, validate=None):
         out.append(f'- error: {e}')
     out += ['', f"**Decision ({_label(doc)}):** [ ] approve  [ ] edit  [ ] reject  Notes: ______", '']
 
-    sliders = doc.get('sliders') or {}
     slider_ev = doc.get('slider_evidence') or {}
+    v2 = cp.is_v2(doc)
+    sliders = si.effective_sliders(doc) if v2 else (doc.get('sliders') or {})
+    sources = _slider_sources(doc)
+    note = ('a slider with no evidence gets an inferred value from his traits (marked inferred)' if v2
+            else 'a slider with no evidence stays 5')
     out += ['### Sliders', '', f'Total {sum(v for v in sliders.values() if isinstance(v, int))} '
-            f'(band {cp.SLIDER_RANGE[0]}-{cp.SLIDER_RANGE[1]}); a slider with no evidence stays 5.', '',
-            '| Slider | Value | Sources |', '|---|---|---|']
+            f'(band {cp.SLIDER_RANGE[0]}-{cp.SLIDER_RANGE[1]}); {note}.', '',
+            '| Slider | Value | Source | Citations |', '|---|---|---|---|']
     for s in legacy.SLIDERS:
         ids = slider_ev.get(s)
-        out.append(f'| {s} | {sliders.get(s)} | {_cite(ids, by_id) if ids else "none (neutral)"} |')
+        out.append(f'| {s} | {sliders.get(s)} | {sources[s]} | {_cite(ids, by_id) if ids else "none"} |')
 
     trait_ev = doc.get('trait_evidence') or {}
     out += ['', '### Traits', '']
@@ -184,9 +258,16 @@ def _coach_section(doc, catalogue, index, validate=None):
     out += ['', '### Views', '']
     for v in doc.get('views') or []:
         out.append(f"- {_md(v.get('text', ''))} (when: {', '.join(v.get('when') or [])})")
-    out += ['', '### Want and fear', '', f"- Want: {_md(doc.get('want', ''))}",
-            f"- Fear: {_md(doc.get('fear', ''))}", '', '### Voice', '', _md(doc.get('voice', '')), '',
-            '### Signatures', '']
+    if cp.is_v2(doc):
+        motivation = doc.get('motivation') or {}
+        out += ['', '### Motivation', '', f"- Want: {_md(motivation.get('want', ''))}",
+                f"- Fear: {_md(motivation.get('fear', ''))}", '', '### Current focus', '']
+        for slot in fo.SLOTS:
+            out.append(_focus_line(slot, (doc.get('focus') or {}).get(slot), index))
+    else:
+        out += ['', '### Want and fear', '', f"- Want: {_md(doc.get('want', ''))}",
+                f"- Fear: {_md(doc.get('fear', ''))}"]
+    out += ['', '### Voice', '', _md(doc.get('voice', '')), '', '### Signatures', '']
     for s in doc.get('signatures') or []:
         out.append(f"- {_md(s.get('text') if isinstance(s, dict) else s)}")
 
@@ -211,7 +292,7 @@ def build_report(docs, *, title, missing=(), kind='coach'):
     k = _Kind(kind)
     validate = k.validator()
     out = [f'# {kind.capitalize()} profile review: {title}', '',
-           f'{len(docs)} profile(s). Schema {k.mod.SCHEMA_VERSION}; sources through {k.mod.SOURCE_CUTOFF}. '
+           f'{len(docs)} profile(s). Schema {k.mod.SCHEMA_VERSION} or {k.mod.SCHEMA_VERSION_V2}; sources through {k.mod.SOURCE_CUTOFF}. '
            f'Each profile is a fictional character inspired by the real {kind}; every claim cites a dated public '
            'source by its ID and confidence, and each source is summarised once, in the Sources table. Tick one box per profile and add notes; the decisions are '
            'recorded with `python -m tools.coach_profile_review apply-review`.', '']
@@ -296,6 +377,89 @@ def cmd_apply_review(args):
     return 0
 
 
+# ---------------------------------------------------------------------------------------- infer / convert ---
+
+def _basis_text(s, value, b):
+    if b.get('locked'):
+        return f'  {s} = {value} (set by JR, locked)'
+    traits = ', '.join(f'{t} {v:+d}' for t, v in (b.get('traits') or {}).items()) or 'no leaning traits'
+    text = f"  {s} = {value} (lean {b['lean']:+d} from {traits}; seed step {b['jitter']:+d}"
+    if b.get('balanced'):
+        text += f"; balanced {b['balanced']} step(s) toward 5"
+    return text + ')'
+
+
+def _write_doc(path, doc):
+    Path(path).write_text(json.dumps(cp.file_doc(doc), indent=2, ensure_ascii=False) + '\n')
+
+
+def _path(args, doc):
+    return Path(cp._resolve_dir(_dir(args))) / doc['_file'] if not args.file else next(
+        Path(p) for p in args.file if Path(p).name == doc['_file'])
+
+
+def cmd_infer(args):
+    validate = _kind(args).validator()
+    failed = 0
+    for doc in _docs(args):
+        if not cp.is_v2(doc):
+            print(f'{_label(doc)}: v1, skipped (run convert-v2 first)')
+            continue
+        new = cp.with_inference(doc)
+        block = new['slider_inference']
+        basis = si.infer_sliders(new, locked={x: block['values'][x] for x in block['locked']})['basis']
+        print(f"{_label(doc)}: {len(block['values'])} inferred")
+        for s, v in block['values'].items():
+            print(_basis_text(s, v, basis[s]))
+        errors = validate(new)
+        if errors:
+            failed += 1
+            print(f'  not written: {len(errors)} error(s)')
+            for e in errors:
+                print(f'  - {e}')
+            continue
+        if args.write and cp.file_doc(new) != cp.file_doc(doc):
+            _write_doc(_path(args, doc), new)
+            print('  written')
+    return 1 if failed else 0
+
+
+def cmd_convert(args):
+    k = _kind(args)
+    validate = k.validator()
+    today = args.today or date.today().isoformat()
+    edits = json.loads(Path(args.edits).read_text()) if args.edits else {}
+    failed = converted = 0
+    for doc in _docs(args):
+        if cp.is_v2(doc):
+            print(f'{_label(doc)}: already v2')
+            continue
+        new = cp.convert_v2(doc, k.v2_version, today=today)
+        extra = edits.get(doc.get('key')) or {}
+        bad = sorted(set(extra) - set(CONVERT_EDITABLE))
+        if bad:
+            failed += 1
+            print(f'{_label(doc)}: edits name fields {bad} (only {list(CONVERT_EDITABLE)})')
+            continue
+        if extra:
+            new.update(json.loads(json.dumps(extra)))
+            new = cp.with_inference(new)
+        converted += 1
+        errors = validate(new)
+        n = len(new['slider_inference']['values'])
+        print(f"{_label(doc)}: converted to {k.v2_version} ({n} inferred slider(s), review "
+              f"{(new.get('review') or {}).get('status')})" + (f'; {len(errors)} error(s)' if errors else ''))
+        for e in errors:
+            print(f'  - {e}')
+        if errors:
+            failed += 1
+        elif args.write:
+            _write_doc(_path(args, doc), new)
+            print('  written')
+    print(f'{converted} conversion(s), {failed} not valid' + ('' if args.write else '; nothing written (dry run)'))
+    return 1 if failed and args.write else 0
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog='python -m tools.coach_profile_review',
                                  description='Validate, report and record reviews of real-coach and owner profiles '
@@ -312,14 +476,24 @@ def main(argv=None):
     a = sub.add_parser('apply-review', help="record JR's approve/edit/reject decisions in the files")
     a.add_argument('--decisions', required=True)
     a.add_argument('--dir', help='profile directory (default: the kind\'s own)')
-    for p in (v, r, a):
+    i = sub.add_parser('infer', help='print (and with --write store) the inferred values of no-evidence sliders')
+    c = sub.add_parser('convert-v2', help='convert v1 files to the v2 schema (motivation, focus, slider_inference)')
+    for p in (i, c):
+        p.add_argument('--dir', help='profile directory (default: the kind\'s own)')
+        p.add_argument('--teams', help='comma-separated team codes, e.g. BUF,MIA')
+        p.add_argument('--file', nargs='+', help='specific profile files instead of --dir/--teams')
+        p.add_argument('--write', action='store_true', help='write valid results (default: dry run)')
+    c.add_argument('--edits', help='JSON {key: {motivation, focus, slider_inference}} applied before validation')
+    c.add_argument('--today', help='conversion date (default: today)')
+    for p in (v, r, a, i, c):
         p.add_argument('--kind', choices=('coach', 'owner'), default='coach')
     a.add_argument('--reviewer', default='JR')
     a.add_argument('--today', help='review date (default: today)')
     args = ap.parse_args(argv)
     if args.cmd == 'report' and not (args.teams or args.file):
         ap.error('report needs --teams or --file')
-    return {'validate': cmd_validate, 'report': cmd_report, 'apply-review': cmd_apply_review}[args.cmd](args)
+    return {'validate': cmd_validate, 'report': cmd_report, 'apply-review': cmd_apply_review, 'infer': cmd_infer,
+            'convert-v2': cmd_convert}[args.cmd](args)
 
 
 if __name__ == '__main__':

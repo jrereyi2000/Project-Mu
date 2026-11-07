@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:TEAM:ROLE",
   "name": "<Name exactly as in db/seed_clean_db.py COACHES_DATA or COORDINATORS_DATA>",
   "role": "ROLE",
@@ -7,6 +7,7 @@
   "seed_ref": {"table": "<COACHES_DATA for HC, COORDINATORS_DATA for OC/DC>", "team": "TEAM", "role": "ROLE", "name": "<Name as in the seed row>"},
   "sliders": {"temperament": 5, "sociability": 5, "confidence": 5, "openness": 5, "warmth": 5, "drive": 5},
   "slider_evidence": {},
+  "slider_inference": {"version": "slider-inference-v1", "values": {"temperament": 3, "sociability": 6, "confidence": 4, "openness": 5, "warmth": 5, "drive": 7}, "locked": []},
   "traits": ["SCHEME_NERD", "TEACHER", "MEASURED"],
   "trait_evidence": {"SCHEME_NERD": ["E1"], "TEACHER": ["E1"], "MEASURED": ["E2"]},
   "views": [
@@ -18,8 +19,8 @@
     {"text": "<A view about the coaching job itself>", "when": ["COACHING"]}
   ],
   "signatures": ["<A recurring habit a writer would notice, in your words>", "<Another habit>"],
-  "want": "<One want: a reasoned reading of his public career, marked medium confidence on review>",
-  "fear": "<One fear, the same way>",
+  "motivation": {"want": "<Durable want: no names, at most 14 words>", "fear": "<Durable fear, the same way>"},
+  "focus": {"want": {"text": "<Current want, at most 14 words; may name up to two people>", "subjects": [{"kind": "player", "name": "<Full name>", "team_2026": "TEAM"}], "until_season": null}, "fear": null},
   "voice": "<Two to four sentences on how he talks: register, pace, what he deflects, what he praises. Style, never his exact phrases.>",
   "ties": [],
   "evidence": [

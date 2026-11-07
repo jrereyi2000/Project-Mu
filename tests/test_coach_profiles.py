@@ -232,4 +232,121 @@ def test_template_has_only_placeholder_identity_errors():
     fixed = deepcopy(t)
     fixed.update(key='coach:CAR:HC', team='CAR', role='HC', name='Dave Canales',
                  seed_ref={'table': 'COACHES_DATA', 'team': 'CAR', 'role': 'HC', 'name': 'Dave Canales'})
-    assert errors(fixed) == []
+    assert errors(cp.with_inference(fixed)) == []
+
+
+# ------------------------------------------------- v2 schema (INFERRED_SLIDERS_AND_FOCUS_PLAN.md §2.1, §4) ---
+
+from personality import slider_inference as si  # noqa: E402
+
+YOUNG = {'kind': 'player', 'name': 'Bryce Young', 'team_2026': 'CAR'}
+
+
+def profile_v2(status='approved', **over):
+    d = profile(status)
+    d['schema_version'] = cp.SCHEMA_VERSION_V2
+    del d['want'], d['fear']
+    d['motivation'] = {'want': 'to build an offense that lasts', 'fear': 'losing the room'}
+    d['focus'] = {'want': {'text': 'to turn Bryce Young into a winning starter', 'subjects': [YOUNG],
+                           'until_season': None}, 'fear': None}
+    d.update(over)
+    return cp.with_inference(d)
+
+
+def test_v2_valid_and_v1_still_valid():
+    assert errors(profile_v2()) == []
+    assert errors(profile()) == []
+    assert si.neutral_sliders(profile_v2()) == ['confidence', 'openness']
+
+
+def test_v2_field_rules():
+    d = profile_v2()
+    d['want'] = 'old field'
+    assert has(errors(d), 'unknown fields')
+    d = profile()
+    d['motivation'] = {'want': 'x', 'fear': 'y'}
+    assert has(errors(d), 'unknown fields')
+    d = profile_v2()
+    del d['slider_inference']
+    assert has(errors(d), 'slider_inference must be')
+
+
+def test_v2_inference_block_rules():
+    d = profile_v2()
+    d['slider_inference']['values'] = dict(d['slider_inference']['values'], warmth=5)
+    assert has(errors(d), 'cover exactly')
+    d = profile_v2()
+    s = 'openness'
+    d['slider_inference']['values'][s] = 10 - d['slider_inference']['values'][s]
+    assert has(errors(d), 'stale')
+    d = profile_v2()
+    d['slider_inference']['values']['openness'] = 9
+    d['slider_inference']['locked'] = ['openness']
+    assert errors(d) == []
+    d['slider_inference']['locked'] = ['warmth']
+    assert has(errors(d), 'not a no-evidence slider')
+    d = profile_v2()
+    d['traits'] = ['ANALYTICS_BELIEVER', 'QB_WHISPERER', 'MEASURED']
+    d['trait_evidence'] = {'ANALYTICS_BELIEVER': ['E1'], 'QB_WHISPERER': ['E2'], 'MEASURED': ['E3']}
+    fresh = cp.with_inference(d)['slider_inference']['values']
+    if fresh != d['slider_inference']['values']:
+        assert has(errors(d), 'stale')
+    assert errors(cp.with_inference(d)) == []
+
+
+def test_v2_effective_band():
+    d = profile_v2(sliders={'temperament': 10, 'sociability': 10, 'confidence': 5, 'openness': 5, 'warmth': 10,
+                            'drive': 10},
+                   slider_evidence={'temperament': ['E1'], 'sociability': ['E2'], 'warmth': ['E2'], 'drive': ['E1']})
+    assert has(errors(d), 'effective slider total')
+
+
+def test_v2_motivation_and_focus_rules():
+    d = profile_v2()
+    d['motivation']['want'] = 'to win a title with Young under center'
+    assert has(errors(d), 'names Bryce Young')
+    d = profile_v2()
+    d['focus']['want']['text'] = ' '.join(['word'] * 15)
+    assert has(errors(d), '1-14 words')
+
+
+def test_core_initial_values_overlay_with_provenance():
+    d = profile_v2()
+    vals = cp.core_initial_values(d)
+    for s, v in d['slider_inference']['values'].items():
+        assert vals['sliders'][s] == v
+        assert si.is_inferred(vals['evidence']['slider:' + s])
+    assert vals['sliders']['warmth'] == 8 and not si.is_inferred(vals['evidence']['slider:warmth'])
+    core.initialize(core.Identity('t', 'coach', 'x'), 'real', 2026, **vals)
+    d['slider_inference']['locked'] = ['openness']
+    vals = cp.core_initial_values(d)
+    assert vals['evidence']['slider:openness']['source'] == 'jr-set:2026-11-04'
+    v1 = cp.core_initial_values(profile())
+    assert v1['sliders'] == profile()['sliders'] and 'slider:confidence' not in v1['evidence']
+
+
+def test_persona_for_v1_v2_and_stored_focus():
+    p1 = cp.persona_for(profile())
+    assert p1['want'] == 'to build an offense that lasts' and 'focus_want' not in p1
+    p2 = cp.persona_for(profile_v2())
+    assert p2['want'] == 'to build an offense that lasts' and p2['fear'] == 'losing the room'
+    assert p2['focus_want'] == 'to turn Bryce Young into a winning starter' and 'focus_fear' not in p2
+    assert p2['sliders'] == si.effective_sliders(profile_v2())
+    stored = {'want': {'text': 'to win big with Andy Dalton running his offense'}, 'fear': None}
+    p3 = cp.persona_for(profile_v2(), focus=stored)
+    assert p3['focus_want'] == 'to win big with Andy Dalton running his offense' and 'focus_fear' not in p3
+    with pytest.raises(ValueError):
+        cp.persona_for(profile_v2('draft'))
+
+
+def test_convert_v2_mechanical():
+    new = cp.convert_v2(profile(), cp.SCHEMA_VERSION_V2, today='2026-11-07')
+    assert new['schema_version'] == cp.SCHEMA_VERSION_V2 and 'want' not in new
+    assert new['motivation'] == {'want': 'to build an offense that lasts', 'fear': 'losing the room'}
+    assert new['focus'] == {'want': None, 'fear': None}
+    keys = list(new)
+    assert keys.index('slider_inference') == keys.index('slider_evidence') + 1
+    assert new['review']['status'] == 'draft'
+    assert 'converted to v2 on 2026-11-07' in new['review']['notes'] and 'was approved by JR' in new['review']['notes']
+    assert errors(new) == []
+

@@ -1,5 +1,5 @@
 {
-  "schema_version": "owner-profile-v1",
+  "schema_version": "owner-profile-v2",
   "key": "owner:TEAM",
   "name": "<Owner name exactly as in personality/owner_profiles.py OWNERS_DATA>",
   "role": "OWNER",
@@ -7,6 +7,7 @@
   "seed_ref": {"table": "OWNERS_DATA", "team": "TEAM", "name": "<Name as in the OWNERS_DATA row>"},
   "sliders": {"temperament": 5, "sociability": 5, "confidence": 5, "openness": 5, "warmth": 5, "drive": 5},
   "slider_evidence": {},
+  "slider_inference": {"version": "slider-inference-v1", "values": {"temperament": 2, "sociability": 4, "confidence": 4, "openness": 5, "warmth": 5, "drive": 5}, "locked": []},
   "traits": ["HANDS_OFF", "DEEP_POCKETS", "PATIENT_BUILDER"],
   "trait_evidence": {"HANDS_OFF": ["E1"], "DEEP_POCKETS": ["E1"], "PATIENT_BUILDER": ["E2"]},
   "views": [
@@ -18,8 +19,8 @@
     {"text": "<A view about the draft or building through youth>", "when": ["DRAFT", "YOUTH"]}
   ],
   "signatures": ["<A recurring habit a writer would notice, in your words>", "<Another habit>"],
-  "want": "<One want: a reasoned reading of his public record as an owner, marked medium confidence on review>",
-  "fear": "<One fear, the same way>",
+  "motivation": {"want": "<Durable want: no names, at most 14 words>", "fear": "<Durable fear, the same way>"},
+  "focus": {"want": {"text": "<Current want, at most 14 words; may name up to two people>", "subjects": [{"kind": "player", "name": "<Full name>", "team_2026": "TEAM"}], "until_season": null}, "fear": null},
   "voice": "<Two to four sentences on how he talks in public: register, what he deflects, what he praises. Style, never his exact phrases.>",
   "ties": [],
   "evidence": [

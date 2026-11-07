@@ -122,3 +122,106 @@ def test_help_exits_zero():
     run = subprocess.run([sys.executable, '-m', 'tools.coach_profile_review', '--help'], cwd=ROOT,
                          capture_output=True, text=True)
     assert run.returncode == 0 and 'apply-review' in run.stdout
+
+
+# ------------------------------------------- infer / convert-v2 / v2 report (INFERRED_SLIDERS_AND_FOCUS_PLAN) ---
+
+from tests.test_coach_profiles import profile_v2  # noqa: E402
+
+
+def test_infer_prints_basis_and_writes_only_with_flag(tmp_path, capsys):
+    doc = profile_v2('draft')
+    doc['slider_inference']['values'] = {s: 5 for s in doc['slider_inference']['values']}
+    path = write(tmp_path, doc)
+    before = path.read_text()
+    assert tool.main(['infer', '--dir', str(tmp_path)]) == 0
+    out = capsys.readouterr().out
+    assert 'coach:CAR:HC: 2 inferred' in out and 'confidence =' in out and 'seed step' in out
+    assert path.read_text() == before
+    assert tool.main(['infer', '--dir', str(tmp_path), '--write']) == 0
+    stored = json.loads(path.read_text())
+    assert stored['slider_inference'] == cp.with_inference(doc)['slider_inference']
+    assert stored['review']['status'] == 'draft'
+    write(tmp_path, profile('draft'))
+    assert tool.main(['infer', '--dir', str(tmp_path)]) == 0
+    assert 'v1, skipped' in capsys.readouterr().out
+
+
+def test_infer_keeps_locked_and_refuses_invalid(tmp_path, capsys):
+    doc = profile_v2('draft')
+    doc['slider_inference']['values']['openness'] = 9
+    doc['slider_inference']['locked'] = ['openness']
+    path = write(tmp_path, doc)
+    assert tool.main(['infer', '--dir', str(tmp_path), '--write']) == 0
+    assert 'set by JR, locked' in capsys.readouterr().out
+    assert json.loads(path.read_text())['slider_inference']['values']['openness'] == 9
+    bad = profile_v2('draft')
+    bad['views'][0]['when'] = ['NOPE']
+    path = write(tmp_path, bad)
+    before = path.read_text()
+    assert tool.main(['infer', '--dir', str(tmp_path), '--write']) == 1
+    assert 'not written' in capsys.readouterr().out and path.read_text() == before
+
+
+def test_convert_v2_dry_run_write_and_edits(tmp_path, capsys):
+    path = write(tmp_path, profile('approved'))
+    before = path.read_text()
+    assert tool.main(['convert-v2', '--dir', str(tmp_path), '--today', '2026-11-07']) == 0
+    out = capsys.readouterr().out
+    assert 'converted to coach-profile-v2' in out and 'nothing written (dry run)' in out
+    assert path.read_text() == before
+    edits = tmp_path.parent / (tmp_path.name + '_edits.json')
+    edits.write_text(json.dumps({'coach:CAR:HC': {'focus': {'want': {
+        'text': 'to turn Bryce Young into a winning starter',
+        'subjects': [{'kind': 'player', 'name': 'Bryce Young', 'team_2026': 'CAR'}], 'until_season': None},
+        'fear': None}}}))
+    assert tool.main(['convert-v2', '--dir', str(tmp_path), '--edits', str(edits), '--write',
+                      '--today', '2026-11-07']) == 0
+    stored = json.loads(path.read_text())
+    assert stored['schema_version'] == 'coach-profile-v2' and stored['review']['status'] == 'draft'
+    assert 'converted to v2 on 2026-11-07' in stored['review']['notes']
+    assert stored['focus']['want']['subjects'][0]['name'] == 'Bryce Young'
+    assert cp.validate_profile_file(dict(stored, _file='CAR_HC.json')) == []
+    assert tool.main(['convert-v2', '--dir', str(tmp_path)]) == 0
+    assert 'already v2' in capsys.readouterr().out
+
+
+def test_convert_v2_writes_only_valid(tmp_path, capsys):
+    doc = profile('draft')
+    doc['want'] = ' '.join(['word'] * 20)
+    path = write(tmp_path, doc)
+    before = path.read_text()
+    assert tool.main(['convert-v2', '--dir', str(tmp_path), '--write']) == 1
+    assert 'motivation.want must be at most 14 words' in capsys.readouterr().out
+    assert path.read_text() == before
+    bad = tmp_path.parent / (tmp_path.name + '_bad.json')
+    bad.write_text(json.dumps({'coach:CAR:HC': {'views': []}}))
+    assert tool.main(['convert-v2', '--dir', str(tmp_path), '--edits', str(bad)]) == 0
+    assert 'edits name fields' in capsys.readouterr().out
+
+
+def test_report_v2_source_column_and_focus(tmp_path):
+    doc = profile_v2('draft')
+    doc['slider_inference']['values']['openness'] = 9
+    doc['slider_inference']['locked'] = ['openness']
+    write(tmp_path, doc)
+    out = tmp_path / 'r.md'
+    assert tool.main(['report', '--dir', str(tmp_path), '--teams', 'CAR', '--out', str(out)]) == 0
+    text = out.read_text()
+    assert '| Slider | Value | Source | Citations |' in text
+    assert '| temperament | 3 | evidence (E1) |' in text
+    assert '| openness | 9 | set by JR |' in text
+    assert '| confidence |' in text and 'inferred' in text
+    assert '### Motivation' in text and '### Current focus' in text
+    assert 'refreshes when Bryce Young leaves CAR, retires or leaves the league' in text
+    assert '- Fear: none (motivation only)' in text
+
+
+def test_apply_review_edits_v2_fields(tmp_path):
+    doc = profile_v2('draft')
+    write(tmp_path, doc)
+    planned = tool.apply_decisions({'coach:CAR:HC': {'status': 'edited', 'edits': {
+        'motivation': {'want': 'to build a program that lasts', 'fear': 'losing the room'}}}},
+        str(tmp_path), today='2026-11-08')
+    assert planned[1] == [] and planned[0][0][1]['motivation']['want'] == 'to build a program that lasts'
+

@@ -1,7 +1,10 @@
 """Reviewed real-coach profiles (docs/in_progress/REAL_COACH_PROFILES_PLAN.md §2.1-§2.2).
 
 One file per 2026 head coach or coordinator in newsroom/config/coach_personas/<TEAM>_<ROLE>.json
-(schema `coach-profile-v1`). Pure apart from reading files: no database, network or model calls.
+(schema `coach-profile-v1`, or `coach-profile-v2` per docs/in_progress/INFERRED_SLIDERS_AND_FOCUS_PLAN.md §2.1:
+top-level want/fear replaced by a durable `motivation` and a per-slot current `focus`, plus a `slider_inference`
+block for the no-evidence sliders; v1 files are still read). Pure apart from reading files: no database, network
+or model calls.
 
   seed_index()                         {(table, team, role): row} parsed from db/seed_clean_db.py (no import,
                                        so psycopg is never loaded)
@@ -10,7 +13,10 @@ One file per 2026 head coach or coordinator in newsroom/config/coach_personas/<T
   validate_profile_file(doc, ...)      list of error messages ([] = valid); never raises on bad content
   core_initial_values(doc)             {sliders, traits, evidence} for core.initialize(identity, 'real', ...)
   lifecycle_entries(docs)              reviewed coach manifest entries for the lifecycle plan (approved/edited)
-  persona_for(doc, view=None)          render_persona-ready persona; a stored core view's sliders/traits win
+  persona_for(doc, view=None, change_notes=None, focus=None)
+                                       render_persona-ready persona; a stored core view's sliders/traits win; a v2
+                                       file gives motivation as want/fear and its focus (or the stored focus rows)
+                                       as focus_want/focus_fear
   tie_events(doc, resolve)             (meaningful_interaction envelopes, unresolved ties)
 
 Only `approved` and `edited` files leave this module: core_initial_values, persona_for and tie_events refuse
@@ -27,9 +33,13 @@ import re
 
 from newsroom import personas as legacy
 from personality import core
+from personality import focus as fo
 from personality import relationship_events as rev
+from personality import slider_inference as si
 
 SCHEMA_VERSION = 'coach-profile-v1'
+SCHEMA_VERSION_V2 = 'coach-profile-v2'
+SCHEMA_VERSIONS = (SCHEMA_VERSION, SCHEMA_VERSION_V2)
 SOURCE_CUTOFF = '2026-09-08'  # eve of the 2026 opener (Sep 9, 2026), JR 2026-11-06
 MAX_QUOTE_WORDS = 15
 PROFILE_DIR = 'newsroom/config/coach_personas'
@@ -51,6 +61,7 @@ START_SEASON = 2026
 TIE_TIME = {'season': START_SEASON, 'tick': 1}
 FIELDS = ('schema_version', 'key', 'name', 'role', 'team', 'seed_ref', 'sliders', 'slider_evidence', 'traits',
           'trait_evidence', 'views', 'signatures', 'want', 'fear', 'voice', 'ties', 'evidence', 'review')
+V2_FIELDS = tuple(f for f in FIELDS if f not in ('want', 'fear')) + ('slider_inference', 'motivation', 'focus')
 _WORD = re.compile(r"[a-z0-9]+(?:'[a-z0-9]+)*")
 
 
@@ -132,6 +143,12 @@ def _ngrams(words, n):
 def _text_fields(doc):
     """(label, text) for every free-text field a profile writes in its own words."""
     out = [(f, doc.get(f)) for f in ('want', 'fear', 'voice')]
+    motivation = doc.get('motivation') if isinstance(doc.get('motivation'), dict) else {}
+    focus = doc.get('focus') if isinstance(doc.get('focus'), dict) else {}
+    for slot in fo.SLOTS:
+        out.append((f'motivation.{slot}', motivation.get(slot)))
+        entry = focus.get(slot)
+        out.append((f'focus.{slot}', entry.get('text') if isinstance(entry, dict) else None))
     for i, v in enumerate(doc.get('views') or []):
         out.append((f'views[{i}]', v.get('text') if isinstance(v, dict) else v))
     for i, s in enumerate(doc.get('signatures') or []):
@@ -231,21 +248,39 @@ def _check_quotes(doc, evidence, errors):
                 break
 
 
-def validate_profile_file(doc, *, catalogue=None, index=None) -> list[str]:
-    """Every rule of §2.1 as messages ([] = valid). `_file`, when present, is checked against team and role."""
-    if not isinstance(doc, dict):
-        return ['profile must be a JSON object']
-    catalogue = legacy.load_traits() if catalogue is None else catalogue
-    index = seed_index() if index is None else index
-    errors = []
-    if doc.get('schema_version') != SCHEMA_VERSION:
-        errors.append(f'schema_version must be {SCHEMA_VERSION}')
-    unknown = sorted(k for k in doc if k not in FIELDS and not k.startswith('_'))
+def is_v2(doc) -> bool:
+    return isinstance(doc, dict) and str(doc.get('schema_version', '')).endswith('-v2')
+
+
+def check_schema(doc, versions, errors):
+    """schema_version and the field list of its version (v1 or v2)."""
+    version = doc.get('schema_version')
+    if version not in versions:
+        errors.append(f'schema_version must be one of {list(versions)}')
+    allowed = V2_FIELDS if is_v2(doc) else FIELDS
+    unknown = sorted(k for k in doc if k not in allowed and not k.startswith('_'))
     if unknown:
         errors.append(f'unknown fields {unknown}')
-    _check_identity(doc, index, errors)
-    evidence = _check_evidence(doc, errors)
 
+
+def check_motives(doc, errors):
+    """v1: want, fear and voice nonempty. v2: voice nonempty, the motivation/focus rules and the inference block."""
+    if not _nonempty(doc.get('voice')):
+        errors.append('voice must be nonempty')
+    if not is_v2(doc):
+        for f in ('want', 'fear'):
+            if not _nonempty(doc.get(f)):
+                errors.append(f'{f} must be nonempty')
+        return
+    errors.extend(fo.validate_file_focus(doc))
+    if isinstance(doc.get('sliders'), dict):
+        errors.extend(si.check_inference(doc))
+
+
+def check_sliders(doc, evidence, errors):
+    """Six sliders 0-10; a value that is not 5 (or any cited slider) cites strong evidence. v1 checks the file
+    total; v2 checks the effective total (with the inferred values) in check_inference. Returns the sliders
+    the core check should use (effective for v2), or None."""
     sliders = doc.get('sliders')
     slider_ev = doc.get('slider_evidence') or {}
     if not isinstance(slider_ev, dict):
@@ -257,7 +292,7 @@ def validate_profile_file(doc, *, catalogue=None, index=None) -> list[str]:
         sliders = None
     else:
         total = sum(sliders.values())
-        if not SLIDER_RANGE[0] <= total <= SLIDER_RANGE[1]:
+        if not is_v2(doc) and not SLIDER_RANGE[0] <= total <= SLIDER_RANGE[1]:
             errors.append(f'slider total {total} is outside {SLIDER_RANGE[0]}-{SLIDER_RANGE[1]}')
         for s in legacy.SLIDERS:
             if sliders[s] != 5 or s in slider_ev:
@@ -265,6 +300,27 @@ def validate_profile_file(doc, *, catalogue=None, index=None) -> list[str]:
     for s in slider_ev:
         if s not in legacy.SLIDERS:
             errors.append(f'slider_evidence names unknown slider {s!r}')
+    if sliders is None:
+        return None
+    if is_v2(doc):
+        eff = si.effective_sliders(doc)
+        if all(type(v) is int and 0 <= v <= 10 for v in eff.values()):
+            return eff
+        return None
+    return sliders
+
+
+def validate_profile_file(doc, *, catalogue=None, index=None) -> list[str]:
+    """Every rule of §2.1 as messages ([] = valid). `_file`, when present, is checked against team and role."""
+    if not isinstance(doc, dict):
+        return ['profile must be a JSON object']
+    catalogue = legacy.load_traits() if catalogue is None else catalogue
+    index = seed_index() if index is None else index
+    errors = []
+    check_schema(doc, SCHEMA_VERSIONS, errors)
+    _check_identity(doc, index, errors)
+    evidence = _check_evidence(doc, errors)
+    sliders = check_sliders(doc, evidence, errors)
 
     traits = doc.get('traits')
     trait_ev = doc.get('trait_evidence') or {}
@@ -324,9 +380,7 @@ def validate_profile_file(doc, *, catalogue=None, index=None) -> list[str]:
     for i, s in enumerate(sigs if isinstance(sigs, list) else []):
         if not (_nonempty(s) or (isinstance(s, dict) and _nonempty(s.get('text')))):
             errors.append(f'signatures[{i}] needs text')
-    for f in ('want', 'fear', 'voice'):
-        if not _nonempty(doc.get(f)):
-            errors.append(f'{f} must be nonempty')
+    check_motives(doc, errors)
     _check_quotes(doc, evidence, errors)
 
     ties = doc.get('ties', [])
@@ -384,7 +438,9 @@ def _core_entry(ids, by_id, reviewer):
 
 
 def core_initial_values(doc) -> dict:
-    """{sliders, traits, evidence} for core.initialize(identity, 'real', season, **values)."""
+    """{sliders, traits, evidence} for core.initialize(identity, 'real', season, **values). A v2 file gives its
+    effective sliders (the inferred values over the no-evidence ones), each inferred slider with an
+    `inferred:` provenance entry (low confidence, voice only) or, when JR locked it, a `jr-set:` entry."""
     _require_reviewed(doc)
     by_id = {ev['id']: ev for ev in doc['evidence']}
     reviewer = doc['review']['reviewer']
@@ -393,9 +449,66 @@ def core_initial_values(doc) -> dict:
         ids = (doc.get('slider_evidence') or {}).get(s)
         if ids:
             evidence['slider:' + s] = _core_entry(ids, by_id, reviewer)
+    sliders = dict(doc['sliders'])
+    if is_v2(doc):
+        sliders = si.effective_sliders(doc)
+        for s in (doc.get('slider_inference') or {}).get('values') or {}:
+            evidence['slider:' + s] = si.inferred_evidence(doc, s)
     for t in doc['traits']:
         evidence['trait:' + t] = _core_entry(doc['trait_evidence'][t], by_id, reviewer)
-    return dict(sliders=dict(doc['sliders']), traits=list(doc['traits']), evidence=evidence)
+    return dict(sliders=sliders, traits=list(doc['traits']), evidence=evidence)
+
+
+def with_inference(doc, leans=None) -> dict:
+    """The doc with `slider_inference` filled from a fresh inference, keeping JR's locked values."""
+    block = doc.get('slider_inference') if isinstance(doc.get('slider_inference'), dict) else {}
+    neutral = set(si.neutral_sliders(doc))
+    locked = [s for s in (block.get('locked') or []) if s in neutral]
+    values = block.get('values') or {}
+    out = si.infer_sliders(doc, leans, locked={s: values[s] for s in locked if s in values})
+    new = dict(doc)
+    new['slider_inference'] = dict(version=si.INFERENCE_VERSION, values=out['values'],
+                                   locked=[s for s in locked if s in out['values']])
+    return new
+
+
+def convert_v2(doc, v2_version, *, today, leans=None) -> dict:
+    """Mechanical v1 -> v2: schema, want/fear -> motivation, focus {want: null, fear: null}, slider_inference
+    (placed after slider_evidence). A reviewed file goes back to draft with a conversion note."""
+    order = []
+    for k in doc:
+        if k in ('want', 'fear'):
+            if 'motivation' not in order:
+                order += ['motivation', 'focus']
+            continue
+        order.append(k)
+        if k == 'slider_evidence':
+            order.append('slider_inference')
+    new = {}
+    for k in order:
+        if k == 'schema_version':
+            new[k] = v2_version
+        elif k == 'motivation':
+            new[k] = dict(want=doc.get('want'), fear=doc.get('fear'))
+        elif k == 'focus':
+            new[k] = dict(want=None, fear=None)
+        elif k == 'slider_inference':
+            new[k] = None
+        else:
+            new[k] = doc[k]
+    new.setdefault('motivation', dict(want=doc.get('want'), fear=doc.get('fear')))
+    new.setdefault('focus', dict(want=None, fear=None))
+    new = with_inference(new, leans)
+    review = dict(new.get('review') or {})
+    note = f'converted to v2 on {today}: check motivation, focus and inferred sliders'
+    if review.get('status') in REVIEWED:
+        prior = f"was {review['status']} by {review.get('reviewer')} on {review.get('reviewed_at')}"
+        notes = '; '.join(n for n in (review.get('notes'), prior, note) if n)
+        review = dict(status='draft', notes=notes)
+    else:
+        review['notes'] = '; '.join(n for n in (review.get('notes'), note) if n)
+    new['review'] = review
+    return new
 
 
 def lifecycle_entries(docs) -> list[dict]:
@@ -416,18 +529,35 @@ def lifecycle_entries(docs) -> list[dict]:
     return out
 
 
-def persona_for(doc, view=None, change_notes=None) -> dict:
+def persona_for(doc, view=None, change_notes=None, focus=None) -> dict:
     """The render_persona shape. A stored core feature view's sliders and traits replace the file's, so JR's
     overrides and later evolution show; the file keeps the voice, views, signatures and want/fear. Evolution
-    change notes (personality.evolution_run.change_notes_for, newest first) pass through as `change_notes`."""
+    change notes (personality.evolution_run.change_notes_for, newest first) pass through as `change_notes`.
+
+    v2: `want`/`fear` are the motivation; `focus_want`/`focus_fear` are the file's focus texts, or the stored
+    rows' texts when `focus` ({'want': row | None, 'fear': row | None} from focus_store.read_focus) is given;
+    a slot with no focus has no key. v1: want/fear as written, no focus keys."""
     _require_reviewed(doc)
-    sliders, traits = dict(doc['sliders']), list(doc['traits'])
+    sliders, traits = (si.effective_sliders(doc) if is_v2(doc) else dict(doc['sliders'])), list(doc['traits'])
     if view is not None and view.get('status') == 'stored':
         sliders, traits = dict(view['sliders']), list(view['traits'])
     sigs = [dict(s) if isinstance(s, dict) else {'text': s} for s in doc['signatures']]
     out = dict(voice=doc['voice'], sliders=sliders, traits=traits,
                views=[dict(text=v['text'], when=list(v['when'])) for v in doc['views']],
-               signatures=sigs, want=doc['want'], fear=doc['fear'])
+               signatures=sigs)
+    if is_v2(doc):
+        out['want'], out['fear'] = doc['motivation']['want'], doc['motivation']['fear']
+        for slot in fo.SLOTS:
+            if focus is not None:
+                row = focus.get(slot)
+                text = row.get('text') if isinstance(row, dict) else None
+            else:
+                entry = (doc.get('focus') or {}).get(slot)
+                text = entry.get('text') if isinstance(entry, dict) else None
+            if _nonempty(text):
+                out['focus_' + slot] = text
+    else:
+        out['want'], out['fear'] = doc['want'], doc['fear']
     if change_notes:
         out['change_notes'] = [str(n) for n in change_notes]
     return out

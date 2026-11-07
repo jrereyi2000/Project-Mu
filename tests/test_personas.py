@@ -204,3 +204,43 @@ class RenderTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ---------------------------------- motivation plus current focus (INFERRED_SLIDERS_AND_FOCUS_PLAN.md §2.8) ---
+
+def _bg(block):
+    return next(part for part in block.split("\n\n") if part.startswith("IN THE BACKGROUND"))
+
+
+def _persona(**over):
+    p = {"voice": "Calm.", "sliders": {s: 5 for s in P.SLIDERS}, "traits": [], "views": [],
+         "signatures": [], "want": "to prove he can build a contender", "fear": "being judged against his old boss"}
+    p.update(over)
+    return p
+
+
+def test_background_line_unchanged_without_focus():
+    line = _bg(P.render_persona(_persona(), traits={}))
+    assert line == ("IN THE BACKGROUND (motivation only; do not state it): you want to prove he can build a "
+                    "contender; you fear being judged against his old boss.")
+
+
+def test_background_line_with_focus():
+    line = _bg(P.render_persona(_persona(focus_want="a title with Lamar Jackson in his prime",
+                                                focus_fear="that one more losing season costs him the job."),
+                                       traits={}))
+    assert line == ("IN THE BACKGROUND (motivation only; do not state it): you want to prove he can build a "
+                    "contender, and right now a title with Lamar Jackson in his prime; you fear being judged "
+                    "against his old boss, and right now that one more losing season costs him the job.")
+    line = _bg(P.render_persona(_persona(focus_want="a title"), traits={}))
+    assert line.endswith("and right now a title; you fear being judged against his old boss.")
+
+
+def test_background_line_word_budget_at_the_caps():
+    fourteen = " ".join(["word"] * 14)
+    line = _bg(P.render_persona(_persona(want=fourteen, fear=fourteen, focus_want=fourteen,
+                                                focus_fear=fourteen), traits={}))
+    content = line.split(":", 1)[1]
+    assert len(content.split()) <= 70
+    assert sum(1 for w in content.split() if w.strip(",.;") == "word") == 56
+
