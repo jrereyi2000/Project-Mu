@@ -1,0 +1,711 @@
+{
+  "schema_version": "coaching-trees-v1",
+  "kind": "registry",
+  "trees": [
+    {
+      "key": "walsh",
+      "label": "Walsh tree",
+      "root": "Bill Walsh",
+      "parent": null,
+      "summary": "Bill Walsh's 49ers and Stanford staffs produced head coaches such as George Seifert, Mike Holmgren and Dennis Green, whose own assistants (Reid, Gruden, Mike Shanahan) carried the tree into later generations.",
+      "evidence": [
+        "T1",
+        "T2",
+        "T3"
+      ],
+      "review": {
+        "status": "draft",
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": ""
+      }
+    },
+    {
+      "key": "holmgren",
+      "label": "Holmgren tree",
+      "root": "Mike Holmgren",
+      "parent": "walsh",
+      "summary": "Mike Holmgren, Walsh's 49ers QB coach and coordinator, built 1990s Packers staffs that produced Andy Reid, Jon Gruden, Steve Mariucci and Mike Sherman as head coaches.",
+      "evidence": [
+        "T1",
+        "T6",
+        "T7"
+      ],
+      "review": {
+        "status": "draft",
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": ""
+      }
+    },
+    {
+      "key": "reid",
+      "label": "Reid tree",
+      "root": "Andy Reid",
+      "parent": "holmgren",
+      "summary": "Andy Reid, a Holmgren assistant in Green Bay, has groomed the largest group of active head-coach protégés, including John Harbaugh, Doug Pederson, Matt Nagy, Sean McDermott and Ron Rivera.",
+      "evidence": [
+        "T7",
+        "T8",
+        "T9"
+      ],
+      "review": {
+        "status": "draft",
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": ""
+      }
+    },
+    {
+      "key": "shanahan",
+      "label": "Shanahan tree",
+      "root": "Mike Shanahan",
+      "parent": "walsh",
+      "summary": "Mike Shanahan, who coordinated George Seifert's 49ers offense in Walsh's lineage, spawned a branch running through Gary Kubiak, Kyle Shanahan, Sean McVay and Matt LaFleur.",
+      "evidence": [
+        "T1",
+        "T2",
+        "T4",
+        "T5"
+      ],
+      "review": {
+        "status": "draft",
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": ""
+      }
+    },
+    {
+      "key": "kubiak",
+      "label": "Kubiak tree",
+      "root": "Gary Kubiak",
+      "parent": "shanahan",
+      "summary": "Gary Kubiak, Mike Shanahan's longtime Denver coordinator, gave Kyle Shanahan his first coordinator job in Houston, and his late-2000s Texans staff fed coaches like Matt LaFleur into the wider Shanahan family.",
+      "evidence": [
+        "T1",
+        "T4",
+        "T5"
+      ],
+      "review": {
+        "status": "draft",
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": ""
+      }
+    },
+    {
+      "key": "gruden",
+      "label": "Gruden tree",
+      "root": "Jon Gruden",
+      "parent": "holmgren",
+      "summary": "Jon Gruden, a Holmgren assistant in Green Bay, ran Tampa Bay staffs that launched Mike Tomlin, Kyle Shanahan, Jay Gruden, Raheem Morris and Sean McVay.",
+      "evidence": [
+        "T1",
+        "T3",
+        "T10",
+        "T11"
+      ],
+      "review": {
+        "status": "draft",
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": ""
+      }
+    },
+    {
+      "key": "mcvay",
+      "label": "McVay tree",
+      "root": "Sean McVay",
+      "parent": "shanahan",
+      "summary": "Sean McVay, who worked under Mike Shanahan in Washington, has sent Rams assistants such as Matt LaFleur, Zac Taylor, Kevin O'Connell, Raheem Morris and Brandon Staley to head-coaching jobs.",
+      "evidence": [
+        "T3",
+        "T4",
+        "T12",
+        "T13"
+      ],
+      "review": {
+        "status": "draft",
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": ""
+      }
+    },
+    {
+      "key": "harbaugh",
+      "label": "Harbaugh tree",
+      "root": "John Harbaugh",
+      "parent": "reid",
+      "summary": "John Harbaugh, Andy Reid's longtime Eagles special teams coordinator, has produced head coaches from his Ravens staffs including Rex Ryan, Chuck Pagano, Jim Caldwell and Mike Macdonald.",
+      "evidence": [
+        "T9",
+        "T14",
+        "T15",
+        "T16"
+      ],
+      "review": {
+        "status": "draft",
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": ""
+      }
+    },
+    {
+      "key": "lafleur",
+      "label": "LaFleur tree",
+      "root": "Matt LaFleur",
+      "parent": "shanahan",
+      "summary": "Matt LaFleur, who came up under Kyle Shanahan and Sean McVay in Mike Shanahan's lineage, has sent his first Packers offensive coordinator Nathaniel Hackett to a head-coaching job in Denver.",
+      "evidence": [
+        "T4",
+        "T17",
+        "T18"
+      ],
+      "review": {
+        "status": "draft",
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": ""
+      }
+    },
+    {
+      "key": "parcells",
+      "label": "Parcells tree",
+      "root": "Bill Parcells",
+      "parent": null,
+      "summary": "Bill Parcells' Giants, Patriots, Jets and Cowboys staffs produced Bill Belichick, Tom Coughlin, Sean Payton, Romeo Crennel and many more head coaches.",
+      "evidence": [
+        "T3",
+        "T19",
+        "T20",
+        "T21"
+      ],
+      "review": {
+        "status": "draft",
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": ""
+      }
+    },
+    {
+      "key": "belichick",
+      "label": "Belichick tree",
+      "root": "Bill Belichick",
+      "parent": "parcells",
+      "summary": "Bill Belichick, Parcells' Giants defensive coordinator, has a tree that includes Nick Saban, Romeo Crennel, Josh McDaniels, Bill O'Brien, Matt Patricia and Brian Flores.",
+      "evidence": [
+        "T3",
+        "T20",
+        "T21",
+        "T22"
+      ],
+      "review": {
+        "status": "draft",
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": ""
+      }
+    },
+    {
+      "key": "payton",
+      "label": "Payton tree",
+      "root": "Sean Payton",
+      "parent": "parcells",
+      "summary": "Sean Payton, Parcells' assistant head coach in Dallas, has produced head coaches from his Saints staffs such as Dennis Allen, Doug Marrone, Dan Campbell and Aaron Glenn.",
+      "evidence": [
+        "T3",
+        "T23",
+        "T24",
+        "T25"
+      ],
+      "review": {
+        "status": "draft",
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": ""
+      }
+    },
+    {
+      "key": "coughlin",
+      "label": "Coughlin tree",
+      "root": "Tom Coughlin",
+      "parent": "parcells",
+      "summary": "Tom Coughlin, Parcells' Giants receivers coach, has seen many former assistants at Jacksonville and New York become head coaches, Steve Spagnuolo among them.",
+      "evidence": [
+        "T20",
+        "T26",
+        "T19"
+      ],
+      "review": {
+        "status": "draft",
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": ""
+      }
+    },
+    {
+      "key": "saban",
+      "label": "Saban tree",
+      "root": "Nick Saban",
+      "parent": "belichick",
+      "summary": "Nick Saban, Belichick's Browns defensive coordinator, built the largest college tree of the era, including Kirby Smart, Jimbo Fisher, Lane Kiffin and Brian Daboll.",
+      "evidence": [
+        "T22",
+        "T27",
+        "T28"
+      ],
+      "review": {
+        "status": "draft",
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": ""
+      }
+    },
+    {
+      "key": "dungy",
+      "label": "Dungy tree",
+      "root": "Tony Dungy",
+      "parent": null,
+      "summary": "Tony Dungy's Tampa Bay and Indianapolis staffs produced head coaches Herm Edwards, Lovie Smith, Rod Marinelli, Mike Tomlin, Jim Caldwell and Leslie Frazier.",
+      "evidence": [
+        "T1",
+        "T29",
+        "T30",
+        "T31"
+      ],
+      "review": {
+        "status": "draft",
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": ""
+      }
+    },
+    {
+      "key": "tomlin",
+      "label": "Tomlin tree",
+      "root": "Mike Tomlin",
+      "parent": "dungy",
+      "summary": "Mike Tomlin, Dungy's Buccaneers defensive backs coach, ran Pittsburgh for 19 seasons but produced few head coaches, with Bruce Arians the main NFL branch.",
+      "evidence": [
+        "T1",
+        "T29",
+        "T31",
+        "T32"
+      ],
+      "review": {
+        "status": "draft",
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": ""
+      }
+    },
+    {
+      "key": "carroll",
+      "label": "Carroll tree",
+      "root": "Pete Carroll",
+      "parent": null,
+      "summary": "Pete Carroll's USC and Seattle staffs produced head coaches such as Gus Bradley, Dan Quinn, Lane Kiffin, Steve Sarkisian and Dave Canales, plus coordinators like Robert Saleh.",
+      "evidence": [
+        "T33",
+        "T34"
+      ],
+      "review": {
+        "status": "draft",
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": ""
+      }
+    },
+    {
+      "key": "fangio",
+      "label": "Fangio tree",
+      "root": "Vic Fangio",
+      "parent": null,
+      "summary": "Vic Fangio's two-high defensive system spread through assistants such as Brandon Staley, Joe Barry and Sean Desai.",
+      "evidence": [
+        "T35",
+        "T36",
+        "T37"
+      ],
+      "review": {
+        "status": "draft",
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": ""
+      }
+    },
+    {
+      "key": "ryan",
+      "label": "Ryan tree",
+      "root": "Buddy Ryan",
+      "parent": null,
+      "summary": "Buddy Ryan, architect of the 46 defense, passed his attacking defensive approach to sons Rex and Rob Ryan, and several of his 1985 Bears players, including Jeff Fisher, became coaches.",
+      "evidence": [
+        "T38",
+        "T39"
+      ],
+      "review": {
+        "status": "draft",
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": ""
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "id": "T1",
+      "url": "https://www.nfl.com/news/bill-walsh-s-bio-09000d5d80086d95",
+      "publisher": "NFL.com",
+      "published": "2007-07-30",
+      "accessed": "2026-11-07",
+      "summary": "Walsh bio with a coaching-tree list giving staff years: Holmgren, Seifert, Green and Dungy under Walsh, then Reid and Gruden under Holmgren, Mike Shanahan as Seifert's 49ers OC, Kubiak under Shanahan in Denver, and Tomlin and Lovie Smith under Dungy.",
+      "confidence": "high"
+    },
+    {
+      "id": "T2",
+      "url": "https://www.nfl.com/news/hall-of-fame-coach-bill-walsh-who-won-three-super-bowls-with-th-09000d5d800879e1",
+      "publisher": "NFL.com (Associated Press)",
+      "published": "2007-07-30",
+      "accessed": "2026-11-07",
+      "summary": "AP obituary saying Walsh's San Francisco assistants (Seifert, Holmgren, Green, Wyche, Rhodes) became head coaches and handed his methods to a later generation including Mike Shanahan, Gruden, Reid, Carroll and Kubiak.",
+      "confidence": "high"
+    },
+    {
+      "id": "T3",
+      "url": "https://www.nfl.com/news/even-nfl-s-newest-coaches-branch-from-parcells-walsh-trees-0ap3000001009347",
+      "publisher": "NFL.com",
+      "published": "2019-01-09",
+      "accessed": "2026-11-07",
+      "summary": "Judy Battista traces new head coaches to two roots: Walsh via Holmgren, Gruden, McVay and LaFleur, and Parcells via Belichick (his Giants DC) and Sean Payton (his Dallas assistant head coach/QB coach).",
+      "confidence": "high"
+    },
+    {
+      "id": "T4",
+      "url": "https://www.theringer.com/2018/08/30/nfl/sean-mcvay-kyle-shanahan-andy-reid-coaching-trees",
+      "publisher": "The Ringer",
+      "published": "2018-08-30",
+      "accessed": "2026-11-07",
+      "summary": "Robert Mays profiles the McVay/Shanahan and Reid trees: McVay and Kyle Shanahan began on Gruden's Tampa staff, Kubiak worked for Mike Shanahan in Denver, LaFleur worked for both Shanahans and McVay, and Pederson and Nagy came from Reid's staffs.",
+      "confidence": "medium"
+    },
+    {
+      "id": "T5",
+      "url": "https://www.ninersnation.com/2020/9/12/21409930/breaking-down-the-shanahan-coaching-tree-and-offense",
+      "publisher": "Niners Nation (SB Nation)",
+      "published": "2020-09-12",
+      "accessed": "2026-11-07",
+      "summary": "Explains the Shanahan lineage, crediting Kubiak with Kyle Shanahan's first coordinator job and listing 2009 Texans staffers such as Matt LaFleur, and says the scheme grew out of Walsh's West Coast offense.",
+      "confidence": "medium"
+    },
+    {
+      "id": "T6",
+      "url": "https://www.packers.com/news/remmel-reid-has-proven-most-successful-in-holmgren-tree-2452930",
+      "publisher": "Packers.com",
+      "published": "2006-09-25",
+      "accessed": "2026-11-07",
+      "summary": "Lee Remmel calls Andy Reid the most successful branch of Mike Holmgren's coaching tree, one of several 1990s Green Bay assistants who became NFL head coaches.",
+      "confidence": "high"
+    },
+    {
+      "id": "T7",
+      "url": "https://www.si.com/nfl/2018/11/15/andy-reid-coaching-tree-doug-pederson-sean-mcdermott-ron-rivera-matt-nagy-steve-spagnuolo-john-harbaugh",
+      "publisher": "Sports Illustrated (The MMQB)",
+      "published": "2018-11-15",
+      "accessed": "2026-11-07",
+      "summary": "Profile of Reid's tree (Pederson, McDermott, Rivera, Nagy, Harbaugh and others); calls Holmgren Reid's mentor, who built Packers staffs of the 1990s with Reid, Gruden and Mariucci.",
+      "confidence": "high",
+      "mentorship": true
+    },
+    {
+      "id": "T8",
+      "url": "https://www.inquirer.com/eagles/andy-reid-coaching-tree-doug-pederson-matt-nagy-bill-belichick-nick-saban-john-harbaugh-20190104.html",
+      "publisher": "Philadelphia Inquirer",
+      "published": "2019-01-04",
+      "accessed": "2026-11-07",
+      "summary": "Paul Domowitch counts nine former Reid assistants who became NFL head coaches, among them Pederson, Nagy, John Harbaugh, Rivera, McDermott and Shurmur; Pederson and Harbaugh credit Reid for preparing them.",
+      "confidence": "high"
+    },
+    {
+      "id": "T9",
+      "url": "https://www.chicagobears.com/news/nagy-part-of-a-strong-line-of-coaches-in-the-andy-reid-tree-20226436",
+      "publisher": "ChicagoBears.com",
+      "published": "2018-01-08",
+      "accessed": "2026-11-07",
+      "summary": "On Nagy's hiring, lists the Reid assistants who became head coaches with their roles under Reid, including John Harbaugh as Eagles special teams coordinator 1999-2006, and notes Reid worked under Holmgren in Green Bay.",
+      "confidence": "high"
+    },
+    {
+      "id": "T10",
+      "url": "https://www.espn.com/blog/afcwest/post/_/id/82785/how-jon-gruden-raised-a-generation-of-coaches-at-the-rat-infested-woodshed",
+      "publisher": "ESPN",
+      "published": "2018-11-01",
+      "accessed": "2026-11-07",
+      "summary": "Nick Wagoner on Gruden's 2002-08 Buccaneers staffs, which produced future head coaches Kyle Shanahan, Jay Gruden, Mike Tomlin, Raheem Morris and Rod Marinelli and gave Sean McVay an early job.",
+      "confidence": "high"
+    },
+    {
+      "id": "T11",
+      "url": "https://www.nbcsports.com/bayarea/49ers/kyle-shanahan-credits-experience-under-jon-gruden-his-foundation",
+      "publisher": "NBC Sports Bay Area",
+      "published": "2018-10-31",
+      "accessed": "2026-11-07",
+      "summary": "Kyle Shanahan says his 2004 start as a quality-control coach under Gruden in Tampa laid his foundation; that staff also included Tomlin, Marinelli, Kiffin and Raheem Morris.",
+      "confidence": "medium"
+    },
+    {
+      "id": "T12",
+      "url": "https://www.espn.com/nfl/story/_/id/41026670/los-angeles-rams-sean-mcvay-coaching-tree-kevin-oconnell-vikings-week-8",
+      "publisher": "ESPN",
+      "published": "2024-10-24",
+      "accessed": "2026-11-07",
+      "summary": "ESPN feature on McVay's tree with former Rams assistants Kevin O'Connell, Zac Taylor, Raheem Morris and Matt LaFleur as head coaches; McVay cites how Mike Shanahan and Jay Gruden treated him in Washington.",
+      "confidence": "high"
+    },
+    {
+      "id": "T13",
+      "url": "https://www.si.com/nfl/rams/news/nfl-hiring-cycle-concludes-with-2-more-branches-on-sean-mcvay-coaching-tree-01jm0p2bfr31",
+      "publisher": "Sports Illustrated (Rams On SI)",
+      "published": "2025-02-14",
+      "accessed": "2026-11-07",
+      "summary": "After the 2025 hiring cycle, lists McVay's former assistants who are head coaches (Matt LaFleur, Raheem Morris, Zac Taylor, Kevin O'Connell and new hires) plus former head coaches Thomas Brown and Brandon Staley.",
+      "confidence": "medium"
+    },
+    {
+      "id": "T14",
+      "url": "https://www.baltimoreravens.com/news/history-of-john-harbaugh-s-coaching-hires-12599960",
+      "publisher": "BaltimoreRavens.com",
+      "published": "2014-02-08",
+      "accessed": "2026-11-07",
+      "summary": "Table of John Harbaugh's Ravens assistant hires from 2008 on, showing Rex Ryan, Chuck Pagano, Mike Pettine and Jim Caldwell leaving his staff for head-coaching jobs.",
+      "confidence": "high"
+    },
+    {
+      "id": "T15",
+      "url": "https://www.baltimoreravens.com/news/mike-macdonald-todd-monken-head-coaching-jobs-coordinators-ravens-late-for-work",
+      "publisher": "BaltimoreRavens.com",
+      "published": "2023-12-06",
+      "accessed": "2026-11-07",
+      "summary": "Late for Work roundup quoting Jason La Canfora that Harbaugh stayed within his coaching tree in promoting Mike Macdonald, who rose through the Ravens ranks, to defensive coordinator.",
+      "confidence": "medium"
+    },
+    {
+      "id": "T16",
+      "url": "https://www.yahoo.com/news/seahawks-offensive-coordinator-candidates-think-035113498.html",
+      "publisher": "The News Tribune via Yahoo Sports",
+      "published": "2025-01-09",
+      "accessed": "2026-11-07",
+      "summary": "Gregg Bell writes that Seahawks head coach Mike Macdonald, a former assistant under John and Jim Harbaugh, would look to the Harbaugh coaching tree for his offensive coordinator.",
+      "confidence": "medium"
+    },
+    {
+      "id": "T17",
+      "url": "https://www.wbay.com/content/news/Matt-LaFleurs-past----and-his-future-coaching-in-Green-Bay-504128761.html",
+      "publisher": "WBAY-TV",
+      "published": "2019-01-09",
+      "accessed": "2026-11-07",
+      "summary": "Report on LaFleur's introduction as Packers head coach describing him as a product of the Mike Shanahan and Sean McVay coaching lineage.",
+      "confidence": "medium"
+    },
+    {
+      "id": "T18",
+      "url": "https://www.espn.com/nfl/story/_/id/33157981/denver-broncos-hire-nathaniel-hackett-new-head-coach-sources-say",
+      "publisher": "ESPN",
+      "published": "2022-01-27",
+      "accessed": "2026-11-07",
+      "summary": "Denver hires Packers offensive coordinator Nathaniel Hackett as head coach, crediting him with helping Matt LaFleur to 39 regular-season wins in LaFleur's first three seasons.",
+      "confidence": "high"
+    },
+    {
+      "id": "T19",
+      "url": "https://www.si.com/more-sports/2009/10/14/parcells-tree",
+      "publisher": "Sports Illustrated",
+      "published": "2009-10-14",
+      "accessed": "2026-11-07",
+      "summary": "Dave Hyde surveys the many branches of Bill Parcells' coaching tree across the NFL and college, including Tom Coughlin, Bill Belichick and Sean Payton.",
+      "confidence": "medium"
+    },
+    {
+      "id": "T20",
+      "url": "https://www.giants.com/news/super-coaching-staff",
+      "publisher": "Giants.com",
+      "published": "2020-09-19",
+      "accessed": "2026-11-07",
+      "summary": "Looks back at Parcells' 1990 Giants staff, on which seven assistants (Coughlin as receivers coach, Belichick as defensive coordinator, Crennel, Groh, Weis and others) became head coaches; calls Coughlin and Belichick its strongest limbs.",
+      "confidence": "high"
+    },
+    {
+      "id": "T21",
+      "url": "https://www.foxnews.com/sports/bill-belichick-coaching-tree-bill-parcells",
+      "publisher": "Fox News",
+      "published": "2020-10-05",
+      "accessed": "2026-11-07",
+      "summary": "Contrasts the productive Parcells tree (Belichick, Coughlin, Payton, Haley, Sparano) with Belichick's own, whose branches such as O'Brien, Patricia and Judge mostly struggled, with Saban the big exception in college.",
+      "confidence": "medium"
+    },
+    {
+      "id": "T22",
+      "url": "https://www.cbssports.com/nfl/news/raiders-fire-josh-mcdaniels-ranking-all-the-nfl-head-coaches-from-bill-belichicks-coaching-tree/",
+      "publisher": "CBS Sports",
+      "published": "2023-11-01",
+      "accessed": "2026-11-07",
+      "summary": "Ranks every NFL head coach from Belichick's tree after McDaniels' Raiders firing, including Nick Saban, noted as Belichick's Browns defensive coordinator, plus Crennel, Mangini, O'Brien, Patricia, Flores and Judge.",
+      "confidence": "high"
+    },
+    {
+      "id": "T23",
+      "url": "https://www.espn.com/nfl/story/_/id/29908073/how-sean-payton-career-was-shaped-mentors-jon-gruden-bill-parcells",
+      "publisher": "ESPN",
+      "published": "2020-09-21",
+      "accessed": "2026-11-07",
+      "summary": "Mike Triplett on how Parcells hired Payton as Dallas assistant head coach and QB coach, eventually gave him play-calling, and remains a father figure to him.",
+      "confidence": "high",
+      "mentorship": true
+    },
+    {
+      "id": "T24",
+      "url": "https://www.neworleanssaints.com/news/john-deshazier-another-branch-of-sean-payton-s-coaching-tree-coming-to--11624537",
+      "publisher": "NewOrleansSaints.com",
+      "published": "2013-10-24",
+      "accessed": "2026-11-07",
+      "summary": "John DeShazier notes Bills coach Doug Marrone, from Payton's first Saints staff, as another branch of Payton's tree alongside Dennis Allen.",
+      "confidence": "high"
+    },
+    {
+      "id": "T25",
+      "url": "https://www.denvergazette.com/2025/10/11/sean-payton-coaching-tree-in-focus-ahead-of-broncos-jets-game-in-london",
+      "publisher": "Denver Gazette",
+      "published": "2025-10-11",
+      "accessed": "2026-11-07",
+      "summary": "Lists former Payton assistants now leading teams, among them Dan Campbell (Lions) and Aaron Glenn (Jets), plus Dennis Allen as a two-time former head coach.",
+      "confidence": "medium"
+    },
+    {
+      "id": "T26",
+      "url": "https://www.giants.com/news/the-coaching-circle-5813561",
+      "publisher": "Giants.com",
+      "published": "2011-09-18",
+      "accessed": "2026-11-07",
+      "summary": "Says 11 of Tom Coughlin's former assistants became head coaches, including Steve Spagnuolo, and that Coughlin leaned especially on Bill Parcells, whom he worked for in the NFL.",
+      "confidence": "high"
+    },
+    {
+      "id": "T27",
+      "url": "https://www.cbssports.com/college-football/news/nick-saban-coaching-tree-kirby-smart-lane-kiffin-jimbo-fisher-among-many-who-worked-under-legend",
+      "publisher": "CBS Sports",
+      "published": "2024-01-11",
+      "accessed": "2026-11-07",
+      "summary": "On Saban's retirement, lists coaches who worked under him, such as Kirby Smart, Jimbo Fisher, Lane Kiffin, Will Muschamp and Giants coach Brian Daboll.",
+      "confidence": "high"
+    },
+    {
+      "id": "T28",
+      "url": "https://bleacherreport.com/articles/2596708-breaking-down-nick-sabans-impressive-coaching-tree",
+      "publisher": "Bleacher Report",
+      "published": "2015-12-07",
+      "accessed": "2026-11-07",
+      "summary": "Breaks down Saban's tree of former assistants and notes that Saban himself is most associated with Bill Belichick from their 1991-94 Cleveland Browns years.",
+      "confidence": "medium"
+    },
+    {
+      "id": "T29",
+      "url": "https://www.espn.com/blog/tampa-bay-buccaneers/post/_/id/21271/tony-dungys-legacy-championing-diverse-coach-including-mike-tomlin",
+      "publisher": "ESPN",
+      "published": "2018-09-24",
+      "accessed": "2026-11-07",
+      "summary": "Jenna Laine tabulates Dungy assistants who became NFL head coaches (Herm Edwards, Lovie Smith, Rod Marinelli, Mike Tomlin, Jim Caldwell, Leslie Frazier, Frank Reich) and later-generation coaches descended from them.",
+      "confidence": "high"
+    },
+    {
+      "id": "T30",
+      "url": "https://www.heraldstandard.com/sports/2007/feb/03/tony-dungys-coaching-tree-keeps-growing/",
+      "publisher": "Herald-Standard (Associated Press)",
+      "published": "2007-02-03",
+      "accessed": "2026-11-07",
+      "summary": "Jim Litke's AP column before Super Bowl XLI says four Dungy disciples (Edwards, Smith, Marinelli and Tomlin) had become NFL head coaches.",
+      "confidence": "medium"
+    },
+    {
+      "id": "T31",
+      "url": "https://www.nfl.com/news/roots-from-dungy-coaching-tree-help-trace-tomlin-s-success-09000d5d80e5b36c",
+      "publisher": "NFL.com",
+      "published": "2009-01-26",
+      "accessed": "2026-11-07",
+      "summary": "Before Super Bowl XLIII, traces Mike Tomlin's roots to Tony Dungy's Tampa Bay staff, where both he and Lovie Smith were defensive assistants; Smith calls Tomlin a cousin in that tree.",
+      "confidence": "high"
+    },
+    {
+      "id": "T32",
+      "url": "https://steelersnow.com/ex-nfl-gm-questions-fruitfulness-of-mike-tomlin-future",
+      "publisher": "Steelers Now",
+      "published": "2024-06-15",
+      "accessed": "2026-11-07",
+      "summary": "Former GM Mike Whaley criticizes Tomlin's hiring, saying only Bruce Arians (NFL) and Scottie Montgomery (college) left his staffs to become head coaches.",
+      "confidence": "low"
+    },
+    {
+      "id": "T33",
+      "url": "https://www.seahawks.com/news/pete-carroll-s-coaching-tree-continues-to-grow-in-nfl-183261",
+      "publisher": "Seahawks.com",
+      "published": "2017-02-06",
+      "accessed": "2026-11-07",
+      "summary": "Notes that Carroll's Seattle defensive coordinators Gus Bradley and Dan Quinn became NFL head coaches and that former assistant Robert Saleh became 49ers defensive coordinator.",
+      "confidence": "high"
+    },
+    {
+      "id": "T34",
+      "url": "https://www.raiders.com/news/pete-carroll-coaching-tree-dan-quinn-dave-canales-brian-schottenheimer",
+      "publisher": "Raiders.com",
+      "published": "2025-02-14",
+      "accessed": "2026-11-07",
+      "summary": "Counts 17 assistants from Carroll-led staffs who became NFL or college head coaches, including Dan Quinn, Dave Canales, Brian Schottenheimer, Lane Kiffin and Steve Sarkisian.",
+      "confidence": "high"
+    },
+    {
+      "id": "T35",
+      "url": "https://www.philadelphiaeagles.com/news/eagles-name-vic-fangio-defensive-coordinator",
+      "publisher": "PhiladelphiaEagles.com",
+      "published": "2024-01-27",
+      "accessed": "2026-11-07",
+      "summary": "Announcing Fangio as Eagles defensive coordinator, the team describes a 'Fangio Tree' of defensive coaches who worked for him and carried his scheme elsewhere.",
+      "confidence": "high"
+    },
+    {
+      "id": "T36",
+      "url": "https://www.pff.com/news/nfl-vic-fangio-coaching-tree-week-1-2021",
+      "publisher": "PFF",
+      "published": "2021-09-15",
+      "accessed": "2026-11-07",
+      "summary": "Diante Lee analyzes defenses run by Fangio-tree coaches Brandon Staley, Joe Barry and Sean Desai after Week 1 of 2021.",
+      "confidence": "medium"
+    },
+    {
+      "id": "T37",
+      "url": "https://www.denverbroncos.com/news/mile-high-morning-how-brandon-staley-learned-from-vic-fangio-on-his-path-to-beco",
+      "publisher": "DenverBroncos.com",
+      "published": "2020-12-31",
+      "accessed": "2026-11-07",
+      "summary": "Explains how Brandon Staley learned under Vic Fangio as outside linebackers coach in Chicago and Denver before becoming Rams defensive coordinator.",
+      "confidence": "high",
+      "mentorship": true
+    },
+    {
+      "id": "T38",
+      "url": "https://www.cbssports.com/nfl/news/buddy-ryan-nfl-innovator-and-architect-of-famed-1985-bears-defense-dies-at-85",
+      "publisher": "CBS Sports",
+      "published": "2016-06-28",
+      "accessed": "2026-11-07",
+      "summary": "Obituary for Buddy Ryan, creator of the 46 defense, noting sons Rex and Rob as his coaching heirs and 1985 Bears players such as Jeff Fisher, Ron Rivera and Leslie Frazier who became head coaches.",
+      "confidence": "medium"
+    },
+    {
+      "id": "T39",
+      "url": "https://www.si.com/nfl/2016/06/28/buddy-ryan-46-defense-bears-rex-rob-ryan",
+      "publisher": "Sports Illustrated",
+      "published": "2016-06-28",
+      "accessed": "2026-11-07",
+      "summary": "Feature on how Buddy Ryan invented the 46 defense and handed his defensive approach down to his sons Rex and Rob Ryan.",
+      "confidence": "high"
+    }
+  ]
+}
