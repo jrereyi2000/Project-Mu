@@ -347,3 +347,32 @@ def test_inbox_and_producer_style_envelopes_validate():
         'situation_kind': 'injury', 'state': 'resolved', 'valid_until': None, 'outcome_refs': ['mu:injury:4'],
         'rule': 'injury_resolved@producers-v1'})
     rev.validate_event(healed, team_registry=REG)
+
+
+# ------------------------------------------------------------------- mentorship direction (COACHING_TREES §2.1) ---
+
+def _mentor_env(direction=None, kind='mentorship'):
+    payload = {'relationship_kind': kind, 'outcome': 'positive', 'significance': 'meaningful',
+               'opportunity_ref': 'coaching-tree:x'}
+    if direction is not None:
+        payload['direction'] = direction
+    return env('meaningful_interaction', 'mu:coach-tree:x', subject=person('c1', 'coach'),
+               target=person('c2', 'coach'), payload=payload)
+
+
+@pytest.mark.parametrize('direction', rev.DIRECTIONS)
+def test_direction_is_accepted_on_a_mentorship(direction):
+    assert rev.validate_event(_mentor_env(direction), team_registry=REG)['payload']['direction'] == direction
+
+
+def test_direction_is_rejected_on_other_kinds_and_bad_values():
+    assert code(rev.validate_event, _mentor_env('mentor', kind='support'), team_registry=REG) == 'invalid_field'
+    assert code(rev.validate_event, _mentor_env('teacher'), team_registry=REG) == 'invalid_enum'
+
+
+def test_envelope_without_direction_hashes_as_before():
+    plain = rev.validate_event(_mentor_env(), team_registry=REG)
+    assert 'direction' not in plain['payload']
+    assert rev.canonical_payload_hash(plain) == rev.canonical_payload_hash(deepcopy(plain))
+    assert rev.canonical_payload_hash(plain) != rev.canonical_payload_hash(
+        rev.validate_event(_mentor_env('mentor'), team_registry=REG))

@@ -52,6 +52,8 @@ VISIBILITIES = ('private', 'public')
 OUTCOMES = ('positive', 'negative', 'mixed')
 SIGNIFICANCES = ('routine', 'meaningful')
 RELATIONSHIP_KINDS = ('mentorship', 'support', 'conflict', 'collaboration')
+# Optional on a mentorship meaningful_interaction: the subject's role toward the target (COACHING_TREES_PLAN §2.1).
+DIRECTIONS = ('mentor', 'mentee')
 COVERAGES = ('complete', 'partial')
 ASSESSMENTS = ('satisfied', 'unsatisfied', 'unknown')
 TERM_KINDS = ('role', 'opportunity', 'communication')
@@ -330,6 +332,10 @@ def _payload(kind, p, ctx):
         _enum(p.get('outcome'), OUTCOMES, f'{path}.outcome')
         _enum(p.get('significance'), SIGNIFICANCES, f'{path}.significance')
         _text(p.get('opportunity_ref'), f'{path}.opportunity_ref')
+        if 'direction' in p:
+            if p['relationship_kind'] != 'mentorship':
+                _fail('invalid_field', 'direction is only set on a mentorship', f'{path}.direction')
+            _enum(p['direction'], DIRECTIONS, f'{path}.direction')
     elif kind == 'promise_made':
         _text(p.get('promise_id'), f'{path}.promise_id')
         person_ref(p.get('issuer'), universe_id, f'{path}.issuer')

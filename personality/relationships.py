@@ -237,7 +237,8 @@ def project_relationships(events, *, subject, as_of, known_through, policy, cale
 
 
 def _ties(mine, others, as_of):
-    """Meaningful person ties: positive/mixed meaningful interactions (one per person, sources listed)."""
+    """Meaningful person ties: positive/mixed meaningful interactions (one per person, sources listed).
+    A tie's kind and direction come from the first directed mentorship toward that person, else the first event."""
     found = {}
     for ev in mine:
         if ev['kind'] != 'meaningful_interaction' or ev['target']['kind'] != 'person':
@@ -247,7 +248,9 @@ def _ties(mine, others, as_of):
             continue
         key = rev.target_key(ev['target'])
         tie = found.setdefault(key, {'person': deepcopy(ev['target']), 'kind': p['relationship_kind'],
-                                     'source_ids': []})
+                                     'direction': p.get('direction'), 'source_ids': []})
+        if tie['direction'] is None and p.get('direction') is not None:
+            tie['kind'], tie['direction'] = p['relationship_kind'], p['direction']
         if ev['source_event_id'] not in tie['source_ids']:
             tie['source_ids'].append(ev['source_event_id'])
     tenure = {}
@@ -259,7 +262,8 @@ def _ties(mine, others, as_of):
 
 def _tie_view(tie, team_key, as_of):
     windows = tie['_tenure'].get((rev.subject_key(tie['person']), team_key), []) if team_key else []
-    return {'person': deepcopy(tie['person']), 'kind': tie['kind'], 'source_ids': sorted(tie['source_ids']),
+    return {'person': deepcopy(tie['person']), 'kind': tie['kind'], 'direction': tie['direction'],
+            'source_ids': sorted(tie['source_ids']),
             'relevant_to_team': bool(team_key) and _covering(windows, as_of)}
 
 

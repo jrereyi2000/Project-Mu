@@ -332,3 +332,37 @@ def test_knowledge_cutoff_hides_later_ingestion():
     early = talk(GM, sid='g1')
     late = dict(deepcopy(talk(GM, outcome='negative', sid='g2', at=(2026, 3))), head=5)
     assert edge(project([early, late], known_through=4), GM)['trust'] == pytest.approx(0.1 * 0.5 ** (63 / 32), abs=1e-6)
+
+
+# ------------------------------------------------------------------- mentorship direction (COACHING_TREES §2.1) ---
+
+def directed(target, direction, sid, at=(2026, 3)):
+    return env('meaningful_interaction', {'relationship_kind': 'mentorship', 'outcome': 'positive',
+                                          'significance': 'meaningful', 'opportunity_ref': 'coaching-tree:x',
+                                          'direction': direction}, target=target, at=at, sid=sid)
+
+
+def test_ties_carry_direction_and_undirected_ties_read_none():
+    s = project([talk(MENTOR, significance='meaningful', kind='mentorship', sid='m0')])
+    assert edge(s, MENTOR)['meaningful_ties'][0]['direction'] is None
+    s = project([directed(MENTOR, 'mentee', 'tree1')])
+    (t,) = edge(s, MENTOR)['meaningful_ties']
+    assert (t['kind'], t['direction']) == ('mentorship', 'mentee')
+
+
+@pytest.mark.parametrize('directed_first', [True, False])
+def test_directed_mentorship_beats_an_undirected_tie_in_either_order(directed_first):
+    plain = talk(MENTOR, significance='meaningful', kind='support', sid='prof1', at=(2026, 2 if directed_first else 1))
+    tree = directed(MENTOR, 'mentee', 'tree1', at=(2026, 1 if directed_first else 2))
+    (t,) = edge(project([plain, tree]), MENTOR)['meaningful_ties']
+    assert (t['kind'], t['direction']) == ('mentorship', 'mentee')
+    assert t['source_ids'] == ['prof1', 'tree1']
+
+
+def test_relationship_context_and_tie_label_read_the_direction():
+    from server.personality_api import tie_label
+    for direction, words in (('mentee', 'mentored by'), ('mentor', 'mentor to')):
+        ctx = rel.relationship_context(project([directed(MENTOR, direction, f't-{direction}')]), target=MENTOR)
+        (e,) = ctx['edges']
+        assert e['ties'][0]['direction'] == direction
+        assert tie_label(e) == words
