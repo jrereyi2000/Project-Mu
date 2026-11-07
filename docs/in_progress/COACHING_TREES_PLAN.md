@@ -1,6 +1,9 @@
 # Project Mu: Coaching Trees Plan
 
-**Status:** approved by JR (2026-11-07, his own message: "Approve as written", Q1–Q9 as recommended); building, wave 1 of 3.
+**Status:** approved by JR (2026-11-07, his own message: "Approve as written", Q1–Q9 as recommended); building, wave 2 of 3 done.
+- As built (U1): the projection tests live in `tests/test_personality_relationships.py` (the file that tests `personality/relationships.py`); `tests/test_relationships.py` tests `newsroom/relationships.py` and was left untouched. U1 owned the former instead.
+- As built (U2): `lineage` also returns `root_of` (trees the person roots: a registry root or a computed `<Surname> tree`), and `lineage_line` says "root of the ..." and "mentor to ..."; `coaching_tree_facts` adds `graph_from` / `context_from` (the same reads from rows already in hand).
+- As built (U3–U6): research by four agents on 2026-11-07. Registry: 19 trees (the 13 plus kubiak, lafleur, holmgren, coughlin, gruden, ryan; spagnuolo dropped, no source), 39 sources. Batches: A 51 edges / 19 memberships, B 37 / 26 (+ proposed `reich`), C 51 / 22 (+ proposed `arians`); every entry a draft. Review pages: `verify_output/coaching_tree_review/{registry,batch_A,batch_B,batch_C}.md`.
 **Builds on:** PROJECT_SPEC §2.19 (coaching carousel), §3.3a (coaches and staff), §3.3r (relationship event producers), §3.3t (relationship ledger), §7.11 (real-coach profiles, switchboard); [`REAL_COACH_PROFILES_PLAN.md`](../in_progress/REAL_COACH_PROFILES_PLAN.md) (reviewed-evidence method, Q3); [`PERSONALITY_RELATIONSHIPS_PLAN.md`](../done/PERSONALITY_RELATIONSHIPS_PLAN.md) §2.2–§2.3; [`RELATIONSHIP_EVENT_PRODUCERS_PLAN.md`](../done/RELATIONSHIP_EVENT_PRODUCERS_PLAN.md); [`PERSONALITY_DISPLAY_PLAN.md`](../done/PERSONALITY_DISPLAY_PLAN.md) (mentorship labels need a `direction`); [`PERSONALITY_ACTIVATION_PLAN.md`](../done/PERSONALITY_ACTIVATION_PLAN.md) (switchboard).
 
 **Goal:** JR asked (2026-11-07) whether coaching trees, like the Shanahan tree, should be recorded as relationships or are already in coach tenures. They are not in tenures: `coach_tenures` and `coordinator_tenures` say who held which seat on which team each season, from the 2026 start, but not who learned under whom, and nothing before 2026. This plan records real coaching trees for the 2026 staffs as reviewed, cited, directed mentor → protégé ties, gives each coach a named-tree label for writing ("a Shanahan-tree play caller"), and grows the trees inside the simulation: a coordinator who serves two seasons under a head coach becomes his protégé. Writers and coach voices get the lineage as plain facts. A separate, off-by-default switch lets the carousel prefer tree members and lets coordinators follow their mentors.
@@ -372,3 +375,9 @@ No path appears twice.
 
 | Unit | Wave | Branch | Worktree | Result | Merge |
 |---|---|---|---|---|---|
+| U1 | 1 | build/ct-u1 | .claude/worktrees/ct-u1 | merged | a3fe52e |
+| U2 | 1 | build/ct-u2 | .claude/worktrees/ct-u2 | merged | c54df6d |
+| U3 | 1 | build/ct-u3 | .claude/worktrees/ct-u3 | merged | 04a5fde |
+| U4 | 2 | build/ct-u4 | .claude/worktrees/ct-u4 | merged | 012aa1b |
+| U5 | 2 | build/ct-u5 | .claude/worktrees/ct-u5 | merged | b59a3cc |
+| U6 | 2 | build/ct-u6 | .claude/worktrees/ct-u6 | merged | 02406ac |
