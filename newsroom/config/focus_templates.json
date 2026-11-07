@@ -1,0 +1,642 @@
+{
+ "_comment": "Focus templates (docs/in_progress/INFERRED_SLIDERS_AND_FOCUS_PLAN.md §2.4, personality/focus.py). A stale current focus is redrawn from these by personality.focus_run: eligible = seat and slot match, every `when` key equals the season fact, every `needs` person exists; a template whose traits_any meets the person's traits counts twice. Every (seat, slot) has a GENERIC_<SEAT>_<SLOT> fallback. Text reads after \"and right now ...\" in the prompt, at most 14 words filled.",
+ "version": "focus-v1",
+ "templates": [
+  {
+   "template_id": "OWNER_WANT_CONTEND_QB",
+   "seats": [
+    "OWNER"
+   ],
+   "slot": "want",
+   "when": {
+    "direction": "CONTEND"
+   },
+   "needs": [
+    "qb1"
+   ],
+   "text": "a championship while {qb1} is in his prime",
+   "traits_any": [
+    "RING_CHASER",
+    "HEADLINE_HUNTER"
+   ]
+  },
+  {
+   "template_id": "OWNER_WANT_RETOOL",
+   "seats": [
+    "OWNER"
+   ],
+   "slot": "want",
+   "when": {
+    "direction": "RETOOL"
+   },
+   "needs": [],
+   "text": "a quick retool that gets {team_name} back to January"
+  },
+  {
+   "template_id": "OWNER_WANT_REBUILD_STAR",
+   "seats": [
+    "OWNER"
+   ],
+   "slot": "want",
+   "when": {
+    "direction": "REBUILD"
+   },
+   "needs": [
+    "young_star"
+   ],
+   "text": "a young core around {young_star} that contends for years",
+   "traits_any": [
+    "PATIENT_BUILDER"
+   ]
+  },
+  {
+   "template_id": "OWNER_WANT_REPEAT",
+   "seats": [
+    "OWNER"
+   ],
+   "slot": "want",
+   "when": {
+    "won_super_bowl": true
+   },
+   "needs": [],
+   "text": "to see {team_name} win it all again",
+   "traits_any": [
+    "LEGACY_BUILDER",
+    "RING_CHASER"
+   ]
+  },
+  {
+   "template_id": "OWNER_WANT_DEEP_RUN",
+   "seats": [
+    "OWNER"
+   ],
+   "slot": "want",
+   "when": {
+    "made_playoffs": true
+   },
+   "needs": [],
+   "text": "a deeper playoff run than last season"
+  },
+  {
+   "template_id": "GENERIC_OWNER_WANT",
+   "seats": [
+    "OWNER"
+   ],
+   "slot": "want",
+   "when": {},
+   "needs": [],
+   "text": "a {team_name} team that wins in January"
+  },
+  {
+   "template_id": "OWNER_FEAR_HOT_SEAT",
+   "seats": [
+    "OWNER"
+   ],
+   "slot": "fear",
+   "when": {
+    "hot_seat": true
+   },
+   "needs": [
+    "head_coach"
+   ],
+   "text": "having to fire {head_coach} and start over",
+   "traits_any": [
+    "MEDDLER"
+   ]
+  },
+  {
+   "template_id": "OWNER_FEAR_CONTEND",
+   "seats": [
+    "OWNER"
+   ],
+   "slot": "fear",
+   "when": {
+    "direction": "CONTEND"
+   },
+   "needs": [
+    "qb1"
+   ],
+   "text": "wasting the prime years of {qb1}"
+  },
+  {
+   "template_id": "OWNER_FEAR_RETOOL",
+   "seats": [
+    "OWNER"
+   ],
+   "slot": "fear",
+   "when": {
+    "direction": "RETOOL"
+   },
+   "needs": [],
+   "text": "that a retool turns into a long slide"
+  },
+  {
+   "template_id": "OWNER_FEAR_REBUILD",
+   "seats": [
+    "OWNER"
+   ],
+   "slot": "fear",
+   "when": {
+    "direction": "REBUILD"
+   },
+   "needs": [],
+   "text": "that the rebuild drags on and the seats go empty",
+   "traits_any": [
+    "BUDGET_CONSCIOUS",
+    "HEADLINE_HUNTER"
+   ]
+  },
+  {
+   "template_id": "OWNER_FEAR_MISSED",
+   "seats": [
+    "OWNER"
+   ],
+   "slot": "fear",
+   "when": {
+    "made_playoffs": false
+   },
+   "needs": [],
+   "text": "another January spent watching other teams play"
+  },
+  {
+   "template_id": "GENERIC_OWNER_FEAR",
+   "seats": [
+    "OWNER"
+   ],
+   "slot": "fear",
+   "when": {},
+   "needs": [],
+   "text": "that {team_name} slips back into the pack"
+  },
+  {
+   "template_id": "HC_WANT_CONTEND_QB",
+   "seats": [
+    "HC"
+   ],
+   "slot": "want",
+   "when": {
+    "direction": "CONTEND"
+   },
+   "needs": [
+    "qb1"
+   ],
+   "text": "to win big with {qb1} running his offense",
+   "traits_any": [
+    "RING_CHASER"
+   ]
+  },
+  {
+   "template_id": "HC_WANT_RETOOL",
+   "seats": [
+    "HC"
+   ],
+   "slot": "want",
+   "when": {
+    "direction": "RETOOL"
+   },
+   "needs": [],
+   "text": "to retool fast and get back into the playoff race"
+  },
+  {
+   "template_id": "HC_WANT_REBUILD_STAR",
+   "seats": [
+    "HC"
+   ],
+   "slot": "want",
+   "when": {
+    "direction": "REBUILD"
+   },
+   "needs": [
+    "young_star"
+   ],
+   "text": "to build his program around {young_star}",
+   "traits_any": [
+    "YOUTH_DEVELOPER",
+    "TEACHER"
+   ]
+  },
+  {
+   "template_id": "HC_WANT_REPEAT",
+   "seats": [
+    "HC"
+   ],
+   "slot": "want",
+   "when": {
+    "won_super_bowl": true
+   },
+   "needs": [],
+   "text": "to prove last season was no one-off",
+   "traits_any": [
+    "LEGACY_BUILDER"
+   ]
+  },
+  {
+   "template_id": "HC_WANT_PLAYOFFS",
+   "seats": [
+    "HC"
+   ],
+   "slot": "want",
+   "when": {
+    "made_playoffs": true
+   },
+   "needs": [],
+   "text": "to turn a playoff berth into a real run"
+  },
+  {
+   "template_id": "GENERIC_HC_WANT",
+   "seats": [
+    "HC"
+   ],
+   "slot": "want",
+   "when": {},
+   "needs": [],
+   "text": "to make {team_name} a team nobody wants to play"
+  },
+  {
+   "template_id": "HC_FEAR_HOT_SEAT",
+   "seats": [
+    "HC"
+   ],
+   "slot": "fear",
+   "when": {
+    "hot_seat": true
+   },
+   "needs": [],
+   "text": "that one more losing season costs him the job"
+  },
+  {
+   "template_id": "HC_FEAR_CONTEND",
+   "seats": [
+    "HC"
+   ],
+   "slot": "fear",
+   "when": {
+    "direction": "CONTEND"
+   },
+   "needs": [
+    "qb1"
+   ],
+   "text": "wasting a contending roster around {qb1}"
+  },
+  {
+   "template_id": "HC_FEAR_RETOOL",
+   "seats": [
+    "HC"
+   ],
+   "slot": "fear",
+   "when": {
+    "direction": "RETOOL"
+   },
+   "needs": [],
+   "text": "that the front office loses patience with the retool"
+  },
+  {
+   "template_id": "HC_FEAR_REBUILD",
+   "seats": [
+    "HC"
+   ],
+   "slot": "fear",
+   "when": {
+    "direction": "REBUILD"
+   },
+   "needs": [],
+   "text": "being let go before his young players grow up"
+  },
+  {
+   "template_id": "HC_FEAR_GM",
+   "seats": [
+    "HC"
+   ],
+   "slot": "fear",
+   "when": {},
+   "needs": [
+    "gm"
+   ],
+   "text": "falling out of step with {gm} on the roster",
+   "traits_any": [
+    "GRUDGE_HOLDER",
+    "MEDDLER"
+   ]
+  },
+  {
+   "template_id": "GENERIC_HC_FEAR",
+   "seats": [
+    "HC"
+   ],
+   "slot": "fear",
+   "when": {},
+   "needs": [],
+   "text": "that the league figures out his team"
+  },
+  {
+   "template_id": "OC_WANT_WEAPON",
+   "seats": [
+    "OC"
+   ],
+   "slot": "want",
+   "when": {},
+   "needs": [
+    "top_weapon"
+   ],
+   "text": "to build the offense around {top_weapon}",
+   "traits_any": [
+    "SCHEME_NERD"
+   ]
+  },
+  {
+   "template_id": "OC_WANT_CONTEND_QB",
+   "seats": [
+    "OC"
+   ],
+   "slot": "want",
+   "when": {
+    "direction": "CONTEND"
+   },
+   "needs": [
+    "qb1"
+   ],
+   "text": "to make {qb1} the most dangerous passer in football",
+   "traits_any": [
+    "QB_WHISPERER"
+   ]
+  },
+  {
+   "template_id": "OC_WANT_RETOOL",
+   "seats": [
+    "OC"
+   ],
+   "slot": "want",
+   "when": {
+    "direction": "RETOOL"
+   },
+   "needs": [],
+   "text": "to fix a stalled offense in one offseason"
+  },
+  {
+   "template_id": "OC_WANT_REBUILD",
+   "seats": [
+    "OC"
+   ],
+   "slot": "want",
+   "when": {
+    "direction": "REBUILD"
+   },
+   "needs": [
+    "young_star"
+   ],
+   "text": "to develop {young_star} into a featured weapon",
+   "traits_any": [
+    "YOUTH_DEVELOPER"
+   ]
+  },
+  {
+   "template_id": "OC_WANT_HC_JOB",
+   "seats": [
+    "OC"
+   ],
+   "slot": "want",
+   "when": {
+    "made_playoffs": true
+   },
+   "needs": [],
+   "text": "a head coaching job off a top offense",
+   "traits_any": [
+    "SPOTLIGHT_SEEKER",
+    "LEGACY_BUILDER"
+   ]
+  },
+  {
+   "template_id": "GENERIC_OC_WANT",
+   "seats": [
+    "OC"
+   ],
+   "slot": "want",
+   "when": {},
+   "needs": [],
+   "text": "an offense that scores on anybody"
+  },
+  {
+   "template_id": "OC_FEAR_HOT_SEAT",
+   "seats": [
+    "OC"
+   ],
+   "slot": "fear",
+   "when": {
+    "hot_seat": true
+   },
+   "needs": [],
+   "text": "being the first one blamed if the staff is cleared out"
+  },
+  {
+   "template_id": "OC_FEAR_CONTEND",
+   "seats": [
+    "OC"
+   ],
+   "slot": "fear",
+   "when": {
+    "direction": "CONTEND"
+   },
+   "needs": [],
+   "text": "that his offense lets down a contending roster"
+  },
+  {
+   "template_id": "OC_FEAR_QB",
+   "seats": [
+    "OC"
+   ],
+   "slot": "fear",
+   "when": {},
+   "needs": [
+    "qb1"
+   ],
+   "text": "that {qb1} never takes the next step under him"
+  },
+  {
+   "template_id": "OC_FEAR_REBUILD",
+   "seats": [
+    "OC"
+   ],
+   "slot": "fear",
+   "when": {
+    "direction": "REBUILD"
+   },
+   "needs": [],
+   "text": "that a thin roster makes his scheme look stale"
+  },
+  {
+   "template_id": "OC_FEAR_RETOOL",
+   "seats": [
+    "OC"
+   ],
+   "slot": "fear",
+   "when": {
+    "direction": "RETOOL"
+   },
+   "needs": [],
+   "text": "that the retool leaves him short of playmakers"
+  },
+  {
+   "template_id": "GENERIC_OC_FEAR",
+   "seats": [
+    "OC"
+   ],
+   "slot": "fear",
+   "when": {},
+   "needs": [],
+   "text": "that defenses have caught up to his playbook"
+  },
+  {
+   "template_id": "DC_WANT_DEFENDER",
+   "seats": [
+    "DC"
+   ],
+   "slot": "want",
+   "when": {},
+   "needs": [
+    "top_defender"
+   ],
+   "text": "a defense built around {top_defender}",
+   "traits_any": [
+    "SCHEME_NERD"
+   ]
+  },
+  {
+   "template_id": "DC_WANT_CONTEND",
+   "seats": [
+    "DC"
+   ],
+   "slot": "want",
+   "when": {
+    "direction": "CONTEND"
+   },
+   "needs": [],
+   "text": "a top-five defense that carries a contender"
+  },
+  {
+   "template_id": "DC_WANT_RETOOL",
+   "seats": [
+    "DC"
+   ],
+   "slot": "want",
+   "when": {
+    "direction": "RETOOL"
+   },
+   "needs": [],
+   "text": "to rebuild the defense into something fast and nasty"
+  },
+  {
+   "template_id": "DC_WANT_REBUILD",
+   "seats": [
+    "DC"
+   ],
+   "slot": "want",
+   "when": {
+    "direction": "REBUILD"
+   },
+   "needs": [
+    "young_star"
+   ],
+   "text": "to turn {young_star} into a defensive cornerstone",
+   "traits_any": [
+    "YOUTH_DEVELOPER",
+    "TEACHER"
+   ]
+  },
+  {
+   "template_id": "DC_WANT_HC_JOB",
+   "seats": [
+    "DC"
+   ],
+   "slot": "want",
+   "when": {
+    "made_playoffs": true
+   },
+   "needs": [],
+   "text": "a head coaching job off a playoff defense",
+   "traits_any": [
+    "SPOTLIGHT_SEEKER",
+    "LEGACY_BUILDER"
+   ]
+  },
+  {
+   "template_id": "GENERIC_DC_WANT",
+   "seats": [
+    "DC"
+   ],
+   "slot": "want",
+   "when": {},
+   "needs": [],
+   "text": "a defense opponents dread facing"
+  },
+  {
+   "template_id": "DC_FEAR_HOT_SEAT",
+   "seats": [
+    "DC"
+   ],
+   "slot": "fear",
+   "when": {
+    "hot_seat": true
+   },
+   "needs": [],
+   "text": "taking the fall if the staff is let go"
+  },
+  {
+   "template_id": "DC_FEAR_CONTEND",
+   "seats": [
+    "DC"
+   ],
+   "slot": "fear",
+   "when": {
+    "direction": "CONTEND"
+   },
+   "needs": [],
+   "text": "being the reason a contender goes home early"
+  },
+  {
+   "template_id": "DC_FEAR_DEFENDER",
+   "seats": [
+    "DC"
+   ],
+   "slot": "fear",
+   "when": {},
+   "needs": [
+    "top_defender"
+   ],
+   "text": "losing {top_defender} and having no answer"
+  },
+  {
+   "template_id": "DC_FEAR_REBUILD",
+   "seats": [
+    "DC"
+   ],
+   "slot": "fear",
+   "when": {
+    "direction": "REBUILD"
+   },
+   "needs": [],
+   "text": "that young mistakes make his unit look broken"
+  },
+  {
+   "template_id": "DC_FEAR_RETOOL",
+   "seats": [
+    "DC"
+   ],
+   "slot": "fear",
+   "when": {
+    "direction": "RETOOL"
+   },
+   "needs": [],
+   "text": "that the retool strips his defense of veterans"
+  },
+  {
+   "template_id": "GENERIC_DC_FEAR",
+   "seats": [
+    "DC"
+   ],
+   "slot": "fear",
+   "when": {},
+   "needs": [],
+   "text": "that offenses keep finding holes in his scheme"
+  }
+ ]
+}
