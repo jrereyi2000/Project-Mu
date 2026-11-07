@@ -697,6 +697,37 @@ class LeagueOfficeIngestTest(unittest.TestCase):
         self.assertEqual(res["league_office"]["status"], "written")
 
 
+    def offseason_ingest(self, window):
+        def fake_lo(*a, **k):
+            self.calls.league_office()
+            return {"status": "written", "replaced": True, "output_sha256": "o", "run_id": 3,
+                    "retirement_window": window}
+        mock.patch("pipeline.watch_save.run_league_office", side_effect=fake_lo).start()
+        ws.ingest_snapshot(self.snapshot, 2036, None, save_name="CAREER-A", save_path=self.save,
+                           league_office=True, stage_only=True)
+        return self.notify.call_args
+
+    def test_offseason_notification_carries_the_retirement_window_line(self):
+        call = self.offseason_ingest({"role": "window", "stop": "RESIGN", "restored": [], "conflicts": [],
+                                      "vanished": [], "blocked": [{"pgid": 2, "reasons": ["authority_missing"]}]})
+        self.assertIn("Retirement window RESIGN: 0 restored; 1 late retirement(s) not restored", call[0][0])
+        self.assertEqual(call[1]["priority"], "default")
+        self.assertEqual(call[1]["title"], "Mu: offseason stage done")
+
+    def test_vanished_rostered_player_makes_it_high_priority(self):
+        call = self.offseason_ingest({"role": "window", "stop": "DRAFT", "restored": [], "conflicts": [],
+                                      "blocked": [], "vanished": [{"pgid": 4, "kind": "VANISHED_ROSTERED",
+                                                                   "name": "A B", "last": {"status": "Signed",
+                                                                                           "team_index": 3}}]})
+        self.assertIn("A B (team 3)", call[0][0])
+        self.assertEqual(call[1]["priority"], "high")
+
+    def test_no_window_line_without_a_window_summary(self):
+        call = self.offseason_ingest(None)
+        self.assertNotIn("Retirement window", call[0][0])
+        self.assertEqual(call[1]["priority"], "default")
+
+
 class RunLeagueOfficeTest(unittest.TestCase):
     """run_league_office: the in-process call into pipeline.league_office.run and its error mapping."""
 
@@ -730,6 +761,14 @@ class RunLeagueOfficeTest(unittest.TestCase):
         self.assertEqual(run.call_args[1]["stage"], "auto")
         self.assertFalse(run.call_args[1]["dry_run"])
         self.assertEqual(run.call_args[0][2], self.save)
+
+    def test_written_carries_the_retirement_window_summary(self):
+        def fake(*a, out, **k):
+            out(json.dumps({"run_id": 4, "status": "WRITTEN", "replaced": True,
+                            "summary": {"retirement_window": {"role": "decision", "decided": {}}}}))
+            return 4
+        res, _ = self.run_lo(fake)
+        self.assertEqual(res["retirement_window"], {"role": "decision", "decided": {}})
 
     def test_dry_run_passed_to_league_office(self):
         res, run = self.run_lo(lambda *a, **k: 5, dry_run=True)
@@ -1238,3 +1277,25 @@ class RelationshipProducersStepTest(unittest.TestCase):
                 res = ws.ingest_snapshot(self.snapshot, 2036, 6, save_name="CAREER-A")
         self.assertEqual(res["status"], "success")
         self.assertEqual(res["relationship_producers"]["status"], "failed")
+
+
+class RetirementWindowNoticeTest(unittest.TestCase):
+    """retirement_window_notice (RETIREMENT_WINDOW_PLAN §2.5): the line and its priority rule."""
+
+    def test_line_and_priority(self):
+        base = {"role": "window", "stop": "FREE_AGENCY:1", "restored": [{"pgid": 1}], "conflicts": [],
+                "vanished": [], "blocked": []}
+        line, prio = ws.retirement_window_notice({"retirement_window": base})
+        self.assertEqual((line, prio), ("Retirement window FREE_AGENCY:1: 1 restored.", "default"))
+        line, prio = ws.retirement_window_notice({"retirement_window": dict(base, conflicts=[{"pgid": 3}])})
+        self.assertEqual(prio, "high")
+        self.assertIn("1 conflict(s)", line)
+        line, prio = ws.retirement_window_notice({"retirement_window": {"role": "decision", "season": 2026,
+                                                                        "decided": {"1": {"keep": True}}}})
+        self.assertEqual(prio, "default")
+        self.assertIn("decided 1 retirement(s) for 2026 (1 kept)", line)
+
+    def test_no_line(self):
+        self.assertIsNone(ws.retirement_window_notice(None))
+        self.assertIsNone(ws.retirement_window_notice({"status": "failed"}))
+        self.assertIsNone(ws.retirement_window_notice({"retirement_window": {"role": "image", "roster_image": {}}}))

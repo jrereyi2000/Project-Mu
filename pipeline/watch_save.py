@@ -1032,8 +1032,21 @@ def run_league_office(snapshot_path, save_path, dsn, dry_run=False, expected_sha
     if dry_run:
         return dict(res, status="dry_run")
     if status == "WRITTEN":
-        return dict(res, status="written", replaced=bool(rep.get("replaced")), output_sha256=rep.get("output_sha256"))
+        return dict(res, status="written", replaced=bool(rep.get("replaced")), output_sha256=rep.get("output_sha256"),
+                    retirement_window=(rep.get("summary") or {}).get("retirement_window"))
     return dict(res, status="failed", error=rep.get("error") or f"league office run {run_id} ended {status}")
+
+
+def retirement_window_notice(result):
+    """(line, priority) for the offseason notification from a written league office run's
+    summary["retirement_window"] (RETIREMENT_WINDOW_PLAN §2.5), or None without one. High priority when a rostered
+    player vanished or a restore hit a conflict."""
+    from pipeline import retirement_window as rw
+
+    window = (result or {}).get("retirement_window")
+    if not isinstance(window, dict) or window.get("role") not in ("decision", "window"):
+        return None          # in-season runs store only the roster image
+    return rw.notice(window)
 
 
 def report_league_office(result, save_name, log_fn=log):
@@ -1111,8 +1124,14 @@ def ingest_snapshot(snapshot_path, save_season, save_week, dry_run=False, no_art
     if stage_only:
         # An offseason stop: no current week, so no weekly engines, articles or mod pack.
         lo_line = step_league_office()
-        send_notify(f"Ingested season {save_season} offseason stage from {save_name}. {lo_line or ''}".strip(),
-                    title="Mu: offseason stage done", tags=("white_check_mark",))
+        rw_notice = retirement_window_notice(lo_result)
+        rw_line, rw_priority = rw_notice if rw_notice else ("", "default")
+        if rw_line:
+            log_fn(rw_line)
+        send_notify(f"Ingested season {save_season} offseason stage from {save_name}. {lo_line or ''} "
+                    f"{rw_line}".strip(),
+                    title="Mu: offseason stage done", priority=rw_priority,
+                    tags=("white_check_mark",) if rw_priority == "default" else ("warning",))
         return result()
 
     if no_engines:
@@ -1145,11 +1164,16 @@ def ingest_snapshot(snapshot_path, save_season, save_week, dry_run=False, no_art
     if save_week is not None:
         prepare_next_week_mod_pack(dsn, save_season, save_week, log_fn=log_fn)
 
+    # PRESEASON / CUTDOWN runs are in the retirement window too (RETIREMENT_WINDOW_PLAN §2.1)
+    rw_notice = retirement_window_notice(lo_result)
+    rw_line, rw_priority = rw_notice if rw_notice else ("", "default")
+    if rw_line:
+        log_fn(rw_line)
     send_notify(
         f"Ingested season {save_season} week {save_week or 'preseason'} from {save_name}. "
-        f"{published or 'Articles skipped.'}" + (f" {lo_line}." if lo_line else ""),
-        title="Mu: week done",
-        tags=("white_check_mark",)
+        f"{published or 'Articles skipped.'}" + (f" {lo_line}." if lo_line else "") + (f" {rw_line}" if rw_line else ""),
+        title="Mu: week done", priority=rw_priority,
+        tags=("white_check_mark",) if rw_priority == "default" else ("warning",)
     )
 
     return result()
