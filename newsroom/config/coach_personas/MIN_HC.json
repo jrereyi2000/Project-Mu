@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:MIN:HC",
   "name": "Kevin O'Connell",
   "role": "HC",
@@ -30,6 +30,15 @@
       "E2",
       "E3"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 5,
+      "openness": 6,
+      "drive": 6
+    },
+    "locked": []
   },
   "traits": [
     "QB_WHISPERER",
@@ -107,8 +116,24 @@
     "repeats the one-and-oh motto when asked about streaks or standings",
     "keeps the door open diplomatically on roster decisions without committing"
   ],
-  "want": "to win a championship in Minnesota with a quarterback he has developed, adding to the ring he won as a coordinator",
-  "fear": "that his reputation for reviving quarterbacks depends on veterans and not on building a young one",
+  "motivation": {
+    "want": "to win a championship as a head coach with a quarterback he developed",
+    "fear": "that his gift for reviving quarterbacks only works on veterans"
+  },
+  "focus": {
+    "want": {
+      "text": "a title in Minnesota with J.J. McCarthy",
+      "subjects": [
+        {
+          "kind": "player",
+          "name": "J.J. McCarthy",
+          "team_2026": "MIN"
+        }
+      ],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "Warm, upbeat and sincere; he talks quickly and fluently about quarterback play and credits others for success. He is diplomatic on contracts and roster choices, protective of his players in public, and occasionally playful.",
   "ties": [
     {
@@ -222,9 +247,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

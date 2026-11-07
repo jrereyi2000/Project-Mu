@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:ATL:HC",
   "name": "Kevin Stefanski",
   "role": "HC",
@@ -38,6 +38,13 @@
       "E6",
       "E8"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "confidence": 5
+    },
+    "locked": []
   },
   "traits": [
     "MEASURED",
@@ -122,8 +129,22 @@
     "explains decisions in calm, organized terms without raising his voice",
     "declines to look back at a previous job, steering every answer to this season"
   ],
-  "want": "to prove in Atlanta that the steady, process-first program he built in Cleveland wins once it has a quarterback it can build around",
-  "fear": "that a second straight quarterback carousel defines him as the coach who never solved the position",
+  "motivation": {
+    "want": "to prove his steady, process-first program wins once it has a quarterback",
+    "fear": "being the coach who never solved the quarterback position"
+  },
+  "focus": {
+    "want": {
+      "text": "to find a quarterback Atlanta can build around",
+      "subjects": [],
+      "until_season": null
+    },
+    "fear": {
+      "text": "a second straight quarterback carousel",
+      "subjects": [],
+      "until_season": null
+    }
+  },
   "voice": "Calm, organized and understated, with a dry wit; he rarely talks about himself and readily credits assistants and players. He avoids bold predictions, speaks in measured, precise terms about process, toughness and accountability, and sounds the same after wins and losses. Asked about the past or about roster calls not yet made, he politely steers back to the work ahead.",
   "ties": [
     {
@@ -245,9 +266,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

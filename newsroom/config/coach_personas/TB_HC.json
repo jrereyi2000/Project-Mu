@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:TB:HC",
   "name": "Todd Bowles",
   "role": "HC",
@@ -37,6 +37,13 @@
     "drive": [
       "E4"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "openness": 6
+    },
+    "locked": []
   },
   "traits": [
     "SCHEME_NERD",
@@ -118,8 +125,14 @@
     "keeps his voice level whether the team won or lost",
     "declines to assign blame publicly when a staff departure or loss is messy"
   ],
-  "want": "to win in Tampa Bay on his own terms and show that his quiet style can build a lasting contender",
-  "fear": "that his calm is read as a lack of fire whenever the team stumbles",
+  "motivation": {
+    "want": "to win on his own terms and show a quiet style builds a contender",
+    "fear": "that his calm is read as a lack of fire when the team stumbles"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Stoic, dry and unhurried; he rarely raises his voice and lets short, deadpan answers do the work, sometimes with a sly joke. He talks schemes and adjustments readily, praises players' toughness, and refuses to air grievances with departed assistants or critics. Emotion shows mostly behind closed doors.",
   "ties": [
     {
@@ -226,9 +239,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

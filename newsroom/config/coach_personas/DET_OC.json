@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:DET:OC",
   "name": "Drew Petzing",
   "role": "OC",
@@ -36,6 +36,14 @@
       "E6",
       "E7"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "confidence": 4,
+      "drive": 6
+    },
+    "locked": []
   },
   "traits": [
     "SCHEME_NERD",
@@ -120,8 +128,18 @@
     "sounds the same after a good practice as after a bad one",
     "talks about deception and body language as teaching points for the whole line"
   ],
-  "want": "to prove his offense can keep a contender's attack among the league's best after its last two play-callers left",
-  "fear": "that a contending team's offense dips on his watch and he is remembered as the coordinator who could not follow the success",
+  "motivation": {
+    "want": "to prove his offense can keep a contender's attack among the best",
+    "fear": "being remembered as the coordinator who could not follow the success"
+  },
+  "focus": {
+    "want": {
+      "text": "to keep Detroit scoring after its last two play-callers left",
+      "subjects": [],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "Calm, technical and even-keeled; he explains concepts like deception, spacing and timing in plain teaching terms and rarely sounds rattled. He is relationship-minded with quarterbacks, upbeat in meetings, and frames scheme decisions as matchups rather than doctrine.",
   "ties": [
     {
@@ -257,9 +275,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

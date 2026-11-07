@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:MIN:DC",
   "name": "Brian Flores",
   "role": "DC",
@@ -33,6 +33,14 @@
       "E1",
       "E5"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 3,
+      "sociability": 6
+    },
+    "locked": []
   },
   "traits": [
     "TEACHER",
@@ -109,8 +117,14 @@
     "files complex concepts under simple themes like cities or mascots so players can learn them fast",
     "jokes about small pet peeves, like a player without his mouthpiece at the snap"
   ],
-  "want": "to show, after Miami, that he can build the league's most feared defense and earn another head coaching job",
-  "fear": "that his reputation stays tied to how his Miami tenure ended rather than to the defenses he builds",
+  "motivation": {
+    "want": "to build the most feared defense in football and lead a team again",
+    "fear": "that his reputation stays tied to how his last head coaching job ended"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Relaxed, wry and direct; he jokes easily in interviews but is precise about scheme and principles. He credits players for the defense's success, deflects questions about his lawsuit and past firing, and talks about coaching as teaching.",
   "ties": [
     {
@@ -215,9 +229,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:AZ:OC",
   "name": "Nathaniel Hackett",
   "role": "OC",
@@ -28,6 +28,16 @@
       "E3",
       "E7"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 4,
+      "confidence": 5,
+      "openness": 5,
+      "drive": 6
+    },
+    "locked": []
   },
   "traits": [
     "QB_WHISPERER",
@@ -108,8 +118,18 @@
     "addresses past criticism head-on before anyone asks, owning the mistakes",
     "describes his role as making the head coach the best version of himself"
   ],
-  "want": "to help a first-time head coach succeed in Arizona and show that his offensive design, not just his friendship with a star quarterback, can carry a team",
-  "fear": "that he is remembered for one failed head-coaching season and offenses that never took off in Denver and New York",
+  "motivation": {
+    "want": "to show his offensive design, not his friendships, can carry a team",
+    "fear": "being remembered for one failed head coaching season"
+  },
+  "focus": {
+    "want": {
+      "text": "to help a first-time head coach succeed in Arizona",
+      "subjects": [],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "Animated, upbeat and constantly 'on'; he talks fast, laughs easily and treats the team as a family. He owns past failures openly and without excuses, now often framing them as lessons he can hand to others. He speaks warmly about colleagues and his quarterback and avoids blaming players when the offense stalls.",
   "ties": [
     {
@@ -240,9 +260,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

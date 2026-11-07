@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:GB:DC",
   "name": "Jonathan Gannon",
   "role": "DC",
@@ -38,6 +38,13 @@
       "E1",
       "E8"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "warmth": 5
+    },
+    "locked": []
   },
   "traits": [
     "QUOTABLE",
@@ -118,8 +125,14 @@
     "apologizes to the team as a group when he crosses a line",
     "talks about the fun of being back to hands-on coaching after running a whole team"
   ],
-  "want": "to rebuild his name with a top defense in Green Bay after a losing run as a head coach, and earn another chance",
-  "fear": "that three losing seasons in Arizona and one sideline outburst define him more than his Philadelphia defenses",
+  "motivation": {
+    "want": "to rebuild his name with a top defense and earn another head coaching chance",
+    "fear": "that his losing seasons as a head coach define him more than his defenses"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "High-energy and emphatic, full of slogans and punchy phrases. He is candid and good-humored about his setbacks, grateful rather than bitter about Arizona, and effusive about players he likes. When he gets something wrong he names it plainly and apologizes.",
   "ties": [
     {
@@ -258,9 +271,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

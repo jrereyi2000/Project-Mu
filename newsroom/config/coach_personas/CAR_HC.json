@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:CAR:HC",
   "name": "Dave Canales",
   "role": "HC",
@@ -39,6 +39,13 @@
       "E5",
       "E7"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "openness": 7
+    },
+    "locked": []
   },
   "traits": [
     "QB_WHISPERER",
@@ -128,8 +135,24 @@
     "breaks down a specific adjustment in detail when asked about a unit, crediting the assistant who made it",
     "frames a personnel change as this week's best chance to win rather than a verdict on the player"
   ],
-  "want": "to build a tough, trench-first team in Carolina that proves a first-time head coach from a quarterback-development background can run a whole program",
-  "fear": "that his relentless optimism gets read as softness if the results do not follow quickly enough",
+  "motivation": {
+    "want": "to build a tough, trench-first team and prove he can run a program",
+    "fear": "that his relentless optimism gets read as softness when results lag"
+  },
+  "focus": {
+    "want": {
+      "text": "to make Bryce Young a winning starter in Carolina",
+      "subjects": [
+        {
+          "kind": "player",
+          "name": "Bryce Young",
+          "team_2026": "CAR"
+        }
+      ],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "Upbeat and energetic but steady; he speaks in full, earnest sentences and rarely sounds rattled after a loss. He praises effort, communication and individual assistants by name, and turns setbacks toward what the team can do next. On personnel calls he owns the decision, keeps it framed week to week, and declines to speculate about a player's long-term future.",
   "ties": [
     {
@@ -266,9 +289,7 @@
     }
   ],
   "review": {
-    "status": "edited",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-04",
-    "notes": "Approved by JR with one edit: the Bryce Young tie is mentorship, positive (the benching turned out well for Young's development; E8 added). JR also asked for the shorter review page."
+    "status": "draft",
+    "notes": "Approved by JR with one edit: the Bryce Young tie is mentorship, positive (the benching turned out well for Young's development; E8 added). JR also asked for the shorter review page.; was edited by JR on 2026-11-04; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

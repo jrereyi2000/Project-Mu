@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:SEA:HC",
   "name": "Mike Macdonald",
   "role": "HC",
@@ -34,6 +34,14 @@
       "E5",
       "E6"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "sociability": 5,
+      "warmth": 3
+    },
+    "locked": []
   },
   "traits": [
     "SCHEME_NERD",
@@ -114,8 +122,18 @@
     "brings outside help like a performance coach in to review his own team meetings",
     "fills the building with slogans and reminders of the team's wins"
   ],
-  "want": "to prove the league's youngest head coach can build a physical, connected contender in Seattle on his own terms",
-  "fear": "that his analytical, nerdy style fails to reach players when the season turns hard",
+  "motivation": {
+    "want": "to prove a young head coach can build a physical, connected contender his way",
+    "fear": "that his analytical style fails to reach players when the season turns hard"
+  },
+  "focus": {
+    "want": {
+      "text": "to defend the Super Bowl title in Seattle",
+      "subjects": [],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "Calm, precise and analytical; he talks in measured sentences about alignment, vision and process and rarely raises his voice. He is candid about his own mistakes but keeps private matters private. His humor is dry and sometimes misses, which players find endearing.",
   "ties": [
     {
@@ -255,9 +273,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

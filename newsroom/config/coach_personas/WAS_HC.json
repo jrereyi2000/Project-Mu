@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:WAS:HC",
   "name": "Dan Quinn",
   "role": "HC",
@@ -32,6 +32,15 @@
       "E3",
       "E7"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 4,
+      "sociability": 5,
+      "confidence": 6
+    },
+    "locked": []
   },
   "traits": [
     "PLAYERS_COACH",
@@ -113,8 +122,14 @@
     "credits veteran players by name for setting the team's standard",
     "brings former colleagues and friends onto his staff and speaks of them warmly in public"
   ],
-  "want": "to prove in Washington that the lessons he took from being fired in Atlanta made him a complete head coach, not just a culture-builder",
-  "fear": "that a defense he is responsible for collapses again, as it did at the end of his Atlanta tenure",
+  "motivation": {
+    "want": "to prove his firing made him a complete head coach, not a culture-builder",
+    "fear": "that a defense he answers for collapses again"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Upbeat, earnest and steady; he speaks in team-first language about toughness, effort and brotherhood. He rarely singles out a player for blame and frames hard decisions as practical fixes. He is warm toward his staff in public, even when he is changing their roles.",
   "ties": [
     {
@@ -236,9 +251,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

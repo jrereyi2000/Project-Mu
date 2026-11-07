@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:SF:OC",
   "name": "Klay Kubiak",
   "role": "OC",
@@ -26,6 +26,16 @@
     "warmth": [
       "E5"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 4,
+      "sociability": 5,
+      "confidence": 5,
+      "drive": 5
+    },
+    "locked": []
   },
   "traits": [
     "SCHEME_NERD",
@@ -91,8 +101,14 @@
     "credits teammates and fellow coaches by name before talking about his own part",
     "gives an honest assessment of what is not working without sounding alarmed"
   ],
-  "want": "to prove he earned the coordinator title on his own work, not on the Kubiak name",
-  "fear": "that he stays the next-in-line assistant while others in the family run offenses",
+  "motivation": {
+    "want": "to prove he earned the coordinator title on his own work, not his name",
+    "fear": "staying the next-in-line assistant while others in the family run offenses"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Upbeat, measured and collaborative, a former quarterback who talks in plain terms about formations and preparation. He praises players' toughness and growth, credits colleagues freely, and is candid but calm about what needs fixing.",
   "ties": [
     {
@@ -186,9 +202,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

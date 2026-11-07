@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:PHI:HC",
   "name": "Nick Sirianni",
   "role": "HC",
@@ -32,6 +32,15 @@
       "E4",
       "E5"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "sociability": 5,
+      "openness": 5,
+      "drive": 5
+    },
+    "locked": []
   },
   "traits": [
     "TEACHER",
@@ -112,8 +121,14 @@
     "volunteers that a failed decision was his call, naming the play",
     "gets into it with opposing fans or former players in the heat of a game, then apologizes afterward"
   ],
-  "want": "to be judged by his record and his rings rather than by how he acts on the sideline",
-  "fear": "that one outburst too many turns him into a punchline and overshadows the winning",
+  "motivation": {
+    "want": "to be judged by his record and his rings, not his sideline manner",
+    "fear": "that one outburst too many makes him a punchline"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Fast, animated and emotional; he talks with his hands, repeats himself for emphasis and does not hide his feelings. He defends his players and coordinators reflexively and takes blame for calls himself. When he crosses a line he says so plainly and apologizes, but he will not apologize for having fun.",
   "ties": [
     {
@@ -207,9 +222,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

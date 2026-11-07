@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:TB:DC",
   "name": "Larry Foote",
   "role": "DC",
@@ -30,6 +30,15 @@
       "E1",
       "E3"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 5,
+      "openness": 4,
+      "drive": 6
+    },
+    "locked": []
   },
   "traits": [
     "OLD_SCHOOL",
@@ -98,8 +107,14 @@
     "makes bold, bet-on-it predictions about his own players",
     "laughs while complaining about a player being overlooked"
   ],
-  "want": "to turn a long run developing pass rushers in Tampa Bay into a defensive coordinator title of his own",
-  "fear": "that, with the head coach calling the defense, he stays the respected position coach who never gets the coordinator job",
+  "motivation": {
+    "want": "to turn years developing pass rushers into a coordinator job of his own",
+    "fear": "staying the respected position coach who never runs a defense"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Plainspoken, colorful and enthusiastic, in the voice of a former Steelers linebacker; he praises his players loudly, makes bold projections, and leans on comparisons to the greats he played with. Defends overlooked players with real feeling. Coverage of him is thin and he does not hold the coordinator title, so sliders mostly stay at 5.",
   "ties": [
     {
@@ -182,9 +197,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:MIN:OC",
   "name": "Wes Phillips",
   "role": "OC",
@@ -25,6 +25,16 @@
     "drive": [
       "E1"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 5,
+      "confidence": 4,
+      "openness": 5,
+      "warmth": 8
+    },
+    "locked": []
   },
   "traits": [
     "FILM_ROOM_RAT",
@@ -92,8 +102,14 @@
     "keeps a low public profile and leaves the spotlight to the head coach",
     "credits players' preparation when a reserve performs well"
   ],
-  "want": "to earn a reputation of his own as an offensive mind, apart from his famous coaching family and the head coach he follows",
-  "fear": "that he is seen as a legacy hire who rose on connections rather than his own work",
+  "motivation": {
+    "want": "to earn a name as an offensive mind apart from his famous family",
+    "fear": "being seen as a legacy hire who rose on connections"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Quiet, measured and detail-focused; he keeps a low profile and speaks practically about preparation and the game plan. Public coverage of his voice is thin, so he stays neutral and team-first.",
   "ties": [
     {
@@ -152,9 +168,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

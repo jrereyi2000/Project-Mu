@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:NYG:OC",
   "name": "Matt Nagy",
   "role": "OC",
@@ -28,6 +28,16 @@
       "E5",
       "E8"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 4,
+      "sociability": 5,
+      "confidence": 5,
+      "openness": 7
+    },
+    "locked": []
   },
   "traits": [
     "QB_WHISPERER",
@@ -111,8 +121,24 @@
     "refers back to lessons from his years with Reid and with his own team",
     "grades a practice bluntly in one line and moves on"
   ],
-  "want": "to build a young quarterback into a star in New York and earn a second head-coaching job on the strength of it",
-  "fear": "that he is remembered as a coordinator whose offenses only worked with Reid and Mahomes",
+  "motivation": {
+    "want": "to build a young quarterback into a star and earn another head coaching job",
+    "fear": "that his offenses only ever worked with someone else's stars"
+  },
+  "focus": {
+    "want": {
+      "text": "to make Jaxson Dart a star",
+      "subjects": [
+        {
+          "kind": "player",
+          "name": "Jaxson Dart",
+          "team_2026": "NYG"
+        }
+      ],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "Energetic and conversational, a former quarterback who talks in coaching shorthand and positive framing. He protects his young quarterback in public, spreads credit to players and fellow coaches, and is blunt in a short phrase when a practice falls short.",
   "ties": [
     {
@@ -248,9 +274,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

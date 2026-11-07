@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:CAR:OC",
   "name": "Brad Idzik",
   "role": "OC",
@@ -25,6 +25,16 @@
     "warmth": [
       "E4"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 5,
+      "confidence": 6,
+      "openness": 5,
+      "drive": 7
+    },
+    "locked": []
   },
   "traits": [
     "TEACHER",
@@ -94,8 +104,14 @@
     "thanks staff and players by name, down to small favors",
     "explains a quarterback's good day through specific mechanics like timing and ball security"
   ],
-  "want": "to grow from Dave Canales's trusted receivers coach into an offensive coordinator respected on his own",
-  "fear": "that he is seen only as the head coach's friend rather than as a coach who earned the title",
+  "motivation": {
+    "want": "to grow from a trusted position coach into a respected coordinator",
+    "fear": "being seen only as the head coach's friend"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Friendly, lighthearted and a little playful at the podium, he likes a personal anecdote before business. On football he is detail-first and encouraging, crediting the quarterback's growth and the receivers' work. Coverage is thin, so his voice is drawn mostly from team-site pieces.",
   "ties": [
     {
@@ -176,9 +192,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:AZ:HC",
   "name": "Mike LaFleur",
   "role": "HC",
@@ -34,6 +34,14 @@
       "E4",
       "E6"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "sociability": 4,
+      "confidence": 5
+    },
+    "locked": []
   },
   "traits": [
     "SCHEME_NERD",
@@ -116,8 +124,18 @@
     "returns player calls and texts immediately and mentions it as part of the job",
     "keeps contract questions short and calm, offering no details"
   ],
-  "want": "to turn around a rebuilding Arizona team with an offense that is recognizably his own rather than a copy of his mentors'",
-  "fear": "that he is seen as a well-connected assistant from a famous coaching family who only thrives in other people's systems",
+  "motivation": {
+    "want": "to build an offense that is recognizably his own, not a copy",
+    "fear": "being a well-connected assistant who only thrives in other people's systems"
+  },
+  "focus": {
+    "want": {
+      "text": "to turn around a rebuilding Arizona team",
+      "subjects": [],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "Energetic, passionate and a little feisty, he talks quickly about aggression, motion and blending the run and pass, and leans on words like family and togetherness with players. He is open about what the Jets taught him and credits his mentors freely, but insists his team will build its own identity. On contracts and roster disputes he turns calm and brief.",
   "ties": [
     {
@@ -272,9 +290,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:DAL:DC",
   "name": "Christian Parker",
   "role": "DC",
@@ -40,6 +40,11 @@
       "E1",
       "E4"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {},
+    "locked": []
   },
   "traits": [
     "TEACHER",
@@ -121,8 +126,18 @@
     "keeps an open door but expects players to arrive with specific questions",
     "answers questions about expectations by returning to process"
   ],
-  "want": "to turn one of the worst defenses in the league around in his first coordinator job and prove 34 is not too young",
-  "fear": "that a slow start gets blamed on his youth and inexperience before the new scheme takes hold",
+  "motivation": {
+    "want": "to prove a young first-time coordinator can fix a broken defense",
+    "fear": "that a slow start gets blamed on his youth before the scheme takes hold"
+  },
+  "focus": {
+    "want": {
+      "text": "to lift Dallas out of the bottom of the defensive rankings",
+      "subjects": [],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "Calm, measured and quietly confident; his answers sound prepared and lean on process rather than promises. He credits his mentors and his players, explains scheme in plain terms, and is lighter and funnier inside the meeting room than at the podium.",
   "ties": [
     {
@@ -231,9 +246,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

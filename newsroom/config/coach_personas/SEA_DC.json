@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:SEA:DC",
   "name": "Aden Durde",
   "role": "DC",
@@ -30,6 +30,15 @@
       "E2",
       "E4"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "sociability": 6,
+      "confidence": 5,
+      "drive": 6
+    },
+    "locked": []
   },
   "traits": [
     "TEACHER",
@@ -97,8 +106,14 @@
     "slips British expressions into football talk with his players",
     "plays down his trailblazing status and steers back to the work"
   ],
-  "want": "to earn his own play-calling job and keep widening the path into the NFL for players and coaches from outside America",
-  "fear": "that working beside a head coach who calls the defense keeps his own contribution unseen",
+  "motivation": {
+    "want": "to call his own defense and widen the path for coaches from abroad",
+    "fear": "that working beside a play-calling head coach keeps his work unseen"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Low-key, warm and direct, with a London accent and an easy manner. He talks about learning, support and the head coach's vision rather than himself, and stays calm and forward-looking. Colleagues describe him as transparent and straight with everyone.",
   "ties": [
     {
@@ -207,9 +222,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

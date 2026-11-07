@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:WAS:DC",
   "name": "Daronte Jones",
   "role": "DC",
@@ -29,6 +29,15 @@
     "sociability": [
       "E4"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 5,
+      "confidence": 5,
+      "warmth": 7
+    },
+    "locked": []
   },
   "traits": [
     "TEACHER",
@@ -105,8 +114,18 @@
     "mentions his hometown roots when talking about the job",
     "talks about lesson plans like a schoolteacher"
   ],
-  "want": "to turn his hometown team's last-ranked defense into a disguised, aggressive unit in his first NFL play-calling job",
-  "fear": "that his first season calling an NFL defense exposes his inexperience in front of the fans he grew up with",
+  "motivation": {
+    "want": "to build a disguised, aggressive defense in his first play-calling job",
+    "fear": "that his inexperience shows in front of the fans he grew up with"
+  },
+  "focus": {
+    "want": {
+      "text": "to lift his hometown team's last-ranked defense",
+      "subjects": [],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "Measured, private about scheme and teacher-like; he speaks about communication, technique and learning styles and gives little away about alignments. Proud of his long climb and his local roots, he credits mentors and keeps expectations framed as steady growth. Personality coverage is thin.",
   "ties": [
     {
@@ -221,9 +240,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

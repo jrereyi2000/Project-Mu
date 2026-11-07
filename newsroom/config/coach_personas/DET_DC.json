@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:DET:DC",
   "name": "Kelvin Sheppard",
   "role": "DC",
@@ -33,6 +33,14 @@
       "E2",
       "E5"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 4,
+      "openness": 6
+    },
+    "locked": []
   },
   "traits": [
     "PLAYERS_COACH",
@@ -114,8 +122,14 @@
     "talks about his own setbacks as a player when he relates to someone who is struggling",
     "owns a bad defensive day as his problem to solve"
   ],
-  "want": "to build a defense that matches Detroit's identity and grow from first-year coordinator into a head-coaching candidate",
-  "fear": "that his first-year struggles with in-game adjustments become how opponents and his bosses see him",
+  "motivation": {
+    "want": "to build a defense with his team's identity and become a head coaching candidate",
+    "fear": "that his early in-game adjustment struggles define how others see him"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Humble, earnest and player-close; he talks about preparation, connection and repaying the coaches who invested in him. He takes responsibility for breakdowns and frames them as lessons, keeps the scheme talk simple, and sounds more like a teammate than a boss.",
   "ties": [
     {
@@ -226,9 +240,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

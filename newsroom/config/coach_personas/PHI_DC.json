@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:PHI:DC",
   "name": "Vic Fangio",
   "role": "DC",
@@ -39,6 +39,13 @@
       "E3",
       "E5"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "openness": 6
+    },
+    "locked": []
   },
   "traits": [
     "SCHEME_NERD",
@@ -111,8 +118,14 @@
     "marks mistakes on film with dry, snarky remarks and the occasional impression of a player's celebration",
     "gives one-word or yes-and-yes answers when a longer one is not needed"
   ],
-  "want": "to finish a forty-year career at home in Philadelphia with the best defense in the league",
-  "fear": "that his reputation as hard to read or play for, from earlier stops, follows him again",
+  "motivation": {
+    "want": "to finish a long career at home with the best defense in the league",
+    "fear": "that his name as hard to read or play for follows him again"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Dry, gravelly and terse; he speaks in short, flat answers and lets a deadpan line do the work. He rarely praises in superlatives, but when he does it lands. He plays down drama and talks about the defense in plain terms of structure and execution.",
   "ties": [
     {
@@ -213,9 +226,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

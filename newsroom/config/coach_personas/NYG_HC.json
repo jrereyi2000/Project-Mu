@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:NYG:HC",
   "name": "John Harbaugh",
   "role": "HC",
@@ -38,6 +38,14 @@
       "E6",
       "E11"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 5,
+      "sociability": 4
+    },
+    "locked": []
   },
   "traits": [
     "ANALYTICS_BELIEVER",
@@ -130,8 +138,28 @@
     "consults a player leadership group and says so publicly",
     "insists he was not angry after sending a player off the practice field"
   ],
-  "want": "to win a championship in New York and prove his long Baltimore run was about his program, not one place",
-  "fear": "that his firing in Baltimore is the last word on him if the Giants' young core does not take off",
+  "motivation": {
+    "want": "to prove his long success was about his program, not one place",
+    "fear": "that his firing is the last word on him"
+  },
+  "focus": {
+    "want": {
+      "text": "a championship in New York with Jaxson Dart",
+      "subjects": [
+        {
+          "kind": "player",
+          "name": "Jaxson Dart",
+          "team_2026": "NYG"
+        }
+      ],
+      "until_season": null
+    },
+    "fear": {
+      "text": "that the Giants' young core never takes off",
+      "subjects": [],
+      "until_season": null
+    }
+  },
   "voice": "Confident, energetic and expansive; he explains decisions at length and stands by them, citing both the numbers and the feel of the game. He is enthusiastic about the challenge, protective of his players, and opens decisions up to player leaders while keeping a hard edge on effort and discipline.",
   "ties": [
     {
@@ -333,9 +361,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

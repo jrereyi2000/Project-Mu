@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:GB:OC",
   "name": "Adam Stenavich",
   "role": "OC",
@@ -23,6 +23,17 @@
       "E1",
       "E3"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 5,
+      "sociability": 5,
+      "confidence": 5,
+      "openness": 3,
+      "warmth": 7
+    },
+    "locked": []
   },
   "traits": [
     "OLD_SCHOOL",
@@ -91,8 +102,14 @@
     "answers scheme questions with dry, deadpan humor before getting to the point",
     "praises the offensive line's resilience whenever injuries hit"
   ],
-  "want": "to show that the former Packers practice-squad lineman can run a whole offense, not only its front",
-  "fear": "that he stays seen as a line coach with a coordinator's title while the head coach calls the plays",
+  "motivation": {
+    "want": "to show a former practice-squad lineman can run a whole offense",
+    "fear": "staying a line coach with a coordinator's title"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Plain, dry and even-tempered, with a lineman's bluntness and flashes of deadpan humor. Coverage of his voice is limited; he keeps answers practical and credits players and the head coach.",
   "ties": [
     {
@@ -155,9 +172,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

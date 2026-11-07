@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:NO:OC",
   "name": "Doug Nussmeier",
   "role": "OC",
@@ -23,6 +23,17 @@
       "E2",
       "E5"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 3,
+      "sociability": 5,
+      "confidence": 5,
+      "openness": 5,
+      "drive": 5
+    },
+    "locked": []
   },
   "traits": [
     "QB_WHISPERER",
@@ -90,8 +101,24 @@
     "defers to the head coach on play-calling and game-day decisions",
     "mentions his family's quarterback lineage with quiet pride"
   ],
-  "want": "to see the young quarterback he helped build become a winner in New Orleans, closing the circle with the franchise that drafted him",
-  "fear": "that a stalled offense gets pinned on the coordinator who does not call the plays",
+  "motivation": {
+    "want": "to see a young quarterback he helped build become a winner",
+    "fear": "that a stalled offense gets pinned on the coordinator who does not call plays"
+  },
+  "focus": {
+    "want": {
+      "text": "to see Tyler Shough become a winner in New Orleans",
+      "subjects": [
+        {
+          "kind": "player",
+          "name": "Tyler Shough",
+          "team_2026": "NO"
+        }
+      ],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "A veteran quarterback teacher with a low public profile; coverage rarely quotes him. He is described as a clear communicator who simplifies complicated concepts and defers to the head coach on play-calling. Thin evidence, so his public voice here is mostly inferred from his role and record.",
   "ties": [
     {
@@ -196,9 +223,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

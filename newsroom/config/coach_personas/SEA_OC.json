@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:SEA:OC",
   "name": "Brian Fleury",
   "role": "OC",
@@ -34,6 +34,14 @@
       "E3",
       "E4"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "sociability": 5,
+      "warmth": 5
+    },
+    "locked": []
   },
   "traits": [
     "SCHEME_NERD",
@@ -110,8 +118,18 @@
     "answers good and bad plays in the same even tone",
     "calls himself an ordinary college backup when asked about his background"
   ],
-  "want": "to keep a Super Bowl champion offense on top in his first job calling plays",
-  "fear": "that the offense slips after its play-caller left and the drop is blamed on the new voice",
+  "motivation": {
+    "want": "to prove a first-time play-caller can keep an offense on top",
+    "fear": "that a drop in the offense gets blamed on the new voice"
+  },
+  "focus": {
+    "want": {
+      "text": "to keep a Super Bowl champion's offense on top",
+      "subjects": [],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "Steady, businesslike and precise; he talks about preparation, situations and post-snap detail, and his tone does not change with results. Self-deprecating about his playing days and quick to credit the existing staff and players. First season calling plays, so mostly plans rather than track record.",
   "ties": [
     {
@@ -219,9 +237,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

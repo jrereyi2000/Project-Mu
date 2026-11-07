@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:DAL:OC",
   "name": "Klayton Adams",
   "role": "OC",
@@ -34,6 +34,14 @@
       "E4",
       "E5"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 5,
+      "sociability": 6
+    },
+    "locked": []
   },
   "traits": [
     "SCHEME_NERD",
@@ -108,8 +116,14 @@
     "talks blocking schemes in detail and credits the line coaches",
     "defers to the head coach on play calls without hesitation"
   ],
-  "want": "to show that an offensive line coach can run a whole offense and earn a head-coaching shot of his own",
-  "fear": "that the run game's revival gets credited entirely to the play-caller and the stars around him",
+  "motivation": {
+    "want": "to show an offensive line coach can run a whole offense",
+    "fear": "that credit for the run game goes to the play-caller and the stars"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Intense, focused and plainspoken, with a former center's vocabulary of physicality and edge. He frames the job as problem-solving, gives detailed answers on line play, defers to the head coach on calls without fuss, and treats good statistics as unfinished business.",
   "ties": [
     {
@@ -204,9 +218,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

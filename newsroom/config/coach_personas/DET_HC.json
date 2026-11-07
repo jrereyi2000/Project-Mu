@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:DET:HC",
   "name": "Dan Campbell",
   "role": "HC",
@@ -34,6 +34,14 @@
       "E1",
       "E4"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "openness": 5,
+      "drive": 5
+    },
+    "locked": []
   },
   "traits": [
     "QUOTABLE",
@@ -109,8 +117,18 @@
     "gets visibly emotional talking about mentors, players or a painful loss",
     "says he did not have the team ready when a big game goes wrong"
   ],
-  "want": "to bring a championship to the city he once played for and that had little to cheer for",
-  "fear": "that the aggressive identity he built gets blamed for the playoff losses that keep stopping his team",
+  "motivation": {
+    "want": "to bring a championship to the city he once played for",
+    "fear": "that his aggressive identity gets blamed for every playoff loss"
+  },
+  "focus": {
+    "want": null,
+    "fear": {
+      "text": "that the playoff losses keep stopping a contender",
+      "subjects": [],
+      "until_season": null
+    }
+  },
   "voice": "Loud, emotional and funny; he talks in blue-collar images, swings between intensity and jokes, and does not hide tears or anger. He takes the blame for losses himself, backs his players publicly, and talks about his staff like family. On fourth-down calls he is unapologetic.",
   "ties": [
     {
@@ -204,9 +222,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }
