@@ -217,3 +217,28 @@ def test_coach_kind_is_still_the_default(tmp_path, capsys):
     assert tool.main(['validate', '--dir', str(tmp_path)]) == 0
     assert 'coach:CAR:HC: ok' in capsys.readouterr().out
     assert deepcopy(profile())['key'] == 'owner:CAR'
+
+
+# ------------------------------------------------- v2 schema (INFERRED_SLIDERS_AND_FOCUS_PLAN.md §2.1, §4) ---
+
+def test_owner_v2_validates_and_overlays():
+    from personality import slider_inference as si
+    d = cp.convert_v2(profile(), op.SCHEMA_VERSION_V2, today='2026-11-07')
+    assert d['schema_version'] == 'owner-profile-v2'
+    assert op.validate_profile_file(d) == []
+    assert op.validate_profile_file(profile()) == []
+    d['review'] = {'status': 'approved', 'reviewer': 'JR', 'reviewed_at': '2026-11-07', 'notes': None}
+    vals = op.core_initial_values(d)
+    for s in d['slider_inference']['values']:
+        assert si.is_inferred(vals['evidence']['slider:' + s])
+    assert sum(vals['sliders'].values()) in range(24, 37)
+    p = op.persona_for(d)
+    assert p['want'] == profile()['want'] and 'focus_want' not in p
+    d['focus'] = {'want': {'text': 'a title with ' + 'Bryce Young', 'subjects': [
+        {'kind': 'player', 'name': 'Bryce Young', 'team_2026': 'CAR'}], 'until_season': None}, 'fear': None}
+    assert op.validate_profile_file(d) == []
+    d['motivation']['want'] = 'to see Young win it all'
+    assert has(op.validate_profile_file(d), 'names Bryce Young')
+    d = cp.convert_v2(profile(), op.SCHEMA_VERSION, today='2026-11-07')
+    assert has(op.validate_profile_file(d), 'unknown fields')
+

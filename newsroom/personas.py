@@ -813,7 +813,8 @@ def render_persona(persona, fmt: str = "ARTICLE", tags: set = frozenset(), seed:
                    recent_texts: list = (), recent_headlines: list = (), traits: dict = None) -> str:
     """The ROLE & PERSONA block for one piece. fmt is ARTICLE or POST. A plain string persona passes through.
     An optional `change_notes` list (newest first, personality.evolution.change_notes) shows its first
-    MAX_CHANGE_NOTES under the voice."""
+    MAX_CHANGE_NOTES under the voice. Optional `focus_want`/`focus_fear` (v2 coach and owner profiles) add
+    "and right now <focus>" to the background line; without them the line is unchanged."""
     if isinstance(persona, str):
         return persona
     if traits is None:
@@ -862,7 +863,14 @@ def render_persona(persona, fmt: str = "ARTICLE", tags: set = frozenset(), seed:
         out.append("USED IN YOUR LAST FEW PIECES (leave these out this time):\n"
                    + "\n".join(f"- {sigs[i]['text']}" for i in sorted(used)))
 
-    if persona.get("want") or persona.get("fear"):
+    if persona.get("focus_want") or persona.get("focus_fear"):
+        # v2 real coach/owner profiles: durable motivation plus the current focus (INFERRED_SLIDERS_AND_FOCUS_PLAN §2.8)
+        def _slot(slot):
+            text = f"you {slot} {persona.get(slot, '').rstrip('.')}"
+            focus = (persona.get(f"focus_{slot}") or "").strip().rstrip(".")
+            return f"{text}, and right now {focus}" if focus else text
+        out.append(f"IN THE BACKGROUND (motivation only; do not state it): {_slot('want')}; {_slot('fear')}.")
+    elif persona.get("want") or persona.get("fear"):
         out.append("IN THE BACKGROUND (motivation only; do not state it): "
                    f"you want {persona.get('want', '').rstrip('.')}; you fear {persona.get('fear', '').rstrip('.')}.")
 

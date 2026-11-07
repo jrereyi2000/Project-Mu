@@ -1,6 +1,7 @@
 """Reviewed real-inspired owner profiles (docs/in_progress/OWNERS_SCOUTS_VOTERS_PLAN.md §2.1-§2.2).
 
-One file per team in newsroom/config/owner_personas/<TEAM>.json (schema `owner-profile-v1`): the coach-profile
+One file per team in newsroom/config/owner_personas/<TEAM>.json (schema `owner-profile-v1`, or `owner-profile-v2`
+with motivation, focus and slider_inference as in coach_profiles; INFERRED_SLIDERS_AND_FOCUS_PLAN §2.1): the coach-profile
 schema (personality/coach_profiles.py, REAL_COACH_PROFILES_PLAN §2.1) with role OWNER, key `owner:<TEAM>` and a
 seed_ref into OWNERS_DATA below. Each owner is a fictional character inspired by the real controlling owner as of
 the eve of the 2026 season (2026-09-08). Pure apart from reading files: no database, network or model calls.
@@ -29,6 +30,8 @@ from personality import core
 from personality import relationship_events as rev
 
 SCHEMA_VERSION = 'owner-profile-v1'
+SCHEMA_VERSION_V2 = 'owner-profile-v2'
+SCHEMA_VERSIONS = (SCHEMA_VERSION, SCHEMA_VERSION_V2)
 SOURCE_CUTOFF = cp.SOURCE_CUTOFF   # eve of the 2026 opener (Sep 9, 2026), JR 2026-11-06
 PROFILE_DIR = 'newsroom/config/owner_personas'
 ROLE = 'OWNER'
@@ -36,6 +39,7 @@ TABLE = 'OWNERS_DATA'
 START_SEASON = cp.START_SEASON
 TIE_KINDS = cp.TIE_KINDS
 FIELDS = cp.FIELDS
+V2_FIELDS = cp.V2_FIELDS
 
 # (team, owner as of 2026-09-08, first season as controlling/principal owner or, for Green Bay, as president).
 # Checked by JR on review; the profile files cite the sources.
@@ -132,26 +136,7 @@ def _check_identity(doc, index, errors):
 
 
 def _check_sliders(doc, evidence, errors):
-    sliders = doc.get('sliders')
-    slider_ev = doc.get('slider_evidence') or {}
-    if not isinstance(slider_ev, dict):
-        errors.append('slider_evidence must be an object')
-        slider_ev = {}
-    if (not isinstance(sliders, dict) or set(sliders) != set(legacy.SLIDERS)
-            or any(type(v) is not int or not 0 <= v <= 10 for v in sliders.values())):
-        errors.append(f'sliders must be the six {list(legacy.SLIDERS)}, integers 0-10')
-        sliders = None
-    else:
-        total = sum(sliders.values())
-        if not cp.SLIDER_RANGE[0] <= total <= cp.SLIDER_RANGE[1]:
-            errors.append(f'slider total {total} is outside {cp.SLIDER_RANGE[0]}-{cp.SLIDER_RANGE[1]}')
-        for s in legacy.SLIDERS:
-            if sliders[s] != 5 or s in slider_ev:
-                cp._check_citations(slider_ev.get(s), f'slider {s}={sliders[s]}', evidence, errors, strong=True)
-    for s in slider_ev:
-        if s not in legacy.SLIDERS:
-            errors.append(f'slider_evidence names unknown slider {s!r}')
-    return sliders
+    return cp.check_sliders(doc, evidence, errors)
 
 
 def _check_traits(doc, evidence, catalogue, sliders, errors):
@@ -213,9 +198,7 @@ def _check_text(doc, evidence, errors):
     for i, s in enumerate(sigs if isinstance(sigs, list) else []):
         if not (cp._nonempty(s) or (isinstance(s, dict) and cp._nonempty(s.get('text')))):
             errors.append(f'signatures[{i}] needs text')
-    for f in ('want', 'fear', 'voice'):
-        if not cp._nonempty(doc.get(f)):
-            errors.append(f'{f} must be nonempty')
+    cp.check_motives(doc, errors)
     cp._check_quotes(doc, evidence, errors)
 
 
@@ -254,11 +237,7 @@ def validate_profile_file(doc, *, catalogue=None, index=None, coach_index=None) 
     index = owner_index() if index is None else index
     coach_index = cp.seed_index() if coach_index is None else coach_index
     errors = []
-    if doc.get('schema_version') != SCHEMA_VERSION:
-        errors.append(f'schema_version must be {SCHEMA_VERSION}')
-    unknown = sorted(k for k in doc if k not in FIELDS and not k.startswith('_'))
-    if unknown:
-        errors.append(f'unknown fields {unknown}')
+    cp.check_schema(doc, SCHEMA_VERSIONS, errors)
     _check_identity(doc, index, errors)
     evidence = cp._check_evidence(doc, errors)
     sliders = _check_sliders(doc, evidence, errors)
