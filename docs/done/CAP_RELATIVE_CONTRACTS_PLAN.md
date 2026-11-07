@@ -9,7 +9,7 @@ As built:
 - **Extra edits (U3):** PERSONALITY_PLAN §5.2's stale exact-30 sentence rewritten; the `#debug` API budget-message test updated.
 - **Career earnings (U2):** deals are grouped on `(player_id, team_id, signed, length)` only (R4), so restructures and a TRANSACTION row followed by the next season's SCAN of the same deal stay one deal; a TRADED row doesn't cut a deal. On `madden_2036` 2036: 1,777 players, 86 secure, 521 not secure, 1,170 unknown, 522 complete. A deal first seen mid-term is back-dated at its full APY, so big recent extensions can overstate early seasons. The spec section is §2.17e, as planned.
 - **Base (all units):** worktrees start from `origin/main` (`140a7a9`, not on local main); each unit reset its fresh branch to `1d95a9d` first. The first attempts stopped at the base check without changes.
-**Builds on:** PROJECT_SPEC §2.17 (trade value, market worth), §2.17a (contracts engine), §2.17b (free agency), §7.11 (personas); [`PERSONALITY_PLAN.md`](../in_progress/PERSONALITY_PLAN.md) §4–§6 and §10; [`PERSONALITY_GENERATED_EFFECTS_DESIGN.md`](../in_progress/PERSONALITY_GENERATED_EFFECTS_DESIGN.md) §2 and §5. Comes out of JR's review of a Gemini conversation (`Gemini_NFL-Finances-and-Contender-Dynamics_20261031-1900.pdf`, repo root) on 2026-10-31.
+**Builds on:** PROJECT_SPEC §2.17 (trade value, market worth), §2.17a (contracts engine), §2.17b (free agency), §7.11 (personas); [`PERSONALITY_PLAN.md`](../in_progress/PERSONALITY_PLAN.md) §4–§6 and §10; [`PERSONALITY_GENERATED_EFFECTS_DESIGN.md`](../reference/PERSONALITY_GENERATED_EFFECTS_DESIGN.md) §2 and §5. Comes out of JR's review of a Gemini conversation (`Gemini_NFL-Finances-and-Contender-Dynamics_20261031-1900.pdf`, repo root) on 2026-10-31.
 
 **Goal:** Contract prices should keep up with the salary cap over a long simulated run. Today the market worth `W` is fitted on cap hits of deals signed one to five years earlier, so asking prices trail the cap and nothing anchors them. This plan prices every veteran deal as a share of the cap in the season it was signed and converts that share to this season's cap. It adds a drift report so JR can watch the market over seasons. It adds a career-earnings ledger, measured in cap shares, as the input for the "financially secure" gate on strong ring chasing. It relaxes the persona slider total from exactly 30 to a 24–36 band. It updates the personality plan and design with what JR agreed after the Gemini review. Personality engine effects stay inactive.
 
@@ -194,7 +194,7 @@ Run with `pytest -m "not integration" tests/test_cap_history.py tests/test_trade
 
 Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this plan, `CLAUDE.md`.
 
-**Before wave 1 (orchestrator, per §8 Q1):** commit the finished personality work as it stands, in one commit with no content changes: `personality/` (without `__pycache__/`), `db/migrations/2027_01_16_personality_core.sql`, `tests/test_personality_core.py`, `tests/test_personality_core_store.py`, `tools/personality_contract_demo.py`, `tests/test_personality_contract_demo.py`, `docs/in_progress/PERSONALITY_PLAN.md`, `docs/in_progress/PERSONALITY_GENERATED_EFFECTS_DESIGN.md` and `docs/in_progress/PERSONALITY_PANTHERS_SAMPLE.md`. The six new `docs/not_started/PERSONALITY_*_PLAN.md` files, and every other untracked or modified file, are left alone.
+**Before wave 1 (orchestrator, per §8 Q1):** commit the finished personality work as it stands, in one commit with no content changes: `personality/` (without `__pycache__/`), `db/migrations/2027_01_16_personality_core.sql`, `tests/test_personality_core.py`, `tests/test_personality_core_store.py`, `tools/personality_contract_demo.py`, `tests/test_personality_contract_demo.py`, `docs/in_progress/PERSONALITY_PLAN.md`, `docs/reference/PERSONALITY_GENERATED_EFFECTS_DESIGN.md` and `docs/reference/PERSONALITY_PANTHERS_SAMPLE.md`. The six new `docs/not_started/PERSONALITY_*_PLAN.md` files, and every other untracked or modified file, are left alone.
 
 ### U1: Cap-share market and drift report
 
@@ -214,7 +214,7 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 
 ### U3: Slider band, personality docs, coefficient guard
 
-- **Owns:** `newsroom/personas.py`, `db/migrations/2027_01_17_persona_slider_band.sql` (new), `db/init_db.sql`, `tests/test_personas.py`, `tests/test_personas_db.py`, `tests/test_personality_contract_demo.py`, `docs/in_progress/PERSONALITY_PLAN.md`, `docs/in_progress/PERSONALITY_GENERATED_EFFECTS_DESIGN.md`
+- **Owns:** `newsroom/personas.py`, `db/migrations/2027_01_17_persona_slider_band.sql` (new), `db/init_db.sql`, `tests/test_personas.py`, `tests/test_personas_db.py`, `tests/test_personality_contract_demo.py`, `docs/in_progress/PERSONALITY_PLAN.md`, `docs/reference/PERSONALITY_GENERATED_EFFECTS_DESIGN.md`
 - **Reads:** `tools/personality_contract_demo.py`, `engines/free_agency_engine.py` (`W_DEFAULT`), `server/debug_api.py:1197` (calls validation; no change), this plan §0 S8–S11 and §2.5–§2.6
 - **Depends on:** none (the pre-wave commit must exist)
 - **Done when:** validation, the migration and `init_db.sql` all accept totals 24–36; seeding is unchanged; both docs carry the §2.6 edits; the guard test passes.
@@ -234,7 +234,7 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 |---|---|
 | `db/init_db.sql` | U3 |
 | `db/migrations/2027_01_17_persona_slider_band.sql` | U3 |
-| `docs/in_progress/PERSONALITY_GENERATED_EFFECTS_DESIGN.md` | U3 |
+| `docs/reference/PERSONALITY_GENERATED_EFFECTS_DESIGN.md` | U3 |
 | `docs/in_progress/PERSONALITY_PLAN.md` | U3 |
 | `engines/cap_history.py` | U1 |
 | `engines/career_earnings.py` | U2 |
