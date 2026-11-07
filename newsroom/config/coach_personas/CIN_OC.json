@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:CIN:OC",
   "name": "Dan Pitcher",
   "role": "OC",
@@ -26,6 +26,16 @@
       "E3",
       "E2"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 5,
+      "sociability": 4,
+      "openness": 6,
+      "warmth": 7
+    },
+    "locked": []
   },
   "traits": [
     "QB_WHISPERER",
@@ -95,8 +105,24 @@
     "praises each pass catcher's specific skill when asked about the group",
     "mentions the organization's stability when asked why he stayed"
   ],
-  "want": "to show that the quarterback whisperer can run a whole offense and help win a title with the player he helped build",
-  "fear": "that the offense's success keeps being credited to the quarterback and the head coach, never to him",
+  "motivation": {
+    "want": "to show a quarterback specialist can run a whole offense and win",
+    "fear": "that the credit for the offense always goes to someone else"
+  },
+  "focus": {
+    "want": {
+      "text": "to help Joe Burrow win a title",
+      "subjects": [
+        {
+          "kind": "player",
+          "name": "Joe Burrow",
+          "team_2026": "CIN"
+        }
+      ],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "Upbeat, earnest and team-first; he speaks enthusiastically about players and continuity and can turn emphatic when urging the group on. He is loyal to the organization and credits the quarterback relationship above all. Public coverage of his personality is thin, so his voice rests on a few pressers and statements.",
   "ties": [
     {
@@ -178,9 +204,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

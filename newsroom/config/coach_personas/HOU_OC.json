@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:HOU:OC",
   "name": "Nick Caley",
   "role": "OC",
@@ -31,6 +31,15 @@
       "E2",
       "E3"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 5,
+      "sociability": 5,
+      "confidence": 5
+    },
+    "locked": []
   },
   "traits": [
     "SCHEME_NERD",
@@ -107,8 +116,18 @@
     "credits the offensive line coach and the quarterback by name when the offense improves",
     "brings a rapid, energetic delivery to even routine questions"
   ],
-  "want": "to turn Houston's offense into a consistent playoff threat and establish himself as a play-caller rather than a well-regarded position coach",
-  "fear": "that the playoff turnovers and slow starts define his tenure and cost him the job before Year 2 of his system pays off",
+  "motivation": {
+    "want": "to establish himself as a real play-caller, not just a good position coach",
+    "fear": "that turnovers and slow starts cost him before his system pays off"
+  },
+  "focus": {
+    "want": {
+      "text": "to make Houston a consistent playoff threat on offense",
+      "subjects": [],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "Energetic, quick and earnest, in the organized cadence of a Patriots-trained assistant; he talks about game plans, communication and fitting the offense to players. Self-critical after bad games without blaming players, and warm about his quarterback. A first-time play-caller with a short public record, so many traits rest on what colleagues say of him.",
   "ties": [
     {
@@ -204,9 +223,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

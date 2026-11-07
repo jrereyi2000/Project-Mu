@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:KC:HC",
   "name": "Andy Reid",
   "role": "HC",
@@ -33,6 +33,14 @@
     "drive": [
       "E2"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "sociability": 5,
+      "confidence": 5
+    },
+    "locked": []
   },
   "traits": [
     "PLAYERS_COACH",
@@ -121,8 +129,24 @@
     "slips a food reference or a dry one-liner into an otherwise short answer",
     "credits the quarterback or a young assistant for a play design while keeping the final say himself"
   ],
-  "want": "to keep the offense fresh enough that a long run of contention never goes stale, and to see the coaches he raised win on their own",
-  "fear": "that the game passes him by or the program loses its edge before he decides it is time to step away",
+  "motivation": {
+    "want": "to keep a long run of contention fresh and see his pupils win",
+    "fear": "that the game passes him by before he decides to step away"
+  },
+  "focus": {
+    "want": {
+      "text": "one more title with Patrick Mahomes",
+      "subjects": [
+        {
+          "kind": "player",
+          "name": "Patrick Mahomes",
+          "team_2026": "KC"
+        }
+      ],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "Unhurried and plain-spoken, with short answers that often trail into a wry aside. He almost never raises his voice in public, shoulders the blame for losses, and praises players and assistants by name. He deflects talk of retirement or legacy back to this week's game plan.",
   "ties": [
     {
@@ -235,9 +259,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

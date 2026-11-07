@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:HOU:HC",
   "name": "DeMeco Ryans",
   "role": "HC",
@@ -31,6 +31,15 @@
       "E2",
       "E3"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 6,
+      "confidence": 5,
+      "openness": 5
+    },
+    "locked": []
   },
   "traits": [
     "PLAYERS_COACH",
@@ -107,8 +116,14 @@
     "answers questions about effort with talk of a relentless mindset and playing for one another",
     "gives a direct, unvarnished assessment of a mistake, then turns to what the player does well"
   ],
-  "want": "to make the franchise he starred for as a player a perennial contender built on his relentless culture",
-  "fear": "that loyalty to the people he brought with him slows the hard calls a contender needs",
+  "motivation": {
+    "want": "to make his old team a perennial contender built on his culture",
+    "fear": "that loyalty to his own people slows the hard calls"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Energetic and sincere, with a former linebacker's directness; he speaks in short, positive sentences about effort, togetherness and character. He gives honest assessments without theatrics, praises players by name, and keeps personnel decisions framed as what is best for the team.",
   "ties": [
     {
@@ -236,9 +251,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

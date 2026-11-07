@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:NYJ:DC",
   "name": "Brian Duker",
   "role": "DC",
@@ -22,6 +22,17 @@
     "openness": [
       "E4"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 4,
+      "sociability": 5,
+      "confidence": 5,
+      "warmth": 7,
+      "drive": 5
+    },
+    "locked": []
   },
   "traits": [
     "LOYAL",
@@ -88,8 +99,14 @@
     "praises the head coach's defensive vision before describing his own role",
     "names the veteran leaders first when asked about the defense"
   ],
-  "want": "to grow from Glenn's long-time assistant into a recognized defensive mind with a defense of his own",
-  "fear": "that he stays defined as the head coach's helper with a vague role and no credit for the results",
+  "motivation": {
+    "want": "to grow into a recognized defensive mind with a defense of his own",
+    "fear": "staying defined as the head coach's helper with no credit"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Measured, respectful and cooperative; he defers to the head coach, speaks carefully about scheme in general terms, and highlights veteran players. Public coverage is thin.",
   "ties": [
     {
@@ -149,9 +166,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

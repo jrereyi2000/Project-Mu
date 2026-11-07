@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:CIN:DC",
   "name": "Al Golden",
   "role": "DC",
@@ -35,6 +35,14 @@
       "E2",
       "E3"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "sociability": 4,
+      "openness": 4
+    },
+    "locked": []
   },
   "traits": [
     "PERFECTIONIST",
@@ -117,8 +125,18 @@
     "answers a question about a bad unit with a plan of drills and checkpoints",
     "praises young linebackers by name when asked about the defense as a whole"
   ],
-  "want": "to rebuild Cincinnati's defense into a championship-level unit worthy of the team's quarterback",
-  "fear": "that a second poor season makes his college success and head-coaching past look like they do not translate",
+  "motivation": {
+    "want": "to build a championship-level defense worthy of his quarterback",
+    "fear": "that his college success and past jobs do not translate"
+  },
+  "focus": {
+    "want": null,
+    "fear": {
+      "text": "that a second poor season in Cincinnati costs him",
+      "subjects": [],
+      "until_season": null
+    }
+  },
   "voice": "Formal, frank and organized; he talks in standards, checkpoints and installation plans, and is candid about how far the unit has to go. He is demanding without theatrics, praises professionalism and hard work, and avoids public criticism of individual players.",
   "ties": [
     {
@@ -200,9 +218,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

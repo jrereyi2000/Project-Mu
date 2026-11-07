@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:NE:HC",
   "name": "Mike Vrabel",
   "role": "HC",
@@ -34,6 +34,14 @@
       "E4",
       "E6"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 5,
+      "openness": 4
+    },
+    "locked": []
   },
   "traits": [
     "PLAYERS_COACH",
@@ -122,8 +130,28 @@
     "declines to put timelines on contracts or injuries",
     "calls out a player in front of the group when effort slips, then moves on"
   ],
-  "want": "to turn one surprise Super Bowl run into a lasting contender built around Drake Maye, in the franchise where he won as a player",
-  "fear": "that his first-year run proves a peak rather than a foundation and the Super Bowl loss repeats",
+  "motivation": {
+    "want": "to build a lasting contender where he once won as a player",
+    "fear": "that his first big season proves a peak rather than a foundation"
+  },
+  "focus": {
+    "want": {
+      "text": "a lasting contender built around Drake Maye",
+      "subjects": [
+        {
+          "kind": "player",
+          "name": "Drake Maye",
+          "team_2026": "NE"
+        }
+      ],
+      "until_season": null
+    },
+    "fear": {
+      "text": "that the Super Bowl loss repeats itself",
+      "subjects": [],
+      "until_season": null
+    }
+  },
   "voice": "Direct and measured, with a dry sense of humor; approachable with players and blunt about standards. He avoids timelines and outside storylines, gives credit to the building, and speaks warmly about players as people while holding them to effort in public.",
   "ties": [
     {
@@ -236,9 +264,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

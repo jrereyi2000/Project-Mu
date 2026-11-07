@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:KC:OC",
   "name": "Eric Bieniemy",
   "role": "OC",
@@ -40,6 +40,13 @@
       "E1",
       "E2"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "openness": 5
+    },
+    "locked": []
   },
   "traits": [
     "DISCIPLINARIAN",
@@ -124,8 +131,14 @@
     "sends a whole unit off the field when it lines up wrong",
     "says he is the same person he always was when asked how he has changed"
   ],
-  "want": "to restore the detail and discipline of Kansas City's championship offenses and earn the head-coaching job that has eluded him",
-  "fear": "that his intensity is remembered more than his results, as it was in Washington",
+  "motivation": {
+    "want": "to restore a detailed, disciplined offense and earn a head coaching job",
+    "fear": "that his intensity is remembered more than his results"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Loud, direct and relentless on the field; in front of reporters he is energetic and plain-spoken, talking about standards, details and discipline. He frames his demands as care rather than anger, credits Reid warmly, and does not apologize for being hard on players.",
   "ties": [
     {
@@ -205,9 +218,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

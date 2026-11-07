@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:BAL:HC",
   "name": "Jesse Minter",
   "role": "HC",
@@ -36,6 +36,14 @@
       "E6",
       "E8"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 3,
+      "openness": 7
+    },
+    "locked": []
   },
   "traits": [
     "TEACHER",
@@ -127,8 +135,34 @@
     "says he will be his own coach rather than a copy of his mentors",
     "gathers the team after a practice scuffle and turns it into a talk about making each other better"
   ],
-  "want": "to build Baltimore into a tough, fundamentally sound contender that wins big games, with a quarterback who trusts him",
-  "fear": "that his partnership with the franchise quarterback never clicks and he is judged against the coach he replaced",
+  "motivation": {
+    "want": "to build a tough, fundamentally sound contender that wins big games",
+    "fear": "being judged against the coach he replaced"
+  },
+  "focus": {
+    "want": {
+      "text": "to earn the trust of Lamar Jackson",
+      "subjects": [
+        {
+          "kind": "player",
+          "name": "Lamar Jackson",
+          "team_2026": "BAL"
+        }
+      ],
+      "until_season": null
+    },
+    "fear": {
+      "text": "that his partnership with Lamar Jackson never clicks",
+      "subjects": [
+        {
+          "kind": "player",
+          "name": "Lamar Jackson",
+          "team_2026": "BAL"
+        }
+      ],
+      "until_season": null
+    }
+  },
   "voice": "Upbeat, plain-spoken and steady; he sounds like a teacher explaining why something works. He talks about relationships and identity more than about himself, spreads credit across the staff, and is direct about sloppy details without making it personal. He deflects comparisons with his mentors by saying he will be himself.",
   "ties": [
     {
@@ -291,9 +325,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

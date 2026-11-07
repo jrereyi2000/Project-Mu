@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:MIA:OC",
   "name": "Bobby Slowik",
   "role": "OC",
@@ -23,6 +23,17 @@
       "E5",
       "E7"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 3,
+      "sociability": 4,
+      "confidence": 5,
+      "openness": 5,
+      "drive": 7
+    },
+    "locked": []
   },
   "traits": [
     "QB_WHISPERER",
@@ -104,8 +115,18 @@
     "starts a review of a bad half by naming his own call that went wrong",
     "tells the story of switching from defense to offense under Shanahan when asked about himself"
   ],
-  "want": "to rebuild his play-calling name in Miami with a new quarterback after Houston let him go",
-  "fear": "that Houston's 2024 slide becomes the lasting verdict on him rather than the rookie season before it",
+  "motivation": {
+    "want": "to rebuild his name as a play-caller with a fresh start",
+    "fear": "that one bad season becomes the lasting verdict on him"
+  },
+  "focus": {
+    "want": {
+      "text": "to make the new Miami quarterback look like a starter",
+      "subjects": [],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "Analytical and quietly intense, a play-caller who talks in concepts and coaching points, but warm and gracious at the podium. He is candid about his own errors, credits quarterbacks and receivers, and avoids grand statements about himself or what the offense will do.",
   "ties": [
     {
@@ -235,9 +256,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

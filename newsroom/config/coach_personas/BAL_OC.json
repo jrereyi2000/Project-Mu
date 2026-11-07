@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:BAL:OC",
   "name": "Declan Doyle",
   "role": "OC",
@@ -35,6 +35,14 @@
       "E3",
       "E4"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 5,
+      "warmth": 5
+    },
+    "locked": []
   },
   "traits": [
     "SCHEME_NERD",
@@ -117,8 +125,24 @@
     "compares young receivers to stars he coached earlier in his career",
     "stays in the quarterback's ear between snaps at practice"
   ],
-  "want": "to prove the league's youngest play-caller can build an explosive offense around a two-time MVP",
-  "fear": "that his first season calling plays is judged only on whether the star quarterback looks like himself again",
+  "motivation": {
+    "want": "to prove a young play-caller can build an explosive offense",
+    "fear": "being judged only on how his star quarterback looks"
+  },
+  "focus": {
+    "want": {
+      "text": "an explosive offense around Lamar Jackson",
+      "subjects": [
+        {
+          "kind": "player",
+          "name": "Lamar Jackson",
+          "team_2026": "BAL"
+        }
+      ],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "Quick, technical and confident; he talks in specifics about cadence, motion and timing and speeds up when excited. He answers questions about his age by pointing to what he can teach, praises the quarterback's eagerness to learn, and keeps a light, joking touch with players. Thin record as a play-caller, so his public voice is still mostly about plans.",
   "ties": [
     {
@@ -229,9 +253,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

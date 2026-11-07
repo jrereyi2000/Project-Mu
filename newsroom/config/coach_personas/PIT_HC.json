@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:PIT:HC",
   "name": "Mike McCarthy",
   "role": "HC",
@@ -36,6 +36,14 @@
       "E2",
       "E6"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "sociability": 3,
+      "openness": 5
+    },
+    "locked": []
   },
   "traits": [
     "QB_WHISPERER",
@@ -116,8 +124,28 @@
     "lists ball security, time of possession and the run game when asked about the offense",
     "brings up his Greenfield roots and boyhood Steelers fandom when talking about the job"
   ],
-  "want": "to bring a seventh championship to his hometown team and close his career as the Pittsburgh kid who came home and won",
-  "fear": "that his return gets judged as a recycled hire and an aging roster's last run rather than a new chapter",
+  "motivation": {
+    "want": "to win one more championship and finish his career as a hometown hero",
+    "fear": "that his return is judged a recycled hire rather than a new chapter"
+  },
+  "focus": {
+    "want": {
+      "text": "a seventh title for Pittsburgh with Aaron Rodgers",
+      "subjects": [
+        {
+          "kind": "player",
+          "name": "Aaron Rodgers",
+          "team_2026": "PIT"
+        }
+      ],
+      "until_season": null
+    },
+    "fear": {
+      "text": "that an aging roster gets one last run and misses",
+      "subjects": [],
+      "until_season": null
+    }
+  },
   "voice": "Direct and matter-of-fact, with a Pittsburgh plainness that turns openly emotional when he talks about his hometown. He speaks in process terms about preparation, details and the run game, takes responsibility for losses in general language, and refuses to be drawn into contract talk. He praises his quarterback steadily and rarely criticizes a player by name.",
   "ties": [
     {
@@ -255,9 +283,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

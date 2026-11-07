@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:LV:DC",
   "name": "Rob Leonard",
   "role": "DC",
@@ -34,6 +34,14 @@
       "E2",
       "E4"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "confidence": 4,
+      "openness": 6
+    },
+    "locked": []
   },
   "traits": [
     "PLAYERS_COACH",
@@ -118,8 +126,14 @@
     "calls himself a little intense and leaves it at that",
     "opens a new job with long football calls to the veterans he will coach"
   ],
-  "want": "to turn the Raiders defense into his line room writ large: tough, close and player-led",
-  "fear": "that a first season as coordinator on a rebuilding team exposes him before his players are ready",
+  "motivation": {
+    "want": "to build a tough, close, player-led defense",
+    "fear": "that a first season on a rebuilding team exposes him too soon"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Genuine, intense and relational; he talks about brotherhood, effort and being himself rather than about fronts and coverages. He is direct about wanting aggression over hesitation and credits players and mentors. His language comes from the line room: hands-on, blunt and warm.",
   "ties": [
     {
@@ -230,9 +244,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

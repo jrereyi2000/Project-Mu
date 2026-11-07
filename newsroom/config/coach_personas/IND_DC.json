@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:IND:DC",
   "name": "Lou Anarumo",
   "role": "DC",
@@ -32,6 +32,15 @@
       "E2",
       "E3"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 4,
+      "sociability": 6,
+      "confidence": 6
+    },
+    "locked": []
   },
   "traits": [
     "SCHEME_NERD",
@@ -116,8 +125,14 @@
     "invites players to challenge his calls and mentions it",
     "draws on his years as a teacher when explaining how he coaches"
   ],
-  "want": "to prove in Indianapolis that his multiple, pressure-heavy defense still works after Cincinnati let him go",
-  "fear": "that middling results at a second stop mark him as a coordinator whose best days were in Cincinnati",
+  "motivation": {
+    "want": "to prove his multiple, pressure-heavy defense still works",
+    "fear": "that his best days are behind him"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Direct, intense and approachable, with a Staten Island bluntness and a teacher's patience. He talks scheme with relish but in clear terms, can be fiery after a poor showing yet steady through long stretches, and welcomes players' challenges. He credits players and assistants for adjustments.",
   "ties": [
     {
@@ -209,9 +224,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

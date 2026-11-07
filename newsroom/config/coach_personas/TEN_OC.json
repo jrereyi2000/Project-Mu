@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:TEN:OC",
   "name": "Brian Daboll",
   "role": "OC",
@@ -36,6 +36,14 @@
       "E2",
       "E8"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "sociability": 5,
+      "confidence": 4
+    },
+    "locked": []
   },
   "traits": [
     "QB_WHISPERER",
@@ -120,8 +128,24 @@
     "keeps in touch with former players through regular video calls",
     "compares a young quarterback's development to his years with Josh Allen"
   ],
-  "want": "to build a young quarterback into a star again and show he can still lift an offense after his New York firing",
-  "fear": "that his temper becomes the story whenever the offense struggles",
+  "motivation": {
+    "want": "to build a young quarterback into a star again",
+    "fear": "that his temper becomes the story when the offense struggles"
+  },
+  "focus": {
+    "want": {
+      "text": "to make Cam Ward a star",
+      "subjects": [
+        {
+          "kind": "player",
+          "name": "Cam Ward",
+          "team_2026": "TEN"
+        }
+      ],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "Intense and blunt on game day, loose and down to earth away from it; he talks like one of the players. He is openly confident in his quarterback while insisting on the work, admits regrets plainly and frames them as growth, and avoids talking about his old job.",
   "ties": [
     {
@@ -259,9 +283,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

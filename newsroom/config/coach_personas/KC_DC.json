@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:KC:DC",
   "name": "Steve Spagnuolo",
   "role": "DC",
@@ -31,6 +31,15 @@
       "E1",
       "E5"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 5,
+      "sociability": 4,
+      "openness": 6
+    },
+    "locked": []
   },
   "traits": [
     "SCHEME_NERD",
@@ -112,8 +121,14 @@
     "jokes about his own playing days or an old coach to loosen up a meeting",
     "credits his mentors and his assistants by name when a big call works"
   ],
-  "want": "to keep adding championships as the mind behind a defense that wins in the biggest games",
-  "fear": "that one bad night on the biggest stage defines the scheme instead of the years of trust behind it",
+  "motivation": {
+    "want": "to keep adding championships as the mind behind a big-game defense",
+    "fear": "that one bad night on the biggest stage defines his scheme"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Animated and candid, with flashes of East Coast bluntness when a performance falls short and real warmth when he talks about players and mentors. He explains pressure concepts in layman's terms without giving away specifics and is quick to say a bad day is on him and the staff.",
   "ties": [
     {
@@ -194,9 +209,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

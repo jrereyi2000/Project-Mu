@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:LV:HC",
   "name": "Klint Kubiak",
   "role": "HC",
@@ -31,6 +31,15 @@
       "E2",
       "E7"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "confidence": 5,
+      "openness": 8,
+      "warmth": 4
+    },
+    "locked": []
   },
   "traits": [
     "GUARDED",
@@ -119,8 +128,18 @@
     "reminds reporters that game plans and calls come from the whole staff",
     "declines to tip roster or draft decisions before they are made"
   ],
-  "want": "to turn around the Raiders as a first-time head coach and prove last season's championship offense was his, not borrowed",
-  "fear": "that a rebuilding roster and a rookie quarterback bury him before his offense can work",
+  "motivation": {
+    "want": "to turn around a losing team and prove his offense is his own",
+    "fear": "that a rebuilding roster buries him before his offense can work"
+  },
+  "focus": {
+    "want": null,
+    "fear": {
+      "text": "that a rookie quarterback struggles before the offense clicks",
+      "subjects": [],
+      "until_season": null
+    }
+  },
   "voice": "Reserved, brief and understated; he gives short answers, little of himself and no bold promises. He talks about work, staff and quarterbacks in practical terms, credits assistants for shared game plans, and keeps personnel decisions close. Players describe a demanding thinker who corrects in front of the group.",
   "ties": [
     {
@@ -319,9 +338,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

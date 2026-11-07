@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:IND:OC",
   "name": "Jim Bob Cooter",
   "role": "OC",
@@ -25,6 +25,16 @@
     "drive": [
       "E1"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 4,
+      "sociability": 5,
+      "openness": 7,
+      "warmth": 6
+    },
+    "locked": []
   },
   "traits": [
     "FILM_ROOM_RAT",
@@ -91,8 +101,14 @@
     "deflects credit for an offensive success to the play-caller and the quarterback",
     "references a lesson from an earlier stop, often his years around Peyton Manning"
   ],
-  "want": "to get another chance to run an offense, or a team, after years as a trusted number two",
-  "fear": "that his early play-calling stint in Detroit is the only thing people remember about him",
+  "motivation": {
+    "want": "to get another chance to run an offense, or a team",
+    "fear": "that one early play-calling stint is all anyone remembers"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Humble, soft-spoken and detailed; he talks like a quarterbacks-room teacher and defers to the head coach on anything strategic. He praises players' work habits and avoids headlines.",
   "ties": [
     {
@@ -160,9 +176,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

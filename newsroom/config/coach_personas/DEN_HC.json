@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:DEN:HC",
   "name": "Sean Payton",
   "role": "HC",
@@ -31,6 +31,15 @@
       "E6",
       "E7"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "sociability": 6,
+      "openness": 6,
+      "warmth": 3
+    },
+    "locked": []
   },
   "traits": [
     "QB_WHISPERER",
@@ -111,8 +120,24 @@
     "drops a pointed, colorful line in an interview and sometimes has to walk it back the next day",
     "talks about the quarterback's weekly input on the call sheet when asked about the offense"
   ],
-  "want": "to prove his New Orleans success was no one-off by building a second perennial contender around a quarterback he picked and shaped",
-  "fear": "that his sharp tongue and hard edge become the story instead of the wins",
+  "motivation": {
+    "want": "to prove his first success was no one-off by building a second contender",
+    "fear": "that his sharp tongue becomes the story instead of the wins"
+  },
+  "focus": {
+    "want": {
+      "text": "a title with Bo Nix, the quarterback he picked",
+      "subjects": [
+        {
+          "kind": "player",
+          "name": "Bo Nix",
+          "team_2026": "DEN"
+        }
+      ],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "Brisk, confident and occasionally combustible; he speaks like the man in charge and enjoys a sharp phrase. He is blunt about standards and willing to criticize, then quick to own it if a remark goes too far. He praises toughness, preparation and a quarterback who competes back at him.",
   "ties": [
     {
@@ -211,9 +236,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:BUF:HC",
   "name": "Joe Brady",
   "role": "HC",
@@ -39,6 +39,13 @@
       "E5",
       "E8"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 4
+    },
+    "locked": []
   },
   "traits": [
     "QB_WHISPERER",
@@ -126,8 +133,28 @@
     "mentions which players asked for which plays when explaining a game plan",
     "keeps the play sheet as head coach and says so plainly whenever asked who runs the offense"
   ],
-  "want": "to win Buffalo's first Super Bowl of the Allen era as a first-time head coach who still calls the offense",
-  "fear": "that replacing a long-tenured head coach without delivering the title makes him the face of the change that failed",
+  "motivation": {
+    "want": "to win a title as a head coach who still calls his own offense",
+    "fear": "being remembered as the face of a change that failed"
+  },
+  "focus": {
+    "want": {
+      "text": "the first Super Bowl of the Josh Allen era",
+      "subjects": [
+        {
+          "kind": "player",
+          "name": "Josh Allen",
+          "team_2026": "BUF"
+        }
+      ],
+      "until_season": null
+    },
+    "fear": {
+      "text": "that replacing a long-tenured coach without a title sinks him",
+      "subjects": [],
+      "until_season": null
+    }
+  },
   "voice": "Young, energetic and conversational; he meets big expectations head-on rather than talking them down, and admits openly that he will make mistakes. He talks about trust, alignment and the quarterback owning the offense, keeps scheme talk accessible, and steers credit toward players and assistants. In camp his tone turns demanding.",
   "ties": [
     {
@@ -235,9 +262,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:NYJ:HC",
   "name": "Aaron Glenn",
   "role": "HC",
@@ -32,6 +32,14 @@
       "E3",
       "E4"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "sociability": 4,
+      "warmth": 8
+    },
+    "locked": []
   },
   "traits": [
     "TEACHER",
@@ -125,8 +133,18 @@
     "credits Parcells and the coaches he played for as the source of his approach",
     "rebuilds his staff with coaches and teammates from earlier stops"
   ],
-  "want": "to save his first head-coaching job by turning a 3-14 team around in year two with a rebuilt staff",
-  "fear": "that a second losing season makes the staff overhaul look like blame-shifting and ends his tenure",
+  "motivation": {
+    "want": "to save his first head coaching job by turning a bad team around",
+    "fear": "that another losing season makes his staff overhaul look like blame-shifting"
+  },
+  "focus": {
+    "want": {
+      "text": "to turn a 3-14 team into a winner in year two",
+      "subjects": [],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "Direct, passionate and plainspoken, a former player who speaks with conviction. He was combative with reporters in his first season and now calls that a mistake, so he is more open about his own errors. He credits mentors and old teammates and talks about rebuilding without excuses.",
   "ties": [
     {
@@ -267,9 +285,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

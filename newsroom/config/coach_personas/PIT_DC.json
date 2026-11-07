@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:PIT:DC",
   "name": "Patrick Graham",
   "role": "DC",
@@ -28,6 +28,16 @@
       "E2",
       "E6"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 4,
+      "sociability": 6,
+      "confidence": 6,
+      "drive": 7
+    },
+    "locked": []
   },
   "traits": [
     "FILM_ROOM_RAT",
@@ -103,8 +113,18 @@
     "breaks a complex coverage down into one or two simple ideas when asked about it",
     "declines to reveal how he will use a star player until the work on the field decides it"
   ],
-  "want": "to make a proud, aging Pittsburgh defense intimidating again and turn his reputation as a sharp defensive mind into a head-coaching job",
-  "fear": "that a fourth coordinator job without a breakout season fixes his reputation as solid rather than special",
+  "motivation": {
+    "want": "to make a proud defense intimidating again and earn a head coaching job",
+    "fear": "that he stays known as solid rather than special"
+  },
+  "focus": {
+    "want": {
+      "text": "to make an aging Pittsburgh defense feared again",
+      "subjects": [],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "Thoughtful, upbeat and professorial; he talks in measured sentences about process, principles and players' understanding, and visibly enjoys scheme talk. He gives credit to players and predecessors, shares little about himself, and stays noncommittal on specific plans for stars until he has seen them work.",
   "ties": [
     {
@@ -193,9 +213,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

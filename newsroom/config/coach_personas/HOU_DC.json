@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:HOU:DC",
   "name": "Matt Burke",
   "role": "DC",
@@ -19,6 +19,18 @@
     "drive": 5
   },
   "slider_evidence": {},
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 4,
+      "sociability": 6,
+      "confidence": 4,
+      "openness": 7,
+      "warmth": 6,
+      "drive": 5
+    },
+    "locked": []
+  },
   "traits": [
     "LOYAL",
     "SCHEME_NERD",
@@ -84,8 +96,14 @@
     "credits the head coach and the staff collectively when asked about a good defensive day",
     "keeps his public answers short and process-focused"
   ],
-  "want": "to show that a coordinator whose first defense struggled can run a top unit when given trust",
-  "fear": "that he remains seen as a placeholder beside a head coach who can always take the call sheet back",
+  "motivation": {
+    "want": "to show he can run a top defense when he is trusted",
+    "fear": "being a placeholder beside a head coach who can take the call sheet back"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Low-key, humble and team-first; he speaks briefly about process, credits the head coach and players, and avoids self-promotion.",
   "ties": [
     {
@@ -144,9 +162,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

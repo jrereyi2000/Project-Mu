@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:NE:DC",
   "name": "Zak Kuhr",
   "role": "DC",
@@ -32,6 +32,14 @@
     "drive": [
       "E2"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 4,
+      "sociability": 4
+    },
+    "locked": []
   },
   "traits": [
     "SCHEME_NERD",
@@ -103,8 +111,14 @@
     "answers questions about his rise by talking about the role he was handed",
     "brings up detailed opponent tendencies when asked about a game plan"
   ],
-  "want": "to prove he earned the coordinator title on merit after running the defense through a Super Bowl as a fill-in",
-  "fear": "that he is remembered as a stopgap who got the job because of a colleague's illness",
+  "motivation": {
+    "want": "to prove he earned the coordinator title on merit",
+    "fear": "being remembered as a stopgap who got the job by circumstance"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Driven and confident but deferential; he hands credit to his support system and players and speaks in detail about opponents. Public coverage of his own voice is thin.",
   "ties": [
     {
@@ -164,9 +178,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }
