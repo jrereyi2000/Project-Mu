@@ -332,7 +332,7 @@ def _causes(cur, changed, prev, season, tick):
 # ---------------------------------------------------------------- the tick
 
 def read_tick(cur, league, season, tick, *, source='SAVE', roster=None, roster_season=None,
-              rules_version='producers-v1'):
+              rules_version='producers-v2'):
     """One tick's inputs (module docstring). `roster` ({pid: team|None}) overrides the database roster (the
     watcher passes the snapshot's); `roster_season` is the player_seasons season to read otherwise."""
     if source not in ('SAVE', 'CATCHUP'):
@@ -461,8 +461,24 @@ def read_tick(cur, league, season, tick, *, source='SAVE', roster=None, roster_s
         'games': {team: [g for g in gs if g['tick'] <= tick] for team, gs in games.get(season, {}).items()},
         'recognitions': recognitions, 'contract_years': contract_years,
         'awards': awards, 'staff_moves': staff, 'hot_seat': hot,
+        'tree_staff': tree_staff(cur, season) if tick >= cal.FIRST_OFFSEASON_TICK else [],
+        'tree_reviewed_pairs': tree_reviewed_pairs() if tick >= cal.FIRST_OFFSEASON_TICK else [],
         'watermarks': {'player_contracts': watermark} if watermark is not None else {},
     }
+
+
+def tree_staff(cur, season):
+    """Coaching-tree staff seasons through `season` (engines.coaching_tree_facts.staff_seasons; COACHING_TREES §2.6)."""
+    from engines import coaching_tree_facts
+    return coaching_tree_facts.staff_seasons(cur, through=season)
+
+
+def tree_reviewed_pairs(directory=None):
+    """[[mentor person key, protégé person key]] of reviewed coaching-tree edges (the files; no database).
+    sim_edges skips these pairs so a reviewed tie isn't produced twice."""
+    from personality import coaching_trees as ct
+    edges = ct.reviewed_edges(ct.load_batches(directory or ct.TREE_DIR))
+    return sorted([list(p) for p in ct.reviewed_pairs(edges)])
 
 
 def first_save_season(cur):

@@ -79,6 +79,7 @@ class League:
         self.pending_moves = []             # (id, kind, payload, written_run)
         self.contracts = []                 # (id, pid, team, season, years_remaining, status)
         self.awards, self.staff, self.hot = [], [], []
+        self.hc_tenures, self.coord_tenures = [], []   # (id, name, team, abbr, start, end, role)
         self.transitions = []               # (pid, to_season, status, source)
         self.first_save = 2026
         self.ready = (True, True, True)
@@ -212,6 +213,22 @@ class LeagueCursor(store_tests.FakeCursor):
     def q_first_save(self):
         return [(self.league.first_save,)]
 
+    # coaching trees (engines/coaching_tree_facts.py)
+    def q_regclass(self, table):
+        return [(True,)]
+
+    def q_fired(self, first, last):
+        return [(h[1], h[2], h[0], h[4]) for h in self.league.hot if h[0] != 'HC' and h[6] and first <= h[1] <= last]
+
+    def _tenures(self, rows, through, first):
+        return [t for t in rows if t[4] <= through and (t[5] if t[5] is not None else through) >= first]
+
+    def q_hc(self, through, _t, first):
+        return self._tenures(self.league.hc_tenures, through, first)
+
+    def q_coord(self, through, _t, first):
+        return self._tenures(self.league.coord_tenures, through, first)
+
 
 def base_league():
     lg = League()
@@ -251,9 +268,9 @@ def test_run_tick_week1_offseason_and_next_season(rel_store, aliases):
     first = runner.run_tick(cur, 2026, 1)
     assert first['status'] == 'APPENDED' and first['source'] == 'SAVE'
     counts = first['counts']
-    assert counts['rules']['tenure_window@producers-v1'] == 4     # players 1-4 on teams; 6 is HISTORY, 5 a free agent
-    assert counts['rules']['role_window@producers-v1'] == 4
-    assert counts['rules']['contract_year@producers-v1'] == 1     # contract 10: years_remaining 1 at tick 1
+    assert counts['rules']['tenure_window@producers-v2'] == 4     # players 1-4 on teams; 6 is HISTORY, 5 a free agent
+    assert counts['rules']['role_window@producers-v2'] == 4
+    assert counts['rules']['contract_year@producers-v2'] == 1     # contract 10: years_remaining 1 at tick 1
     assert counts['appended'] >= 1 and counts['held'] == counts['events'] - counts['appended']
     assert counts['watermarks'] == {'player_contracts': 11}
     (call,) = rel_store.calls
@@ -274,13 +291,13 @@ def test_run_tick_week1_offseason_and_next_season(rel_store, aliases):
     assert held['mu:release:2026:2:2']['attribution']['evidence_refs'] == ['mu-producer:transactions:1']
     assert held['mu:depart:2026:2:2:1']['payload']['state'] == 'negative'
     assert held['mu:arrive:2026:2:5:2']['payload']['state'] == 'positive'
-    assert second['counts']['rules']['tenure_window@producers-v1'] == 4
+    assert second['counts']['rules']['tenure_window@producers-v2'] == 4
 
     # an offseason stop: no role windows, tenure only; the season's awards are dated (2026, 23)
     lg.awards = [(50, 2026, 'MVP', 1, 1, None)]
     off = runner.run_tick(cur, 2026, 24)
-    assert 'role_window@producers-v1' not in off['counts']['rules']
-    assert off['counts']['rules']['award@producers-v1'] == 1
+    assert 'role_window@producers-v2' not in off['counts']['rules']
+    assert off['counts']['rules']['award@producers-v2'] == 1
 
     # 2027 week 1: player 3 traded through a WRITTEN league-office run at PRESEASON (tick 32)
     for (pid, s), v in list(lg.player_seasons.items()):
@@ -291,7 +308,7 @@ def test_run_tick_week1_offseason_and_next_season(rel_store, aliases):
     lg.charts[(2027, 1)] = {1: chart([1, 3]), 2: chart([4, 5])}
     nxt = runner.run_tick(cur, 2027, 1)
     held = {e['source_event_id']: e for e in by_rule(cur, '')}
-    assert held['mu:depart:2027:1:3:2']['payload']['rule'] == 'departure_trade@producers-v1'
+    assert held['mu:depart:2027:1:3:2']['payload']['rule'] == 'departure_trade@producers-v2'
     assert held['mu:arrive:2027:1:3:1']['attribution']['evidence_refs'] == ['mu-producer:league_office_runs:7']
     assert 'mu:release:2027:1:3' not in held                       # a trade is never a treatment
     assert nxt['status'] in ('APPENDED', 'HELD')
@@ -335,7 +352,7 @@ def test_recognition_from_new_contract_after_the_watermark(rel_store, aliases):
     lg.contracts.append((12, 3, 2, 2026, 4, 'ACTIVE'))           # re-signed: replaces contract 11 on team 2
     lg.contracts.append((13, 4, 2, 2026, 2, 'ACTIVE'))           # a first contract: no recognition
     run = runner.run_tick(cur, 2026, 2)
-    assert run['counts']['rules']['resign_recognition@producers-v1'] == 1
+    assert run['counts']['rules']['resign_recognition@producers-v2'] == 1
     (rec,) = by_rule(cur, 'resign_recognition')
     assert rec['source_refs'] == [{'namespace': 'mu-producer', 'key': 'player_contracts:12'}]
     assert run['counts']['watermarks'] == {'player_contracts': 13}
@@ -447,6 +464,41 @@ def test_streaks_season_outcome_and_coach_facts():
     assert coach['mu:hotseat:2026:2:HC']['payload']['situation_kind'] == 'job_pressure'
 
 
+def tree_league():
+    lg = base_league()
+    lg.hc_tenures = [(9, 'Ann Head', 2, 'BBB', 2020, None, 'HC')]
+    lg.coord_tenures = [(4, 'Bo Coord', 2, 'BBB', 2025, None, 'OC'), (5, 'Cy One', 2, 'BBB', 2026, 2026, 'DC')]
+    return lg
+
+
+def test_coaching_tree_events_from_tick_24_with_historical_time():
+    lg = tree_league()
+    cur = LeagueCursor(lg)
+    assert not [e for e in runner.build_events(sources.read_tick(cur, LEAGUE, 2026, 24))
+                if e['payload']['rule'].startswith('coaching_tree')]          # 2025 doesn't count: 1 season in 2026
+    week5 = sources.read_tick(cur, LEAGUE, 2027, 5)
+    assert week5['tree_staff'] == [] and not [e for e in runner.build_events(week5)
+                                              if e['payload']['rule'].startswith('coaching_tree')]
+    tick = sources.read_tick(cur, LEAGUE, 2027, 24)
+    assert {(r['season'], r['role']) for r in tick['tree_staff']} >= {(2026, 'HC'), (2027, 'OC'), (2026, 'DC')}
+    tree = [e for e in runner.build_events(tick) if e['payload']['rule'] == 'coaching_tree@producers-v2']
+    assert len(tree) == 2 and {e['source_event_id'] for e in tree} == {'mu:tree:9:4'}
+    mentee = next(e for e in tree if e['payload']['direction'] == 'mentee')
+    assert mentee['subject_alias'] == {'role': 'coach', 'namespace': 'db-coordinator', 'external_id': '4'}
+    assert mentee['target_alias'] == {'role': 'coach', 'namespace': 'db-coach', 'external_id': '9'}
+    assert mentee['occurred_at'] == {'season': 2027, 'tick': 24}
+    later = [e for e in runner.build_events(sources.read_tick(cur, LEAGUE, 2029, 24))
+             if e['payload']['rule'].startswith('coaching_tree')]
+    assert later == tree                         # frozen at the 2027 crossing: identical facets, deduped by the store
+    assert later[0]['payload']['seasons'] == 2
+
+
+def test_coaching_tree_skips_reviewed_pairs(monkeypatch):
+    monkeypatch.setattr(sources, 'tree_reviewed_pairs', lambda directory=None: [['p:ann head', 'p:bo coord']])
+    tick = sources.read_tick(LeagueCursor(tree_league()), LEAGUE, 2027, 24)
+    assert not [e for e in runner.build_events(tick) if e['payload']['rule'].startswith('coaching_tree')]
+
+
 def test_window_and_build_are_deterministic():
     assert sources.window(None, 2026, 5) == [[2026, 5]]
     assert sources.window((2026, 22), 2027, 1) == [[2026, t] for t in range(23, 33)] + [[2027, 1]]
@@ -481,7 +533,7 @@ def test_preview_is_byte_identical_and_offline(tmp_path):
         assert code.returncode == 0, code.stderr
         outs.append(out.read_bytes())
     assert outs[0] == outs[1]
-    assert json.loads(outs[0])['counts']['tenure_window@producers-v1'] == 4
+    assert json.loads(outs[0])['counts']['tenure_window@producers-v2'] == 4
 
 
 def test_cli_exit_codes(tmp_path, monkeypatch, rel_store, aliases):

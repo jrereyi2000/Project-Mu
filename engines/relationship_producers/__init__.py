@@ -13,4 +13,4 @@ honoured, fired or hired) into the relationships plan's canonical events (PERSON
 calendar.py and rules.py never import a database driver; the rules take plain dicts.
 """
 
-PRODUCER_RULES_VERSION = "producers-v1"
+PRODUCER_RULES_VERSION = "producers-v2"   # v2 adds the coaching_tree rule (COACHING_TREES_PLAN §2.6)

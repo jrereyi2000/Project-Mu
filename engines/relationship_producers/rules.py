@@ -1,6 +1,6 @@
 """
 Relationship producer rules (RELATIONSHIP_EVENT_PRODUCERS_PLAN.md §2.1-§2.2). Pure: plain dicts in, envelopes out,
-no database. Every outcome is a fixed rule (plan D1) recorded as payload.rule = '<rule>@producers-v1'.
+no database. Every outcome is a fixed rule (plan D1) recorded as payload.rule = '<rule>@producers-v2'.
 
 Envelopes follow PERSONALITY_RELATIONSHIPS_PLAN.md §2.2. Two fields are left for store.py (unit U2) to fill once
 the subject's identity resolves: `universe_id` (envelope, subject, target, actor and attribution refs all carry
@@ -44,7 +44,8 @@ Players whose origin starts with HISTORY are skipped (plan D3): their builders r
 
 from engines import depth_chart_engine as dce
 from engines.relationship_producers import PRODUCER_RULES_VERSION
-from engines.relationship_producers.calendar import LAST_GAME_TICK, advance, is_in_season, time_point
+from engines.relationship_producers.calendar import (FIRST_OFFSEASON_TICK, LAST_GAME_TICK, advance, is_in_season,
+                                                     time_point)
 
 RELATIONSHIP_SCHEMA_VERSION = "relationships-v1"   # PERSONALITY_RELATIONSHIPS_PLAN §2.1
 SOURCE_KIND = "relationship_producer"
@@ -60,6 +61,7 @@ FIRING_LINE = 1.0              # engines/coach_hot_seat.py HOT_SEAT_LINE (a row 
 
 RESIGN_TICK = 25               # pipeline.league_office.STAGE_WEEKS["RESIGN"]
 OFFSEASON_START_TICK = 24      # pipeline.league_office.STAGE_WEEKS["OFFSEASON_START"]
+TREE_TICK = FIRST_OFFSEASON_TICK   # coaching_tree: an edge forms once the season it crossed is over (COACHING_TREES §2.6)
 
 TIERS = ("RESERVE", "ROTATION", "STARTER")         # low to high
 TIER_RANK = {t: i for i, t in enumerate(TIERS)}
@@ -168,6 +170,11 @@ def hot_seat_source_id(season, team_id, role):
     return f"mu:hotseat:{season}:{team_id}:{role}"
 
 
+def tree_source_id(coach_id, coordinator_id):
+    """One simulated coaching-tree edge (head coach -> his coordinator): both facets share it."""
+    return f"mu:tree:{int(coach_id)}:{int(coordinator_id)}"
+
+
 # ------------------------------------------------------------ envelope ----
 
 def rule_name(name):
@@ -191,7 +198,9 @@ def _target_key(ref):
 def facet_key(envelope):
     """'<role>:<namespace>:<external_id>|<target key>|<kind>': one facet per affected subject of an occurrence."""
     a = envelope["subject_alias"]
-    return f"{a['role']}:{a['namespace']}:{a['external_id']}|{_target_key(envelope['target'])}|{envelope['kind']}"
+    t = envelope.get("target_alias")
+    target = f"{t['role']}:{t['namespace']}:{t['external_id']}" if t else _target_key(envelope["target"])
+    return f"{a['role']}:{a['namespace']}:{a['external_id']}|{target}|{envelope['kind']}"
 
 
 def envelope(*, kind, source_event_id, season, tick, alias, target, payload, rule, source="SAVE",
@@ -699,3 +708,29 @@ def hot_seat_pressure(row, *, source="SAVE"):
                       evidence_scope=[table], extra={"score": round(score, 3), "firing_line": line,
                                                      "staff_role": role})
 
+
+# --------------------------------------------------------- coaching trees ----
+
+def coaching_tree_events(edge, *, source="SAVE"):
+    """Two meaningful_interaction facets for one simulated coaching-tree edge (personality.coaching_trees.sim_edges):
+    the protégé (db-coordinator) toward his mentor (db-coach) with direction 'mentee', and the mirror facet with
+    direction 'mentor', at (crossed_season, TREE_TICK). Person targets go by target_alias, so store.py holds each
+    facet until both identities exist."""
+    mentor = coach_alias(edge["mentor_ref"]["external_id"])
+    protege = coordinator_alias(edge["protege_ref"]["external_id"])
+    coach_id, coordinator_id = mentor["external_id"], protege["external_id"]
+    sid = tree_source_id(coach_id, coordinator_id)
+    opportunity = f"coach_tenures:{coach_id}|coordinator_tenures:{coordinator_id}"
+    out = []
+    for direction, alias, other in (("mentee", protege, mentor), ("mentor", mentor, protege)):
+        env = envelope(kind="meaningful_interaction", source_event_id=sid, season=edge["crossed_season"],
+                       tick=TREE_TICK, alias=alias, target=person_subject(other),
+                       payload={"relationship_kind": "mentorship", "outcome": edge["outcome"],
+                                "significance": "meaningful", "opportunity_ref": opportunity,
+                                "direction": direction, "seasons": edge["seasons"]},
+                       rule="coaching_tree", source=source,
+                       evidence_scope=["coach_tenures", "coordinator_tenures"])
+        env["target_alias"] = dict(other)
+        env["event_id"] = f"{sid}|{facet_key(env)}"
+        out.append(env)
+    return out
