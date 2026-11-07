@@ -1,4 +1,4 @@
-"""Retirement window: one retirement decision per offseason (docs/in_progress/RETIREMENT_WINDOW_PLAN.md §2.2–2.6, U1).
+"""Retirement window: one retirement decision per offseason (docs/done/RETIREMENT_WINDOW_PLAN.md §2.2–2.6, U1).
 
 Pure: no database, subprocess, save or league office import. The league office (U3) calls it.
 

@@ -54,7 +54,7 @@ Source-only inventory for [PERSONALITY_RETIREMENT_PLAN.md](../done/PERSONALITY_R
 
 ## 5. Retirement window: PC checklist and proof file
 
-From [RETIREMENT_WINDOW_PLAN.md](../in_progress/RETIREMENT_WINDOW_PLAN.md) §2.4 and §2.9 (2026-11-07). The league office makes one retirement decision per offseason (the decision stage, normally `OFFSEASON_START`) and, at every later stop through `CUTDOWN`, restores native retirements it didn't decide through `pipeline/retirement_edits.py`. Those restores stay blocked (`authority_missing`) until JR writes and approves the proof file below; until then the window only detects, records and reports.
+From [RETIREMENT_WINDOW_PLAN.md](../done/RETIREMENT_WINDOW_PLAN.md) §2.4 and §2.9 (2026-11-07). The league office makes one retirement decision per offseason (the decision stage, normally `OFFSEASON_START`) and, at every later stop through `CUTDOWN`, restores native retirements it didn't decide through `pipeline/retirement_edits.py`. Those restores stay blocked (`authority_missing`) until JR writes and approves the proof file below; until then the window only detects, records and reports.
 
 ### 5.1 Checklist (JR, on the PC)
 

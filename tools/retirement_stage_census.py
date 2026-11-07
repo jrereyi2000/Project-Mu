@@ -1,4 +1,4 @@
-"""Retirement stage census (docs/in_progress/RETIREMENT_WINDOW_PLAN.md §2.9 step 1, U2).
+"""Retirement stage census (docs/done/RETIREMENT_WINDOW_PLAN.md §2.9 step 1, U2).
 
 Offline: reads reader snapshots (pipeline/save_reader/pc_save_reader.mjs JSON) in the order JR saved them and
 counts, per snapshot, new retirees, un-retired players, players who vanished (active before, absent now: retired and

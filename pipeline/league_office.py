@@ -55,7 +55,7 @@ players-edit field already planned with a different value is a CompositionError,
          cut on its own) by releasing the lowest-OVR healthy non-starters with no other edit planned (ties: the biggest
          cut savings first), and coach depth charts (depth_chart_engine) for every team except one that queued its own
          (a PENDING DEPTH_CHART move) or a user team with a stored JR chart.
-     Retirements, one decision per offseason (docs/in_progress/RETIREMENT_WINDOW_PLAN.md): the decision stage is the
+     Retirements, one decision per offseason (docs/done/RETIREMENT_WINDOW_PLAN.md): the decision stage is the
          first offseason stop (normally OFFSEASON_START) with no WRITTEN decision run for the season
          (Deps.retirement_window_inputs). There every player Madden retired is recorded in retirement_decisions and
          Project Mu keeps (un-retires) him when deps.retirement_decision says so: as a free agent, or, with a proven
