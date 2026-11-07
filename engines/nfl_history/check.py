@@ -1,4 +1,4 @@
-"""Record book cross-check, report only (docs/in_progress/REAL_NFL_HISTORY_PLAN.md §2.10; PROJECT_SPEC §2.9).
+"""Record book cross-check, report only (docs/done/REAL_NFL_HISTORY_PLAN.md §2.10; PROJECT_SPEC §2.9).
 
 The record book (franchise_records / league_record_entries, source NFL: Pro-Football-Reference back to 1920) stays
 the authority and never reads nfl_*. record_check(cur) compares every NFL row of 1999-2025 in a category nflverse can

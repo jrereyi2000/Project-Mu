@@ -1,4 +1,4 @@
-"""engines/nfl_history store and read (docs/in_progress/REAL_NFL_HISTORY_PLAN.md §2.2, §2.8, §4)."""
+"""engines/nfl_history store and read (docs/done/REAL_NFL_HISTORY_PLAN.md §2.2, §2.8, §4)."""
 import os
 import re
 import subprocess

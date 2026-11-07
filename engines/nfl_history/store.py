@@ -1,4 +1,4 @@
-"""Writes for real NFL history (docs/in_progress/REAL_NFL_HISTORY_PLAN.md §2.8; PROJECT_SPEC §3.3x).
+"""Writes for real NFL history (docs/done/REAL_NFL_HISTORY_PLAN.md §2.8; PROJECT_SPEC §3.3x).
 
 Every function takes a cursor and runs in the caller's transaction; nothing here commits. Rows are plain dicts in
 the column shapes of db/migrations/2027_02_04_nfl_history.sql. Column names are checked against the table's known

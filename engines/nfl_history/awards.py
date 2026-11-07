@@ -1,4 +1,4 @@
-"""Real NFL awards 1999-2025 (docs/in_progress/REAL_NFL_HISTORY_PLAN.md §2.5, as built: Wikipedia fallback).
+"""Real NFL awards 1999-2025 (docs/done/REAL_NFL_HISTORY_PLAN.md §2.5, as built: Wikipedia fallback).
 
 Pro-Football-Reference refuses automated fetches (HTTP 403 Cloudflare challenge, spike S21), so the CSV is built
 from Wikipedia's API (action=parse) per the plan's fallback, and Pro Bowl is dropped (Q6):

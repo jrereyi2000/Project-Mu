@@ -1,4 +1,4 @@
-"""engines/nfl_history/coach_baseline (docs/in_progress/REAL_NFL_HISTORY_PLAN.md §2.7, §4)."""
+"""engines/nfl_history/coach_baseline (docs/done/REAL_NFL_HISTORY_PLAN.md §2.7, §4)."""
 import pytest
 
 from engines.nfl_history import coach_baseline as cb

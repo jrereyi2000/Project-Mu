@@ -1,4 +1,4 @@
-"""Real player <-> Madden player linking (docs/in_progress/REAL_NFL_HISTORY_PLAN.md §2.6).
+"""Real player <-> Madden player linking (docs/done/REAL_NFL_HISTORY_PLAN.md §2.6).
 
 Pure core (normalize_name, real_side, match), thin database wrapper (madden_side, run_link).
 

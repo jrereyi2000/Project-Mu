@@ -1,4 +1,4 @@
-"""Historical team codes -> Project Mu franchises (docs/in_progress/REAL_NFL_HISTORY_PLAN.md §2.1, §2.3). Pure.
+"""Historical team codes -> Project Mu franchises (docs/done/REAL_NFL_HISTORY_PLAN.md §2.1, §2.3). Pure.
 
 mu_abbr(code, season) maps nflverse codes (OAK, SD, STL, LA, ARI, WSH) and Pro-Football-Reference draft codes (GNB,
 KAN, LVR, NOR, NWE, SDG, SFO, TAM, ...) to the current franchise's teams.abbreviation. Houston before 2002 and any

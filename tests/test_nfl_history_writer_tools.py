@@ -1,4 +1,4 @@
-"""Writer tools with real NFL history (docs/in_progress/REAL_NFL_HISTORY_PLAN.md §2.11, §4): get_player_career's
+"""Writer tools with real NFL history (docs/done/REAL_NFL_HISTORY_PLAN.md §2.11, §4): get_player_career's
 labeled real block and combined total, get_team_history's real seasons. No database: psycopg.connect and the
 engines.nfl_history.read functions are faked."""
 import json

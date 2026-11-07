@@ -1,4 +1,4 @@
-"""The 2025 coach_seasons baseline (docs/in_progress/REAL_NFL_HISTORY_PLAN.md §2.7; PROJECT_SPEC §3.3h).
+"""The 2025 coach_seasons baseline (docs/done/REAL_NFL_HISTORY_PLAN.md §2.7; PROJECT_SPEC §3.3h).
 
 A fresh franchise database has no coach_seasons rows, so the season archive would start every head coach from zero
 (mu_era_only). This writes one coach_seasons row per head coach with an open tenure for BASELINE_SEASON (2025,

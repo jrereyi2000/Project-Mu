@@ -1,4 +1,4 @@
-"""Real NFL blocks on the site's endpoints (docs/in_progress/REAL_NFL_HISTORY_PLAN.md §2.11, §4): /api/player/{id}
+"""Real NFL blocks on the site's endpoints (docs/done/REAL_NFL_HISTORY_PLAN.md §2.11, §4): /api/player/{id}
 nfl_career, /api/team/{abbr}/history nfl_seasons, /api/awards nfl_seasons. No database: pools, connections and the
 engines.nfl_history.read functions are faked."""
 import contextlib

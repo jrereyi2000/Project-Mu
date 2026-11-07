@@ -1,4 +1,4 @@
-"""nflverse parsing and derivations (docs/in_progress/REAL_NFL_HISTORY_PLAN.md §2.3-§2.4). Pure: parsed CSV rows
+"""nflverse parsing and derivations (docs/done/REAL_NFL_HISTORY_PLAN.md §2.3-§2.4). Pure: parsed CSV rows
 (dicts of strings) in, plain dicts in the db/migrations/2027_02_04_nfl_history.sql column shapes out.
 
 Team columns (team_id, home_team_id, away_team_id) come out holding the Mu abbreviation (teams.abbreviation of the

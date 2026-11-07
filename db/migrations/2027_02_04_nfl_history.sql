@@ -1,4 +1,4 @@
--- Real NFL history 1999-2025 (docs/in_progress/REAL_NFL_HISTORY_PLAN.md §2.2; PROJECT_SPEC §3.3x).
+-- Real NFL history 1999-2025 (docs/done/REAL_NFL_HISTORY_PLAN.md §2.2; PROJECT_SPEC §3.3x).
 -- Real players, season lines (regular season and playoffs), games, team and head-coach seasons, awards and the
 -- draft from nflverse (awards from Wikipedia), in their own nfl_* tables so they never mix with the league's
 -- simulated seasons. nfl_player_links ties this database's Madden players to the real people. Written only by

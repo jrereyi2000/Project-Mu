@@ -1,4 +1,4 @@
-"""engines/nfl_history CLI and record check (docs/in_progress/REAL_NFL_HISTORY_PLAN.md §2.9, §2.10, §4)."""
+"""engines/nfl_history CLI and record check (docs/done/REAL_NFL_HISTORY_PLAN.md §2.9, §2.10, §4)."""
 import pytest
 
 import engines.nfl_history.__main__ as cli

@@ -1,4 +1,4 @@
-"""engines/nfl_history fetch, teams and nflverse (docs/in_progress/REAL_NFL_HISTORY_PLAN.md §2.3, §4)."""
+"""engines/nfl_history fetch, teams and nflverse (docs/done/REAL_NFL_HISTORY_PLAN.md §2.3, §4)."""
 import io
 
 import pytest

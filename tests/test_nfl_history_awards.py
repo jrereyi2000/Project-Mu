@@ -1,4 +1,4 @@
-"""engines/nfl_history/awards (docs/in_progress/REAL_NFL_HISTORY_PLAN.md §2.5, §4; Wikipedia fallback)."""
+"""engines/nfl_history/awards (docs/done/REAL_NFL_HISTORY_PLAN.md §2.5, §4; Wikipedia fallback)."""
 import os
 
 import pytest

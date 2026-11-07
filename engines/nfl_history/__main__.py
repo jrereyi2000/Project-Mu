@@ -1,4 +1,4 @@
-"""CLI for real NFL history (docs/in_progress/REAL_NFL_HISTORY_PLAN.md §2.9, §2.12; PROJECT_SPEC §1.2).
+"""CLI for real NFL history (docs/done/REAL_NFL_HISTORY_PLAN.md §2.9, §2.12; PROJECT_SPEC §1.2).
 
   python3 -m engines.nfl_history fetch          [--seasons 1999-2025] [--refresh] [--awards]
   python3 -m engines.nfl_history load           --db DB [--seasons ...] [--only players,stats,games,teams,awards,draft]

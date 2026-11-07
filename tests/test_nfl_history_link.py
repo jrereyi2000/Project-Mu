@@ -1,4 +1,4 @@
-"""engines/nfl_history/link (docs/in_progress/REAL_NFL_HISTORY_PLAN.md §2.6, §4)."""
+"""engines/nfl_history/link (docs/done/REAL_NFL_HISTORY_PLAN.md §2.6, §4)."""
 import csv
 import os
 

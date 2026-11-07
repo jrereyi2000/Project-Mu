@@ -1,4 +1,4 @@
-"""Reads of real NFL history for the site, writers and engines (docs/in_progress/REAL_NFL_HISTORY_PLAN.md §2.8).
+"""Reads of real NFL history for the site, writers and engines (docs/done/REAL_NFL_HISTORY_PLAN.md §2.8).
 
 Every function returns empty ({} / [] / None) when the nfl_* tables aren't installed (installed(cur) is false), so
 callers need no migration check. Cursors may return tuples or dicts; rows come back as dicts.

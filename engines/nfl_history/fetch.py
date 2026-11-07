@@ -1,4 +1,4 @@
-"""Cached downloads for real NFL history (docs/in_progress/REAL_NFL_HISTORY_PLAN.md §2.3). No database.
+"""Cached downloads for real NFL history (docs/done/REAL_NFL_HISTORY_PLAN.md §2.3). No database.
 
 Files land in data/history/.cache/ (git-ignored, shared with engines.tuning). get() writes to a temporary name and
 renames it, so a cut download never caches; it waits POLITE_DELAY_S before each network request so a full fetch

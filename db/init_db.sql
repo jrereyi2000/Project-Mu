@@ -2871,7 +2871,7 @@ CREATE TABLE IF NOT EXISTS scout_interviews (
     UNIQUE (draft_season, team_id, prospect_uid, kind)
 );
 
--- Real NFL history 1999-2025 (2027_02_04_nfl_history.sql, docs/in_progress/REAL_NFL_HISTORY_PLAN.md §2.2;
+-- Real NFL history 1999-2025 (2027_02_04_nfl_history.sql, docs/done/REAL_NFL_HISTORY_PLAN.md §2.2;
 -- PROJECT_SPEC §3.3x). Own nfl_* tables, never the league's; written only by `python3 -m engines.nfl_history`.
 
 CREATE TABLE IF NOT EXISTS nfl_players (            -- one real person (nflverse players.csv), upserted, never deleted
