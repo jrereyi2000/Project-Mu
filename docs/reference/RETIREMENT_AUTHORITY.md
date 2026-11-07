@@ -47,7 +47,37 @@ Source-only inventory for [PERSONALITY_RETIREMENT_PLAN.md](../done/PERSONALITY_R
 
 ## 4. Spikes that need JR's PC (not done, not faked)
 
-1. **Restore proof (G4, Q1 first half).** On a disposable `CAREER-TUNE-*` clone with the watcher paused: save at the offseason start (Retired present), apply a restore of three players (expired contract, 2+ years left, practice squad), then save at the next stage and after the rollover. Read back status, TeamIndex, contract row, roster/depth/PS lists, cap and transactions.
-2. **Purge stage and row reuse (A2).** Count named vs total Player rows per offseason stage to settle which note is right.
+1. **Restore proof (G4, Q1 first half).** On a disposable `CAREER-TUNE-*` clone with the watcher paused: save at the offseason start (Retired present), apply a restore of three players (expired contract, 2+ years left, practice squad), then save at the next stage and after the rollover. Read back status, TeamIndex, contract row, roster/depth/PS lists, cap and transactions. Extended to late stops by the retirement window: §5 step 2.
+2. **Purge stage and row reuse (A2).** Count named vs total Player rows per offseason stage to settle which note is right. Extended into the per-stop retirement census: §5 step 1 (`tools/retirement_stage_census.py`).
 3. **Retire-active proof (Q1 second half).** Only after (1): set an active contracted player to Retired at the offseason start and check cap/dead money and the next advance.
 4. **Arbitrator workflow (R2).** JR decides whether the tool stays; if it does, document its stage, inputs and edited fields from its own docs before any isolated test.
+
+## 5. Retirement window: PC checklist and proof file
+
+From [RETIREMENT_WINDOW_PLAN.md](../in_progress/RETIREMENT_WINDOW_PLAN.md) §2.4 and §2.9 (2026-11-07). The league office makes one retirement decision per offseason (the decision stage, normally `OFFSEASON_START`) and, at every later stop through `CUTDOWN`, restores native retirements it didn't decide through `pipeline/retirement_edits.py`. Those restores stay blocked (`authority_missing`) until JR writes and approves the proof file below; until then the window only detects, records and reports.
+
+### 5.1 Checklist (JR, on the PC)
+
+Run on a disposable `CAREER-TUNE-*` clone with the save watcher paused (`/madden` can drive the sims). Nothing touches the live franchise.
+
+1. **Stage census (spike 2, extended).** Use CPU-controlled teams as in a Mu lineage, not only all-user. Save at all 8 offseason stops, preseason week 1 and the cut-down week. Read each with `pc_save_reader.mjs`, then run `python3 -m tools.retirement_stage_census <snapshots in save order> --out census.json`. It prints one row per snapshot (stop, named players, `Retired`, new retirees, un-retired, purged, vanished rostered / free agent) and answers: at which stops new `Retired` players appear; whether any rostered player vanishes without first showing as `Retired` (the unrecoverable case); and at which advance `Retired` rows disappear. One session.
+2. **Restore proof G4 (spike 1, extended).** Restore three players (expired contract, 2+ years left, practice squad) at `OFFSEASON_START`, three at one stop after the contract rollover (`FREE_AGENCY` wave 1), and at one late stop (`DRAFT` or `UDFA`). Advance and read back status, team, contract row, roster/depth/PS lists, cap and transactions at the next stop and after the rollover into the preseason.
+3. **Re-retirement check.** In the same run: does Madden retire a restored player again at a later stop? (Sets whether `MAX_WINDOW_RESTORES = 1` is enough.)
+4. **Write the proof file** (§5.2), listing only the stops that passed, and set `MU_RETIREMENT_AUTHORITY=/path/proof.json` for the watcher. JR approves it by filling `approved_by` / `approved_on`.
+5. **Arbitrator (spike 4).** Keep it uninstalled for Mu lineages, or the proof sets `exclusive_owner false` and every restore is blocked.
+6. **Later: retire-active proof (spike 3)**, only for the window's phase 2 (Mu-chosen extra retirements, its own plan).
+
+### 5.2 Proof file format
+
+```json
+{"kind": "retirement-authority-proof-v1", "version": "retirement-authority-v1", "fixture_id": "g4-2026-11-xx",
+ "proof_save_hash": "<sha256 of the proof save>", "schema_version": 5,
+ "stages": ["OFFSEASON_START", "RESIGN", "FREE_AGENCY"], "exclusive_owner": true,
+ "actions": {"KEEP_NATIVE_RETIREE": {"proven": true, "proof_id": "...", "fields": ["ContractStatus", "TeamIndex"]}},
+ "approved_by": "JR", "approved_on": "2026-11-xx"}
+```
+
+- `stages` uses league office stage names (`FREE_AGENCY` covers both waves); a stop not listed stays observe-only (`stage_mismatch`).
+- `schema_version` is the reader's `meta.reader_version` at proof time; a reader change denies every restore (`schema_mismatch`) until the proof is redone.
+- `load_proof` (`pipeline/retirement_window.py`) refuses a file that is unreadable or malformed, has another `kind`, lacks `approved_by` / `approved_on`, or lists `RETIRE_ACTIVE` as proven; a broken proof stops the run loudly rather than silently denying.
+- `authority_for_run` stamps the current run's save hash onto the proof: the proof covers a class of save (reader schema + stages), not one file. `proof_save_hash` stays as the record of which save proved it.
