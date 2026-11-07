@@ -39,6 +39,7 @@ from pydantic import BaseModel
 
 from newsroom import personas as legacy
 from personality.evolution import MAX_CHANGE_NOTES
+from personality.slider_inference import is_inferred
 
 CONN_INFO = os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")
 
@@ -76,8 +77,11 @@ class Unavailable(Exception):
 
 # ------------------------------------------------------------------------------------------------ words ---
 
-def slider_rows(sliders: dict) -> list[dict]:
-    """Each slider in legacy order: 0-3 reads the low phrase, 4-6 nothing, 7-10 the high phrase (SLIDER_WORDS)."""
+def slider_rows(sliders: dict, evidence: Optional[dict] = None) -> list[dict]:
+    """Each slider in legacy order: 0-3 reads the low phrase, 4-6 nothing, 7-10 the high phrase (SLIDER_WORDS).
+    `inferred` is true when the slider's core provenance is an `inferred:` entry (no direct evidence; estimated
+    from traits, docs/in_progress/INFERRED_SLIDERS_AND_FOCUS_PLAN.md §2.9)."""
+    evidence = evidence if isinstance(evidence, dict) else {}
     rows = []
     for name in legacy.SLIDERS:
         value = sliders.get(name)
@@ -85,7 +89,8 @@ def slider_rows(sliders: dict) -> list[dict]:
             continue
         low, high = legacy.SLIDER_WORDS[name]
         sentence = low if value <= 3 else high if value >= 7 else None
-        rows.append({"name": name, "value": int(value), "sentence": sentence, "low": low, "high": high})
+        rows.append({"name": name, "value": int(value), "sentence": sentence, "low": low, "high": high,
+                     "inferred": is_inferred(evidence.get("slider:" + name))})
     return rows
 
 
@@ -233,7 +238,7 @@ def build_profile(kind: str, ref: str, src) -> dict:
             "editable": bool(core and profile.get("origin") in ("generated", "real")),
             "revision": profile.get("revision") if core else None,
             "team": (who.get("team") or {}).get("abbr"),
-            "sliders": slider_rows(profile.get("sliders") or {}), "traits": trait_rows(profile.get("traits") or [], catalogue)}
+            "sliders": slider_rows(profile.get("sliders") or {}, profile.get("evidence")), "traits": trait_rows(profile.get("traits") or [], catalogue)}
     unavailable = {}
     for block in BLOCKS:
         body[block] = None

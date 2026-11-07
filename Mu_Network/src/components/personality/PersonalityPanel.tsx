@@ -175,7 +175,18 @@ export function PersonalityPanel({ kind, refId, compact = false, fixture }: Pers
                 <i style={{ width: `${Math.max(0, Math.min(10, s.value)) * 10}%` }} />
               </span>
             )}
-            <span className={`pp-sentence${s.sentence ? "" : " muted"}`}>{s.sentence || "unremarkable"}</span>
+            <span className={`pp-sentence${s.sentence ? "" : " muted"}`}>
+              {s.sentence || "unremarkable"}
+              {s.inferred && (
+                <span
+                  className="pp-inferred"
+                  title="No direct evidence; estimated from his traits."
+                  style={{ fontSize: "0.8em", fontStyle: "italic", opacity: 0.7 }}
+                >
+                  {" "}inferred
+                </span>
+              )}
+            </span>
           </li>
         ))}
       </ul>

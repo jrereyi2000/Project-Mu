@@ -9,6 +9,7 @@ export type PersonalitySlider = {
   sentence: string | null; // the low phrase for 0-3, the high phrase for 7-10, nothing for 4-6
   low: string;
   high: string;
+  inferred?: boolean; // no direct evidence; estimated from the person's traits (INFERRED_SLIDERS_AND_FOCUS_PLAN §2.9)
 };
 
 export type PersonalityTrait = { id: string; name: string; category: string | null; tendency: string | null };
