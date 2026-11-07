@@ -77,7 +77,7 @@ python -m personality history|as-of --universe U --role R (--birth-key K | --ali
 
 Applying `2027_01_29` to a franchise database and running `adopt --writers` / `--gms` there are JR's decisions, each after a `--dry-run`.
 
-## Inferred sliders and refreshing focus (docs/in_progress/INFERRED_SLIDERS_AND_FOCUS_PLAN.md)
+## Inferred sliders and refreshing focus (docs/done/INFERRED_SLIDERS_AND_FOCUS_PLAN.md)
 
 Real coach and owner profiles (`coach_profiles.py`, `owner_profiles.py`) have a v2 schema (`coach-profile-v2`, `owner-profile-v2`; v1 still read) with a `slider_inference` block, a durable `motivation` {want, fear} and a per-slot current `focus`.
 

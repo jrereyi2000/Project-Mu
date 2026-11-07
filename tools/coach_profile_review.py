@@ -22,7 +22,7 @@ a decision line for JR. apply-review reads {"<key>": {"status": "approved|edited
 "edits": {field: value}}}, applies edits, re-validates and stamps review; nothing is written unless every
 decision is valid (exit 0), otherwise exit 1 with the reasons.
 
-infer (docs/in_progress/INFERRED_SLIDERS_AND_FOCUS_PLAN.md §2.3) prints, per v2 file, each inferred slider with its
+infer (docs/done/INFERRED_SLIDERS_AND_FOCUS_PLAN.md §2.3) prints, per v2 file, each inferred slider with its
 basis (traits and leans, seed step, balancing); --write stores the `slider_inference` block (JR's locked values and
 the review status kept). v1 files are skipped. Exit 0, or 1 when a file fails other validation (not written).
 convert-v2 moves v1 files to v2 mechanically (schema, want/fear -> motivation, focus {want: null, fear: null},

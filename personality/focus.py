@@ -1,5 +1,5 @@
 """Durable motivation and a refreshing current focus for real coaches and owners
-(docs/in_progress/INFERRED_SLIDERS_AND_FOCUS_PLAN.md §2.1, §2.4). Pure apart from reading the templates file.
+(docs/done/INFERRED_SLIDERS_AND_FOCUS_PLAN.md §2.1, §2.4). Pure apart from reading the templates file.
 
 A v2 profile splits want/fear into `motivation` (durable, names nobody) and `focus` (per slot, may name up to two
 people as subjects). The stored focus goes stale when a subject retires, leaves the team, leaves his seat or the

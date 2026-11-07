@@ -80,7 +80,7 @@ class Unavailable(Exception):
 def slider_rows(sliders: dict, evidence: Optional[dict] = None) -> list[dict]:
     """Each slider in legacy order: 0-3 reads the low phrase, 4-6 nothing, 7-10 the high phrase (SLIDER_WORDS).
     `inferred` is true when the slider's core provenance is an `inferred:` entry (no direct evidence; estimated
-    from traits, docs/in_progress/INFERRED_SLIDERS_AND_FOCUS_PLAN.md §2.9)."""
+    from traits, docs/done/INFERRED_SLIDERS_AND_FOCUS_PLAN.md §2.9)."""
     evidence = evidence if isinstance(evidence, dict) else {}
     rows = []
     for name in legacy.SLIDERS:

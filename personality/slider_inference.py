@@ -1,5 +1,5 @@
 """Inferred values for no-evidence sliders of real coach and owner profiles
-(docs/in_progress/INFERRED_SLIDERS_AND_FOCUS_PLAN.md §2.2). Pure apart from reading the leans file.
+(docs/done/INFERRED_SLIDERS_AND_FOCUS_PLAN.md §2.2). Pure apart from reading the leans file.
 
 A profile slider at 5 with no cited evidence is a *no-evidence* slider. Instead of reading as a flat 5 it gets
 5 + the person's capped trait leans (newsroom/config/slider_leans.json) + a seeded step of -1/0/+1, kept in 2-8,

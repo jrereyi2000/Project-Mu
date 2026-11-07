@@ -1,7 +1,7 @@
 """Reviewed real-coach profiles (docs/in_progress/REAL_COACH_PROFILES_PLAN.md §2.1-§2.2).
 
 One file per 2026 head coach or coordinator in newsroom/config/coach_personas/<TEAM>_<ROLE>.json
-(schema `coach-profile-v1`, or `coach-profile-v2` per docs/in_progress/INFERRED_SLIDERS_AND_FOCUS_PLAN.md §2.1:
+(schema `coach-profile-v1`, or `coach-profile-v2` per docs/done/INFERRED_SLIDERS_AND_FOCUS_PLAN.md §2.1:
 top-level want/fear replaced by a durable `motivation` and a per-slot current `focus`, plus a `slider_inference`
 block for the no-evidence sliders; v1 files are still read). Pure apart from reading files: no database, network
 or model calls.
