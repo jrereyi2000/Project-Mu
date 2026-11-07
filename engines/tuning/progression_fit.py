@@ -5,8 +5,7 @@ Offline progression fit (docs/in_progress/MADDEN_PILOT_AND_TUNING_PLAN.md §2.4,
                                             [--out data/tuning/progression_fit.json] [--careers CSV] [--no-hold-shape]
 
 Replays Project Mu's progression engine (engines/progression.py, its pure functions only: seed_player_ceiling,
-compute_player_delta, upkeep_term, performance_term, simulated_performance, calibrate_league_term, top_quarter,
-bottom_quarter, dev_transition) over N seasons from a pc_save_reader snapshot league, scores the replayed league, and
+compute_player_delta, upkeep_term, performance_term, simulated_performance, calibrate_league_term) over N seasons from a pc_save_reader snapshot league, scores the replayed league, and
 searches the engine's module-level constants for a better score. It RECOMMENDS constants: it never writes
 engines/progression.py (V2 core U7 owns that file). Patching is in memory, for one replay, and always restored.
 
@@ -35,8 +34,8 @@ replay(snapshot, seasons=5, params=None, seed=0) -> league history
   4. Progression for everyone who stays: age + 1 (as run_simulation), compute_player_delta with the games, IR and
      missed weeks above, performance_term and upkeep_term, and the league-shape terms (calibrate_league_term on a
      stratified sample of at most CALIBRATION_SAMPLE players, its target scaled to the sample) holding the start's
-     90+ count and mean OVR, as the engine does (hold_shape; off with hold_shape=False). Dev traits move with
-     dev_transition. Years pro + 1.
+     90+ count and mean OVR, as the engine does (hold_shape; off with hold_shape=False). Dev traits keep their
+     labels, as run_simulation (the engine has no dev lottery since the receipt-driven progression). Years pro + 1.
   5. Rookies: each leaver is replaced by a rookie of his position group on his team, cloned from the snapshot's own
      rookie class (players with years_pro 0: OVR +-1, position, age, dev), so the league keeps its size and mix.
 
@@ -365,7 +364,6 @@ def _replay(league, seasons, seed, hold_shape):
     all_rookies = league["rookies"] or [{k: p[k] for k in ("position", "engine_position", "group", "age", "ovr",
                                                            "dev")} for p in roster]
     next_pid = 10_000_000 + max([p["pid"] for p in roster] + [0])
-    previous_perf = {}
     history = []
     for yr in range(1, seasons + 1):
         sim_s = league["calendar_year"] + yr
@@ -439,18 +437,11 @@ def _replay(league, seasons, seed, hold_shape):
             frac = (len(sample) + len(rookie_sample)) / max(1, len(staying) + len(rookies))
             target = {"count_90_plus": base["count_90_plus"] * frac, "avg_ovr": base["avg_ovr"]}
             terms = P.calibrate_league_term(sample, [r["ovr"] for r in rookie_sample], target, progress)[0]
-        top_now, top_before = P.top_quarter(perf), P.top_quarter(previous_perf)
-        bottom_now, bottom_before = P.bottom_quarter(perf), P.bottom_quarter(previous_perf)
         advanced = []
         for p in staying:
             new_ovr = progress(p, *terms)
-            ceiling = prepared[p["pid"]][0]
-            dev = P.dev_transition(p["pid"], sim_s, p["dev"], p["age"] + 1, new_ovr, ceiling,
-                                   p["pid"] in top_now, p["pid"] in top_before,
-                                   p["pid"] in bottom_now, p["pid"] in bottom_before) or p["dev"]
-            advanced.append({**p, "age": p["age"] + 1, "years_pro": p["years_pro"] + 1, "ovr": new_ovr, "dev": dev,
+            advanced.append({**p, "age": p["age"] + 1, "years_pro": p["years_pro"] + 1, "ovr": new_ovr,
                              "last_games": None, "last_prod": None})
-        previous_perf = perf
         roster = sorted(advanced + rookies, key=lambda p: p["pid"])
 
         history.append({"season": sim_s, "shape": league_shape(roster), "exits": len(leaving),

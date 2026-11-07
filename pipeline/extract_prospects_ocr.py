@@ -19,11 +19,12 @@ import re
 import unicodedata
 from typing import Any, Dict, List, Optional, Tuple
 
+from PIL import Image
+
 try:
     import Quartz
     import Vision
     from Foundation import NSURL
-    from PIL import Image
     HAS_APPLE_VISION = True
 except ImportError:
     HAS_APPLE_VISION = False
