@@ -529,14 +529,17 @@ def lifecycle_entries(docs) -> list[dict]:
     return out
 
 
-def persona_for(doc, view=None, change_notes=None, focus=None) -> dict:
+def persona_for(doc, view=None, change_notes=None, focus=None, lineage=None) -> dict:
     """The render_persona shape. A stored core feature view's sliders and traits replace the file's, so JR's
     overrides and later evolution show; the file keeps the voice, views, signatures and want/fear. Evolution
     change notes (personality.evolution_run.change_notes_for, newest first) pass through as `change_notes`.
 
     v2: `want`/`fear` are the motivation; `focus_want`/`focus_fear` are the file's focus texts, or the stored
     rows' texts when `focus` ({'want': row | None, 'fear': row | None} from focus_store.read_focus) is given;
-    a slot with no focus has no key. v1: want/fear as written, no focus keys."""
+    a slot with no focus has no key. v1: want/fear as written, no focus keys.
+
+    `lineage` (personality.coaching_trees.lineage_line, COACHING_TREES_PLAN §2.7): a non-empty string passes through
+    as `lineage`, one line render_persona prints after the voice."""
     _require_reviewed(doc)
     sliders, traits = (si.effective_sliders(doc) if is_v2(doc) else dict(doc['sliders'])), list(doc['traits'])
     if view is not None and view.get('status') == 'stored':
@@ -560,6 +563,8 @@ def persona_for(doc, view=None, change_notes=None, focus=None) -> dict:
         out['want'], out['fear'] = doc['want'], doc['fear']
     if change_notes:
         out['change_notes'] = [str(n) for n in change_notes]
+    if isinstance(lineage, str) and lineage.strip():
+        out['lineage'] = lineage.strip()
     return out
 
 

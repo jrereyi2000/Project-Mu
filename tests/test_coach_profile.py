@@ -156,3 +156,51 @@ class WithTeamRecordTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CoachingTreeBlockTests(unittest.TestCase):
+    """coach_profile carries `coaching_tree` (COACHING_TREES_PLAN §2.7)."""
+
+    def _profile(self, ctx, awards_visible=False):
+        from unittest.mock import patch
+        import engines.coach_profile as cp_mod
+        seen = []
+
+        def fake_context(cur, name, *, through, directory=None):
+            seen.append(through)
+            return ctx
+
+        class Cur:
+            def execute(self, *a):
+                pass
+
+            def fetchall(self):
+                return []
+
+            def fetchone(self):
+                return None
+
+        staff = {"head_coach": {"id": 1, "coach_name": "Ann Head", "start_season": 2030, "offensive_scheme": "Spread",
+                                "defensive_scheme": "4-3"}}
+        with patch.object(cp_mod, "fetch_team_staff", lambda *a: staff), \
+                patch.object(cp_mod, "fetch_tenures", lambda *a: [{"team_id": CAR, "start_season": 2030,
+                                                                   "end_season": None}]), \
+                patch.object(cp_mod, "fetch_snapshot", lambda *a: None), \
+                patch.object(cp_mod, "fetch_games", lambda *a: []), \
+                patch.object(cp_mod, "fetch_lines", lambda *a: []), \
+                patch.object(cp_mod, "fetch_previous_coach", lambda *a: None), \
+                patch("engines.coaching_tree_facts.tree_context", fake_context):
+            return cp_mod.coach_profile(Cur(), CAR, 2031, lambda s, w: True, awards_visible), seen
+
+    def test_present_with_the_season_rule(self):
+        ctx = {"label": "Reid tree", "line": "Coaching tree: Reid tree.", "mentors": [{"name": "Andy Reid"}],
+               "proteges": [], "trees": [], "root_of": []}
+        out, seen = self._profile(ctx)
+        self.assertEqual(out["coaching_tree"], {"label": "Reid tree", "line": "Coaching tree: Reid tree.",
+                                                "mentors": [{"name": "Andy Reid"}], "proteges": []})
+        self.assertEqual(seen, [2030])                                  # in season: through the season before
+        self.assertEqual(self._profile(ctx, awards_visible=True)[1], [2031])
+
+    def test_omitted_when_nothing_to_say(self):
+        out, _ = self._profile(None)
+        self.assertNotIn("coaching_tree", out)

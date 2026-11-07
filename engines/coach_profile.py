@@ -367,6 +367,16 @@ def fetch_games(cur, team_ids, first_season: int, last_season: int, visible) -> 
     return [g for g in (dict(zip(cols, r)) for r in cur.fetchall()) if visible(g["season"], g["week"])]
 
 
+def coaching_tree_block(cur, name: str, season: int, season_over: bool) -> dict | None:
+    """{label, line, mentors, proteges} for a coach (COACHING_TREES_PLAN §2.7), read through the season before
+    `season` while it is being played and through `season` once it is over; None when there's nothing to say."""
+    from engines import coaching_tree_facts
+    ctx = coaching_tree_facts.tree_context(cur, name, through=season if season_over else season - 1)
+    if ctx is None:
+        return None
+    return {"label": ctx["label"], "line": ctx["line"], "mentors": ctx["mentors"], "proteges": ctx["proteges"]}
+
+
 def coach_profile(cur, team_id: int, season: int, visible, awards_visible: bool) -> dict | None:
     """Everything a writer needs about the team's head coach in `season`. `awards_visible`: whether this season's
     awards (decided after the season) may be shown."""
@@ -392,8 +402,9 @@ def coach_profile(cur, team_id: int, season: int, visible, awards_visible: bool)
         ORDER BY season
     """, (coach["id"], season, awards_visible))
     coty = [r[0] for r in cur.fetchall()]
+    tree = coaching_tree_block(cur, coach["coach_name"], season, awards_visible)
 
-    return {
+    out = {
         "coach": coach["coach_name"],
         "slant": coach.get("slant", "OFFENSIVE"),
         "season_with_team": season - start + 1,
@@ -426,6 +437,9 @@ def coach_profile(cur, team_id: int, season: int, visible, awards_visible: bool)
                                  " record_with_team and playoff_record_with_team are null when an earlier season of "
                                  "this tenure isn't on record."),
     }
+    if tree is not None:
+        out["coaching_tree"] = tree
+    return out
 
 
 def _mu_era_only(cur, coach_id: int, snapshot_season: int) -> bool:
