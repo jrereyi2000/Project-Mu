@@ -1,5 +1,5 @@
 {
-  "schema_version": "owner-profile-v1",
+  "schema_version": "owner-profile-v2",
   "key": "owner:PHI",
   "name": "Jeffrey Lurie",
   "role": "OWNER",
@@ -18,6 +18,18 @@
     "drive": 5
   },
   "slider_evidence": {},
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 4,
+      "sociability": 4,
+      "confidence": 6,
+      "openness": 4,
+      "warmth": 6,
+      "drive": 5
+    },
+    "locked": []
+  },
   "traits": [
     "PATIENT_BUILDER",
     "MEDDLER",
@@ -81,8 +93,24 @@
     "explains big decisions at the owners meetings",
     "praises his general manager in superlatives"
   ],
-  "want": "Keep the Eagles a perennial contender after another championship (medium).",
-  "fear": "Letting a title window close through complacency (medium).",
+  "motivation": {
+    "want": "to keep the Eagles a perennial contender",
+    "fear": "letting a title window close through complacency"
+  },
+  "focus": {
+    "want": {
+      "text": "another championship while Jalen Hurts is in his prime",
+      "subjects": [
+        {
+          "kind": "player",
+          "name": "Jalen Hurts",
+          "team_2026": "PHI"
+        }
+      ],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "Thoughtful and articulate, a film producer's ease with narrative. Defends patience with reasoning and avoids timelines; brief on contract matters.",
   "ties": [
     {
@@ -122,9 +150,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 ('The rest of the owners look good')."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 ('The rest of the owners look good').; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

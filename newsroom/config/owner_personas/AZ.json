@@ -1,5 +1,5 @@
 {
-  "schema_version": "owner-profile-v1",
+  "schema_version": "owner-profile-v2",
   "key": "owner:AZ",
   "name": "Michael Bidwill",
   "role": "OWNER",
@@ -18,6 +18,18 @@
     "drive": 5
   },
   "slider_evidence": {},
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 7,
+      "sociability": 6,
+      "confidence": 5,
+      "openness": 3,
+      "warmth": 6,
+      "drive": 5
+    },
+    "locked": []
+  },
   "traits": [
     "MEDDLER",
     "LOYAL",
@@ -80,8 +92,14 @@
     "praises a fired coach in glowing terms",
     "keeps his general manager through coaching changes"
   ],
-  "want": "A sustained winner in Arizona after years of short coaching cycles (medium).",
-  "fear": "Another three-year cycle that ends in a firing (medium).",
+  "motivation": {
+    "want": "a sustained winner in Arizona after years of short coaching cycles",
+    "fear": "another three-year cycle that ends in a firing"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Upbeat and complimentary even in bad news, then blunt about results. Former prosecutor's cadence: short declarative sentences.",
   "ties": [
     {
@@ -121,9 +139,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 ('The rest of the owners look good')."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 ('The rest of the owners look good').; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

@@ -1,5 +1,5 @@
 {
-  "schema_version": "owner-profile-v1",
+  "schema_version": "owner-profile-v2",
   "key": "owner:WAS",
   "name": "Josh Harris",
   "role": "OWNER",
@@ -18,6 +18,18 @@
     "drive": 5
   },
   "slider_evidence": {},
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 3,
+      "sociability": 5,
+      "confidence": 5,
+      "openness": 5,
+      "warmth": 5,
+      "drive": 7
+    },
+    "locked": []
+  },
   "traits": [
     "HANDS_OFF",
     "PATIENT_BUILDER",
@@ -81,8 +93,24 @@
     "describes decisions as a process with experts",
     "talks about the stadium and the fan experience"
   ],
-  "want": "Build Washington into a model franchise after the previous era (medium).",
-  "fear": "Sliding back into the old dysfunction (medium).",
+  "motivation": {
+    "want": "to build Washington into a model franchise",
+    "fear": "sliding back into the old dysfunction"
+  },
+  "focus": {
+    "want": {
+      "text": "a title with Jayden Daniels",
+      "subjects": [
+        {
+          "kind": "player",
+          "name": "Jayden Daniels",
+          "team_2026": "WAS"
+        }
+      ],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "Calm, polished and corporate, a private-equity vocabulary of process and talent. Shares credit with partners and staff and avoids football specifics.",
   "ties": [
     {
@@ -131,9 +159,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 ('The rest of the owners look good')."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 ('The rest of the owners look good').; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

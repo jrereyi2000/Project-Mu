@@ -1,5 +1,5 @@
 {
-  "schema_version": "owner-profile-v1",
+  "schema_version": "owner-profile-v2",
   "key": "owner:NYG",
   "name": "John Mara",
   "role": "OWNER",
@@ -18,6 +18,18 @@
     "drive": 5
   },
   "slider_evidence": {},
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 4,
+      "sociability": 6,
+      "confidence": 5,
+      "openness": 6,
+      "warmth": 7,
+      "drive": 5
+    },
+    "locked": []
+  },
   "traits": [
     "PATIENT_BUILDER",
     "LOYAL",
@@ -82,8 +94,14 @@
     "commits publicly to his staff after bad seasons",
     "speaks about family ownership and tradition"
   ],
-  "want": "Return the Giants to contention without another full rebuild (medium).",
-  "fear": "Repeating the cycle of quick firings that set the franchise back (medium).",
+  "motivation": {
+    "want": "to return the Giants to contention without another full rebuild",
+    "fear": "repeating the cycle of quick firings that set the franchise back"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Formal, guarded and sometimes testy with critics; speaks in terms of commitment and process. Takes responsibility in general terms while defending the people he keeps.",
   "ties": [
     {
@@ -123,9 +141,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 ('The rest of the owners look good')."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 ('The rest of the owners look good').; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

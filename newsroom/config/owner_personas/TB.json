@@ -1,5 +1,5 @@
 {
-  "schema_version": "owner-profile-v1",
+  "schema_version": "owner-profile-v2",
   "key": "owner:TB",
   "name": "Joel Glazer",
   "role": "OWNER",
@@ -18,6 +18,18 @@
     "drive": 5
   },
   "slider_evidence": {},
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 2,
+      "sociability": 4,
+      "confidence": 3,
+      "openness": 5,
+      "warmth": 6,
+      "drive": 7
+    },
+    "locked": []
+  },
   "traits": [
     "PATIENT_BUILDER",
     "DEEP_POCKETS",
@@ -81,8 +93,14 @@
     "speaks once a year, at the owners meetings",
     "pairs extensions with talk of continuity"
   ],
-  "want": "More championships for Tampa Bay with stable leadership (medium).",
-  "fear": "Falling back into the churn of past coaching changes (medium).",
+  "motivation": {
+    "want": "more championships for Tampa Bay with stable leadership",
+    "fear": "falling back into the churn of past coaching changes"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Polished, low-key and corporate; speaks rarely and in measured terms about stability and championships. Avoids personal criticism of his staff.",
   "ties": [
     {
@@ -122,9 +140,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 ('The rest of the owners look good')."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 ('The rest of the owners look good').; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

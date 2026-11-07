@@ -1,5 +1,5 @@
 {
-  "schema_version": "owner-profile-v1",
+  "schema_version": "owner-profile-v2",
   "key": "owner:HOU",
   "name": "Cal McNair",
   "role": "OWNER",
@@ -21,6 +21,17 @@
     "drive": [
       "E2"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 7,
+      "sociability": 5,
+      "confidence": 7,
+      "openness": 5,
+      "warmth": 5
+    },
+    "locked": []
   },
   "traits": [
     "DEEP_POCKETS",
@@ -85,8 +96,28 @@
     "speaks alongside family members at team events",
     "talks about embracing expectations"
   ],
-  "want": "Turn the Texans into a perennial AFC contender while the young core is cheap (medium).",
-  "fear": "Wasting a rookie-contract window and returning to the lean years (medium).",
+  "motivation": {
+    "want": "to make the Texans a perennial contender",
+    "fear": "returning to the lean years"
+  },
+  "focus": {
+    "want": {
+      "text": "a deep playoff run while the young core is cheap",
+      "subjects": [],
+      "until_season": null
+    },
+    "fear": {
+      "text": "wasting the rookie-contract window of C.J. Stroud",
+      "subjects": [
+        {
+          "kind": "player",
+          "name": "C.J. Stroud",
+          "team_2026": "HOU"
+        }
+      ],
+      "until_season": null
+    }
+  },
   "voice": "Polite, earnest, family-centered; speaks in team-mission phrases. Lets his general manager handle the detail and talks about expectations and community.",
   "ties": [
     {
@@ -135,9 +166,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 ('The rest of the owners look good')."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 ('The rest of the owners look good').; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

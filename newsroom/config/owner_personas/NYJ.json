@@ -1,5 +1,5 @@
 {
-  "schema_version": "owner-profile-v1",
+  "schema_version": "owner-profile-v2",
   "key": "owner:NYJ",
   "name": "Woody Johnson",
   "role": "OWNER",
@@ -22,6 +22,17 @@
       "E1",
       "E2"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "sociability": 5,
+      "confidence": 6,
+      "openness": 6,
+      "warmth": 6,
+      "drive": 6
+    },
+    "locked": []
   },
   "traits": [
     "MEDDLER",
@@ -86,8 +97,14 @@
     "makes the firing announcement himself",
     "is reported to weigh in on lineup and personnel questions"
   ],
-  "want": "A Jets team good enough to end the franchise's long playoff drought (medium).",
-  "fear": "Being cast as the meddling owner behind another failed era (medium).",
+  "motivation": {
+    "want": "a Jets team good enough to end the long playoff drought",
+    "fear": "being cast as the meddling owner behind another failed era"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Polished and diplomatic in public statements, terse when announcing a decision. Insists decisions are his own. Keeps the rhetoric about winning and the fans.",
   "ties": [],
   "evidence": [
@@ -120,9 +137,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 ('The rest of the owners look good')."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 ('The rest of the owners look good').; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

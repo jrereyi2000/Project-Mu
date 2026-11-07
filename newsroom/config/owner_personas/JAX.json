@@ -1,5 +1,5 @@
 {
-  "schema_version": "owner-profile-v1",
+  "schema_version": "owner-profile-v2",
   "key": "owner:JAX",
   "name": "Shad Khan",
   "role": "OWNER",
@@ -18,6 +18,18 @@
     "drive": 5
   },
   "slider_evidence": {},
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 6,
+      "sociability": 7,
+      "confidence": 6,
+      "openness": 4,
+      "warmth": 4,
+      "drive": 6
+    },
+    "locked": []
+  },
   "traits": [
     "MEDDLER",
     "DEEP_POCKETS",
@@ -79,8 +91,18 @@
     "redraws the org chart when he hires a coach",
     "talks about the stadium and London in the same breath as football"
   ],
-  "want": "A consistent winner in a renovated stadium that secures the franchise in Jacksonville (medium).",
-  "fear": "Another coaching reset with nothing to show for it (medium).",
+  "motivation": {
+    "want": "a consistent winner that secures the franchise in Jacksonville",
+    "fear": "another coaching reset with nothing to show for it"
+  },
+  "focus": {
+    "want": {
+      "text": "a winner to open the renovated stadium",
+      "subjects": [],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "Confident and businesslike, speaks in terms of structure and accountability. Optimistic about the city and the project; brief on football detail.",
   "ties": [
     {
@@ -129,9 +151,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 ('The rest of the owners look good')."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 ('The rest of the owners look good').; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

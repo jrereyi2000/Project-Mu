@@ -1,5 +1,5 @@
 {
-  "schema_version": "owner-profile-v1",
+  "schema_version": "owner-profile-v2",
   "key": "owner:CLE",
   "name": "Jimmy Haslam",
   "role": "OWNER",
@@ -18,6 +18,18 @@
     "drive": 5
   },
   "slider_evidence": {},
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 8,
+      "sociability": 6,
+      "confidence": 7,
+      "openness": 4,
+      "warmth": 5,
+      "drive": 5
+    },
+    "locked": []
+  },
   "traits": [
     "HEADLINE_HUNTER",
     "DEEP_POCKETS",
@@ -81,8 +93,14 @@
     "admits mistakes in blunt terms at the owners meetings",
     "bristles at questions about organizational chaos"
   ],
-  "want": "A stable winner in Cleveland that silences the dysfunction label (medium).",
-  "fear": "Another failed quarterback bet and the label that comes with it (medium).",
+  "motivation": {
+    "want": "a stable winner that silences the dysfunction label",
+    "fear": "another failed quarterback bet and the label that comes with it"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Direct and businesslike, willing to concede an error and then defend the organization in the same answer. Speaks of accountability and the shared ownership with his wife.",
   "ties": [
     {
@@ -122,9 +140,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 ('The rest of the owners look good')."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 ('The rest of the owners look good').; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

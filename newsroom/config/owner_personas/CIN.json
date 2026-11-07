@@ -1,5 +1,5 @@
 {
-  "schema_version": "owner-profile-v1",
+  "schema_version": "owner-profile-v2",
   "key": "owner:CIN",
   "name": "Mike Brown",
   "role": "OWNER",
@@ -21,6 +21,17 @@
     "openness": [
       "E2"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 4,
+      "sociability": 4,
+      "confidence": 7,
+      "warmth": 4,
+      "drive": 5
+    },
+    "locked": []
   },
   "traits": [
     "PATIENT_BUILDER",
@@ -86,8 +97,14 @@
     "comments on contract talks personally",
     "keeps the same football leadership year after year"
   ],
-  "want": "Another deep playoff run built on the core the family drafted (medium).",
-  "fear": "Overpaying and losing the cap flexibility the club depends on (medium).",
+  "motivation": {
+    "want": "another deep playoff run built on the core the family drafted",
+    "fear": "overpaying and losing the cap flexibility the club depends on"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Dry, understated, unhurried; speaks in short, cautious sentences. Praises players while declining to commit on money. Treats the club as a family business.",
   "ties": [
     {
@@ -127,9 +144,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 ('The rest of the owners look good')."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 ('The rest of the owners look good').; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

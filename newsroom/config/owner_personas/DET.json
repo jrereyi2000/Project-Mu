@@ -1,5 +1,5 @@
 {
-  "schema_version": "owner-profile-v1",
+  "schema_version": "owner-profile-v2",
   "key": "owner:DET",
   "name": "Sheila Ford Hamp",
   "role": "OWNER",
@@ -25,6 +25,16 @@
     "temperament": [
       "E1"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "sociability": 5,
+      "confidence": 5,
+      "openness": 5,
+      "drive": 5
+    },
+    "locked": []
   },
   "traits": [
     "PATIENT_BUILDER",
@@ -90,8 +100,28 @@
     "publicly backs her staff during losing streaks",
     "calls her coach and GM the driving force of the rebuild"
   ],
-  "want": "A first Super Bowl for Detroit and her family's ownership (medium).",
-  "fear": "Losing the leaders who finally turned the franchise around (medium).",
+  "motivation": {
+    "want": "a first Super Bowl for Detroit and her family's ownership",
+    "fear": "losing the leaders who finally turned the franchise around"
+  },
+  "focus": {
+    "want": null,
+    "fear": {
+      "text": "losing Dan Campbell before the title comes",
+      "subjects": [
+        {
+          "kind": "coach",
+          "seed_ref": {
+            "table": "COACHES_DATA",
+            "team": "DET",
+            "role": "HC",
+            "name": "Dan Campbell"
+          }
+        }
+      ],
+      "until_season": null
+    }
+  },
   "voice": "Warm, steady and candid about frustration without anger. Speaks of trust, patience and the fans, and lets the football people explain football.",
   "ties": [
     {
@@ -131,9 +161,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 ('The rest of the owners look good')."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 ('The rest of the owners look good').; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

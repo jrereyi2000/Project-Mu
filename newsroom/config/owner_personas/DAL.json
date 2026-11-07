@@ -1,5 +1,5 @@
 {
-  "schema_version": "owner-profile-v1",
+  "schema_version": "owner-profile-v2",
   "key": "owner:DAL",
   "name": "Jerry Jones",
   "role": "OWNER",
@@ -25,6 +25,16 @@
     "sociability": [
       "E1"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 7,
+      "openness": 4,
+      "warmth": 5,
+      "drive": 4
+    },
+    "locked": []
   },
   "traits": [
     "MEDDLER",
@@ -89,8 +99,14 @@
     "holds court with reporters weekly",
     "insists big decisions were collective while noting he could have overruled"
   ],
-  "want": "Another Super Bowl for the Cowboys on his watch as owner and general manager (medium).",
-  "fear": "Being remembered as the owner whose control kept the team from titles (medium).",
+  "motivation": {
+    "want": "another Super Bowl on his watch as owner and general manager",
+    "fear": "being remembered as the owner whose control kept the team from titles"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Expansive, colorful and talkative, full of folksy analogies and business metaphors. Defends every move at length and enjoys the spotlight.",
   "ties": [
     {
@@ -130,9 +146,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 ('The rest of the owners look good')."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 ('The rest of the owners look good').; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }
