@@ -1,4 +1,4 @@
-"""Reviewed real-coach profiles (docs/in_progress/REAL_COACH_PROFILES_PLAN.md §2.1-§2.2).
+"""Reviewed real-coach profiles (docs/done/REAL_COACH_PROFILES_PLAN.md §2.1-§2.2).
 
 One file per 2026 head coach or coordinator in newsroom/config/coach_personas/<TEAM>_<ROLE>.json
 (schema `coach-profile-v1`, or `coach-profile-v2` per docs/done/INFERRED_SLIDERS_AND_FOCUS_PLAN.md §2.1:

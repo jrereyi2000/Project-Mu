@@ -1,6 +1,6 @@
 # Project Mu: Real-Coach Profiles Plan
 
-**Status:** approved by JR (2026-11-03); all 3 waves built on main (2026-11-05); re-seated to the 2026 staffs (2026-11-06), then the 33 new seats researched and the 32 moved ones refreshed with 2026 sources: all 96 validate; CAR_HC reviewed, the other 95 are drafts awaiting JR's review (pages `verify_output/coach_review/review_2026_*.md`)
+**Status:** approved by JR (2026-11-03); built and on main. All 3 waves built 2026-11-05; re-seated to the 2026 staffs 2026-11-06 and the new/moved seats researched with 2026 sources; JR approved all 96 coach profiles on 2026-11-07, and again after the inferred-sliders/focus conversion to v2 (2026-11-07, commit cc2ed17). Moved to `docs/done/`.
 - As built (U1): `seed_index` parses `db/seed_clean_db.py` with `ast` instead of importing it, so no psycopg import.
 - As built (U1): `load_profiles` adds an in-memory `_file` (base name) that `validate_profile_file` checks against team and role; `_`-keys are never written. `validate` and `report` also take `--file PATH ...` (used for the template), and `validate` lists missing team files without failing.
 - As built (U1): a tie's `opportunity_ref` is `coach-profile:<key>:tie:<n>`, not null: the relationships-v1 contract requires nonempty text there. `file_sha256` in the review receipt is the SHA-256 of the file's canonical JSON (sorted keys).

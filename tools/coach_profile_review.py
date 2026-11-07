@@ -1,4 +1,4 @@
-"""Review tool for real-coach and real-inspired owner profiles (docs/in_progress/REAL_COACH_PROFILES_PLAN.md
+"""Review tool for real-coach and real-inspired owner profiles (docs/done/REAL_COACH_PROFILES_PLAN.md
 §2.3; owners: docs/in_progress/OWNERS_SCOUTS_VOTERS_PLAN.md §2.2).
 
 Offline throughout: no database, network or model calls.
