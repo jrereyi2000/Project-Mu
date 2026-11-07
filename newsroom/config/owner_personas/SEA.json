@@ -113,9 +113,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "Brand-new owners: the Khosla family's purchase was approved 2026-08-26 and closed days before the opener. Neeru Khosla is the controlling owner per the NFL; Vinod Khosla (chair) is the family's public voice. Their introductory press conference (2026-09-09) is after the source cutoff and is not used. E2 and E3 dates are taken from the late-August news cycle. JR to confirm which Khosla the persona should be."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07: Neeru Khosla is the owner persona."
   }
 }
