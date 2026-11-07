@@ -11,13 +11,17 @@ personas casts seeded ballots for the six major awards and the All-Pro teams. No
   store_results(cur, season, tallies, cands_by_award, ballots)   awards rows (winners) + award_ballots rows
   store_all_pro(cur, season, teams, cands_by_slot, ballots)      62 awards rows + award_ballots ('ALL_PRO:<slot>')
   run_awards(cur, season) / run_all_pro(cur, season)              candidates -> ballots -> tallies -> storage
+  feature_mode(cur) -> 'off' | 'shadow' | 'active'               the switchboard's media_voters mode for the league
+  decide_awards(cur, season, mode) / decide_all_pro(cur, season, mode)   the ballots' results when active, else None
 
 Leans (review-only estimates): ANALYTICS_BELIEVER up-weights efficiency; OLD_SCHOOL wins and volume (production);
 HISTORIAN adds the record-pace bonus; a view tagged AWARDS adds a lean toward winning teams. Each ballot adds seeded
 noise (sha256(['ballot-v1', season, voter, award])) to every candidate's leaned score. The award_ballots table comes
-from the owners/scouts/voters migration (2027_02_02, plan U6). Nothing here is wired into the newsroom run yet: the
-`media_voters` switchboard feature (activation plan) decides when the Week 19 and Week 22 articles report stored
-ballots instead of writing the winners themselves.
+from the owners/scouts/voters migration (2027_02_02, plan U6). The newsroom run (swarm_dispatcher, Week 19 All-Pro
+and Week 22 awards storage) reads the `media_voters` switchboard mode through feature_mode: off (the default, and
+whenever the switchboard can't be read) and shadow keep today's path (the article's winners are parsed and stored);
+active stores the panel's ballots and checks the article against them instead. The feature can't reach shadow
+until U6's migration file exists (personality.features.REQUIREMENTS), so today it always reads off.
 """
 from __future__ import annotations
 
@@ -267,3 +271,40 @@ def all_pro_facts(teams, cands_by_slot) -> dict:
     return {level: {slot: [{"name": names.get(e["id"], {}).get("name"), "team_id": names.get(e["id"], {}).get(
         "team_id"), "votes": e["votes"]} for e in team.get(slot) or []] for slot in ALL_SLOT_QUOTAS}
             for level, team in zip(TEAM_LEVELS, (teams["first"], teams["second"]))}
+
+
+# ------------------------------------------------------------------------------------------- switchboard ---
+FEATURE = "media_voters"
+
+
+def feature_mode(cur) -> str:
+    """The switchboard's media_voters mode for this database's league (personality.features); 'off' when there is
+    no league, no switchboard tables or any read error (inside a savepoint, so the caller's transaction survives)."""
+    try:
+        cur.execute("SAVEPOINT media_voters_mode")
+    except Exception:  # noqa: BLE001
+        return "off"
+    try:
+        from personality import features
+        cur.execute("SELECT madden_league_id FROM league_state WHERE id = 1")
+        row = cur.fetchone()
+        mode = "off" if not row or row[0] is None else features.mode(cur, int(row[0]), FEATURE)
+        cur.execute("RELEASE SAVEPOINT media_voters_mode")
+        return mode if mode in ("off", "shadow", "active") else "off"
+    except Exception:  # noqa: BLE001 - the article path stays today's
+        try:
+            cur.execute("ROLLBACK TO SAVEPOINT media_voters_mode")
+            cur.execute("RELEASE SAVEPOINT media_voters_mode")
+        except Exception:  # noqa: BLE001
+            pass
+        return "off"
+
+
+def decide_awards(cur, season, mode, voters=None):
+    """run_awards when media_voters is active (the ballots decide the six awards), else None (today's path)."""
+    return run_awards(cur, season, voters) if mode == "active" else None
+
+
+def decide_all_pro(cur, season, mode, voters=None):
+    """run_all_pro when media_voters is active (the ballots decide the All-Pro teams), else None (today's path)."""
+    return run_all_pro(cur, season, voters) if mode == "active" else None

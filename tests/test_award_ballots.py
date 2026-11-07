@@ -295,3 +295,63 @@ def test_the_all_pro_article_is_checked_against_the_stored_teams(all_pro_run):
     cur = fake_cur([("First Team All-Pro", "QB", 1, "Al", 3)])
     assert all_pro.load_stored_teams(cur, 2026) == [{"award_type": "First Team All-Pro", "slot": "QB",
                                                      "player_id": 1, "player_name": "Al", "team_id": 3}]
+
+
+# ------------------------------------------------------------------------- media_voters via the switchboard ---
+
+class _ModeCursor:
+    """league_state and savepoint statements only; the switchboard read itself is patched."""
+
+    def __init__(self, league=(7,), fail=False):
+        self.league, self.fail, self.sql = league, fail, []
+
+    def execute(self, sql, params=None):
+        self.sql.append(sql)
+        if self.fail and "league_state" in sql:
+            raise RuntimeError("boom")
+
+    def fetchone(self):
+        return self.league
+
+
+def test_feature_mode_reads_the_switchboard():
+    from unittest import mock
+    from newsroom import award_ballots as ab
+    cur = _ModeCursor()
+    with mock.patch("personality.features.mode", return_value="active") as mode:
+        assert ab.feature_mode(cur) == "active"
+    assert mode.call_args[0][1:] == (7, "media_voters")
+    assert cur.sql[-1] == "RELEASE SAVEPOINT media_voters_mode"
+
+
+def test_feature_mode_is_off_without_a_league_or_on_errors():
+    from unittest import mock
+    from newsroom import award_ballots as ab
+    with mock.patch("personality.features.mode", return_value="active") as mode:
+        assert ab.feature_mode(_ModeCursor(league=None)) == "off"
+        mode.assert_not_called()
+        cur = _ModeCursor(fail=True)
+        assert ab.feature_mode(cur) == "off"
+    assert "ROLLBACK TO SAVEPOINT media_voters_mode" in cur.sql
+
+
+def test_feature_mode_off_by_default_without_switchboard_tables():
+    from unittest import mock
+    from newsroom import award_ballots as ab
+    with mock.patch("personality.features.tables_ready", return_value=False), \
+            mock.patch("personality.features.league_key", return_value=7):
+        assert ab.feature_mode(_ModeCursor()) == "off"
+
+
+def test_decide_runs_ballots_only_when_active():
+    from unittest import mock
+    from newsroom import award_ballots as ab
+    with mock.patch.object(ab, "run_awards", return_value={"tallies": {}}) as aw, \
+            mock.patch.object(ab, "run_all_pro", return_value={"teams": {}}) as ap:
+        for mode in ("off", "shadow"):
+            assert ab.decide_awards("cur", 2030, mode) is None
+            assert ab.decide_all_pro("cur", 2030, mode) is None
+        aw.assert_not_called()
+        ap.assert_not_called()
+        assert ab.decide_awards("cur", 2030, "active") == {"tallies": {}}
+        assert ab.decide_all_pro("cur", 2030, "active") == {"teams": {}}

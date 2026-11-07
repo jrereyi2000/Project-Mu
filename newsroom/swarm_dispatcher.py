@@ -25,15 +25,20 @@ from newsroom.power_rankings import (
     previous_rankings_directive,
     store_power_rankings,
 )
+from newsroom import award_ballots
 from newsroom.all_pro import (
     all_pro_fix_prompt,
+    check_against_stored as check_all_pro_against_stored,
     load_roster_index,
+    load_stored_teams as load_stored_all_pro,
     parse_all_pro,
     store_all_pro_teams,
 )
 from newsroom.award_winners import (
     award_winners_fix_prompt,
+    check_against_stored as check_awards_against_stored,
     load_coach_index,
+    load_stored_winners,
     parse_award_winners,
     parse_sb_mvp,
     sb_mvp_fix_prompt,
@@ -1739,7 +1744,14 @@ If you need specific stats, use your database tools before producing your final 
                                 n = store_power_rankings(cur, season, week, article_id, compiled_prompt["archetype"], entries)
                                 print(f"📊 [POWER RANKINGS STORED] Season {season} Week {week}: {n} teams from article #{article_id}.")
 
-                        if article_id and ctype == "ARTICLE" and at_id == "OFFICIAL_AP_ALL_PRO_ROSTER":
+                        if article_id and ctype == "ARTICLE" and at_id == "OFFICIAL_AP_ALL_PRO_ROSTER" and \
+                                award_ballots.decide_all_pro(cur, season, award_ballots.feature_mode(cur)) is not None:
+                            # media_voters active: the panel's ballots decided and stored the teams; check the article
+                            ap_errors = check_all_pro_against_stored(generated_text, load_stored_all_pro(cur, season),
+                                                                     load_roster_index(cur, season))
+                            print(f"🗳️  [ALL-PRO BALLOTS] Season {season}: stored from the media panel; article #{article_id} "
+                                  + ("matches." if not ap_errors else "differs: " + " | ".join(ap_errors[:5])))
+                        elif article_id and ctype == "ARTICLE" and at_id == "OFFICIAL_AP_ALL_PRO_ROSTER":
                             entries, ap_errors = parse_all_pro(generated_text, load_roster_index(cur, season))
                             if ap_errors:
                                 print(f"⚠️  [ALL-PRO NOT STORED] Article #{article_id}: " + " | ".join(ap_errors[:5]))
@@ -1747,7 +1759,14 @@ If you need specific stats, use your database tools before producing your final 
                                 n = store_all_pro_teams(cur, season, week, article_id, compiled_prompt["archetype"], entries)
                                 print(f"🏆 [ALL-PRO STORED] Season {season} Week {week}: {n} selections saved to awards from article #{article_id}.")
 
-                        if article_id and ctype == "ARTICLE" and at_id == "AWARDS_TRACKER" and week == 22:
+                        if article_id and ctype == "ARTICLE" and at_id == "AWARDS_TRACKER" and week == 22 and \
+                                award_ballots.decide_awards(cur, season, award_ballots.feature_mode(cur)) is not None:
+                            # media_voters active: the panel's ballots decided and stored the winners; check the article
+                            aw_errors = check_awards_against_stored(generated_text, load_stored_winners(cur, season),
+                                                                    load_roster_index(cur, season), load_coach_index(cur, season))
+                            print(f"🗳️  [AWARD BALLOTS] Season {season}: winners stored from the media panel; article #{article_id} "
+                                  + ("matches." if not aw_errors else "differs: " + " | ".join(aw_errors[:5])))
+                        elif article_id and ctype == "ARTICLE" and at_id == "AWARDS_TRACKER" and week == 22:
                             entries, aw_errors = parse_award_winners(generated_text, load_roster_index(cur, season), load_coach_index(cur, season))
                             if aw_errors:
                                 print(f"⚠️  [AWARDS NOT STORED] Article #{article_id}: " + " | ".join(aw_errors[:5]))

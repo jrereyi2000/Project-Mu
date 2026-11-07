@@ -282,7 +282,7 @@ CREATE TABLE IF NOT EXISTS inbox_threads (
     actor_id          VARCHAR(40) NOT NULL,                    -- the controlled persona; 'TEAM' + abbr for notices
     counterpart_type  VARCHAR(16) NOT NULL
         CHECK (counterpart_type IN ('gm','coach','player','writer','prospect','scout','owner','system')),
-    counterpart_id    VARCHAR(100) NOT NULL,                   -- gm_profiles.id, coaches.id, players.id, agent_memories.agent_id, prospect_key (V2.10: draft_prospects.id changes on a board re-scan)
+    counterpart_id    VARCHAR(100) NOT NULL,                   -- gm_profiles.id, coaches.id, players.id, agent_memories.agent_id, prospect_uid (V2.10: draft_prospects.id changes on a board re-scan; the permanent prospect ID, engines/prospect_ids.py)
     counterpart_name  VARCHAR(255) NOT NULL,
     subject           VARCHAR(255) NOT NULL,
     status            VARCHAR(12) NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN','WAITING_JR','CLOSED','EXPIRED')),
