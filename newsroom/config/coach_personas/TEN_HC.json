@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:TEN:HC",
   "name": "Robert Saleh",
   "role": "HC",
@@ -33,6 +33,15 @@
       "E2",
       "E7"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 5,
+      "confidence": 5,
+      "openness": 5
+    },
+    "locked": []
   },
   "traits": [
     "LOYAL",
@@ -129,8 +138,24 @@
     "defends a young player against outside criticism before talking about the player's mistakes",
     "stops practice to cool things down after a fight rather than letting it ride"
   ],
-  "want": "to prove in Tennessee that the lessons from his Jets firing make him a winning head coach the second time",
-  "fear": "that a second head-coaching failure confirms the doubts from New York",
+  "motivation": {
+    "want": "to prove the lessons of his firing make him a winner the second time",
+    "fear": "that a second failure confirms every doubt about him"
+  },
+  "focus": {
+    "want": {
+      "text": "to build a winner in Tennessee around Cam Ward",
+      "subjects": [
+        {
+          "kind": "player",
+          "name": "Cam Ward",
+          "team_2026": "TEN"
+        }
+      ],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "High-energy, warm and conversational, with quick, catchy phrases players and fans repeat. He is candid about what he learned from failing in New York, defends his players hard in public, and turns blunt and clipped when a quarterback's mistake or a fight crosses his standard.",
   "ties": [
     {
@@ -314,9 +339,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

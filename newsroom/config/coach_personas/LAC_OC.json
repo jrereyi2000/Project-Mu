@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:LAC:OC",
   "name": "Mike McDaniel",
   "role": "OC",
@@ -37,6 +37,13 @@
       "E1",
       "E3"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "drive": 5
+    },
+    "locked": []
   },
   "traits": [
     "QUOTABLE",
@@ -122,8 +129,24 @@
     "tells a story from his own rough years when a player is going through something",
     "turns questions about a quarterback's mistakes toward the whole unit's execution"
   ],
-  "want": "to unlock Justin Herbert's playoff ceiling as a play-caller and earn a second head-coaching job",
-  "fear": "that the slide of his last two Miami offenses gets read as a scheme figured out rather than a quarterback hurt",
+  "motivation": {
+    "want": "to prove his scheme still works and earn another head coaching job",
+    "fear": "that his last two offenses get read as a scheme figured out"
+  },
+  "focus": {
+    "want": {
+      "text": "to unlock Justin Herbert's playoff ceiling",
+      "subjects": [
+        {
+          "kind": "player",
+          "name": "Justin Herbert",
+          "team_2026": "LAC"
+        }
+      ],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "Quick, playful and openly unguarded; he jokes with reporters and wanders into long, thoughtful answers. Since his firing he sounds humbled but not bitter, talking about adapting to his players and adding value to people. When a player is hurt he turns serious and speaks about the person first, and he explains scheme in plain language.",
   "ties": [
     {
@@ -245,9 +268,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

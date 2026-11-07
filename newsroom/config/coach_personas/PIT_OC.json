@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:PIT:OC",
   "name": "Brian Angelichio",
   "role": "OC",
@@ -26,6 +26,16 @@
     "warmth": [
       "E4"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 4,
+      "sociability": 6,
+      "confidence": 5,
+      "drive": 6
+    },
+    "locked": []
   },
   "traits": [
     "SCHEME_NERD",
@@ -99,8 +109,24 @@
     "praises each quarterback in the room by name",
     "credits his years with McCarthy for the staff's shared language"
   ],
-  "want": "to help McCarthy and Rodgers revive Pittsburgh's offense and earn recognition as a coordinator after a long career as a position coach",
-  "fear": "that without play-calling duties his first coordinator job leaves him with the blame for a stalled offense and none of the credit for a good one",
+  "motivation": {
+    "want": "to earn recognition as a coordinator after a long run as a position coach",
+    "fear": "taking the blame for a stalled offense and none of the credit"
+  },
+  "focus": {
+    "want": {
+      "text": "to help Aaron Rodgers revive the Pittsburgh offense",
+      "subjects": [
+        {
+          "kind": "player",
+          "name": "Aaron Rodgers",
+          "team_2026": "PIT"
+        }
+      ],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "Upbeat, complimentary and careful; he credits players and the head coach, hedges on specifics, and avoids comparisons with the previous staff. He talks about the quarterback's comfort, explosives and versatility in plain terms. A first-time coordinator with a short public record, so sliders mostly stay at 5.",
   "ties": [
     {
@@ -198,9 +224,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

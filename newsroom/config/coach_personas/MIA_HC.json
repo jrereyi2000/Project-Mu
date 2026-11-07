@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:MIA:HC",
   "name": "Jeff Hafley",
   "role": "HC",
@@ -34,6 +34,14 @@
       "E4",
       "E7"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 5,
+      "openness": 4
+    },
+    "locked": []
   },
   "traits": [
     "SCHEME_NERD",
@@ -127,8 +135,18 @@
     "praises his assistants by name for their character as much as their football minds",
     "explains calling his own defense by pointing to the offensive head coaches he worked for"
   ],
-  "want": "to change Miami's culture into a tough, physical team and win the franchise's first playoff game in a generation as a first-time NFL head coach",
-  "fear": "that running the whole team and calling the defense leaves both jobs half done",
+  "motivation": {
+    "want": "to build a tough, physical team that changes a losing culture",
+    "fear": "that running the team and calling the defense leaves both half done"
+  },
+  "focus": {
+    "want": {
+      "text": "Miami's first playoff win in a generation",
+      "subjects": [],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "Talkative, upbeat and detailed; he speaks at length about coverage concepts and about toughness and physicality as an identity for the whole team. He talks about his staff warmly and in terms of trust and character, and keeps expectations for individual players loose.",
   "ties": [
     {
@@ -272,9 +290,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

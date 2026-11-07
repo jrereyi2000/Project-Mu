@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:CLE:OC",
   "name": "Travis Switzer",
   "role": "OC",
@@ -23,6 +23,17 @@
       "E3",
       "E4"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 5,
+      "sociability": 5,
+      "confidence": 4,
+      "openness": 3,
+      "drive": 5
+    },
+    "locked": []
   },
   "traits": [
     "TEACHER",
@@ -96,8 +107,14 @@
     "talks about the offensive line before any other position group",
     "calls a quarterback race open and declines to set a timeline"
   ],
-  "want": "to show that a coach who rose from the Ravens' front office to run-game architect can build a physical offense of his own",
-  "fear": "that as a first-time coordinator under a play-calling head coach, his own fingerprints never show",
+  "motivation": {
+    "want": "to build a physical run-first offense of his own",
+    "fear": "that his own fingerprints never show under a play-calling boss"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Upbeat, earnest and team-first; he talks like a former center about physicality, finishing blocks and doing the work together. He praises colleagues and young players, stays in step with the head coach on quarterbacks, and gives few hot quotes. Thin public record: sliders mostly left at 5.",
   "ties": [
     {
@@ -178,9 +195,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

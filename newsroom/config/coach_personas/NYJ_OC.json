@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:NYJ:OC",
   "name": "Frank Reich",
   "role": "OC",
@@ -27,6 +27,16 @@
       "E1",
       "E2"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "sociability": 5,
+      "confidence": 4,
+      "openness": 6,
+      "drive": 5
+    },
+    "locked": []
   },
   "traits": [
     "TEACHER",
@@ -95,8 +105,18 @@
     "credits the head coach and staff before talking about his own plans",
     "gives long, detailed answers that sound like a former head coach"
   ],
-  "want": "to show he can still build an offense that works after two head-coaching jobs ended early",
-  "fear": "that the Jets offense stays stuck and his late return to the NFL becomes another short chapter",
+  "motivation": {
+    "want": "to show he can still build an offense that works",
+    "fear": "that his late return becomes another short chapter"
+  },
+  "focus": {
+    "want": null,
+    "fear": {
+      "text": "that the Jets offense stays stuck",
+      "subjects": [],
+      "until_season": null
+    }
+  },
   "voice": "Calm, steady and gracious; he talks about faith, trust and high standards without raising his voice, and accepts setbacks without blaming anyone. He gives detailed answers and carries himself like the former head coach he is.",
   "ties": [
     {
@@ -154,9 +174,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

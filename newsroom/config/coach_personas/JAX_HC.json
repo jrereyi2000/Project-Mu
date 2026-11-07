@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:JAX:HC",
   "name": "Liam Coen",
   "role": "HC",
@@ -35,6 +35,14 @@
       "E4",
       "E6"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 5,
+      "openness": 6
+    },
+    "locked": []
   },
   "traits": [
     "SCHEME_NERD",
@@ -117,8 +125,18 @@
     "mentions his father and family when talking about big career choices",
     "names the low point of a season as the moment the team turned"
   ],
-  "want": "to turn Jacksonville's breakthrough season into a sustained contender and prove the Rams-tree offense builds a winning culture from the head chair",
-  "fear": "that the first-year jump proves a peak and the messy way he left Tampa Bay colors how people read his word",
+  "motivation": {
+    "want": "to turn a breakthrough season into a lasting contender",
+    "fear": "that the messy way he left a job colors how people read his word"
+  },
+  "focus": {
+    "want": {
+      "text": "to prove last season was no peak in Jacksonville",
+      "subjects": [],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "Upbeat, self-deprecating and energetic, he jokes easily and talks fast about personnel and run-pass blending. After big wins he turns quickly to what fell short; after bad losses he describes candid conversations rather than blame. He credits players and his Rams mentors and insists on being himself.",
   "ties": [
     {
@@ -284,9 +302,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

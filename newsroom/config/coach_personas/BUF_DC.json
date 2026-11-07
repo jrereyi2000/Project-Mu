@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:BUF:DC",
   "name": "Jim Leonhard",
   "role": "DC",
@@ -38,6 +38,13 @@
       "E3",
       "E5"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 4
+    },
+    "locked": []
   },
   "traits": [
     "SCHEME_NERD",
@@ -112,8 +119,18 @@
     "draws on his years as an undrafted safety moving between locker rooms",
     "admits with a laugh when a meeting room is chattier than he expected"
   ],
-  "want": "to prove the former college coordinator and interim head coach can run an NFL defense in the city where his playing career began",
-  "fear": "that a first NFL defense built to attack gives up the big plays that have cost Buffalo in January",
+  "motivation": {
+    "want": "to prove a former college coordinator can run an attacking NFL defense",
+    "fear": "that an aggressive scheme gives up the big plays that lose in January"
+  },
+  "focus": {
+    "want": {
+      "text": "to run a defense in the city where his playing career began",
+      "subjects": [],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "Candid, low-key and a little self-deprecating; he lays out plans in plain terms and admits that explaining his own thinking does not come naturally. He talks about trust and relationships, praises players by name, and turns reflective about the place where he started as a player.",
   "ties": [
     {
@@ -210,9 +227,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

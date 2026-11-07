@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:JAX:DC",
   "name": "Anthony Campanile",
   "role": "DC",
@@ -30,6 +30,15 @@
       "E1",
       "E3"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 5,
+      "sociability": 5,
+      "confidence": 4
+    },
+    "locked": []
   },
   "traits": [
     "SCHEME_NERD",
@@ -104,8 +113,18 @@
     "talks about relationships and caring for people in the same breath as toughness",
     "answers with a wry one-liner before getting technical"
   ],
-  "want": "to turn Jacksonville's defensive turnaround into a head-coaching job, carrying on a family coaching tradition",
-  "fear": "that his first-year jump in takeaways is treated as a fluke and a regression in 2026 costs him his shot",
+  "motivation": {
+    "want": "to earn a head coaching job and carry on his family's coaching tradition",
+    "fear": "that his best season is called a fluke"
+  },
+  "focus": {
+    "want": null,
+    "fear": {
+      "text": "that the takeaways dry up in 2026 and cost him his shot",
+      "subjects": [],
+      "until_season": null
+    }
+  },
   "voice": "Intense, passionate and direct, with a New Jersey coaching family's bluntness softened by talk of caring for people. He speaks in vivid terms about violence at the point of attack, honesty and accountability, and is wary of reading too much into a good season. A first-time NFL coordinator, so his public record is short.",
   "ties": [
     {
@@ -189,9 +208,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

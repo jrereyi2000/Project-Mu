@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:CLE:DC",
   "name": "Mike Rutenberg",
   "role": "DC",
@@ -35,6 +35,14 @@
       "E3",
       "E5"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "confidence": 5,
+      "drive": 6
+    },
+    "locked": []
   },
   "traits": [
     "MENTOR",
@@ -111,8 +119,14 @@
     "keeps in touch with players he coached years earlier and recruits them to follow him",
     "talks about his inherited defense with respect before describing changes"
   ],
-  "want": "to keep Cleveland's defense among the league's best in his first coordinator job and step out of a famous predecessor's shadow",
-  "fear": "that the defense slips without its former architect and the drop gets pinned on him",
+  "motivation": {
+    "want": "to keep a top defense elite and step out of a famous shadow",
+    "fear": "that any drop in the defense gets pinned on him"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Energetic and warm, with a teacher's habit of explaining the why; he talks about style, effort and character more than fronts and coverages. Respectful of what he inherited and of veteran players, candid about self-evaluation, and openly excited about the job.",
   "ties": [
     {
@@ -217,9 +231,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:LAC:DC",
   "name": "Chris O'Leary",
   "role": "DC",
@@ -26,6 +26,16 @@
       "E2",
       "E5"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 5,
+      "sociability": 6,
+      "confidence": 4,
+      "openness": 6
+    },
+    "locked": []
   },
   "traits": [
     "TEACHER",
@@ -94,8 +104,14 @@
     "frames every change as building on what the previous coordinator started",
     "credits calls and texts from players as a reason he took the job"
   ],
-  "want": "to keep the Chargers' defense among the league's best as a first-time NFL coordinator and stamp it with his own aggression",
-  "fear": "that any dip in the defense gets blamed on losing Minter rather than on something he can fix",
+  "motivation": {
+    "want": "to keep an elite defense elite and stamp it with his own aggression",
+    "fear": "that any dip gets blamed on his predecessor rather than fixed"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Energetic and earnest, relationship-first; he talks about standards, accountability and pushing players, and credits his predecessor and the players for what is already built. He says little about scheme detail in public. Coverage is mostly from his hiring and first camp.",
   "ties": [
     {
@@ -176,9 +192,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

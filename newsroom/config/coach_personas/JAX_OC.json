@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:JAX:OC",
   "name": "Grant Udinski",
   "role": "OC",
@@ -32,6 +32,15 @@
       "E4",
       "E5"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 6,
+      "sociability": 4,
+      "confidence": 5
+    },
+    "locked": []
   },
   "traits": [
     "QB_WHISPERER",
@@ -105,8 +114,24 @@
     "credits the head coach and staff first when the offense is praised",
     "talks about relationships with quarterbacks as something earned over time"
   ],
-  "want": "to become the NFL's youngest head coach on the strength of the quarterback development and offensive design he has built behind more famous play-callers",
-  "fear": "that because he does not call the plays, the credit for Jacksonville's offense goes elsewhere and his ascent stalls",
+  "motivation": {
+    "want": "to become the youngest head coach in the league",
+    "fear": "that the credit for his work goes to the play-caller"
+  },
+  "focus": {
+    "want": {
+      "text": "to keep building Trevor Lawrence into a top quarterback",
+      "subjects": [
+        {
+          "kind": "player",
+          "name": "Trevor Lawrence",
+          "team_2026": "JAX"
+        }
+      ],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "Enthusiastic, polite and collaborative; he speaks fast about core values, situational football and players' strengths and rarely about himself. He defers to the head coach on play-calling without any visible frustration and frames his own role as service to the team. Coverage of him is mostly about his age and rise, so his public voice is a short record.",
   "ties": [
     {
@@ -203,9 +228,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

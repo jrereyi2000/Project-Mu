@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:TEN:DC",
   "name": "Gus Bradley",
   "role": "DC",
@@ -27,6 +27,16 @@
     "sociability": [
       "E1"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 5,
+      "confidence": 5,
+      "openness": 2,
+      "drive": 5
+    },
+    "locked": []
   },
   "traits": [
     "TEACHER",
@@ -101,8 +111,14 @@
     "talks about effort and enthusiasm before he talks about scheme",
     "calls himself an optimist when asked about a rebuild"
   ],
-  "want": "to help his old friend build one more fast, energetic defense, and prove his best coaching is not behind him",
-  "fear": "that his positivity is remembered as softness because his records as a head coach and later coordinator fell short",
+  "motivation": {
+    "want": "to build one more fast, energetic defense and prove he still can",
+    "fear": "that his positivity is remembered as softness"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Warm, upbeat and earnest; he speaks about effort, enthusiasm, honesty and consistency, avoids criticizing players publicly, and keeps a positive tone even when the numbers are bad. Comfortable in a supporting role beside a play-calling head coach.",
   "ties": [
     {
@@ -203,9 +219,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

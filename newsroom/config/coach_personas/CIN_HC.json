@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:CIN:HC",
   "name": "Zac Taylor",
   "role": "HC",
@@ -30,6 +30,15 @@
       "E1",
       "E2"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "sociability": 6,
+      "openness": 6,
+      "drive": 7
+    },
+    "locked": []
   },
   "traits": [
     "LOYAL",
@@ -106,8 +115,24 @@
     "credits ownership, the front office and his staff before himself",
     "talks about players' off-field friendships as part of why the team wins"
   ],
-  "want": "to win a championship in Cincinnati with the quarterback he built the program around, and stay there for good",
-  "fear": "that the team's early rough years come back and define him if the window with his quarterback closes empty",
+  "motivation": {
+    "want": "to win a championship with the quarterback he built his program around",
+    "fear": "that a closed window brings back the rough early years"
+  },
+  "focus": {
+    "want": {
+      "text": "a title in Cincinnati with Joe Burrow",
+      "subjects": [
+        {
+          "kind": "player",
+          "name": "Joe Burrow",
+          "team_2026": "CIN"
+        }
+      ],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "Grounded, friendly and unflashy, with an easy Midwestern manner; he speaks calmly even after bad losses. He explains football decisions in specific, practical detail and readily credits assistants, ownership and players. He protects the locker room's chemistry and avoids public criticism of his players.",
   "ties": [
     {
@@ -220,9 +245,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

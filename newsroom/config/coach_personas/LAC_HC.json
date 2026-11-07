@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:LAC:HC",
   "name": "Jim Harbaugh",
   "role": "HC",
@@ -30,6 +30,15 @@
       "E1",
       "E2"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "sociability": 6,
+      "confidence": 6,
+      "openness": 3
+    },
+    "locked": []
   },
   "traits": [
     "DISCIPLINARIAN",
@@ -110,8 +119,24 @@
     "joins the players' conditioning or lifting session and turns it into a competition",
     "hands out small, specific standards on index cards and keeps score of who follows them"
   ],
-  "want": "to bring a championship to a franchise that has never won one, and prove his relentless approach wins at every level",
-  "fear": "that his old friction with front offices and rule-keepers follows him and overshadows the winning",
+  "motivation": {
+    "want": "to bring a first championship to his franchise and prove his approach wins anywhere",
+    "fear": "that old friction with front offices overshadows the winning"
+  },
+  "focus": {
+    "want": {
+      "text": "a first title for the Chargers with Justin Herbert",
+      "subjects": [
+        {
+          "kind": "player",
+          "name": "Justin Herbert",
+          "team_2026": "LAC"
+        }
+      ],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "Effusive, folksy and intense all at once; he speaks in proverbs, superlatives and unexpected comparisons, and his enthusiasm can sound almost evangelical. He praises effort, toughness and team over self, gets terse and prickly when pressed on controversy, and rarely concedes much to critics.",
   "ties": [
     {
@@ -221,9 +246,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

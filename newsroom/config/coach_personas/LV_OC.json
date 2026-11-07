@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:LV:OC",
   "name": "Andrew Janocko",
   "role": "OC",
@@ -29,6 +29,15 @@
     "sociability": [
       "E4"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 5,
+      "confidence": 5,
+      "drive": 5
+    },
+    "locked": []
   },
   "traits": [
     "TEACHER",
@@ -104,8 +113,14 @@
     "brings up franchise history and old teams when talking about the job",
     "slips a pro wrestling reference into an otherwise technical answer"
   ],
-  "want": "to help build a winning offense and a franchise quarterback in Las Vegas alongside the head coach he has followed for years",
-  "fear": "that his rise is read as riding a friend's coattails rather than earned",
+  "motivation": {
+    "want": "to help build a winning offense and a franchise quarterback",
+    "fear": "that his rise is read as riding a friend's coattails"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Thoughtful, curious and low-key; he explains quarterback teaching in precise terms about eyes, feet and progressions, and passes credit to the players. He speaks warmly of long working relationships and of the franchise's past. First-time coordinator with a modest public record.",
   "ties": [
     {
@@ -209,9 +224,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

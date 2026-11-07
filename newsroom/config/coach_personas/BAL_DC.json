@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:BAL:DC",
   "name": "Anthony Weaver",
   "role": "DC",
@@ -35,6 +35,14 @@
       "E5",
       "E7"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 5,
+      "confidence": 5
+    },
+    "locked": []
   },
   "traits": [
     "PLAYERS_COACH",
@@ -117,8 +125,14 @@
     "compares a young pass rusher to great players he has coached",
     "calls himself a nice guy and old school in the same breath"
   ],
-  "want": "to restore the physical, feared Baltimore defense he once played on, and earn a head-coaching job doing it",
-  "fear": "that being passed over for the top job and not calling plays leaves him seen as an assistant rather than a leader",
+  "motivation": {
+    "want": "to restore a physical, feared defense and earn a head coaching job",
+    "fear": "being seen as an assistant rather than a leader"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Warm, direct and plain-spoken, with the credibility of a former Raven; he talks about players as people and about physical play as a standard. He is easygoing in tone but blunt about the violence of the game, and stresses having no ego beside a play-calling head coach. He praises effort and connection more than scheme.",
   "ties": [
     {
@@ -252,9 +266,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

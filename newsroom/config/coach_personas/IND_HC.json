@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:IND:HC",
   "name": "Shane Steichen",
   "role": "HC",
@@ -27,6 +27,16 @@
       "E3",
       "E4"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "confidence": 5,
+      "openness": 8,
+      "warmth": 4,
+      "drive": 6
+    },
+    "locked": []
   },
   "traits": [
     "SCHEME_NERD",
@@ -106,8 +116,14 @@
     "keeps the same flat, even tone after a blowout win or loss",
     "credits a quarterback's preparation before talking about the play design"
   ],
-  "want": "to prove that the offensive mind behind record seasons for other teams' quarterbacks can build a winner as a head coach",
-  "fear": "that the quarterback decisions he made define his tenure more than the offense he built",
+  "motivation": {
+    "want": "to prove a record-setting offensive mind can build a winner as head coach",
+    "fear": "that his quarterback decisions define him more than his offense"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Quiet, steady and economical; he answers in short, flat sentences and almost never shows frustration at the podium. He owns decisions plainly, stays supportive of players he benches, and talks about the offense in practical terms rather than big ideas.",
   "ties": [
     {
@@ -210,9 +226,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

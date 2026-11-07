@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:CLE:HC",
   "name": "Todd Monken",
   "role": "HC",
@@ -34,6 +34,15 @@
       "E6",
       "E7"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "sociability": 5,
+      "confidence": 6,
+      "warmth": 4
+    },
+    "locked": []
   },
   "traits": [
     "QB_WHISPERER",
@@ -119,8 +128,18 @@
     "jokes about his age while saying he is a better coach now than ever",
     "cuts a practice period short when the same mistake repeats"
   ],
-  "want": "to prove a lifelong offensive journeyman can turn Cleveland into a winner as a first-time NFL head coach",
-  "fear": "that an unsettled quarterback room sinks his first season before his offense gets a fair chance",
+  "motivation": {
+    "want": "to prove a lifelong offensive journeyman can build a winner",
+    "fear": "that a shaky quarterback room sinks his offense before it gets a chance"
+  },
+  "focus": {
+    "want": {
+      "text": "to turn Cleveland into a winner in his first season",
+      "subjects": [],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "Blunt, passionate and self-deprecating; he speaks with emotion about earning the job every day and takes responsibility quickly when the offense fails. He is candid but careful on the quarterback race, refusing to crown anyone off one practice, and talks in detailed, practical football terms. Loud and demanding on the field.",
   "ties": [
     {
@@ -265,9 +284,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

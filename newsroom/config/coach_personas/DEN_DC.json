@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:DEN:DC",
   "name": "Vance Joseph",
   "role": "DC",
@@ -27,6 +27,16 @@
       "E5",
       "E6"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "sociability": 5,
+      "confidence": 5,
+      "openness": 6,
+      "warmth": 6
+    },
+    "locked": []
   },
   "traits": [
     "SCHEME_NERD",
@@ -93,8 +103,14 @@
     "takes the blame for a bad defensive day in the first sentence",
     "credits the pass rushers for finishing when asked about a sack total"
   ],
-  "want": "to turn his second act in Denver into a second chance at running a team of his own",
-  "fear": "that one historic blowout follows him around longer than the defensive turnaround that came after it",
+  "motivation": {
+    "want": "to turn a second act into another shot at running a team",
+    "fear": "that one historic blowout follows him longer than the turnaround"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Even-toned and accountable; he speaks in short, unhurried sentences and does not get defensive under criticism. He explains scheme in broad strokes, credits players' effort and finishing, and keeps talk of his own future brief.",
   "ties": [
     {
@@ -171,9 +187,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

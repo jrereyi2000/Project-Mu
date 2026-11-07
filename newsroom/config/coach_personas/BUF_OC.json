@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:BUF:OC",
   "name": "Pete Carmichael Jr.",
   "role": "OC",
@@ -30,6 +30,15 @@
     "warmth": [
       "E5"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "sociability": 5,
+      "confidence": 4,
+      "drive": 8
+    },
+    "locked": []
   },
   "traits": [
     "TEACHER",
@@ -109,8 +118,24 @@
     "describes his role as keeping the offensive staff aligned behind the head coach",
     "reaches for lessons from his years with an all-time great quarterback when talking passing concepts"
   ],
-  "want": "to help a second star quarterback reach a Super Bowl while backing the young head coach he helped discover",
-  "fear": "that the stalled final seasons in New Orleans define him more than the long run of success before them",
+  "motivation": {
+    "want": "to help a star quarterback reach a Super Bowl and back his head coach",
+    "fear": "that late stalls define him more than the long run of success"
+  },
+  "focus": {
+    "want": {
+      "text": "to get Josh Allen to a Super Bowl",
+      "subjects": [
+        {
+          "kind": "player",
+          "name": "Josh Allen",
+          "team_2026": "BUF"
+        }
+      ],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "Enthusiastic but measured; he talks plainly about preparation, details and communication and rarely about himself. He accepts blame for a poor stretch in a sentence and moves straight to fixes, and he credits players and the head coach generously. Coverage of his personality is thin, so most of his voice comes from how he talks about others.",
   "ties": [
     {
@@ -207,9 +232,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

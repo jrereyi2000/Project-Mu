@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:NE:OC",
   "name": "Josh McDaniels",
   "role": "OC",
@@ -22,6 +22,17 @@
     "openness": [
       "E3"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 4,
+      "sociability": 5,
+      "confidence": 5,
+      "warmth": 7,
+      "drive": 6
+    },
+    "locked": []
   },
   "traits": [
     "SCHEME_NERD",
@@ -91,8 +102,24 @@
     "credits the quarterback's input on the plays",
     "keeps playbook details vague in public"
   ],
-  "want": "to build his late career around developing a second great quarterback in New England after two head-coaching stints ended early",
-  "fear": "that his two failed head-coaching jobs remain the headline over his record as a coordinator",
+  "motivation": {
+    "want": "to build his late career around developing one more great quarterback",
+    "fear": "that his failed head coaching jobs stay the headline over his coordinator record"
+  },
+  "focus": {
+    "want": {
+      "text": "to make Drake Maye a great quarterback",
+      "subjects": [
+        {
+          "kind": "player",
+          "name": "Drake Maye",
+          "team_2026": "NE"
+        }
+      ],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "Measured, careful and polished; he reveals little about scheme and stays on process and the present week. He credits quarterbacks and players, and sounds settled and content about staying in New England. Little 2026 first-person coverage was found.",
   "ties": [
     {
@@ -180,9 +207,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

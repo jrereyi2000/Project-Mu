@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:DEN:OC",
   "name": "Davis Webb",
   "role": "OC",
@@ -32,6 +32,14 @@
     "drive": [
       "E2"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 4,
+      "sociability": 5
+    },
+    "locked": []
   },
   "traits": [
     "QB_WHISPERER",
@@ -105,8 +113,14 @@
     "calls the head coach's suggestions part of the deal rather than a threat to his role",
     "describes the quarterback's growth through small, specific pointers"
   ],
-  "want": "to grow from Payton's protege into a play-caller and future head coach in his own right",
-  "fear": "that any offensive stumble reads as Payton taking the sheet back and the handoff looking premature",
+  "motivation": {
+    "want": "to grow from protege into a play-caller and future head coach",
+    "fear": "that any stumble looks like his mentor taking the sheet back"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Young, earnest and grateful, with a former quarterback's shorthand. He speaks calmly and specifically, credits Payton and Nix before himself, and avoids grand claims about his own future.",
   "ties": [
     {
@@ -188,9 +202,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }
