@@ -170,6 +170,31 @@ class ShapeTest(unittest.TestCase):
         row = pa.slider_rows({"temperament": 7})[0]
         self.assertEqual((row["low"], row["high"], row["value"]), (low, high, 7))
 
+    def test_inferred_flag_from_provenance(self):
+        ev = {"slider:warmth": {"source": "inferred:slider-inference-v1", "confidence": "low"},
+              "slider:drive": {"source": "https://example.com/a", "confidence": "high"},
+              "slider:openness": {"source": "jr-set:2026-11-07", "confidence": "high"}}
+        rows = {r["name"]: r["inferred"] for r in pa.slider_rows(
+            {s: 5 for s in legacy.SLIDERS}, ev)}
+        self.assertEqual(rows, {"temperament": False, "sociability": False, "confidence": False,
+                                "openness": False, "warmth": True, "drive": False})
+        self.assertTrue(all(r["inferred"] is False for r in pa.slider_rows({"warmth": 5})))
+
+    def test_inferred_flag_in_body_adds_no_numbers(self):
+        class Inferred(FakeSources):
+            def resolve(self, kind, ref):
+                out = super().resolve(kind, ref)
+                if out.get("profile") is not None:
+                    out = dict(out, profile=dict(out["profile"], evidence={
+                        "slider:warmth": {"source": "inferred:slider-inference-v1", "confidence": "low"}}))
+                return out
+        body = client(Inferred(kind="coach")).get("/api/personality/coach/x1").json()
+        flags = {s["name"]: s["inferred"] for s in body["sliders"]}
+        self.assertTrue(flags["warmth"])
+        self.assertEqual(sum(flags.values()), 1)
+        stray = [(p, v) for p, v in numbers(body) if p not in ALLOWED_NUMBERS]
+        self.assertEqual(stray, [])
+
     def test_legacy_profile_is_read_only(self):
         class Legacy(FakeSources):
             def resolve(self, kind, ref):
