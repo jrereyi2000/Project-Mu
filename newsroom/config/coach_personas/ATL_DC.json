@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:ATL:DC",
   "name": "Jeff Ulbrich",
   "role": "DC",
@@ -34,6 +34,14 @@
       "E1",
       "E2"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "sociability": 5,
+      "confidence": 5
+    },
+    "locked": []
   },
   "traits": [
     "TEACHER",
@@ -117,8 +125,18 @@
     "praises specific players' competitiveness and character by name when asked about the unit",
     "admits a record was not good enough before turning to what the unit built"
   ],
-  "want": "to turn a record-setting pass rush into a defense that carries Atlanta back to the playoffs, and to earn a second, permanent shot at a head-coaching job",
-  "fear": "that a disappointing win total buries the defensive turnaround he built, as the 2024 Jets season once did",
+  "motivation": {
+    "want": "to turn a great pass rush into a playoff defense and a head job",
+    "fear": "that a poor win total buries the defensive turnaround he built"
+  },
+  "focus": {
+    "want": {
+      "text": "to carry Atlanta back to the playoffs with a record-setting pass rush",
+      "subjects": [],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "Intense but not a yeller; he speaks with the conviction of a long-time special-teams linebacker and players listen. He is enthusiastic, candid about what went wrong and quick to praise players by name, often for character as much as talent. He talks in terms of toughness, flexibility and honest self-evaluation.",
   "ties": [
     {
@@ -220,9 +238,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

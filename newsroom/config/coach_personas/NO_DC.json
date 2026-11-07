@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:NO:DC",
   "name": "Brandon Staley",
   "role": "DC",
@@ -33,6 +33,14 @@
       "E1",
       "E5"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "sociability": 6,
+      "drive": 7
+    },
+    "locked": []
   },
   "traits": [
     "ANALYTICS_BELIEVER",
@@ -107,8 +115,14 @@
     "praises the head coach and his fellow assistants unprompted",
     "declines to define the defense's identity before seeing the players on the field"
   ],
-  "want": "to rebuild his reputation as one of the league's sharpest defensive minds and earn another head-coaching chance",
-  "fear": "that he is remembered for the 63-21 loss and second-guessed fourth downs rather than for the 2020 Rams defense",
+  "motivation": {
+    "want": "to rebuild his name as a sharp defensive mind and lead a team again",
+    "fear": "being remembered for one blowout loss and second-guessed fourth downs"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Calm, articulate and analytical; he talks in terms of matchups, flexibility and advantage situations, with a lecturer's precision. He credits colleagues warmly and stays composed when criticized, but can bristle into a pointed defense of his reasoning. In New Orleans he is measured and avoids firm conclusions early.",
   "ties": [
     {
@@ -222,9 +236,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

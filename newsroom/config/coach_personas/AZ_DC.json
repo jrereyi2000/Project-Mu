@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:AZ:DC",
   "name": "Nick Rallis",
   "role": "DC",
@@ -30,6 +30,15 @@
       "E1",
       "E3"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "sociability": 5,
+      "confidence": 5,
+      "warmth": 7
+    },
+    "locked": []
   },
   "traits": [
     "SCHEME_NERD",
@@ -97,8 +106,14 @@
     "separates staying calm from being quiet when he describes his own style",
     "holds up one veteran as the model for how the whole defense should play"
   ],
-  "want": "to prove the league's youngest coordinator can out-think older play-callers with less talent",
-  "fear": "that his youth becomes the explanation whenever the defense falls short",
+  "motivation": {
+    "want": "to prove a young coordinator can out-think older play-callers with less talent",
+    "fear": "that his youth explains every shortfall"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Steady, earnest and precise for a young coach; he talks about problem-solving and keeping a clear head more than about himself. He credits Gannon and his best players and avoids grand claims. His voice is upbeat but controlled.",
   "ties": [
     {
@@ -190,9 +205,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

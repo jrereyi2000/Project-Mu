@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:WAS:OC",
   "name": "David Blough",
   "role": "OC",
@@ -37,6 +37,13 @@
       "E3",
       "E5"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "sociability": 5
+    },
+    "locked": []
   },
   "traits": [
     "QB_WHISPERER",
@@ -119,8 +126,24 @@
     "keeps a weekly throwing competition with his quarterback",
     "quotes a coaching maxim he picked up from a book or a mentor"
   ],
-  "want": "to restore his quarterback to his rookie form and prove a 30-year-old first-time play-caller belongs",
-  "fear": "that a slow start gets blamed on his inexperience and costs him the job he was promoted into",
+  "motivation": {
+    "want": "to prove a young first-time play-caller belongs",
+    "fear": "that a slow start gets blamed on his inexperience"
+  },
+  "focus": {
+    "want": {
+      "text": "to restore Jayden Daniels to his rookie form",
+      "subjects": [
+        {
+          "kind": "player",
+          "name": "Jayden Daniels",
+          "team_2026": "WAS"
+        }
+      ],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "Composed, articulate and encouraging; he talks about design, preparation and fitting the plan to players in full, thoughtful sentences. He credits his quarterback and mentors, sounds grateful rather than brash, and uses maxims to explain his approach. No game record as a play-caller by the cutoff.",
   "ties": [
     {
@@ -217,9 +240,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

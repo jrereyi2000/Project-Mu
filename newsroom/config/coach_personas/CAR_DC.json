@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:CAR:DC",
   "name": "Ejiro Evero",
   "role": "DC",
@@ -31,6 +31,15 @@
       "E3",
       "E8"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "sociability": 5,
+      "confidence": 5,
+      "drive": 8
+    },
+    "locked": []
   },
   "traits": [
     "SCHEME_NERD",
@@ -109,8 +118,14 @@
     "talks about the meeting room's level of conversation as a sign of progress",
     "credits veteran players who help coach the younger ones"
   ],
-  "want": "to turn a defense that hit historic lows into a respected unit and earn a head-coaching job on that turnaround",
-  "fear": "that one record-setting bad season becomes the only thing people remember about his defenses",
+  "motivation": {
+    "want": "to turn a historically bad defense around and earn a head coaching job",
+    "fear": "that one record-setting bad season is all anyone remembers"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Measured, polite and even-toned, he talks football in specifics: alignments, rotations and how a player wins his matchup. He praises effort and the veterans who help teach, and he does not sound rattled when results are poor. He avoids big claims and keeps his answers on the unit.",
   "ties": [
     {
@@ -250,9 +265,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

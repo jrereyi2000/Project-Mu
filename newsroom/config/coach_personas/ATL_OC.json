@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:ATL:OC",
   "name": "Tommy Rees",
   "role": "OC",
@@ -35,6 +35,14 @@
       "E1",
       "E5"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 5,
+      "confidence": 5
+    },
+    "locked": []
   },
   "traits": [
     "QB_WHISPERER",
@@ -119,8 +127,14 @@
     "jokes about the hours of the job before getting into detail",
     "answers quarterback questions with a measured both-paths framing and no ranking"
   ],
-  "want": "to show that a former backup quarterback who reached an NFL coordinator job at 32 can build and call a playoff offense of his own",
-  "fear": "that his youth becomes the explanation for any offensive slump in his first full season as a play-caller",
+  "motivation": {
+    "want": "to show a young former backup can build and call a playoff offense",
+    "fear": "that his youth explains away any offensive slump"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Easygoing, self-deprecating and quick with a joke about long hours or his own age, but precise once the talk turns to concepts. He praises colleagues and players, keeps quarterback rankings to himself, and frames his scheme in plain terms like conflict, ownership and decision-making. Thin record as a play-caller, so his public football opinions are mostly about principle rather than results.",
   "ties": [
     {
@@ -210,9 +224,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

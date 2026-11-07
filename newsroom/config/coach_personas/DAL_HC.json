@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:DAL:HC",
   "name": "Brian Schottenheimer",
   "role": "HC",
@@ -40,6 +40,13 @@
       "E6",
       "E8"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "confidence": 5
+    },
+    "locked": []
   },
   "traits": [
     "PLAYERS_COACH",
@@ -134,8 +141,22 @@
     "talks about friendships with other coaches and what he learned from them",
     "repeats his praise for a new assistant's communication several times in the same answer"
   ],
-  "want": "to pair a high-scoring offense with a rebuilt defense and prove a career assistant can lead Dallas deep into January",
-  "fear": "that a second straight year out of the playoffs ends his first head-coaching job before his culture work pays off",
+  "motivation": {
+    "want": "to prove a career assistant can lead a team deep into January",
+    "fear": "that his first head coaching job ends before his culture work pays off"
+  },
+  "focus": {
+    "want": {
+      "text": "a high-scoring offense paired with a rebuilt Dallas defense",
+      "subjects": [],
+      "until_season": null
+    },
+    "fear": {
+      "text": "a second straight year out of the playoffs",
+      "subjects": [],
+      "until_season": null
+    }
+  },
   "voice": "Loud, warm and emotional; he speaks quickly with visible enthusiasm and hands out praise by name, especially to quarterbacks and new assistants. He owns losses in the first person and promises to get to the bottom of them, and his temper shows when players fight in practice. He keeps criticism of individual players inside the building.",
   "ties": [
     {
@@ -274,9 +295,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

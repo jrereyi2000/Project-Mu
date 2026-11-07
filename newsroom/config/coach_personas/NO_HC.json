@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:NO:HC",
   "name": "Kellen Moore",
   "role": "HC",
@@ -30,6 +30,15 @@
       "E5",
       "E8"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "sociability": 5,
+      "confidence": 3,
+      "warmth": 5
+    },
+    "locked": []
   },
   "traits": [
     "SCHEME_NERD",
@@ -114,8 +123,24 @@
     "credits players for ideas that turned into big plays",
     "answers questions about the future with a short, calm line about patience"
   ],
-  "want": "to build New Orleans into a contender around a young quarterback he developed, proving the former record-setting college passer can run a whole program",
-  "fear": "that a slow rebuild and a youthful staff get read as a coach in over his head rather than one building patiently",
+  "motivation": {
+    "want": "to build a contender around a young quarterback he developed",
+    "fear": "that a patient rebuild reads as a coach in over his head"
+  },
+  "focus": {
+    "want": {
+      "text": "a contender in New Orleans built around Tyler Shough",
+      "subjects": [
+        {
+          "kind": "player",
+          "name": "Tyler Shough",
+          "team_2026": "NO"
+        }
+      ],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "Calm, quiet and precise; he answers in short, practical sentences without boasts. He talks about systems, development and staff collaboration, shares blame readily, and praises players for their growth and input. He rarely shows emotion in public and counsels patience when asked about the future.",
   "ties": [
     {
@@ -292,9 +317,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:LAR:DC",
   "name": "Chris Shula",
   "role": "DC",
@@ -29,6 +29,15 @@
     "warmth": [
       "E4"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "sociability": 5,
+      "confidence": 5,
+      "drive": 6
+    },
+    "locked": []
   },
   "traits": [
     "SCHEME_NERD",
@@ -95,8 +104,14 @@
     "sits in on different position meetings instead of watching from above",
     "talks about trusting his players rather than about his own calls"
   ],
-  "want": "to show he earned the job on his own merits and build a young Rams defense into a lasting strength",
-  "fear": "that he is seen as the boss's college teammate and a famous grandson rather than a coordinator in his own right",
+  "motivation": {
+    "want": "to prove he earned the job on merit and build a lasting defense",
+    "fear": "being seen as a connected hire rather than a coordinator in his own right"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Even, unflappable and collaborative; he speaks in measured terms about trust, adaptability and the players' ideas. He rarely sounds rattled by a bad week and credits the room for improvements. He keeps the focus off himself and his family name.",
   "ties": [
     {
@@ -177,9 +192,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:TB:OC",
   "name": "Zac Robinson",
   "role": "OC",
@@ -33,6 +33,14 @@
       "E2",
       "E5"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "sociability": 6,
+      "drive": 6
+    },
+    "locked": []
   },
   "traits": [
     "QB_WHISPERER",
@@ -110,8 +118,24 @@
     "explains a scheme choice by listing the variations it hides rather than defending the label",
     "refers back to what he learned beside McVay, Stafford and Mayfield in Los Angeles"
   ],
-  "want": "to show in Tampa Bay that his offense, reunited with a quarterback he helped revive, can produce what Atlanta's did not",
-  "fear": "that a second straight coordinator job ends with his offense labeled predictable",
+  "motivation": {
+    "want": "to show his offense can produce what his last one did not",
+    "fear": "that a second coordinator job ends with his offense called predictable"
+  },
+  "focus": {
+    "want": {
+      "text": "to thrive again with Baker Mayfield, the quarterback he helped revive",
+      "subjects": [
+        {
+          "kind": "player",
+          "name": "Baker Mayfield",
+          "team_2026": "TB"
+        }
+      ],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "Calm, polite and analytical, a former quarterback who talks in the language of coverages and packaging. He spreads credit to players, gushes about his quarterback's gifts, and owns slow starts, but pushes back firmly when he thinks a criticism of his scheme is lazy. Rarely raises his voice in public.",
   "ties": [
     {
@@ -272,9 +296,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:CHI:OC",
   "name": "Press Taylor",
   "role": "OC",
@@ -29,6 +29,15 @@
     "drive": [
       "E1"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 4,
+      "sociability": 5,
+      "warmth": 6
+    },
+    "locked": []
   },
   "traits": [
     "FILM_ROOM_RAT",
@@ -103,8 +112,18 @@
     "credits the quarterback's input on the call sheet when a game plan works",
     "defers to the head coach on anything about play-calling"
   ],
-  "want": "to prove he is a play-caller in his own right, not only Pederson's long-time protege, by helping build a winner in Chicago",
-  "fear": "that he is remembered as the coordinator whose struggles in Jacksonville got his mentor fired",
+  "motivation": {
+    "want": "to prove he is a play-caller in his own right, not a protege",
+    "fear": "that past struggles that cost his mentor a job define him"
+  },
+  "focus": {
+    "want": {
+      "text": "to help build a winner in Chicago",
+      "subjects": [],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "Intense and earnest, with a younger coach's conviction; he speaks about aggression, growth and winning, brushes off criticism without heat, and spreads credit across the staff and the quarterback. In Chicago he says little in public and defers to the head coach on play-calling, so his recent public record is thin.",
   "ties": [
     {
@@ -203,9 +222,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:SF:DC",
   "name": "Raheem Morris",
   "role": "DC",
@@ -36,6 +36,14 @@
       "E4",
       "E7"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 5,
+      "drive": 5
+    },
+    "locked": []
   },
   "traits": [
     "PLAYERS_COACH",
@@ -120,8 +128,14 @@
     "praises a benched or released veteran's character in the same breath as announcing the move",
     "calls the defense from the sideline with visible, loud energy"
   ],
-  "want": "to rebuild his name as a top defensive coordinator alongside Shanahan in San Francisco and earn a third head-coaching chance",
-  "fear": "that two head-coaching firings define him as a great assistant who cannot lead a team",
+  "motivation": {
+    "want": "to rebuild his name as a top coordinator and lead a team again",
+    "fear": "that two firings define him as a great assistant who cannot lead"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Loud, warm and quick, a talker who fills a room and laughs easily, yet turns careful and inclusive on hard calls. He frames choices as shared, praises character before talent, and speaks fondly of long friendships in coaching. After a loss he points to review and fixes rather than blame.",
   "ties": [
     {
@@ -281,9 +295,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

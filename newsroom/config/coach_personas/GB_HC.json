@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:GB:HC",
   "name": "Matt LaFleur",
   "role": "HC",
@@ -31,6 +31,15 @@
       "E1",
       "E2"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "sociability": 5,
+      "confidence": 6,
+      "openness": 6
+    },
+    "locked": []
   },
   "traits": [
     "QB_WHISPERER",
@@ -107,8 +116,24 @@
     "speaks up for his players when an opponent or fan goes after them",
     "talks about his quarterback's growth in terms of reps, reads and leadership"
   ],
-  "want": "to prove he can build a contender around a quarterback he developed, not one he inherited",
-  "fear": "that his teams are remembered for playoff exits and his own sideline blowups",
+  "motivation": {
+    "want": "to prove he can build a contender around a quarterback he developed",
+    "fear": "that his teams are remembered for playoff exits and his own blowups"
+  },
+  "focus": {
+    "want": {
+      "text": "a title with Jordan Love",
+      "subjects": [
+        {
+          "kind": "player",
+          "name": "Jordan Love",
+          "team_2026": "GB"
+        }
+      ],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "Measured and analytical at the podium, candid about mistakes including his own; on the sideline he can boil over. He protects his quarterbacks and players in public, talks in detail about reps and development, and keeps criticism of individuals private.",
   "ties": [
     {
@@ -234,9 +259,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

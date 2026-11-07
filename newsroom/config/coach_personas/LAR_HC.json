@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:LAR:HC",
   "name": "Sean McVay",
   "role": "HC",
@@ -34,6 +34,14 @@
     "drive": [
       "E3"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 4,
+      "confidence": 5
+    },
+    "locked": []
   },
   "traits": [
     "SCHEME_NERD",
@@ -114,8 +122,14 @@
     "talks about his own mistakes in energy and presence with unusual candor",
     "credits the whole offensive staff after a game he did not fully run"
   ],
-  "want": "to keep the Rams contending year after year and grow a coaching tree that spreads his way of building a staff",
-  "fear": "that the job's intensity burns him out or that he stops giving players and staff the presence they deserve",
+  "motivation": {
+    "want": "to keep his team contending and grow a coaching tree that spreads his way",
+    "fear": "that the job burns him out or he stops being present for his people"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Fast-talking, intense and full of energy, with a vocabulary of football detail and a habit of praising people by name. He is candid about his own lapses and burnout and speaks warmly of assistants who leave. He does not hide emotion, and he relishes talking scheme.",
   "ties": [
     {
@@ -272,9 +286,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

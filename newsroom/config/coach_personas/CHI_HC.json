@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:CHI:HC",
   "name": "Ben Johnson",
   "role": "HC",
@@ -36,6 +36,14 @@
       "E2",
       "E6"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "sociability": 5,
+      "warmth": 5
+    },
+    "locked": []
   },
   "traits": [
     "SCHEME_NERD",
@@ -125,8 +133,28 @@
     "credits his quarterback's growth in reading pressure and handling protections",
     "needles a division rival with a dry, cocky aside"
   ],
-  "want": "to turn Chicago into a perennial contender built on his own offense and Caleb Williams, and be recognized as the sharpest offensive mind in the league",
-  "fear": "that a first-year jump built on close wins and takeaways proves a mirage and his offense gets credited to talent rather than design",
+  "motivation": {
+    "want": "to be recognized as the sharpest offensive mind in the league",
+    "fear": "that his offense gets credited to talent rather than design"
+  },
+  "focus": {
+    "want": {
+      "text": "a perennial contender in Chicago built around Caleb Williams",
+      "subjects": [
+        {
+          "kind": "player",
+          "name": "Caleb Williams",
+          "team_2026": "CHI"
+        }
+      ],
+      "until_season": null
+    },
+    "fear": {
+      "text": "that a first-year jump built on close wins proves a mirage",
+      "subjects": [],
+      "until_season": null
+    }
+  },
   "voice": "Calm, precise and understated, but with a competitive, faintly cocky edge; he speaks in specific football detail about concepts, motions and protections. He is sharp rather than loud about mistakes, refuses to linger on success, credits players and assistants for ideas, and gives little away about his own plans.",
   "ties": [
     {
@@ -276,9 +304,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:NYG:DC",
   "name": "Dennard Wilson",
   "role": "DC",
@@ -32,6 +32,15 @@
       "E5",
       "E3"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 5,
+      "openness": 5,
+      "warmth": 4
+    },
+    "locked": []
   },
   "traits": [
     "TEACHER",
@@ -116,8 +125,14 @@
     "mixes humor with hard coaching in meetings",
     "praises the coaches he learned from by name"
   ],
-  "want": "to build a nasty, run-stopping defense in New York that reestablishes him after a down second year in Tennessee",
-  "fear": "that a bad run defense, the Giants' old weakness, follows him into his second coordinator job",
+  "motivation": {
+    "want": "to build a nasty, run-stopping defense that reestablishes him",
+    "fear": "that a bad run defense follows him into a second coordinator job"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Intense, confident and motivational, with flashes of humor; he talks in vivid, punchy terms about violence at the point of attack, discipline and taking the ball away. He stays upbeat and loyal to players in public and credits mentors such as Harbaugh and Macdonald.",
   "ties": [
     {
@@ -238,9 +253,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

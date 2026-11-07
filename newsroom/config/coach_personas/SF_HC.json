@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:SF:HC",
   "name": "Kyle Shanahan",
   "role": "HC",
@@ -37,6 +37,13 @@
       "E3",
       "E4"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "warmth": 5
+    },
+    "locked": []
   },
   "traits": [
     "SCHEME_NERD",
@@ -116,8 +123,14 @@
     "describes in detail who contributes to the game plan before admitting he makes the final call",
     "turns blunt and visibly frustrated when pressed on roster speculation"
   ],
-  "want": "to win the championship that has slipped away in the final moments more than once",
-  "fear": "that he is remembered for blown leads in the biggest games rather than for the offenses he designed",
+  "motivation": {
+    "want": "to win the championship that has slipped away in the final moments",
+    "fear": "being remembered for blown leads rather than the offenses he designed"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Blunt, quick and deeply technical; he can be sharp with reporters on sensitive topics and plain about what went wrong. He talks schemes and process at length, credits his assistants, and backs his players publicly. He holds himself to the same exacting standard as everyone else.",
   "ties": [
     {
@@ -259,9 +272,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

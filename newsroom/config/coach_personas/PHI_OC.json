@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:PHI:OC",
   "name": "Sean Mannion",
   "role": "OC",
@@ -33,6 +33,14 @@
       "E4",
       "E5"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 4,
+      "sociability": 4
+    },
+    "locked": []
   },
   "traits": [
     "QB_WHISPERER",
@@ -111,8 +119,24 @@
     "mentions the McVay and Shanahan offenses as the roots of his system",
     "talks about having planned to coach since childhood"
   ],
-  "want": "to prove a career backup with two years of coaching can call a Super Bowl offense around Jalen Hurts",
-  "fear": "that he becomes the next one-and-done coordinator in Philadelphia's revolving door",
+  "motivation": {
+    "want": "to prove a former backup with little coaching experience can call a title offense",
+    "fear": "becoming the next one-and-done coordinator in a revolving door"
+  },
+  "focus": {
+    "want": {
+      "text": "a Super Bowl offense around Jalen Hurts",
+      "subjects": [
+        {
+          "kind": "player",
+          "name": "Jalen Hurts",
+          "team_2026": "PHI"
+        }
+      ],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "Confident, composed and analytical, in the even tone of a long-time backup quarterback who studied every room he was in. He talks about connection with players, timing and fundamentals, praises his quarterback's work habits, and credits the coaching trees he came from. He has never called plays, so the record behind his voice is short.",
   "ties": [
     {
@@ -220,9 +244,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

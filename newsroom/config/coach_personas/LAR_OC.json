@@ -1,5 +1,5 @@
 {
-  "schema_version": "coach-profile-v1",
+  "schema_version": "coach-profile-v2",
   "key": "coach:LAR:OC",
   "name": "Nathan Scheelhaase",
   "role": "OC",
@@ -29,6 +29,15 @@
       "E1",
       "E4"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "sociability": 6,
+      "confidence": 4,
+      "openness": 4
+    },
+    "locked": []
   },
   "traits": [
     "FILM_ROOM_RAT",
@@ -97,8 +106,14 @@
     "credits his old college head coach for shaping him",
     "turns head-coaching questions back to the week in front of him"
   ],
-  "want": "to earn his own head-coaching job the way McVay's earlier coordinators did, by mastering the whole offense first",
-  "fear": "that he stays seen as a helper in McVay's shadow rather than a coach with ideas of his own",
+  "motivation": {
+    "want": "to earn a head coaching job by mastering the whole offense first",
+    "fear": "staying a helper in a famous boss's shadow"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Humble, steady and present-focused, with a former college quarterback's ease. He speaks plainly and upbeat about relationships and work ethic, credits McVay and his old college staff, and deflects talk of his own ambitions. Coverage of his day-to-day voice is limited.",
   "ties": [
     {
@@ -175,9 +190,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }
