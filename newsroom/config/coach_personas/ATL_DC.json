@@ -220,9 +220,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "Moved seat 2026 (NYJ DC to ATL DC; he returned to Atlanta in 2025 and was retained by Stefanski in January 2026): added the AP retention story, the Stefanski first-priority piece and the February 2026 coordinator press conference; dropped the 2024 Jets play-calling source; views and want/fear now fit Atlanta; added a tie to Stefanski."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

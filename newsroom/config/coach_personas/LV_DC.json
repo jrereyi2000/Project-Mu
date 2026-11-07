@@ -230,9 +230,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "New seat 2026. Five sources, 2024-03 to 2026-08. The Spagnuolo and Flores ties rest on his years on their staffs (E4), not on testimony; JR may drop them. Confidence left at 5."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

@@ -203,9 +203,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "Moved seat 2026 (IND DC to 2024, SF assistant head coach 2025, now TEN DC under a play-calling Saleh). Added 2026 sources E6-E7 (introduction, camp). Views and voice updated for the non-play-calling role; new tie to Saleh. Sliders unchanged; 2026 coverage of him is light."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

@@ -252,9 +252,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "Moved seat 2026 (MIA DC to BAL DC, under a head coach who calls the defense). Added 2026 sources E6-E9 (hire, introduction, camp). Views, want, fear and voice updated for the return to Baltimore and the non-play-calling role; new tie to Minter. Older Miami evidence kept."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

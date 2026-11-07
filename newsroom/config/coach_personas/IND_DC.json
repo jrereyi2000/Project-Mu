@@ -209,9 +209,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "Moved seat 2026 (Bengals DC to Colts DC, in the job since 2025). Added the 2025 Colts hiring remarks and a 2026 piece on his former-player pipeline; dropped the undated 2023 NFL.com item. One view replaced, want and fear rewritten for Indianapolis, tie to Steichen added. Reports after the cutoff (the 2026 0-2 start) are not used."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

@@ -221,9 +221,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "New seat 2026. Five sources, all 2026; personality coverage is thin (GUARDED rests on his declining scheme specifics, E4, E5). E4 is AP on NFL.com with no printed date, dated from the news cycle; E5 dated from the URL. Ties rest on staff overlap (Flores, Vance Joseph, Anarumo), not testimony."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

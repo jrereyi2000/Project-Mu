@@ -240,9 +240,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "Moved seat 2026 (NYJ OC to AZ OC under Mike LaFleur, who calls plays): added the AP hire story and the February offense piece; TEACHER added for his stated role of helping LaFleur grow; views, want and fear now fit a non-play-calling coordinator in Arizona; added ties to Mike LaFleur and Matt LaFleur."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

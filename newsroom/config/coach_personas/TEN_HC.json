@@ -314,9 +314,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "Moved seat 2026 (NYJ HC to 2024, SF DC 2025, now TEN HC calling the defense). Added 2026 sources E7-E10 (introduction, Ward on the staff, Bradley hire, camp). Views, want, fear and voice rewritten for Tennessee; sliders unchanged (the 36 budget is used; E7 and E10 show a sharper edge, reflected in the voice). New ties: Bradley, Daboll, Cam Ward."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

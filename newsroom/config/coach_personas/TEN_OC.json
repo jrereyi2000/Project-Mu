@@ -259,9 +259,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "Moved seat 2026 (NYG HC to TEN OC). Added 2026 sources E8-E10 (introduction, Ward on him, minicamp). Views, want, fear and voice rewritten for coordinating Ward under Saleh; new ties to Ward and Saleh. Sliders unchanged. Play-calling split with Saleh not stated in the sources found."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

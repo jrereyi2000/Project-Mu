@@ -217,9 +217,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "New seat 2026. Five sources, all 2026. MENTOR and the temperament and warmth sliders rest on one long profile (E5). E3 is an AP story on NFL.com with no printed date, dated from the news cycle at medium. The O'Connell tie rests on having played for him (E1); JR may drop it."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

@@ -257,9 +257,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "Moved seat 2026 (AZ OC to DET OC). Added 2026 sources E6-E8 (Campbell on the hire, OTA feature). OLD_SCHOOL replaced by MEASURED (calm and unrattled per E6, E7); temperament set to 3 and sociability 6 on that evidence. Views, want, fear and voice updated for Detroit; new ties to Campbell and Goff."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

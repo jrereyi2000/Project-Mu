@@ -248,9 +248,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "Moved seat 2026 (KC OC to NYG OC). Added 2026 sources E6-E8 (hire, first press session, camp). Views, want, fear and voice updated for coordinating Dart under Harbaugh; new ties to Dart and Harbaugh. Sliders unchanged."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

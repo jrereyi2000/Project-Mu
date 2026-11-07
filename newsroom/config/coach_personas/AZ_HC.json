@@ -272,9 +272,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "Moved seat 2026 (LAR OC to AZ HC, hired February 2026): added the introduction-day player reaction, the February offense/Hackett piece and the May Brissett coverage; warmth and drive raised on that evidence; views, want and fear now fit a first-time head coach rebuilding Arizona; added a tie to Hackett."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

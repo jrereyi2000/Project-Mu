@@ -210,9 +210,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "New seat 2026 (ATL OC). Six sources, 2025-01-15 to 2026-08-26; play-calling record is short (from November 2025), so temperament and confidence stay at 5."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

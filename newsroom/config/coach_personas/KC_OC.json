@@ -205,9 +205,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "New seat 2026 (return to KC as OC; Reid still calls plays). Five sources, 2023-05 to 2026-06. E2 records friction over his intensity in Washington; it supports the voice and fear, not a negative tie, since no named player is involved."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

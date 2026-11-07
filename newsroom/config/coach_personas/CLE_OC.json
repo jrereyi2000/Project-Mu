@@ -178,9 +178,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "New seat 2026. Thin coverage: five sources, all from the 2026 hire and introduction (E5 is low and supports only voice). No camp coverage of him found by the cutoff. Traits are modest readings: TEACHER (rose through quality control, plans to develop the line), OLD_SCHOOL (run-first, line-first), LOYAL (nine seasons in one building, followed Monken). Five sliders at 5."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

@@ -245,9 +245,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "Moved seat 2026 (Dolphins head coach to Chargers OC). Added his firing, hiring, introduction and a camp piece; dropped the 2022 SI column and the Tagovailoa-injury presser to stay at 8 sources. FAMILY_MAN (thin) replaced by SCHEME_NERD; Tagovailoa tie now mixed given the decline he described; tie to Harbaugh added; want, fear and three views rewritten."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

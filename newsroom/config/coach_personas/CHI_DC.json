@@ -249,9 +249,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "Moved seat 2026 (NO HC to CHI DC, hired January 2025): added the Chicago introduction, the 2025 takeaway feature and his May 2026 self-assessment; dropped his Saints introduction and firing news items; openness moved to 6 for the scheme changes; views, want and fear now fit a coordinator under Ben Johnson; added ties to Johnson and D'Marco Jackson."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

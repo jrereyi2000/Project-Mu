@@ -258,9 +258,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "Moved seat 2026 (Cardinals head coach to Packers DC). Added his firing and hiring (AP) and two May 2026 media sessions; dropped two 2023 Arizona team-site pieces to stay at 8 sources. OLD_SCHOOL replaced by MENTOR (young coordinators he hired); openness now cites his fit-the-players remarks; tie to LaFleur added. Want, fear and two views rewritten for the coordinator role."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

@@ -281,9 +281,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "Moved seat 2026 (ATL HC to SF DC, hired February 2026 after Atlanta fired him in January): added the ESPN firing story and the SF hiring analysis; dropped the AJC quarterback-plan and 2025 camp items; views, want and fear now fit a coordinator under Shanahan; added ties to Shanahan and Drake London. No 2026 press conference with his own words was found."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

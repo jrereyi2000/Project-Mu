@@ -238,9 +238,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "Moved seat 2026 (TEN DC to NYG DC). Added 2026 sources E6-E8 (hire, offseason vision, camp). Views, want, fear and voice updated for the Giants; new ties to Harbaugh, Macdonald and Lawrence (who was traded to CIN in April 2026). Sliders unchanged."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

@@ -291,9 +291,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "Moved seat 2026 (LAC DC to BAL HC). Added 2026 sources E6-E9 (hiring presser, coordinator hires, camp). Views, want, fear and voice rewritten for a head coach who still calls the defense; warmth and drive nudged up on camp evidence. New ties: John Harbaugh (gave him his first NFL job), Lamar Jackson, Doyle, Weaver."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

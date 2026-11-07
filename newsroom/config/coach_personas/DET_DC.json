@@ -226,9 +226,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "New file 2026 (Sheppard was DET DC in 2025 and stayed). Five sources, 2025-01 to 2026-06. PLAYERS_COACH and two sliders rest on one strong source (E2); E1 is NFL.com with no printed date, dated from the news cycle at medium confidence. Openness and temperament left at 5."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

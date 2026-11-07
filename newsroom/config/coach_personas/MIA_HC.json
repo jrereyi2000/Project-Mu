@@ -272,9 +272,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "Moved seat 2026 (Packers DC to Dolphins head coach). Added the introduction, the Duggan hiring remarks, the coordinators' transcript and the league-meeting remarks; dropped the 2024 AP hiring story. OLD_SCHOOL added (physical identity); drive moved to 6; college-football view replaced with head-coach views; ties to Duggan, Slowik and Willis added."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

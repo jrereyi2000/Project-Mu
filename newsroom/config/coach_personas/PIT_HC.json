@@ -255,9 +255,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "Moved seat 2026 (DAL HC to PIT HC, hired January 2026 after Tomlin stepped away): added the Pittsburgh introduction, his play-calling statement and the Graham hire; dropped the Marty Schottenheimer obituary item; views, want and fear now fit a hometown head coach calling plays. Aaron Rodgers (PIT) tie left for JR: his Green Bay history with McCarthy is well known but no pre-cutoff 2026 source about their relationship was read (a Rodgers interview found was dated 2026-09-10, after the cutoff)."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

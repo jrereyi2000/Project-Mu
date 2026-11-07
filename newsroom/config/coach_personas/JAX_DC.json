@@ -189,9 +189,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "New seat 2026 (JAX DC since 2025, retained January 2026 after head-coaching interviews). Five sources, 2025-02-05 to 2026-05-05; temperament, sociability and confidence stay at 5. DISCIPLINARIAN rests on one source (his stated honesty-and-accountability culture). Mentor tie to Jeff Hafley (MIA HC in the seed) rests on their shared 2024 Green Bay system and Hafley's praise."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

@@ -217,9 +217,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "New seat 2026. Six sources, 2022-06 to 2026-08 (E4 low, voice only). The Saleh tie rests on his years on Saleh-led staffs (49ers 2020, Jets 2021-24 per E2, E1), not on direct testimony; JR may prefer to drop it. No regular-season play-calling record by the cutoff."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

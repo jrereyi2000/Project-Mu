@@ -222,9 +222,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "New seat 2026 (NO DC since 2025). Seven sources, 2021-10-05 to 2026-07-05; New Orleans-era coverage quoting him is thin (E7 is low confidence, paywalled subtitle only), so the sliders lean on his Chargers years. Sociability and drive stay at 5."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

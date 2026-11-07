@@ -200,9 +200,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "New file 2026 (Golden was CIN DC in 2025 and stayed). Five sources, 2025-01 to 2026-08. A 2026-09-09 FOX19 profile exists but is after the cutoff and is not used. Openness and sociability left at 5."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

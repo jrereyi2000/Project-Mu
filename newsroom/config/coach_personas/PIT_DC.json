@@ -193,9 +193,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "Moved seat 2026 (LV DC to PIT DC, hired January 2026): added the AP hire item, the McCarthy staff roundup and his April 2026 media session; dropped the Pierce-era Raiders items; openness raised to 7 on the no-fixed-playbook evidence; added a tie to McCarthy. His 2018 Green Bay title is disputed between sources; only the shared staff is relied on."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

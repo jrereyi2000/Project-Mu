@@ -235,9 +235,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "Moved seat 2026 (Bills OC to head coach). Added four 2026 sources (introduction, alignment coverage, Carmichael feature, camp preview); dropped the 2025 SI Allen-joke piece; drive raised to 7 on camp evidence; FILM_ROOM_RAT added; tie to his OC Carmichael added. Want, fear, voice and three views rewritten for the head job."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

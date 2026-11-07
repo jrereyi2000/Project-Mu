@@ -198,9 +198,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "New seat 2026 (PIT OC, hired January 2026; McCarthy calls plays). Five sources, 2026-01-27 to 2026-06-15; E1's date is inferred from the news cycle. Thin personal coverage; temperament, sociability, confidence and drive stay at 5."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

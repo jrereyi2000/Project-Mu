@@ -267,9 +267,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "Moved seat 2026 (Lions DC to Jets head coach, in the job since 2025). Added the 2026 coordinator hires and his August regret over his media approach and first staff; dropped the 2024 hometown profile. Temperament moved to 6 and openness to 6 on E8; LOYAL added; ties to Reich and Duker added; want, fear, voice and three views rewritten."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

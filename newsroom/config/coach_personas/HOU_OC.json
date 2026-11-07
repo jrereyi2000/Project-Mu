@@ -204,9 +204,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "New seat 2026 (HOU OC since 2025, retained January 2026). Five sources, 2025-02-13 to 2026-06-30; E2's date is inferred from his introduction. Several traits rest on colleagues' praise rather than his own record; temperament, sociability and confidence stay at 5."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

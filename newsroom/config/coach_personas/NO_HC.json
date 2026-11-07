@@ -292,9 +292,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "Moved seat 2026 (PHI OC to NO HC, hired February 2025; 6-11 in 2025): added the Saints introduction, the Staley and Nussmeier hires, Staley's view of him and the end-of-season press conference; dropped the Hurts 95-percent-new item; drive moved to 6; views, want and fear now fit a second-year head coach; added ties to Nussmeier, Staley and Tyler Shough."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

@@ -229,9 +229,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "New seat 2026. Five sources, all 2026 (hire release, AP x2, ESPN feature and camp log). Coverage is mostly hiring and spring practice; he had not called a regular-season game by the cutoff. Temperament and warmth left at 5. Payton and Johnson ties rest on his time on their staffs (E1, E2), not on public testimony."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

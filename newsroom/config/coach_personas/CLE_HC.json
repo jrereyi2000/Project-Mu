@@ -265,9 +265,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "Moved seat 2026 (BAL OC to CLE HC; he calls the offense). Added 2026 sources E7-E9 (introduction, Switzer on his style, camp). Views, want, fear and voice rewritten for a head coach running a quarterback competition; temperament nudged up to 7 on the intro and camp evidence. New ties: Switzer, Sanders."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

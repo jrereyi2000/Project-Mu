@@ -272,9 +272,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "Moved seat 2026 (ATL OC to TB OC, hired January 2026): added the Bucs hire announcement, his introductory press conference and the ESPN story on Atlanta's firings; dropped the SportsTalk ATL item; views and want/fear now fit Tampa Bay; added ties to Bowles and Baker Mayfield."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

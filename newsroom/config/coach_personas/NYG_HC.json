@@ -333,9 +333,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "Moved seat 2026 (BAL HC to NYG HC after his Baltimore firing). Added 2026 sources E8-E12 (introduction, staff hires, offseason, camp). Views, want, fear and voice rewritten for the Giants; sliders unchanged (camp evidence E11 added to drive and openness). New ties: Andy Reid, Wilson, Nagy, Jaxson Dart. The Lamar Jackson tie stays positive on 2020-24 evidence; nothing found on how they parted."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

@@ -182,9 +182,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "New seat 2026 (TB DC seat per the seed; his real title is run game coordinator and outside linebackers coach, as Bowles calls the defense). Thin coverage: four sources, under the 5-source target; E2 and E4 dates are approximate (E4 is an undated team bio). Temperament, openness and drive stay at 5."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

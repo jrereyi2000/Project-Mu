@@ -274,9 +274,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "Moved seat 2026 (Cowboys OC in the old seed, head coach since 2025). Added the 2025 camp-discipline story, the season-end blame, the Parker introduction and the 2026 camp address; dropped the headline-only 2023 Brees-comparison piece (QB_WHISPERER now rests on E1 and E2). Sliders rebalanced to stay within 36: temperament and drive cite the new sources; tie to DC Parker added."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

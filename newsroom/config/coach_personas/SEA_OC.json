@@ -219,9 +219,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "New seat 2026. Five sources, all 2026 (E5 low, background only). ANALYTICS_BELIEVER rests on one source (E3: analytics work in Miami, pre-planned situational calls); JR may prefer TEACHER. The Shanahan tie rests on seven seasons on his staff, not testimony. Warmth and sociability left at 5."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

@@ -319,9 +319,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "Moved seat 2026 (NO OC 2024, SEA OC 2025, now LV HC). Added 2026 sources E7-E10 (introduction, coordinator hires, Janocko profile, Leonard feature). The seed's SEA-era gap is covered only through E7/E8; no 2025 Seattle feature added. Views, want, fear and voice rewritten for a first-time head coach who calls plays; new ties to Janocko, Leonard and Darnold. Crosby relationship left out (E8 reports strain with the team, not with Kubiak)."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

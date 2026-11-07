@@ -209,9 +209,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "New seat 2026. Five sources, 2025-11 to 2026-07. Kubiak calls the plays, so Janocko's public record is mostly as a quarterbacks coach. HISTORIAN rests on one team-written profile (E4: history major, talks about the franchise's past); JR may prefer MENTOR. Temperament, confidence and drive left at 5."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

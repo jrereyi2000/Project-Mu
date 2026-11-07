@@ -220,9 +220,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "New seat 2026 (PHI OC, hired January 2026, first-time play-caller). Five sources, 2026-01-29 to 2026-07-27; temperament and sociability stay at 5. Traits rest mostly on Sirianni's and players' descriptions plus his first press conference."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

@@ -203,9 +203,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "Moved seat 2026 (JAX OC to CHI OC; Bears pass-game coordinator in 2025, promoted February 2026, Johnson calls plays): added the AP promotion item and the May 2026 piece on his role; views and want now fit a non-play-calling coordinator; added a tie to Ben Johnson. Chicago-era coverage is thin and he is rarely quoted, so the sliders keep their Jacksonville basis."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

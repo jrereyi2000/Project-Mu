@@ -276,9 +276,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "Moved seat 2026 (DET OC to CHI HC, hired January 2025; 11-6 and a playoff win in 2025): added the introduction, the Allen partnership, the end-of-season press conference, the Taylor promotion and his June 2026 play-calling comments; dropped two Detroit context sources; confidence 6 and drive 8 on the Chicago evidence; added ties to Allen, Taylor and Caleb Williams."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

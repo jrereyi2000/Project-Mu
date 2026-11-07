@@ -235,9 +235,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "Moved seat 2026 (Texans OC to Dolphins OC). Added his promotion and his Miami introduction; warmth raised to 6 on the transcript; two views, a signature, want and fear updated; tie to Hafley added. Other sliders stay at 5 (thin personality coverage)."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

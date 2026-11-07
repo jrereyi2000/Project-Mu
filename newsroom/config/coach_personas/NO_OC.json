@@ -196,9 +196,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "New seat 2026 (NO OC since 2025). Thin coverage: five sources, 2025-02-20 to the 2026 preseason, almost none quoting him; sliders stay at 5 except warmth. E5 is an undated team bio, dated approximately. The Garrett Nussmeier tie is his son (support, positive) for JR to keep or drop."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

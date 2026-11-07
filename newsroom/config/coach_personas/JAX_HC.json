@@ -284,9 +284,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "Moved seat 2026 (TB OC to JAX HC, hired January 2025; 13-4 in 2025): added the end-of-season press conference, his first-year lesson and the coordinators' return; dropped the Tampa deep-ball item; views, want and fear updated for a second-year head coach; added ties to Udinski, Campanile and Trevor Lawrence."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }

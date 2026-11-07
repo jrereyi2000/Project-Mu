@@ -245,9 +245,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "reviewer": null,
-    "reviewed_at": null,
-    "notes": "Moved seat 2026 (CLE to ATL HC): added the Cleveland firing (AP), the Atlanta introduction, the Rees play-calling decision and the Ulbrich retention; dropped two Cleveland coordinator-hiring sources; drive moved to 6 on the Atlanta-era sources; added ties to Rees and Ulbrich."
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept)."
   }
 }
