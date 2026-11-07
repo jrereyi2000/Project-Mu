@@ -866,6 +866,51 @@ CAREER_STATS = ("games_played", "completions", "pass_attempts", "pass_yards", "p
                 "def_sacks", "def_tfl", "def_ints", "def_deflections", "def_forced_fumbles", "kick_fgm", "kick_fga",
                 "punt_punts", "blk_sacks_allowed")
 HISTORY_CAPTURED_FROM = 2035      # seasons before this are reconstructed league history (canon, docs/done/HISTORY_BACKFILL_PLAN.md)
+REAL_NFL_NOTE = ("Real NFL seasons through 2025 are fact (the player's real career before this league); league seasons "
+                 "from 2026 are this league. Keep them apart; quote the combined total only as his \"career\" total.")
+
+
+def real_nfl_career_block(cur, player_id):
+    """(real_nfl_career, career_including_real_nfl) for get_player_career: the player's real NFL career through 2025
+    (engines.nfl_history.read, regular season and playoffs, awards, draft) and his real + league regular-season totals
+    for CAREER_STATS. (None, None) when he isn't linked or the nfl_* tables aren't installed."""
+    from engines.nfl_history import read as nfl_read
+    try:
+        c = nfl_read.player_nfl_career(cur, player_id)
+    except Exception:
+        return None, None
+    if not c:
+        return None, None
+    keep = set(CAREER_STATS) | {"kick_fg_long"}
+
+    def line(r):
+        return {k: v for k, v in r.items() if k in keep and v} | {"season": r.get("season"),
+                                                                    "team": r.get("team_abbr")}
+    block = {"seasons": [line(r) for r in sorted(c["seasons"], key=lambda r: r["season"])],
+             "totals": {k: v for k, v in c["totals"].items() if k in keep and v},
+             "playoff_totals": {k: v for k, v in c["postseason_totals"].items() if k in keep and v},
+             "playoff_seasons": len(c["postseason"]),
+             "awards": [f"{a['season']} {a['award_type']}" for a in c["awards"]],
+             "draft": c["draft"], "first_season": c["first_season"], "last_season": c["last_season"]}
+    return block, c["totals"]
+
+
+def real_nfl_team_seasons(cur, team_id):
+    """The franchise's real NFL seasons 1999-2025 for get_team_history ([] without the nfl_* tables)."""
+    from engines.nfl_history import read as nfl_read
+    try:
+        rows = nfl_read.team_nfl_seasons(cur, team_id)
+    except Exception:
+        return []
+    out = []
+    for r in sorted(rows, key=lambda r: r["season"]):
+        out.append({"season": r["season"], "team": r["team_abbr"], "wins": r["wins"], "losses": r["losses"],
+                    "ties": r["ties"], "points_for": r["points_for"], "points_against": r["points_against"],
+                    "division_place": r["division_place"], "conference_seed": r["conference_seed"],
+                    "playoff_result": r["playoff_result"], "head_coach": r["head_coach"],
+                    "awards": [f"{a['award_type']}: {a['player_name'] or a['coach_name']}" for a in r["awards"]
+                               if "All-Pro" not in a["award_type"]]})
+    return out
 
 
 def rating_history(rows):
@@ -892,7 +937,10 @@ def get_player_career(player_identifier: str) -> str:
     Includes his awards, his moves between captured seasons (moved, drafted, joined, free agent, retired; from 2035 on),
     where his career stands now (active, a free agent, or retired) and his ratings by season from 2035 on (age,
     overall, change from the season before, dev trait; the reconstructed seasons have no ratings, so never cite one
-    for them). Accepts a player name or ID."""
+    for them). Also his real NFL career through 2025 when the league knows it (`real_nfl_career`: seasons, totals,
+    playoffs, awards, draft) and `career_including_real_nfl` (real + league regular-season totals): real NFL seasons
+    are fact, league seasons from 2026 are this league; keep them apart and quote the combined total only as his
+    "career" total. Accepts a player name or ID."""
     try:
         s_val = resolve_season(0)
         with psycopg.connect(db.db_conn_info) as conn:
@@ -924,6 +972,11 @@ def get_player_career(player_identifier: str) -> str:
                 ratings = rating_history(cur.fetchall())
                 from engines import season_ledger
                 path = season_ledger.career_path(cur, pid) if season_ledger.installed(cur) else None
+                real, real_totals = real_nfl_career_block(cur, pid)
+                combined = None
+                if real_totals:
+                    combined = {c: (totals.get(c) or 0) + (real_totals.get(c) or 0) for c in CAREER_STATS}
+                    combined = {c: v for c, v in combined.items() if v}
                 return json.dumps({
                     "player": name, "since": seasons[0]["season"] if seasons else None,
                     "moves_between_seasons": [m for m in path["moves"] if m["season"] <= s_val] if path else [],
@@ -933,7 +986,9 @@ def get_player_career(player_identifier: str) -> str:
                              "A fill-in from the league's reconstructed history (not a current player)."
                              if origin == "HISTORY_FILLIN" else None),
                     "seasons": seasons, "career_totals": {c: v for c, v in totals.items() if v},
-                    "ratings_by_season": ratings, "awards": awards}, indent=2, default=str)
+                    "ratings_by_season": ratings, "awards": awards,
+                    "real_nfl_career": real, "career_including_real_nfl": combined,
+                    "real_nfl_note": REAL_NFL_NOTE if real else None}, indent=2, default=str)
     except Exception as e:
         return f"Error: {str(e)}"
 
@@ -1007,8 +1062,9 @@ def get_offseason_movement(team_identifier: str = "", season: int = 0) -> str:
 def get_team_history(team_identifier: str) -> str:
     """Fetch a franchise's season-by-season history in this league since 2026: record, points, division place,
     playoff seed and result, head coach, GM and the team's award winners, plus totals (playoff trips, Super Bowl trips,
-    titles). 2026-2034 are reconstructed league history: canon, write about them as fact. Accepts team name,
-    abbreviation, or team ID."""
+    titles). 2026-2034 are reconstructed league history: canon, write about them as fact. Also the franchise's real
+    NFL seasons 1999-2025 (`real_nfl_seasons`), which are fact and come before this league; the totals count this
+    league only. Accepts team name, abbreviation, or team ID."""
     try:
         s_val = resolve_season(0)
         with psycopg.connect(db.db_conn_info) as conn:
@@ -1034,8 +1090,13 @@ def get_team_history(team_identifier: str) -> str:
                     s["history"] = s["season"] < HISTORY_CAPTURED_FROM
                     s["awards"] = awards.get(s["season"], [])
                 cur.execute("SELECT name FROM teams WHERE id = %s", (team_id,))
+                team_name = cur.fetchone()[0]
+                real = real_nfl_team_seasons(cur, team_id)
                 return json.dumps({
-                    "team": cur.fetchone()[0], "seasons": seasons,
+                    "team": team_name, "seasons": seasons,
+                    "real_nfl_seasons": real,
+                    "real_nfl_note": ("Real NFL seasons 1999-2025 are fact, before this league began; the totals "
+                                      "below count this league only.") if real else None,
                     "totals": {"wins": sum(s["wins"] for s in seasons), "losses": sum(s["losses"] for s in seasons),
                                "playoff_trips": sum(1 for s in seasons if s["playoff_result"] != "MISSED"),
                                "super_bowl_trips": [s["season"] for s in seasons

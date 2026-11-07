@@ -1,9 +1,11 @@
 """
 Career milestones since 2026 (docs/in_progress/SEASON_CONTINUITY_PLAN.md phase 4; PROJECT_SPEC §3.3m).
 
-A player's career in this league is every season_stat_lines row he has since 2026: the reconstructed 2026-2034 history
-(source SYNTH, canon) and the captured seasons from 2035, the same basis as the player page's "Career since 2026"
-(server/api.career_totals). Pre-2026 NFL careers are never added, so every total and milestone reads "since 2026".
+A player's career is his real NFL career through 2025 (engines.nfl_history, regular season, linked players only;
+REAL_NFL_HISTORY_PLAN Q3) plus every season_stat_lines row he has in this league since 2026: the league continues the
+real NFL, so a veteran's 40,000 career yards count his real yards. Each entry's `since` is his real first season
+where he has one, else 2026; `real_career_included` says whether any real career was added. The player page keeps the
+two apart (server/api.career_totals stays league-only).
 
 For a season this finds, per stat (MILESTONES):
 - crossed: players whose career total passed a round mark this season (before < mark <= now). `first` is "alone"
@@ -87,7 +89,32 @@ def compute(rows, season, in_progress, games_left):
 
 
 def _who(r):
-    return {"player_id": r["player_id"], "name": r["name"], "team": r["team"], "position": r["position"]}
+    return {"player_id": r["player_id"], "name": r["name"], "team": r["team"], "position": r["position"],
+            "since": r.get("since", FIRST_SEASON)}
+
+
+def add_real_careers(rows, league_rows, real, first_seasons):
+    """Pure. Adds each player's real NFL total to career_before. league_rows: {player_id: {name, team, position,
+    games, stats: {stat: (before, now)}}}; real: {player_id: {stat: total}}; first_seasons: {player_id: season}.
+    Returns the rows compute() takes (a stat with nothing before and nothing this season is left out)."""
+    for pid, p in league_rows.items():
+        for s, (b, n) in p["stats"].items():
+            before = b + float((real.get(pid) or {}).get(s) or 0)
+            if before or n:
+                rows.append({"player_id": pid, "name": p["name"], "team": p["team"], "position": p["position"],
+                             "stat": s, "career_before": before, "this_season": n, "games": p["games"],
+                             "since": min(first_seasons.get(pid, FIRST_SEASON), FIRST_SEASON)})
+    return rows
+
+
+def real_careers(cur, player_ids, stats):
+    """({player_id: {stat: real total}}, {player_id: first real season}) from engines.nfl_history ({} , {} when the
+    nfl_* tables aren't installed)."""
+    from engines.nfl_history import read as nfl_read
+    try:
+        return nfl_read.nfl_career_before(cur, player_ids, stats), nfl_read.nfl_first_seasons(cur, player_ids)
+    except Exception:
+        return {}, {}
 
 
 def _num(v):
@@ -128,21 +155,22 @@ def season_milestones(cur, season):
         WHERE l.season BETWEEN %s AND %s
         GROUP BY l.player_id, p.full_name, p.player_name""",
                 [season, season, season] + [season] * len(stats) + [season] * len(stats) + [FIRST_SEASON, season])
-    rows = []
+    league = {}
     for r in cur.fetchall():
         pid, name, team, pos, games = r[:5]
         before, now = r[5:5 + len(stats)], r[5 + len(stats):]
-        for s, b, n in zip(stats, before, now):
-            if b or n:
-                rows.append({"player_id": pid, "name": name, "team": team, "position": pos, "stat": s,
-                             "career_before": float(b), "this_season": float(n), "games": games or 0})
+        league[pid] = {"name": name, "team": team, "position": pos, "games": games or 0,
+                       "stats": {s: (float(b), float(n)) for s, b, n in zip(stats, before, now)}}
+    real, first = real_careers(cur, list(league), stats)
+    rows = add_real_careers([], league, real, first)
     out = compute(rows, season, in_progress, games_left)
-    return {"season": season, "in_progress": in_progress, "since": FIRST_SEASON, **out}
+    return {"season": season, "in_progress": in_progress, "since": FIRST_SEASON,
+            "real_career_included": bool(real), **out}
 
 
 if __name__ == "__main__":
     import argparse, json
-    ap = argparse.ArgumentParser(description="Career milestones since 2026 for a season.")
+    ap = argparse.ArgumentParser(description="Career milestones (real NFL career + this league) for a season.")
     ap.add_argument("--season", type=int)
     args = ap.parse_args()
     with psycopg.connect(CONN_INFO) as conn:
