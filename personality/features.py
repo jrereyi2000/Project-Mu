@@ -51,7 +51,7 @@ import sys
 FEATURES = ('producers', 'relationships', 'profiles', 'evolution', 'focus_refresh', 'contracts_ambition',
             'contracts_relationships', 'development_learning', 'trade_requests', 'retirement',
             'development_opportunity', 'coach_loop', 'player_loop', 'owner_patience', 'owner_hiring',
-            'owner_spending', 'owner_meddling', 'scout_directors', 'media_voters')     # D2 go-live order
+            'coaching_tree_hiring', 'owner_spending', 'owner_meddling', 'scout_directors', 'media_voters')     # D2 go-live order
 MODES = ('off', 'shadow', 'active')
 OBSERVE_ONLY = ('producers', 'relationships')
 TABLES = ('personality_feature_modes', 'personality_feature_mode_changes', 'personality_feature_clearances')
@@ -80,6 +80,7 @@ REQUIREMENTS = {
     'player_loop': ('engines.agent_loops.base', '2027_02_01_agent_loops.sql'),
     'owner_patience': ('engines.owner_policy', '2027_02_02_owners_scouts_voters.sql'),
     'owner_hiring': ('engines.owner_policy', '2027_02_02_owners_scouts_voters.sql'),
+    'coaching_tree_hiring': ('engines.coaching_tree_hiring', None),     # COACHING_TREES_PLAN §2.8; no migration
     'owner_spending': ('engines.owner_policy', '2027_02_02_owners_scouts_voters.sql'),
     'owner_meddling': ('engines.owner_policy', '2027_02_02_owners_scouts_voters.sql'),
     'scout_directors': ('engines.scout_directors', '2027_02_02_owners_scouts_voters.sql'),

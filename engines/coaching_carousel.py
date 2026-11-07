@@ -22,7 +22,9 @@ import os
 import random
 
 from engines import coach_hot_seat as chs
+from engines import coaching_tree_hiring as th
 from engines.staff_names import background, new_name, taken_names
+from personality import coaching_trees as ct
 
 APPEAL_WEIGHTS = {"qb": 0.30, "roster": 0.20, "draft": 0.15, "market": 0.15, "front_office": 0.10, "cap": 0.10}
 CHURN_PENALTY = 0.05               # per extra head coach the team went through in the last 5 seasons
@@ -392,7 +394,12 @@ def hiring_cycle(cur, season, log=print, personality=None):
     OC, DEFENSIVE: the DC, CEO: none), then the coordinator openings left (most attractive team first).
     JR's teams fill only the coordinator jobs JR left open himself (engines/fire_coordinator.py).
     Returns {head_coaches: [...], coordinators: [...], jr_losses: [...] (JR's coordinators poached),
-    jr_hires: [...] (the jobs JR left open), personality (staff_lifecycle: observe without `personality`)}."""
+    jr_hires: [...] (the jobs JR left open), personality (staff_lifecycle: observe without `personality`)}.
+
+    Coaching-tree hiring (switchboard `coaching_tree_hiring`, engines/coaching_tree_hiring.py; COACHING_TREES_PLAN
+    §2.8): off -> exactly the above; active -> tree terms added before each pick and a new head coach may bring an
+    out-of-work protégé (source REHIRED) instead of the invented stand-in; shadow -> picks as off, plus
+    report['tree_shadow'] listing each opening where the tree terms would have picked someone else."""
     nxt = season + 1
     tm, mine = teams(cur), jr_teams(cur)
     ranks, res = unit_ranks(cur, season), chs.playoff_results(cur, season)
@@ -406,6 +413,26 @@ def hiring_cycle(cur, season, log=print, personality=None):
     report = {"head_coaches": [], "coordinators": [], "jr_losses": [], "jr_hires": []}
     created = set()                                 # coordinators this cycle created: only these may be undone
     events = []                                     # person lifecycle events (staff_lifecycle), in order
+    tmode, tree, followed_ids = th.tree_mode(cur), None, set()
+    if tmode != "off":
+        from engines import coaching_tree_facts
+        tree = {"graph": coaching_tree_facts.tree_graph(cur, through=season), "records": th.mentor_records(cur)}
+        if tmode == "shadow":
+            report["tree_shadow"] = []
+
+    def tpick(pool, seed, opening, hiring_hc_pk=None):
+        """pick(), with the coaching-tree terms when the feature is active (shadow: noted, not applied)."""
+        base = pick(pool, seed)
+        if tree is None:
+            return base
+        alt = pick(th.adjusted(pool, graph=tree["graph"], hiring_hc_pk=hiring_hc_pk, records=tree["records"]), seed)
+        chosen = next(c for c in pool if c["key"] == alt["key"])
+        if tmode == "active":
+            return chosen
+        if chosen["key"] != base["key"]:
+            report["tree_shadow"].append({"opening": opening, "picked": base.get("name") or base["key"],
+                                          "tree_pick": chosen.get("name") or chosen["key"]})
+        return base
 
     def promote(team_id, role, prev, why):
         """An internal promotion who keeps the system (prev: the coordinator he replaces)."""
@@ -457,7 +484,7 @@ def hiring_cycle(cur, season, log=print, personality=None):
         seed = f"{season}:{abbr}:HC"
         outsider = {"key": f"outside:{abbr}", "kind": "OUTSIDE", "score": OUTSIDE_SCORE["HC"]}
         pool = [c for c in cands if not (c["kind"] == "RETREAD" and c["coach_id"] == old_id)] + [outsider]
-        c = pick(pool, seed)
+        c = tpick(pool, seed, f"{abbr} HC")
         if c is not outsider:
             cands.remove(c)
         oc, dc = staff.get((tid, "OC"), {}), staff.get((tid, "DC"), {})
@@ -562,32 +589,62 @@ def hiring_cycle(cur, season, log=print, personality=None):
                       notes=f"{name} brought in his own {role}")
                 fired_coord[(tid, role)] = cur_c["coordinator_id"]      # out of a job: a rehire candidate
                 cands[:] = [x for x in cands if x.get("coordinator_id") != cur_c["coordinator_id"]]
-            lseed = f"{season}:{abbr}:{role}:hcstaff"
-            lname = new_name(lseed, taken)
-            bg = background(lseed, "PROMOTED", role)
-            notes = f"{tm[tid]['name']} {role} under {name} from {nxt}; {name}'s {bg} before following him"
-            cid = _insert_coordinator(cur, lname, role, mine_side["scheme"], f"{tm[tid]['name']} "
-                                      f"{'Offense' if role == 'OC' else 'Defense'}", tend, notes)
-            created.add(cid)
-            events.append({"kind": "created", "event": f"carousel:{lseed}", "creator": "coaching_carousel:HC_STAFF",
-                           "namespace": "db-coordinator", "external_id": cid})
-            cur.execute("INSERT INTO coordinator_tenures (coordinator_id, team_id, role, start_season) "
-                        "VALUES (%s, %s, %s, %s)", (cid, tid, role, nxt))
-            _move(cur, season, tid, role, "HIRED", lname, coordinator_id=cid, source="HC_STAFF",
-                  notes=f"{name}'s {bg}; runs his {mine_side['scheme'] or 'system'}")
-            report["coordinators"].append({"team": abbr, "role": role, "coordinator": lname, "source": "HC_STAFF"})
+            follow = None
+            if tree is not None:
+                where_now = {v: k for k, v in fired_coord.items()}
+                ids = sorted(set(fired_coord.values()) - followed_ids)
+                cur.execute("SELECT id, coordinator_name, scheme FROM coordinators WHERE id = ANY(%s)", (ids,))
+                ow = [{"coordinator_id": r[0], "name": r[1], "scheme": r[2], "team_id": where_now[r[0]][0],
+                       "role": where_now[r[0]][1]} for r in cur.fetchall()]
+                fpool = th.follow_candidates(ct.person_key(name), ow, graph=tree["graph"], role=role)
+                if fpool:
+                    fpick = pick([{"key": "hc_staff", "kind": "HC_STAFF", "score": 0.0}] + fpool,
+                                 f"{season}:{abbr}:{role}:follow")
+                    if fpick["kind"] == "FOLLOWED" and tmode == "active":
+                        follow = fpick
+                    elif fpick["kind"] == "FOLLOWED":
+                        report["tree_shadow"].append({"opening": f"{abbr} {role}", "picked": "HC_STAFF stand-in",
+                                                      "tree_pick": fpick["name"]})
+            if follow is not None:
+                fid = follow["coordinator_id"]
+                followed_ids.add(fid)
+                events.append({"kind": "retained", "event": f"carousel:{season}:{abbr}:{role}:follow",
+                               "namespace": "db-coordinator", "external_id": fid})
+                cur.execute("INSERT INTO coordinator_tenures (coordinator_id, team_id, role, start_season) "
+                            "VALUES (%s, %s, %s, %s)", (fid, tid, role, nxt))
+                _move(cur, season, tid, role, "HIRED", follow["name"], coordinator_id=fid, source="REHIRED",
+                      from_team_id=follow["team_id"], from_role=follow["role"], score=th.FOLLOW_SCORE,
+                      notes=f"follows his mentor {name}")
+                report["coordinators"].append({"team": abbr, "role": role, "coordinator": follow["name"],
+                                               "source": "REHIRED"})
+            else:
+                lseed = f"{season}:{abbr}:{role}:hcstaff"
+                lname = new_name(lseed, taken)
+                bg = background(lseed, "PROMOTED", role)
+                notes = f"{tm[tid]['name']} {role} under {name} from {nxt}; {name}'s {bg} before following him"
+                cid = _insert_coordinator(cur, lname, role, mine_side["scheme"], f"{tm[tid]['name']} "
+                                          f"{'Offense' if role == 'OC' else 'Defense'}", tend, notes)
+                created.add(cid)
+                events.append({"kind": "created", "event": f"carousel:{lseed}", "creator": "coaching_carousel:HC_STAFF",
+                               "namespace": "db-coordinator", "external_id": cid})
+                cur.execute("INSERT INTO coordinator_tenures (coordinator_id, team_id, role, start_season) "
+                            "VALUES (%s, %s, %s, %s)", (cid, tid, role, nxt))
+                _move(cur, season, tid, role, "HIRED", lname, coordinator_id=cid, source="HC_STAFF",
+                      notes=f"{name}'s {bg}; runs his {mine_side['scheme'] or 'system'}")
+                report["coordinators"].append({"team": abbr, "role": role, "coordinator": lname, "source": "HC_STAFF"})
 
     # Coordinator openings left: fired coordinators' jobs (JR's teams: only the ones he fired) and a poached team's
     # own vacancy.
     nstaff = staff_in(cur, nxt)
     cur.execute("""SELECT c.id, c.coordinator_name, c.scheme, c.playbook, c.pass_lean, c.blitz_rate, c.man_coverage
-                   FROM coordinators c WHERE c.id = ANY(%s)""", (list(set(fired_coord.values())),))
+                   FROM coordinators c WHERE c.id = ANY(%s)""", (list(set(fired_coord.values()) - followed_ids),))
     out_of_work = {r[0]: dict(zip(("coordinator_id", "name", "scheme", "playbook", "pass_lean", "blitz_rate",
                                    "man_coverage"), r)) for r in cur.fetchall()}
     where = {v: k for k, v in fired_coord.items()}
     cpu = [t for t in tm if t not in mine]
     hiring = cpu + sorted({t for t, _ in fired_coord if t in mine})
     cparts = opening_parts(cur, season, hiring)
+    next_hcs = head_coaches(cur, nxt) if tree is not None else {}
     for tid in sorted(hiring, key=lambda t: (-opening_appeal(cparts[t]), t)):     # best job first
         for role in ("OC", "DC"):
             if (tid, role) in nstaff or (tid in mine and (tid, role) not in fired_coord):
@@ -604,7 +661,8 @@ def hiring_cycle(cur, season, log=print, personality=None):
                 ur, trk = unit_of(ranks, ft, fr)
                 pool.append({"key": f"coord:{cid}", "kind": "REHIRED", **c, "team_id": ft, "role": fr,
                              "score": round(coordinator_candidacy(ur, trk, years=years.get(cid, 1)) - 0.3, 3)})
-            c = pick(pool, seed)
+            hc_pk = ct.person_key(next_hcs[tid]["name"]) if tid in next_hcs else "p:"
+            c = tpick(pool, seed, f"{abbr} {role}", hiring_hc_pk=hc_pk)
             if c["kind"] == "PROMOTED":
                 name = promote(tid, role, prev, f"to replace {prev.get('name') or 'the departed coordinator'}")
             elif c["kind"] == "REHIRED":
