@@ -48,7 +48,7 @@ from pathlib import Path
 import re
 import sys
 
-FEATURES = ('producers', 'relationships', 'profiles', 'evolution', 'contracts_ambition',
+FEATURES = ('producers', 'relationships', 'profiles', 'evolution', 'focus_refresh', 'contracts_ambition',
             'contracts_relationships', 'development_learning', 'trade_requests', 'retirement',
             'development_opportunity', 'coach_loop', 'player_loop', 'owner_patience', 'owner_hiring',
             'owner_spending', 'owner_meddling', 'scout_directors', 'media_voters')     # D2 go-live order
@@ -69,6 +69,7 @@ REQUIREMENTS = {
     'relationships': ('personality.relationships', '2027_01_27_personality_relationships.sql'),
     'profiles': ('personality.lifecycle', '2027_01_24_personality_lifecycle.sql'),
     'evolution': ('personality.evolution_run', '2027_01_30_personality_evolution.sql'),
+    'focus_refresh': ('personality.focus_run', '2027_02_03_persona_focus.sql'),
     'contracts_ambition': ('engines.personality_contract_policy', '2027_01_23_contract_personality_policy.sql'),
     'contracts_relationships': ('engines.personality_contract_policy', '2027_01_23_contract_personality_policy.sql'),
     'development_learning': ('engines.personality_development', None),
