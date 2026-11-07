@@ -639,11 +639,24 @@ def personality_evolution_on(modes=None):
     return feature_gate("evolution", EVOLUTION_ENV, modes)[0] != "off"
 
 
+def development_evolution_candidates(cur, universe, season, evolution_mode, modes):
+    """The development plan's evolution candidates (personality/evolution_development.py, source DEVELOPMENT) for
+    run_season(external=...): [] unless the switchboard's development_learning feature is on too (development
+    active feeds its applied receipts; development shadow feeds its shadow receipts only to a dry run)."""
+    from personality import evolution_development as ed
+    from personality import features as pf
+    dev_mode = pf.snapshot_mode(modes, ed.FEATURE) if modes is not None else "off"
+    return ed.external_candidates(cur, universe, season,
+                                  receipt_mode=ed.development_mode(evolution_mode, dev_mode))
+
+
 def step_personality_evolution(snapshot_path, save_season, dsn=None, log_fn=log, connect=None, modes=None):
     """Personality evolution for the season just ended (PERSONALITY_EVOLUTION_PLAN.md §2.5), on the OFFSEASON_START
     ingest (tick 24) only, after the relationship producers and before the league office. Its own connection and
     transaction; runs by the switchboard `modes` (feature_gate: the MU_PERSONALITY_EVOLUTION kill switch wins):
-    shadow runs the season as a dry run (report only, no profile changes), active applies it. Skipped (with a
+    shadow runs the season as a dry run (report only, no profile changes), active applies it. The development
+    plan's candidates join as source DEVELOPMENT only when development_learning is on too
+    (development_evolution_candidates). Skipped (with a
     logged reason) when the evolution tables aren't migrated or the league has no lifecycle universe. Writes the
     season report under verify_output/ and, when applied, notifies "Mu: N personality changes in <season>". Never
     fails the ingest: an error is logged, notified and recorded as a FAILED run."""
@@ -677,7 +690,8 @@ def step_personality_evolution(snapshot_path, save_season, dsn=None, log_fn=log,
                 conn.rollback()
                 log_fn(f"Personality evolution skipped: {e}")
                 return {"status": "skipped", "reason": "no_universe"}
-            report = er.run_season(cur, universe, season, dry_run=mode == "shadow")
+            external = development_evolution_candidates(cur, universe, season, mode, modes)
+            report = er.run_season(cur, universe, season, dry_run=mode == "shadow", external=external)
         if mode == "shadow":
             conn.rollback()
         else:
@@ -689,7 +703,7 @@ def step_personality_evolution(snapshot_path, save_season, dsn=None, log_fn=log,
             send_notify(f"Mu: {changes} personality changes in {season}. Report: {path}",
                         title="Mu: personality evolution", tags=("busts_in_silhouette",))
         return {"status": report["status"], "season": season, "universe_id": universe, "changes": changes,
-                "report": path}
+                "report": path, "development_candidates": len(external)}
     except Exception as e:  # noqa: BLE001 - never fatal to the ingest
         msg = f"Personality evolution failed for season {season}: {e}"
         log_fn(msg)

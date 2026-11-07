@@ -10,6 +10,7 @@ Nothing here switches a feature on by itself: a missing row (or a database witho
   set_mode(cur, league_id, feature, mode, *, version, config, review_ref, now, force_reason=None, set_by='JR')
   snapshot(cur, league_id) -> {league_id, source, features: {feature: config}}   frozen once per ingest / write
   check(cur, league_id, feature, mode, *, version, now) -> refusal reason | None   (no write)
+  relationship_policy(feature_config) -> relationships policy | None   off None, shadow observe, active enabled
   next_step(cur, league_id, feature, *, now) -> {next, allowed, why}
   history(cur, league_id, feature=None) -> [change]
   export_clearance(cur, league_id, feature, *, source_label, now, report_path=None) -> clearance document
@@ -236,6 +237,24 @@ def snapshot_mode(snap, feature):
     """A feature's mode from a snapshot (None or a missing feature reads 'off')."""
     _feature(feature)
     return (((snap or {}).get('features') or {}).get(feature) or {}).get('mode') or 'off'
+
+
+def relationship_policy(feature_config):
+    """The relationships plan's policy for a `relationships` feature config ({mode, version, config}): None when
+    off; shadow -> mode 'observe' (evidence only, consumers neutral); active -> mode 'enabled' with the reviewed
+    trust / attachment / reactions sections from the feature's config. Validated by
+    personality.relationships.validate_policy (PolicyError when an active config is incomplete)."""
+    cfg = feature_config or {}
+    mode = cfg.get('mode') or 'off'
+    if mode == 'off':
+        return None
+    from personality import relationships as rel
+    policy = {'mode': 'observe' if mode == 'shadow' else 'enabled',
+              'rule_version': cfg.get('version') or 'relationships-unversioned'}
+    if mode == 'active':
+        policy.update({k: v for k, v in (cfg.get('config') or {}).items()
+                       if k in ('trust', 'attachment', 'reactions')})
+    return rel.validate_policy(policy)
 
 
 def _clearance(cur, league, feature, version=None):

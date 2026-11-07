@@ -279,10 +279,52 @@ class AvailabilityTest(unittest.TestCase):
     def test_production_relationships_off_without_policy(self):
         self.assertIsNone(pa.RELATIONSHIP_POLICY)
         s = pa.Sources.__new__(pa.Sources)
-        with self.assertRaises(pa.Unavailable):
-            s.relationship_context({})
-        with self.assertRaises(pa.Unavailable):
-            s.mood({}, {})
+        with mock.patch.object(pa.Sources, "relationship_policy", return_value=None):
+            with self.assertRaises(pa.Unavailable):
+                s.relationship_context({})
+            with self.assertRaises(pa.Unavailable):
+                s.mood({}, {})
+
+    def _switchboard_sources(self, feature_config, league=(7,)):
+        s = pa.Sources.__new__(pa.Sources)
+        s.cur = mock.Mock()
+        s._sp = lambda: __import__("contextlib").nullcontext()
+        s._one = mock.Mock(return_value=league)
+        return s, mock.patch("personality.features.config", return_value=feature_config)
+
+    def test_relationship_policy_follows_the_switchboard(self):
+        from tests.test_personality_relationships import trial_policy
+        enabled = trial_policy()
+        sections = {k: enabled[k] for k in ("trust", "attachment")}
+        s, patch = self._switchboard_sources({"mode": "off", "version": None, "config": {}})
+        with patch as cfg:
+            self.assertIsNone(s.relationship_policy())
+            with self.assertRaises(pa.Unavailable) as e:
+                s.relationship_context({})
+        self.assertIn("switchboard: relationships off", str(e.exception))
+        self.assertEqual(cfg.call_args[0][1:], (7, "relationships"))
+        s, patch = self._switchboard_sources({"mode": "shadow", "version": "rel-v1", "config": sections})
+        with patch:
+            pol = s.relationship_policy()
+        self.assertEqual((pol["mode"], pol["rule_version"], pol["trust"]), ("observe", "rel-v1", None))
+        s, patch = self._switchboard_sources({"mode": "active", "version": "rel-v1", "config": sections})
+        with patch:
+            pol = s.relationship_policy()
+        self.assertEqual(pol["mode"], "enabled")
+        self.assertEqual(pol["attachment"], enabled["attachment"])
+
+    def test_incomplete_active_relationship_config_is_unavailable_with_its_reason(self):
+        s, patch = self._switchboard_sources({"mode": "active", "version": "rel-v1", "config": {}})
+        with patch:
+            with self.assertRaises(pa.Unavailable) as e:
+                s.relationship_policy()
+        self.assertIn("relationships policy incomplete", str(e.exception))
+
+    def test_no_league_reads_relationships_off(self):
+        s, patch = self._switchboard_sources({"mode": "active"}, league=None)
+        with patch as cfg:
+            self.assertIsNone(s.relationship_policy())
+        cfg.assert_not_called()
 
     def test_no_numbers_outside_sliders(self):
         ctx = {"status": "enabled", "edges": [edge("coach", "12", trust=0.73), edge("player", "8", trust=-0.61),

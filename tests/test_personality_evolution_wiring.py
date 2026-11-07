@@ -116,8 +116,10 @@ def test_on_at_tick_24_runs_writes_the_report_and_notifies(tmp):
             mock.patch('personality.evolution_run.run_season', return_value=report) as run, \
             mock.patch('pipeline.watch_save.send_notify') as notify:
         res = ws.step_personality_evolution(snapshot_file(tmp), 2030, connect=lambda dsn: c, log_fn=lambda m: None)
-    assert res == {'status': 'applied', 'season': 2030, 'universe_id': 'mu:u', 'changes': 3, 'report': path}
+    assert res == {'status': 'applied', 'season': 2030, 'universe_id': 'mu:u', 'changes': 3, 'report': path,
+                   'development_candidates': 0}
     assert run.call_args[0][1:] == ('mu:u', 2030)
+    assert run.call_args[1]['external'] == []
     c.commit.assert_called_once()
     assert os.path.exists(path)
     assert 'Mu: 3 personality changes in 2030' in notify.call_args[0][0]

@@ -20,8 +20,8 @@ player without a db-player alias who is still an undrafted prospect is 404 hidde
 else unresolved is 404 no_profile.
 
 Every block reads only what other plans built: the relationships ledger (promises), the relationships projection
-(ties, attachment, mood; neutral until a relationships policy is active, so the block is unavailable until the
-activation plan supplies one through RELATIONSHIP_POLICY), the core's history (evolution notes) and the trade
+(ties, attachment, mood; the policy comes from the switchboard's relationships feature for the league: off ->
+unavailable, shadow -> observe, so still neutral and unavailable, active -> the reviewed enabled policy), the core's history (evolution notes) and the trade
 request store's PUBLIC projection. A missing table, module or policy makes that block null with a reason in
 `unavailable`; the page hides it. Reads never write; the override goes through personality.store.override
 (actor JR, the league_state season and week) and commits only on success.
@@ -66,7 +66,7 @@ ATTACHMENT_LABELS = {"none": None, "weak": "settling in", "established": "attach
 BLOCKS = ("mood", "changes", "ties", "attachment", "promises", "trade_request")
 TICK_STRIDE = 1000           # engines.player_trade_requests.clock_ordinal: season * 1000 + tick
 TICKS_PER_SEASON = 32        # engines.relationship_producers.calendar
-RELATIONSHIP_POLICY = None   # the activation plan's switchboard supplies an enabled policy; None = not active
+RELATIONSHIP_POLICY = None   # an explicit override (tests); None = read the switchboard's relationships feature
 
 router = APIRouter(prefix="/api/personality")
 
@@ -503,14 +503,39 @@ class Sources:
         seasons = {ev["occurred_at"]["season"] for ev in events} | {self.clock()[0]}
         return {s: TICKS_PER_SEASON for s in range(min(seasons), max(seasons) + 1)}
 
+    def relationship_policy(self):
+        """The relationships policy for this league from the switchboard (personality.features.relationship_policy:
+        off -> None, shadow -> observe, active -> enabled with the feature's reviewed sections). RELATIONSHIP_POLICY,
+        when set, overrides it. None also when the switchboard or league can't be read; an incomplete active config
+        is Unavailable with its reason."""
+        if RELATIONSHIP_POLICY is not None:
+            return RELATIONSHIP_POLICY
+        if not hasattr(self, "_rel_policy"):
+            from personality import features as pf
+            from personality import relationships as rel
+            self._rel_policy, self._rel_policy_error = None, None
+            try:
+                with self._sp():
+                    row = self._one("SELECT madden_league_id FROM league_state WHERE id = 1")
+                    if row and row[0] is not None:
+                        self._rel_policy = pf.relationship_policy(pf.config(self.cur, int(row[0]), "relationships"))
+            except rel.PolicyError as e:
+                self._rel_policy_error = f"relationships policy incomplete ({e})"
+            except Exception:
+                self._rel_policy = None
+        if self._rel_policy_error:
+            raise Unavailable(self._rel_policy_error)
+        return self._rel_policy
+
     def relationship_context(self, subject):
         from personality import relationships as rel
-        if RELATIONSHIP_POLICY is None:
-            raise Unavailable("relationships not active yet (no approved policy)")
+        policy = self.relationship_policy()
+        if policy is None:
+            raise Unavailable("relationships not active yet (switchboard: relationships off)")
         events = self.relationship_events(subject)
         season, tick = self.clock()
         state = rel.project_relationships(events, subject=subject, as_of={"season": season, "tick": tick},
-                                          known_through=None, policy=RELATIONSHIP_POLICY,
+                                          known_through=None, policy=policy,
                                           calendar=self._calendar(events))
         context = rel.relationship_context(state)
         if context.get("status") != "enabled":
@@ -519,15 +544,16 @@ class Sources:
 
     def mood(self, subject, profile):
         from personality import core, reactions as rx, relationships as rel
-        if RELATIONSHIP_POLICY is None:
-            raise Unavailable("relationships not active yet (no approved policy)")
+        policy = self.relationship_policy()
+        if policy is None:
+            raise Unavailable("relationships not active yet (switchboard: relationships off)")
         events = self.relationship_events(subject)
         season, tick = self.clock()
         as_of, cal = {"season": season, "tick": tick}, self._calendar(events)
         state = rel.project_relationships(events, subject=subject, as_of=as_of, known_through=None,
-                                          policy=RELATIONSHIP_POLICY, calendar=cal)
+                                          policy=policy, calendar=cal)
         result = rx.project_reactions(events, state, feature_view=core.feature_view(profile, "reactions"),
-                                      as_of=as_of, known_through=None, policy=RELATIONSHIP_POLICY, calendar=cal)
+                                      as_of=as_of, known_through=None, policy=policy, calendar=cal)
         context = rx.reaction_context(result)
         if context.get("status") != "enabled":
             raise Unavailable("relationships not active yet")
