@@ -244,3 +244,12 @@ def test_background_line_word_budget_at_the_caps():
     assert len(content.split()) <= 70
     assert sum(1 for w in content.split() if w.strip(",.;") == "word") == 56
 
+
+
+def test_render_persona_prints_the_lineage_line_after_the_voice():
+    barnwell = P.load_personas()["BARNWELL"]
+    line = "Coaching tree: McVay tree (Shanahan lineage); served 5 seasons under Sean McVay."
+    out = P.render_persona(dict(barnwell, lineage=line), "ARTICLE", set(), seed="x")
+    blocks = out.split("\n\n")
+    assert blocks[1] == f"YOUR COACHING LINEAGE (a fact about you): {line}"
+    assert "COACHING LINEAGE" not in P.render_persona(barnwell, "ARTICLE", set(), seed="x")

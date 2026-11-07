@@ -814,7 +814,8 @@ def render_persona(persona, fmt: str = "ARTICLE", tags: set = frozenset(), seed:
     """The ROLE & PERSONA block for one piece. fmt is ARTICLE or POST. A plain string persona passes through.
     An optional `change_notes` list (newest first, personality.evolution.change_notes) shows its first
     MAX_CHANGE_NOTES under the voice. Optional `focus_want`/`focus_fear` (v2 coach and owner profiles) add
-    "and right now <focus>" to the background line; without them the line is unchanged."""
+    "and right now <focus>" to the background line; without them the line is unchanged. An optional `lineage`
+    (one coaching-tree sentence, personality.coaching_trees.lineage_line) is printed as a fact line after the voice."""
     if isinstance(persona, str):
         return persona
     if traits is None:
@@ -822,6 +823,9 @@ def render_persona(persona, fmt: str = "ARTICLE", tags: set = frozenset(), seed:
     rng = random.Random(f"persona:{seed}")
     tags = set(tags)
     out = [persona["voice"].strip()]
+    lineage = persona.get("lineage")
+    if isinstance(lineage, str) and lineage.strip():
+        out.append(f"YOUR COACHING LINEAGE (a fact about you): {lineage.strip()}")
 
     notes = [n.strip() for n in (persona.get("change_notes") or []) if isinstance(n, str) and n.strip()]
     if notes:

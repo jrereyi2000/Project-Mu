@@ -531,3 +531,46 @@ class TestOffseasonDebugApi(unittest.TestCase):
 if __name__ == "__main__":
     unittest.main()
 
+
+
+class TestCoachingPacketTrees(unittest.TestCase):
+    """mu_coaching_packet: each head-coach hire carries his coaching tree (COACHING_TREES_PLAN §2.7)."""
+
+    def _cursor(self):
+        moves = [{"id": 1, "season": 2030, "team_id": 3, "role": "HC", "action": "HIRED", "person": "Ann Head",
+                  "slant": "OFFENSIVE", "source": "POACHED", "inputs": None, "from_team": "BBB", "from_role": "OC",
+                  "notes": None, "team": "AAA", "team_name": "A Team", "offensive_scheme": "West Coast",
+                  "defensive_scheme": "4-3"}]
+        results = [[], [], moves, []]
+
+        class Cur:
+            connection = None
+
+            def execute(self, *a):
+                self.rows = results.pop(0) if results else []
+
+            def fetchall(self):
+                return self.rows
+
+        return Cur()
+
+    def test_hires_carry_coaching_tree(self):
+        import newsroom.offseason_service as svc
+        seen = []
+
+        def fake_context(cur, name, *, through, directory=None):
+            seen.append((name, through))
+            return {"label": "McVay tree (Shanahan lineage)", "line": "Coaching tree: McVay tree.", "mentors": []}
+
+        with patch("engines.coaching_tree_facts.tree_context", fake_context):
+            packet = svc.mu_coaching_packet(self._cursor(), 2030)
+        hire = packet["head_coach_hires"][0]
+        self.assertEqual(hire["coaching_tree"], {"label": "McVay tree (Shanahan lineage)",
+                                                 "line": "Coaching tree: McVay tree."})
+        self.assertEqual(seen, [("Ann Head", 2030)])
+
+    def test_hire_without_tree_reads_none(self):
+        import newsroom.offseason_service as svc
+        with patch("engines.coaching_tree_facts.tree_context", lambda *a, **k: None):
+            packet = svc.mu_coaching_packet(self._cursor(), 2030)
+        self.assertIsNone(packet["head_coach_hires"][0]["coaching_tree"])

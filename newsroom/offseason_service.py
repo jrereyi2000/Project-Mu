@@ -301,9 +301,27 @@ def hot_seat_warnings(firings: List[Dict[str, Any]], moves: List[Dict[str, Any]]
     return out
 
 
+def _tuple_cursor(cur):
+    """A tuple-row cursor on the same connection (and transaction) for tuple readers; `cur` itself when that isn't
+    available (fake cursors, other drivers)."""
+    try:
+        from psycopg.rows import tuple_row
+        return cur.connection.cursor(row_factory=tuple_row)
+    except Exception:  # noqa: BLE001
+        return cur
+
+
+def _hire_tree(cur, name, season):
+    """{label, line} for a hired head coach (COACHING_TREES_PLAN §2.7): the carousel runs after the season, so
+    the trees are read through `season`. None when there's nothing to say."""
+    from engines import coaching_tree_facts
+    ctx = coaching_tree_facts.tree_context(cur, name, through=season)
+    return None if ctx is None else {"label": ctx["label"], "line": ctx["line"]}
+
+
 def mu_coaching_packet(cur, season: int) -> Dict[str, Any]:
     """The Coaching Carousel facts from Mu's carousel: each head-coach hire with the coach he replaces (record, how
-    he was fired), the coordinators fired, and every other staff move (dict_row cursor)."""
+    he was fired), his coaching tree, the coordinators fired, and every other staff move (dict_row cursor)."""
     from engines.coach_profile import season_record
     cur.execute("""SELECT season, week, home_team_id, away_team_id, home_score, away_score, game_type
                    FROM games WHERE completed_at IS NOT NULL AND season = %s""", (season,))
@@ -317,6 +335,7 @@ def mu_coaching_packet(cur, season: int) -> Dict[str, Any]:
                    LEFT JOIN coaches c ON c.id = m.coach_id WHERE m.season = %s ORDER BY m.id""", (season,))
     moves = [dict(r) for r in cur.fetchall()]
     hires = []
+    tree_cur = _tuple_cursor(cur)
     for m in (m for m in moves if m["role"] == "HC" and m["action"] == "HIRED"):
         out = fired.get(m["team_id"])
         rec = season_record(games_list, m["team_id"], season) if out else {}
@@ -339,7 +358,10 @@ def mu_coaching_packet(cur, season: int) -> Dict[str, Any]:
                         if m.get("inputs") else None),
             "origin": (f"{m['from_role']} with {m['from_team']}" if m["from_team"] else m["notes"]),
             "scheme_inheritance": {"offensive_scheme": m["offensive_scheme"], "defensive_scheme": m["defensive_scheme"]},
+            "coaching_tree": _hire_tree(tree_cur, m["person"], season),
             "notes": m["notes"]})
+    if tree_cur is not cur:
+        tree_cur.close()
     cur.execute("""SELECT t.abbreviation AS team, h.role, c.coordinator_name AS coordinator, h.phase
                    FROM coordinator_hot_seat h JOIN teams t ON t.id = h.team_id
                    JOIN coordinators c ON c.id = h.coordinator_id WHERE h.season = %s AND h.fired""", (season,))

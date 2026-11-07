@@ -350,3 +350,10 @@ def test_convert_v2_mechanical():
     assert 'converted to v2 on 2026-11-07' in new['review']['notes'] and 'was approved by JR' in new['review']['notes']
     assert errors(new) == []
 
+
+
+def test_persona_for_passes_the_lineage_line():
+    line = 'Coaching tree: McVay tree (Shanahan lineage); served 5 seasons under Sean McVay.'
+    assert cp.persona_for(profile(), lineage=line)['lineage'] == line
+    assert 'lineage' not in cp.persona_for(profile())
+    assert 'lineage' not in cp.persona_for(profile(), lineage='  ')
