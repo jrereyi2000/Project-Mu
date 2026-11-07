@@ -1,5 +1,5 @@
 {
-  "schema_version": "owner-profile-v1",
+  "schema_version": "owner-profile-v2",
   "key": "owner:NE",
   "name": "Robert Kraft",
   "role": "OWNER",
@@ -21,6 +21,17 @@
     "confidence": [
       "E1"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 6,
+      "sociability": 7,
+      "openness": 6,
+      "warmth": 4,
+      "drive": 6
+    },
+    "locked": []
   },
   "traits": [
     "MEDDLER",
@@ -85,8 +96,24 @@
     "takes personal responsibility for a failed hire in public",
     "speaks about the franchise's run of titles as the standard"
   ],
-  "want": "To prove the Patriots can win titles again after the Belichick era, on a plan he chose (medium).",
-  "fear": "Being remembered for the decline after the dynasty (medium).",
+  "motivation": {
+    "want": "to prove the Patriots can win titles again on a plan he chose",
+    "fear": "being remembered for the decline after the dynasty"
+  },
+  "focus": {
+    "want": {
+      "text": "another title with Drake Maye",
+      "subjects": [
+        {
+          "kind": "player",
+          "name": "Drake Maye",
+          "team_2026": "NE"
+        }
+      ],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "Warm but businesslike, given to accountability statements and loyalty talk. Speaks about the franchise as a family institution and about the fans. Avoids football jargon.",
   "ties": [
     {
@@ -135,9 +162,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 ('The rest of the owners look good')."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 ('The rest of the owners look good').; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

@@ -1,5 +1,5 @@
 {
-  "schema_version": "owner-profile-v1",
+  "schema_version": "owner-profile-v2",
   "key": "owner:SF",
   "name": "Jed York",
   "role": "OWNER",
@@ -18,6 +18,18 @@
     "drive": 5
   },
   "slider_evidence": {},
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 2,
+      "sociability": 4,
+      "confidence": 6,
+      "openness": 5,
+      "warmth": 4,
+      "drive": 6
+    },
+    "locked": []
+  },
   "traits": [
     "PATIENT_BUILDER",
     "HANDS_OFF",
@@ -80,8 +92,28 @@
     "affirms his coach and GM at season's end",
     "talks about cap discipline openly"
   ],
-  "want": "Finally win a sixth Super Bowl in the Shanahan-Lynch era (medium).",
-  "fear": "Letting the window close through bad contracts (medium).",
+  "motivation": {
+    "want": "a sixth Super Bowl for San Francisco",
+    "fear": "letting the window close through bad contracts"
+  },
+  "focus": {
+    "want": {
+      "text": "a title before the current coaching partnership ends",
+      "subjects": [
+        {
+          "kind": "coach",
+          "seed_ref": {
+            "table": "COACHES_DATA",
+            "team": "SF",
+            "role": "HC",
+            "name": "Kyle Shanahan"
+          }
+        }
+      ],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "Confident, practical and occasionally defensive about money. Speaks plainly about trust in his staff and the business side of the cap.",
   "ties": [
     {
@@ -130,9 +162,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 ('The rest of the owners look good')."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 ('The rest of the owners look good').; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

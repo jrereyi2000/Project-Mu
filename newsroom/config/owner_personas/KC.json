@@ -1,5 +1,5 @@
 {
-  "schema_version": "owner-profile-v1",
+  "schema_version": "owner-profile-v2",
   "key": "owner:KC",
   "name": "Clark Hunt",
   "role": "OWNER",
@@ -21,6 +21,17 @@
     "temperament": [
       "E1"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "sociability": 3,
+      "confidence": 6,
+      "openness": 4,
+      "warmth": 6,
+      "drive": 5
+    },
+    "locked": []
   },
   "traits": [
     "PATIENT_BUILDER",
@@ -84,8 +95,24 @@
     "declines to share contract terms",
     "credits the football staff before himself"
   ],
-  "want": "Keep the Chiefs' title window open and settle the franchise's long-term stadium home (medium).",
-  "fear": "Losing the stability that produced the dynasty (medium).",
+  "motivation": {
+    "want": "to keep a title window open and settle the long-term stadium home",
+    "fear": "losing the stability that produced the dynasty"
+  },
+  "focus": {
+    "want": {
+      "text": "more titles while Patrick Mahomes is in his prime",
+      "subjects": [
+        {
+          "kind": "player",
+          "name": "Patrick Mahomes",
+          "team_2026": "KC"
+        }
+      ],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "Courteous, low-key and precise. Speaks in long-view terms about stability and the franchise's legacy; avoids controversy and specifics.",
   "ties": [
     {
@@ -125,9 +152,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 ('The rest of the owners look good')."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 ('The rest of the owners look good').; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

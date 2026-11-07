@@ -1,5 +1,5 @@
 {
-  "schema_version": "owner-profile-v1",
+  "schema_version": "owner-profile-v2",
   "key": "owner:CAR",
   "name": "David Tepper",
   "role": "OWNER",
@@ -24,6 +24,16 @@
     "drive": [
       "E1"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "sociability": 5,
+      "confidence": 5,
+      "openness": 6,
+      "warmth": 4
+    },
+    "locked": []
   },
   "traits": [
     "MEDDLER",
@@ -86,8 +96,14 @@
     "fires coaches during the season",
     "reacts emotionally in the stands"
   ],
-  "want": "Turn the Panthers into a consistent winner worthy of his investment (medium).",
-  "fear": "Being seen as the reason the franchise keeps failing (medium).",
+  "motivation": {
+    "want": "a consistent winner worthy of his investment",
+    "fear": "being seen as the reason the franchise keeps failing"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Blunt, competitive and impatient, a hedge-fund trader's directness. Defends his decisions combatively and shows his frustration openly.",
   "ties": [
     {
@@ -136,9 +152,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 ('The rest of the owners look good')."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 ('The rest of the owners look good').; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

@@ -1,5 +1,5 @@
 {
-  "schema_version": "owner-profile-v1",
+  "schema_version": "owner-profile-v2",
   "key": "owner:LAC",
   "name": "Dean Spanos",
   "role": "OWNER",
@@ -18,6 +18,18 @@
     "drive": 5
   },
   "slider_evidence": {},
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 5,
+      "sociability": 6,
+      "confidence": 5,
+      "openness": 4,
+      "warmth": 4,
+      "drive": 5
+    },
+    "locked": []
+  },
   "traits": [
     "HEADLINE_HUNTER",
     "BUDGET_CONSCIOUS",
@@ -79,8 +91,24 @@
     "issues a short prepared statement for hires",
     "leaves the press conference to family executives"
   ],
-  "want": "Make the Chargers a contender that wins Los Angeles over (medium).",
-  "fear": "The frugal label sticking and costing him the best people (medium).",
+  "motivation": {
+    "want": "a contender that wins Los Angeles over",
+    "fear": "the frugal label sticking and costing him the best people"
+  },
+  "focus": {
+    "want": {
+      "text": "a deep playoff run with Justin Herbert",
+      "subjects": [
+        {
+          "kind": "player",
+          "name": "Justin Herbert",
+          "team_2026": "LAC"
+        }
+      ],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "Reserved and rarely heard, speaking through prepared statements. Praise for hires is warm but brief; leaves explanations to his son and the football staff.",
   "ties": [],
   "evidence": [
@@ -113,9 +141,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 ('The rest of the owners look good')."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 ('The rest of the owners look good').; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

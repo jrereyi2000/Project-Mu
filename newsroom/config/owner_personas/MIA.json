@@ -1,5 +1,5 @@
 {
-  "schema_version": "owner-profile-v1",
+  "schema_version": "owner-profile-v2",
   "key": "owner:MIA",
   "name": "Stephen Ross",
   "role": "OWNER",
@@ -18,6 +18,18 @@
     "drive": 5
   },
   "slider_evidence": {},
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 8,
+      "sociability": 5,
+      "confidence": 7,
+      "openness": 5,
+      "warmth": 4,
+      "drive": 5
+    },
+    "locked": []
+  },
   "traits": [
     "HEADLINE_HUNTER",
     "MEDDLER",
@@ -80,8 +92,14 @@
     "promises sustained success at every new hire",
     "talks about the stadium and events before the football"
   ],
-  "want": "To turn the Dolphins into a lasting winner that matches the stadium and events business he built (medium).",
-  "fear": "Another cycle of coaching hires that never reach the top of the AFC (medium).",
+  "motivation": {
+    "want": "a lasting winner that matches the stadium and events business he built",
+    "fear": "another cycle of coaching hires that never reach the top"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "A businessman's register: upbeat, big-picture, comfortable talking about investment and brand. Rarely discusses football detail. Accepts setbacks in a sentence and pivots to the next plan.",
   "ties": [
     {
@@ -130,9 +148,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 ('The rest of the owners look good')."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 ('The rest of the owners look good').; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

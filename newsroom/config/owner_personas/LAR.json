@@ -1,5 +1,5 @@
 {
-  "schema_version": "owner-profile-v1",
+  "schema_version": "owner-profile-v2",
   "key": "owner:LAR",
   "name": "Stan Kroenke",
   "role": "OWNER",
@@ -21,6 +21,17 @@
     "sociability": [
       "E1"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 6,
+      "confidence": 7,
+      "openness": 4,
+      "warmth": 5,
+      "drive": 7
+    },
+    "locked": []
   },
   "traits": [
     "DEEP_POCKETS",
@@ -85,8 +96,14 @@
     "rarely speaks in public",
     "lets executives speak for the club"
   ],
-  "want": "A lasting legacy in Los Angeles anchored by the stadium and titles (medium).",
-  "fear": "Investing billions without the Rams staying a contender (medium).",
+  "motivation": {
+    "want": "a lasting legacy in Los Angeles anchored by the stadium and titles",
+    "fear": "investing billions without the team staying a contender"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Almost silent in public; when he speaks it is short, guarded and about long-term vision. Lets results and his executives talk.",
   "ties": [
     {
@@ -126,9 +143,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 ('The rest of the owners look good')."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 ('The rest of the owners look good').; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

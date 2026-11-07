@@ -1,5 +1,5 @@
 {
-  "schema_version": "owner-profile-v1",
+  "schema_version": "owner-profile-v2",
   "key": "owner:TEN",
   "name": "Amy Adams Strunk",
   "role": "OWNER",
@@ -21,6 +21,17 @@
     "temperament": [
       "E1"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "sociability": 6,
+      "confidence": 5,
+      "openness": 6,
+      "warmth": 6,
+      "drive": 7
+    },
+    "locked": []
   },
   "traits": [
     "DEEP_POCKETS",
@@ -84,8 +95,24 @@
     "announces front-office firings by statement",
     "measures leaders on visible improvement"
   ],
-  "want": "A return to contention for the Titans and a new stadium era that starts with winning (medium).",
-  "fear": "A long losing stretch that defines her stewardship (medium).",
+  "motivation": {
+    "want": "a return to contention and a new stadium era that starts with winning",
+    "fear": "a long losing stretch that defines her stewardship"
+  },
+  "focus": {
+    "want": {
+      "text": "to see Cam Ward lead the Titans back",
+      "subjects": [
+        {
+          "kind": "player",
+          "name": "Cam Ward",
+          "team_2026": "TEN"
+        }
+      ],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "Reserved and formal in public, speaking mostly through statements. Emphasizes accountability and improvement. Leaves football detail to her executives.",
   "ties": [],
   "evidence": [
@@ -109,9 +136,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 ('The rest of the owners look good')."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 ('The rest of the owners look good').; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

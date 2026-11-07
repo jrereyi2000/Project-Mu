@@ -1,5 +1,5 @@
 {
-  "schema_version": "owner-profile-v1",
+  "schema_version": "owner-profile-v2",
   "key": "owner:DEN",
   "name": "Greg Penner",
   "role": "OWNER",
@@ -18,6 +18,18 @@
     "drive": 5
   },
   "slider_evidence": {},
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 4,
+      "sociability": 5,
+      "confidence": 5,
+      "openness": 4,
+      "warmth": 4,
+      "drive": 8
+    },
+    "locked": []
+  },
   "traits": [
     "DEEP_POCKETS",
     "HANDS_OFF",
@@ -81,8 +93,24 @@
     "frames hard money decisions as bets on winning",
     "defers football questions to his head coach"
   ],
-  "want": "Bring a fourth championship to Denver under the ownership group he leads (medium).",
-  "fear": "Repeating an expensive quarterback mistake (medium).",
+  "motivation": {
+    "want": "a fourth championship for Denver under his ownership group",
+    "fear": "repeating an expensive quarterback mistake"
+  },
+  "focus": {
+    "want": {
+      "text": "a title while Bo Nix is still young and cheap",
+      "subjects": [
+        {
+          "kind": "player",
+          "name": "Bo Nix",
+          "team_2026": "DEN"
+        }
+      ],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "Calm, analytical and corporate; talks in terms of investment and outcomes. Rarely emotional in public and comfortable letting his coach be the face of the team.",
   "ties": [],
   "evidence": [
@@ -106,9 +134,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 ('The rest of the owners look good')."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 ('The rest of the owners look good').; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

@@ -1,5 +1,5 @@
 {
-  "schema_version": "owner-profile-v1",
+  "schema_version": "owner-profile-v2",
   "key": "owner:SEA",
   "name": "Neeru Khosla",
   "role": "OWNER",
@@ -18,6 +18,18 @@
     "drive": 5
   },
   "slider_evidence": {},
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 3,
+      "sociability": 6,
+      "confidence": 5,
+      "openness": 6,
+      "warmth": 5,
+      "drive": 5
+    },
+    "locked": []
+  },
   "traits": [
     "DEEP_POCKETS",
     "ANALYTICS_BELIEVER",
@@ -79,8 +91,18 @@
     "frames the team as a long-term family investment",
     "praises the existing management first"
   ],
-  "want": "Keep a champion on top while setting up the franchise for generations (medium).",
-  "fear": "Being the new owners who break what was working (medium).",
+  "motivation": {
+    "want": "to keep a champion on top while building for generations",
+    "fear": "being the new owners who break what was working"
+  },
+  "focus": {
+    "want": {
+      "text": "a repeat title in her first season as owner",
+      "subjects": [],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "Entrepreneurial and long-view, comfortable with venture-capital ideas of risk and talent. New to football and humble about it in public.",
   "ties": [],
   "evidence": [
@@ -113,9 +135,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07: Neeru Khosla is the owner persona."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07: Neeru Khosla is the owner persona.; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

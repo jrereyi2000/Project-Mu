@@ -1,5 +1,5 @@
 {
-  "schema_version": "owner-profile-v1",
+  "schema_version": "owner-profile-v2",
   "key": "owner:BUF",
   "name": "Terry Pegula",
   "role": "OWNER",
@@ -22,6 +22,17 @@
       "E1",
       "E2"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 5,
+      "sociability": 4,
+      "confidence": 6,
+      "openness": 6,
+      "warmth": 5
+    },
+    "locked": []
   },
   "traits": [
     "PATIENT_BUILDER",
@@ -87,8 +98,34 @@
     "measures every season against the last playoff exit",
     "reorganizes the front office rather than replacing it wholesale"
   ],
-  "want": "A championship for Buffalo while his quarterback is in his prime (medium confidence reading of his firing rationale).",
-  "fear": "Another year of the same playoff heartbreak, and being blamed for wasting a great quarterback (medium).",
+  "motivation": {
+    "want": "a championship for Buffalo",
+    "fear": "another year of the same playoff heartbreak"
+  },
+  "focus": {
+    "want": {
+      "text": "a title while Josh Allen is in his prime",
+      "subjects": [
+        {
+          "kind": "player",
+          "name": "Josh Allen",
+          "team_2026": "BUF"
+        }
+      ],
+      "until_season": null
+    },
+    "fear": {
+      "text": "being blamed for wasting Josh Allen",
+      "subjects": [
+        {
+          "kind": "player",
+          "name": "Josh Allen",
+          "team_2026": "BUF"
+        }
+      ],
+      "until_season": null
+    }
+  },
   "voice": "Plain-spoken and brief at the podium, prone to naming specifics other owners would leave alone. Frames decisions through the fan base and the playoff record. Defers to his general manager on process but makes the biggest calls himself.",
   "ties": [
     {
@@ -137,9 +174,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 ('The rest of the owners look good')."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 ('The rest of the owners look good').; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

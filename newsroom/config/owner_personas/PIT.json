@@ -1,5 +1,5 @@
 {
-  "schema_version": "owner-profile-v1",
+  "schema_version": "owner-profile-v2",
   "key": "owner:PIT",
   "name": "Art Rooney II",
   "role": "OWNER",
@@ -24,6 +24,16 @@
     "warmth": [
       "E2"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "sociability": 4,
+      "confidence": 4,
+      "openness": 4,
+      "drive": 5
+    },
+    "locked": []
   },
   "traits": [
     "PATIENT_BUILDER",
@@ -88,8 +98,14 @@
     "points to the franchise's short list of head coaches",
     "announces hires through the team's own reporter"
   ],
-  "want": "A seventh Lombardi Trophy without abandoning the franchise's patient way (medium).",
-  "fear": "Breaking the Steelers' tradition of stability with the wrong choice (medium).",
+  "motivation": {
+    "want": "a seventh Lombardi Trophy without abandoning the patient way",
+    "fear": "breaking a tradition of stability with the wrong choice"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Even, courteous and unhurried, a lawyer's caution in every answer. Defends decisions without heat. Leans on tradition and the city.",
   "ties": [
     {
@@ -138,9 +154,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 ('The rest of the owners look good')."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 ('The rest of the owners look good').; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

@@ -1,5 +1,5 @@
 {
-  "schema_version": "owner-profile-v1",
+  "schema_version": "owner-profile-v2",
   "key": "owner:NO",
   "name": "Gayle Benson",
   "role": "OWNER",
@@ -18,6 +18,18 @@
     "drive": 5
   },
   "slider_evidence": {},
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 6,
+      "sociability": 5,
+      "confidence": 6,
+      "openness": 5,
+      "warmth": 7,
+      "drive": 4
+    },
+    "locked": []
+  },
   "traits": [
     "LOYAL",
     "MEDDLER",
@@ -78,8 +90,14 @@
     "speaks of the team as part of the city",
     "defends longtime executives against fan criticism"
   ],
-  "want": "Keep the Saints winning and rooted in New Orleans for generations (medium).",
-  "fear": "Fans turning on the organization she has kept loyal to (medium).",
+  "motivation": {
+    "want": "to keep the Saints winning and rooted in New Orleans for generations",
+    "fear": "fans turning on the organization she has kept loyal"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Gracious, faith-tinged and community-minded, firm when defending her people. Short statements that center the city and the fans.",
   "ties": [
     {
@@ -128,9 +146,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 ('The rest of the owners look good')."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 ('The rest of the owners look good').; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

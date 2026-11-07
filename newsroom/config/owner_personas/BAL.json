@@ -1,5 +1,5 @@
 {
-  "schema_version": "owner-profile-v1",
+  "schema_version": "owner-profile-v2",
   "key": "owner:BAL",
   "name": "Steve Bisciotti",
   "role": "OWNER",
@@ -18,6 +18,18 @@
     "drive": 5
   },
   "slider_evidence": {},
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "temperament": 2,
+      "sociability": 4,
+      "confidence": 5,
+      "openness": 4,
+      "warmth": 5,
+      "drive": 8
+    },
+    "locked": []
+  },
   "traits": [
     "PATIENT_BUILDER",
     "HANDS_OFF",
@@ -81,8 +93,24 @@
     "announces big decisions in a written statement first",
     "credits the thoroughness of the process"
   ],
-  "want": "A second Lombardi Trophy of the Lamar Jackson era (medium).",
-  "fear": "Letting a great quarterback's prime pass without a title (medium).",
+  "motivation": {
+    "want": "another championship for Baltimore",
+    "fear": "letting a great quarterback's prime pass without a title"
+  },
+  "focus": {
+    "want": {
+      "text": "a second Lombardi Trophy of the Lamar Jackson era",
+      "subjects": [
+        {
+          "kind": "player",
+          "name": "Lamar Jackson",
+          "team_2026": "BAL"
+        }
+      ],
+      "until_season": null
+    },
+    "fear": null
+  },
   "voice": "Measured and reflective, more comfortable in a statement than a soundbite. Calls hard decisions hard. Speaks of organizational values and the people who carry them.",
   "ties": [
     {
@@ -131,9 +159,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 ('The rest of the owners look good')."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 ('The rest of the owners look good').; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }

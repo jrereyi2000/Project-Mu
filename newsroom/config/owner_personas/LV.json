@@ -1,5 +1,5 @@
 {
-  "schema_version": "owner-profile-v1",
+  "schema_version": "owner-profile-v2",
   "key": "owner:LV",
   "name": "Mark Davis",
   "role": "OWNER",
@@ -22,6 +22,17 @@
       "E1",
       "E2"
     ]
+  },
+  "slider_inference": {
+    "version": "slider-inference-v1",
+    "values": {
+      "sociability": 6,
+      "confidence": 7,
+      "openness": 5,
+      "warmth": 6,
+      "drive": 5
+    },
+    "locked": []
   },
   "traits": [
     "HEADLINE_HUNTER",
@@ -83,8 +94,14 @@
     "makes coaching announcements himself",
     "invokes his father and the Raiders' past"
   ],
-  "want": "A winner worthy of the Raiders' history in the new Las Vegas era (medium).",
-  "fear": "Remaining the franchise that churns through head coaches (medium).",
+  "motivation": {
+    "want": "a winner worthy of the franchise's history in its new home",
+    "fear": "remaining the franchise that churns through head coaches"
+  },
+  "focus": {
+    "want": null,
+    "fear": null
+  },
   "voice": "Folksy and candid, with an unusual frankness about mistakes. Talks about family history and Raider Nation. Delegates football detail to his executives.",
   "ties": [],
   "evidence": [
@@ -108,9 +125,7 @@
     }
   ],
   "review": {
-    "status": "approved",
-    "reviewer": "JR",
-    "reviewed_at": "2026-11-07",
-    "notes": "JR approved 2026-11-07 ('The rest of the owners look good')."
+    "status": "draft",
+    "notes": "JR approved 2026-11-07 ('The rest of the owners look good').; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
   }
 }
