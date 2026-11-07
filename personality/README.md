@@ -77,6 +77,26 @@ python -m personality history|as-of --universe U --role R (--birth-key K | --ali
 
 Applying `2027_01_29` to a franchise database and running `adopt --writers` / `--gms` there are JR's decisions, each after a `--dry-run`.
 
+## Inferred sliders and refreshing focus (docs/in_progress/INFERRED_SLIDERS_AND_FOCUS_PLAN.md)
+
+Real coach and owner profiles (`coach_profiles.py`, `owner_profiles.py`) have a v2 schema (`coach-profile-v2`, `owner-profile-v2`; v1 still read) with a `slider_inference` block, a durable `motivation` {want, fear} and a per-slot current `focus`.
+
+- **`slider_inference.py`** (pure): a slider at 5 with no evidence gets `clamp(5 + capped trait leans + seeded step, 2, 8)` from `newsroom/config/slider_leans.json`, balanced into the 24–36 band by moving inferred values toward 5. `infer_sliders`, `check_inference`, `effective_sliders`, `inferred_evidence` (a low-confidence, voice-only `inferred:slider-inference-v1` provenance entry, or `jr-set:<date>` for a slider JR locked), `is_inferred`. The values are fixed in the file at review time (`python -m tools.coach_profile_review infer --write`) and reach the core only through the reviewed lifecycle apply (`core_initial_values` overlays them).
+- **`focus.py`** (pure): `validate_file_focus` (motivation and focus word caps, subjects, no names in the motivation), `stale_causes` (SUBJECT_RETIRED, SUBJECT_LEFT_TEAM, SUBJECT_LEFT_ROLE, SUBJECT_LEFT_LEAGUE, SUBJECT_UNRESOLVED, HOLDER_MOVED, EXPIRED; unknown is never stale), `load_templates` (`newsroom/config/focus_templates.json`), `draft_focus` (seeded template pick), `change_note`.
+- **`focus_store.py`**: `persona_focus` (append-only focus history, one active row per person and slot) and `persona_focus_runs` from `db/migrations/2027_02_03_persona_focus.sql` (requires `2027_01_16` and `2027_01_24`; not in `init_db.sql`; applying it is JR's call). Explicit cursor, savepoints, never commits.
+- **`focus_facts.py`** (read-only): `facts(cur, universe_id, season, *, bindings=None)`: each core coach's seat and team (db-coach / db-coordinator alias and tenures) and each owner's team (birth key `curated-owner:<TEAM>:2026`), team direction, playoffs, Super Bowl, hot seat, the team's people (qb1, young_star, top_defender, top_weapon, head_coach, gm) and the status of the subjects of his active focus rows. A missing table leaves its facts None.
+- **`focus_run.py`**: `seed` (seq-0 rows from reviewed v2 files), `run_season` (keep, replace a stale profile/template row by a template draft with a change note, report a stale JR row as `jr_stale`; noop on the same input hash; `dry_run` writes nothing), `render_report`, `set_focus`, `revert`, and the CLI below. The switchboard feature is `focus_refresh` (after `evolution`); the watcher step `step_focus_refresh` runs it on the OFFSEASON_START ingest (shadow = dry run, active = applied; kill switch `MU_FOCUS_REFRESH`).
+
+```
+python -m personality.focus_run season --season S [--dry-run] [--universe U] [--dsn DSN]
+python -m personality.focus_run report --season S [--out PATH] [--universe U] [--dsn DSN]
+python -m personality.focus_run show --persona ID [--as-of S:T] [--universe U] [--dsn DSN]
+python -m personality.focus_run set --persona ID --slot want|fear --text TEXT [--subject kind:namespace:id ...] --reason TEXT [--season S --tick T]
+python -m personality.focus_run revert --focus-id ID --reason TEXT [--dsn DSN]
+```
+
+`DATABASE_URL` or `--dsn`, refusing `madden_2036` and `postgres`; JSON out; commits unless `--dry-run` (report and show never commit); exit 0 ok, 2 invalid, 3 not found or not migrated, 4 conflict.
+
 ## Validation and parallel work
 
 Pure tests cover deterministic generated initialization, scopes, sparse real-person evidence, full real reads, mutation limits, active slider policy, overrides, adoption of all 40 writers, carry-over and as-of reconstruction; `tests/test_personality_cli.py` covers the CLI offline. PostgreSQL tests use an explicit scratch DSN and a fresh schema per test; all DDL/data roll back and never touch public profiles. They exercise alias conflicts, insert-once replay, event deduplication, legacy-mutation detection, forced failure after canonical writes and preservation of caller transaction ownership.

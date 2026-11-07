@@ -717,6 +717,95 @@ def step_personality_evolution(snapshot_path, save_season, dsn=None, log_fn=log,
                 pass
 
 
+# ----------------------------------------------------------------------------------------- focus refresh ---
+FOCUS_ENV = "MU_FOCUS_REFRESH"
+
+
+def focus_refresh_on(modes=None):
+    """True when the focus refresh runs: MU_FOCUS_REFRESH=on, or the switchboard's focus_refresh feature in shadow
+    (dry run) or active, unless MU_FOCUS_REFRESH=off (the kill switch)."""
+    return feature_gate("focus_refresh", FOCUS_ENV, modes)[0] != "off"
+
+
+def step_focus_refresh(snapshot_path, save_season, dsn=None, log_fn=log, connect=None, modes=None):
+    """Refresh the current focus of real coaches and owners for the season just ended
+    (INFERRED_SLIDERS_AND_FOCUS_PLAN.md §2.7), on the OFFSEASON_START ingest (tick 24) only, right after personality
+    evolution and before the league office and trade-request steps. Its own connection and transaction; runs by the
+    switchboard `modes` (feature_gate: the MU_FOCUS_REFRESH kill switch wins): shadow runs the season as a dry run
+    (report only), active applies it. Skipped (with a logged reason) when the persona_focus tables aren't migrated
+    or the league has no lifecycle universe. Writes the season report under verify_output/ and, when applied,
+    notifies "Mu: N focus refreshes in <season>". Never fails the ingest: an error is logged, notified and recorded
+    as a FAILED run."""
+    mode, why = feature_gate("focus_refresh", FOCUS_ENV, modes)
+    if mode == "off":
+        log_fn(f"Focus refresh off ({why}).")
+        return {"status": "off"}
+    season = universe = None
+    conn = None
+    try:
+        from pipeline import league_office as lo
+        from personality import focus_run as fr
+        with open(snapshot_path) as fh:
+            snapshot = json.load(fh)
+        stage = lo.detect_stage(snapshot)
+        if stage in lo.IN_SEASON or lo.STAGE_WEEKS.get(stage) != EVOLUTION_TICK:
+            return {"status": "skipped", "reason": "not_offseason_start", "stage": stage}
+        season = lo.league_season(snapshot, stage)
+        if connect is None:
+            import psycopg
+            connect = psycopg.connect
+        conn = connect(dsn or os.environ.get("DATABASE_URL"))
+        with conn.cursor() as cur:
+            if not fr.tables_ready(cur):
+                conn.rollback()
+                log_fn("Focus refresh skipped: persona_focus tables not migrated.")
+                return {"status": "skipped", "reason": "not_migrated"}
+            try:
+                universe = fr.resolve_universe(cur)
+            except fr.FocusRunError as e:
+                conn.rollback()
+                log_fn(f"Focus refresh skipped: {e}")
+                return {"status": "skipped", "reason": "no_universe"}
+            report = fr.run_season(cur, universe, season, dry_run=mode == "shadow")
+        if mode == "shadow":
+            conn.rollback()
+        else:
+            conn.commit()
+        path = fr.write_report(report, fr.report_path(universe, season))
+        changes = report["counts"].get("replaced", 0) if report["status"] == "applied" else 0
+        log_fn(f"Focus refresh {season} ({mode}): {report['status']} ({changes} refreshed); report {path}")
+        if report["status"] == "applied":
+            send_notify(f"Mu: {changes} focus refreshes in {season}. Report: {path}",
+                        title="Mu: focus refresh", tags=("busts_in_silhouette",))
+        return {"status": report["status"], "season": season, "universe_id": universe, "changes": changes,
+                "report": path}
+    except Exception as e:  # noqa: BLE001 - never fatal to the ingest
+        msg = f"Focus refresh failed for season {season}: {e}"
+        log_fn(msg)
+        traceback.print_exc()
+        if conn is not None:
+            try:
+                conn.rollback()
+                if universe is not None and season is not None:
+                    from personality import focus_run as fr
+                    with conn.cursor() as cur:
+                        fr.record_failure(cur, universe, season, e)
+                    conn.commit()
+            except Exception as rec_err:  # noqa: BLE001
+                log_fn(f"Could not record the FAILED focus run: {rec_err}")
+        try:
+            send_notify(msg, title="Mu: focus refresh failed", priority="default", tags=("warning",))
+        except Exception:  # noqa: BLE001
+            pass
+        return {"status": "failed", "error": str(e)}
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:  # noqa: BLE001
+                pass
+
+
 # ------------------------------------------------------------------------------------------ trade requests ---
 TRADE_REQUEST_REPORTS = os.path.join("verify_output", "personality_trade_requests")
 
@@ -1101,6 +1190,8 @@ def ingest_snapshot(snapshot_path, save_season, save_week, dry_run=False, no_art
     producers = step_relationship_producers(snapshot_path, save_season, dsn=dsn, log_fn=log_fn, modes=modes)
     # Step: personality evolution (OFFSEASON_START only, after the producers, before the league office; off by default)
     evolution = step_personality_evolution(snapshot_path, save_season, dsn=dsn, log_fn=log_fn, modes=modes)
+    # Step: focus refresh (OFFSEASON_START only, right after evolution, before the league office; off by default)
+    focus_refresh = step_focus_refresh(snapshot_path, save_season, dsn=dsn, log_fn=log_fn, modes=modes)
     # Step: trade-request reviews (after producers and evolution; off by default; never fatal)
     trade_requests = step_trade_requests(snapshot_path, save_season, dsn=dsn, log_fn=log_fn, modes=modes)
 
@@ -1119,7 +1210,8 @@ def ingest_snapshot(snapshot_path, save_season, save_week, dry_run=False, no_art
     def result():
         return {"status": "success", "dry_run": False, "season": save_season, "week": save_week,
                 "load_report": load_report, "league_office": lo_result, "relationship_producers": producers,
-                "personality_evolution": evolution, "trade_requests": trade_requests}
+                "personality_evolution": evolution, "focus_refresh": focus_refresh,
+                "trade_requests": trade_requests}
 
     if stage_only:
         # An offseason stop: no current week, so no weekly engines, articles or mod pack.

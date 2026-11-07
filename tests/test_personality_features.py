@@ -310,7 +310,7 @@ def test_activate_cleared_follows_the_order_and_stops_at_the_first_gap(tmp_path)
     real.batch = True                                     # lifecycle inventory applied: profiles counts as active
     out = pf.activate_cleared(real, LEAGUE, now={'season': 2026, 'tick': 1}, review_ref='go')
     assert [o['status'] for o in out[:4]] == ['already_active', 'already_active', 'already_active', 'activated']
-    assert out[4] == {'feature': 'contracts_ambition', 'status': 'stopped', 'reason': 'no clearance imported'}
+    assert out[4] == {'feature': 'focus_refresh', 'status': 'stopped', 'reason': 'no clearance imported'}
 
 
 # ----------------------------------------------------------------------------------------------- CLI ---
@@ -401,3 +401,11 @@ def test_scratch_migration_twice_and_incompatible_table_refused():
             cur.execute(MIGRATION.read_text())
         cur.execute('ROLLBACK')   # the migration's own BEGIN left the refused transaction open
         cur.execute('DROP SCHEMA pf_test CASCADE')
+
+
+def test_focus_refresh_follows_evolution_with_its_requirement():
+    """INFERRED_SLIDERS_AND_FOCUS_PLAN §2.7: focus_refresh sits right after evolution in the D2 order."""
+    assert pf.FEATURES.index('focus_refresh') == pf.FEATURES.index('evolution') + 1
+    assert pf.REQUIREMENTS['focus_refresh'] == ('personality.focus_run', '2027_02_03_persona_focus.sql')
+    assert (pf.MIGRATIONS / '2027_02_03_persona_focus.sql').exists()
+
