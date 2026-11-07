@@ -1,6 +1,7 @@
 // The Team hub's History tab (docs/done/HISTORY_BACKFILL_PLAN.md phase 4; PROJECT_SPEC §3.3j): every season this league
 // records, from GET /api/team/{abbr}/history. 2026–2034 are reconstructed league history (marked "hist"); 2035 on
-// come from the season archive; the current season shows its record so far.
+// come from the season archive; the current season shows its record so far. Below them, under "Real NFL", the
+// franchise's real seasons 1999–2025 (nfl_seasons, engines/nfl_history; §3.3x), kept out of the league totals.
 import { useEffect, useState } from "react";
 import { API_BASE } from "../../api";
 import { ordinal } from "./format";
@@ -23,8 +24,24 @@ type Season = {
   in_progress?: boolean;
   awards: { award: string; name: string }[];
 };
+type NflSeason = {
+  season: number;
+  team_abbr: string;
+  division: string | null;
+  wins: number;
+  losses: number;
+  ties: number;
+  points_for: number;
+  points_against: number;
+  division_place: number | null;
+  conference_seed: number | null;
+  playoff_result: string;
+  head_coach: string | null;
+  awards: { award_type: string; player_name: string | null; coach_name: string | null }[];
+};
 type History = {
   seasons: Season[];
+  nfl_seasons?: NflSeason[];
   summary: { since: number | null; wins: number; losses: number; playoffs: number; titles: number[]; super_bowls: number[] };
 };
 
@@ -53,6 +70,7 @@ export default function TeamHistory({ abbr }: { abbr: string }) {
   if (error) return <section className="team-history"><p className="player-log-note">History isn't available.</p></section>;
   if (!data) return <section className="team-history"><p className="player-log-note">Loading history…</p></section>;
   const { seasons, summary } = data;
+  const nflSeasons = data.nfl_seasons ?? [];
   const hasHistory = seasons.some((s) => s.history);
 
   return (
@@ -99,6 +117,46 @@ export default function TeamHistory({ abbr }: { abbr: string }) {
           <span className="career-history-tag">hist</span> seasons are reconstructed league history (2026–2034): records,
           playoffs and staff are canon; games weren't kept, so there are no box scores.
         </p>
+      )}
+      {nflSeasons.length > 0 && (
+        <>
+          <div className="team-section-title"><span>1999–2025</span><h2>Real NFL</h2></div>
+          <div className="player-table-scroll">
+            <table className="player-history-table team-history-table">
+              <thead>
+                <tr>
+                  <th>SEASON</th><th>TEAM</th><th>RECORD</th><th>DIV</th><th>PF</th><th>PA</th><th>PLAYOFFS</th><th>HEAD COACH</th><th>AWARDS</th>
+                </tr>
+              </thead>
+              <tbody>
+                {nflSeasons.map((s) => (
+                  <tr key={`nfl-${s.season}`} className={s.playoff_result === "CHAMPION" ? "team-history-champion" : ""}>
+                    <td><strong>{s.season}</strong></td>
+                    <td>{s.team_abbr}</td>
+                    <td>{s.ties ? `${s.wins}-${s.losses}-${s.ties}` : `${s.wins}-${s.losses}`}</td>
+                    <td>{s.division_place ? ordinal(s.division_place) : "—"}</td>
+                    <td>{s.points_for}</td>
+                    <td>{s.points_against}</td>
+                    <td>
+                      {RESULT[s.playoff_result] ?? "—"}
+                      {s.conference_seed ? <span className="career-since">{ordinal(s.conference_seed)} seed</span> : null}
+                    </td>
+                    <td>{s.head_coach ?? "—"}</td>
+                    <td>
+                      {s.awards.filter((a) => !a.award_type.includes("All-Pro")).length
+                        ? s.awards.filter((a) => !a.award_type.includes("All-Pro"))
+                            .map((a) => `${a.award_type}: ${a.player_name ?? a.coach_name}`).join(" · ")
+                        : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="player-log-note">
+            Real NFL seasons, before this league began in 2026. The totals above count this league only.
+          </p>
+        </>
       )}
     </section>
   );

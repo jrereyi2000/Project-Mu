@@ -58,6 +58,81 @@ export const unitCareerColumns: Record<string, StatCol[]> = {
   blocking: [{ label: "SACKS ALLOWED", value: (s) => dash(s.blk_sacks_allowed) }],
 };
 
+// Real NFL career table (nfl_career from /api/player/{id}: engines/nfl_history, §3.3x), by the page's stat group.
+const avg = (yds: any, n: any) => (n ? (yds / n).toFixed(1) : "—");
+export const nflCareerColumns: Record<string, StatCol[]> = {
+  passing: [
+    { label: "CMP/ATT", value: (s) => ratio(s.completions, s.pass_attempts) }, { label: "PASS YDS", value: (s) => dash(s.pass_yards) },
+    { label: "PASS TD", value: (s) => dash(s.pass_tds) }, { label: "INT", value: (s) => dash(s.interceptions) },
+    { label: "RUSH YDS", value: (s) => dash(s.rush_yards) }, { label: "RUSH TD", value: (s) => dash(s.rush_tds) },
+  ],
+  rushing: [
+    { label: "CAR", value: (s) => dash(s.rush_attempts) }, { label: "RUSH YDS", value: (s) => dash(s.rush_yards) },
+    { label: "RUSH TD", value: (s) => dash(s.rush_tds) }, { label: "REC", value: (s) => dash(s.receptions) },
+    { label: "REC YDS", value: (s) => dash(s.rec_yards) }, { label: "REC TD", value: (s) => dash(s.rec_tds) },
+  ],
+  receiving: [
+    { label: "TGT", value: (s) => dash(s.rec_targets) }, { label: "REC", value: (s) => dash(s.receptions) },
+    { label: "REC YDS", value: (s) => dash(s.rec_yards) }, { label: "REC TD", value: (s) => dash(s.rec_tds) },
+    { label: "RUSH YDS", value: (s) => dash(s.rush_yards) },
+  ],
+  defense: unitCareerColumns.defense,
+  kicking: unitCareerColumns.kicking,
+  punting: [
+    { label: "PUNTS", value: (s) => dash(s.punt_punts) }, { label: "YDS", value: (s) => dash(s.punt_yards) },
+    { label: "AVG", value: (s) => avg(s.punt_yards, s.punt_punts) }, { label: "NET", value: (s) => avg(s.punt_net_yards, s.punt_punts) },
+    { label: "IN 20", value: (s) => dash(s.punt_inside_20) },
+  ],
+  blocking: [],
+};
+
+function NflCareer({ career, statGroup }: { career: any; statGroup: string }) {
+  const cols = nflCareerColumns[statGroup] ?? nflCareerColumns.rushing;
+  const honors: string[] = (career.awards || []).map((a: any) => `${a.season} ${a.award_type}`);
+  const draft = career.draft;
+  return (
+    <section className="player-career-section">
+      <div className="team-section-title"><span>Before this league</span><h2>Real NFL career (through 2025)</h2></div>
+      <p className="player-log-note">
+        {draft ? `Drafted ${draft.season}, round ${draft.round ?? "?"}, pick ${draft.pick ?? "?"} by ${draft.team ?? "?"}.` : "Undrafted."}
+        {honors.length > 0 && <> Honors: {honors.join(" · ")}.</>}
+      </p>
+      <div className="player-table-scroll">
+        <table className="player-history-table career-table">
+          <thead>
+            <tr><th>SEASON</th><th>TEAM</th><th>GP</th>{cols.map((c) => <th key={c.label}>{c.label}</th>)}</tr>
+          </thead>
+          <tbody>
+            {(career.seasons || []).map((s: any) => (
+              <tr key={`nfl-${s.season}`}>
+                <td><strong>{s.season}</strong></td>
+                <td>{s.mu_team ? <><img src={logo(String(s.mu_team).toLowerCase())} alt="" /><span>{s.team_abbr}</span></> : s.team_abbr}</td>
+                <td>{s.games_played ?? "—"}</td>
+                {cols.map((c) => <td key={c.label}>{c.value(s)}</td>)}
+              </tr>
+            ))}
+            <tr className="career-total-row">
+              <td><strong>Total</strong><span className="career-since">{career.first_season}–{career.last_season}</span></td>
+              <td>{(career.seasons || []).length} seasons</td>
+              <td>{career.totals?.games_played ?? 0}</td>
+              {cols.map((c) => <td key={c.label}>{c.value(career.totals || {})}</td>)}
+            </tr>
+            {(career.postseason || []).length > 0 && (
+              <tr className="career-total-row">
+                <td><strong>Playoffs</strong></td>
+                <td>{career.postseason.length} seasons</td>
+                <td>{career.postseason_totals?.games_played ?? 0}</td>
+                {cols.map((c) => <td key={c.label}>{c.value(career.postseason_totals || {})}</td>)}
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      <p className="player-log-note">Real NFL seasons; the Career Stats above count this league only, since 2026.</p>
+    </section>
+  );
+}
+
 export function PlayerPage({ playerId }: { category?: string; playerId: number }) {
   const systemStatus = useContext(SystemContext);
   const [showAllGames, setShowAllGames] = useState(false);
@@ -377,6 +452,8 @@ export function PlayerPage({ playerId }: { category?: string; playerId: number }
             </p>
           )}
         </section>
+
+        {playerData.nfl_career && <NflCareer career={playerData.nfl_career} statGroup={playerData.stat_group} />}
 
         {playerStories.length > 0 && (
         <section className="player-stories-section">
