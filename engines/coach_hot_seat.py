@@ -12,6 +12,13 @@ Two phases, each decided once per team:
   contender that went out early, again, can lose its coach (contender_seat).
 A fired coach's tenure closes at the season just finished; the hiring cycle (engines/coaching_carousel.py) names his
 replacement after the Super Bowl. hot_seat() and contender_seat() are pure; a second run changes nothing.
+
+Owner patience (switchboard `owner_patience`, engines/owner_policy.patience; OWNERS_SCOUTS_VOTERS_PLAN §2.3, U5): a
+row may carry `owner` {hot_seat_line_scale, min_tenure_delta}; its line is HOT_SEAT_LINE x the scale and its minimum
+tenure MIN_TENURE (EXIT_MIN_TENURE for a playoff exit) + the delta (at least 1). Rows without it are decided exactly
+as before. run() attaches the terms to CPU teams with a reviewed owner when the feature is active; in shadow the
+decisions are today's and report['owner_shadow'] lists the teams the owner terms would have decided differently.
+The league-wide fire counts (MIN_FIRES, MAX_FIRES, MAX_EXIT_FIRES, MAX_SEASON_FIRES) and JR's safety never change.
 """
 import argparse
 import json
@@ -42,6 +49,15 @@ def _history(r, season):
         hist[season - 1] = {"season": season - 1, "wins": r["wins_before"], "losses": r.get("losses_before") or 0,
                             "playoffs": bool(r.get("playoffs_before")), "result": None}
     return hist
+
+
+def _owner_terms(r, min_tenure):
+    """(line, minimum tenure, owner terms or None) for a row: today's constants without r['owner']."""
+    own = r.get("owner")
+    if not own:
+        return HOT_SEAT_LINE, min_tenure, None
+    line = round(HOT_SEAT_LINE * float(own.get("hot_seat_line_scale", 1.0)), 4)
+    return line, max(1, min_tenure + int(own.get("min_tenure_delta", 0))), dict(own)
 
 
 def hot_seat(rows, season, max_fires=MAX_FIRES, min_fires=MIN_FIRES):
@@ -75,6 +91,7 @@ def hot_seat(rows, season, max_fires=MAX_FIRES, min_fires=MIN_FIRES):
                 break
             dry += 1
         last = hist.get(season - 1, {})
+        line, min_tenure, own = _owner_terms(r, MIN_TENURE)
         terms = {"record": round(0.2 * (PAR_WINS - wins), 3),
                  "shortfall": round(min(1.0, max(-0.5, (exp - wins) / 3)), 3) if exp is not None else 0.0,
                  "losing_run": 0.6 if run >= 3 else 0.3 if run == 2 else 0.0,
@@ -86,20 +103,22 @@ def hot_seat(rows, season, max_fires=MAX_FIRES, min_fires=MIN_FIRES):
                  "super_bowl": -1.0 if (r.get("super_bowl_win") is not None
                                         and season - r["super_bowl_win"] < SUPER_BOWL_YEARS) else 0.0}
         score = round(sum(terms.values()), 3)
-        p = min(0.95, max(0.0, 0.4 + 0.4 * (score - HOT_SEAT_LINE)))
+        p = min(0.95, max(0.0, 0.4 + 0.4 * (score - line)))
         draw = random.Random(f"coachseat:{season}:{r['abbr']}").random()
         why_not = ("made the playoffs" if r.get("made_playoffs") else
-                   "first season" if tenure < MIN_TENURE else
+                   "first season" if tenure < min_tenure else
                    "JR's team" if r.get("user_controlled") else
                    "also the GM" if r.get("coach_gm") else None)
         out[r["team_id"]] = {"coach_id": r["coach_id"], "score": score,
-                             "fire": why_not is None and score >= HOT_SEAT_LINE and draw < p,
+                             "fire": why_not is None and score >= line and draw < p,
                              "inputs": {"coach": r.get("coach_name"), "wins": wins, "losses": losses,
                                         "expected_wins": exp, "tenure": tenure, "terms": terms,
                                         "losing_run": run, "seasons_without_playoffs": dry,
                                         "made_playoffs": bool(r.get("made_playoffs")), "p": round(p, 3),
                                         "draw": round(draw, 3),
-                                        "safe": why_not or ("below the line" if score < HOT_SEAT_LINE else None)}}
+                                        "safe": why_not or ("below the line" if score < line else None)}}
+        if own is not None:
+            out[r["team_id"]]["inputs"]["owner"] = dict(own, line=line, min_tenure=min_tenure)
     by_score = sorted(out, key=lambda t: (-out[t]["score"], t))
     fired = [t for t in by_score if out[t]["fire"]]
     for t in by_score:                                 # owners who want change anyway
@@ -131,6 +150,7 @@ def contender_seat(rows, season, max_fires=MAX_EXIT_FIRES):
         exp = r.get("expected_wins")
         tenure = season - (r.get("start_season") or season) + 1
         contender = (exp is not None and exp >= CONTENDER_EXPECTED_WINS) or wins >= CONTENDER_WINS
+        line, min_tenure, own = _owner_terms(r, EXIT_MIN_TENURE)
         terms = {"no_playoff_win": 0.5 if not r.get("playoff_wins") else 0.0,
                  "contender": 0.5 if contender else 0.0,
                  "flops_before": 0.5 * min(r.get("flops_before") or 0, 2),
@@ -138,19 +158,21 @@ def contender_seat(rows, season, max_fires=MAX_EXIT_FIRES):
                  "super_bowl": -1.0 if (r.get("super_bowl_win") is not None
                                         and season - r["super_bowl_win"] < SUPER_BOWL_YEARS) else 0.0}
         score = sum(terms.values())
-        p = min(0.6, max(0.0, 0.2 + 0.3 * (score - HOT_SEAT_LINE)))
+        p = min(0.6, max(0.0, 0.2 + 0.3 * (score - line)))
         draw = random.Random(f"coachexit:{season}:{r['abbr']}").random()
         why_not = ("won the Super Bowl" if r.get("champion") else
-                   "tenure under 3 seasons" if tenure < EXIT_MIN_TENURE else
+                   f"tenure under {min_tenure} seasons" if tenure < min_tenure else
                    "JR's team" if r.get("user_controlled") else
                    "also the GM" if r.get("coach_gm") else
-                   "below the line" if score < HOT_SEAT_LINE else None)
+                   "below the line" if score < line else None)
         out[r["team_id"]] = {"coach_id": r["coach_id"], "score": round(score, 3),
                              "fire": why_not is None and draw < p,
                              "inputs": {"coach": r.get("coach_name"), "wins": wins, "losses": r.get("losses") or 0,
                                         "expected_wins": exp, "tenure": tenure, "terms": terms,
                                         "playoff_wins": r.get("playoff_wins") or 0, "made_playoffs": True,
                                         "p": round(p, 3), "draw": round(draw, 3), "safe": why_not}}
+        if own is not None:
+            out[r["team_id"]]["inputs"]["owner"] = dict(own, line=line, min_tenure=min_tenure)
     fired = sorted((t for t, v in out.items() if v["fire"]), key=lambda t: -out[t]["score"])
     for t in fired[max(0, max_fires):]:
         out[t]["fire"] = False
@@ -281,17 +303,53 @@ def _store(cur, season, phase, rows, decisions, rep, log):
     rep["decided"] += [by_team[t]["team_id"] for t in decisions]
 
 
+def _with_owner(rows, terms):
+    """Copies of the rows with each CPU team's owner patience terms (JR's teams never get one)."""
+    return [dict(r, owner=terms[r["team_id"]]) if r["team_id"] in terms and not r.get("user_controlled") else r
+            for r in rows]
+
+
+def _owner_shadow(rep, phase, base, alt):
+    for tid in sorted(set(base) | set(alt)):
+        b, a = base.get(tid, {}).get("fire"), alt.get(tid, {}).get("fire")
+        if b != a:
+            rep["owner_shadow"].append({"team_id": tid, "phase": phase, "fired": bool(b), "owner_fired": bool(a),
+                                        "owner": (alt.get(tid, {}).get("inputs") or {}).get("owner")})
+
+
+def _decide(rows, decide, mode, terms, rep, phase):
+    """decide(rows) by owner_patience mode: off -> today's; active -> with the owner terms; shadow -> today's, the
+    owner-term differences in rep['owner_shadow']."""
+    if mode == "off" or not terms:
+        return decide(rows)
+    owned = _with_owner(rows, terms)
+    if mode == "active":
+        return decide(owned)
+    base = decide(rows)
+    _owner_shadow(rep, phase, base, decide(owned))
+    return base
+
+
 def run(cur, season, log=print):
     """Decide what is ready of `season`'s hot seat inside the caller's transaction: Black Monday once, then each
     playoff team once it is out. Returns {season, status, fired: [{team, coach, score, phase}] (new this run),
-    decided: [team ids decided this run]}; status 'not ready' before Black Monday."""
+    decided: [team ids decided this run]}; status 'not ready' before Black Monday. With owner_patience not off
+    the report also carries owner_mode (and owner_shadow in shadow)."""
+    from engines import owner_context as oc
     rep = {"season": season, "fired": [], "decided": []}
+    mode = oc.feature_mode(cur, "owner_patience")
+    terms = oc.patience_terms(cur) if mode != "off" else {}
+    if mode != "off":
+        rep["owner_mode"] = mode
+        if mode == "shadow":
+            rep["owner_shadow"] = []
     if not decided(cur, season):
         if not ready(cur, season):
             rep["status"] = "not ready"
             return rep
         rows = [r for r in read_rows(cur, season) if not r["made_playoffs"]]
-        _store(cur, season, "BLACK_MONDAY", rows, hot_seat(rows, season), rep, log)
+        _store(cur, season, "BLACK_MONDAY", rows,
+               _decide(rows, lambda rs: hot_seat(rs, season), mode, terms, rep, "BLACK_MONDAY"), rep, log)
     cur.execute("SELECT team_id FROM coach_hot_seat WHERE season = %s", (season,))
     done = {r[0] for r in cur.fetchall()}
     res = playoff_results(cur, season)
@@ -306,7 +364,9 @@ def run(cur, season, log=print):
                        WHERE season = %s AND fired""", (season,))
         exits, total = cur.fetchone()
         left = min(MAX_EXIT_FIRES - exits, MAX_SEASON_FIRES - total)
-        _store(cur, season, "PLAYOFF_EXIT", rows, contender_seat(rows, season, left), rep, log)
+        _store(cur, season, "PLAYOFF_EXIT", rows,
+               _decide(rows, lambda rs: contender_seat(rs, season, left), mode, terms, rep, "PLAYOFF_EXIT"),
+               rep, log)
     rep["status"] = "decided" if rep["decided"] else "up to date"
     return rep
 

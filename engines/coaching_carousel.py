@@ -23,6 +23,7 @@ import random
 
 from engines import coach_hot_seat as chs
 from engines import coaching_tree_hiring as th
+from engines import owner_policy as op
 from engines.staff_names import background, new_name, taken_names
 from personality import coaching_trees as ct
 
@@ -38,6 +39,7 @@ RETREAD_PENALTY = 0.3              # owners prefer a fresh face
 OUTSIDE_SLANTS = (("OFFENSIVE", 0.45), ("DEFENSIVE", 0.35), ("CEO", 0.2))
 SIDE = {"OC": "OFFENSIVE", "DC": "DEFENSIVE"}
 FIRST_SEASON = 2026               # a fresh franchise's first season: the carousel decides every season from it on
+HIRE_TICK = 23                     # the hiring cycle runs after the Super Bowl (week 22): tick 23 of the 32-tick year
 
 
 # ----------------------------------------------------------------------------------------------- data helpers ----
@@ -264,6 +266,25 @@ def gumbel(key):
     return -NOISE * math.log(-math.log(min(max(u, 1e-12), 1 - 1e-12)))
 
 
+def owner_adjusted(pool, owner_view):
+    """Pure. Copies of the pool entries with the owner's hiring term (owner_policy.hiring_key, |x| <= 0.15) added
+    to their scores."""
+    return [dict(c, score=round(c["score"] + op.hiring_key(owner_view, c), 4)) for c in pool]
+
+
+def owner_alternative(pool, chosen, owner_view):
+    """Pure. The candidate the owner would rather have than `chosen` (a PUSH): the one with the best positive
+    hiring term, then score, then key; None when no other candidate has a positive term."""
+    best = None
+    for c in pool:
+        if c["key"] == chosen["key"]:
+            continue
+        k = op.hiring_key(owner_view, c)
+        if k > 0 and (best is None or (k, c["score"], c["key"]) > best[0]):
+            best = ((k, c["score"], c["key"]), c)
+    return None if best is None else best[1]
+
+
 def pick(candidates, key):
     """Pure. The candidate with the best score plus seeded Gumbel noise (random.Random(f"hire:{key}:{cand key}")).
     candidates: [{key, score, ...}]."""
@@ -399,7 +420,14 @@ def hiring_cycle(cur, season, log=print, personality=None):
     Coaching-tree hiring (switchboard `coaching_tree_hiring`, engines/coaching_tree_hiring.py; COACHING_TREES_PLAN
     §2.8): off -> exactly the above; active -> tree terms added before each pick and a new head coach may bring an
     out-of-work protégé (source REHIRED) instead of the invented stand-in; shadow -> picks as off, plus
-    report['tree_shadow'] listing each opening where the tree terms would have picked someone else."""
+    report['tree_shadow'] listing each opening where the tree terms would have picked someone else.
+
+    Owners (OWNERS_SCOUTS_VOTERS_PLAN §2.3, U5; CPU head-coach openings only, never JR's teams): `owner_hiring`
+    active adds owner_policy.appeal_term to the opening's appeal and hiring_key to each candidate's score before
+    the pick; `owner_meddling` active lets the owner review the pick (owner_policy.meddle_choice): VETO picks again
+    without that candidate, PUSH hires owner_alternative instead, and either is stored in owner_decisions when the
+    table exists. Shadow (either feature): picks as off, report['owner_shadow'] lists what the owner would have
+    changed. Off: unchanged."""
     nxt = season + 1
     tm, mine = teams(cur), jr_teams(cur)
     ranks, res = unit_ranks(cur, season), chs.playoff_results(cur, season)
@@ -414,6 +442,13 @@ def hiring_cycle(cur, season, log=print, personality=None):
     created = set()                                 # coordinators this cycle created: only these may be undone
     events = []                                     # person lifecycle events (staff_lifecycle), in order
     tmode, tree, followed_ids = th.tree_mode(cur), None, set()
+    from engines import owner_context as octx      # not `oc`: the hiring loop names the OC `oc`
+    hmode, mmode = octx.feature_mode(cur, "owner_hiring"), octx.feature_mode(cur, "owner_meddling")
+    owners = octx.team_owner_views(cur, exclude=mine) if (hmode, mmode) != ("off", "off") else {}
+    if "shadow" in (hmode, mmode):
+        report["owner_shadow"] = []
+    if (hmode, mmode) != ("off", "off"):
+        report["owner_modes"] = {"owner_hiring": hmode, "owner_meddling": mmode}
     if tmode != "off":
         from engines import coaching_tree_facts
         tree = {"graph": coaching_tree_facts.tree_graph(cur, through=season), "records": th.mentor_records(cur)}
@@ -475,8 +510,61 @@ def hiring_cycle(cur, season, log=print, personality=None):
                       "offensive_scheme": off, "defensive_scheme": de, "pass_lean": pl, "blitz_rate": br,
                       "man_coverage": mc, "score": round((pct - 0.5) * 4 + (0.3 if pw else 0) - RETREAD_PENALTY, 3)})
 
+    def opick(pool, seed, opening, tid):
+        """tpick() for a head-coach opening, with the owner's hiring term and meddling by their modes."""
+        view = owners.get(tid)
+        if view is None:
+            return tpick(pool, seed, opening)
+        if hmode == "active":
+            alt = tpick(owner_adjusted(pool, view), seed, opening)
+            c = next(x for x in pool if x["key"] == alt["key"])
+        else:
+            c = tpick(pool, seed, opening)
+            if hmode == "shadow":
+                adj = owner_adjusted(pool, view)
+                if tree is not None and tmode == "active":
+                    adj = th.adjusted(adj, graph=tree["graph"], records=tree["records"])
+                alt = pick(adj, seed)
+                if alt["key"] != c["key"]:
+                    report["owner_shadow"].append({"opening": opening, "feature": "owner_hiring",
+                                                   "picked": c.get("name") or c["key"],
+                                                   "owner_pick": alt.get("name") or alt["key"]})
+        if mmode == "off":
+            return c
+        want = owner_alternative(pool, c, view)
+        move = {"kind": "HIRE", "role": "HC", "team_id": tid, "ref": c["key"], "user_controlled": False,
+                "alternative": want["key"] if want else None}
+        used = octx.vetoes_used(cur, season, tid)
+        decision = op.meddle_choice(move, view, season=season, tick=HIRE_TICK, vetoes_used=used)
+        if decision in (None, "APPROVE"):
+            return c
+        if decision == "VETO":
+            rest = [x for x in pool if x["key"] != c["key"]]
+            new = tpick(rest, f"{seed}:veto", opening) if rest else c
+        else:
+            new = want
+        if mmode == "shadow":
+            report["owner_shadow"].append({"opening": opening, "feature": "owner_meddling", "decision": decision,
+                                           "picked": c.get("name") or c["key"],
+                                           "owner_pick": new.get("name") or new["key"]})
+            return c
+        octx.record_decision(cur, season=season, tick=HIRE_TICK, team_id=tid, move_kind="HIRE",
+                           move_ref={"ref": c["key"], "name": c.get("name")}, decision=decision,
+                           alternative={"ref": new["key"], "name": new.get("name")})
+        report.setdefault("owner_decisions", []).append({"opening": opening, "decision": decision,
+                                                         "vetoed": c.get("name") or c["key"],
+                                                         "hired": new.get("name") or new["key"]})
+        return new
+
     parts = opening_parts(cur, season, list(fired_hc))
     appeal = {t: opening_appeal(p) for t, p in parts.items()}
+    if hmode != "off":
+        owner_appeal = {t: round(a + op.appeal_term(owners[t]), 3) if t in owners else a for t, a in appeal.items()}
+        if hmode == "active":
+            appeal = owner_appeal
+        elif sorted(fired_hc, key=lambda t: (-owner_appeal[t], t)) != sorted(fired_hc, key=lambda t: (-appeal[t], t)):
+            report["owner_shadow"].append({"feature": "owner_hiring", "what": "opening order",
+                                           "owner_appeal": {tm[t]["abbr"]: owner_appeal[t] for t in fired_hc}})
     ranked = sorted(fired_hc, key=lambda t: (-appeal[t], t))           # the best job gets first pick
     for rank, tid in enumerate(ranked, 1):
         old_id, old_name = fired_hc[tid]
@@ -484,7 +572,7 @@ def hiring_cycle(cur, season, log=print, personality=None):
         seed = f"{season}:{abbr}:HC"
         outsider = {"key": f"outside:{abbr}", "kind": "OUTSIDE", "score": OUTSIDE_SCORE["HC"]}
         pool = [c for c in cands if not (c["kind"] == "RETREAD" and c["coach_id"] == old_id)] + [outsider]
-        c = tpick(pool, seed, f"{abbr} HC")
+        c = opick(pool, seed, f"{abbr} HC", tid)
         if c is not outsider:
             cands.remove(c)
         oc, dc = staff.get((tid, "OC"), {}), staff.get((tid, "DC"), {})

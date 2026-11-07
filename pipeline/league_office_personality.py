@@ -11,6 +11,13 @@ according to that feature's mode in the switchboard (`personality/features.py`),
                                               development_opportunity is active (shadow: computed and recorded)
   retirement_decision                         the retirement policy's keep / retire for players Madden retired
                                               (PERSONALITY_RETIREMENT_PLAN); never retires an active player
+  cpu_offers                                  each CPU team's owner spending knobs (owner_spending;
+                                              OWNERS_SCOUTS_VOTERS_PLAN §2.3 U5); shadow plans the owner offers
+                                              without storing them and records per-team counts
+  signings_from_decisions                     the owner's review of a CPU team's top-50 free-agent signing
+                                              (owner_meddling): active drops a VETOed signing (one veto a team a
+                                              season, stored in owner_decisions when the table exists); shadow
+                                              records the decisions. JR's teams are never reviewed.
 
 Modes: **off** is today's call, exactly. **shadow** runs the baseline (today's call), returns it unchanged, and
 records the adjusted result (computed as if active) in `receipts`; an adjusted-path error is recorded and never
@@ -35,9 +42,12 @@ from personality import features as pf
 from pipeline import league_office as lo
 
 CONTRACT_FEATURES = ('contracts_ambition', 'contracts_relationships')
-LEAGUE_OFFICE_FEATURES = CONTRACT_FEATURES + ('development_learning', 'development_opportunity', 'retirement')
+OWNER_FEATURES = ('owner_spending', 'owner_meddling')
+LEAGUE_OFFICE_FEATURES = CONTRACT_FEATURES + ('development_learning', 'development_opportunity', 'retirement') + \
+    OWNER_FEATURES
 ORDER = {m: i for i, m in enumerate(pf.MODES)}
 YOUTH_MAX_AGE, VETERAN_MIN_AGE = 24, 30        # cohort labels for opportunity candidates (the coaching plan's cohorts)
+OFFSEASON_TICK = 24                             # a free-agency stage without a week: the first offseason tick
 
 
 def _fields(cls, data, drop=('mode', 'version')):
@@ -188,6 +198,20 @@ class LiveFeatures:
                                    'cohort_weight': 1.0})
         return pc.opportunity_adjustments(candidates=candidates, coach_view=view, config=config)
 
+    # -- owners
+    def owner_views(self, cur, exclude=()):
+        """{team_id: owner view} for CPU teams with a reviewed owner profile (engines/owner_context)."""
+        from engines import owner_context as oc
+        return oc.team_owner_views(cur, exclude=set(exclude) | oc.user_team_ids(cur))
+
+    def owner_vetoes_used(self, cur, season, team_id):
+        from engines import owner_context as oc
+        return oc.vetoes_used(cur, season, team_id)
+
+    def owner_record(self, cur, **decision):
+        from engines import owner_context as oc
+        return oc.record_decision(cur, **decision)
+
     # -- retirement
     def retirement(self, cur, league_id, row, mode, *, player, season, seed):
         """{keep, reason, decision} from the retirement policy for a player Madden retired, or None when the
@@ -247,6 +271,8 @@ class PersonalityDeps(lo.Deps):
         self.receipts = []
         self.run_id = None
         self.stage = {'stage': None, 'season': None, 'week': None, 'wave': None, 'seed': None}
+        self._fa_rank = {}
+        self._owner_vetoes = {}
 
     # -- hooks the league office calls
     def bind_run(self, run_id):
@@ -365,6 +391,99 @@ class PersonalityDeps(lo.Deps):
 
         adj = self._dual('development_opportunity', mode, f'chart:{team_id}', lambda: None, compute)
         return adj or None
+
+    # -- owners (OWNERS_SCOUTS_VOTERS_PLAN §2.3, U5)
+    def _owner_views(self, cur):
+        try:
+            jr = set(self.user_team_ids(cur) or ())
+        except Exception:      # noqa: BLE001 - no registry: the owner layer still skips gm_team_settings teams
+            jr = set()
+        return self.features.owner_views(cur, exclude=jr)
+
+    def cpu_offers(self, cur, season, stage, wave, seed):
+        mode = self.mode('owner_spending')
+        if mode == 'off':
+            return super().cpu_offers(cur, season, stage, wave, seed)
+        from engines import owner_policy as op
+        from engines import transactions_engine as te
+        try:
+            spending = {t: op.spending(v) for t, v in self._owner_views(cur).items()}
+        except Exception as e:      # noqa: BLE001
+            if mode == 'active':
+                raise
+            self.record('owner_spending', mode, 'error', what=f'free_agency:{wave}', error=f'{type(e).__name__}: {e}')
+            return super().cpu_offers(cur, season, stage, wave, seed)
+
+        def counts(offers):
+            out = {}
+            for o in offers or []:
+                out[str(o.get('team_id'))] = out.get(str(o.get('team_id')), 0) + 1
+            return out
+
+        if mode == 'active':
+            offers = te.cpu_offers(cur, season, stage, wave, seed, spending=spending)
+            self.record('owner_spending', mode, 'applied', what=f'free_agency:{wave}', teams=len(spending),
+                        offers=counts(offers))
+            return offers
+        base = super().cpu_offers(cur, season, stage, wave, seed)
+        try:
+            league = te.fetch_league(cur, season, te.target_season(season, stage=stage))
+            adj = te.plan_offers(league, stage, wave, seed, spending=spending)
+            self.record('owner_spending', mode, 'recorded', what=f'free_agency:{wave}', teams=len(spending),
+                        baseline=counts(base), adjusted=counts(adj))
+        except Exception as e:      # noqa: BLE001 - shadow never fails the write
+            self.record('owner_spending', mode, 'error', what=f'free_agency:{wave}', error=f'{type(e).__name__}: {e}')
+        return base
+
+    def free_agent_pool(self, cur, season, target):
+        pool = super().free_agent_pool(cur, season, target)
+        ranked = sorted(pool or [], key=lambda p: (-(p.get('ovr') or 0), p.get('id') or 0))
+        self._fa_rank = {p.get('id'): n for n, p in enumerate(ranked, 1) if p.get('id') is not None}
+        return pool
+
+    def signings_from_decisions(self, decisions, offers):
+        moves = super().signings_from_decisions(decisions, offers)
+        mode = self.mode('owner_meddling')
+        if mode == 'off' or not moves:
+            return moves
+        from engines import owner_policy as op
+        cur, s = self.cur, self.stage
+        season = s['season']
+        week = s['week']
+        tick = week if isinstance(week, int) and 1 <= week <= 32 else OFFSEASON_TICK
+        try:
+            views = self._owner_views(cur)
+        except Exception as e:      # noqa: BLE001
+            if mode == 'active':
+                raise
+            self.record('owner_meddling', mode, 'error', what='signings', error=f'{type(e).__name__}: {e}')
+            return moves
+        kept, reviewed = [], []
+        for m in moves:
+            view = views.get(m.get('team_id'))
+            move = {'kind': 'SIGNING', 'team_id': m.get('team_id'), 'ref': m.get('player_id'),
+                    'fa_rank': self._fa_rank.get(m.get('player_id')), 'user_controlled': view is None}
+            if view is None or not op.is_big_move(move):
+                kept.append(m)
+                continue
+            key = (season, m.get('team_id'))
+            if key not in self._owner_vetoes:
+                self._owner_vetoes[key] = int(self.features.owner_vetoes_used(cur, season, m.get('team_id')) or 0)
+            decision = op.meddle_choice(move, view, season=season, tick=tick, vetoes_used=self._owner_vetoes[key])
+            reviewed.append({'team_id': m.get('team_id'), 'player_id': m.get('player_id'),
+                             'fa_rank': move['fa_rank'], 'decision': decision})
+            if decision == 'VETO' and mode == 'active':
+                self._owner_vetoes[key] += 1
+                self.features.owner_record(cur, season=season, tick=tick, team_id=m.get('team_id'),
+                                           move_kind='SIGNING', move_ref={'player_id': m.get('player_id'),
+                                                                          'offer_id': m.get('offer_id')},
+                                           decision='VETO')
+                continue
+            kept.append(m)
+        if reviewed:
+            self.record('owner_meddling', mode, 'applied' if mode == 'active' else 'recorded', what='signings',
+                        decisions=reviewed)
+        return kept if mode == 'active' else moves
 
     # -- retirement
     def retirement_decision(self, cur, player, season, seed):

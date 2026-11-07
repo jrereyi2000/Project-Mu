@@ -42,6 +42,12 @@ active mode, for that player only:
              passes; REJECT -> the original contract stands (and the 5th-year option check runs as usual).
 Tenders (ERFA/RFA), tags, 5th-year options and rookie deals stay team instruments: no personality veto. Moves made
 through consent carry `consent` (ACCEPT | COUNTER | REJECT).
+
+Owner spending (docs/in_progress/OWNERS_SCOUTS_VOTERS_PLAN.md §2.3, U5; switchboard `owner_spending`, passed in by
+pipeline/league_office_personality.py). plan_offers / cpu_offers take keyword-only spending {team_id:
+{cap_buffer_share, offers_per_wave, need_premium}} (engines/owner_policy.spending) for CPU teams with a reviewed
+owner; a team without an entry uses CAP_BUFFER_SHARE, OFFERS_PER_WAVE and OFFER_NEED_PREMIUM, so spending=None is
+today's offers exactly. Pricing, legality, the roster limit and the cap still bind; the re-sign stage is unchanged.
 """
 import hashlib
 
@@ -550,14 +556,15 @@ def free_agents(league):
             if p.get("status") == "FA" and p.get("group")]
 
 
-def plan_offers(league, stage, wave, seed):
+def plan_offers(league, stage, wave, seed, *, spending=None):
     """CPU offers for one free-agency wave (or an in-season pass with wave None: 1-year deals). Each team with
     roster spots under ROSTER_LIMIT and cap room makes at most min(OFFERS_PER_WAVE, spots) offers, one per group
     (need groups first, highest need first, to a free agent who would start or hold a role; then any other group, to
     one who would start), to the free agent with the best value at the offer price among those of wave tier <= wave;
     the offers' league-year cap hits together fit its room (2% buffer), so
     even if every offer is accepted the team stays under the cap and the limit. Offers carry `team` (offer_utility's
-    team dict) and `market` (the trade-value fit) for free_agency_engine.run_wave."""
+    team dict) and `market` (the trade-value fit) for free_agency_engine.run_wave. spending: the module docstring
+    (a team's owner knobs replace the three constants for that team)."""
     T, fits = league["target"], league["fits"]
     ros = rosters(league)
     ctxs = contexts(league, ros)
@@ -568,8 +575,11 @@ def plan_offers(league, stage, wave, seed):
     for t in sorted(ros):
         ctx = ctxs[t]
         spots = ROSTER_LIMIT - ctx["roster_count"]
-        room = ctx["cap_room"] - int(ctx["cap"] * CAP_BUFFER_SHARE)
-        left = min(OFFERS_PER_WAVE, spots)
+        knobs = (spending or {}).get(t) or {}
+        buffer = knobs.get("cap_buffer_share", CAP_BUFFER_SHARE)
+        premium = knobs.get("need_premium", OFFER_NEED_PREMIUM)
+        room = ctx["cap_room"] - int(ctx["cap"] * buffer)
+        left = min(int(knobs.get("offers_per_wave", OFFERS_PER_WAVE)), spots)
         if left <= 0 or room <= 0:
             continue
         total_need = sum(ctx["needs_map"].values()) or 1.0
@@ -590,7 +600,7 @@ def plan_offers(league, stage, wave, seed):
                     continue
                 age = p.get("age") or 27
                 ask = asking_price(p, fits["market"], accrued(p, league), ctx["cap"])
-                mult = 1 + OFFER_NEED_PREMIUM * score / total_need + _noise(OFFER_NOISE, seed, "offer", stage,
+                mult = 1 + premium * score / total_need + _noise(OFFER_NOISE, seed, "offer", stage,
                                                                                     wave, t, p["id"])
                 aav = int(round(ask * mult))
                 yrs = 1 if in_season else ideal_years(age + (T - league["season"]))
@@ -986,10 +996,11 @@ def resign_decisions(cur, season, seed, *, contract_inputs=None, decisions=None)
     return plan_resign(fetch_league(cur, season), seed, contract_inputs=contract_inputs, decisions=decisions)
 
 
-def cpu_offers(cur, season, stage, wave, seed):
-    """CPU free-agent offers (run_wave's offer dicts with team and market), stored in contract_offers."""
+def cpu_offers(cur, season, stage, wave, seed, *, spending=None):
+    """CPU free-agent offers (run_wave's offer dicts with team and market), stored in contract_offers. spending:
+    the owners' knobs per team (module docstring; None = today's constants)."""
     league = fetch_league(cur, season, target_season(season, stage=stage))
-    return store_offers(cur, plan_offers(league, stage, wave, seed), season, seed)
+    return store_offers(cur, plan_offers(league, stage, wave, seed, spending=spending), season, seed)
 
 
 def cutdown(cur, season, seed, limit=ROSTER_LIMIT):

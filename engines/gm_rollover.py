@@ -11,6 +11,13 @@ GM: the tenure closes at the season just finished and a new persona is seeded), 
 rows with a preseason direction (last season's wins and this season's team_ovr) and needs, fo_quality carried
 forward until step 4 writes it, own picks seeded for the new third draft out, and the draft just held marked used.
 rollover_actions() is pure and returns only what is still missing, so a second run changes nothing.
+
+Owner patience (switchboard `owner_patience`, engines/owner_policy.patience; OWNERS_SCOUTS_VOTERS_PLAN §2.3, U5): a
+hot-seat row may carry `owner` {hot_seat_line_scale, min_tenure_delta}: its line is HOT_SEAT_LINE x the scale and
+its minimum tenure MIN_TENURE + the delta (at least 1); rows without it are decided as before. rollover() attaches
+the terms to CPU teams with a reviewed owner when the feature is active; in shadow the hot seat is today's and the
+report's owner_shadow lists the GMs the owner terms would have decided differently. MAX_FIRES and JR's safety
+(his GMs are never fired) never change.
 """
 import argparse
 import json
@@ -36,21 +43,26 @@ def hot_seat(rows, season, max_fires=MAX_FIRES):
     Returns {team_id: {score, inputs, fire}}."""
     out = {}
     for r in rows:
+        own = r.get("owner") or None
+        line = round(HOT_SEAT_LINE * float(own.get("hot_seat_line_scale", 1.0)), 4) if own else HOT_SEAT_LINE
+        min_tenure = max(1, MIN_TENURE + int(own.get("min_tenure_delta", 0))) if own else MIN_TENURE
         exp = EXPECTED_WINS.get(r.get("direction") or "RETOOL", 8.5)
         wins = r.get("wins") or 0
         tenure = season - (r.get("start_season") or season) + 1
         two_bad = wins <= 6 and r.get("wins_before") is not None and r["wins_before"] <= 6
         fo_pts = hot_seat_term(r.get("fo_score"), FO_WEIGHT)
         score = (exp - wins) / 3 + (0.5 if two_bad else 0) + (0.25 if tenure >= 4 else 0) + fo_pts
-        p = min(0.9, 0.35 + 0.3 * (score - HOT_SEAT_LINE))
+        p = min(0.9, 0.35 + 0.3 * (score - line))
         draw = random.Random(f"hotseat:{season}:{r['abbr']}").random()
-        eligible = tenure >= MIN_TENURE and score >= HOT_SEAT_LINE and not r.get("user_controlled")
+        eligible = tenure >= min_tenure and score >= line and not r.get("user_controlled")
         out[r["team_id"]] = {"score": round(score, 3), "fire": eligible and draw < p,
                              "inputs": {"direction": r.get("direction"), "expected_wins": exp, "wins": wins,
                                         "wins_before": r.get("wins_before"), "tenure": tenure, "p": round(p, 3),
                                         "fo_score": r.get("fo_score"), "fo_rank": r.get("fo_rank"),
                                         "fo_points": fo_pts,
                                         "user_controlled": bool(r.get("user_controlled"))}}
+        if own:
+            out[r["team_id"]]["inputs"]["owner"] = dict(own, line=line, min_tenure=min_tenure)
     fired = sorted((t for t, v in out.items() if v["fire"]), key=lambda t: -out[t]["score"])
     for t in fired[max_fires:]:
         out[t]["fire"] = False
@@ -126,9 +138,24 @@ def rollover(cur, season, llm=None, log=print):
     """Run the rollover for new `season` inside the caller's transaction. Returns a report."""
     from engines import gm_direction
     from engines.gm_personas import ensure_team_seasons, seed, seed_picks
+    from engines import owner_context as oc
     prior = season - 1
-    acts = rollover_actions(read_state(cur, season))
+    state = read_state(cur, season)
     rep = {"season": season, "fired": [], "team_rows": 0, "directions": 0, "fo_carried": 0, "picks": 0, "used": 0}
+    mode = oc.feature_mode(cur, "owner_patience")
+    if mode != "off":
+        terms = oc.patience_terms(cur)
+        owned = [dict(r, owner=terms[r["team_id"]]) if r["team_id"] in terms and not r.get("user_controlled")
+                 else r for r in state["hot_seat_rows"]]
+        rep["owner_mode"] = mode
+        if mode == "active":
+            state = dict(state, hot_seat_rows=owned)
+        elif not state["hot_seat_decided"]:
+            base, alt = hot_seat(state["hot_seat_rows"], prior), hot_seat(owned, prior)
+            rep["owner_shadow"] = [{"team_id": t, "fired": bool(base.get(t, {}).get("fire")),
+                                    "owner_fired": bool(alt[t]["fire"]), "owner": alt[t]["inputs"].get("owner")}
+                                   for t in sorted(alt) if bool(base.get(t, {}).get("fire")) != bool(alt[t]["fire"])]
+    acts = rollover_actions(state)
     cur.execute("""UPDATE gm_trade_proposals SET status = 'EXPIRED', status_reason = 'the offseason is over'
                    WHERE season = %s AND status IN ('PROPOSED', 'APPROVED')""", (prior,))
     rep["expired"] = cur.rowcount
