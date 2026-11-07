@@ -174,7 +174,9 @@
     }
   ],
   "review": {
-    "status": "draft",
-    "notes": "JR approved 2026-11-07 (all coach profiles; existing ties kept).; was approved by JR on 2026-11-07; converted to v2 on 2026-11-07: check motivation, focus and inferred sliders"
+    "status": "approved",
+    "reviewer": "JR",
+    "reviewed_at": "2026-11-07",
+    "notes": "JR approved the v2 conversion 2026-11-07 (inferred sliders, motivation, focus)."
   }
 }
