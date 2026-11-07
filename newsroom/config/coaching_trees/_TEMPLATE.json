@@ -1,0 +1,35 @@
+{
+  "_comment": "coaching-trees-v1 batch file shape (docs/in_progress/COACHING_TREES_PLAN.md §2.2). Copy to batch_<A|B|C>.json. The protégé's (or member's) 2026 team decides the batch. Persons are seed refs {table, team, role} from db/seed_clean_db.py (no names). Edge rule: the mentor was the protégé's boss on one staff (HC over any assistant, coordinator over a position coach on his side), NFL or college, >= 2 seasons summed over stints, or 1 season plus a source marked \"mentorship\": true; playing careers and peers don't count. >= 2 sources per edge, one medium/high, published on or before 2026-09-08. Only approved/edited entries load. trees.json (kind registry) holds {trees: [{key, label, root, parent, summary, evidence, review}], evidence}.",
+  "schema_version": "coaching-trees-v1",
+  "kind": "batch",
+  "batch": "C",
+  "members": [
+    {
+      "person": {"table": "COACHES_DATA", "team": "SF", "role": "HC"},
+      "trees": ["shanahan"],
+      "evidence": ["E1"],
+      "review": {"status": "draft", "reviewer": null, "reviewed_at": null, "notes": ""}
+    }
+  ],
+  "edges": [
+    {
+      "key": "coach:SF:HC>coach:SEA:OC",
+      "mentor": {"table": "COACHES_DATA", "team": "SF", "role": "HC"},
+      "protege": {"table": "COORDINATORS_DATA", "team": "SEA", "role": "OC"},
+      "stints": [
+        {"team": "SF", "first_season": 2021, "last_season": 2023, "mentor_role": "HC", "protege_role": "pass game coordinator"}
+      ],
+      "outcome": "positive",
+      "evidence": ["E1", "E2"],
+      "notes": "",
+      "review": {"status": "draft", "reviewer": null, "reviewed_at": null, "notes": ""}
+    }
+  ],
+  "proposed_trees": [],
+  "evidence": [
+    {"id": "E1", "url": "https://example.com/source-one", "publisher": "Publisher", "published": "2024-01-01",
+     "accessed": "2026-11-07", "summary": "What the source says, in your own words.", "confidence": "high"},
+    {"id": "E2", "url": "https://example.com/source-two", "publisher": "Publisher", "published": "2024-02-01",
+     "accessed": "2026-11-07", "summary": "Second source; add \"mentorship\": true when it calls the tie a mentorship.", "confidence": "medium"}
+  ]
+}
