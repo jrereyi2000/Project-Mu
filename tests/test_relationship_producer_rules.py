@@ -536,7 +536,7 @@ class DeterminismTest(unittest.TestCase):
     def test_constants(self):
         self.assertEqual((r.ROLE_ESTABLISHED_WEEKS, r.INJURY_SITUATION_WEEKS, r.STREAK_GAMES, r.HOT_SEAT_PRESSURE),
                          (4, 2, 3, 0.5))
-        self.assertEqual(PRODUCER_RULES_VERSION, "producers-v1")
+        self.assertEqual(PRODUCER_RULES_VERSION, "producers-v2")
         if rel_events is not None and hasattr(rel_events, "RELATIONSHIP_SCHEMA_VERSION"):
             self.assertEqual(r.RELATIONSHIP_SCHEMA_VERSION, rel_events.RELATIONSHIP_SCHEMA_VERSION)
 
@@ -546,6 +546,45 @@ class DeterminismTest(unittest.TestCase):
         self.assertEqual(r.OFFSEASON_START_TICK, lo.STAGE_WEEKS["OFFSEASON_START"])
         self.assertEqual(cal.FIRST_OFFSEASON_TICK, lo.STAGE_WEEKS["OFFSEASON_START"])
         self.assertEqual(max(lo.STAGE_WEEKS.values()), cal.TICKS_PER_SEASON)
+
+
+class CoachingTreeTest(unittest.TestCase):
+    EDGE = {"mentor_ref": {"namespace": "db-coach", "external_id": 9},
+            "protege_ref": {"namespace": "db-coordinator", "external_id": 4},
+            "crossed_season": 2027, "seasons": 2, "outcome": "mixed"}
+
+    def test_two_facets_with_aliases_and_payload(self):
+        mentee, mentor = r.coaching_tree_events(self.EDGE)
+        self.assertEqual(r.TREE_TICK, cal.FIRST_OFFSEASON_TICK)
+        self.assertEqual(r.tree_source_id(9, 4), "mu:tree:9:4")
+        self.assertEqual({mentee["source_event_id"], mentor["source_event_id"]}, {"mu:tree:9:4"})
+        self.assertEqual(mentee["subject_alias"], r.coordinator_alias(4))
+        self.assertEqual(mentee["target_alias"], r.coach_alias(9))
+        self.assertEqual(mentor["subject_alias"], r.coach_alias(9))
+        self.assertEqual(mentor["target_alias"], r.coordinator_alias(4))
+        self.assertNotEqual(r.facet_key(mentee), r.facet_key(mentor))
+        self.assertEqual(mentee["occurred_at"], {"season": 2027, "tick": r.TREE_TICK})
+        self.assertEqual(mentee["payload"], {"relationship_kind": "mentorship", "outcome": "mixed",
+                                             "significance": "meaningful",
+                                             "opportunity_ref": "coach_tenures:9|coordinator_tenures:4",
+                                             "direction": "mentee", "seasons": 2,
+                                             "rule": "coaching_tree@producers-v2"})
+        self.assertEqual(mentor["payload"]["direction"], "mentor")
+        self.assertEqual((mentee["visibility"], mentee["basis"]), ("public", "verified_simulation"))
+        self.assertEqual(mentee["evidence_scope"], ["coach_tenures", "coordinator_tenures"])
+        self.assertEqual(mentee["target"]["kind"], "person")
+        self.assertEqual(r.coaching_tree_events(self.EDGE, source="CATCHUP")[0]["confidence"], "medium")
+
+    def test_resolved_facet_is_a_valid_relationship_event(self):
+        if rel_events is None or not hasattr(rel_events, "DIRECTIONS"):
+            self.skipTest("personality.relationship_events without direction")
+        env = copy.deepcopy(r.coaching_tree_events(self.EDGE)[0])
+        for k in ("subject_alias", "target_alias"):
+            env.pop(k)
+        env["universe_id"] = "u1"
+        env["subject"].update(universe_id="u1", persona_id="p-coord")
+        env["target"].update(universe_id="u1", persona_id="p-coach")
+        rel_events.validate_event(env, team_registry={})
 
 
 if __name__ == "__main__":

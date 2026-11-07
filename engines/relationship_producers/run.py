@@ -212,6 +212,25 @@ def _coach_events(inputs, R, source):
         at = PHASE_TICKS.get(row.get('phase'), cal.LAST_GAME_TICK)
         if tick >= at:
             out.append(R.hot_seat_pressure(dict(row, season=season, tick=at), source=source))
+    out.extend(_tree_events(inputs, R, source))
+    return out
+
+
+def _tree_events(inputs, R, source):
+    """coaching_tree (COACHING_TREES §2.6): from TREE_TICK on, every simulated edge that has crossed by this season,
+    at its own (crossed_season, TREE_TICK). Each edge is read as of its crossing season (seasons and outcome frozen
+    there), so a later tick rebuilds the identical facets and the store's dedupe makes repeats free."""
+    season, tick = inputs['season'], inputs['tick']
+    staff = inputs.get('tree_staff') or []
+    if tick < R.TREE_TICK or not staff:
+        return []
+    from personality import coaching_trees as ct
+    pairs = frozenset(tuple(p) for p in inputs.get('tree_reviewed_pairs') or [])
+    out = []
+    for s in range(ct.FIRST_SEASON, season + 1):
+        for edge in ct.sim_edges(staff, through=s, reviewed_pairs=pairs):
+            if edge['crossed_season'] == s:
+                out.extend(R.coaching_tree_events(edge, source=source))
     return out
 
 
