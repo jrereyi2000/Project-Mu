@@ -515,13 +515,40 @@ def fetch_player_awards(cur, player_id: int) -> list:
             for r in rows]
 
 
+def nfl_award_seasons(cur) -> list:
+    """Real NFL seasons 1999-2025 for the Awards page (engines.nfl_history, §3.3x), newest first: the champion from
+    nfl_team_seasons and the winners of the award-history columns from nfl_awards. [] without the nfl_* tables."""
+    from engines.nfl_history import read as nfl_read
+    try:
+        by_season = nfl_read.nfl_awards_by_season(cur)
+        champions = nfl_read.nfl_champions(cur)
+    except Exception:
+        return []
+    out = []
+    for season in sorted(set(by_season) | set(champions), reverse=True):
+        won = {}
+        for a in by_season.get(season, []):
+            if a["award_type"] in AWARD_TYPES:
+                won.setdefault(a["award_type"], {
+                    "name": a.get("player_name") or a.get("coach_name"), "position": a.get("position"),
+                    "team": a.get("mu_team") or a.get("team_abbr"), "player_id": a.get("player_id")})
+        champ = champions.get(season)
+        out.append({"season": season, "source": "NFL",
+                    "champion": {"team": champ["mu_team"], "team_abbr": champ["team_abbr"],
+                                 "record": f"{champ['wins']}-{champ['losses']}" + (f"-{champ['ties']}" if champ["ties"] else ""),
+                                 "coach": champ["head_coach"]} if champ else None,
+                    "awards": {t: won.get(t) for t in AWARD_TYPES}})
+    return out
+
+
 @router.get("/api/awards")
 def awards():
     """Champions and award history, newest season first: each season's Super Bowl result, the champion's head coach
     and the award winners (award history columns), plus repeat winners and each franchise's titles and awards."""
     with psycopg.connect(CONN_INFO) as conn:
         with conn.cursor() as cur:
-            out = {"award_types": list(AWARD_TYPES), "seasons": [], "leaders": [], "franchise_counts": []}
+            out = {"award_types": list(AWARD_TYPES), "seasons": [], "leaders": [], "franchise_counts": [],
+                   "nfl_seasons": []}
             if not _regclass(cur, "awards"):
                 return out
             abbrs = fetch_abbrs(cur)
@@ -547,6 +574,7 @@ def awards():
                                        "awards": {t: won.get(t) for t in AWARD_TYPES}})
             out["leaders"] = award_leaders(rows)
             out["franchise_counts"] = franchise_counts(out["seasons"])
+            out["nfl_seasons"] = nfl_award_seasons(cur)
             return out
 
 

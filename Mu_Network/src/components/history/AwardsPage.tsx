@@ -1,7 +1,8 @@
 // Awards & Champions (#awards, PROJECT_SPEC §5.1/§5.2; docs/done/RECORD_BOOK_AND_AWARDS_PLAN.md phase 2), from
 // GET /api/awards and /api/awards/all-pro (server/history_api.py): one champion card per season, the award history
 // table, repeat winners, each franchise's titles and awards, and the All-Pro teams. The team and award filters live in
-// the hash (#awards?team=car&award=MVP).
+// the hash (#awards?team=car&award=MVP). After the league's award history, "Real NFL" lists the real champions and
+// winners of 1999–2025 (nfl_seasons, engines/nfl_history; §3.3x), marked apart from this league's seasons.
 import { useEffect, useMemo, useState } from "react";
 import { API_BASE } from "../../api";
 import AllProTeams from "./AllProTeams";
@@ -28,9 +29,18 @@ type Season = {
 
 type Leader = { award_type: string; count: number; name: string; player_id: number | null; team: string | null; seasons: number[] };
 
+type NflAward = { name: string | null; position: string | null; team: string | null; player_id: number | null };
+
+type NflSeason = {
+  season: number;
+  champion: { team: string; team_abbr: string; record: string; coach: string | null } | null;
+  awards: Record<string, NflAward | null>;
+};
+
 type AwardsData = {
   award_types: string[];
   seasons: Season[];
+  nfl_seasons?: NflSeason[];
   leaders: Leader[];
   franchise_counts: { team: string; titles: number; awards: number }[];
 };
@@ -83,6 +93,13 @@ export default function AwardsPage({ query, teams }: { query: string; teams: { n
   const teamMatch = (abbr: string | null | undefined) => !!abbr && siteAbbr(abbr) === params.team;
   const seasons = (data?.seasons || []).filter(s => !params.team
     || teamMatch(s.champion?.team) || types.some(t => teamMatch(s.awards[t]?.team)));
+  const nflSeasons = (data?.nfl_seasons || []).filter(s => !params.team
+    || teamMatch(s.champion?.team) || types.some(t => teamMatch(s.awards[t]?.team)));
+  const nflAward = (s: NflSeason, t: string): Award | null => {
+    const a = s.awards[t];
+    return a ? { award_type: t, season: s.season, name: a.name, player_id: a.player_id, coach_id: null,
+                 position: a.position, team: a.team } : null;
+  };
   const leaders = (data?.leaders || []).filter(l => (!params.award || l.award_type === params.award) && (!params.team || teamMatch(l.team)));
   const counts = (data?.franchise_counts || []);
   const span = data?.seasons.length ? `${data.seasons[data.seasons.length - 1].season}–${data.seasons[0].season}` : "";
@@ -163,6 +180,35 @@ export default function AwardsPage({ query, teams }: { query: string; teams: { n
                 </div>
               )}
             </div>
+
+            {nflSeasons.length > 0 && (
+              <div className="aw-section">
+                <div className="team-section-title"><span>1999–2025, before this league</span><h2>Real NFL</h2></div>
+                <div className="rb-table-wrap">
+                  <table className="rb-table aw-table">
+                    <thead>
+                      <tr><th>Season</th><th>Champion</th>{types.map(t => <th key={t}>{AWARD_LABELS[t]?.long || t}</th>)}</tr>
+                    </thead>
+                    <tbody>
+                      {nflSeasons.map(s => (
+                        <tr key={`nfl-${s.season}`}>
+                          <td className="rb-table-value">{s.season}</td>
+                          <td>
+                            {s.champion ? (
+                              <span className="aw-winner">
+                                <img src={teamLogo(s.champion.team)} alt={s.champion.team} />
+                                <span><b>{s.champion.team_abbr}</b><small>{[s.champion.record, s.champion.coach].filter(Boolean).join(" · ")}</small></span>
+                              </span>
+                            ) : <span className="aw-none">—</span>}
+                          </td>
+                          {types.map(t => <td key={t}><Winner award={nflAward(s, t)} team={params.team} /></td>)}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
 
             <div className="aw-section aw-split">
               <div>

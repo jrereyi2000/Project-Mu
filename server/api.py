@@ -16,6 +16,7 @@ from db.franchises import export_active_dsn
 export_active_dsn()
 
 from engines.gotw_engine import display_excitement
+from engines.nfl_history import read as nfl_read
 from pipeline.commentary_names import player_name_aliases_exist
 from server import debug_api, social_api, napper_api, front_office_api, draft_api, history_api, franchise_api, personality_api
 
@@ -396,7 +397,25 @@ def get_team_history(abbr: str):
                 "titles": [r["season"] for r in done if r.get("playoff_result") == "CHAMPION"],
                 "super_bowls": [r["season"] for r in done if r.get("playoff_result") in ("CHAMPION", "SUPER_BOWL_LOSS")],
             }
-            return {"seasons": seasons, "summary": summary}
+            # Real NFL seasons 1999-2025 (engines.nfl_history, §3.3x), listed apart; the summary stays league-only
+            return {"seasons": seasons, "summary": summary, "nfl_seasons": nfl_team_seasons(cur, team_id)}
+
+
+def nfl_player_career(cur, player_id):
+    """The player's real NFL career through 2025 (engines.nfl_history.read.player_nfl_career), None when he isn't
+    linked or the nfl_* tables aren't installed. Called last in a request: a failed read can't break earlier ones."""
+    try:
+        return nfl_read.player_nfl_career(cur, player_id)
+    except Exception:
+        return None
+
+
+def nfl_team_seasons(cur, team_id):
+    """The franchise's real NFL seasons 1999-2025, newest first ([] without the nfl_* tables)."""
+    try:
+        return nfl_read.team_nfl_seasons(cur, team_id)
+    except Exception:
+        return []
 
 
 @app.get("/api/team/{abbr}/news")
@@ -1221,7 +1240,9 @@ def get_player_api(id: int, season: Optional[int] = None):
                 "career_stats": career,
                 "career_totals": career_totals(career),
                 "career_path": _career_path(conn, id),
-                "weekly_outlook": weekly_outlook
+                "weekly_outlook": weekly_outlook,
+                # real NFL career through 2025, beside (never inside) the league career and its totals
+                "nfl_career": nfl_player_career(cur, id),
             }
 
 
