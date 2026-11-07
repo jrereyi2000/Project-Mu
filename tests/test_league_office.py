@@ -1392,3 +1392,196 @@ def test_apply_db_sync_team_caps():
     cur_noop = FakeCursor()
     lo._apply_db(cur_noop, {"db": {}}, deps)
     assert not any("team_cap_seasons" in s for s, _ in cur_noop.sql)
+
+
+# ------------------------------------------------------ retirement window ----
+# RETIREMENT_WINDOW_PLAN U3: the decision stage, the window at later stops, the roster image on every run.
+PROOF = {"kind": "retirement-authority-proof-v1", "version": "retirement-authority-v1", "fixture_id": "g4-test",
+         "proof_save_hash": "sha:proof", "schema_version": 5,
+         "stages": ["OFFSEASON_START", "RESIGN", "FREE_AGENCY"], "exclusive_owner": True,
+         "actions": {"KEEP_NATIVE_RETIREE": {"proven": True, "proof_id": "p1",
+                                             "fields": ["ContractStatus", "TeamIndex"]}},
+         "approved_by": "JR", "approved_on": "2099-01-01"}
+
+
+def window_deps(snap, decision=None, prior=None, prior_stop="OFFSEASON_START", restores=None, proof=None,
+                decided_extra=None, **kw):
+    deps = FakeDeps(snap, **kw)
+    decided = dict(decided_extra or {})
+    decided.update((decision or {}).get("decided") or {})
+    inputs = {"decision": decision, "decided": decided, "window_restores": restores or {},
+              "prior_image": prior, "prior_stop": prior_stop, "prior_run_id": 1}
+    deps.retirement_window_inputs = lambda cur, season: inputs
+    deps.retirement_authority = lambda: proof
+    deps.player_names = lambda cur, ids: {i: f"Name {i}" for i in ids}
+    return deps
+
+
+def resign_snap(players):
+    return snapshot("OffSeason", "OffSeason", 1, 1, players=players)
+
+
+DECISION = {"run_id": 1, "stop": "OFFSEASON_START",
+            "decided": {"8": {"player_id": pid(8), "keep": True, "reason": "kept"},
+                        "9": {"player_id": pid(9), "keep": False, "reason": "retired"}}}
+PRIOR = {"1": ["Signed", 0], "2": ["Signed", 0], "3": ["Signed", 1], "8": ["FreeAgent", 32], "9": ["Retired", None],
+         "10": ["Signed", 1]}
+
+
+def test_decision_stage_is_offseason_start_and_summary_holds_decided():
+    snap = snapshot("OffSeason", "OffSeason", 0, 1, players=[
+        player(1, 0), player(8, 32, status="Retired", age=30, ovr=80), player(9, 32, status="Retired", age=37, ovr=70)])
+    p = plan("OFFSEASON_START", snap, window_deps(snap))
+    w = p["summary"]["retirement_window"]
+    assert w["role"] == "decision" and w["stop"] == "OFFSEASON_START" and w["version"] == "retirement-window-v1"
+    assert w["decided"]["8"]["keep"] is True and w["decided"]["9"]["keep"] is False
+    # legacy writer without a proof: the keep is a free agent, and the image says so
+    assert w["roster_image"]["8"] == ["FreeAgent", 32] and w["roster_image"]["9"] == ["Retired", 32]
+    assert {e["pgid"]: e["set"] for e in p["edits"]["players"]}[8] == {"ContractStatus": "FreeAgent", "TeamIndex": 32}
+
+
+def test_resign_is_the_decision_stage_without_an_offseason_start_run():
+    snap = resign_snap([player(1, 0), player(8, 32, status="Retired", age=30, ovr=80)])
+    p = plan("RESIGN", snap, window_deps(snap, decision=None, prior=PRIOR, prior_stop="PLAYOFF_WEEK"))
+    w = p["summary"]["retirement_window"]
+    assert w["role"] == "decision" and w["stop"] == "RESIGN" and set(w["decided"]) == {"8"}
+    assert [r["player_id"] for r in p["db"]["retirements"]] == [pid(8)]
+
+
+def test_window_reports_a_late_native_without_a_proof():
+    snap = resign_snap([player(1, 0), player(2, 0, status="Retired"), player(3, 1),
+                        player(9, 32, status="Retired"), player(10, 1)])
+    p = plan("RESIGN", snap, window_deps(snap, decision=DECISION, prior=PRIOR))
+    w = p["summary"]["retirement_window"]
+    assert w["role"] == "window" and w["decision_stop"] == "OFFSEASON_START"
+    assert w["restored"] == [] and [b["pgid"] for b in w["blocked"]] == [2]
+    assert w["blocked"][0]["reasons"] == ["authority_missing"] and w["decided_retired"] == [9]
+    assert "players" not in p["edits"] or all(e["pgid"] != 2 for e in p["edits"]["players"])
+    assert {r["player_id"]: (r["mu_keep"], r["reason"]) for r in p["db"]["retirements"]} == {
+        pid(2): (False, "window:blocked:RESIGN:authority_missing")}
+    assert any("not restored" in x for x in p["warnings"])
+
+
+def test_window_restores_a_late_native_with_a_proof_and_keeps_him_out_of_free_agency():
+    snap = snapshot("OffSeason", "OffSeason", 3, 2, players=[
+        player(1, 0), player(4, 32, status="Retired", ovr=78), player(5, 32, status="FreeAgent", ovr=60)])
+    c = {"length": 2, "current_year": 0, "salary_by_year": [3_000_000, 3_000_000], "bonus_by_year": [0, 0]}
+    offers = [{"team_id": CHI, "player_id": pid(4), "contract": c, "offer_id": 55}]
+    decisions = [{"player_id": pid(4), "team_id": CHI, "offer_index": 0, "status": "ACCEPT"}]
+    prior = {"1": ["Signed", 0], "4": ["FreeAgent", 32], "5": ["FreeAgent", 32]}
+    deps = window_deps(snap, decision=DECISION, prior=prior, prior_stop="FREE_AGENCY:1", proof=PROOF, cpu=offers,
+                       decisions=decisions)
+    deps.signings_from_decisions = lambda d, o: lo.te.signings_from_decisions(d, o)
+    p = plan("FREE_AGENCY", snap, deps, state=dict(STATE, spare_contract_rows=1))
+    w = p["summary"]["retirement_window"]
+    assert w["stop"] == "FREE_AGENCY:2" and [r["pgid"] for r in w["restored"]] == [4]
+    assert {e["pgid"]: e["set"] for e in p["edits"]["players"]}[4] == {"ContractStatus": "FreeAgent", "TeamIndex": 32}
+    assert not p["edits"].get("sign")                          # not signed in the same write
+    assert w["roster_image"]["4"] == ["FreeAgent", 32]
+    assert p["summary"]["window_restored"] == 1
+    assert {r["player_id"]: r["reason"] for r in p["db"]["retirements"]} == {pid(4): "window:restored:FREE_AGENCY"}
+
+
+def test_window_restores_baseline_team_and_flags_user_team():
+    snap = resign_snap([player(1, 0), player(2, 0, status="Retired"), player(3, 1)])
+    p = plan("RESIGN", snap, window_deps(snap, decision=DECISION, prior=PRIOR, proof=PROOF, users={CHI}))
+    w = p["summary"]["retirement_window"]
+    assert w["restored"][0]["baseline"] == {"status": "Signed", "team_index": 0} and w["restored"][0]["user_team"]
+    assert {e["pgid"]: e["set"] for e in p["edits"]["players"]}[2] == {"ContractStatus": "Signed", "TeamIndex": 0}
+    assert w["roster_image"]["2"] == ["Signed", 0]
+
+
+def test_window_conflicts_vanished_and_reason_prefixes():
+    snap = resign_snap([player(1, 0), player(2, 0), player(8, 32, status="Retired")])
+    deps = window_deps(snap, decision=DECISION, prior=PRIOR, proof=PROOF, restores={"8": 1})
+    deps.pgid_map = lambda cur: {pid(g): g for g in (1, 2, 3, 8, 9, 10)}   # the vanished are still in players
+    p = plan("RESIGN", snap, deps)
+    w = p["summary"]["retirement_window"]
+    assert [c["kind"] for c in w["conflicts"]] == ["RE_RETIRED_AGAIN"]
+    assert {v["pgid"]: v["kind"] for v in w["vanished"]} == {3: "VANISHED_ROSTERED", 10: "VANISHED_ROSTERED"}
+    assert w["vanished"][0]["name"] == f"Name {pid(3)}" and w["purged"] == [9]
+    reasons = {r["player_id"]: r["reason"] for r in p["db"]["retirements"]}
+    assert reasons == {pid(8): "window:conflict:RESIGN:re_retired_again", pid(3): "window:vanished:RESIGN",
+                       pid(10): "window:vanished:RESIGN"}
+
+
+def test_every_run_has_a_roster_image_and_replans_identically():
+    p = plan("REGULAR_WEEK")
+    w = p["summary"]["retirement_window"]
+    assert w["role"] == "image" and w["roster_image"]["1"] == ["Signed", 0] and "decided" not in w
+    snap = resign_snap([player(1, 0), player(2, 0, status="Retired")])
+    a = plan("RESIGN", snap, window_deps(snap, decision=DECISION, prior=PRIOR, proof=PROOF))
+    b = plan("RESIGN", copy.deepcopy(snap), window_deps(snap, decision=DECISION, prior=PRIOR, proof=PROOF))
+    assert a["edits_hash"] == b["edits_hash"] and a["summary"]["retirement_window"] == b["summary"]["retirement_window"]
+
+
+def test_decision_stage_keep_uses_the_baseline_team_with_a_proof():
+    snap = snapshot("OffSeason", "OffSeason", 0, 1, players=[player(1, 0), player(8, 32, status="Retired", age=30, ovr=80)])
+    p = plan("OFFSEASON_START", snap, window_deps(snap, prior={"1": ["Signed", 0], "8": ["Signed", 1]},
+                                                  prior_stop="PLAYOFF_WEEK", proof=PROOF))
+    w = p["summary"]["retirement_window"]
+    assert {e["pgid"]: e["set"] for e in p["edits"]["players"]}[8] == {"ContractStatus": "Signed", "TeamIndex": 1}
+    assert [r["pgid"] for r in w["restored"]] == [8] and w["roster_image"]["8"] == ["Signed", 1]
+    # a proof that does not cover the decision stage falls back to the legacy free-agent writer
+    uncovered = dict(PROOF, stages=["RESIGN"])
+    p = plan("OFFSEASON_START", snap, window_deps(snap, prior={"8": ["Signed", 1]}, proof=uncovered))
+    assert {e["pgid"]: e["set"] for e in p["edits"]["players"]}[8] == {"ContractStatus": "FreeAgent", "TeamIndex": 32}
+
+
+def test_broken_proof_stops_the_plan(tmp_path, monkeypatch):
+    bad = tmp_path / "proof.json"
+    bad.write_text("{not json")
+    monkeypatch.setenv("MU_RETIREMENT_AUTHORITY", str(bad))
+    snap = resign_snap([player(1, 0)])
+    deps = FakeDeps(snap)
+    deps.retirement_window_inputs = lambda cur, season: {"decision": DECISION, "decided": {}, "window_restores": {},
+                                                         "prior_image": PRIOR, "prior_stop": "OFFSEASON_START"}
+    p = plan("RESIGN", snap, deps)
+    assert any(e.startswith("retirement authority: WindowError") for e in p["errors"])
+
+
+class RowsCursor:
+    def __init__(self, many, one):
+        self.many, self.one, self.sql = many, one, []
+
+    def execute(self, sql, args=None):
+        self.sql.append((" ".join(sql.split()), args))
+
+    def fetchall(self):
+        return self.many
+
+    def fetchone(self):
+        return self.one
+
+
+def test_retirement_window_inputs_reads_written_runs():
+    rows = [(5, "decision", "OFFSEASON_START", json.dumps({"8": {"player_id": 1008, "keep": True}}), None),
+            (6, "window", "RESIGN", None, json.dumps([{"pgid": 2, "player_id": 1002}])),
+            (7, "window", "FREE_AGENCY:1", None, [{"pgid": 8, "player_id": 1008}])]
+    cur = RowsCursor(rows, (7, "FREE_AGENCY:1", json.dumps({"1": ["Signed", 0]})))
+    got = lo.Deps().retirement_window_inputs(cur, SEASON)
+    assert got["decision"] == {"run_id": 5, "stop": "OFFSEASON_START",
+                               "decided": {"8": {"player_id": 1008, "keep": True}}}
+    assert got["window_restores"] == {"2": 1, "8": 1}
+    assert got["decided"]["2"] == {"player_id": 1002, "keep": True, "reason": "window:restored:RESIGN"}
+    assert got["decided"]["8"] == {"player_id": 1008, "keep": True}       # the decision record wins
+    assert (got["prior_image"], got["prior_stop"], got["prior_run_id"]) == ({"1": ["Signed", 0]}, "FREE_AGENCY:1", 7)
+    assert all("status = 'WRITTEN'" in s for s, _ in cur.sql)
+    empty = lo.Deps().retirement_window_inputs(RowsCursor([], None), SEASON)
+    assert empty["decision"] is None and empty["prior_image"] is None
+
+
+def test_retirement_authority_reads_the_env(tmp_path, monkeypatch):
+    monkeypatch.delenv("MU_RETIREMENT_AUTHORITY", raising=False)
+    assert lo.Deps().retirement_authority() is None
+    path = tmp_path / "proof.json"
+    path.write_text(json.dumps(PROOF))
+    monkeypatch.setenv("MU_RETIREMENT_AUTHORITY", str(path))
+    assert lo.Deps().retirement_authority()["fixture_id"] == "g4-test"
+
+
+def test_run_report_leaves_out_the_roster_image():
+    s = {"stage": "RESIGN", "retirement_window": {"role": "window", "roster_image": {"1": ["Signed", 0]}}}
+    assert lo.report_summary(s)["retirement_window"] == {"role": "window"}
+    assert s["retirement_window"]["roster_image"]           # the stored summary keeps it
+    assert lo.report_summary({"stage": "X"}) == {"stage": "X"}

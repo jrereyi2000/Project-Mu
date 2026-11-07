@@ -55,9 +55,19 @@ players-edit field already planned with a different value is a CompositionError,
          cut on its own) by releasing the lowest-OVR healthy non-starters with no other edit planned (ties: the biggest
          cut savings first), and coach depth charts (depth_chart_engine) for every team except one that queued its own
          (a PENDING DEPTH_CHART move) or a user team with a stored JR chart.
-     OFFSEASON_START  retirements: every player Madden retired is recorded in retirement_decisions and Project Mu
-         keeps (un-retires) him when keep_retired says so; contracts for the practice-squad players Madden promoted (a
-         1-year minimum for the coming league year, contracts_engine.minimum_salary).
+     Retirements, one decision per offseason (docs/in_progress/RETIREMENT_WINDOW_PLAN.md): the decision stage is the
+         first offseason stop (normally OFFSEASON_START) with no WRITTEN decision run for the season
+         (Deps.retirement_window_inputs). There every player Madden retired is recorded in retirement_decisions and
+         Project Mu keeps (un-retires) him when deps.retirement_decision says so: as a free agent, or, with a proven
+         authority ($MU_RETIREMENT_AUTHORITY, Deps.retirement_authority) covering the stage, through
+         retirement_edits.plan_retirement_edits with the previous run's status and team. At every later stop through
+         CUTDOWN step_retirement_window (before re-signings, free agency, the draft and cut-down) restores native
+         retirements the decision didn't make, and a kept player Madden retired again (once a season), through the
+         same planner; without an authority they are recorded and reported only. Players who vanished since the
+         previous run are reported (rostered ones recorded). Every run's summary carries "retirement_window" with
+         the roster image the save holds after the write.
+     OFFSEASON_START  contracts for the practice-squad players Madden promoted (a 1-year minimum for the coming
+         league year, contracts_engine.minimum_salary).
      RESIGN  transactions_engine.resign_decisions (CONTRACT / TAG / EXTENSION / OPTION rewrite the contract; LET_GO
          is left to Madden's FA prep).
      FREE_AGENCY (waves 1-2), COMBINE (wave 3)  cpu_offers for the wave, free_agency_engine.run_wave,
@@ -144,6 +154,8 @@ from engines import cap_history
 from engines import contracts_engine as ce
 from engines import transactions_engine as te
 from pipeline import load_save as ls
+from pipeline import retirement_window as rw
+from pipeline.retirement_edits import plan_retirement_edits
 
 log = logging.getLogger("league_office")
 
@@ -498,6 +510,10 @@ class Plan:
         self.cap = defaultdict(lambda: [0, 0, 0])   # team_index -> [room, next-year room, base salary] change (units)
         self.db = {"pending": [], "charts": [], "injuries": [], "retirements": [], "offers": [],
                    "written_offer_ids": [], "salary_cap": None}
+        # what a retirement edit writes for a player whose view stays ("Retired", None) this write (the roster image
+        # stores what the save holds after the write; RETIREMENT_WINDOW_PLAN §2.2)
+        self.image_overrides = {}
+        self.retirement_window = None   # summary["retirement_window"] minus roster_image (decision or window role)
 
     # -- lookups
     def pgid(self, player_id):
@@ -1033,6 +1049,50 @@ class Deps:
                     (season,))
         return {r[0] for r in cur.fetchall()}
 
+    def retirement_window_inputs(self, cur, season):
+        """What the retirement window needs for `season`, from WRITTEN league office runs only (RETIREMENT_WINDOW_PLAN
+        §2.2): {"decision": {run_id, stop, decided} of the season's decision run or None (this stop is then the
+        decision stage), "decided": the decision set plus every player a window run restored (keep True, so a
+        second re-retirement counts against MAX_WINDOW_RESTORES), "window_restores": {pgid: restores this season},
+        "prior_image" / "prior_stop" / "prior_run_id": the newest WRITTEN run's roster image (any season)}."""
+        cur.execute("""SELECT id, summary->'retirement_window'->>'role', summary->'retirement_window'->>'stop',
+                              summary->'retirement_window'->'decided', summary->'retirement_window'->'restored'
+                       FROM league_office_runs WHERE status = 'WRITTEN' AND season = %s
+                       AND summary->'retirement_window'->>'role' IN ('decision', 'window') ORDER BY id""", (season,))
+        decision, restores, restored_info = None, Counter(), {}
+        for run_id, role, stop, decided, restored in cur.fetchall():
+            decided = json.loads(decided) if isinstance(decided, str) else decided
+            restored = json.loads(restored) if isinstance(restored, str) else restored
+            if role == "decision" and decision is None:
+                decision = {"run_id": run_id, "stop": stop, "decided": dict(decided or {})}
+            elif role == "window" and decision is not None:
+                for r in restored or ():
+                    key = str(r.get("pgid"))
+                    restores[key] += 1
+                    restored_info[key] = {"player_id": r.get("player_id"), "keep": True,
+                                          "reason": f"window:restored:{stop}"}
+        cur.execute("""SELECT id, summary->'retirement_window'->>'stop', summary->'retirement_window'->'roster_image'
+                       FROM league_office_runs WHERE status = 'WRITTEN'
+                       AND summary->'retirement_window'->'roster_image' IS NOT NULL ORDER BY id DESC LIMIT 1""")
+        row = cur.fetchone()
+        image = (json.loads(row[2]) if isinstance(row[2], str) else row[2]) if row else None
+        decided = dict(restored_info)
+        decided.update((decision or {}).get("decided") or {})
+        return {"decision": decision, "decided": decided, "window_restores": dict(restores),
+                "prior_image": image, "prior_stop": row[1] if row else None, "prior_run_id": row[0] if row else None}
+
+    def retirement_authority(self):
+        """The JR-approved retirement authority proof ($MU_RETIREMENT_AUTHORITY), or None (default deny). A broken
+        proof file raises retirement_window.WindowError."""
+        return rw.proof_from_env()
+
+    def player_names(self, cur, player_ids):
+        """{player_id: "First Last"} for the retirement window's vanished players (absent from the snapshot)."""
+        if not player_ids:
+            return {}
+        cur.execute("SELECT id, COALESCE(full_name, player_name) FROM players WHERE id = ANY(%s)", (list(player_ids),))
+        return {i: name for i, name in cur.fetchall()}
+
     def draft_inputs(self, cur, season):
         """The coming draft: slots [{overall_pick, team_id}], boards {team_id: [(name, position), ...]}, JR's picks
         {overall_pick: (name, position)}."""
@@ -1416,24 +1476,143 @@ def step_moves(plan, moves, priority, label):
             plan.warn(f"{label}: move kind {kind} not handled")
 
 
-def step_retirements(plan, seed, deps=None, cur=None):
-    """Madden's retirements: recorded, and un-retired (as free agents) where deps.retirement_decision (today's
-    keep_retired unless the switchboard's retirement feature says otherwise) keeps them."""
+def _planner_pending(plan):
+    """The league office's own moves already claimed in this plan, shaped as plan_retirement_edits' `pending` (its
+    overlap check then covers Mu's moves too)."""
+    out = {"release": [], "sign": [], "trade": [], "players": []}
+    for g, (move, _, _) in sorted(plan.claimed.items()):
+        if move == "release":
+            out["release"].append(g)
+        elif move == "sign":
+            out["sign"].append({"pgid": g})
+        elif move == "trade":
+            out["trade"].append({"pgids": [g]})
+    out["players"] = [{"pgid": g} for g in sorted(plan.edits)]
+    return out
+
+
+def _schema_version(plan):
+    return (plan.snapshot.get("meta") or {}).get("reader_version")
+
+
+def _apply_restores(plan, out, tag):
+    """Applies plan_retirement_edits' restore edits to the plan; returns [(pgid, set)]."""
+    done = []
+    for e in (out.get("edits") or {}).get("players") or ():
+        g, st = e["pgid"], dict(e["set"])
+        plan.set_fields(g, st)
+        plan.view[g] = ("Retired", None)   # signable / movable only in a later write
+        plan.image_overrides[g] = (st.get("ContractStatus"), st.get("TeamIndex"))
+        plan.counts[tag] += 1
+        done.append((g, st))
+    return done
+
+
+def step_retirements(plan, seed, deps=None, cur=None, authority=None, prior_image=None, source_fingerprint=None):
+    """The decision stage (RETIREMENT_WINDOW_PLAN §2.1): Madden's retirements recorded, and un-retired where
+    deps.retirement_decision (today's keep_retired unless the switchboard's retirement feature says otherwise) keeps
+    them. Without a proven authority covering this stage a keep is un-retired as a free agent (the legacy writer);
+    with one it goes through plan_retirement_edits and keeps the previous run's status and team. Returns the
+    decision record {"decided": {pgid: {player_id, keep, reason}}, "restored": [...], "blocked": [...]}."""
+    decided, kept, rows = {}, [], {}
     for g, p in sorted(plan.players.items()):
         if p.get("status") != "Retired":
             continue
         keep, reason = (keep_retired(p, plan.season, seed) if deps is None
                         else deps.retirement_decision(cur, p, plan.season, seed))
         pid = plan.pid(g)
+        decided[str(g)] = {"player_id": pid, "keep": bool(keep), "reason": reason}
         if pid is None:
             plan.warn(f"{plan.name(g)}: retired but not in players (no madden_pgid); not recorded")
             continue
-        plan.db["retirements"].append({"player_id": pid, "mu_keep": keep, "reason": reason})
+        rows[g] = {"player_id": pid, "mu_keep": keep, "reason": reason}
+        plan.db["retirements"].append(rows[g])
         plan.counts["retired_by_madden"] += 1
         if keep:
+            kept.append(g)
+    restored, blocked = [], []
+    auth = rw.authority_for_run(authority, source_save_hash=source_fingerprint, schema_version=_schema_version(plan))
+    if kept and auth and plan.stage in auth["stages"]:
+        snap = rw.planner_snapshot(list(plan.players.values()), source_save_hash=source_fingerprint,
+                                   stage=plan.stage, schema_version=_schema_version(plan),
+                                   prior_image=prior_image or {}, pending=_planner_pending(plan))
+        reqs = [{"decision_id": f"decision:{plan.season}:{g}", "pgid": g, "action": rw.KEEP_ACTION,
+                 "state": rw.DEFAULT_CAREER_STATE} for g in kept]
+        out = plan_retirement_edits(snap, reqs, auth)
+        for g, st in _apply_restores(plan, out, "unretired"):
+            restored.append({"pgid": g, "player_id": plan.pid(g), "kind": "DECIDED_KEEP",
+                             "set": {"status": st.get("ContractStatus"), "team_index": st.get("TeamIndex")}})
+        for c in out["conflicts"]:
+            g = c["pgid"]
+            blocked.append({"pgid": g, "player_id": plan.pid(g), "kind": "DECIDED_KEEP", "reasons": c["reasons"]})
+            rows[g].update(mu_keep=False, reason=f"window:blocked:{plan.stage}:{c['reasons'][0]}")
+            plan.warn(f"{plan.name(g)}: kept by the retirement decision but not restored ({', '.join(c['reasons'])})")
+    else:
+        for g in kept:
             plan.set_fields(g, {"ContractStatus": "FreeAgent", "TeamIndex": FREE_AGENT_TEAM})
             plan.view[g] = ("Retired", None)   # signable only in a later write
+            plan.image_overrides[g] = ("FreeAgent", FREE_AGENT_TEAM)
             plan.counts["unretired"] += 1
+    return {"decided": decided, "restored": restored, "blocked": blocked}
+
+
+def step_retirement_window(plan, deps, cur, source_fingerprint, inputs, authority):
+    """A later offseason stop (RETIREMENT_WINDOW_PLAN §2.3-2.5): native retirements the decision stage didn't decide
+    (and keeps Madden retired again, once) are restored through the default-deny planner with the run's authority;
+    without one they are recorded and reported only. Players who vanished since the previous run are recorded
+    (rostered) and reported. Returns the window record (classify's report plus restored / blocked)."""
+    user_ids = deps.user_team_ids(cur) or set()
+    user_idx = frozenset(i for i, t in plan.teams.items() if t in user_ids)
+    report = rw.classify(list(plan.players.values()), stage=plan.stage, wave=plan.wave, season=plan.season,
+                         decided=inputs.get("decided") or {}, prior_image=inputs.get("prior_image"),
+                         prior_stop=inputs.get("prior_stop"), window_restores=inputs.get("window_restores") or {},
+                         user_team_indexes=user_idx)
+    schema = _schema_version(plan)
+    auth = rw.authority_for_run(authority, source_save_hash=source_fingerprint, schema_version=schema)
+    snap = rw.planner_snapshot(list(plan.players.values()), source_save_hash=source_fingerprint, stage=plan.stage,
+                               schema_version=schema, prior_image=inputs.get("prior_image") or {},
+                               pending=_planner_pending(plan))
+    out = plan_retirement_edits(snap, rw.restore_requests(report), auth)
+    by_pgid = {r["pgid"]: r for r in report["restore"]}
+    stage = plan.stage
+    restored, blocked = [], []
+
+    def record(g, keep, reason, player_id=None):
+        pid = player_id if player_id is not None else plan.pid(g)
+        if pid is None:
+            plan.warn(f"retirement window: pgid {g} not in players (no madden_pgid); not recorded")
+            return
+        plan.db["retirements"].append({"player_id": pid, "mu_keep": keep, "reason": reason})
+
+    for g, st in _apply_restores(plan, out, "window_restored"):
+        restored.append(dict(by_pgid[g], player_id=plan.pid(g), name=plan.name(g)))
+        record(g, True, f"window:restored:{stage}")
+    for c in out["conflicts"]:
+        g = c["pgid"]
+        blocked.append(dict(by_pgid.get(g, {"pgid": g}), player_id=plan.pid(g), name=plan.name(g),
+                            reasons=c["reasons"]))
+        record(g, False, f"window:blocked:{stage}:{c['reasons'][0]}")
+        plan.warn(f"retirement window {report['stop']}: {plan.name(g)} retired by Madden, not restored "
+                  f"({', '.join(c['reasons'])})")
+    for c in report["conflicts"]:
+        c["name"] = plan.name(c["pgid"])
+        reason = "re_retired_again" if c["kind"] == "RE_RETIRED_AGAIN" else c["kind"].lower()
+        record(c["pgid"], False, f"window:conflict:{stage}:{reason}")
+        plan.warn(f"retirement window {report['stop']}: {c['name']} {c['kind']} ({c['reason']}); left retired")
+    vanished = report["vanished"]
+    pids = {v["pgid"]: plan.pid(v["pgid"]) for v in vanished}
+    names = (deps.player_names(cur, [p for p in pids.values() if p is not None]) or {}) if vanished else {}
+    for v in vanished:
+        pid = pids[v["pgid"]]
+        v["player_id"], v["name"] = pid, names.get(pid) or f"pgid {v['pgid']}"
+        if v["kind"] == "VANISHED_ROSTERED":
+            record(v["pgid"], False, f"window:vanished:{stage}", pid)
+            plan.warn(f"retirement window {report['stop']}: {v['name']} (team {v['last']['team_index']}) vanished "
+                      "since the previous run (retired and purged in one advance): unrecoverable")
+    plan.counts["window_blocked"] += len(blocked)
+    plan.counts["window_conflicts"] += len(report["conflicts"])
+    plan.counts["window_vanished_rostered"] += sum(1 for v in vanished if v["kind"] == "VANISHED_ROSTERED")
+    return dict(report, role="window", restored=restored, blocked=blocked)
 
 
 def step_restore_retirees(plan, kept, stored):
@@ -1731,14 +1910,32 @@ def plan_stage(cur, snapshot, stage, seed, deps=None, wave=None, state=None, sou
         if rel_pids:
             plan.step("waivers", lambda: step_moves(plan, deps.waivers(cur, season, week, rel_pids, seed),
                                                     PRIORITY_STAGE, "waivers"))
-    elif stage == OFFSEASON_START:
-        plan.step("salary cap", step_salary_cap, plan, deps, cur)
-        plan.step("retirements", step_retirements, plan, seed, deps, cur)
-        plan.step("promoted practice squads", lambda: step_promoted_ps(plan, deps.ps_without_contract(cur, calendar)))
     else:
-        kept = plan.step("kept retirees", deps.kept_retirees, cur, season) or set()
-        if kept:
-            plan.step("restore retirees", step_restore_retirees, plan, kept, stored)
+        if stage == OFFSEASON_START:
+            plan.step("salary cap", step_salary_cap, plan, deps, cur)
+        # one retirement decision per offseason (RETIREMENT_WINDOW_PLAN §2.1): the first stop with no WRITTEN
+        # decision run for the season decides; every later stop runs the window before any signing or cut
+        window_in = plan.step("retirement window inputs", deps.retirement_window_inputs, cur, season)
+        if window_in is not None:
+            authority = plan.step("retirement authority", deps.retirement_authority)
+            if window_in.get("decision") is None:
+                rec = plan.step("retirements", step_retirements, plan, seed, deps, cur, authority,
+                                window_in.get("prior_image"), source_fingerprint)
+                if rec is not None:
+                    plan.retirement_window = dict(rec, role="decision")
+            else:
+                rec = plan.step("retirement window", step_retirement_window, plan, deps, cur, source_fingerprint,
+                                window_in, authority)
+                if rec is not None:
+                    plan.retirement_window = dict(rec, decision_run_id=window_in["decision"].get("run_id"),
+                                                  decision_stop=window_in["decision"].get("stop"))
+        if stage == OFFSEASON_START:
+            plan.step("promoted practice squads",
+                      lambda: step_promoted_ps(plan, deps.ps_without_contract(cur, calendar)))
+        else:
+            kept = plan.step("kept retirees", deps.kept_retirees, cur, season) or set()
+            if kept:
+                plan.step("restore retirees", step_restore_retirees, plan, kept, stored)
     if stage == RESIGN:
         plan.step("re-signings", lambda: step_moves(plan, deps.resign_decisions(cur, season, seed), PRIORITY_STAGE,
                                                     "resign"))
@@ -1803,11 +2000,34 @@ def plan_stage(cur, snapshot, stage, seed, deps=None, wave=None, state=None, sou
     report = getattr(deps, "personality_report", None)
     if report is not None:
         summary["personality"] = report()
+    summary["retirement_window"] = retirement_window_summary(plan)
     return {"stage": stage, "wave": plan.wave, "season": season, "week": week, "calendar_year": calendar,
             "seed": seed, "edits": edits, "edits_hash": canonical_hash(edits), "league_edits": league_edits,
             "prepared": prepared, "progression": prog_info, "summary": summary, "drift": drift,
             "deferred": plan.deferred, "warnings": plan.warnings, "errors": plan.errors, "db": plan.db,
             "team_ids": plan.teams, "pid_by_pgid": plan.pid_by_pgid, "cap": plan.cap}
+
+
+def retirement_window_summary(plan):
+    """summary["retirement_window"] (RETIREMENT_WINDOW_PLAN §2.2): every run stores the roster image the save holds
+    after its write ({pgid: [status, team_index]}, the next run's baseline); offseason runs add the decision record
+    (role "decision") or the window record (role "window"); other runs have role "image"."""
+    view = dict(plan.view)
+    view.update(plan.image_overrides)
+    out = {"version": rw.WINDOW_VERSION, "role": "image", "season": plan.season,
+           "stop": rw.stop_name(plan.stage, plan.wave)}
+    if plan.retirement_window:
+        out.update(plan.retirement_window)
+    out["roster_image"] = rw.roster_image(view)
+    return out
+
+
+def report_summary(summary):
+    """The run summary as printed in the run report: the roster image is left out (it stays in league_office_runs)."""
+    rwin = summary.get("retirement_window")
+    if not isinstance(rwin, dict) or "roster_image" not in rwin:
+        return summary
+    return dict(summary, retirement_window={k: v for k, v in rwin.items() if k != "roster_image"})
 
 
 # -------------------------------------------------------------- read-back ----
@@ -2069,7 +2289,7 @@ def run(cur, snapshot, save_path, stage="auto", dry_run=False, confirm_franchise
             conn.commit()
         raise
     report = {"stage": plan["stage"], "wave": plan["wave"], "season": plan["season"], "week": plan["week"],
-              "summary": plan["summary"], "deferred": plan["deferred"], "warnings": plan["warnings"],
+              "summary": report_summary(plan["summary"]), "deferred": plan["deferred"], "warnings": plan["warnings"],
               "errors": plan["errors"], "input_sha256": input_sha, "combined_hash": plan["edits_hash"],
               "progression_edits_hash": (plan["prepared"] or {}).get("edits_hash")}
     if dry_run:
