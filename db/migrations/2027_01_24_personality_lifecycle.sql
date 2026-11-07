@@ -1,6 +1,6 @@
 -- Person lifecycle ledgers (docs/in_progress/PERSONALITY_DRAFT_INTEGRATION_PLAN.md §2.2; PROJECT_SPEC §3.3p, §7.11).
--- Requires 2027_01_09_personas.sql and 2027_01_16_personality_core.sql. Seeds nothing; not folded into
--- db/init_db.sql; applying it to a franchise database is JR's decision.
+-- Requires 2027_01_09_personas.sql and 2027_01_16_personality_core.sql. Seeds nothing; mirrored in
+-- db/init_db.sql; applying it to an existing franchise database is JR's decision.
 --
 --   persona_lifecycle_universes  one immutable registration per universe (league ID, starting snapshot hash)
 --   persona_lifecycle_people     one row per (universe, source person, role): classification receipt, state

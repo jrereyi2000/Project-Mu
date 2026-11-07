@@ -2871,6 +2871,421 @@ CREATE TABLE IF NOT EXISTS scout_interviews (
     UNIQUE (draft_season, team_id, prospect_uid, kind)
 );
 
+-- ---------------------------------------------------------------------------
+-- Personality tables (folded from the 2027_01_16 .. 2027_02_03 migrations; their guard DO blocks, which refuse an
+-- incompatible existing table, stay in the migrations). Each migration is a no-op on a database built from this file.
+-- ---------------------------------------------------------------------------
+
+-- Personality core sidecars (2027_01_16_personality_core.sql + 2027_01_29_personality_core_extensions.sql,
+-- personality/; PROJECT_SPEC §3.3p, §7.11). The catalogue row is written by the personality code, not seeded here.
+CREATE TABLE IF NOT EXISTS persona_core_catalogues (
+    version TEXT PRIMARY KEY,
+    catalogue JSONB NOT NULL
+);
+CREATE TABLE IF NOT EXISTS persona_core_profiles (
+    persona_type VARCHAR(32) NOT NULL,
+    persona_id VARCHAR(64) NOT NULL,
+    universe_id TEXT NOT NULL,
+    birth_key TEXT NOT NULL,
+    origin TEXT NOT NULL CHECK (origin IN ('generated', 'real', 'unknown')),
+    catalogue_version TEXT NOT NULL REFERENCES persona_core_catalogues(version),
+    revision INTEGER NOT NULL CHECK (revision >= 0),
+    metadata JSONB NOT NULL,
+    PRIMARY KEY (persona_type, persona_id),
+    UNIQUE (universe_id, persona_type, birth_key),
+    FOREIGN KEY (persona_type, persona_id) REFERENCES persona_sliders(persona_type, persona_id)
+);
+CREATE TABLE IF NOT EXISTS persona_core_aliases (
+    universe_id TEXT NOT NULL,
+    persona_type VARCHAR(32) NOT NULL,
+    namespace TEXT NOT NULL,
+    external_id TEXT NOT NULL,
+    persona_id VARCHAR(64) NOT NULL,
+    PRIMARY KEY (universe_id, persona_type, namespace, external_id),
+    FOREIGN KEY (persona_type, persona_id) REFERENCES persona_core_profiles(persona_type, persona_id)
+);
+-- Columns kind .. recorded_at are 2027_01_29's (kept last, in its order); its partial index replaces
+-- 2027_01_16's UNIQUE (persona_type, persona_id, season), so only evolution is one-a-season.
+CREATE TABLE IF NOT EXISTS persona_core_events (
+    persona_type VARCHAR(32) NOT NULL,
+    persona_id VARCHAR(64) NOT NULL,
+    event_id TEXT NOT NULL,
+    source_event_id TEXT NOT NULL,
+    season INTEGER NOT NULL,
+    request JSONB NOT NULL,
+    before_state JSONB NOT NULL,
+    after_state JSONB NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'evolution' CHECK (kind IN ('evolution', 'override', 'adoption', 'role_link')),
+    effective_tick SMALLINT CHECK (effective_tick BETWEEN 1 AND 32),
+    actor TEXT,
+    seq BIGINT GENERATED ALWAYS AS IDENTITY,
+    recorded_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (persona_type, persona_id, event_id),
+    UNIQUE (persona_type, persona_id, source_event_id),
+    FOREIGN KEY (persona_type, persona_id) REFERENCES persona_core_profiles(persona_type, persona_id)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS persona_core_events_one_evolution_per_season
+    ON persona_core_events (persona_type, persona_id, season) WHERE kind = 'evolution';
+
+CREATE TABLE IF NOT EXISTS persona_core_links (
+    universe_id TEXT NOT NULL,
+    from_type VARCHAR(32) NOT NULL,
+    from_id VARCHAR(64) NOT NULL,
+    to_type VARCHAR(32) NOT NULL,
+    to_id VARCHAR(64) NOT NULL,
+    link_kind TEXT NOT NULL CHECK (link_kind = 'role_change'),
+    effective_season INT NOT NULL,
+    effective_tick SMALLINT CHECK (effective_tick BETWEEN 1 AND 32),
+    receipt JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (to_type, to_id),
+    UNIQUE (from_type, from_id, to_type),
+    FOREIGN KEY (from_type, from_id) REFERENCES persona_core_profiles(persona_type, persona_id),
+    FOREIGN KEY (to_type, to_id) REFERENCES persona_core_profiles(persona_type, persona_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_persona_core_links_from ON persona_core_links (from_type, from_id);
+
+-- Person lifecycle ledgers (2027_01_24_personality_lifecycle.sql; PROJECT_SPEC §3.3p).
+CREATE TABLE IF NOT EXISTS persona_lifecycle_universes (
+    universe_id TEXT PRIMARY KEY,
+    league_id TEXT NOT NULL UNIQUE,
+    initial_snapshot_sha256 TEXT NOT NULL,
+    start_season INTEGER NOT NULL,
+    start_cutoff JSONB NOT NULL,
+    manifest_version TEXT NOT NULL,
+    registration JSONB NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS persona_lifecycle_people (
+    universe_id TEXT NOT NULL REFERENCES persona_lifecycle_universes(universe_id),
+    source_person_id UUID NOT NULL,
+    role TEXT NOT NULL,
+    birth_key TEXT NOT NULL,
+    classification TEXT NOT NULL CHECK (classification IN ('generated', 'real', 'unknown')),
+    classification_receipt JSONB NOT NULL,
+    first_seen JSONB NOT NULL,
+    state TEXT NOT NULL CHECK (state IN ('pending', 'ready', 'quarantined', 'archived')),
+    persona_id VARCHAR(64),
+    revision INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (universe_id, source_person_id, role),
+    UNIQUE (universe_id, role, birth_key),
+    FOREIGN KEY (role, persona_id) REFERENCES persona_core_profiles(persona_type, persona_id)
+);
+
+CREATE TABLE IF NOT EXISTS persona_lifecycle_bindings (
+    universe_id TEXT NOT NULL REFERENCES persona_lifecycle_universes(universe_id),
+    role TEXT NOT NULL,
+    namespace TEXT NOT NULL,
+    external_id TEXT NOT NULL,
+    source_person_id UUID NOT NULL,
+    valid_from JSONB NOT NULL,
+    valid_to JSONB,
+    receipt JSONB NOT NULL,
+    PRIMARY KEY (universe_id, role, namespace, external_id),
+    FOREIGN KEY (universe_id, source_person_id, role)
+        REFERENCES persona_lifecycle_people(universe_id, source_person_id, role)
+);
+
+CREATE INDEX IF NOT EXISTS persona_lifecycle_bindings_person
+    ON persona_lifecycle_bindings (universe_id, source_person_id, role);
+
+CREATE TABLE IF NOT EXISTS persona_lifecycle_batches (
+    batch_id TEXT PRIMARY KEY,
+    universe_id TEXT NOT NULL REFERENCES persona_lifecycle_universes(universe_id),
+    manifest JSONB NOT NULL,
+    before_state JSONB NOT NULL,
+    after_state JSONB NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('applied', 'reverted')),
+    applied_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    review_receipt JSONB NOT NULL,
+    revert_receipt JSONB
+);
+
+-- Contract policy receipts (2027_01_23_contract_personality_policy.sql, engines/personality_contract_store.py; §3.3u).
+CREATE TABLE IF NOT EXISTS contract_policy_decisions (
+    universe_id TEXT NOT NULL,
+    decision_id TEXT NOT NULL,          -- the actual negotiation attempt / batch entry, never player-season
+    season INTEGER NOT NULL,
+    week INTEGER NOT NULL,
+    stage TEXT NOT NULL,
+    player_id BIGINT NOT NULL,
+    persona_id TEXT,                    -- NULL: no profile (neutral with reason)
+    revision INTEGER,
+    mode TEXT NOT NULL CHECK (mode IN ('off', 'shadow', 'active')),
+    policy_version TEXT NOT NULL,
+    input_hash TEXT NOT NULL,           -- sha256 of the canonical snapshot
+    snapshot JSONB NOT NULL,
+    result JSONB NOT NULL,              -- links existing offer / execution ids
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (universe_id, decision_id)
+);
+
+CREATE TABLE IF NOT EXISTS contract_policy_event_outbox (
+    universe_id TEXT NOT NULL,
+    event_id TEXT NOT NULL,
+    decision_id TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('CONTRACT_OFFER_SUBMITTED', 'CONTRACT_RESPONSE_RECORDED',
+                                       'CONTRACT_EXECUTED', 'CONTRACT_INSTRUMENT_APPLIED')),
+    payload JSONB NOT NULL,
+    delivered_at TIMESTAMPTZ,
+    PRIMARY KEY (universe_id, event_id),
+    FOREIGN KEY (universe_id, decision_id) REFERENCES contract_policy_decisions (universe_id, decision_id)
+);
+
+-- Player trade requests (2027_01_25_player_trade_requests.sql, engines/player_trade_request_store.py; §3.3v).
+CREATE TABLE IF NOT EXISTS player_trade_request_decisions (
+    universe_id TEXT NOT NULL,
+    persona_id VARCHAR(64) NOT NULL,
+    season INTEGER NOT NULL,
+    decision_id UUID NOT NULL UNIQUE,
+    outcome TEXT NOT NULL CHECK (outcome IN ('REQUEST', 'NO_REQUEST')),
+    input_hash TEXT NOT NULL,
+    policy_version TEXT NOT NULL,
+    seed_algorithm TEXT NOT NULL,
+    draw DOUBLE PRECISION NOT NULL CHECK (draw >= 0 AND draw < 1),
+    receipt JSONB NOT NULL CHECK (jsonb_typeof(receipt) = 'object'),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (universe_id, persona_id, season)
+);
+
+CREATE TABLE IF NOT EXISTS player_trade_requests (
+    request_id UUID PRIMARY KEY,
+    decision_id UUID NOT NULL UNIQUE REFERENCES player_trade_request_decisions (decision_id),
+    universe_id TEXT NOT NULL,
+    persona_type VARCHAR(32) NOT NULL CHECK (persona_type = 'player'),
+    persona_id VARCHAR(64) NOT NULL,
+    team_id INTEGER NOT NULL REFERENCES teams (id),
+    opened_season INTEGER NOT NULL,
+    revision INTEGER NOT NULL CHECK (revision >= 0),
+    status TEXT NOT NULL CHECK (status IN ('ACTIVE', 'WITHDRAWN', 'RESOLVED_TRADE', 'CLOSED_EMPLOYMENT',
+                                           'VOIDED_CORRECTION')),
+    state JSONB NOT NULL CHECK (jsonb_typeof(state) = 'object' AND state->>'status' = status
+                                AND (state->>'revision')::int = revision),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    FOREIGN KEY (persona_type, persona_id) REFERENCES persona_core_profiles (persona_type, persona_id)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS player_trade_requests_one_active
+    ON player_trade_requests (universe_id, persona_id) WHERE status = 'ACTIVE';
+
+CREATE TABLE IF NOT EXISTS player_trade_request_actions (
+    universe_id TEXT NOT NULL,
+    persona_id VARCHAR(64) NOT NULL,
+    event_id TEXT NOT NULL,
+    source_event_id TEXT NOT NULL,
+    request_id UUID NULL REFERENCES player_trade_requests (request_id),
+    season INTEGER NOT NULL,
+    window_id TEXT NOT NULL,
+    checkpoint_id TEXT NOT NULL,
+    action_kind TEXT NOT NULL CHECK (action_kind IN ('REVIEW', 'ACKNOWLEDGE', 'DECLINE', 'EXPLORE', 'REVIEW_REPAIR',
+                                                     'RECORD_WITHDRAWAL', 'RECORD_TRADE', 'CLOSE_EMPLOYMENT',
+                                                     'CORRECT', 'DISCLOSE')),
+    payload_hash TEXT NOT NULL,
+    before_state JSONB NULL,
+    after_state JSONB NULL,
+    receipt JSONB NOT NULL CHECK (jsonb_typeof(receipt) = 'object'),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (universe_id, persona_id, event_id),
+    UNIQUE (universe_id, persona_id, source_event_id, action_kind),
+    UNIQUE (universe_id, persona_id, season, window_id, checkpoint_id, action_kind)
+);
+
+-- Relationship ledger (2027_01_27_personality_relationships.sql, personality/relationship_store.py; §3.3t).
+CREATE TABLE IF NOT EXISTS persona_relationship_batches (
+    universe_id TEXT NOT NULL,
+    head BIGINT NOT NULL CHECK (head > 0),
+    expected_head BIGINT NOT NULL CHECK (expected_head >= 0 AND expected_head = head - 1),
+    batch_hash TEXT NOT NULL,
+    receipt JSONB NOT NULL CHECK (jsonb_typeof(receipt) = 'object'),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (universe_id, head),
+    UNIQUE (universe_id, batch_hash)
+);
+
+CREATE TABLE IF NOT EXISTS persona_relationship_events (
+    universe_id TEXT NOT NULL,
+    source_event_id TEXT NOT NULL,
+    facet_key TEXT NOT NULL,           -- relationship_events.facet_key: hash of subject / target / kind
+    event_id TEXT NOT NULL,            -- transport ID, checked separately for content conflicts
+    head BIGINT NOT NULL CHECK (head > 0),
+    occurred_season INT NOT NULL,
+    occurred_tick INT NOT NULL CHECK (occurred_tick >= 0),
+    schema_version TEXT NOT NULL CHECK (schema_version IN ('relationships-v1')),
+    payload_hash TEXT NOT NULL,
+    envelope JSONB NOT NULL CHECK (jsonb_typeof(envelope) = 'object'
+                                   AND envelope->>'schema_version' = schema_version
+                                   AND envelope->>'source_event_id' = source_event_id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (universe_id, source_event_id, facet_key),
+    UNIQUE (universe_id, event_id, facet_key),
+    FOREIGN KEY (universe_id, head) REFERENCES persona_relationship_batches (universe_id, head)
+);
+
+CREATE INDEX IF NOT EXISTS persona_relationship_events_time
+    ON persona_relationship_events (universe_id, occurred_season, occurred_tick);
+
+CREATE TABLE IF NOT EXISTS persona_relationship_sources (
+    universe_id TEXT NOT NULL,
+    namespace TEXT NOT NULL,
+    external_key TEXT NOT NULL,
+    source_event_id TEXT NOT NULL,
+    PRIMARY KEY (universe_id, namespace, external_key)
+);
+
+-- Personality evolution records (2027_01_30_personality_evolution.sql, personality/evolution_store.py; §3.3p).
+CREATE TABLE IF NOT EXISTS persona_evolution_runs (
+    universe_id TEXT NOT NULL,
+    season INT NOT NULL,
+    rules_version TEXT NOT NULL,
+    input_hash TEXT NOT NULL,          -- sha256 of the season facts and external candidates the run read
+    counts JSONB NOT NULL,
+    status VARCHAR(10) NOT NULL CHECK (status IN ('APPLIED','PREVIEW','FAILED')),
+    error TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (universe_id, season, rules_version)
+);
+
+CREATE TABLE IF NOT EXISTS persona_evolution_candidates (
+    candidate_id TEXT PRIMARY KEY,     -- '<universe>:<persona>:<season>:<rule_id | external:<event_id>>'
+    universe_id TEXT NOT NULL,
+    persona_type VARCHAR(32) NOT NULL,
+    persona_id VARCHAR(64) NOT NULL,
+    season INT NOT NULL,
+    source VARCHAR(16) NOT NULL CHECK (source IN ('RULE','RELATIONSHIPS','DEVELOPMENT','OTHER')),
+    rule_id TEXT NOT NULL,
+    rules_version TEXT NOT NULL,
+    change JSONB NOT NULL,             -- {kind, slider/step | remove/add}
+    chance NUMERIC(5,4),               -- NULL for external candidates (reviewed, not drawn)
+    draw DOUBLE PRECISION,
+    source_event_ids TEXT[] NOT NULL,
+    note TEXT,
+    status VARCHAR(12) NOT NULL CHECK (status IN ('drawn_out','blocked','superseded','applied','reverted')),
+    reason TEXT,
+    core_event_id TEXT,                -- the persona_core_events event_id of an applied change
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (universe_id, persona_type, persona_id, season, rule_id)
+);
+
+CREATE INDEX IF NOT EXISTS persona_evolution_candidates_season
+    ON persona_evolution_candidates (universe_id, season, status);
+
+-- Personality feature switchboard (2027_01_31_personality_feature_modes.sql, personality/features.py; §3.3p).
+-- Seeds nothing: a missing row reads 'off'.
+CREATE TABLE IF NOT EXISTS personality_feature_modes (
+    league_id BIGINT NOT NULL,
+    feature TEXT NOT NULL,
+    mode TEXT NOT NULL CHECK (mode IN ('off','shadow','active')),
+    version TEXT NOT NULL,
+    config JSONB NOT NULL DEFAULT '{}',
+    review_ref TEXT,                       -- JR's review note or report reference
+    shadow_since_season INT,               -- when the current version entered shadow (D3)
+    shadow_since_tick SMALLINT,
+    set_by TEXT NOT NULL,
+    set_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (league_id, feature)
+);
+
+CREATE TABLE IF NOT EXISTS personality_feature_mode_changes (
+    id BIGSERIAL PRIMARY KEY,
+    league_id BIGINT NOT NULL,
+    feature TEXT NOT NULL,
+    from_mode TEXT CHECK (from_mode IN ('off','shadow','active')),
+    to_mode TEXT NOT NULL CHECK (to_mode IN ('off','shadow','active')),
+    version TEXT NOT NULL,
+    review_ref TEXT,
+    force_reason TEXT,                     -- set when JR skipped the order or shadow-season rule
+    at_season INT NOT NULL,
+    at_tick SMALLINT NOT NULL,
+    set_by TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS personality_feature_clearances (
+    league_id BIGINT NOT NULL,
+    feature TEXT NOT NULL,
+    version TEXT NOT NULL,
+    source_db TEXT NOT NULL,               -- e.g. madden_tune_2026a
+    source_label TEXT NOT NULL,            -- e.g. CAREER-TUNE-2026a
+    shadow_from_season INT NOT NULL,
+    shadow_from_tick SMALLINT NOT NULL,
+    shadow_to_season INT NOT NULL,
+    shadow_to_tick SMALLINT NOT NULL,
+    report_path TEXT NOT NULL,
+    report_sha256 TEXT NOT NULL,
+    config JSONB NOT NULL,                 -- the config tuned on the tuning franchise
+    cleared_by TEXT NOT NULL,
+    cleared_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (league_id, feature, version)
+);
+
+-- Agent loop decisions (2027_02_01_agent_loops.sql, engines/agent_loops/base.py).
+CREATE TABLE IF NOT EXISTS agent_loop_decisions (
+    id BIGSERIAL PRIMARY KEY,
+    league_id BIGINT NOT NULL,
+    season INT NOT NULL,
+    tick SMALLINT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('CHART','PROMISE','PROMISE_REVIEW','CONTRACT','INBOX_REPLY','LEAK')),
+    subject_key TEXT NOT NULL,              -- e.g. 'team:12:chart', 'player:4411:promise', 'player:4411:offer:88'
+    persona_type VARCHAR(32),
+    persona_id VARCHAR(64),
+    options JSONB NOT NULL,                 -- [{key, action, detail, label}]: labels only, never a hidden score
+    policy_key TEXT NOT NULL,               -- the seeded personality policy's choice (always computed)
+    chosen_key TEXT NOT NULL,
+    choice_source TEXT NOT NULL CHECK (choice_source IN ('POLICY','MODEL','MODEL_REJECTED')),
+    text TEXT,                              -- the model's words, kept only when grounded in facts
+    visibility TEXT NOT NULL DEFAULT 'private' CHECK (visibility IN ('private','public')),
+    facts JSONB NOT NULL,
+    cause_refs JSONB NOT NULL DEFAULT '[]',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (league_id, season, tick, kind, subject_key)
+);
+
+CREATE INDEX IF NOT EXISTS agent_loop_decisions_public
+    ON agent_loop_decisions (league_id, season, tick) WHERE visibility = 'public';
+
+-- Persona focus (2027_02_03_persona_focus.sql, personality/focus_store.py; §3.3p).
+CREATE TABLE IF NOT EXISTS persona_focus (
+    focus_id TEXT PRIMARY KEY,                 -- 'focus:<universe_id>:<persona_id>:<slot>:<seq>'
+    universe_id TEXT NOT NULL,
+    persona_type VARCHAR(32) NOT NULL CHECK (persona_type IN ('coach','owner')),
+    persona_id VARCHAR(64) NOT NULL,
+    slot VARCHAR(4) NOT NULL CHECK (slot IN ('want','fear')),
+    seq INT NOT NULL CHECK (seq >= 0),         -- 0 = from the profile, +1 per later row
+    text TEXT NOT NULL,
+    subjects JSONB NOT NULL DEFAULT '[]',      -- [{kind, name, binding {namespace, external_id} | null}]
+    anchor JSONB NOT NULL DEFAULT '{}',        -- {team, seat} of the holder when the row was written
+    until_season INT,
+    source VARCHAR(8) NOT NULL CHECK (source IN ('profile','template','jr')),
+    template_id TEXT,
+    rules_version TEXT NOT NULL,
+    status VARCHAR(10) NOT NULL CHECK (status IN ('active','superseded','reverted')),
+    valid_from_season INT NOT NULL,
+    valid_from_tick SMALLINT NOT NULL CHECK (valid_from_tick BETWEEN 1 AND 32),
+    supersedes TEXT REFERENCES persona_focus(focus_id),
+    stale_causes JSONB NOT NULL DEFAULT '[]',
+    reason TEXT,                               -- the change note
+    actor TEXT NOT NULL DEFAULT 'system',      -- 'JR' for set and revert
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (universe_id, persona_id, slot, seq),
+    FOREIGN KEY (persona_type, persona_id) REFERENCES persona_core_profiles(persona_type, persona_id)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS persona_focus_one_active
+    ON persona_focus (universe_id, persona_id, slot) WHERE status = 'active';
+
+CREATE TABLE IF NOT EXISTS persona_focus_runs (
+    universe_id TEXT NOT NULL,
+    season INT NOT NULL,
+    rules_version TEXT NOT NULL,
+    input_hash TEXT NOT NULL,                  -- sha256 of the season facts and active rows the run read
+    counts JSONB NOT NULL,
+    status VARCHAR(10) NOT NULL CHECK (status IN ('APPLIED','PREVIEW','FAILED')),
+    error TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (universe_id, season, rules_version)
+);
+
 -- Real NFL history 1999-2025 (2027_02_04_nfl_history.sql, docs/done/REAL_NFL_HISTORY_PLAN.md §2.2;
 -- PROJECT_SPEC §3.3x). Own nfl_* tables, never the league's; written only by `python3 -m engines.nfl_history`.
 

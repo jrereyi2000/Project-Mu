@@ -1,7 +1,7 @@
 -- Personality relationships ledger (docs/done/PERSONALITY_RELATIONSHIPS_PLAN.md §2.6;
 -- personality/relationship_store.py). Requires 2027_01_16_personality_core.sql (persona_core_profiles, read by
 -- the store to validate every PersonRef). Additive feature tables only: no core schema edits, no legacy
--- persona_relationships dual-write, no backfill, not folded into db/init_db.sql.
+-- persona_relationships dual-write, no backfill; mirrored in db/init_db.sql.
 --   persona_relationship_batches  one row per appended batch: the universe's serialized head (starts at 1),
 --                                 the caller's expected head, the batch hash and the full receipt
 --   persona_relationship_events   one row per (occurrence, facet): canonical envelope, payload hash, head
