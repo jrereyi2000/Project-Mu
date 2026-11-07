@@ -6,12 +6,18 @@ import tempfile
 import unittest
 from unittest import mock
 
-import madden_capture as mc
 from pipeline import extract_team_overalls_ocr as ocr_mod
 from pipeline import load_capture as lc
 from pipeline import weekly_capture as wc
 
+try:
+    import madden_capture as mc
+except ImportError:
+    mc = None
+needs_madden_capture = unittest.skipIf(mc is None, "madden_capture.py needs macOS Quartz/Vision (PS5 chiaki-ng capture runner, a legacy shim since the PC migration; see AUDIT_LEDGER.md)")
 
+
+@needs_madden_capture
 class TestKeycodesAndGrid(unittest.TestCase):
     def test_keycodes_added(self):
         self.assertEqual(mc.KEYCODES["triangle"], 13)
@@ -37,6 +43,7 @@ class TestKeycodesAndGrid(unittest.TestCase):
         self.assertEqual(mc.TEAM_POSITIONS["VIKINGS"], (7, 3))
 
 
+@needs_madden_capture
 class TestClassifyScreens(unittest.TestCase):
     def test_classify_hub_options(self):
         class MockFrame:
@@ -66,6 +73,7 @@ class TestClassifyScreens(unittest.TestCase):
         self.assertEqual(mc.classify(f), "TEAM_OVERALLS")
 
 
+@needs_madden_capture
 class TestCrossOptions(unittest.TestCase):
     def test_cross_hub_options_permitted_on_user_teams(self):
         class MockFrame:
@@ -83,6 +91,7 @@ class TestCrossOptions(unittest.TestCase):
             mc.cross("HUB_OPTIONS", MockFrame())
 
 
+@needs_madden_capture
 class TestNavigationLogic(unittest.TestCase):
     def test_team_overalls_team_detected(self):
         class MockFrame:

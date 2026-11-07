@@ -126,7 +126,8 @@ def test_load_meta(tmp_path):
 
 
 def test_madden_position():
-    assert ar.madden_position("WILL") == "LOLB"
+    assert ar.madden_position("WILL") == "ROLB"
+    assert ar.madden_position("SAM") == "LOLB"
     assert ar.madden_position("LEDG") == "LE"
     assert ar.madden_position("MIKE") == "MLB"
     assert ar.madden_position("QB") == "QB"

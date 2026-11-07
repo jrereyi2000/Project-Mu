@@ -6,9 +6,14 @@ import unittest
 from unittest.mock import MagicMock, patch
 from PIL import Image
 
-import madden_capture as MC
 from pipeline import load_capture as L
 from pipeline import resolve_player as RP
+
+try:
+    import madden_capture as MC
+except ImportError:
+    MC = None
+needs_madden_capture = unittest.skipIf(MC is None, "madden_capture.py needs macOS Quartz/Vision (PS5 chiaki-ng capture runner, a legacy shim since the PC migration; see AUDIT_LEDGER.md)")
 
 
 class RowCountChecksTest(unittest.TestCase):
@@ -40,6 +45,7 @@ class RowCountChecksTest(unittest.TestCase):
         self.assertTrue(265 > limit_high)   # 265 exceeds limit
 
 
+@needs_madden_capture
 class MaddenCaptureCategoryTest(unittest.TestCase):
     def test_capture_category_passes_confirm_end(self):
         """capture_category passes confirm_end=True to capture_wide_list and capture_list."""
