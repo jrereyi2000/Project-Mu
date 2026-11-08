@@ -477,13 +477,20 @@ def draft_board_subjects(movers: dict, n: int) -> list:
 def load_trades(cur, season: int, week: int) -> tuple:
     """(executed trades, rumors) new for publication week `week` (swarm_dispatcher.new_week_trades: last week's
     executed GM trades, rumors from last week's rumor_ok proposals through the deadline), as facts for the trade
-    posts: team ids, the trade or rumor line, the money strings in it and each GM's stated thinking. Missing step 3
-    tables -> nothing."""
+    posts: team ids, the trade or rumor line, the money strings in it and each GM's stated thinking. A leak
+    (`source: LEAK`) with `insider_key` is fresh to that insider's pool in its first edition (`fresh: True`) and open
+    to the other insiders from the following edition (`fresh: False`). Missing step 3 tables -> nothing."""
     from newsroom import roster_moves as rm
     from newsroom.db_tools import _team_names, new_week_trades
     cur.execute("SAVEPOINT agent_wire_trades")
     try:
         trades, rumors = new_week_trades(cur, season, week)
+        older = []
+        if week >= 3 and rm.rumor_visible(week - 2, week):   # leaks others may see the edition after their first
+            _, earlier = new_week_trades(cur, season, week - 1)
+            older = [r for r in earlier if r.get("source") == "LEAK" and r.get("insider_key")]
+        seen = {r.get("rumor_id") for r in rumors}
+        older = [r for r in older if r.get("rumor_id") not in seen]
         names = _team_names(cur)
         cur.execute("SELECT abbreviation, id FROM teams WHERE abbreviation IS NOT NULL;")
         ids = dict(cur.fetchall())
@@ -497,8 +504,16 @@ def load_trades(cur, season: int, week: int) -> tuple:
                       "line": line, "money": re.findall(r"-?\$[\d.]+[MK]?", line),
                       "players": [l["player_name"] for l in t["legs"] if l.get("type") == "PLAYER"],
                       "gm_said": {ids[t["team_a"]]: t.get("rationale_a"), ids[t["team_b"]]: t.get("rationale_b")}})
-    out_r = [{"id": r["rumor_id"], "week": r["week"], "teams": [ids[x] for x in r["teams"]],
-              "line": rm.rumor_line(r, names), "outcome": r["outcome"]} for r in rumors]
+    out_r = []
+    for r in list(rumors) + older:
+        leak = r.get("source") == "LEAK"
+        row = {"id": r["rumor_id"], "week": r["week"], "teams": [ids[x] for x in r["teams"]],
+               "line": rm.leak_line(r, names) if leak else rm.rumor_line(r, names),
+               "outcome": r.get("outcome") or ("stalled" if r.get("stage") == "STALLED" else "open")}
+        if leak:
+            row.update({"source": "LEAK", "insider_key": r.get("insider_key"), "named": r.get("named") or [],
+                        "fresh": bool(r.get("insider_key")) and r["week"] == week - 1})
+        out_r.append(row)
     return out_t, out_r
 
 
@@ -847,10 +862,15 @@ class Week:
 
     def rumor_facts(self, r):
         a, b = r["teams"]
+        grounding = ("A RUMOR, not a done deal: these two front offices talked; no trade happened. Say "
+                     "'talks', 'discussed', 'sources say'. Never say a trade was made or agreed, and no dollar "
+                     "figures.")
+        if r.get("named"):
+            grounding += " A player the leak names may be named, but never as traded."
+        else:
+            grounding += " Never name a player."
         return {"teams": [self.team_with_record(a), self.team_with_record(b)], "rumor": r["line"],
-                "grounding": "A RUMOR, not a done deal: these two front offices talked; no trade happened. Say "
-                             "'talks', 'discussed', 'sources say'. Never say a trade was made or agreed, never name "
-                             "a player, and no dollar figures."}
+                "grounding": grounding}
 
     def cap_take_subject(self):
         """(team_id, release move or None) for the week's cap take: the deepest team over the cap, else the release
@@ -1482,9 +1502,11 @@ class Accounts:
     def archetype(self, arch):
         return self._pick([a for a in self.all() if a["archetype"] == arch], cap_role="meme")
 
-    def insider(self):
-        """A news-breaking insider (Schefter, Rapoport) under the pundit cap."""
-        return self._pick([a for a in self.all() if a["archetype"] in INSIDER_ARCHETYPES], cap_role="pundit")
+    def insider(self, key=None):
+        """A news-breaking insider (Schefter, Rapoport) under the pundit cap; with `key`, the archetype that got a
+        leak first is preferred (it still counts against the cap)."""
+        cands = [a for a in self.all() if a["archetype"] in INSIDER_ARCHETYPES]
+        return self._pick(cands, prefer=(key,) if key else (), cap_role="pundit")
 
     def by_archetype_uncapped(self, arch):
         """The account that shares an article (shares never count against caps)."""
@@ -1649,7 +1671,7 @@ def plan_social_week(ctx: dict, use_expected_articles: bool = False) -> dict:
                                                                   "label": f"{W.teams[a]['abbr']}-{W.teams[b]['abbr']} trade"},
                                          W.trade_facts(t), filed_team=a))
     for r in ctx.get("rumors", [])[:TRADE_RUMOR_MAX]:
-        account = acc.insider()
+        account = acc.insider(r.get("insider_key") if r.get("fresh") else None)
         if not account:
             break
         a, b = r["teams"]

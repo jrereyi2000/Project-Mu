@@ -380,6 +380,7 @@ TRADE_NOTE = ("An executed trade is fact: who went where, the picks, and the cap
 RUMOR_NOTE = ("A rumor is never a done deal. These are real conversations between two front offices (teams and the "
               "kinds of assets only): report them only as talks ('discussed', 'sources say', 'kicked the tires'), never "
               "as a trade that happened or was agreed. Don't name a player or give a figure the rumor doesn't give. "
+              "A player named in a leak may be named, but still never as traded. "
               "'Talks stalled' means no deal came of it. A rumor never outranks the facts: if get_league_transactions "
               "shows an executed trade, that is the story.")
 
@@ -477,6 +478,8 @@ def trade_line(trade, team_names=None) -> str:
     if cap:
         parts.append("cap this season: " + ", ".join(
             f"{nm(t)} {'+' if v > 0 else ''}{money_text(v)}" for t, v in sorted(cap.items(), key=lambda kv: -kv[1])))
+    for q in trade.get("talk_quotes") or []:
+        parts.append(f"GM {q.get('gm') or 'the GM'}: '{q.get('line')}'")
     return " · ".join(parts)
 
 
@@ -507,6 +510,43 @@ def rumor_line(rumor, team_names=None) -> str:
     return " · ".join([f"Week {rumor['week']}", "RUMOR, not a done deal", line, outcome])
 
 
+LEAK_STAGE_WORDS = {"OPENED": "have opened talks", "CLOSE": "talks are close", "STALLED": "talks stalled, no deal"}
+
+
+def leak_line(leak, team_names=None) -> str:
+    """One leaked talk as a rumor line, always labelled: 'Week 6 · RUMOR, not a done deal · per a source, the Jets and
+    the Patriots have talked about CB Tre Reyes; talks are close.' leak: a trade_rumors row with source LEAK
+    ({week, teams, stage, assets (positions), named}). A named player may be named (the leaker named him); positions
+    only otherwise. Never a figure, never a done deal: stage words are OPENED 'have opened talks', CLOSE 'talks are
+    close', STALLED 'talks stalled, no deal'."""
+    names = team_names or {}
+    nm = lambda abbr: names.get(abbr, abbr)
+    a, b = leak["teams"]
+    named = [f"{n.get('position') or ''} {n.get('name') or display_name(n)}".strip()
+             for n in leak.get("named") or []]
+    if not named:
+        seen, positions = set(), []
+        for x in leak.get("assets") or []:
+            pos = x.get("position") or x.get("pos")
+            if x.get("type", "PLAYER") != "PLAYER" or not pos or pos in seen:
+                continue
+            seen.add(pos)
+            positions.append(f"a {pos}")
+        named = positions
+    about = f" about {_join(named)}" if named else ""
+    stage = leak.get("stage")
+    if stage == "OPENED":
+        clause = f"have opened talks{about}"
+    elif stage == "STALLED":
+        clause = f"talked{about}; talks stalled, no deal"
+    elif stage == "CLOSE":
+        clause = f"have talked{about}; talks are close"
+    else:
+        clause = f"have talked{about}; {LEAK_STAGE_WORDS.get(stage, 'outcome not known: report it only as talks')}"
+    return " · ".join([f"Week {leak['week']}", "RUMOR, not a done deal",
+                       f"per a source, the {nm(a)} and the {nm(b)} {clause}"])
+
+
 def trades_block(trades, rumors, team_names=None, through_week=None) -> dict:
     """The briefs' `league_trades` block: executed trades new this edition (fact) and rumors new this edition.
     Empty dict when there is neither."""
@@ -517,7 +557,8 @@ def trades_block(trades, rumors, team_names=None, through_week=None) -> dict:
         block["executed_trades"] = [trade_line(t, team_names) for t in trades]
         block["trade_note"] = TRADE_NOTE
     if rumors:
-        block["rumors"] = [rumor_line(r, team_names) for r in rumors]
+        block["rumors"] = [leak_line(r, team_names) if r.get("source") == "LEAK" else rumor_line(r, team_names)
+                           for r in rumors]
         block["rumor_note"] = RUMOR_NOTE
     return block
 

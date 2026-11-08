@@ -6,6 +6,7 @@ import collections
 import json
 import re
 import unittest
+from unittest import mock
 
 from newsroom.social_desk import ROLE_CAPS, TARGET_POSTS, Accounts, Week, plan_social_week, plan_team_wakeup, tidy_name
 
@@ -497,3 +498,64 @@ class AgentWireMoveTests(unittest.TestCase):
         self.assertIn("BEAT_MOVE", [a["kind"] for a in plan["assignments"]])
         plan = plan_team_wakeup(moves_league([move(1, 16, notable=False)]), 16)
         self.assertNotIn("BEAT_MOVE", [a["kind"] for a in plan["assignments"]])
+
+
+class FakeTradeCursor:
+    """Answers every query with the same team rows; load_trades' other reads are patched."""
+
+    def __init__(self, team_rows):
+        self.team_rows, self.sql = team_rows, []
+
+    def execute(self, q, params=None):
+        self.sql.append(" ".join(q.split()))
+
+    def fetchall(self):
+        return self.team_rows
+
+
+def trade_leak(rid, week, stage="CLOSE", insider="SCHEFTER_TWEET", named=True):
+    """A trade_rumors leak row as fetch_rumors passes it through (source LEAK)."""
+    return {"rumor_id": f"leak:{rid}", "week": week, "teams": ["NYJ", "NE"], "source": "LEAK", "stage": stage,
+            "insider_key": insider, "outcome": "stalled" if stage == "STALLED" else "open",
+            "named": [{"player_id": 7, "name": "Tre Reyes", "position": "CB"}] if named else [],
+            "assets": [{"type": "PLAYER", "position": "CB", "from": "NE", "to": "NYJ"}]}
+
+
+class LeakRoutingTests(unittest.TestCase):
+    """Leaks on the Agent Wire (TRADE_LEAKS_PLAN U6): the insider who got it first, then everyone else."""
+
+    def load(self, week, fresh, older):
+        from newsroom.social_desk import load_trades
+
+        def fake(cur, season, w):
+            return [], {week: fresh, week - 1: older}.get(w, [])
+
+        with mock.patch("newsroom.db_tools.new_week_trades", side_effect=fake), \
+                mock.patch("newsroom.db_tools._team_names", return_value={"NYJ": "Jets", "NE": "Patriots"}):
+            return load_trades(FakeTradeCursor([("NYJ", 3), ("NE", 4)]), 2035, week)
+
+    def test_a_fresh_leak_is_insider_first_and_older_leaks_are_open(self):
+        _, rumors = self.load(8, [trade_leak(7, 7)], [trade_leak(6, 6)])
+        self.assertEqual([(r["id"], r["fresh"], r["insider_key"]) for r in rumors],
+                         [("leak:7", True, "SCHEFTER_TWEET"), ("leak:6", False, "SCHEFTER_TWEET")])
+        self.assertIn("per a source, the Jets and the Patriots have talked about CB Tre Reyes; talks are close",
+                      rumors[0]["line"])
+        self.assertEqual([r["teams"] for r in rumors], [[3, 4], [3, 4]])
+
+    def test_planner_gives_a_fresh_leak_to_its_insider(self):
+        from newsroom.social_desk import plan_social_week
+        ctx = moves_league([])
+        ctx["rumors"] = [{"id": "leak:7", "week": 8, "teams": [3, 4], "line": "per a source ...",
+                          "outcome": "open", "source": "LEAK", "insider_key": "SCHEFTER_TWEET", "fresh": True,
+                          "named": [{"player_id": 1, "name": "Tre Reyes", "position": "CB"}]}]
+        rumors = by_kind(plan_social_week(ctx))["TRADE_RUMOR"]
+        self.assertEqual([a["archetype"] for a in rumors], ["SCHEFTER_TWEET"])
+        self.assertIn("A player the leak names may be named", rumors[0]["facts"]["grounding"])
+
+    def test_the_two_rumor_cap_still_applies(self):
+        from newsroom.social_desk import TRADE_RUMOR_MAX, plan_social_week
+        ctx = moves_league([])
+        ctx["rumors"] = [{"id": f"leak:{i}", "week": 8, "teams": [3, 4], "line": "per a source ...",
+                          "outcome": "open", "source": "LEAK", "insider_key": "SCHEFTER_TWEET", "fresh": True}
+                         for i in range(3)]
+        self.assertEqual(len(by_kind(plan_social_week(ctx))["TRADE_RUMOR"]), TRADE_RUMOR_MAX)

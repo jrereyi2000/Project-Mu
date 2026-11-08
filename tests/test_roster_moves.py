@@ -203,5 +203,63 @@ class StarterRankTests(unittest.TestCase):
         self.assertFalse(rm.is_starter_rank("WR", None))
 
 
+DONE_WORDS = re.compile(r"\b(traded|acquired|acquires|agreed|completed|executed|sent)\b", re.I)
+LEAK_NAMES = {"NYJ": "Jets", "NE": "Patriots"}
+
+
+def leak(stage="CLOSE", named=True, **kw):
+    row = {"week": 6, "teams": ["NYJ", "NE"], "stage": stage, "insider_key": "SCHEFTER_TWEET",
+           "source": "LEAK", "status": "RUMOR",
+           "named": [{"player_id": 7, "name": "Tre Reyes", "position": "CB"}] if named else [],
+           "assets": [{"type": "PLAYER", "position": "CB", "from": "NE", "to": "NYJ"}]}
+    row.update(kw)
+    return row
+
+
+class LeakLineTests(unittest.TestCase):
+    def test_stage_wording(self):
+        self.assertEqual(rm.leak_line(leak("CLOSE"), LEAK_NAMES),
+                         "Week 6 · RUMOR, not a done deal · per a source, the Jets and the Patriots have talked "
+                         "about CB Tre Reyes; talks are close")
+        self.assertIn("the Jets and the Patriots have opened talks about CB Tre Reyes",
+                      rm.leak_line(leak("OPENED"), LEAK_NAMES))
+        self.assertTrue(rm.leak_line(leak("STALLED"), LEAK_NAMES).endswith(
+            "the Jets and the Patriots talked about CB Tre Reyes; talks stalled, no deal"))
+
+    def test_positions_only_when_the_leaker_names_nobody(self):
+        line = rm.leak_line(leak("CLOSE", named=False), LEAK_NAMES)
+        self.assertIn("have talked about a CB; talks are close", line)
+        self.assertNotIn("Tre Reyes", line)
+
+    def test_never_a_done_deal_or_a_figure(self):
+        for stage in ("OPENED", "CLOSE", "STALLED"):
+            for named in (True, False):
+                line = rm.leak_line(leak(stage, named), LEAK_NAMES)
+                self.assertIn("RUMOR, not a done deal", line)
+                self.assertIsNone(DONE_WORDS.search(line), line)
+                self.assertNotIn("$", line)
+
+    def test_rumor_note_allows_a_named_leak_player_but_never_as_traded(self):
+        self.assertIn("A player named in a leak may be named, but still never as traded.", rm.RUMOR_NOTE)
+
+    def test_trades_block_renders_leaks_with_leak_line(self):
+        block = rm.trades_block([], [leak("STALLED")], LEAK_NAMES, 6)
+        self.assertIn("per a source, the Jets and the Patriots", block["rumors"][0])
+        self.assertTrue(block["rumors"][0].endswith("talks stalled, no deal"))
+
+
+class TradeQuotesTests(unittest.TestCase):
+    def test_trade_line_appends_the_gm_quotes(self):
+        trade = {"week": 4, "team_a": "NYJ", "team_b": "NE",
+                 "legs": [{"type": "PLAYER", "from": "NE", "to": "NYJ", "player_name": "Rich Hanson",
+                           "position": "WR", "cap_hit_now": None}],
+                 "talk_quotes": [{"gm": "Silas Whitlock", "line": "We want him here.", "source": "LLM"},
+                                 {"gm": "Dana Okonkwo", "line": "He was never available.", "source": "TEMPLATE"}]}
+        line = rm.trade_line(trade, LEAK_NAMES)
+        self.assertTrue(line.endswith("GM Silas Whitlock: 'We want him here.' · "
+                                      "GM Dana Okonkwo: 'He was never available.'"))
+        self.assertNotIn("talk_quotes", line)
+
+
 if __name__ == "__main__":
     unittest.main()
