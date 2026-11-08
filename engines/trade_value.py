@@ -57,7 +57,8 @@ AGE_BANDS = ((0, 23), (24, 26), (27, 29), (30, 31), (32, 33), (34, 99))
 GENERIC_AGING = (1.5, 0.5, -0.3, -1.2, -2.2, -3.0)    # OVR a year by band, the prior the fit shrinks toward
 AGING_SHRINK = 20                                       # pseudo-observations of the generic curve
 # picks
-DRAFT_PICKS = 224
+DRAFT_PICKS = 256
+COMP_DECAY = 0.015                                      # §2.3: V_comp(r, s) = V(r, 32) * e^-COMP_DECAY*s
 PICK_YEARS = 4                                          # rookie deals are 4 years (2036 rookies: 177 of 188)
 ROOKIE_ESCALATOR = 1.05                                 # rookie cap hits rise ~5% a year
 ROOKIE_GROWTH = (2.5, 1.5, 1.5)                         # OVR a year in years 1-3: the 2036 OVR-by-experience table
@@ -334,17 +335,42 @@ def projected_slot(team_id, ctx_ranks):
     return (ctx_ranks or {}).get(team_id, 16)
 
 
+def comp_slot_of(pick):
+    """The compensatory slot index (1..N) of a pick, or None for a standard pick. A comp pick is recognized by an
+    explicit `comp_slot`, a non-empty `pick_suffix` (its digits, defaulting to 1 when it has none), or a
+    `slot_in_round`; `round` is the awarded round (3-7). Standard picks carry none of these."""
+    for key in ("comp_slot", "slot_in_round"):
+        v = pick.get(key)
+        if v:
+            return max(1, int(v))
+    suffix = pick.get("pick_suffix")
+    if suffix:
+        digits = "".join(c for c in str(suffix) if c.isdigit())
+        return max(1, int(digits)) if digits else 1
+    return None
+
+
 def pick_value(pick, ctx, fits, season):
-    """A draft pick's value to team T. pick: {draft_season, round, original_team_id}. ctx: {direction,
-    pick_affinity, slots {team_id: 1-32}} or None (neutral). Next year's pick uses the original team's
-    projected slot; later drafts use the middle of the round with one more year of discount per year out."""
+    """A draft pick's value to team T. pick: {draft_season, round, original_team_id} for a standard pick; a
+    compensatory pick also carries one of `pick_suffix` (non-empty), `comp_slot` or `slot_in_round` (see
+    comp_slot_of). ctx: {direction, pick_affinity, slots {team_id: 1-32}} or None (neutral). Next year's pick
+    uses the original team's projected slot; later drafts use the middle of the round with one more year of
+    discount per year out. A comp pick in round r slot s values at the round's last standard pick (overall
+    r*32) decayed e^-COMP_DECAY*s (§2.3), so it never exceeds that pick and decays with the slot."""
     out = pick["draft_season"] - season - 1
-    slot = projected_slot(pick["original_team_id"], (ctx or {}).get("slots")) if out == 0 else 16
-    overall = (pick["round"] - 1) * 32 + slot
     direction = (ctx or {}).get("direction") or "RETOOL"
     d = DISCOUNTS["RETOOL" if ctx is None else direction]
-    v = sum(dk * (w - ROOKIE_COST_WEIGHT * c) for w, c, dk in pick_years(overall, fits["pick"], fits["market"], d,
-                                                                          out))
+    comp = comp_slot_of(pick)
+    if comp:
+        overall = pick["round"] * 32              # the round's last standard pick
+        v = sum(dk * (w - ROOKIE_COST_WEIGHT * c)
+                for w, c, dk in pick_years(overall, fits["pick"], fits["market"], d, out))
+        v *= math.exp(-COMP_DECAY * comp)
+    else:
+        slot = projected_slot(pick["original_team_id"], (ctx or {}).get("slots")) if out == 0 else 16
+        overall = (pick["round"] - 1) * 32 + slot
+        v = sum(dk * (w - ROOKIE_COST_WEIGHT * c)
+                for w, c, dk in pick_years(overall, fits["pick"], fits["market"], d, out))
     if ctx is not None:
         v *= (ctx.get("pick_affinity") or 1.0) * PICK_DIRECTION.get(direction, 1.0)
     return round(v)

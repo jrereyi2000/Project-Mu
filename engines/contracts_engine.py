@@ -48,7 +48,7 @@ SAL_CAP_ROOM_BIAS_UNITS = 160_000
 
 
 # ------------------------------------------------------------- rookie scale ----
-def _rookie_scale(ref_cap_total_top=41_300_000, ref_total_last=4_000_000, decay=26.0, picks=224):
+def _rookie_scale(ref_cap_total_top=41_300_000, ref_total_last=4_000_000, decay=26.0, picks=256):
     """Four-year total value by overall pick at the reference cap. Estimate fitted by eye to the 2024 slotting
     (#1 ~ $41.3M, #32 ~ $15M, #64 ~ $7.5M, #100 ~ $5M, last pick ~ $4.1M): last + (top - last) e^-(p-1)/26.
     Strictly decreasing in whole dollars."""
@@ -58,8 +58,8 @@ def _rookie_scale(ref_cap_total_top=41_300_000, ref_total_last=4_000_000, decay=
 
 CBA = {
     "REFERENCE_CAP": 255_400_000,       # 2024 salary cap (real); every dollar table below is at this cap
-    "DRAFT_PICKS": 224,
-    "PICKS_PER_ROUND": 32,              # compensatory picks ignored: round = (pick - 1) // 32 + 1
+    "DRAFT_PICKS": 256,
+    "PICKS_PER_ROUND": 32,              # standard picks a round; round_for_overall_pick adds comp picks
     "ROOKIE_YEARS": 4,
     "ROOKIE_SCALE": _rookie_scale(),    # overall pick -> 4-year total value at REFERENCE_CAP (estimate)
     "ROOKIE_ESCALATOR": 1.05,           # rookie base salaries rise ~5% a year (engines/trade_value.py uses the same)
@@ -88,6 +88,29 @@ CBA = {
     "MIN_SAVE_CAP": (12_000 + 12_000) * 10_000,     # $240,000,000 (raw TeamSalaryCap = 12,000)
     "MAX_SAVE_CAP": (85_371 + 12_000) * 10_000,     # $973,710,000 (raw TeamSalaryCap = 85,371)
 }
+
+
+# ------------------------------------------------------- round boundaries ----
+def round_for_overall_pick(overall_pick, comp_schedule=None):
+    """Round (1-based) of an overall pick in a 32-picks-a-round draft.
+
+    With no `comp_schedule` the draft is a plain 32-per-round sequence and the round is
+    ``(overall_pick - 1) // 32 + 1`` (picks 1..224 -> rounds 1..7, 225+ -> round 8+).
+
+    `comp_schedule` is the per-round compensatory-pick counts (index 0 = round 1; rounds past its
+    length have none). Comp picks are appended after each round's 32 standard picks, so the total
+    picks through round r is ``32*r + sum(comp_schedule[:r])`` and every later round's overall
+    numbers shift: four Round-3 comp picks (``comp_schedule[2] == 4``) make Round 4 start at pick
+    101 instead of 97. Pure."""
+    if not comp_schedule:
+        return (overall_pick - 1) // 32 + 1
+    cum = 0
+    for r in range(1, 8):
+        comps = comp_schedule[r - 1] if r - 1 < len(comp_schedule) else 0
+        cum += comps
+        if overall_pick <= 32 * r + cum:
+            return r
+    return (overall_pick - 1) // 32 + 1
 
 
 # ---------------------------------------------------------------- helpers ----
@@ -327,11 +350,13 @@ def restructure(contract, year, amount):
     return out
 
 
-def rookie_contract(overall_pick, season, cap):
-    """The slotted 4-year deal for an overall pick (1-224), scaled from the reference cap to `cap`. The signing
+def rookie_contract(overall_pick, season, cap, comp_schedule=None):
+    """The slotted 4-year deal for an overall pick (1-256), scaled from the reference cap to `cap`. The signing
     bonus share falls with the pick (ROOKIE_BONUS_SHARE) and prorates over the 4 years; base salaries escalate 5% a
     year and never drop below the minimum for 0-3 accrued seasons. Guaranteed base (estimate of practice): 1st
-    round all four years, 2nd round year 1, later rounds none."""
+    round all four years, 2nd round year 1, later rounds none. `comp_schedule` (optional) is the per-round
+    compensatory-pick counts passed to `round_for_overall_pick`, so a comp pick's `drafted_round` lands in its
+    awarded round (3-7) instead of the static round for an overall pick past 224."""
     if not 1 <= overall_pick <= CBA["DRAFT_PICKS"]:
         raise ValueError(f"overall pick {overall_pick} outside 1-{CBA['DRAFT_PICKS']}")
     years = CBA["ROOKIE_YEARS"]
@@ -341,7 +366,7 @@ def rookie_contract(overall_pick, season, cap):
     weights = [CBA["ROOKIE_ESCALATOR"] ** i for i in range(years)]
     base_total = total - bonus
     salary = [max(minimum_salary(i, cap), int(round(base_total * w / sum(weights)))) for i, w in enumerate(weights)]
-    rnd = (overall_pick - 1) // CBA["PICKS_PER_ROUND"] + 1
+    rnd = round_for_overall_pick(overall_pick, comp_schedule)
     guaranteed = sum(salary) if rnd == 1 else salary[0] if rnd == 2 else 0
     return {"length": years, "current_year": 0, "salary_by_year": salary, "bonus_by_year": _prorate(bonus, years),
             "guaranteed": guaranteed, "contract_type": "ROOKIE", "signed_season": season,
