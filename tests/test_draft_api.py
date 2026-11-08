@@ -1,5 +1,7 @@
 """Tests for engines/college_stats.py and server/draft_api.py (Draft Central; docs/done/DRAFT_CENTRAL_PLAN.md)."""
+import json
 import unittest
+import uuid
 from unittest import mock
 
 from fastapi import FastAPI
@@ -194,3 +196,128 @@ class DraftApiRoutesTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ----------------------------------------------------------------------------------- V2.10 endpoints ----
+def _fake_conn(cur):
+    class Conn:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def cursor(self):
+            return cur
+
+    return Conn()
+
+
+def _hidden_keys(payload):
+    found, stack = set(), [payload]
+    while stack:
+        x = stack.pop()
+        if isinstance(x, dict):
+            found |= {str(k).upper() for k in x}
+            stack.extend(x.values())
+        elif isinstance(x, list):
+            stack.extend(x)
+    return found
+
+
+def test_report_endpoint_public_shape_and_no_hidden_keys():
+    app = FastAPI()
+    app.include_router(dapi.router)
+    client = TestClient(app)
+    uid = "00000000-0000-0000-0000-000000000001"
+    report = {
+        "prospect_uid": uid, "prospect_key": "2037:QB0:QB", "draft_season": 2037, "edition": "FALL",
+        "step": 4, "grade": 80.0, "rank": 1, "round_label": "1st round", "role": "DAY1_STARTER",
+        "role_words": "a Day 1 starter",
+        "traits": [{"trait": "arm", "label": "arm strength", "score": 7.5, "word": "plus"}],
+        "strengths": ["arm strength"], "concerns": [], "flags": ["INJURY_HISTORY"],
+        "body": {"summary": "s", "strengths": "s", "concerns": "c", "production": "p", "athletic": "",
+                 "projection": "p", "bottom_line": "b"},
+        "text_source": "TEMPLATE",
+    }
+    cur = mock.MagicMock()
+    with mock.patch.object(dapi, "_connect", return_value=_fake_conn(cur)), \
+         mock.patch.object(dapi, "_league_state", return_value=(2036, 1)), \
+         mock.patch("engines.prospect_ids.uid_for", return_value=uuid.UUID(uid)), \
+         mock.patch("engines.scouting_reports.report_for", return_value=report), \
+         mock.patch("engines.college_stats.step_label", return_value="College Week 4 (NFL Wk 4)"):
+        r = client.get("/api/draft/prospect/2037:QB0:QB/report?draft_season=2037&edition=FALL")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["prospect_uid"] == uid
+    assert body["edition"] == "FALL"
+    assert body["step_label"] == "College Week 4 (NFL Wk 4)"
+    assert body["scout"] == {"name": "Mu Scouting Department", "scout_id": None}
+    assert body["editions"] == ["FALL", "BOWLS", "FINAL"]
+    assert body["role_words"] == "a Day 1 starter"
+    assert body["traits"][0]["score"] == 7.5
+    assert body["flags"] == [{"flag": "INJURY_HISTORY", "words": "an injury history"}]
+    assert not (_hidden_keys(body) & {"TRUE_VALUE", "RATINGS", "ERR", "IMPACT", "OVR", "TRUE_RANK", "VALUE_INPUTS"})
+
+
+def test_report_endpoint_404_when_none():
+    app = FastAPI()
+    app.include_router(dapi.router)
+    client = TestClient(app)
+    cur = mock.MagicMock()
+    with mock.patch.object(dapi, "_connect", return_value=_fake_conn(cur)), \
+         mock.patch.object(dapi, "_league_state", return_value=(2036, 1)), \
+         mock.patch("engines.prospect_ids.uid_for", return_value=None):
+        r = client.get("/api/draft/prospect/2037:NOSUCH:QB/report?draft_season=2037")
+    assert r.status_code == 404
+
+
+def test_interviews_endpoint_shape():
+    app = FastAPI()
+    app.include_router(dapi.router)
+    client = TestClient(app)
+    cur = mock.MagicMock()
+    cur.fetchall.return_value = [
+        (1, "00000000-0000-0000-0000-000000000001", "2037:QB0:QB", "QB Zero", "VISIT", "OPEN",
+         6, json.dumps([{"seq": 1, "topic": "FOOTBALL_IQ", "grade": "SOLID", "classified_by": "MENU"}]),
+         "SOLID", 42),
+    ]
+    window = {"latest_step": 25, "combine_open": False, "visit_open": True, "visit_for_step": 26}
+    budget = {"combine_used": 2, "combine_left": 13, "visits_used": 1, "visits_left": 5}
+    eligible = [{"prospect_uid": "00000000-0000-0000-0000-000000000002", "prospect_key": "2037:QB1:QB",
+                 "full_name": "QB One", "position": "QB", "college": "UGA", "rank": 12, "kinds": ["VISIT"]}]
+    with mock.patch.object(dapi, "_connect", return_value=_fake_conn(cur)), \
+         mock.patch.object(dapi, "_league_state", return_value=(2036, 1)), \
+         mock.patch("server.franchise_api.team_row", return_value={"id": 1, "abbr": "CAR", "name": "Panthers"}), \
+         mock.patch("server.franchise_api.require_user_team", return_value=None), \
+         mock.patch("engines.scouting_interviews.window", return_value=window), \
+         mock.patch("engines.scouting_interviews.budget", return_value=budget), \
+         mock.patch("engines.scouting_interviews.eligible", return_value=eligible):
+        r = client.get("/api/draft/interviews?team=CAR&draft_season=2037")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["team"] == "CAR"
+    assert body["draft_season"] == 2037
+    assert body["window"] == window
+    assert body["budget"] == budget
+    assert body["eligible"] == eligible
+    iv = body["interviews"][0]
+    assert iv == {"id": 1, "prospect_uid": "00000000-0000-0000-0000-000000000001",
+                  "prospect_key": "2037:QB0:QB", "full_name": "QB Zero", "kind": "VISIT", "status": "OPEN",
+                  "questions_left": 5, "summary_grade": "SOLID", "thread_id": 42}
+
+
+def test_interviews_endpoint_403_for_non_user_team():
+    app = FastAPI()
+    app.include_router(dapi.router)
+    client = TestClient(app)
+    cur = mock.MagicMock()
+
+    def forbidden(team):
+        raise dapi.HTTPException(403, "not one of your teams")
+
+    with mock.patch.object(dapi, "_connect", return_value=_fake_conn(cur)), \
+         mock.patch("server.franchise_api.team_row", return_value={"id": 2, "abbr": "ATL", "name": "Falcons"}), \
+         mock.patch("server.franchise_api.require_user_team", side_effect=forbidden):
+        r = client.get("/api/draft/interviews?team=ATL&draft_season=2037")
+    assert r.status_code == 403

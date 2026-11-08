@@ -256,6 +256,30 @@ def get_draft_board(
         }
 
 
+@router.get("/prospect/{prospect_key:path}/report")
+def get_prospect_report(prospect_key: str, draft_season: Optional[int] = None, edition: Optional[str] = None):
+    """One prospect's latest (or named) scouting report edition (SCOUTING_REVAMP_PLAN.md §2.7). Public fields only:
+    no rating, err, impact or OVR leaves this endpoint. 404 when the prospect has no report."""
+    from engines import prospect_ids
+    from engines import scouting_reports
+    with _connect() as conn:
+        cur = conn.cursor()
+        cur_season, _ = _league_state(cur)
+        ds = draft_season if draft_season is not None else (cur_season + 1)
+        uid = prospect_ids.uid_for(cur, ds, prospect_key)
+        if uid is None:
+            raise HTTPException(404, f"No scouting report for prospect '{prospect_key}'")
+        report = scouting_reports.report_for(cur, uid, edition=edition)
+        if not report:
+            raise HTTPException(404, f"No scouting report for prospect '{prospect_key}'")
+        report["step_label"] = cs.step_label(report["step"])
+        report["scout"] = {"name": "Mu Scouting Department", "scout_id": None}
+        report["editions"] = list(scouting_reports.EDITIONS)
+        report["flags"] = [{"flag": f, "words": scouting_reports.FLAG_WORDS.get(f, f)}
+                           for f in report.get("flags", [])]
+        return report
+
+
 @router.get("/prospect/{prospect_key:path}")
 def get_prospect_dossier(prospect_key: str, step: Optional[int] = None):
     """Full Scouting Dossier for one prospect: bio, cumulative college stats, game log, combine card, and timeline."""
@@ -683,3 +707,46 @@ def war_room_start_round(n: int, x_debug_token: Optional[str] = Header(None)):
         return _run_war_room_action("start_round", None, n, llm)
     finally:
         flush(llm)
+
+
+@router.get("/interviews")
+def get_draft_interviews(team: str, draft_season: Optional[int] = None):
+    """JR's combine interviews and top-30 visits for one of his teams (SCOUTING_REVAMP_PLAN.md §2.7): the window,
+    budget, still-eligible prospects and past interviews with their inbox thread ids. Reads only, gated by
+    franchise_api.require_user_team; interview writes go through the inbox API."""
+    import json
+    from server import franchise_api as fapi
+    from engines import scouting_interviews as si
+    with _connect() as conn:
+        cur = conn.cursor()
+        trow = fapi.team_row(cur, team)
+        fapi.require_user_team(trow)
+        cur_season, _ = _league_state(cur)
+        ds = draft_season if draft_season is not None else (cur_season + 1)
+        window = si.window(cur, ds)
+        budget = si.budget(cur, ds, trow["id"])
+        eligible = si.eligible(cur, ds, trow["id"])
+        cur.execute("""SELECT i.id, i.prospect_uid, i.prospect_key, d.full_name, i.kind, i.status,
+                              i.questions_max, i.turns, i.summary_grade, i.thread_id
+                       FROM scout_interviews i
+                       LEFT JOIN scout_prospects sp ON sp.draft_season = i.draft_season
+                            AND sp.prospect_key = i.prospect_key
+                       LEFT JOIN draft_prospects d ON d.id = sp.prospect_id
+                       WHERE i.draft_season = %s AND i.team_id = %s
+                       ORDER BY i.id""", (ds, trow["id"]))
+        interviews = []
+        for iid, uid, pkey, full_name, kind, status, qmax, turns, summary_grade, thread_id in cur.fetchall():
+            turns_list = json.loads(turns) if isinstance(turns, str) else (turns or [])
+            interviews.append({
+                "id": iid,
+                "prospect_uid": str(uid) if uid is not None else None,
+                "prospect_key": pkey,
+                "full_name": full_name,
+                "kind": kind,
+                "status": status,
+                "questions_left": (qmax or 0) - len(turns_list),
+                "summary_grade": summary_grade,
+                "thread_id": thread_id,
+            })
+        return {"team": trow["abbr"], "draft_season": ds, "window": window, "budget": budget,
+                "eligible": eligible, "interviews": interviews}

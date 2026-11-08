@@ -409,7 +409,7 @@ def compute(cur, draft_season, step, dry_run=False):
             "prev_step": prev_step}
 
 
-def _write_step(cur, draft_season, step, season, out, keep_llm=None):
+def _write_step(cur, draft_season, step, season, out, keep_llm=None, keep_reports=None):
     s_season, week, stage = step_when(step, season)
     n_events = sum(len(v) for v in out["events"].values())
     cur.execute("""INSERT INTO scout_runs (draft_season, step, season, week, stage, params, n_events)
@@ -437,6 +437,19 @@ def _write_step(cur, draft_season, step, season, out, keep_llm=None):
     for row in out.get("boards") or []:
         cur.execute("""INSERT INTO scout_team_boards (draft_season, step, team_id, prospect_key, team_grade, team_rank,
                            fit, bias, err) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)""", row)
+    if out.get("reports"):
+        from engines import scouting_reports
+        rows = list(out["reports"])
+        if keep_reports:
+            for r in rows:
+                old = keep_reports.get((str(r.get("prospect_uid")), r.get("edition")))
+                if old and old[0] == float(r.get("grade")) and old[1] == int(r.get("rank")):
+                    r["body"], r["text_source"] = old[2], "LLM"
+        cur.executemany(
+            """INSERT INTO scout_reports (draft_season, step, prospect_uid, prospect_key, edition, grade, rank,
+                   round_label, role, traits, strengths, concerns, flags, body, text_source)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+            scouting_reports.report_rows(rows))
     return n_events
 
 
@@ -451,11 +464,15 @@ def run(cur, draft_season, step, dry_run=False, replace=False, log=print, extras
     if stored and not replace and not dry_run:
         log(f"scouting {draft_season} step {step}: already stored (use --replace to redraw)")
         return None
-    keep = {}
+    keep, keep_reports = {}, {}
     if stored and replace and not dry_run:
         cur.execute("""SELECT prospect_key, kind, seq, headline, blurb, text_source FROM scout_events
                        WHERE draft_season = %s AND step = %s AND text_source = 'LLM'""", (draft_season, step))
         keep = {(k, kind, seq): (h, b, src) for k, kind, seq, h, b, src in cur.fetchall()}
+        cur.execute("""SELECT prospect_uid, edition, grade, rank, body FROM scout_reports
+                       WHERE draft_season = %s AND step = %s AND text_source = 'LLM'""", (draft_season, step))
+        keep_reports = {(str(uid), ed): (float(g), r, json.loads(b) if isinstance(b, str) else b)
+                        for uid, ed, g, r, b in cur.fetchall()}
         cur.execute("DELETE FROM scout_runs WHERE draft_season = %s AND step = %s", (draft_season, step))
     out = compute(cur, draft_season, step, dry_run)
     out["params"] = params()
@@ -470,7 +487,7 @@ def run(cur, draft_season, step, dry_run=False, replace=False, log=print, extras
         report(out, step, log)
         log("  dry run: nothing written")
         return out
-    n = _write_step(cur, draft_season, step, season, out, keep)
+    n = _write_step(cur, draft_season, step, season, out, keep, keep_reports)
     log(f"scouting {draft_season} step {step}: {len(out['cons'])} prospects, {n} events stored")
     return out
 
@@ -545,6 +562,17 @@ def stored_visits(cur, draft_season, step):
 BOARD_POOL = 200                      # team boards look at the consensus top 200 and store their top 100
 
 
+def _user_teams():
+    """The active franchise's user team abbreviations (db/franchises.active_entry, the same source as
+    server/franchise_api.user_teams); [] when none are registered."""
+    try:
+        from db.franchises import active_entry
+        _, entry = active_entry()
+    except Exception:
+        return []
+    return [t.upper() for t in ((entry or {}).get("user_teams") or [])]
+
+
 def default_extras(cur, out, step, season):
     """Top-30 VISITs (steps 25-26) and the 32 team boards for the step (scouting_boards)."""
     from engines import scouting_boards as sb
@@ -563,13 +591,25 @@ def default_extras(cur, out, step, season):
                  for k, r in sorted(cons.items(), key=lambda x: x[1]["rank"])[:100]]
         cur.execute("SELECT id, abbreviation, name FROM teams")
         names = {r[0]: (r[1], r[2]) for r in cur.fetchall()}
-        for tid, key in ev.visits(step, {t: {"need_groups": c["need_groups"]} for t, c in ctxs.items()}, cands,
-                                  draft_season):
-            evs = out["events"].setdefault(key, [])
-            e = dict(ev.visit_event(by_key[key], *names[tid]), team_id=tid)
-            e["seq"] = sum(1 for x in evs if x["kind"] == "VISIT")
-            evs.append(e)
-            visited.setdefault(tid, set()).add(key)
+        draw = ev.visits(step, {t: {"need_groups": c["need_groups"]} for t, c in ctxs.items()}, cands, draft_season)
+        by_team = {}
+        for tid, key in draw:
+            by_team.setdefault(tid, []).append(key)
+        # JR's own teams swap their seeded draw for his interviews (JR + seeded fill to VISITS_PER_STEP, §2.5);
+        # CPU teams keep their seeded draw unchanged.
+        from engines import scouting_interviews as si
+        user_tids = {tid for tid, (abbr, _) in names.items() if abbr in _user_teams()}
+        for tid, keys in by_team.items():
+            picks = list(keys)
+            if tid in user_tids:
+                jr = si.jr_visit_keys(cur, draft_season, step, tid)
+                picks = jr + [k for k in picks if k not in jr][:si.VISITS_PER_STEP - len(jr)]
+            for key in picks:
+                evs = out["events"].setdefault(key, [])
+                e = dict(ev.visit_event(by_key[key], *names[tid]), team_id=tid)
+                e["seq"] = sum(1 for x in evs if x["kind"] == "VISIT")
+                evs.append(e)
+                visited.setdefault(tid, set()).add(key)
     vols = volatility(cur, draft_season, step, cons)
     knots = sv.grade_map([p["V"] for p in cls if p.get("status") != "WITHDRAWN"])
     first = out["first_step"]
@@ -584,6 +624,15 @@ def default_extras(cur, out, step, season):
     out["params"] = dict(out.get("params") or params(), boards={"sigma_base": sb.SIGMA_BASE, "rho": sb.RHO,
                                                                 "sigma_res": sb.SIGMA_RES, "phi": sb.PHI,
                                                                 "reach_limit": sb.REACH_LIMIT})
+    # report editions (§2.5): FALL at the class's first step, BOWLS at 21, FINAL at 26
+    from engines import prospect_ids, scouting_reports
+    ed = scouting_reports.edition_for(step, out["first_step"])
+    if ed:
+        uids = {key: uid for uid, key, status in prospect_ids.class_ids(cur, draft_season).values()
+                if status == prospect_ids.OK}
+        out["reports"] = scouting_reports.build_edition(cls, cons, out["events"],
+                                                        scouting_reports.load_ratings(cur, draft_season),
+                                                        uids, step, out["first_step"], draft_season, vols)
     return out
 
 
