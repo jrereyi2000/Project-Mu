@@ -274,7 +274,7 @@ def get_prospect_report(prospect_key: str, draft_season: Optional[int] = None, e
             raise HTTPException(404, f"No scouting report for prospect '{prospect_key}'")
         report["step_label"] = cs.step_label(report["step"])
         report["scout"] = {"name": "Mu Scouting Department", "scout_id": None}
-        report["editions"] = list(scouting_reports.EDITIONS)
+        report["editions"] = scouting_reports.editions_for(cur, uid)
         report["flags"] = [{"flag": f, "words": scouting_reports.FLAG_WORDS.get(f, f)}
                            for f in report.get("flags", [])]
         return report

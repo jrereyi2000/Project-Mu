@@ -245,6 +245,7 @@ def test_report_endpoint_public_shape_and_no_hidden_keys():
          mock.patch.object(dapi, "_league_state", return_value=(2036, 1)), \
          mock.patch("engines.prospect_ids.uid_for", return_value=uuid.UUID(uid)), \
          mock.patch("engines.scouting_reports.report_for", return_value=report), \
+         mock.patch("engines.scouting_reports.editions_for", return_value=["FALL", "FINAL"]), \
          mock.patch("engines.college_stats.step_label", return_value="College Week 4 (NFL Wk 4)"):
         r = client.get("/api/draft/prospect/2037:QB0:QB/report?draft_season=2037&edition=FALL")
     assert r.status_code == 200
@@ -253,7 +254,7 @@ def test_report_endpoint_public_shape_and_no_hidden_keys():
     assert body["edition"] == "FALL"
     assert body["step_label"] == "College Week 4 (NFL Wk 4)"
     assert body["scout"] == {"name": "Mu Scouting Department", "scout_id": None}
-    assert body["editions"] == ["FALL", "BOWLS", "FINAL"]
+    assert body["editions"] == ["FALL", "FINAL"]
     assert body["role_words"] == "a Day 1 starter"
     assert body["traits"][0]["score"] == 7.5
     assert body["flags"] == [{"flag": "INJURY_HISTORY", "words": "an injury history"}]

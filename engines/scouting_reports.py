@@ -508,6 +508,14 @@ def report_for(cur, prospect_uid, edition=None):
     return d
 
 
+def editions_for(cur, prospect_uid):
+    """The editions actually stored for a prospect, in chronological (step) order. [] without the table."""
+    if not _table(cur, "scout_reports"):
+        return []
+    cur.execute("SELECT edition FROM scout_reports WHERE prospect_uid = %s ORDER BY step", (str(prospect_uid),))
+    return [r[0] for r in cur.fetchall()]
+
+
 # ---------------------------------------------------------------------- cli ----
 def _connect():
     import psycopg

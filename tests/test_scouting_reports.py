@@ -289,6 +289,16 @@ def test_scout_report_resolves_alias_and_respects_through_step():
 
 
 # ---------------------------------------------------------------------------------------------- T-R9 ----
+def test_editions_for_returns_stored_editions_in_step_order():
+    conn = _db()
+    uid = _uid(0)
+    _insert_report(conn, uid, "2037:QB0:QB", 1, "FINAL", 26)
+    _insert_report(conn, uid, "2037:QB0:QB", 1, "FALL", 4)   # stored out of step order; chronological wins
+    cur = FakeCursor(conn)
+    assert sr.editions_for(cur, uid) == ["FALL", "FINAL"]
+    assert sr.editions_for(cur, _uid(9)) == []
+
+
 def test_scout_voice_hook_is_neutral():
     dept = sv.department_voice()
     assert dept.scout_id is None and dept.name is None and dept.region is None and dept.lens is None
