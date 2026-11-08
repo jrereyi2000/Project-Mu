@@ -304,3 +304,17 @@ def test_jc2a_year_two_is_carried_into_the_next_class():
         (SEASON, 3, 20), (DRAFT, 3, 20)]
     jc_for_class = [a for a in result["awards"] if a["award_kind"] == "JC2A"]
     assert len(jc_for_class) == 1 and jc_for_class[0]["draft_season"] == DRAFT
+
+
+def test_two_consecutive_class_runs_persist_both_jc2a_picks():
+    # One departure season yields one Round-3 pick in each of the next two drafts; each class's run owns its pick.
+    cur = _fixture(departures=DEPARTURES)
+    run.award_and_persist(cur, SEASON, DRAFT, league_apys=LEAGUE_APYS, jc2a_enabled=True)
+    run.award_and_persist(cur, SEASON + 1, DRAFT + 1, league_apys=LEAGUE_APYS, jc2a_enabled=True)
+
+    jc_awards = sorted((a["draft_season"], a["team_id"], a["round"]) for a in cur.comp_awards
+                       if a["award_kind"] == "JC2A")
+    assert jc_awards == [(DRAFT, 20, 3), (DRAFT + 1, 20, 3)]
+    jc_picks = sorted((p["draft_season"], p["overall_pick"]) for p in cur.draft_picks if p["source"] == "JC2A")
+    # In DRAFT it follows the Round-3 CBA comp (overall 98); in DRAFT+1 it is the only Round-3 comp (overall 97).
+    assert jc_picks == [(DRAFT, 98), (DRAFT + 1, 97)]
