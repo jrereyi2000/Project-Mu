@@ -54,7 +54,7 @@ Engines decide every outcome. The agent on the other side answers in its own voi
 - D1: JR may control any number of GM, coach and player personas. Threads are (controlled persona ↔ counterpart persona). Controlled-player mode isn't designed yet, but the model must allow it.
 - D2: One inbox per team. The team's beat writer can message JR. Players speak for themselves. JR's on-record answers are stored for articles later.
 - D3: No owner threads in this build and no stub kind; `owner` stays a valid counterpart type. A short options section says what owner agents could own later. When they come, start with the cap mandate and job security.
-- D4: Reporter talks in the inbox are one-on-one interviews. Postgame press conferences are a separate multi-agent panel owned by [`PRESS_CONFERENCE_PLAN.md`](../not_started/PRESS_CONFERENCE_PLAN.md); the inbox only carries its `PRESS` notice.
+- D4: Reporter talks in the inbox are one-on-one interviews. Postgame press conferences are a separate multi-agent panel owned by [`PRESS_CONFERENCE_PLAN.md`](./PRESS_CONFERENCE_PLAN.md); the inbox only carries its `PRESS` notice.
 - D5: The inbox is built first; [`TRADE_NEGOTIATIONS_PLAN.md`](../not_started/TRADE_NEGOTIATIONS_PLAN.md) (V2.11) then extends `GM_TALK`.
 - D6: The franchise registry's `user_teams` is the source of truth for which teams JR controls, not `gm_team_settings.user_controlled`. Madden keeps all 32 teams as user teams to stop CPU moves.
 - D7: The language model is the default way counterparts speak (`MU_INBOX_LLM` on, `=0` for templates). It runs with an 8 s budget set by the spike, and the `llm_compare` gate runs before the plan closes; if the gate fails, templates stay the default until the prompt is fixed.
