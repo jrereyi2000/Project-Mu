@@ -215,7 +215,7 @@ def test_an_agreement_carries_the_deals_flags_and_a_resumed_talk_with_none_still
     assert seen["flags"] == ["talks:1", "auto_approved"]
 
 
-OPEN_TALK_ROW = (7, 2036, 24, "OFFSEASON", 3, 1, 2, "CPU", 1, None, 0, None, "OPEN", None, 4, 4, None,
+OPEN_TALK_ROW = (7, 2036, 24, "OFFSEASON", 3, 1, 2, "CPU", 1, None, 0, None, "OPEN", None, 4, 4, None, "INJURY",
                  "2026-01-01", "2026-01-02")
 
 
@@ -235,6 +235,27 @@ def test_open_talk_remembers_the_deals_flags():
     d["flags"] = ["stage:3", "shape:BLOCKBUSTER"]
     talk = gt.open_talk(ScriptedCur(open_talk_router), b, v, d, random.Random(1))
     assert talk["id"] == 7 and talk["flags"] == ["stage:3", "shape:BLOCKBUSTER"]
+
+
+def test_open_talk_stores_the_deals_trigger_for_a_carried_talk():
+    b, v = setup()
+    cur = ScriptedCur(open_talk_router)
+    d = deal(OPENING)
+    d["trigger"] = "SELL"
+    talk = gt.open_talk(cur, b, v, d, random.Random(1))
+    insert = next(p for s, p in zip(cur.sql, cur.params) if "INSERT INTO gm_trade_negotiations" in s)
+    assert insert[-1] == "SELL" and talk["trigger_kind"] == "INJURY"    # the row is what a resumed talk reads
+
+
+def test_an_agreed_talk_uses_the_trigger_stored_on_it(monkeypatch):
+    b, v = setup()
+    seen = {}
+    monkeypatch.setattr(ge, "rationale_for", lambda *a, **k: {"rationale_a": "", "rationale_b": "",
+                                                              "headline": "", "source": "TEMPLATE"})
+    monkeypatch.setattr(ge, "store", lambda *a, **k: (seen.update(k), 9)[1])
+    pid = gt._agree(ScriptedCur(lambda s, p: []), b, v, dict(TALK, status="OPEN", trigger_kind="INJURY"),
+                    OPENING, None)
+    assert pid == 9 and seen["trigger"] == "INJURY"
 
 
 def _run_limit_turns():
@@ -277,8 +298,8 @@ def test_a_run_limit_stall_stores_the_last_offer_not_the_reject(monkeypatch):
 def test_a_run_limit_stall_leaks_at_the_stalled_stage(monkeypatch):
     seen = []
 
-    def fake_events(talk, turn, books, rng):
-        seen.append((gt._leak_stage(talk, turn), bool(turn.get("assets"))))
+    def fake_events(talk, turn, books, rng, turns=None):
+        seen.append((gt._leak_stage(talk, turn, turns), bool(turn.get("assets"))))
         return []
 
     b, v, stored, talk, status = _run_limit_stall(monkeypatch, extra={"leak_events": fake_events})
@@ -348,6 +369,34 @@ def test_leaks_never_on_an_agreed_turn_and_at_most_one_per_week():
     assert gt.leak_events(dict(TALK, status="OPEN"), dict(turn, action="ACCEPT"), b, random.Random(1)) == []
     assert all(len(gt.leak_events(dict(TALK, status="OPEN"), turn, b, random.Random(i))) <= 1
                for i in range(200))
+
+
+def test_the_open_stage_is_the_first_turn_a_gm_speaks():
+    """A USER talk's turn 1 is JR's own offer: the GM's first reply is what "talks opened" means, not turn 1."""
+    talk = dict(TALK, status="OPEN")
+    jr_offer = {"turn_no": 1, "actor": "JR", "action": "OFFER"}
+    gm_reply = {"turn_no": 2, "actor": "GM", "action": "COUNTER"}
+    turns = [jr_offer, gm_reply]
+    assert gt._leak_stage(talk, jr_offer, turns) is None
+    assert gt._leak_stage(talk, gm_reply, turns) == "OPENED"
+    later = turns + [{"turn_no": 3, "actor": "JR", "action": "COUNTER"},
+                     {"turn_no": 4, "actor": "GM", "action": "COUNTER"}]
+    assert gt._leak_stage(talk, later[-1], later) is None
+    cpu = [{"turn_no": 1, "actor": "GM_A", "action": "OFFER"}]
+    assert gt._leak_stage(talk, cpu[0], cpu) == "OPENED"
+    assert gt._leak_stage(talk, cpu[0]) == "OPENED"          # no transcript given: the old turn-1 rule
+
+
+def test_record_leaks_is_the_public_writer(monkeypatch):
+    b, v = setup()
+    leak = gt.Leak(negotiation_id=1, turn_no=2, season=2036, week=4, leaker_team_id=1, stage="OPENED",
+                   named_player_ids=[], detail={"teams": ["AAA", "BBB"]}, insider_key=None)
+    monkeypatch.setattr(gt, "leak_events", lambda *a, **k: [leak])
+    stored = []
+    monkeypatch.setattr(gt, "_store_leak", lambda cur, l: stored.append(l) or True)
+    n = gt.record_leaks(ScriptedCur(lambda s, p: []), dict(TALK), {"turn_no": 2, "actor": "GM"}, b,
+                        random.Random(1), [{"turn_no": 2, "actor": "GM"}])
+    assert n == 1 and stored == [leak]
 
 
 # ------------------------------------------------------------------ transcript ----

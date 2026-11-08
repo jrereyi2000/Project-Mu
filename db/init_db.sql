@@ -895,6 +895,8 @@ CREATE TABLE IF NOT EXISTS gm_trade_negotiations (
     patience SMALLINT NOT NULL,                       -- rounds the GM started with (CPU: the initiator's)
     patience_left SMALLINT NOT NULL,                  -- (CPU: the other GM's)
     proposal_id INT REFERENCES gm_trade_proposals(id) ON DELETE SET NULL,   -- the agreed / stalled deal
+    trigger_kind VARCHAR(8)                           -- the engine trigger a talk was opened from (CPU talks)
+        CHECK (trigger_kind IN ('NEED', 'INJURY', 'SELL', 'DRAFT', 'USER')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

@@ -338,7 +338,7 @@ def call_with_timeout(llm, prompt, seconds):
 # --------------------------------------------------------------- DB helpers ----
 _TALK_COLS = ("id", "season", "week", "trade_window", "offseason_stage", "user_team_id", "gm_team_id", "kind",
               "initiator_team_id", "source_proposal_id", "carried_weeks", "published_at", "status", "status_reason",
-              "patience", "patience_left", "proposal_id", "created_at", "updated_at")
+              "patience", "patience_left", "proposal_id", "trigger_kind", "created_at", "updated_at")
 _TURN_COLS = ("turn_no", "actor", "action", "assets", "surplus_user", "surplus_gm", "mood", "legality", "message",
               "message_source", "actor_team_id", "options", "choice", "choice_source", "posture", "created_at")
 
@@ -420,12 +420,11 @@ def open_talk(cur, b, valuer, deal, rng):
     p_a = _gn().patience_for(_gm(b, a).get("aggressiveness", 0.5))
     p_b = _gn().patience_for(_gm(b, other).get("aggressiveness", 0.5))
     cur.execute("""INSERT INTO gm_trade_negotiations (season, week, trade_window, offseason_stage, user_team_id,
-                       gm_team_id, kind, initiator_team_id, patience, patience_left)
-                   VALUES (%s, %s, %s, %s, %s, %s, 'CPU', %s, %s, %s) RETURNING id""",
-                (season, week, window, stage, a, other, a, p_a, p_b))
+                       gm_team_id, kind, initiator_team_id, patience, patience_left, trigger_kind)
+                   VALUES (%s, %s, %s, %s, %s, %s, 'CPU', %s, %s, %s, %s) RETURNING id""",
+                (season, week, window, stage, a, other, a, p_a, p_b, deal.get("trigger") or "NEED"))
     nid = cur.fetchone()[0]
     talk = _talk(cur, nid)
-    talk["trigger"] = deal.get("trigger")
     talk["flags"] = list(deal.get("flags") or [])    # the stored path's flags; a resumed talk has none
     opener = dict(talk, opening=True)
     options = options_for(b, valuer, opener, a, deal["assets"])
@@ -512,7 +511,7 @@ def _stall(cur, b, valuer, talk, offer_assets, reason, status="STALLED"):
         _set_status(cur, nid, status, reason)
         return None
     deal = {"a": _initiator(talk), "b": talk["gm_team_id"], "assets": offer_assets,
-            "trigger": talk.get("trigger") or "NEED"}
+            "trigger": talk.get("trigger_kind") or "NEED"}
     rat = _ge().rationale_for(b, deal, None)
     flags = [f"talks:{nid}"] + list(talk.get("flags") or [])
     pid = None
@@ -531,7 +530,7 @@ def _agree(cur, b, valuer, talk, offer_assets, llm):
     """Store the agreed deal APPROVED (flags talks:<id> + auto_approved) and agree the talk. Returns the id."""
     nid = talk["id"]
     deal = {"a": _initiator(talk), "b": talk["gm_team_id"], "assets": offer_assets,
-            "trigger": talk.get("trigger") or "NEED"}
+            "trigger": talk.get("trigger_kind") or "NEED"}
     checks = _ge().check_legality(deal, b, valuer)
     rat = _ge().rationale_for(b, deal, llm)
     flags = ([f"talks:{nid}", "auto_approved"] + list(talk.get("flags") or [])
@@ -566,9 +565,15 @@ def _store_leak(cur, leak):
     return True
 
 
-def _maybe_leak(cur, talk, turn, b, rng):
-    for leak in leak_events(talk, turn, b, rng):
-        _store_leak(cur, leak)
+def record_leaks(cur, talk, turn, b, rng, turns=None):
+    """Draw this turn's leaks and store them; the public seam for callers outside the loop (the inbox's GM_TALK).
+    Returns how many rows were stored. Pass `turns` (the transcript so far) so the OPENED stage lands on the first
+    turn a GM speaks."""
+    return sum(bool(_store_leak(cur, leak)) for leak in leak_events(talk, turn, b, rng, turns))
+
+
+def _maybe_leak(cur, talk, turn, b, rng, turns=None):
+    record_leaks(cur, talk, turn, b, rng, turns)
 
 
 def advance_talk(cur, b, valuer, talk, rng, llm):
@@ -612,7 +617,7 @@ def advance_talk(cur, b, valuer, talk, rng, llm):
             _set_status(cur, nid, "WALKED_AWAY", "the GM ran out of patience")
             talk["status"] = "WALKED_AWAY"
             turns = _turns(cur, nid)
-            _maybe_leak(cur, talk, dict(turns[-1], assets=offer_assets), b, rng)
+            _maybe_leak(cur, talk, dict(turns[-1], assets=offer_assets), b, rng, turns)
             _stall(cur, b, valuer, talk, offer_assets, "the GM ran out of patience", status="WALKED_AWAY")
             played += 1
             break
@@ -634,7 +639,7 @@ def advance_talk(cur, b, valuer, talk, rng, llm):
                       options=opts_json, choice=opt.key, choice_source=source, books=b)
         turns = _turns(cur, nid)
         played += 1
-        _maybe_leak(cur, talk, turns[-1], b, rng)
+        _maybe_leak(cur, talk, turns[-1], b, rng, turns)
         if left <= 0:
             _set_status(cur, nid, "WALKED_AWAY", "the GM ran out of patience")
             talk["status"] = "WALKED_AWAY"
@@ -656,7 +661,7 @@ def advance_talk(cur, b, valuer, talk, rng, llm):
         leak_turn = dict(turns[-1])
         if offer_turn is not None:
             leak_turn["assets"] = last_offer
-        _maybe_leak(cur, talk, leak_turn, b, rng)
+        _maybe_leak(cur, talk, leak_turn, b, rng, turns)
     return "STALLED"
 
 
@@ -744,24 +749,29 @@ def _insider_keys():
         return ()
 
 
-def _leak_stage(talk, turn):
+def _leak_stage(talk, turn, turns=None):
     if turn.get("action") == "ACCEPT" or talk.get("status") == "AGREED":
         return None
     if talk.get("status") in ("STALLED", "WALKED_AWAY"):
         return "STALLED"
-    if turn.get("action") == "OFFER" and turn.get("turn_no") == 1:
-        return "OPENED"
+    if turns is not None:                              # the first turn a GM speaks is when talks opened
+        gm_turns = [t for t in turns if t.get("actor") in ("GM", "GM_A")]
+        if gm_turns and turn.get("turn_no") == gm_turns[0].get("turn_no"):
+            return "OPENED"
+    elif turn.get("action") == "OFFER" and turn.get("turn_no") == 1:
+        return "OPENED"                                # without the transcript: a CPU talk's opening turn
     if turn.get("mood") == "CLOSE":
         return "CLOSE"
     return None
 
 
-def leak_events(talk, turn, books, rng):
+def leak_events(talk, turn, books, rng, turns=None):
     """Leaks a turn may produce (pure, at most one per talk per week): per GM p = LEAK_BASE x (0.5 +
     sociability/10) x (0.5 GUARDED) x (1.5 QUOTABLE) x STAGE_W[stage]. An aggressive leaker names the players he
     receives; otherwise positions only. `books` may carry "insider_relationships": {team_id: {insider_key}} to
-    weight an insider who already knows that GM."""
-    stage = _leak_stage(talk, turn)
+    weight an insider who already knows that GM. `turns` is the talk's transcript so far: with it, the OPENED stage
+    is the first turn a GM speaks (so JR's first offer in a USER talk doesn't consume it); without it, turn 1."""
+    stage = _leak_stage(talk, turn, turns)
     if stage is None:
         return []
     initiator, other = _initiator(talk), talk["gm_team_id"]

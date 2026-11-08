@@ -249,25 +249,13 @@ def _move_id(cur, proposal_id):
     return None
 
 
-def _leak_turn(turns):
-    """The turn a leak draw reads. The engine stages OPENED off turn 1 being an OFFER; on JR's talks turn 1 is his
-    own offer, so the first GM reply draws on it (talks opened) and later GM turns draw on themselves."""
-    gm = next((t for t in reversed(turns) if t.get("actor") == "GM"), None)
-    if gm is None:
-        return None
-    opening = turns[0]
-    if gm.get("turn_no") == 2 and opening.get("turn_no") == 1 and opening.get("action") == "OFFER":
-        return opening
-    return gm
-
-
 def _leak_after(cur, res, thread, state):
-    """Run the leak draw after a GM turn (V2.11 §2.7, Q4): gm_talks.leak_events over the talk, stored in
-    gm_trade_leaks by the engine's own writer, never mentioned in the thread. A draw that fails never breaks JR's
-    turn."""
+    """Run the leak draw after a GM turn (V2.11 §2.7, Q4): gm_talks.record_leaks over the talk, stored in
+    gm_trade_leaks by the engine's own writer, never mentioned in the thread. The transcript goes with it, so the
+    first GM reply of a JR talk lands an OPENED leak. A draw that fails never breaks JR's turn."""
     try:
         turns = res.get("turns") or []
-        turn = _leak_turn(turns)
+        turn = next((t for t in reversed(turns) if t.get("actor") == "GM"), None)
         if turn is None:
             return
         from engines import gm_talks
@@ -276,7 +264,7 @@ def _leak_after(cur, res, thread, state):
                 "gm_team_id": state.get("gm_team_id"), "status": res.get("status")}
         b, _ = _negotiation()._books(cur)
         rng = random.Random(f"leak:{talk['season']}:{talk['id']}:{turn.get('turn_no')}")
-        gm_talks._maybe_leak(cur, talk, turn, b, rng)
+        gm_talks.record_leaks(cur, talk, turn, b, rng, turns)
     except Exception:
         return
 

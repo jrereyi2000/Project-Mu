@@ -7,6 +7,7 @@ front_office are patched, so the tests assert exactly what the kind asks the eng
 import pytest
 
 from engines import gm_negotiation
+from engines import gm_talks
 from engines import front_office
 from engines.inbox import InboxError, actors, store, voice
 from engines.inbox.kinds import gm_talk
@@ -293,8 +294,8 @@ def test_template_names_the_queued_move_on_agreement():
 def test_a_leak_draw_runs_after_every_gm_turn_and_never_speaks(cur, monkeypatch):
     draws = []
 
-    def draw(talk, turn, books, rng):
-        draws.append((talk["id"], turn["turn_no"], turn["action"]))
+    def draw(talk, turn, books, rng, turns=None):
+        draws.append((talk["id"], turn["turn_no"], turn["action"], gm_talks._leak_stage(talk, turn, turns)))
         return []
 
     monkeypatch.setattr("engines.gm_talks.leak_events", draw)
@@ -305,7 +306,7 @@ def test_a_leak_draw_runs_after_every_gm_turn_and_never_speaks(cur, monkeypatch)
     t = make_thread(cur, state={"gm_team_id": 2, "negotiation_id": 5, "phase": "TALKS"},
                     source_ref="gm_talk:start:CAR:ATL")
     r = gm_talk.act(cur, t, "MAKE_OFFER", {"players": [101]}, None)
-    assert draws == [(5, 1, "OFFER")]                 # the opening is staged OPENED for JR's talks
+    assert draws == [(5, 2, "COUNTER", "OPENED")]     # the GM's first turn is when JR's talk opened
     assert "leak" not in repr(r.facts) and "leak" not in repr(r.engine_ref)
 
 
