@@ -13,3 +13,13 @@ Edit the relevant existing section rather than appending a changelog. A change i
 
 ## Commits
 Whenever you make a commit, bring it into `main` right away without asking: if you committed on another branch, check out `main` and merge that branch in. Stop and tell the user only if the merge hits a conflict — do not resolve conflicts on your own. Leave uncommitted changes that aren't yours untouched, and don't push unless asked.
+
+Every commit message ends with a trailer naming the exact model that did the work, so commits can be audited by another model:
+
+```
+Model: claude-sonnet-5
+```
+
+Use the committing agent's own model ID (`claude-sonnet-5`, `claude-opus-5-5`, `claude-haiku-5-5`, `claude-fable-5-1`), not the display name. A subagent that makes the commit records its own model, not the orchestrator's, and the orchestrator records the model it was told the unit ran on. If the model is unknown, write `Model: unknown` — never guess.
+
+**Current routing (JR, 2026-11-07):** the session is DeepSeek v4.1 Flash called through the Anthropic API, so commits currently end with `Model: deepseek-v4.1-flash`. The Claude Code harness still reports Sonnet 5; JR's statement of what is actually running wins over the harness's self-report. The orchestrator passes the current model string to every unit agent. JR will say when the routing changes back.
