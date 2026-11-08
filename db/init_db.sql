@@ -2000,7 +2000,7 @@ CREATE TABLE IF NOT EXISTS staff_moves (
     id SERIAL PRIMARY KEY,
     season INT NOT NULL,
     team_id INT NOT NULL REFERENCES teams(id),
-    role VARCHAR(2) NOT NULL CHECK (role IN ('HC', 'OC', 'DC')),
+    role VARCHAR(16) NOT NULL CHECK (role IN ('HC', 'OC', 'DC', 'GM', 'AGM')),
     action VARCHAR(8) NOT NULL CHECK (action IN ('HIRED', 'LEFT', 'REPLACED')),
     person TEXT NOT NULL,
     coach_id INT REFERENCES coaches(id),
@@ -2015,6 +2015,36 @@ CREATE TABLE IF NOT EXISTS staff_moves (
     inputs JSONB                                      -- HC hires: opening_rank, openings, appeal, parts
 );
 CREATE INDEX IF NOT EXISTS staff_moves_season ON staff_moves (season);
+
+-- Staff development award data path (2027_02_07_staff_development_award.sql, COMPENSATORY_PICKS_PLAN follow-up U6):
+-- Resolution JC-2A is modelled as reviewed program eligibility JR supplies; a person absent from the registry is
+-- not eligible (never guessed). No ethnicity/race/minority column exists on any people table.
+CREATE TABLE IF NOT EXISTS staff_development_eligibility (
+    id           SERIAL PRIMARY KEY,
+    person_kind  VARCHAR(16) NOT NULL CHECK (person_kind IN ('COACH', 'COORDINATOR', 'EXECUTIVE')),
+    person_key   TEXT NOT NULL,
+    person_name  TEXT,
+    eligible     BOOLEAN NOT NULL DEFAULT true,
+    source       TEXT NOT NULL,
+    reviewed_by  TEXT,
+    as_of        DATE NOT NULL DEFAULT CURRENT_DATE,
+    notes        TEXT,
+    UNIQUE (person_kind, person_key)
+);
+
+CREATE TABLE IF NOT EXISTS staff_development_departures (
+    id           SERIAL PRIMARY KEY,
+    season       INT NOT NULL,
+    from_team_id INT REFERENCES teams(id),
+    to_team_id   INT REFERENCES teams(id),
+    person_name  TEXT,
+    from_role    VARCHAR(16),
+    to_role      VARCHAR(16),
+    tenure_years INT,
+    eligible     BOOLEAN NOT NULL DEFAULT true,
+    source       TEXT,
+    created_at   TIMESTAMPTZ DEFAULT now()
+);
 
 -- ---------------------------------------------------------------------------
 -- Media & content
