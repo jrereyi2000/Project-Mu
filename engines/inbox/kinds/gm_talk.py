@@ -10,8 +10,13 @@ wrote a note, judges how he was treated (judge = bool(note)). Nothing in the rep
 surplus: only ids, the action and the assets on the table do.
 
 A negotiation agreed by the engine closes the thread. The deal is stored by gm_negotiation as an APPROVED USER
-proposal; this kind never writes a trade itself.
+proposal and queued as a TRADE pending move for the league office (V2.11 §2.4/§2.7); the reply names that move.
+The GM's reply has the inbox's 8 s model budget (`INBOX_LLM_BUDGET_S`), and every GM turn draws leaks through
+gm_talks.leak_events, stored in gm_trade_leaks and never mentioned in the thread. This kind never writes a trade
+itself.
 """
+import json
+import random
 import re
 
 from engines.inbox import InboxError
@@ -40,17 +45,23 @@ def _front_office():
     return front_office
 
 
-def _engine_call(fn, *args):
+def _engine_call(fn, *args, **kwargs):
     """Call an engine helper, mapping its refusal to the inbox's HTTP-shaped error (R2's mismatch text)."""
     from fastapi import HTTPException
 
     from engines.front_office import FrontOfficeError
     try:
-        return fn(*args)
+        return fn(*args, **kwargs)
     except FrontOfficeError as e:
         raise InboxError(e.status, e.message) from None
     except HTTPException as e:
         raise InboxError(e.status_code, str(e.detail)) from None
+
+
+def _llm_budget():
+    """The inbox's reply-time budget (voice.INBOX_LLM_BUDGET_S, 8 s): the GM's turn is written within it."""
+    from engines.inbox.voice import INBOX_LLM_BUDGET_S
+    return INBOX_LLM_BUDGET_S
 
 
 def _abbr(cur, team_id):
@@ -214,6 +225,62 @@ def _counter_from(res):
     return {"assets": table.get("assets") or [], "turn_no": table.get("turn_no")}
 
 
+def _move_id(cur, proposal_id):
+    """The TRADE pending move the league office will write for an agreed deal (gm_talks.queue_trade_move), or None
+    when the table/payload isn't there (older saves)."""
+    if proposal_id is None:
+        return None
+    try:
+        cur.execute("SELECT to_regclass('franchise_pending_moves') IS NOT NULL")
+        row = cur.fetchone()
+        if not row or not row[0]:
+            return None
+        cur.execute("SELECT id, payload FROM franchise_pending_moves WHERE kind = 'TRADE' ORDER BY id DESC")
+        for move_id, payload in cur.fetchall():
+            if isinstance(payload, str):
+                try:
+                    payload = json.loads(payload)
+                except ValueError:
+                    continue
+            if str((payload or {}).get("proposal_id")) == str(proposal_id):
+                return move_id
+    except Exception:
+        return None
+    return None
+
+
+def _leak_turn(turns):
+    """The turn a leak draw reads. The engine stages OPENED off turn 1 being an OFFER; on JR's talks turn 1 is his
+    own offer, so the first GM reply draws on it (talks opened) and later GM turns draw on themselves."""
+    gm = next((t for t in reversed(turns) if t.get("actor") == "GM"), None)
+    if gm is None:
+        return None
+    opening = turns[0]
+    if gm.get("turn_no") == 2 and opening.get("turn_no") == 1 and opening.get("action") == "OFFER":
+        return opening
+    return gm
+
+
+def _leak_after(cur, res, thread, state):
+    """Run the leak draw after a GM turn (V2.11 §2.7, Q4): gm_talks.leak_events over the talk, stored in
+    gm_trade_leaks by the engine's own writer, never mentioned in the thread. A draw that fails never breaks JR's
+    turn."""
+    try:
+        turns = res.get("turns") or []
+        turn = _leak_turn(turns)
+        if turn is None:
+            return
+        from engines import gm_talks
+        talk = {"id": res.get("id"), "season": res.get("season") or thread.get("season"),
+                "week": res.get("week") or thread.get("week"), "user_team_id": thread.get("team_id"),
+                "gm_team_id": state.get("gm_team_id"), "status": res.get("status")}
+        b, _ = _negotiation()._books(cur)
+        rng = random.Random(f"leak:{talk['season']}:{talk['id']}:{turn.get('turn_no')}")
+        gm_talks._maybe_leak(cur, talk, turn, b, rng)
+    except Exception:
+        return
+
+
 def _from_result(cur, res, state, user_abbr):
     """(intent, facts, new state) from a gm_negotiation negotiation json."""
     status = res.get("status")
@@ -225,6 +292,8 @@ def _from_result(cur, res, state, user_abbr):
     facts = {"gm": None, "team": user_abbr, "other_team": _abbr(cur, state.get("gm_team_id")),
              "status": status, "action": action, "gm_message": message,
              "counter": counter, "proposal_id": res.get("proposal_id") or state.get("proposal_id")}
+    if status == "AGREED":
+        facts["pending_move_id"] = _move_id(cur, facts["proposal_id"])
     new_state = dict(state, negotiation_id=res.get("id"), phase="TALKS", counter=counter,
                      proposal_id=facts["proposal_id"])
     intent = INTENTS.get(action) or status or "COUNTER"
@@ -237,10 +306,11 @@ def _closed(res):
 
 
 def _engine_ref(res):
+    """The ids V2.11 §2.7 puts on the message: the GM's last turn's number and posture (never a surplus)."""
     turns = res.get("turns") or []
-    last = turns[-1] if turns else {}
+    last = next((t for t in reversed(turns) if t.get("actor") == "GM"), {})
     ref = {"negotiation_id": res.get("id"), "status": res.get("status"),
-           "action": last.get("action"), "turn_no": last.get("turn_no")}
+           "action": last.get("action"), "turn_no": last.get("turn_no"), "posture": last.get("posture")}
     if res.get("proposal_id") is not None:
         ref["proposal_id"] = res.get("proposal_id")
     return ref
@@ -269,8 +339,10 @@ def act(cur, thread, option_id, payload, note):
         nid = state.get("negotiation_id")
         if nid is None or not state.get("counter"):
             raise InboxError(409, "there's no counter-offer on the table")
-        res = _engine_call(_negotiation().accept_counter, cur, nid)
+        res = _engine_call(_negotiation().accept_counter, cur, nid, timeout=_llm_budget())
         intent, facts, new_state = _from_result(cur, res, state, user)
+        _leak_after(cur, res, thread, new_state)
+        facts["gm"] = thread.get("counterpart_name") or facts.get("gm")
         return ActResult(facts=facts, intent=intent, engine_ref=_engine_ref(res),
                          close=_closed(res), state=new_state,
                          link=("gm_trade_negotiations", nid), judge=bool(note))
@@ -283,10 +355,12 @@ def act(cur, thread, option_id, payload, note):
             raise InboxError(400, "an offer needs at least one player or pick")
         nid = state.get("negotiation_id")
         if nid is None:
-            res = _engine_call(_negotiation().open_negotiation, cur, user, _abbr(cur, gm_team_id), legs, note)
+            res = _engine_call(_negotiation().open_negotiation, cur, user, _abbr(cur, gm_team_id), legs, note,
+                               timeout=_llm_budget())
         else:
-            res = _engine_call(_negotiation().offer, cur, nid, legs, note)
+            res = _engine_call(_negotiation().offer, cur, nid, legs, note, timeout=_llm_budget())
         intent, facts, new_state = _from_result(cur, res, state, user)
+        _leak_after(cur, res, thread, new_state)
         facts["gm"] = thread.get("counterpart_name") or facts.get("gm")
         return ActResult(facts=facts, intent=intent, engine_ref=_engine_ref(res),
                          close=_closed(res), state=new_state,
@@ -298,10 +372,15 @@ def act(cur, thread, option_id, payload, note):
 # ---------------------------------------------------------------------------------------------- template ---
 
 def template(intent, facts):
+    gm = facts.get("gm") or "The GM"
+    if intent in ("AGREED", "ACCEPT"):
+        move = facts.get("pending_move_id")
+        if move is not None:
+            return f"{gm}: Agreed. Queued for the league office (move #{move})."
+        return f"{gm}: Agreed. Queued for the league office."
     message = facts.get("gm_message")
     if message:
         return message
-    gm = facts.get("gm") or "The GM"
     if intent == "TRADE_INTEREST":
         what = facts.get("headline") or "a trade"
         return f"{gm}: We've done our homework on your roster and we want to talk about {what}."
@@ -311,8 +390,6 @@ def template(intent, facts):
         return f"{gm}: Understood. We'll look elsewhere, then."
     if intent == "END_TALKS":
         return f"{gm}: Fine. We'll pick this up another time."
-    if intent in ("AGREED", "ACCEPT"):
-        return f"{gm}: Agreed. Send it over; it still has to clear the league office."
     if intent == "COUNTER":
         return f"{gm}: Here's where we'd get it done. Take a look at the package."
     if intent == "REJECT":

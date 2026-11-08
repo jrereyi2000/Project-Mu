@@ -45,13 +45,14 @@ def make_thread(cur, state=None, source_ref="gm_talk:proposal:77"):
 
 
 def negotiation(action="COUNTER", message="Terry Fontenot: Here's where we'd get it done.", status="OPEN",
-                proposal_id=None):
+                proposal_id=None, posture="HOLD"):
     counter_assets = [{"type": "PLAYER", "player_id": 200, "from": "ATL", "to": "CAR"}] if action == "COUNTER" else \
         [{"type": "PLAYER", "player_id": 101, "from": "CAR", "to": "ATL"}]
     turns = [{"turn_no": 1, "actor": "JR", "action": "OFFER", "assets": [], "message": None, "surplus_user": 0},
              {"turn_no": 2, "actor": "GM", "action": action, "assets": counter_assets, "message": message,
-              "surplus_user": 5_000_000}]             # the fake deliberately carries a surplus the kind must drop
-    return {"id": 5, "status": status, "proposal_id": proposal_id, "turns": turns,
+              "posture": posture or ("HOLD" if action == "COUNTER" else None),
+              "surplus_user": 5_000_000}]            # the fake deliberately carries a surplus the kind must drop
+    return {"id": 5, "season": 2026, "week": 5, "status": status, "proposal_id": proposal_id, "turns": turns,
             "on_table": {"turn_no": 2, "assets": counter_assets} if action == "COUNTER" else None}
 
 
@@ -134,8 +135,8 @@ def test_options_inbound_and_in_talks(cur):
 def test_open_talks_calls_open_negotiation_and_uses_the_engine_message(cur, monkeypatch):
     calls = []
 
-    def fake_open(c, user, gm, assets, note=None, llm=None):
-        calls.append((user, gm, assets, note, llm))
+    def fake_open(c, user, gm, assets, note=None, llm=None, timeout=None, posture=None):
+        calls.append((user, gm, assets, note, llm, timeout))
         return negotiation("COUNTER")
 
     monkeypatch.setattr(gm_negotiation, "open_negotiation", fake_open)
@@ -145,17 +146,19 @@ def test_open_talks_calls_open_negotiation_and_uses_the_engine_message(cur, monk
 
     assert calls == [("CAR", "ATL", [{"type": "PLAYER", "player_id": 101, "from": "CAR", "to": "ATL"},
                                      {"type": "PICK", "draft_season": 2027, "round": 2, "original_team": "CAR",
-                                      "from": "CAR", "to": "ATL"}], None, None)]
+                                      "from": "CAR", "to": "ATL"}], None, None, voice.INBOX_LLM_BUDGET_S)]
     assert r.intent == "COUNTER" and r.close is False and r.judge is False       # no note -> no judgment
     assert r.facts["gm_message"] == "Terry Fontenot: Here's where we'd get it done."
     assert r.state["negotiation_id"] == 5 and r.state["phase"] == "TALKS" and r.state["counter"]
-    assert r.engine_ref == {"negotiation_id": 5, "status": "OPEN", "action": "COUNTER", "turn_no": 2}
+    assert r.engine_ref == {"negotiation_id": 5, "status": "OPEN", "action": "COUNTER", "turn_no": 2,
+                            "posture": "HOLD"}
     assert "surplus" not in repr((r.facts, r.engine_ref, r.state))
 
 
 def test_open_talks_with_a_note_asks_for_a_judgment(cur, monkeypatch):
     monkeypatch.setattr(gm_negotiation, "open_negotiation",
-                        lambda c, user, gm, assets, note=None, llm=None: negotiation("REJECT"))
+                        lambda c, user, gm, assets, note=None, llm=None, timeout=None, posture=None:
+                        negotiation("REJECT"))
     t = make_thread(cur)
     r = gm_talk.act(cur, t, "OPEN_TALKS", {"players": [101]}, "We're not moving Legette cheap.")
     assert r.intent == "REJECT" and r.judge is True
@@ -163,12 +166,13 @@ def test_open_talks_with_a_note_asks_for_a_judgment(cur, monkeypatch):
 
 def test_a_walk_away_closes_but_a_reject_stays_open(cur, monkeypatch):
     monkeypatch.setattr(gm_negotiation, "open_negotiation",
-                        lambda c, user, gm, assets, note=None, llm=None: negotiation("WALK_AWAY",
-                                                                                     status="WALKED_AWAY"))
+                        lambda c, user, gm, assets, note=None, llm=None, timeout=None, posture=None:
+                        negotiation("WALK_AWAY", status="WALKED_AWAY"))
     r = gm_talk.act(cur, make_thread(cur), "OPEN_TALKS", {"players": [101]}, None)
     assert r.close is True and r.intent == "WALK_AWAY"
     monkeypatch.setattr(gm_negotiation, "open_negotiation",
-                        lambda c, user, gm, assets, note=None, llm=None: negotiation("REJECT"))
+                        lambda c, user, gm, assets, note=None, llm=None, timeout=None, posture=None:
+                        negotiation("REJECT"))
     r = gm_talk.act(cur, make_thread(cur, source_ref="gm_talk:proposal:78"), "OPEN_TALKS", {"players": [101]}, None)
     assert r.close is False and r.intent == "REJECT"
 
@@ -176,15 +180,16 @@ def test_a_walk_away_closes_but_a_reject_stays_open(cur, monkeypatch):
 def test_make_offer_calls_offer_with_the_negotiation_id(cur, monkeypatch):
     calls = []
 
-    def fake_offer(c, nid, assets, note=None, llm=None):
-        calls.append((nid, assets, note))
+    def fake_offer(c, nid, assets, note=None, llm=None, timeout=None, posture=None):
+        calls.append((nid, assets, note, timeout))
         return negotiation("ACCEPT", status="AGREED", proposal_id=88)
 
     monkeypatch.setattr(gm_negotiation, "offer", fake_offer)
     t = make_thread(cur, state={"gm_team_id": 2, "negotiation_id": 5, "phase": "TALKS"},
                     source_ref="gm_talk:start:CAR:ATL")
     r = gm_talk.act(cur, t, "MAKE_OFFER", {"players": [101]}, None)
-    assert calls == [(5, [{"type": "PLAYER", "player_id": 101, "from": "CAR", "to": "ATL"}], None)]
+    assert calls == [(5, [{"type": "PLAYER", "player_id": 101, "from": "CAR", "to": "ATL"}], None,
+                      voice.INBOX_LLM_BUDGET_S)]
     assert r.intent == "AGREED" and r.close is True
     assert r.facts["proposal_id"] == 88 and r.engine_ref["proposal_id"] == 88
 
@@ -192,13 +197,13 @@ def test_make_offer_calls_offer_with_the_negotiation_id(cur, monkeypatch):
 def test_accept_counter_calls_accept_counter(cur, monkeypatch):
     calls = []
     monkeypatch.setattr(gm_negotiation, "accept_counter",
-                        lambda c, nid, llm=None: calls.append(nid) or negotiation("ACCEPT", status="AGREED",
-                                                                                 proposal_id=88))
+                        lambda c, nid, llm=None, timeout=None, posture=None:
+                        calls.append((nid, timeout)) or negotiation("ACCEPT", status="AGREED", proposal_id=88))
     t = make_thread(cur, state={"gm_team_id": 2, "negotiation_id": 5, "phase": "TALKS",
                                 "counter": {"assets": [], "turn_no": 2}},
                     source_ref="gm_talk:start:CAR:ATL")
     r = gm_talk.act(cur, t, "ACCEPT_COUNTER", {}, None)
-    assert calls == [5] and r.close is True and r.intent == "AGREED"
+    assert calls == [(5, voice.INBOX_LLM_BUDGET_S)] and r.close is True and r.intent == "AGREED"
 
 
 def test_accept_counter_without_a_counter_is_409(cur):
@@ -227,7 +232,7 @@ def test_not_interested_rejects_the_proposal(cur, monkeypatch):
 
 
 def test_mismatch_text_comes_through(cur, monkeypatch):
-    def refuse(c, user, gm, assets, note=None, llm=None):
+    def refuse(c, user, gm, assets, note=None, llm=None, timeout=None, posture=None):
         raise front_office.FrontOfficeError(400, "you don't control CAR (tick JR controls on the Front Office card)")
     monkeypatch.setattr(gm_negotiation, "open_negotiation", refuse)
     t = make_thread(cur)
@@ -270,8 +275,54 @@ def test_draft_with_nothing_recognisable_is_none(cur, monkeypatch):
 
 def test_template_prefers_the_engine_message():
     assert gm_talk.template("COUNTER", {"gm_message": "Terry Fontenot: Deal."}) == "Terry Fontenot: Deal."
-    assert "Agreed" in gm_talk.template("AGREED", {"gm": "Terry Fontenot"})
     assert "look elsewhere" in gm_talk.template("NOT_INTERESTED", {"gm": "Terry Fontenot"})
+
+
+def test_template_names_the_queued_move_on_agreement():
+    assert gm_talk.template("AGREED", {"gm": "Terry Fontenot", "pending_move_id": 44}) == \
+        "Terry Fontenot: Agreed. Queued for the league office (move #44)."
+    assert gm_talk.template("AGREED", {"gm": "Terry Fontenot"}) == \
+        "Terry Fontenot: Agreed. Queued for the league office."
+    # an engine ACCEPT line never replaces the queued-move reply
+    assert gm_talk.template("AGREED", {"gm": "T", "gm_message": "Done!", "pending_move_id": 7}) == \
+        "T: Agreed. Queued for the league office (move #7)."
+
+
+# -------------------------------------------------------------------------------------------------- leak ---
+
+def test_a_leak_draw_runs_after_every_gm_turn_and_never_speaks(cur, monkeypatch):
+    draws = []
+
+    def draw(talk, turn, books, rng):
+        draws.append((talk["id"], turn["turn_no"], turn["action"]))
+        return []
+
+    monkeypatch.setattr("engines.gm_talks.leak_events", draw)
+    monkeypatch.setattr(gm_negotiation, "_books", lambda c: ({}, None))
+    monkeypatch.setattr(gm_negotiation, "offer",
+                        lambda c, nid, assets, note=None, llm=None, timeout=None, posture=None:
+                        negotiation("COUNTER"))
+    t = make_thread(cur, state={"gm_team_id": 2, "negotiation_id": 5, "phase": "TALKS"},
+                    source_ref="gm_talk:start:CAR:ATL")
+    r = gm_talk.act(cur, t, "MAKE_OFFER", {"players": [101]}, None)
+    assert draws == [(5, 1, "OFFER")]                 # the opening is staged OPENED for JR's talks
+    assert "leak" not in repr(r.facts) and "leak" not in repr(r.engine_ref)
+
+
+def test_agreed_reply_names_the_queued_pending_move(cur, monkeypatch):
+    db = cur  # the fake cursor wraps the InboxDB's sqlite connection
+    cur.execute("CREATE TABLE franchise_pending_moves "
+                "(id INTEGER PRIMARY KEY, team_id INT, kind TEXT, payload TEXT, status TEXT)")
+    cur.execute("INSERT INTO franchise_pending_moves (id, team_id, kind, payload, status) "
+                "VALUES (44, 1, 'TRADE', '{\"proposal_id\": 88}', 'PENDING')")
+    monkeypatch.setattr(gm_negotiation, "offer",
+                        lambda c, nid, assets, note=None, llm=None, timeout=None, posture=None:
+                        negotiation("ACCEPT", status="AGREED", proposal_id=88))
+    t = make_thread(cur, state={"gm_team_id": 2, "negotiation_id": 5, "phase": "TALKS"},
+                    source_ref="gm_talk:start:CAR:ATL")
+    r = gm_talk.act(cur, t, "MAKE_OFFER", {"players": [101]}, None)
+    assert r.facts["pending_move_id"] == 44
+    assert "move #44" in gm_talk.template(r.intent, r.facts)
 
 
 # --------------------------------------------------------------------------------------------- one turn ---
@@ -279,7 +330,8 @@ def test_template_prefers_the_engine_message():
 def test_exchange_stores_the_engine_message_and_no_judgment_without_a_note(cur, monkeypatch):
     actors.take_control(cur, "CAR", "GM", "10")
     monkeypatch.setattr(gm_negotiation, "open_negotiation",
-                        lambda c, user, gm, assets, note=None, llm=None: negotiation("COUNTER"))
+                        lambda c, user, gm, assets, note=None, llm=None, timeout=None, posture=None:
+                        negotiation("COUNTER"))
     t = make_thread(cur)
     out = voice.exchange(cur, gm_talk, t["id"], "OPEN_TALKS", {"players": [101]}, note=None, llm=None)
     msgs = store.messages(cur, t["id"])

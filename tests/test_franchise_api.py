@@ -23,9 +23,11 @@ class FakeCursor:
     def __init__(self):
         self.executed = []
         self._row = None
+        self._rows = []
         self.next_move = 100
         self.next_offer = 500
         self.answers = {}                      # SQL substring -> the row fetchone answers
+        self.answer_rows = {}                  # SQL substring -> the rows fetchall answers
 
     def execute(self, sql, params=None):
         self.executed.append((sql, params))
@@ -40,12 +42,14 @@ class FakeCursor:
             self._row = (self.next_offer,)
         else:
             self._row = None
+        rows = next((r for key, r in self.answer_rows.items() if key in sql), None)
+        self._rows = [] if rows is None else (rows(params) if callable(rows) else list(rows))
 
     def fetchone(self):
         return self._row
 
     def fetchall(self):
-        return []
+        return list(self._rows)
 
     def writes(self, table):
         return [(s, p) for s, p in self.executed if table in s and ("INSERT" in s or "UPDATE" in s)]
@@ -649,6 +653,70 @@ class TradeTest(ApiTest):
     def test_empty_trade_400(self):
         r = self.client.post("/api/franchise/CAR/trades/evaluate", json={"other_team": "ATL"})
         self.assertEqual(r.status_code, 400)
+
+
+PUBLIC_TALK = {
+    "id": 41, "kind": "CPU", "season": SEASON, "weeks": [4, 5], "status": "AGREED", "proposal_id": 512,
+    "teams": [{"abbr": "CAR", "gm": "Dan Morgan", "role": "initiator"},
+              {"abbr": "ATL", "gm": "Terry Fontenot"}],
+    "turns": [{"turn_no": 1, "week": 4, "team": "CAR", "action": "OFFER", "posture": "ANCHOR",
+               "assets": [{"from": "CAR", "to": "ATL", "label": "2027 R2 (CAR)"}], "message": "Opening."},
+              {"turn_no": 2, "week": 4, "team": "ATL", "action": "ACCEPT", "posture": None,
+               "assets": [{"from": "CAR", "to": "ATL", "label": "2027 R2 (CAR)"}], "message": "Agreed."}],
+    "final": {"assets": [{"from": "CAR", "to": "ATL", "label": "2027 R2 (CAR)"}]},
+}
+
+
+class TradeTalksTest(ApiTest):
+    """GET /trade-talks and /trade-talks/{id}: published CPU transcripts, the plan's public shape (§2.3, §2.7)."""
+
+    def setUp(self):
+        super().setUp()
+        self.cur.answers["to_regclass"] = (True,)
+        self.talk_json = mock.patch("engines.gm_talks.talk_json",
+                                    lambda cur, nid, public=True: dict(PUBLIC_TALK, id=nid))
+        self.talk_json.start()
+        self.addCleanup(self.talk_json.stop)
+
+    def test_list_is_newest_first_and_public_only(self):
+        self.cur.answer_rows["FROM gm_trade_negotiations WHERE kind = 'CPU'"] = [(42,), (41,)]
+        r = self.client.get("/api/franchise/trade-talks")
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        self.assertEqual([t["id"] for t in body["talks"]], [42, 41])
+        sql, params = next((s, p) for s, p in self.cur.executed
+                           if "FROM gm_trade_negotiations WHERE kind = 'CPU'" in s)
+        self.assertIn("published_at IS NOT NULL", sql)
+        self.assertIn("ORDER BY published_at DESC, id DESC", sql)
+        self.assertEqual(params, (SEASON,))                 # season defaults to league_state's
+        text = json.dumps(body["talks"])
+        for key in ('"su"', '"sg"', '"options"', '"choice_source"', '"legality"'):
+            self.assertNotIn(key, text)
+
+    def test_week_keeps_the_talks_live_that_week(self):
+        self.cur.answer_rows["FROM gm_trade_negotiations WHERE kind = 'CPU'"] = [(41,)]
+        r = self.client.get("/api/franchise/trade-talks?season=2035&week=6")
+        self.assertEqual(r.status_code, 200, r.text)
+        sql, params = next((s, p) for s, p in self.cur.executed
+                           if "FROM gm_trade_negotiations WHERE kind = 'CPU'" in s)
+        self.assertIn("BETWEEN week AND week + COALESCE(carried_weeks, 0)", sql)
+        self.assertEqual(params, (2035, 6))
+
+    def test_missing_table_is_an_empty_list(self):
+        self.cur.answers["to_regclass"] = (False,)
+        self.assertEqual(self.client.get("/api/franchise/trade-talks").json(), {"talks": []})
+
+    def detail(self, kind, published_at):
+        self.cur.answers["SELECT kind, published_at FROM gm_trade_negotiations WHERE id"] = (kind, published_at)
+        return self.client.get("/api/franchise/trade-talks/41")
+
+    def test_detail_404s_unless_published_cpu(self):
+        self.assertEqual(self.detail("CPU", None).status_code, 404)        # not published
+        self.assertEqual(self.detail("USER", NOW).status_code, 404)        # JR's own talk
+        r = self.detail("CPU", NOW)
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(r.json()["id"], 41)
+        self.assertEqual(self.detail("CPU", NOW).json()["turns"][0]["posture"], "ANCHOR")
 
 
 class GameTest(ApiTest):
