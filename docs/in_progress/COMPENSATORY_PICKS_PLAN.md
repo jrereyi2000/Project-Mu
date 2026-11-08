@@ -1,7 +1,8 @@
 # Project Mu: Compensatory Draft Picks Engine Plan
 
-**Status:** approved by JR (2026-11-07); building, wave 1 of 3 done. Decisions Q1–Q3 settled as recommended (§8).
+**Status:** approved by JR (2026-11-07); building, wave 2 of 3 done. Decisions Q1–Q3 settled as recommended (§8).
 - As built (U1): cancellation is a gained-driven closest-tier pass (each gained QFA cancels the lost QFA closest in round tier, so the most valuable lost QFAs survive); JC-2A is an explicit-input function (`jc2a_eligible`/`jc2a_awards`) because the schema has no demographic or GM/executive field — a follow-up is needed to seed a demographic source and GM/executive-role tracking before the carousel can auto-detect.
+- As built (U2): `CBA["DRAFT_PICKS"]` and the rookie scale are 256 wide (values for picks 1–224 unchanged, each base floored at `minimum_salary`); `round_for_overall_pick` takes per-round comp counts (index 0 = round 1) so four Round-3 comps start Round 4 at 101; comp picks are recognised in `trade_value.pick_value` by `pick_suffix`/`comp_slot`/`slot_in_round` and valued at `V(round×32)·e^(−0.015·s)`; `league_office` still signs rookies without a comp schedule (drafted_round static for comp slots) — open follow-up.
 **Builds on:** PROJECT_SPEC §2.17, §3.3c, §4.6; [`V2_MASTER_PLAN.md`](../in_progress/V2_MASTER_PLAN.md) §2.6, §2.7; [`CAP_RELATIVE_CONTRACTS_PLAN.md`](../done/CAP_RELATIVE_CONTRACTS_PLAN.md); [`SCOUTING_REVAMP_PLAN.md`](../done/SCOUTING_REVAMP_PLAN.md); [`COACH_SLANTS_AND_COORDINATORS_PLAN.md`](../done/COACH_SLANTS_AND_COORDINATORS_PLAN.md).
 
 **Goal:** Implement the official NFL CBA Article 6, Section 2 Compensatory Draft Pick formula and the 2020 Resolution JC-2A minority coach/executive development compensatory picks. The engine tracks Qualifying Free Agents (QFAs) lost versus gained, ranks departing talent by Average Per Year (APY) percentiles and playing time, and allocates up to 32 compensatory picks at the ends of Rounds 3 through 7 (capped at 4 per franchise). Teams whose minority coordinators or executives are hired away as Head Coach or GM are awarded two 3rd-round compensatory picks across consecutive drafts. Picks integrate seamlessly into the Draft War Room, Trade Machine, consensus boards, and rookie contract scales.
@@ -233,6 +234,7 @@ Shared files: `PROJECT_SPEC.md`, this plan, `CLAUDE.md`.
 | `newsroom/compensatory_picks_article.py` | U3 |
 | `server/draft_api.py` | U3 |
 | `tests/test_compensatory_draft_flow.py` | U2 |
+| `tests/test_contracts_engine.py` | U2 (added by the orchestrator 2026-11-08: the 256-pick extension changes this existing test's expectations, e.g. `RookieScaleTest::test_shape_and_rounds` expecting `ValueError` for pick 225) |
 | `tests/test_compensatory_picks_engine.py` | U1 |
 
 ## 7. Spec changes when built
@@ -256,3 +258,4 @@ Shared files: `PROJECT_SPEC.md`, this plan, `CLAUDE.md`.
 | Unit | Wave | Branch | Worktree | Result | Merge |
 |---|---|---|---|---|---|
 | U1 | 1 | worktree-agent-aefa2bc86d7f1964e | .claude/worktrees/agent-aefa2bc86d7f1964e | merged | 757dff1 |
+| U2 | 2 | worktree-agent-a7e07300bad31a384 | .claude/worktrees/agent-a7e07300bad31a384 | merged (retried after an API 402 cut the first run short; also fixed the existing 224-pick expectations in `tests/test_contracts_engine.py` and `tests/test_transactions_engine.py`) | 7c1eb65 |
