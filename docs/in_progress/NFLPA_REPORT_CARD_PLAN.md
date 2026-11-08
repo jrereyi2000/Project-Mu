@@ -1,8 +1,10 @@
 # Project Mu: NFLPA Team Report Cards & Facility Effects Plan
 
-**Status:** approved by JR (2026-11-07); building, wave 1 of 2 done.
+**Status:** approved by JR (2026-11-07); building, wave 2 of 2 done.
 
 **As built (orchestrator pre-build fixes):** baseline data committed at `engines/report_card_baseline.json` (the plan's `data/initial_team_report_cards.json` is git-ignored); migration dated `2027_02_08` (2027_02_05–07 already exist); §2.4's duplicated trailing block for `team_operating_policies` implemented once; the Delivers list now names all four tables. §2.3e CPU Owner Upgrade AI (`engines/owner_policy.py`) is not owned by any unit, so it is out of scope for U1–U3 (left unbuilt).
+
+**As built (U1–U3):** `Mu_Network/src/components/franchise/FranchisePage.tsx` was added to U3's files (the plan's U3 Owns list omitted it; U3 needed it to register the panel). Deferred (persona traits needed, outside U1–U3's files): the §2.2 personality sensitivities (veteran family/travel upweighting, high-ego flat −0.05) and the Q2 refusal (ego ≥ 85 refuses an F-facility team). The plan's §0 S6 points at `newsroom/editorial_desk.py`, which no longer exists; U2 followed `newsroom/compensatory_picks_article.py`.
 **Builds on:** PROJECT_SPEC §2.4, §2.17, §3.3f, §4.2; [`V2_MASTER_PLAN.md`](../in_progress/V2_MASTER_PLAN.md) §2.3, §2.4; [`OWNERS_SCOUTS_VOTERS_PLAN.md`](../in_progress/OWNERS_SCOUTS_VOTERS_PLAN.md) §2.1 (owner spending policies); [`PERSONALITY_CONTRACT_POLICY_PLAN.md`](../done/PERSONALITY_CONTRACT_POLICY_PLAN.md); [`FRONT_OFFICE_INBOX_PLAN.md`](../done/FRONT_OFFICE_INBOX_PLAN.md).
 
 **Goal:** Give every franchise an annual player-evaluated NFLPA Team Report Card grading eight operational and facility categories (Weight Room, Training Room, Locker Room, Nutrition & Food, Travel, Family Treatment, Head Coach, Ownership Investment). Grades produce an organizational quality score ($S_{\text{facility}}$) that integrates directly into free agency utility (`engines/free_agency_engine.py`): elite facilities provide a "facility discount" that saves cap dollars, while bottom-tier organizations suffer a "misery tax" or outright refusal from family-oriented or high-pride players. Published annually in early March as a marquee newsroom event, and visible in the Franchise Command Center where JR and AI GMs can fund facility renovations and operational upgrades.
@@ -345,3 +347,5 @@ Shared files: `PROJECT_SPEC.md`, this plan, `CLAUDE.md`.
 | Unit | Wave | Branch | Worktree | Result | Merge |
 |---|---|---|---|---|---|
 | U1 | 1 | worktree-agent-af05b4ae41b8faa33 | .claude/worktrees/agent-af05b4ae41b8faa33 | merged | 964a3d3 |
+| U2 | 2 | worktree-agent-a0def0437b0e08fee | .claude/worktrees/agent-a0def0437b0e08fee | merged | ae190b6 |
+| U3 | 2 | worktree-agent-a8e1b42fb99541f59 | .claude/worktrees/agent-a8e1b42fb99541f59 | merged | 1038a46 |
