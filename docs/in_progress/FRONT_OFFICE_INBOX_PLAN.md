@@ -1,6 +1,6 @@
 # Project Mu: Front-Office Inbox & Direct Conversations Plan (V2.9)
 
-**Status:** approved by JR (2026-11-03); **all six units built and on main (2026-11-07).** The plan does not close yet: (1) the 30-minute model-latency spike and the `llm_compare` gate (D7) are deferred until JR settles the internal model; (2) starting a `GM_TALK`, `CONTRACT` or `ROLE_TALK` conversation from the Command Center needs a target picker — the new-conversation forms carry no opponent or player field — so the UI can only start `REPORTER` and `VISION` talks today; inbound threads for the other kinds are created by the scan. The remaining units were held until the personality plans were built (PERSONALITY_PLAN §5.3); that hold is satisfied as of 2026-11-07, and JR directed the inbox to go next on 2026-11-07. **The 30-minute model-latency spike (§3 R3, §5 "Spike first") is tabled (JR, 2026-11-07)** until the final model for internal calls is chosen; the 8.0 s estimate stands, and the spike plus the `INBOX_LLM_BUDGET_S` update stay on the close-out list alongside the `llm_compare` gate.
+**Status:** approved by JR (2026-11-03); **all six units built and on main (2026-11-07).** Wave 4 (U7–U9, the new-conversation targets) approved by JR and in progress (2026-11-07). The plan does not close yet: (1) the 30-minute model-latency spike and the `llm_compare` gate (D7) are deferred until JR settles the internal model; (2) starting a `GM_TALK`, `CONTRACT` or `ROLE_TALK` conversation from the Command Center needs a target picker — the new-conversation forms carry no opponent or player field — so the UI can only start `REPORTER` and `VISION` talks today; inbound threads for the other kinds are created by the scan. The remaining units were held until the personality plans were built (PERSONALITY_PLAN §5.3); that hold is satisfied as of 2026-11-07, and JR directed the inbox to go next on 2026-11-07. **The 30-minute model-latency spike (§3 R3, §5 "Spike first") is tabled (JR, 2026-11-07)** until the final model for internal calls is chosen; the 8.0 s estimate stands, and the spike plus the `INBOX_LLM_BUDGET_S` update stay on the close-out list alongside the `llm_compare` gate.
 - As built (U3): the chart in force follows the plan's stated priority (newest stored week, JR before MU_COACH before MADDEN) rather than `franchise_api.stored_depth_chart`, which orders MADDEN first; no chart or `franchise_pending_moves` row is ever written (tests assert both). `WANTS_MORE` reads last week's staff chart from the stored MU_COACH chart and stays silent when there is none. `review_promises` resolves promises due this week or overdue (a missed weekly run doesn't strand one) exactly once, then closes the thread. Reporter move triggers read written trades and accepted offers of the season; the beat writer prefers `LOCAL_BEAT_REPORTER` and falls back to any account assigned to the team. No typed-text `draft` for ROLE_TALK.
 - As built (U4): GM_TALK's reply template is the GM turn message the engine wrote (`gm_negotiation` called with `llm=None`); with a model the inbox voice rephrases it from the fact sheet, and the appraisal is asked only when JR wrote a note (`judge = bool(note)`). `start` opens a talk thread only — the first `MAKE_OFFER` opens the negotiation, so a capped or refused thread can't orphan one. The `trade_assets` form has no direction, so its assets are always JR's team sending to the GM's team. "Starter" for CONTRACT is `gm_direction.starter_slots` over contracted, healthy players; the window is once per player per season. `_score` runs on the original path (no contract-policy receipt); an engine `FrontOfficeError`/`HTTPException` becomes the inbox's `InboxError` with its status and text.
 - As built (U6): "the engine's band" is the raw band (edges plus overrides, no hysteresis), so a written pin doesn't hide a later shift; `ACCEPT_COUNTER` is offered only while a counter is stored; `KEEP_CURRENT` closes without writing a row (and the season source ref keeps `SEASON_VISION` from reopening); a pin sets `set_direction=True` so the weekly write stores it; `respond` resolves a GM counterpart's `risk_appetite` from `gm_profiles` (unknown → 0.5, lean 1.0) while a coach's lean is 1.0.
@@ -466,13 +466,14 @@ Opening the inbox runs `scan(..., teams=[abbr], llm=None)`: fast templates, at m
 | DELETE | `/{abbr}/inbox/actors/{role}/{persona_id}` | — | 204 |
 | GET | `/{abbr}/inbox` | `?status=&kind=&as=GM\|COACH&limit=50` | `{"team", "actors": [Actor], "unread", "threads": [Thread]}` (empty with no actors) |
 | GET | `/{abbr}/inbox/kinds` | — | kinds a controlled actor can use: `[{"kind", "actor_roles", "can_start", "start_form"}]` |
+| GET | `/{abbr}/inbox/targets` | `?kind=CONTRACT\|ROLE_TALK\|GM_TALK` | `{"kind", "targets": [Target]}` — the people a JR-started conversation can be opened with (wave 4) |
 | GET | `/{abbr}/inbox/{thread_id}` | — | `{"thread", "messages", "options"}` (marks read) |
 | POST | `/{abbr}/inbox/{thread_id}/draft` | `{"text"}` | `{"draft": {...} \| null}` (acts on nothing) |
 | POST | `/{abbr}/inbox/{thread_id}/reply` | `{"option_id", "payload", "note"}` | the thread with new messages |
 | POST | `/{abbr}/inbox` | `{"kind", "as", ...kind fields, "note"}` | 201 the new thread |
 | POST | `/{abbr}/inbox/{thread_id}/close` | — | the thread |
 
-`Actor = {role, id, name}`. `Thread` adds `actor` and `counterpart` and leaves out `state`. `Message = {id, seq, author, body, source, option_id, engine_ref, appraisal: {outcome, reason} | null, created_at}`; it never includes `facts` or a GM's surplus. Errors use `{"detail"}`: 400, 403 (team not in the registry, or `as` not a controlled role), 404, 409. Notes are at most 600 characters.
+`Actor = {role, id, name}`. `Target = {id, name, position, overall}` for `CONTRACT` / `ROLE_TALK` (your active-roster players, `id` = `players.id` as text) and `{id, name, team}` for `GM_TALK` (a team with an open GM tenure other than yours; `id` = `gm_profiles.id`, `team` = the abbreviation passed as `gm_team`); an unknown or targetless kind answers an empty `targets`. `Thread` adds `actor` and `counterpart` and leaves out `state`. `Message = {id, seq, author, body, source, option_id, engine_ref, appraisal: {outcome, reason} | null, created_at}`; it never includes `facts` or a GM's surplus. Errors use `{"detail"}`: 400, 403 (team not in the registry, or `as` not a controlled role), 404, 409. Notes are at most 600 characters.
 
 ### 2.13 Frontend
 
@@ -481,7 +482,7 @@ Opening the inbox runs `scan(..., teams=[abbr], llm=None)`: fast templates, at m
   - **Take control:** with no actors, a panel lists the candidates (GM, head coach) with "Take control". A small "Personas" menu does the same later, and releases.
   - **List:** an "acting as" filter, open/all, kind chips, unread dots.
   - **Conversation:** messages, with template tags and a small appraisal marker on counterpart replies that carry one (+/−/~ and the reason on hover; no trust number); options, forms (`contract_terms`, `trade_assets`, `promise`, `vision`), a text box, the draft card, and a "Go to Depth Chart" link in role talks.
-  - **New conversation:** a picker from `/inbox/kinds`.
+  - **New conversation:** a picker from `/inbox/kinds`. A kind that declares `START_FORM` renders it: `player_pick` (`CONTRACT`, `ROLE_TALK`) or `team_pick` (`GM_TALK`), each fed by `/inbox/targets?kind=`, and sends `player_id` or `gm_team` in the start body. `REPORTER` uses the typed topic (or the opening note) as the subject; `VISION` needs no target (wave 4).
 - `FranchisePage.tsx`: the Inbox tab after Game Center, with the unread count.
 
 ### 2.14 How sibling plans plug in
@@ -588,6 +589,34 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 
 (U-numbers are kept from the previous revision; U6 is new.)
 
+### Wave 4: starting conversations with a target (added 2026-11-07, JR approved)
+
+The new-conversation picker could only start `REPORTER` and `VISION`: `GM_TALK`, `CONTRACT` and `ROLE_TALK` need an opponent or player, and no form or endpoint carried one. Wave 4 adds the `targets` endpoint, `START_FORM` on three kinds, and the two picker forms.
+
+### U7: Targets endpoint
+
+- **Owns:** `server/inbox_api.py`, `tests/test_inbox_api.py`.
+- **Reads:** §2.12 (the `targets` row and `Target` shape); `server/franchise_api.py` `_context` (roster `ACTIVE` shaping: `player_id`, `name`, `position`, `overall`); `engines/inbox/actors.py`; `gm_profiles` (`end_season IS NULL`, `team_id`, `gm_name`).
+- **Depends on:** none.
+- **Done when:** `GET /{abbr}/inbox/targets?kind=` answers `{kind, targets}` per §2.12 — your active players for `CONTRACT` / `ROLE_TALK`, other teams' open-GM entries for `GM_TALK`, an empty list otherwise; 400 on a missing kind; 403 outside `user_teams`; the router still imports.
+- **Verify:** `pytest -m "not integration" tests/test_inbox_api.py tests/test_franchise_api.py` pass.
+
+### U8: Start forms and subjects on the kinds
+
+- **Owns:** `engines/inbox/kinds/gm_talk.py`, `contract.py`, `role_talk.py`, `reporter.py`, `tests/test_inbox_kinds_gm_talk.py`, `tests/test_inbox_kinds_contract.py`, `tests/test_inbox_kinds_role_talk.py`, `tests/test_inbox_kinds_reporter.py`.
+- **Reads:** §2.8, §2.12–§2.13; each kind's `start`.
+- **Depends on:** none.
+- **Done when:** `START_FORM = "team_pick"` on `GM_TALK` and `"player_pick"` on `CONTRACT` and `ROLE_TALK` (the API's `/kinds` already passes `START_FORM` through); `reporter.start`, `role_talk.start` and `gm_talk.start` use `body.topic` or, failing that, `body.note` as the subject/topic; every existing test still passes and each new one covers a typed note becoming the subject.
+- **Verify:** `pytest -m "not integration" tests/test_inbox_kinds_gm_talk.py tests/test_inbox_kinds_contract.py tests/test_inbox_kinds_role_talk.py tests/test_inbox_kinds_reporter.py` pass.
+
+### U9: Picker forms in the Command Center
+
+- **Owns:** `Mu_Network/src/components/franchise/InboxModule.tsx`, `Mu_Network/src/types/franchiseInbox.ts`.
+- **Reads:** §2.12 (`Target`, `targets`), §2.13; `InboxModule.tsx` `NewConversation` and `FormFor`.
+- **Depends on:** none (built against the fixed §2.12 shapes; the API is U7).
+- **Done when:** `InboxFormKind` gains `player_pick` / `team_pick`; `NewConversation` renders a player picker (name, position, overall) for `player_pick` and a team/GM picker for `team_pick`, fed by `GET /inbox/targets?kind=`, posting `player_id` or `gm_team` in the start body; a failed targets fetch shows a short unavailable line and leaves Start disabled; the topic field is sent as `note` as today.
+- **Verify:** `cd Mu_Network && npm run build` exits 0.
+
 ## 6. Waves
 
 | Wave | Units | Needs merged first | Why together |
@@ -595,6 +624,7 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 | 1 | U1, U2 | — | No shared files; U2 builds against §2.12's fixed shapes. |
 | 2 | U3, U4, U6 | U1 | Separate kind files found by auto-discovery; only U6 touches `gm_direction.py`. |
 | 3 | U5 | U1 | Generic over kinds; it goes in its own wave only to keep three units per wave. It doesn't need wave 2, so it can run in wave 2 if JR allows four units in a wave. |
+| 4 | U7, U8, U9 | U1–U6 | Added 2026-11-07 so the new-conversation picker can start every kind. No shared files: U7 owns the API, U8 the kinds, U9 the page; U9 builds against the fixed §2.12 shapes. |
 
 After wave 3 the orchestrator runs the page against `madden_test` once (take control of the coach and GM, propose a vision, make a typed contract offer, give an interview, make a promise and review it) and runs the quality gate.
 
@@ -645,6 +675,8 @@ After wave 3 the orchestrator runs the page against `madden_test` once (take con
 | `tests/test_weekly_capture_inbox.py` | U1 |
 
 No path appears twice.
+
+**Wave 4 ownership (added 2026-11-07):** `server/inbox_api.py` and `tests/test_inbox_api.py` move from U5 to **U7**; `engines/inbox/kinds/{gm_talk,contract,role_talk,reporter}.py` and their four test files move from U3/U4 to **U8**; `Mu_Network/src/components/franchise/InboxModule.tsx` and `Mu_Network/src/types/franchiseInbox.ts` move from U2 to **U9**. No other path changes hands.
 
 ## 7. Spec changes when built
 
