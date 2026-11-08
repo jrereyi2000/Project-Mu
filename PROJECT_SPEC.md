@@ -523,6 +523,7 @@ Project Mu/
 │   ├── USAGE_GUIDE.md         # Comprehensive end-to-end usage and operational guide
 │   ├── EDITORIAL_MATRIX.md
 │   ├── NARRATIVE_COHESIVENESS_REVIEW.md # Strategic review re-evaluating past compromises (historical analogies, usage trends, turnover margin, multi-year arcs, playoff clout, scheme splits, red zone, N-season franchise & player trajectories) across real and synthetic datasets
+│   ├── FOLLOW_UPS.md         # Open follow-ups from done/held plans (cross-plan wiring, held units, activation gates) — the canonical list to check before starting new work
 │   ├── writers/               #   Saved swarm debug-harness transcripts per writer (2035 Week 17)
 │   ├── done/                  #   Finished plans (plus PIPELINE_MIGRATION, superseded by the PC plan), kept as the record of what was built
 │   │   ├── PERSONALITY_CORE_EXTENSIONS_PLAN.md # Plan, built 2026-11-04 (waves 1–2): full reads of reviewed real profiles (views-v2), audited JR overrides outside the annual slot, as-of profile reads, in-place adoption of the 40 writer and 32 GM personas, role-change carry-over links, CLI subcommands and #debug override, legacy guards, migration 2027_01_29 (not applied anywhere; adoption not run)
