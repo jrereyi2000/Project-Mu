@@ -325,8 +325,9 @@ export default function TradeMachineModule({ teamAbbr }: { teamAbbr: string }) {
       .catch((e) => setEvaluation(toState<TradeEvaluation>(e)));
   };
 
-  // V2.11 §2.8: open a GM_TALK thread with this package, then the inbox. `as` is the controlled GM persona
-  // (the inbox start requires it); a 409 means a talk with that GM is already open, so link there instead.
+  // V2.11 §2.8: open a GM_TALK thread with this package, then the inbox. `as` is the controlled GM persona (the
+  // inbox start requires it). `assets` is V2.9's `trade_assets` payload, which is one-directional (JR sends; the GM
+  // counters for his own side), so it carries the builder's send side. A 409 means a talk is open: link there.
   const talkToGm = () => {
     const body: InboxStartRequest = { kind: "GM_TALK", as: "GM", gm_team: other, assets: toWire(send) };
     setTalking(true);
