@@ -1380,8 +1380,19 @@ def load_prospects(cur, folder, season, report):
     report["personality"] = class_personality(cur, draft_season, prospects, os.path.basename(folder),
                                               report.pop("personality_context", None))
     # scouting (team management step 4): re-point the class's scouting rows at the new ids (no-op before init)
-    from engines.scouting_engine import relink
-    report["scouting_relink"] = relink(cur, draft_season, log=lambda *a: None)
+    from engines import scouting_engine as se
+    if se.installed(cur):
+        report["scouting_relink"] = se.relink(cur, draft_season, log=lambda *a: None)
+        # a scanned (PS5) class has no ratings, so pipeline/load_save.store_prospect_ratings never runs: allocate its
+        # permanent prospect IDs here next to relink (§2.2, §2.5).
+        from engines import prospect_ids
+        from engines.scouting_value import prospect_key
+        report["prospect_ids"] = prospect_ids.ensure_prospect_ids(
+            cur, draft_season,
+            [{"prospect_key": prospect_key(draft_season, p.full_name, p.position), "pgid": None} for p in prospects],
+            os.path.basename(folder))
+    else:
+        report["scouting_relink"] = None
     dest = os.path.join("data", "draft", f"{draft_season}_prospects.csv")
     if not report.get("dry_run") and os.path.abspath(prospects_path) != os.path.abspath(dest):
         os.makedirs(os.path.dirname(dest), exist_ok=True)

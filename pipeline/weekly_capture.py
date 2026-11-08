@@ -537,8 +537,21 @@ def step_scouting(season):
             if board and not scouted:
                 se.init(cur, s + 1, step, log=log)
             done = se.catch_up(cur, s + 1, step, log=log, extras=se.default_extras, llm=llm)
+            # Step 7c report editions (§2.5): rewrite each new edition's consensus top LLM_TOP with the LLM.
+            # The rows are already stored as templates, so a failure here only logs a warning.
+            llm_report = make_llm("scout_report")
+            try:
+                from engines import scouting_reports
+                for stored in done:
+                    cur.execute("SELECT DISTINCT edition FROM scout_reports WHERE draft_season = %s AND step = %s",
+                                (s + 1, stored))
+                    for (ed,) in cur.fetchall():
+                        scouting_reports.rewrite(cur, s + 1, ed, llm_report)
+            except Exception as e:
+                log(f"  [WARN] Scouting report rewrite skipped: {e!r}")
             conn.commit()
         flush(llm)
+        flush(llm_report)
         log(f"  Scouting {s + 1}: steps stored {done or 'none (up to date or class not initialized)'}")
         return done
     except Exception as e:
