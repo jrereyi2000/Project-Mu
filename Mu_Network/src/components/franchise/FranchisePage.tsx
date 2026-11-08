@@ -21,6 +21,7 @@ import TradeMachineModule from "./TradeMachineModule";
 import DraftWarRoomModule from "./DraftWarRoomModule";
 import TrainingRoomModule from "./TrainingRoomModule";
 import ReportCardModule from "./ReportCardPanel";
+import StaffContractCard from "./StaffContractCard";
 
 type ModuleDef = { slug: string; label: string; Component: ComponentType<{ teamAbbr: string }> };
 
@@ -35,6 +36,7 @@ const MODULES: ModuleDef[] = [
   { slug: "draft-war-room", label: "Draft War Room", Component: DraftWarRoomModule },
   { slug: "training-room", label: "Training Room", Component: TrainingRoomModule },
   { slug: "report-card", label: "Report Card", Component: ReportCardModule },
+  { slug: "staff-contracts", label: "Staff Contracts", Component: StaffContractCard },
 ];
 
 const DEFAULT_TEAM = "CAR";
