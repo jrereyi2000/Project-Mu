@@ -27,7 +27,7 @@ from engines import owner_policy as op
 from engines.staff_names import background, new_name, taken_names
 from personality import coaching_trees as ct
 
-APPEAL_WEIGHTS = {"qb": 0.30, "roster": 0.20, "draft": 0.15, "market": 0.15, "front_office": 0.10, "cap": 0.10}
+APPEAL_WEIGHTS = {"qb": 0.30, "roster": 0.25, "draft": 0.15, "cap": 0.10, "market": 0.10, "facilities": 0.10}
 CHURN_PENALTY = 0.05               # per extra head coach the team went through in the last 5 seasons
 MAX_COORD_FIRES = 8                # coordinators turn over far more than head coaches
 COORD_LINE = 1.0
@@ -216,59 +216,322 @@ def percentiles(values):
 
 
 def opening_appeal(parts):
-    """Pure. parts: {qb, roster, draft, market, front_office, cap} each 0..1 (missing = 0.5) plus churn (extra head
-    coaches in the last 5 seasons). appeal = sum(APPEAL_WEIGHTS[k] * part) - CHURN_PENALTY * churn: the QB first
-    (a franchise quarterback sells a job), then the roster, draft capital, market and prestige, a well-run front
-    office, and cap room; an owner who keeps firing coaches scares candidates off."""
+    """Pure. parts: {qb, roster, draft, cap, market, facilities} each 0..1 (missing = 0.5) plus churn (extra head
+    coaches in the last 5 seasons). appeal = sum(APPEAL_WEIGHTS[k] * part) - CHURN_PENALTY * churn (§2.1): the QB
+    first (a franchise quarterback sells a job), then the roster and its under-25 core, draft capital over the next
+    two drafts, cap room, market prestige and facilities; an owner who keeps firing coaches scares candidates off."""
     base = sum(w * (parts.get(k) if parts.get(k) is not None else 0.5) for k, w in APPEAL_WEIGHTS.items())
     return round(base - CHURN_PENALTY * (parts.get("churn") or 0), 3)
 
 
+# ----------------------------------------------------------------------- §2.1 appeal components (pure) ----
+STARTERS = 22          # the 22 non-specialist starters (QB through S)
+STARTER_SLOTS = {"QB": 1, "RB": 1, "WR": 3, "TE": 1, "OT": 2, "IOL": 3, "EDGE": 2, "DT": 2, "LB": 2, "CB": 3, "S": 2}
+
+
+def qb_appeal(qb):
+    """S_qb (§2.1 five-tier table): a team's QB1 destination score. qb: {ovr, age, dev_trait, cap_hit} (or
+    {ovr, age, cap}); None or {} = no starter (Tier 5, 0.10). Tier 1 elite (OVR >= 88, age <= 31) 1.00; Tier 2
+    promising young (age <= 25, Star/Superstar/X-Factor dev, OVR >= 76) 0.90; Tier 3 average starter (78-84, 26-31)
+    0.60; Tier 4 aging bridge (age >= 34, OVR <= 78, cap >= $30M) 0.25; anything else 0.10."""
+    if not qb:
+        return 0.10
+    ovr, age = qb.get("ovr"), qb.get("age")
+    dev = (qb.get("dev_trait") or "").lower()
+    cap = qb.get("cap_hit") if qb.get("cap_hit") is not None else qb.get("cap")
+    if ovr is not None and age is not None and int(ovr) >= 88 and int(age) <= 31:
+        return 1.00
+    if age is not None and int(age) <= 25 and ovr is not None and int(ovr) >= 76 \
+            and ("star" in dev or "x-factor" in dev):
+        return 0.90
+    if ovr is not None and age is not None and 78 <= int(ovr) <= 84 and 26 <= int(age) <= 31:
+        return 0.60
+    if age is not None and int(age) >= 34 and ovr is not None and int(ovr) <= 78 and int(cap or 0) >= 30_000_000:
+        return 0.25
+    return 0.10
+
+
+def youth_core(under25_starters, under25_xfactor):
+    """S_youth_core (§2.1) = min(under-25 starters / 22 + 0.05 * under-25 X-factor, 1.0)."""
+    return round(min(1.0, (int(under25_starters or 0) / STARTERS) + 0.05 * int(under25_xfactor or 0)), 3)
+
+
+def roster_appeal(team_ovr_pct, under25_starters, under25_xfactor):
+    """S_roster_appeal (§2.1) = 0.50 * team_ovr percentile + 0.50 * S_youth_core."""
+    return round(0.50 * team_ovr_pct + 0.50 * youth_core(under25_starters, under25_xfactor), 3)
+
+
 def opening_parts(cur, season, team_ids):
-    """{team_id: opening_appeal parts} for openings after `season`, each a league percentile: qb =
-    scouting_boards.qb_security of the QB1 (scouting_engine.qb_starters), roster = team_ovr, draft = next draft's
-    Round 1-2 picks owned, weighted by slot (draft_order.draft_order_with_owners; Round 2 counts half), market =
-    market_constants B, front_office = fo_standing.live score, cap = cap space (team_cap_seasons, season + 1 else
-    season); a part that can't be read is 0.5. churn = head coaches who started in the last 5 seasons, minus one."""
+    """{team_id: opening_appeal parts} for openings after `season`. qb = the §2.1 S_qb tier of the QB1 (OVR, age,
+    dev trait, cap hit); roster = 0.50 * team_ovr percentile + 0.50 * S_youth_core (under-25 starters / 22 + 0.05 *
+    under-25 X-factor); draft = Round 1-2 pick capital over the next TWO drafts (the upcoming draft weighted by slot,
+    (33 - round pick)/32, Round 2 half; the draft after counted by round only since its order isn't set yet); cap =
+    cap space percentile (team_cap_seasons, season + 1 else season); market = market_constants B percentile;
+    facilities = report_card_engine.facility_score of the team's latest report card (or the 2026 baseline). churn =
+    head coaches who started in the last 5 seasons, minus one."""
     from engines.draft_order import draft_order_with_owners
     from engines.market_constants import TEAM_MARKET
-    from engines.scouting_boards import qb_security
-    from engines.scouting_engine import qb_starters
     allt = teams(cur)
-    qbs = qb_starters(cur, season)
-    qb = percentiles({t: qb_security(qbs.get(t)) for t in allt})
+    qbs = _qb1_facts(cur, season)
+    qb = {t: qb_appeal(qbs.get(t)) for t in allt}
     cur.execute("SELECT team_id, team_ovr FROM team_seasons WHERE season = %s", (season,))
-    roster = percentiles({**{t: None for t in allt}, **{t: v for t, v in cur.fetchall() if t in allt}})
+    team_ovr = percentiles({**{t: None for t in allt}, **{t: v for t, v in cur.fetchall() if t in allt}})
+    youth = _roster_youth(cur, season)
+    roster = {t: roster_appeal(team_ovr[t], youth.get(t, {}).get("under25_starters", 0),
+                               youth.get(t, {}).get("under25_xfactor", 0)) for t in allt}
     value = {t: 0.0 for t in allt}
     try:
         cur.execute("SAVEPOINT appeal_draft")
-        for slot in draft_order_with_owners(cur, season + 1, rounds=(1, 2)):
-            if slot["owner_team_id"] in value:
-                value[slot["owner_team_id"]] += (33 - slot["round_pick"]) / 32 * (1.0 if slot["round"] == 1 else 0.5)
+        for ds, slot_weighted in ((season + 1, True), (season + 2, False)):
+            for slot in draft_order_with_owners(cur, ds, rounds=(1, 2)):
+                if slot["owner_team_id"] in value:
+                    w = (33 - slot["round_pick"]) / 32 if slot_weighted else 1.0
+                    value[slot["owner_team_id"]] += w * (1.0 if slot["round"] == 1 else 0.5)
         cur.execute("RELEASE SAVEPOINT appeal_draft")
     except Exception:
         cur.execute("ROLLBACK TO SAVEPOINT appeal_draft")
         value = {t: None for t in allt}
     draft = percentiles(value)
     market = percentiles({t: TEAM_MARKET.get(allt[t]["name"], {}).get("B") for t in allt})
-    fo = {t: None for t in allt}
-    try:
-        cur.execute("SAVEPOINT appeal_fo")
-        from engines import fo_standing
-        fo.update({r["team_id"]: r.get("score") for r in fo_standing.live(cur, season) if r["team_id"] in fo})
-        cur.execute("RELEASE SAVEPOINT appeal_fo")
-    except Exception:
-        cur.execute("ROLLBACK TO SAVEPOINT appeal_fo")
-    fo = percentiles(fo)
     cur.execute("""SELECT DISTINCT ON (team_id) team_id, cap_space FROM team_cap_seasons
                    WHERE season IN (%s, %s) ORDER BY team_id, season DESC""", (season, season + 1))
     cap = percentiles({**{t: None for t in allt}, **{t: float(c) if c is not None else None
                                                      for t, c in cur.fetchall() if t in allt}})
+    facilities = _facility_scores(cur, season, allt)
     cur.execute("""SELECT team_id, count(*) FROM coach_tenures WHERE start_season > %s AND start_season <= %s
                    GROUP BY team_id""", (season - 5, season))
     churn = {t: max(n - 1, 0) for t, n in cur.fetchall()}
-    return {t: {"qb": qb[t], "roster": roster[t], "draft": draft[t], "market": market[t], "front_office": fo[t],
-                "cap": cap[t], "churn": churn.get(t, 0)} for t in team_ids}
+    return {t: {"qb": qb[t], "roster": roster[t], "draft": draft[t], "cap": cap[t], "market": market[t],
+                "facilities": facilities.get(t, 0.5), "churn": churn.get(t, 0)} for t in team_ids}
+
+
+def _qb1_facts(cur, season):
+    """{team_id: {ovr, age, dev_trait, cap_hit}} for each team's top-OVR rostered QB1 (scouting_engine.qb_starters
+    plus the dev trait and current-season cap hit the §2.1 S_qb tiers need). Falls back to qb_starters (no dev/cap)
+    when the richer read fails."""
+    from engines.scouting_engine import qb_starters
+    try:
+        cur.execute("SAVEPOINT appeal_qb")
+        cur.execute("""SELECT DISTINCT ON (ps.team_id) ps.team_id, ps.overall_rating, ps.age, ps.dev_trait,
+                              pcy.cap_hit
+                       FROM player_seasons ps
+                       LEFT JOIN player_contracts pc ON pc.player_id = ps.player_id AND pc.season = ps.season
+                            AND pc.status = 'ACTIVE'
+                       LEFT JOIN player_contract_years pcy ON pcy.contract_id = pc.id AND pcy.year = ps.season
+                       WHERE ps.season = %s AND ps.position = 'QB' AND ps.released_week IS NULL
+                         AND ps.team_id IS NOT NULL AND ps.overall_rating IS NOT NULL
+                       ORDER BY ps.team_id, ps.overall_rating DESC, ps.player_id""", (season,))
+        rows = cur.fetchall()
+        cur.execute("RELEASE SAVEPOINT appeal_qb")
+        return {r[0]: {"ovr": r[1], "age": r[2], "dev_trait": r[3], "cap_hit": r[4]} for r in rows}
+    except Exception:
+        cur.execute("ROLLBACK TO SAVEPOINT appeal_qb")
+        return {t: {"ovr": q.get("ovr"), "age": q.get("age"), "dev_trait": None, "cap_hit": None}
+                for t, q in qb_starters(cur, season).items()}
+
+
+def _roster_youth(cur, season):
+    """{team_id: {under25_starters, under25_xfactor}}: the under-25 count among the 22 starters (top OVR per
+    STARTER_SLOTS group) and the roster's under-25 blue-chip (Superstar/X-Factor) dev traits."""
+    from engines.gm_direction import position_group
+    cur.execute("""SELECT team_id, player_id, position, age, overall_rating, dev_trait
+                   FROM player_seasons WHERE season = %s AND released_week IS NULL
+                     AND team_id IS NOT NULL AND position IS NOT NULL""", (season,))
+    by_team = {}
+    for tid, pid, pos, age, ovr, dev in cur.fetchall():
+        g = position_group(pos)
+        if g not in STARTER_SLOTS:
+            continue
+        by_team.setdefault(tid, []).append({"pid": pid, "group": g, "age": age, "ovr": ovr or 0, "dev": dev or ""})
+    out = {}
+    for tid, players in by_team.items():
+        starters = set()
+        for g, n in STARTER_SLOTS.items():
+            pool = sorted((p for p in players if p["group"] == g), key=lambda p: -p["ovr"])[:n]
+            starters.update(p["pid"] for p in pool)
+        under25_starters = sum(1 for p in players if p["pid"] in starters and p["age"] is not None
+                               and int(p["age"]) < 25)
+        under25_xfactor = sum(1 for p in players if p["age"] is not None and int(p["age"]) < 25
+                              and ("x-factor" in p["dev"].lower() or "superstar" in p["dev"].lower()))
+        out[tid] = {"under25_starters": under25_starters, "under25_xfactor": under25_xfactor}
+    return out
+
+
+def _facility_scores(cur, season, tm):
+    """{team_id: facility_score} from the team's latest team_report_cards row (season <= season), else the 2026
+    baseline (engines/report_card_baseline.json, keyed by teams.abbreviation)."""
+    from engines import report_card_engine
+    cols = ("weight_room", "training_room", "locker_room", "food_nutrition", "team_travel",
+            "family_treatment", "head_coach", "ownership")
+    baseline = report_card_engine.load_baseline()
+    out = {tid: report_card_engine.facility_score(baseline[t["abbr"]])
+           for tid, t in tm.items() if t["abbr"] in baseline}
+    try:
+        cur.execute("SAVEPOINT appeal_facility")
+        cur.execute(f"""SELECT DISTINCT ON (team_id) team_id, {', '.join(cols)}
+                        FROM team_report_cards WHERE season <= %s ORDER BY team_id, season DESC""", (season,))
+        for r in cur.fetchall():
+            out[r[0]] = report_card_engine.facility_score(dict(zip(cols, r[1:])))
+        cur.execute("RELEASE SAVEPOINT appeal_facility")
+    except Exception:
+        cur.execute("ROLLBACK TO SAVEPOINT appeal_facility")
+    return out
+
+
+# ----------------------------------------------------------------------- §2.3 Godfather offer (pure) ----
+GODFATHER_CASH = 35_000_000        # owner cash pool floor for a Full Control offer (§2.3)
+GODFATHER_SALARY = 19_000_000      # the top-of-market $16-22M/yr band's midpoint
+GODFATHER_YEARS = 5                # 5-6 years, fully guaranteed
+
+
+def godfather_owner_ok(owner_view, cash_pool):
+    """True when the owner has DEEP_POCKETS and HEADLINE_HUNTER traits and a cash pool >= GODFATHER_CASH (§2.3)."""
+    if not owner_view:
+        return False
+    traits = set(owner_view.get("traits") or ())
+    return {"DEEP_POCKETS", "HEADLINE_HUNTER"} <= traits and int(cash_pool or 0) >= GODFATHER_CASH
+
+
+def godfather_candidate_ok(candidate):
+    """True when the candidate has the §2.3 stature: a Super Bowl win as head coach or coordinator, or an A+
+    mastermind whose drive or ego is >= 8."""
+    if not candidate:
+        return False
+    if (candidate.get("super_bowl_wins") or 0) >= 1 or candidate.get("champion"):
+        return True
+    drive, ego = candidate.get("drive"), candidate.get("ego")
+    return (drive is not None and int(drive) >= 8) or (ego is not None and int(ego) >= 8)
+
+
+def godfather_offer(*, gate, owner_view, cash_pool, hc_vacant, gm_vacant, candidate):
+    """Pure §2.3 gate. gate: staff_contracts_engine.godfather_gate's result (or godfather_eligible's). Returns
+    {'offer': bool, 'blockers': [...], 'salary': GODFATHER_SALARY, 'years': GODFATHER_YEARS}."""
+    blockers = []
+    if not (gate or {}).get("eligible"):
+        blockers.append("rarity gate")
+    if not godfather_owner_ok(owner_view, cash_pool):
+        blockers.append("owner")
+    if not (hc_vacant and gm_vacant):
+        blockers.append("dual vacancy")
+    if not godfather_candidate_ok(candidate):
+        blockers.append("candidate stature")
+    return {"offer": not blockers, "blockers": blockers, "salary": GODFATHER_SALARY, "years": GODFATHER_YEARS}
+
+
+def gm_slant_bias(slant):
+    """The front-office slant sync (§2.3): a coach-GM's position_bias leans toward the coach's side of the ball."""
+    if slant == "OFFENSIVE":
+        return {"QB": 1.10, "WR": 1.08, "OT": 1.08, "RB": 1.05, "TE": 1.05, "IOL": 1.05}
+    if slant == "DEFENSIVE":
+        return {"EDGE": 1.10, "DT": 1.08, "CB": 1.08, "LB": 1.05, "S": 1.05}
+    return {}
+
+
+def godfather_acceptance(season, team_id, coach_id, coach_name, *, salary, years, slant, trigger_reason):
+    """Pure: the writes a Full Control acceptance makes, as plain dicts — the staff_contracts row (full_control
+    true), the gm_profiles coach_id assignment plus the slant-synced position_bias, and the full_control_history
+    row."""
+    return {
+        "staff_contract": {"team_id": team_id, "person_id": coach_id, "person_kind": "HC",
+                           "annual_salary": salary, "total_years": years, "remaining_years": years,
+                           "signed_season": season + 1, "full_control": True, "buyout_owed": 0},
+        "gm_profile": {"team_id": team_id, "coach_id": coach_id, "gm_name": coach_name,
+                       "position_bias": gm_slant_bias(slant), "start_season": season + 1},
+        "full_control_history": {"season": season, "team_id": team_id, "coach_id": coach_id,
+                                 "annual_salary": salary, "contract_years": years,
+                                 "trigger_reason": trigger_reason},
+    }
+
+
+def _gm_vacant(cur, team_id):
+    """True when the team has no open GM tenure (a dual HC+GM vacancy needs the GM seat empty too)."""
+    try:
+        cur.execute("SELECT count(*) FROM gm_profiles WHERE team_id = %s AND end_season IS NULL", (team_id,))
+        return cur.fetchone()[0] == 0
+    except Exception:
+        return False
+
+
+def _godfather_cash_pool(cur, season, team_id, abbr):
+    """The owner's annual cash pool for the Godfather cash floor: owner_cash_ledgers.total_cash_budget (latest
+    season <= season + 1), else the baseline wealth band's base budget."""
+    from engines import report_card_engine
+    try:
+        cur.execute("SAVEPOINT godfather_cash")
+        cur.execute("""SELECT total_cash_budget FROM owner_cash_ledgers
+                       WHERE team_id = %s AND season <= %s ORDER BY season DESC LIMIT 1""", (team_id, season + 1))
+        row = cur.fetchone()
+        cur.execute("RELEASE SAVEPOINT godfather_cash")
+        if row and row[0] is not None:
+            return int(row[0])
+    except Exception:
+        cur.execute("ROLLBACK TO SAVEPOINT godfather_cash")
+    try:
+        card = report_card_engine.load_baseline().get(abbr)
+        if card and card.get("wealth_band"):
+            return report_card_engine.base_budget(card["wealth_band"])
+    except Exception:
+        pass
+    return 0
+
+
+def _extend_full_control(cur, acc):
+    """The §2.3 writes when a Godfather offer is accepted: the full-control staff_contracts row, the gm_profiles
+    coach_id assignment (plus the slant-synced position_bias; a new coach-GM tenure when the GM seat is empty), and
+    the full_control_history row."""
+    sc = acc["staff_contract"]
+    cur.execute("""INSERT INTO staff_contracts (team_id, person_id, person_kind, annual_salary, total_years,
+                                                remaining_years, signed_season, full_control, buyout_owed)
+                   VALUES (%s, %s, 'HC', %s, %s, %s, %s, true, 0)""",
+                (sc["team_id"], sc["person_id"], sc["annual_salary"], sc["total_years"], sc["remaining_years"],
+                 sc["signed_season"]))
+    h = acc["full_control_history"]
+    cur.execute("""INSERT INTO full_control_history (season, team_id, coach_id, annual_salary, contract_years,
+                                                    trigger_reason)
+                   VALUES (%s, %s, %s, %s, %s, %s)""",
+                (h["season"], h["team_id"], h["coach_id"], h["annual_salary"], h["contract_years"],
+                 h["trigger_reason"]))
+    gm = acc["gm_profile"]
+    cur.execute("UPDATE gm_profiles SET coach_id = %s, position_bias = %s "
+                "WHERE team_id = %s AND end_season IS NULL",
+                (gm["coach_id"], json.dumps(gm["position_bias"]), gm["team_id"]))
+    if cur.rowcount == 0:
+        # a dual vacancy: the GM seat is empty, so the new head coach becomes the GM (a new coach-GM tenure)
+        rng = random.Random(f"gm:{gm['team_id']}:{gm['start_season']}:godfather")
+        cur.execute("""INSERT INTO gm_profiles (team_id, gm_name, bio, voice, bio_source, start_season,
+                                                first_draft_season, coach_id, risk_appetite, aggressiveness,
+                                                pick_affinity, youth_bias, position_bias, seed)
+                       VALUES (%s, %s, %s, %s, 'TEMPLATE', %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                    (gm["team_id"], gm["gm_name"],
+                     f"{gm['gm_name']} is the head coach and general manager with full control of football "
+                     "operations.", "the head coach's own voice", gm["start_season"], gm["start_season"],
+                     gm["coach_id"], round(rng.uniform(0.35, 0.75), 2), round(rng.uniform(0.30, 0.70), 2),
+                     round(rng.uniform(0.85, 1.20), 2), round(rng.uniform(-0.5, 0.5), 2),
+                     json.dumps(gm["position_bias"]), f"gm:{gm['team_id']}:{gm['start_season']}:godfather"))
+
+
+def _maybe_godfather(cur, season, tid, abbr, coach_id, coach_name, slant, candidate, owner_view, log=print):
+    """§2.3: extend a Full Control (Godfather) offer for a head-coach opening when every gate passes — the rarity
+    gate (staff_contracts_engine.godfather_gate), the owner archetype + cash, the dual HC+GM vacancy and the
+    candidate stature. Returns the acceptance dict (already written) or None. The owner features stay off until the
+    owners plan's U6 migration, so this normally no-ops."""
+    from engines import staff_contracts_engine as sce
+    try:
+        gate = sce.godfather_gate(cur, season)
+    except Exception:
+        return None
+    cash = _godfather_cash_pool(cur, season, tid, abbr)
+    decision = godfather_offer(gate=gate, owner_view=owner_view, cash_pool=cash,
+                               hc_vacant=True, gm_vacant=_gm_vacant(cur, tid), candidate=candidate)
+    if not decision["offer"]:
+        return None
+    acc = godfather_acceptance(season, tid, coach_id, coach_name, salary=decision["salary"],
+                               years=decision["years"], slant=slant,
+                               trigger_reason="dual HC+GM vacancy; deep-pockets headline-hunter owner; "
+                                             "Super Bowl-winning candidate")
+    _extend_full_control(cur, acc)
+    log(f"  godfather: {abbr} grants {coach_name} full control (head coach + GM)")
+    return acc
 
 
 def gumbel(key):
@@ -520,6 +783,10 @@ def hiring_cycle(cur, season, log=print, personality=None):
     from engines import owner_context as octx      # not `oc`: the hiring loop names the OC `oc`
     hmode, mmode = octx.feature_mode(cur, "owner_hiring"), octx.feature_mode(cur, "owner_meddling")
     owners = octx.team_owner_views(cur, exclude=mine) if (hmode, mmode) != ("off", "off") else {}
+    try:
+        godfather_owners = owners or octx.team_owner_views(cur, exclude=mine)   # §2.3 reads the same owner views
+    except Exception:
+        godfather_owners = {}
     if "shadow" in (hmode, mmode):
         report["owner_shadow"] = []
     if (hmode, mmode) != ("off", "off"):
@@ -568,22 +835,25 @@ def hiring_cycle(cur, season, log=print, personality=None):
             continue
         ur, tr = unit_of(ranks, tid, role)
         cands.append({"key": f"coord:{c['coordinator_id']}", "kind": "POACHED", "team_id": tid, "role": role, **c,
+                      "champion": res.get(tid, {}).get("champion", False),
                       "score": coordinator_candidacy(ur, tr, res.get(tid, {}).get("wins", 0),
                                                      res.get(tid, {}).get("champion", False),
                                                      years.get(c["coordinator_id"], 1))})
     cur.execute("""SELECT c.id, c.coach_name, c.slant, c.offensive_scheme, c.defensive_scheme, c.pass_lean,
-                          c.blitz_rate, c.man_coverage, r.career_wins, r.career_losses, r.playoff_wins
+                          c.blitz_rate, c.man_coverage, r.career_wins, r.career_losses, r.playoff_wins,
+                          r.super_bowl_wins
                    FROM coaches c LEFT JOIN coach_records r ON r.coach_id = c.id
                    WHERE EXISTS (SELECT 1 FROM coach_tenures t WHERE t.coach_id = c.id AND t.end_season BETWEEN %s AND %s)
                      AND NOT EXISTS (SELECT 1 FROM coach_tenures t WHERE t.coach_id = c.id
                                        AND (t.end_season IS NULL OR t.end_season >= %s))
                      AND NOT EXISTS (SELECT 1 FROM gm_profiles g WHERE g.coach_id = c.id AND g.end_season IS NULL)""",
                 (season - 2, season, nxt))
-    for cid, name, slant, off, de, pl, br, mc, w, l, pw in cur.fetchall():
+    for cid, name, slant, off, de, pl, br, mc, w, l, pw, sbw in cur.fetchall():
         pct = w / (w + l) if w is not None and (w + l) else 0.45
         cands.append({"key": f"coach:{cid}", "kind": "RETREAD", "coach_id": cid, "name": name, "slant": slant,
                       "offensive_scheme": off, "defensive_scheme": de, "pass_lean": pl, "blitz_rate": br,
-                      "man_coverage": mc, "score": round((pct - 0.5) * 4 + (0.3 if pw else 0) - RETREAD_PENALTY, 3)})
+                      "man_coverage": mc, "super_bowl_wins": sbw,
+                      "score": round((pct - 0.5) * 4 + (0.3 if pw else 0) - RETREAD_PENALTY, 3)})
 
     def opick(pool, seed, opening, tid):
         """tpick() for a head-coach opening, with the owner's hiring term and meddling by their modes."""
@@ -709,6 +979,12 @@ def hiring_cycle(cur, season, log=print, personality=None):
                                        "replaces": old_name, "opening_rank": rank, "appeal": appeal[tid]})
         log(f"  hiring: {abbr} (opening #{rank}, appeal {appeal[tid]}) hires {name} ({slant}, {src.lower()}: "
             f"{origin}) to replace {old_name}")
+
+        # A rare §2.3 Godfather offer: when every hard gate passes, the new head coach also becomes the GM.
+        godfather = _maybe_godfather(cur, season, tid, abbr, coach_id, name, slant, c,
+                                     godfather_owners.get(tid), log=log)
+        if godfather:
+            report["head_coaches"][-1]["full_control"] = True
 
         # A poached coordinator leaves his job; his team promotes from within (unless it is the hiring team).
         if src == "POACHED":
