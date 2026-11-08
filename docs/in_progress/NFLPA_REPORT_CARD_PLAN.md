@@ -1,13 +1,15 @@
 # Project Mu: NFLPA Team Report Cards & Facility Effects Plan
 
 **Status:** approved by JR (2026-11-07); building, wave 1 of 2.
+
+**As built (orchestrator pre-build fixes):** baseline data committed at `engines/report_card_baseline.json` (the plan's `data/initial_team_report_cards.json` is git-ignored); migration dated `2027_02_08` (2027_02_05–07 already exist); §2.4's duplicated trailing block for `team_operating_policies` implemented once; the Delivers list now names all four tables. §2.3e CPU Owner Upgrade AI (`engines/owner_policy.py`) is not owned by any unit, so it is out of scope for U1–U3 (left unbuilt).
 **Builds on:** PROJECT_SPEC §2.4, §2.17, §3.3f, §4.2; [`V2_MASTER_PLAN.md`](../in_progress/V2_MASTER_PLAN.md) §2.3, §2.4; [`OWNERS_SCOUTS_VOTERS_PLAN.md`](../in_progress/OWNERS_SCOUTS_VOTERS_PLAN.md) §2.1 (owner spending policies); [`PERSONALITY_CONTRACT_POLICY_PLAN.md`](../done/PERSONALITY_CONTRACT_POLICY_PLAN.md); [`FRONT_OFFICE_INBOX_PLAN.md`](../done/FRONT_OFFICE_INBOX_PLAN.md).
 
 **Goal:** Give every franchise an annual player-evaluated NFLPA Team Report Card grading eight operational and facility categories (Weight Room, Training Room, Locker Room, Nutrition & Food, Travel, Family Treatment, Head Coach, Ownership Investment). Grades produce an organizational quality score ($S_{\text{facility}}$) that integrates directly into free agency utility (`engines/free_agency_engine.py`): elite facilities provide a "facility discount" that saves cap dollars, while bottom-tier organizations suffer a "misery tax" or outright refusal from family-oriented or high-pride players. Published annually in early March as a marquee newsroom event, and visible in the Franchise Command Center where JR and AI GMs can fund facility renovations and operational upgrades.
 
 **Delivers:**
-- `db/migrations/2027_02_05_nflpa_report_cards.sql`: tables `team_report_cards`, `facility_upgrades`, and `team_operating_policies`.
-- `data/initial_team_report_cards.json`: 32 reviewed baseline report cards for the 2026 season based on real-world NFLPA survey publications.
+- `db/migrations/2027_02_08_nflpa_report_cards.sql`: tables `owner_cash_ledgers`, `team_report_cards`, `facility_upgrades`, and `team_operating_policies`.
+- `engines/report_card_baseline.json`: 32 reviewed baseline report cards for the 2026 season based on real-world NFLPA survey publications (committed under `engines/` — `data/` is git-ignored).
 - `engines/report_card_engine.py`: grade evaluation, dynamic improvement/degradation lifecycle, utility modifier calculation, and facility upgrade purchasing.
 - `newsroom/report_card_article.py`: annual March newsroom exposé ranking all 32 franchises.
 - `server/front_office_api.py` additions: `report_card` object in `GET /api/team/{abbr}/front-office`, `POST /api/team/{abbr}/facilities/upgrade`, and `POST /api/team/{abbr}/facilities/policy`.
@@ -161,7 +163,7 @@ AI owners manage their facilities based on their personality profile and availab
 * **BALANCED Owners:** Fund renovations when a category drops to D+ or when entering a `CONTEND` window to attract blue-chip free agents.
 * **FRUGAL Owners (e.g. Brown, Bidwill):** Resist renovations until a category reaches F/F- and the team suffers severe free-agent rejections or intense media embarrassment in the annual report card article.
 
-### 2.4 Database Schema (`db/migrations/2027_02_05_nflpa_report_cards.sql`)
+### 2.4 Database Schema (`db/migrations/2027_02_08_nflpa_report_cards.sql`)
 ```sql
 CREATE TABLE IF NOT EXISTS owner_cash_ledgers (
     season INT NOT NULL,
@@ -265,8 +267,8 @@ Shared files: `PROJECT_SPEC.md`, this plan, `CLAUDE.md`.
 
 ### U1: Schema, Config & Report Card Engine
 - **Owns:**
-  - `db/migrations/2027_02_05_nflpa_report_cards.sql` (new)
-  - `data/initial_team_report_cards.json` (new)
+  - `db/migrations/2027_02_08_nflpa_report_cards.sql` (new)
+  - `engines/report_card_baseline.json` (new)
   - `engines/report_card_engine.py` (new)
   - `tests/test_report_card_engine.py` (new)
 - **Reads:** `engines/free_agency_engine.py`, `engines/owner_policy.py`
@@ -308,8 +310,8 @@ Shared files: `PROJECT_SPEC.md`, this plan, `CLAUDE.md`.
 
 | File | Unit |
 |---|---|
-| `data/initial_team_report_cards.json` | U1 |
-| `db/migrations/2027_02_05_nflpa_report_cards.sql` | U1 |
+| `engines/report_card_baseline.json` | U1 |
+| `db/migrations/2027_02_08_nflpa_report_cards.sql` | U1 |
 | `engines/free_agency_engine.py` | U2 |
 | `engines/report_card_engine.py` | U1 |
 | `Mu_Network/src/components/franchise/ReportCardPanel.tsx` | U3 |
