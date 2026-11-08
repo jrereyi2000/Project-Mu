@@ -1,6 +1,6 @@
 # Project Mu: Staff Contracts, Young Talent Appeal & Full Control Plan
 
-**Status:** approved by JR (2026-11-07); building, wave 2 of 2 done.
+**Status:** built and on main (2026-11-08).
 **As built:** U3 also owned `Mu_Network/src/components/team/FrontOfficeTab.tsx` and `Mu_Network/src/components/franchise/FranchisePage.tsx` (the plan's U3 Owns list omitted the two registration mounts). U2 implemented the dual HC+GM vacancy as "no open GM tenure at carousel time" because the GM hot seat runs in the Season scan after the post-Super Bowl carousel, so a same-cycle GM firing is never a vacancy; candidate drive/ego ≥ 8 stature is read from the candidate dict when present (the carousel does not yet populate persona sliders), and the GM candidate tiers' cutovers are review-only estimates.
 **Builds on:** PROJECT_SPEC §2.19, §3.3f, §4.2; [`V2_MASTER_PLAN.md`](../in_progress/V2_MASTER_PLAN.md) §2.3; [`OWNERS_SCOUTS_VOTERS_PLAN.md`](../in_progress/OWNERS_SCOUTS_VOTERS_PLAN.md) §2.1 (owner spending policies); [`COACH_SLANTS_AND_COORDINATORS_PLAN.md`](../done/COACH_SLANTS_AND_COORDINATORS_PLAN.md); [`NFLPA_REPORT_CARD_PLAN.md`](../done/NFLPA_REPORT_CARD_PLAN.md) (Owner Cash Budget pool).
 
