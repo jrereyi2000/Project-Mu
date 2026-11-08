@@ -122,6 +122,13 @@ and launch; these are the contract):
        hits at the league year in and out, the sender's remaining bonus proration as dead money; legal when the room
        stays >= 0 or doesn't shrink), reasons: [str] (failed engine checks and cap), dialogue: str|null (the GM's
        template line)}. Nothing stored (trades are made on the Front Office Negotiate card).
+  GET  /trade-talks?season&week -> {talks: PublishedTalk[]}: the published CPU trade-talk transcripts
+       (gm_trade_negotiations with kind CPU and published_at set), newest first; season defaults to league_state's,
+       week keeps the talks live in that league week. Open to every team (league news, not a user-team action).
+  GET  /trade-talks/{id} -> PublishedTalk, 404 unless the talk is a published CPU transcript.
+       PublishedTalk = {id, kind, season, weeks, status, proposal_id, teams: [{abbr, gm, role?}],
+       turns: [{turn_no, week, team, action, posture, assets: [{from, to, label}], message}], final: {assets}}
+       (gm_talks.talk_json(..., public=True)): never su, sg, options, choice_source or legality.
   GET  /{abbr}/game-center -> {team, season, week, record, next_game: NextGame|null, opponent: {id, abbr, name,
        record, ratings}|null, ratings: {team_ovr, off_ovr, def_ovr, pass_off_rank, rush_off_rank, pass_rush_rank,
        coverage_rank} (team_seasons)|null, ranks: {team: Ranks|null, opponent: Ranks|null}, matchups: [{unit, team_stat,
@@ -1610,6 +1617,64 @@ def trades_evaluate(abbr: str, body: TradeIn):
                 "cap_legal_us": us["ok"], "cap_legal_them": them["ok"],
                 "cap_room_after_us": us["cap_room_after"], "cap_room_after_them": them["cap_room_after"],
                 "reasons": reasons, "dialogue": res.get("dialogue")}
+
+
+# ----------------------------------------------------------- trade talks ----
+def published_talk_ids(cur, season: Optional[int] = None, week: Optional[int] = None) -> list:
+    """Ids of the published CPU talks (kind CPU, published_at set), newest first. season defaults to
+    league_state's; week keeps the talks live in that league week (their span includes carried_weeks)."""
+    if not _regclass(cur, "gm_trade_negotiations"):
+        return []
+    if season is None:
+        season = league_state(cur)[0]
+    sql = ("SELECT id FROM gm_trade_negotiations WHERE kind = 'CPU' AND published_at IS NOT NULL AND season = %s")
+    params = [int(season)]
+    if week is not None:
+        sql += " AND %s BETWEEN week AND week + COALESCE(carried_weeks, 0)"
+        params.append(int(week))
+    sql += " ORDER BY published_at DESC, id DESC"
+    try:
+        cur.execute(sql, tuple(params))
+        return [int(r[0]) for r in cur.fetchall()]
+    except Exception:                    # pre-2027_01_22 talks table: nothing is published
+        return []
+
+
+@router.get("/trade-talks")
+def trade_talks(season: Optional[int] = None, week: Optional[int] = None):
+    from engines import gm_talks
+    with _connect() as conn, conn.cursor() as cur:
+        talks = []
+        for nid in published_talk_ids(cur, season, week):
+            try:
+                talk = gm_talks.talk_json(cur, nid, public=True)
+            except Exception:
+                continue
+            if talk:
+                talks.append(talk)
+        return {"talks": talks}
+
+
+@router.get("/trade-talks/{talk_id}")
+def trade_talk(talk_id: int):
+    from engines import gm_talks
+    with _connect() as conn, conn.cursor() as cur:
+        if not _regclass(cur, "gm_trade_negotiations"):
+            raise HTTPException(404, f"No published trade talk {talk_id}")
+        try:
+            cur.execute("SELECT kind, published_at FROM gm_trade_negotiations WHERE id = %s", (talk_id,))
+            row = cur.fetchone()
+        except Exception:
+            row = None
+        if not row or row[0] != "CPU" or row[1] is None:
+            raise HTTPException(404, f"No published trade talk {talk_id}")
+        try:
+            talk = gm_talks.talk_json(cur, talk_id, public=True)
+        except Exception:
+            talk = None
+        if not talk:
+            raise HTTPException(404, f"No published trade talk {talk_id}")
+        return talk
 
 
 @router.get("/{abbr}/game-center")
