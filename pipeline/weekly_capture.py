@@ -452,6 +452,7 @@ def step_gm(season, next_stage=False):
         from engines.gm_personas import backfill_bios
         from engines.gm_trade_engine import run_week
         llm = make_llm("gm_rationale")
+        talk_llm = make_llm("gm_talks")                # the CPU-to-CPU talks' words (None: templates)
         with psycopg.connect(DSN) as conn:
             cur = conn.cursor()
             cur.execute("SELECT to_regclass('gm_trade_proposals') IS NOT NULL")
@@ -493,11 +494,15 @@ def step_gm(season, next_stage=False):
                 if n:
                     log(f"  GM bios: {n} written by Gemini")
                 flush(bio_llm)
-            rep = run_week(cur, season, week, llm=llm, log=log, stage=stage, request_signals=signals)
+            rep = run_week(cur, season, week, llm=llm, log=log, stage=stage, request_signals=signals,
+                           talk_llm=talk_llm)
             conn.commit()
         flush(llm)
+        flush(talk_llm)
         n = len(rep["proposals"])
-        log(f"  GM trade proposals: {n} new, {len(rep['expired'])} expired, {len(rep['rechecked'])} no longer legal")
+        talks = rep.get("talks") or {}
+        log(f"  GM trade proposals: {n} new, {len(rep['expired'])} expired, {len(rep['rechecked'])} no longer legal; "
+            f"talks: {len(talks.get('agreed') or ())} agreed, {len(talks.get('stalled') or ())} stalled")
         if n:
             when = f"offseason stage {stage}" if stage else f"week {week}"
             notify(f"{n} new trade proposal{'s' if n != 1 else ''} for JR ({when}). Review them on #debug > "

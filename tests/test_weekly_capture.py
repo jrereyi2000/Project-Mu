@@ -324,6 +324,46 @@ class StepGmTest(unittest.TestCase):
             self.assertEqual(wc.step_gm(2036), 0)
         self.assertTrue(any("[WARN] GM trade proposals skipped" in m for m in logs))
 
+    def run_step(self, run_week, log_fn=lambda m: None):
+        made, flushed, runs = [], [], []
+        sentinels = {"gm_rationale": object(), "gm_talks": object()}
+
+        def fake_make(label, *a, **k):
+            made.append(label)
+            return sentinels.get(label)                    # gm_persona stays off: no bio backfill
+        conn = mock.MagicMock()
+        conn.__enter__.return_value = conn
+        conn.cursor.return_value.fetchone.return_value = (True,)     # gm_trade_proposals installed
+        with mock.patch.object(wc, "log", log_fn), \
+             mock.patch("engines.gm_llm.make_llm", fake_make), \
+             mock.patch("engines.gm_llm.flush", lambda llm: flushed.append(llm)), \
+             mock.patch("psycopg.connect", return_value=conn), \
+             mock.patch("engines.gm_trade_engine.league_window", return_value=(2036, 4, "IN_SEASON")), \
+             mock.patch.object(wc, "trade_request_signals", lambda *a, **k: None), \
+             mock.patch("engines.gm_trade_engine.run_week", run_week(runs)):
+            result = wc.step_gm(2036)
+        return result, made, flushed, runs, sentinels
+
+    def test_passes_the_gm_talks_llm_and_flushes_it(self):
+        def run_week(runs):
+            return lambda *a, **k: runs.append(k) or {"proposals": [], "expired": [], "rechecked": [], "talks": {}}
+        result, made, flushed, runs, sentinels = self.run_step(run_week)
+        self.assertEqual(result, 0)
+        self.assertEqual(made[:2], ["gm_rationale", "gm_talks"])
+        self.assertIs(runs[0]["talk_llm"], sentinels["gm_talks"])
+        self.assertIs(runs[0]["llm"], sentinels["gm_rationale"])
+        self.assertEqual(flushed, [sentinels["gm_rationale"], sentinels["gm_talks"]])
+
+    def test_a_talk_failure_only_warns(self):
+        def run_week(runs):
+            def boom(*a, **k):
+                raise RuntimeError("talk boom")
+            return boom
+        logs = []
+        result, *_ = self.run_step(run_week, log_fn=logs.append)
+        self.assertEqual(result, 0)
+        self.assertTrue(any("[WARN] GM trade proposals skipped" in m and "talk boom" in m for m in logs))
+
 
 class StepScoutingTest(unittest.TestCase):
     """Scouting (Step 7c) never stops the week."""

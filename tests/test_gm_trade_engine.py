@@ -381,6 +381,163 @@ def test_recheck_expires_a_deal_a_gm_no_longer_accepts():
     assert ge.recheck_open(Cur(), b2, valuer=ge.Valuer(b2, FITS)) == []   # JR's own trades aren't second-guessed
 
 
+# ------------------------------------------------------- team control (D8, §2.10) ----
+def test_team_control_comes_from_the_registry_when_it_has_an_entry(monkeypatch):
+    b = books()
+    monkeypatch.setattr("engines.front_office.controlled_team_ids", lambda cur: {2})
+    ge.apply_team_control(None, b)
+    assert b["gm"][1]["user_controlled"] is False and b["gm"][2]["user_controlled"] is True
+    assert all(gm["suggestions_on"] for gm in b["gm"].values())     # still from gm_team_settings
+    b = books()
+    b["gm"][1]["user_controlled"] = b["gm"][2]["user_controlled"] = True    # stale gm_team_settings rows
+    monkeypatch.setattr("engines.front_office.controlled_team_ids", lambda cur: set())   # the all-CPU era
+    ge.apply_team_control(None, b)
+    assert b["gm"][1]["user_controlled"] is False and b["gm"][2]["user_controlled"] is False
+
+
+def test_team_control_falls_back_to_gm_team_settings_without_an_entry(monkeypatch):
+    b = books()
+    b["gm"][2]["user_controlled"] = True
+    monkeypatch.setattr("engines.front_office.controlled_team_ids", lambda cur: None)
+    ge.apply_team_control(None, b)
+    assert b["gm"][1]["user_controlled"] is False and b["gm"][2]["user_controlled"] is True
+
+
+def test_read_books_applies_the_registry_overlay(monkeypatch):
+    seen = []
+
+    def fake_apply(cur, books):
+        seen.extend(sorted(books["gm"]))
+        return books
+
+    class Cur:
+        def __init__(self):
+            self.last = ""
+
+        def execute(self, q, a=None):
+            self.last = " ".join(q.split())
+
+        def fetchone(self):
+            return (0, 0, None) if "count(*) FILTER" in self.last else (0,)
+
+        def fetchall(self):
+            if "FROM gm_profiles" in self.last:                     # (team_id, gm id, name, ... control, suggestions)
+                return [(1, 11, "Ann A", 0.6, 0.5, 1.0, 0.0, {}, "", False, True),
+                        (2, 22, "Bob B", 0.6, 0.5, 1.0, 0.0, {}, "", True, True)]
+            return []
+    monkeypatch.setattr(ge, "apply_team_control", fake_apply)
+    try:
+        ge.read_books(Cur(), SEASON, 5)
+    except Exception:
+        pass                                                        # the fake has no players; the overlay call is what matters
+    assert seen == [1, 2]                                           # both GM rows reached the overlay
+
+
+# ------------------------------------------------------- CPU-to-CPU talks (§2.6) ----
+def _run_week(monkeypatch, b, dry_run=False):
+    """run_week with every database boundary replaced: the search and the routing stay real."""
+    calls = {"store": [], "talks": []}
+    import engines.gm_direction as gd
+    import engines.gm_talks as gt
+    monkeypatch.setattr(ge, "read_proposals", lambda *a, **k: [])
+    monkeypatch.setattr(ge, "expire_stale", lambda *a, **k: [])
+    monkeypatch.setattr(ge, "read_books", lambda *a, **k: b)
+    monkeypatch.setattr(ge, "recheck_open", lambda *a, **k: [])
+    monkeypatch.setattr(ge, "injury_triggers", lambda books: {})
+    monkeypatch.setattr(ge, "initiator_order", lambda books, rng: ([1], []))
+    monkeypatch.setattr(ge, "store", lambda *a, **k: calls["store"].append(a) or 1)
+    monkeypatch.setattr(ge.tv, "fits_from_db", lambda cur, season: FITS)
+    monkeypatch.setattr(gd, "read_league", lambda *a, **k: {})
+    monkeypatch.setattr(gd, "compute", lambda rows, week: {})
+    monkeypatch.setattr(gd, "write", lambda *a, **k: None)
+
+    def fake_talks(cur, books, valuer, deals, rng, llm, log=None):
+        calls["talks"].append(list(deals))
+        return {"talks": [{"id": 7, "status": "AGREED"}], "agreed": [7], "stalled": [], "teams": {1, 2}}
+    monkeypatch.setattr(gt, "run_talks", fake_talks)
+    rep = ge.run_week(object(), SEASON, WEEK, dry_run=dry_run, log=lambda m: None)
+    return rep, calls
+
+
+def test_cpu_to_cpu_picks_go_to_talks_instead_of_being_stored(monkeypatch):
+    rep, calls = _run_week(monkeypatch, star_books())
+    assert calls["store"] == []                                     # nothing PROPOSED for JR
+    assert len(calls["talks"]) == 1 and len(calls["talks"][0]) == 1
+    picked = calls["talks"][0][0]
+    assert (picked["a"], picked["b"]) == (1, 2) and any(x.get("player_id") == STAR for x in picked["assets"])
+    assert rep["proposals"] == [] and rep["talks"]["agreed"] == [7] and rep["talks"]["stalled"] == []
+
+
+def test_a_deal_with_a_user_team_is_still_an_advisory_proposal(monkeypatch):
+    b = star_books()
+    b["gm"][1]["user_controlled"] = True
+    rep, calls = _run_week(monkeypatch, b)
+    assert calls["talks"] == [[]]                                   # no collected CPU deal; carried talks still run
+    assert len(calls["store"]) == 1
+    args = calls["store"][0]                                        # store(cur, books, pick, valuer, rationale, flags)
+    pick = args[2]
+    assert (pick["a"], pick["b"]) == (1, 2) and "advisory:AAA" in args[5]
+    assert rep["proposals"] and rep["proposals"][0]["flags"] == args[5]
+
+
+def test_cpu_deal_classification():
+    b = books()
+    assert ge.cpu_deal(b, deal([pl(STAR, 2, 1)]))
+    b["gm"][2]["user_controlled"] = True
+    assert not ge.cpu_deal(b, deal([pl(STAR, 2, 1)]))       # the sender is JR's team
+    assert not ge.cpu_deal(b, deal([pl(STAR, 1, 2)]))       # the receiver is JR's team
+    b["gm"][2]["user_controlled"] = False
+    b["gm"][1]["user_controlled"] = True
+    assert not ge.cpu_deal(b, deal([pl(STAR, 1, 2)]))
+
+
+def test_a_dry_run_stores_no_proposal(monkeypatch):
+    b = star_books()
+    b["gm"][1]["user_controlled"] = True
+    rep, calls = _run_week(monkeypatch, b, dry_run=True)
+    assert calls["store"] == [] and rep["proposals"] and rep["proposals"][0]["id"] is None
+
+
+def test_draft_day_and_round_entry_points_do_not_talk():
+    import inspect
+    for fn in (ge.run_draft_day, ge.run_draft_round):
+        assert "talk_llm" not in inspect.signature(fn).parameters
+        assert "run_talks" not in inspect.getsource(fn)
+
+
+def test_decided_counts_stalled_but_rejected_players_do_not():
+    class Cur:
+        def __init__(self):
+            self.sql = []
+
+        def execute(self, q, a=None):
+            self.sql.append(" ".join(q.split()))
+
+        def fetchone(self):
+            return (0, 0, None) if "count(*) FILTER" in self.sql[-1] else (0,)
+
+        def fetchall(self):
+            return []
+    cur = Cur()
+    try:
+        ge.read_books(cur, SEASON, 5)
+    except Exception:
+        pass
+    counts = [q for q in cur.sql if "count(*) FILTER (WHERE status = 'EXECUTED'" in q]
+    assert counts and "IN ('EXECUTED', 'REJECTED', 'STALLED')" in counts[0]
+    rejected = [q for q in cur.sql if "p.status = 'REJECTED'" in q]
+    assert rejected and all("STALLED" not in q for q in rejected)
+
+
+def test_simulate_season_with_talk_stall_stays_near_target():
+    old_mean = 18.56                                                # the pre-talk simulation, seed 0, 2000 seasons
+    r = ge.simulate_season(0.6, 2000, detail=True, talk_stall=0.25)
+    assert 18 <= r["mean"] <= 22
+    assert abs(r["mean"] - old_mean) <= 2
+    assert ge.simulate_season(0.6, 300, talk_stall=0.25) == ge.simulate_season(0.6, 300, talk_stall=0.25)
+    assert ge.TALK_STALL == 0.25
+
+
 def test_player_jr_rejected_this_week_is_not_offered_again():
     b = star_books()
     b["rejected_players"] = {STAR}

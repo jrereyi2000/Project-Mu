@@ -8,7 +8,12 @@ the best, writes the rationale (template, or Gemini through engines/gm_rationale
 JR approves on #debug, makes the trade by hand in Madden and confirms; nothing here touches Madden (D7).
 
   python3 -m engines.gm_trade_engine [--season 2036] [--week 4] [--dry-run] [--replace] [--no-llm]
-  python3 -m engines.gm_trade_engine --simulate-season [--approval 0.6] [--seasons 2000]
+  python3 -m engines.gm_trade_engine --simulate-season [--talk-stall 0.25] [--approval 0.6] [--seasons 2000]
+
+A deal with no user-controlled team on either side goes through engines/gm_talks.py (a short CPU-to-CPU talk): an
+agreement is stored APPROVED with `talks:` and `auto_approved`, a breakdown STALLED. Advisory proposals (a user
+team on one side) are stored PROPOSED for JR, exactly as before. Team control comes from the franchise registry
+when it has an entry for this database (front_office.controlled_team_ids, §2.10); gm_team_settings is the fallback.
 """
 import argparse
 import hashlib
@@ -24,6 +29,7 @@ from engines.gm_direction import (SLOTS, TRADE_DEADLINE_WEEK, TRADE_POS_WEIGHT, 
 
 # Budget (JR, 2026-10-20)
 IN_SEASON_TARGET = 20                    # JR, 2026-10-20 (was 17), with the 2025 trade shapes below
+TALK_STALL = 0.25                        # share of CPU-to-CPU talks that break down (an estimate; --talk-stall)
 OFFSEASON_RANGE = (15, 20)               # drawn per offseason: random.Random(f"offseason:{season}")
 DEADLINE_WEIGHT = 3                      # the last two weeks before the deadline weigh 3x
 PRIOR_EXEC = (3, 2)                      # Beta(3, 2): p_exec starts at 0.6
@@ -278,11 +284,15 @@ def offseason_budget(season, stage, executed, decided, open_count, target=None, 
     return {"n": n, "e_w": round(e, 3), "p_exec": round(pe, 3), "target": target, "executed": executed}
 
 
-def simulate_season(approval=0.6, seasons=2000, first_week=1, seed=0, detail=False):
-    """Replay the in-season budget with JR approving (and making) each proposal with probability `approval`;
-    every proposal is decided in its week and gets a shape from SHAPE_MIX (a blockbuster only in the two deadline
-    weeks, at most MAX_BLOCKBUSTERS a season). Returns the mean executed count, or with detail {mean, by_week,
-    by_shape} (means per season)."""
+def simulate_season(approval=0.6, seasons=2000, first_week=1, seed=0, detail=False, talk_stall=TALK_STALL):
+    """Replay the in-season budget in the all-CPU era: every proposal is a CPU-to-CPU talk, which stalls with
+    probability `talk_stall` (decided but not executed) and otherwise agrees and is executed with no step from JR
+    (§2.6). A stall counts as decided, so the pacing raises the proposal count and the season total stays near the
+    target. `approval` is kept for the old callers/CLI but no longer decides a CPU deal (an advisory proposal with a
+    user team is not simulated). Every proposal is decided in its week and gets a shape from SHAPE_MIX (a
+    blockbuster only in the two deadline weeks, at most MAX_BLOCKBUSTERS a season; a stalled talk executes nothing).
+    Returns the mean executed count, or with detail {mean, by_week, by_shape} (means per season)."""
+    talk_stall = max(0.0, min(1.0, talk_stall))
     rng = random.Random(seed)
     total = 0
     by_week = {w: 0 for w in range(first_week, TRADE_DEADLINE_WEEK + 1)}
@@ -302,11 +312,12 @@ def simulate_season(approval=0.6, seasons=2000, first_week=1, seed=0, detail=Fal
                     if r <= 0:
                         shape = k
                         break
-                if rng.random() < approval:
-                    executed += 1
-                    by_week[w] += 1
-                    by_shape[shape] += 1
-                    blockbusters += shape == "BLOCKBUSTER"
+                if rng.random() < talk_stall:
+                    continue                                   # the talk broke down: decided, not executed
+                executed += 1
+                by_week[w] += 1
+                by_shape[shape] += 1
+                blockbusters += shape == "BLOCKBUSTER"
         total += executed
     if not detail:
         return total / seasons
@@ -315,6 +326,19 @@ def simulate_season(approval=0.6, seasons=2000, first_week=1, seed=0, detail=Fal
 
 
 # ------------------------------------------------------------------- books ----
+def apply_team_control(cur, books):
+    """Overlay JR's team control from the franchise registry (plan §2.10, D8). When the registry has an entry for
+    this database, `front_office.controlled_team_ids` is the source of truth and `gm_team_settings.user_controlled`
+    is only the fallback (None: no entry, so the rows' values stand). Each team's `user_controlled` is set from the
+    registry either way; `suggestions_on` still comes from gm_team_settings."""
+    from engines import front_office                         # lazy: front_office imports the trade engine's helpers
+    ids = front_office.controlled_team_ids(cur)
+    if ids is not None:
+        for tid, gm in books["gm"].items():
+            gm["user_controlled"] = tid in ids
+    return books
+
+
 def read_books(cur, season, week, window="IN_SEASON", stage=None):
     """Everything the engine needs, read-only."""
     from engines.gm_direction import read_injuries
@@ -357,6 +381,7 @@ def read_books(cur, season, week, window="IN_SEASON", stage=None):
             "voice": r[8], "user_controlled": r[9], "suggestions_on": r[10],
             "sliders": sliders, "traits": traits
         }
+    apply_team_control(cur, b)                       # D8: the registry wins over gm_team_settings when it has one
     cur.execute("""SELECT team_id, direction, needs, surplus, urgent_need, direction_inputs, direction_score
                    FROM gm_team_seasons WHERE season = %s""", (season,))
     b["ts"] = {r[0]: {"direction": r[1], "needs": r[2] or [], "surplus": r[3] or [], "urgent_need": r[4],
@@ -384,7 +409,7 @@ def read_books(cur, season, week, window="IN_SEASON", stage=None):
         b["picks_sent"].setdefault(tid, set()).add((ds, rd, orig))
     b["open"] = read_proposals(cur, season, ("PROPOSED", "APPROVED"))
     cur.execute("""SELECT count(*) FILTER (WHERE status = 'EXECUTED' AND counts_for_pacing),
-                          count(*) FILTER (WHERE status IN ('EXECUTED', 'REJECTED') AND counts_for_pacing),
+                          count(*) FILTER (WHERE status IN ('EXECUTED', 'REJECTED', 'STALLED') AND counts_for_pacing),
                           min(week) FILTER (WHERE origin = 'ENGINE')
                    FROM gm_trade_proposals WHERE season = %s AND trade_window = ANY(%s)""",
                 (season, ["IN_SEASON"] if window == "IN_SEASON" else ["OFFSEASON", "DRAFT_DAY"]))
@@ -1225,6 +1250,12 @@ def eligible_team(b, tid):
     return gm is not None and (not gm["user_controlled"] or gm["suggestions_on"])
 
 
+def cpu_deal(b, deal):
+    """Neither side is user-controlled: the deal goes through a CPU-to-CPU talk instead of being stored PROPOSED
+    (§2.6). A deal with a user team on either side stays an advisory proposal for JR."""
+    return not any(b["gm"].get(t, {}).get("user_controlled") for t in (deal["a"], deal["b"]))
+
+
 def free_player(b, pid):
     p = b["players"].get(pid)
     return (p is not None and pid not in b["booked_players"]
@@ -1564,17 +1595,20 @@ def request_deals(b, valuer, seller, requested):
 
 
 def run_week(cur, season, week, dry_run=False, replace=False, llm=None, log=print, window=None, stage=None,
-             request_signals=None):
+             request_signals=None, talk_llm=None):
     """One engine run. Returns a report dict; in a dry run nothing is written (the caller rolls back too). In the
     offseason (week 24) `stage` is the offseason stage 1-5 (OFFSEASON_STAGES; default 1). request_signals: the
     trade-requests plan's GM signals (optional; None = today's search exactly): each requesting CPU team also shops
-    its requesting player at his normal valuation (request_shopping / request_deals), flagged trade_request:<id>."""
+    its requesting player at his normal valuation (request_shopping / request_deals), flagged trade_request:<id>.
+    Picks with no user-controlled team on either side are collected and handed to gm_talks.run_talks (which resumes
+    carried OPEN kind='CPU' talks first); talk_llm writes the GMs' words (None: templates). `rep["talks"]` is that
+    run's report. An advisory pick (a user team on one side) is stored PROPOSED as before."""
     from engines import gm_direction
     window = window or window_for(week)
     if window == "OFFSEASON":
         stage = stage or 1
     rep = {"season": season, "week": week, "window": window, "expired": [], "proposals": [], "budget": None,
-           "triggers": {}, "rechecked": []}
+           "triggers": {}, "rechecked": [], "talks": {}}
     if window is None:
         log(f"trade window closed (week {week}, deadline {TRADE_DEADLINE_WEEK})")
         if not dry_run:
@@ -1639,10 +1673,12 @@ def run_week(cur, season, week, dry_run=False, replace=False, llm=None, log=prin
         f"{IN_SEASON_MAX_OPEN if window == 'IN_SEASON' else MAX_OPEN} open)")
     # 5-8. search, legality, acceptance, choice
     used = set()
+    collected = []                                       # CPU-to-CPU picks: gm_talks decides them after the search
+    picked = 0                                           # every pick counts against the budget, stored or not
     requests = request_shopping(b, request_signals)
     rep["requests"] = {tid: sorted(p) for tid, p in requests.items()}
     for tid in order:
-        if len(rep["proposals"]) >= n:
+        if picked >= n:
             break
         if tid in used:
             continue
@@ -1663,7 +1699,13 @@ def run_week(cur, season, week, dry_run=False, replace=False, llm=None, log=prin
         pick = choose_shaped(cands, rng) if shaped else choose(cands, rng)
         if not pick:
             continue
+        picked += 1
         used.update((pick["a"], pick["b"]))
+        if cpu_deal(b, pick):                            # no user team: a talk decides it, nothing stored here
+            b["hashes"].add(pick["hash"])
+            collected.append(pick)
+            log(f"  {abbr(b, pick['a'])} <-> {abbr(b, pick['b'])}: both GMs are CPU; the talk decides it")
+            continue
         flags = [f"advisory:{abbr(b, t)}" for t in (pick["a"], pick["b"]) if b["gm"].get(t, {}).get("user_controlled")]
         caps = cap_effects(pick, b)
         flags += [f"{'projected_cap' if c['projected'] else 'rescan'}:{abbr(b, t)}" for t, c in caps.items()
@@ -1688,8 +1730,15 @@ def run_week(cur, season, week, dry_run=False, replace=False, llm=None, log=prin
         rep["proposals"].append({"id": pid, "deal": pick, "rationale": rat, "flags": flags,
                                  "steps": steps_text(b, pick), "caps": caps})
         print_proposal(b, pick, rat, caps, flags, log)
+    # 9. the CPU talks: resume carried ones, then play the collected deals. run_talks has no `used` argument, so the
+    # teams it touched are folded into this week's set here. A dry run writes into the caller's transaction, which
+    # the caller rolls back (talks run in memory, nothing is committed).
+    from engines import gm_talks
+    talks = gm_talks.run_talks(cur, b, valuer, collected, rng, talk_llm, log)
+    used.update(talks.get("teams") or ())
+    rep["talks"] = talks
     if window == "OFFSEASON" and not dry_run:
-        write_stage(cur, season, stage, len(rep["proposals"]))
+        write_stage(cur, season, stage, picked)
     rep["books"] = b
     return rep
 
@@ -2040,14 +2089,17 @@ def main(argv=None):
     ap.add_argument("--recheck-only", action="store_true",
                     help="only the weekly re-check of open proposals (illegal ones expire); nothing else is written")
     ap.add_argument("--simulate-season", action="store_true")
-    ap.add_argument("--approval", type=float, default=0.6)
+    ap.add_argument("--talk-stall", type=float, default=TALK_STALL,
+                    help="share of CPU-to-CPU talks that break down (default %.2f)" % TALK_STALL)
+    ap.add_argument("--approval", type=float, default=0.6, help="kept for old callers; no CPU deal needs it")
     ap.add_argument("--seasons", type=int, default=2000)
     ap.add_argument("--first-week", type=int, default=1)
     a = ap.parse_args(argv)
     if a.simulate_season:
-        r = simulate_season(a.approval, a.seasons, a.first_week, detail=True)
+        r = simulate_season(a.approval, a.seasons, a.first_week, detail=True, talk_stall=a.talk_stall)
         print(f"in-season target {IN_SEASON_TARGET} (scaled {scaled_target(IN_SEASON_TARGET, a.first_week):.1f} from "
-              f"week {a.first_week}), JR approval {a.approval}: mean executed {r['mean']:.2f} over {a.seasons} seasons")
+              f"week {a.first_week}), talk stall {a.talk_stall:.2f}: mean executed {r['mean']:.2f} over "
+              f"{a.seasons} seasons")
         print("  by week:  " + "  ".join(f"W{w} {v:.2f}" for w, v in r["by_week"].items()))
         print("  by shape: " + "  ".join(f"{k} {v:.2f}" for k, v in r["by_shape"].items()))
         return
