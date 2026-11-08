@@ -775,12 +775,45 @@ CREATE TABLE IF NOT EXISTS draft_picks (
     original_team_id INT NOT NULL REFERENCES teams(id),
     owner_team_id INT NOT NULL REFERENCES teams(id),
     overall_pick SMALLINT,
-    source VARCHAR(5) NOT NULL DEFAULT 'SEED' CHECK (source IN ('SEED', 'TRADE', 'JR')),
+    source VARCHAR(5) NOT NULL DEFAULT 'SEED' CHECK (source IN ('SEED', 'TRADE', 'JR', 'COMP', 'JC2A')),
     acquired_proposal_id INT,                         -- FK added below, after gm_trade_proposals
     used BOOLEAN NOT NULL DEFAULT false,
-    PRIMARY KEY (draft_season, round, original_team_id)
+    pick_suffix VARCHAR(4) NOT NULL DEFAULT '',        -- COMP/JC2A comp picks (2027_02_06); '' for every SEED/TRADE/JR row
+    PRIMARY KEY (draft_season, round, original_team_id, pick_suffix)
 );
 CREATE INDEX IF NOT EXISTS draft_picks_owner ON draft_picks (owner_team_id, draft_season);
+
+-- Compensatory draft picks (2027_02_06_compensatory_draft_picks.sql, COMPENSATORY_PICKS_PLAN §2.4/§3.3c): QFA ledger
+-- and the awarded CBA / JC-2A picks.
+CREATE TABLE IF NOT EXISTS qualifying_free_agents (
+    id SERIAL PRIMARY KEY,
+    season INT NOT NULL,
+    player_id INT NOT NULL REFERENCES players(id),
+    old_team_id INT NOT NULL REFERENCES teams(id),
+    new_team_id INT NOT NULL REFERENCES teams(id),
+    signed_date TIMESTAMP WITH TIME ZONE NOT NULL,
+    total_value BIGINT NOT NULL,
+    years INT NOT NULL,
+    apy BIGINT NOT NULL,
+    snap_pct NUMERIC(4,3) DEFAULT 0.0,
+    honors_points INT DEFAULT 0,
+    round_tier SMALLINT CHECK (round_tier BETWEEN 3 AND 7),
+    qualifies BOOLEAN NOT NULL DEFAULT true,
+    canceled_by_qfa_id INT REFERENCES qualifying_free_agents(id)
+);
+
+CREATE TABLE IF NOT EXISTS compensatory_pick_awards (
+    id SERIAL PRIMARY KEY,
+    draft_season INT NOT NULL,
+    team_id INT NOT NULL REFERENCES teams(id),
+    round SMALLINT NOT NULL CHECK (round BETWEEN 3 AND 7),
+    slot_in_round SMALLINT NOT NULL,
+    overall_pick SMALLINT NOT NULL,
+    award_kind VARCHAR(6) NOT NULL CHECK (award_kind IN ('CBA', 'JC2A')),
+    source_player_id INT REFERENCES players(id),
+    source_coach_id INT REFERENCES coaches(id),
+    reason TEXT NOT NULL
+);
 
 -- Trade proposals (engines/gm_trade_engine.py) and trades JR recorded himself (origin USER).
 -- PROPOSED -> APPROVED -> EXECUTED | REJECTED | EXPIRED. EXECUTED only when JR confirms on #debug.
