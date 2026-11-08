@@ -24,6 +24,7 @@ ROUNDS = ["WILD_CARD", "DIVISIONAL", "CONFERENCE", "SUPER_BOWL"]
 ROUND_WEEKS = {19: "WILD_CARD", 20: "DIVISIONAL", 21: "CONFERENCE", 23: "SUPER_BOWL"}   # rows without a game_type
 BRACKET_STATUS = {"WILD_CARD": "Wild Card Elimination", "DIVISIONAL": "Divisional Elimination",
                   "CONFERENCE": "Conference Championship Elimination", "SUPER_BOWL": "Super Bowl Runner-up"}
+COMP_SOURCES = ("COMP", "JC2A")         # draft_picks.source values of a compensatory pick
 
 
 def game_round(game: dict):
@@ -150,24 +151,88 @@ def fetch_games(cur, season: int, before_week=None) -> list:
     return [dict(zip(cols, r)) for r in cur.fetchall()]
 
 
-def apply_owners(order: list, owners: dict, round_no: int = 1) -> list:
+def has_pick_suffix(cur) -> bool:
+    """Whether draft_picks carries the compensatory pick_suffix column (2027_02_06_compensatory_draft_picks.sql).
+    Until that migration is applied it doesn't, and every row is a standard pick: callers must then use the plain
+    32-per-round queries (server/draft_api.py makes the same check). `source` predates the migration, so only
+    pick_suffix is guarded."""
+    cur.execute("""SELECT 1 FROM information_schema.columns
+                   WHERE table_schema = current_schema() AND table_name = 'draft_picks'
+                   AND column_name = 'pick_suffix'""")
+    return cur.fetchone() is not None
+
+
+def is_comp_row(row: dict) -> bool:
+    """A draft_picks row is compensatory when it carries a pick_suffix and/or a COMP/JC2A source (the same rule
+    server/draft_api._draft_slots uses)."""
+    return bool(row.get("pick_suffix")) or str(row.get("source") or "").upper() in COMP_SOURCES
+
+
+def _pick_suffix_digits(pick_suffix):
+    digits = "".join(c for c in str(pick_suffix or "") if c.isdigit())
+    return int(digits) if digits else None
+
+
+def _comp_sort_key(row):
+    """Comp picks sit after the round's 32 standard picks, in slot order (mirrors draft_api._draft_slots)."""
+    return (_pick_suffix_digits(row.get("pick_suffix")) or 10_000, row.get("original_team_id") or 0,
+            str(row.get("pick_suffix") or ""))
+
+
+def apply_owners(order: list, owners: dict, round_no: int = 1, comp_rows=None, comps_before: int = 0) -> list:
     """order: compute_draft_order's round_1_order; owners: {(round, original_team_id): owner_team_id}. Returns the
     round's slots [{pick (overall), round, round_pick, original_team_id, owner_team_id, locked}] (pure). A slot with
-    no draft_picks row stays with its original team."""
+    no draft_picks row stays with its original team.
+
+    `comp_rows` (optional) are the round's compensatory draft_picks rows [{original_team_id, owner_team_id,
+    pick_suffix, source}]: they are appended after the 32 standard picks, ordered by pick_suffix. `comps_before` is
+    how many compensatory picks the earlier rounds were awarded and shifts every overall number (four Round-3 comps
+    make Round 4 start at 101). With no comp rows and comps_before 0 the output is exactly the old slots."""
     out = []
+    size = len(order)
+    base = (round_no - 1) * size + comps_before
     for e in order:
         orig = e["team_id"]
-        out.append({"pick": (round_no - 1) * len(order) + e["pick"], "round": round_no, "round_pick": e["pick"],
+        out.append({"pick": base + e["pick"], "round": round_no, "round_pick": e["pick"],
                     "original_team_id": orig, "owner_team_id": owners.get((round_no, orig), orig),
                     "locked": e.get("locked", False)})
+    for j, c in enumerate(sorted(comp_rows or [], key=_comp_sort_key), start=1):
+        orig = c["original_team_id"]
+        out.append({"pick": base + size + j, "round": round_no, "round_pick": size + j,
+                    "original_team_id": orig, "owner_team_id": c.get("owner_team_id") or orig,
+                    "locked": True, "pick_suffix": c.get("pick_suffix") or "",
+                    "source": c.get("source") or "COMP"})
     return out
 
 
 def draft_order_with_owners(cur, draft_season: int, rounds=(1,), before_week=None) -> list:
     """The draft's slots for `rounds`, each mapped through draft_picks ownership (team management step 3): the
-    order comes from the season draft_season - 1 (compute_draft_order, every round the same order)."""
+    order comes from the season draft_season - 1 (compute_draft_order, every round the same order).
+
+    Compensatory picks (source COMP/JC2A or a non-empty pick_suffix) are extra slots appended after their round's
+    32 standard picks, so a round with N comps has 32 + N slots and every later round's overall numbers shift by
+    the comps awarded before it. A class with no comp rows returns exactly the old slots."""
     order = compute_draft_order(fetch_teams(cur), fetch_games(cur, draft_season - 1, before_week))["round_1_order"]
-    cur.execute("SELECT round, original_team_id, owner_team_id FROM draft_picks WHERE draft_season = %s",
-                (draft_season,))
-    owners = {(r, o): w for r, o, w in cur.fetchall()}
-    return [slot for rd in rounds for slot in apply_owners(order, owners, rd)]
+    if has_pick_suffix(cur):
+        cur.execute("""SELECT round, original_team_id, owner_team_id, pick_suffix, source FROM draft_picks
+                       WHERE draft_season = %s""", (draft_season,))
+        cols = ("round", "original_team_id", "owner_team_id", "pick_suffix", "source")
+        rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+        # standard rows only: a comp row must never shadow a standard pick's owner
+        owners = {(r["round"], r["original_team_id"]): r["owner_team_id"] for r in rows if not is_comp_row(r)}
+        comps = {}
+        for r in rows:
+            if is_comp_row(r):
+                comps.setdefault(int(r["round"]), []).append(r)
+    else:
+        # the migration isn't applied: every row is a standard pick, exactly the old query and mapping
+        cur.execute("SELECT round, original_team_id, owner_team_id FROM draft_picks WHERE draft_season = %s",
+                    (draft_season,))
+        owners = {(r, o): w for r, o, w in cur.fetchall()}
+        comps = {}
+    counts = {rd: len(rs) for rd, rs in comps.items()}
+    out = []
+    for rd in rounds:
+        out.extend(apply_owners(order, owners, rd, comp_rows=comps.get(rd),
+                                comps_before=sum(n for r2, n in counts.items() if r2 < rd)))
+    return out

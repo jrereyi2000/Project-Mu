@@ -28,6 +28,7 @@ import json
 
 from engines import scouting_boards as sb
 from engines import scouting_engine as se
+from engines.draft_order import COMP_SOURCES, has_pick_suffix
 
 ROUND_1 = 32
 LAST_ROUND = 7
@@ -394,11 +395,24 @@ def next_round(started):
 
 
 def round_slots(cur, draft_season, n):
-    """Round n's slots from the locked order with today's owners: [{pick, round_pick, key, owner_team_id}]."""
+    """Round n's slots from the locked order with today's owners: [{pick, round_pick, key, owner_team_id}].
+
+    Compensatory picks sit after the round's 32 standard picks, so a round with N comps has 32 + N slots and its
+    overall numbers already carry the comps awarded in the earlier rounds (Round 4 starts at 101 after four Round-3
+    comps, though its own round_picks still start at 1); a comp slot's round_pick is 33+. Until the comp migration
+    is applied there are no comp rows and the plain 32-per-round numbering stands."""
+    if has_pick_suffix(cur):
+        cur.execute("""SELECT count(*) FROM draft_picks WHERE draft_season = %s AND round < %s
+                       AND (COALESCE(pick_suffix, '') <> '' OR upper(COALESCE(source, '')) = ANY(%s))""",
+                    (draft_season, n, list(COMP_SOURCES)))
+        comps_before = int(cur.fetchone()[0])
+    else:
+        comps_before = 0
     cur.execute("""SELECT overall_pick, original_team_id, owner_team_id FROM draft_picks
                    WHERE draft_season = %s AND round = %s AND overall_pick IS NOT NULL ORDER BY overall_pick""",
                 (draft_season, n))
-    return [{"pick": p, "round_pick": p - (n - 1) * ROUND_1, "key": (draft_season, n, o), "original_team_id": o,
+    base = (n - 1) * ROUND_1 + comps_before
+    return [{"pick": p, "round_pick": p - base, "key": (draft_season, n, o), "original_team_id": o,
              "owner_team_id": w} for p, o, w in cur.fetchall()]
 
 
@@ -418,7 +432,7 @@ def start_round(cur, draft_season, n, llm=None, log=print):
     if want is None or n != want:
         raise DraftRoomError(409, f"Round {want} is next, not {n}" if want else "every round has started")
     slots = round_slots(cur, draft_season, n)
-    if len(slots) != ROUND_1:
+    if len(slots) < ROUND_1:
         raise DraftRoomError(409, f"Round {n} has {len(slots)} locked slots, not {ROUND_1}")
     ids = {i["prospect_id"]: k for k, i in room["info"].items() if i.get("prospect_id")}
     cur.execute("SELECT id, projected_pick FROM draft_prospects WHERE id = ANY(%s)", (list(ids),))
@@ -463,9 +477,12 @@ def clock_trades(cur, draft_season, n, room=None, log=print):
 
 
 def lock_order(cur, draft_season=None, fixes=None, log=print):
-    """Fill draft_picks.overall_pick for every round of the class (compute_draft_order through the owners).
-    fixes: {pick: team abbreviation} corrections of Round 1 owners JR made against Madden's order screen (K3);
-    they're written to draft_picks with source JR. Runs the draft-day board (step 27) if it isn't stored."""
+    """Fill draft_picks.overall_pick for every round of the class (compute_draft_order through the owners), including
+    the class's comp rows, which get the shifted numbering after their round's 32 standard picks. Each row is keyed
+    by (round, original_team_id, pick_suffix), so a comp row is never renumbered into its team's standard slot and
+    no owner is clobbered. fixes: {pick: team abbreviation} corrections of Round 1 owners JR made against Madden's
+    order screen (K3); they're written to draft_picks with source JR. Runs the draft-day board (step 27) if it
+    isn't stored."""
     from engines.draft_order import draft_order_with_owners
     draft_season = draft_season or _season(cur) + 1
     if not installed(cur):
@@ -473,6 +490,7 @@ def lock_order(cur, draft_season=None, fixes=None, log=print):
     cur.execute("SELECT count(*) FROM scout_draft_picks WHERE draft_season = %s", (draft_season,))
     if cur.fetchone()[0]:
         raise DraftRoomError(409, "picks are already recorded: the order can't change now")
+    suffix_aware = has_pick_suffix(cur)       # before the migration there are no comp rows to key on
     teams = {v["abbr"]: t for t, v in _teams(cur).items()}
     slots = draft_order_with_owners(cur, draft_season, rounds=range(1, 8))
     for pick, abbr in (fixes or {}).items():
@@ -480,14 +498,25 @@ def lock_order(cur, draft_season=None, fixes=None, log=print):
         slot = next((s for s in slots if s["pick"] == int(pick) and s["round"] == 1), None)
         if tid is None or slot is None:
             raise DraftRoomError(400, f"can't set pick {pick} to {abbr}")
-        cur.execute("""UPDATE draft_picks SET owner_team_id = %s, source = 'JR'
-                       WHERE draft_season = %s AND round = 1 AND original_team_id = %s""",
-                    (tid, draft_season, slot["original_team_id"]))
+        if suffix_aware:
+            cur.execute("""UPDATE draft_picks SET owner_team_id = %s, source = 'JR'
+                           WHERE draft_season = %s AND round = 1 AND original_team_id = %s AND pick_suffix = ''""",
+                        (tid, draft_season, slot["original_team_id"]))
+        else:
+            cur.execute("""UPDATE draft_picks SET owner_team_id = %s, source = 'JR'
+                           WHERE draft_season = %s AND round = 1 AND original_team_id = %s""",
+                        (tid, draft_season, slot["original_team_id"]))
         slot["owner_team_id"] = tid
     cur.execute("UPDATE draft_picks SET overall_pick = NULL WHERE draft_season = %s", (draft_season,))
-    cur.executemany("""UPDATE draft_picks SET overall_pick = %s
-                       WHERE draft_season = %s AND round = %s AND original_team_id = %s""",
-                    [(s["pick"], draft_season, s["round"], s["original_team_id"]) for s in slots])
+    if suffix_aware:
+        cur.executemany("""UPDATE draft_picks SET overall_pick = %s
+                           WHERE draft_season = %s AND round = %s AND original_team_id = %s AND pick_suffix = %s""",
+                        [(s["pick"], draft_season, s["round"], s["original_team_id"], s.get("pick_suffix", ""))
+                         for s in slots])
+    else:
+        cur.executemany("""UPDATE draft_picks SET overall_pick = %s
+                           WHERE draft_season = %s AND round = %s AND original_team_id = %s""",
+                        [(s["pick"], draft_season, s["round"], s["original_team_id"]) for s in slots])
     if se.STEP_DRAFT not in se.stored_steps(cur, draft_season):
         se.catch_up(cur, draft_season, se.STEP_DRAFT, log=log, extras=se.default_extras)
     clock_trades(cur, draft_season, 1, log=log)
