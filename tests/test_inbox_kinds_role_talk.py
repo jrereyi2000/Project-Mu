@@ -258,3 +258,12 @@ def test_start_names_the_player(cur):
     t = role_talk.start(cur, dict(team(cur), week=6), {"player_id": 101, "topic": "Snaps"})
     assert t.counterpart_id == "101" and t.subject == "Snaps"
     assert t.source_ref == "role:jr:101:2026:6" and t.state["slot"] is None
+
+
+def test_start_declares_the_player_pick_form(cur):
+    assert role_talk.START_FORM == "player_pick"
+
+
+def test_start_uses_the_typed_note_as_the_topic(cur):
+    t = role_talk.start(cur, dict(team(cur), week=6), {"player_id": 101, "note": "More targets"})
+    assert t.subject == "More targets" and t.facts["topic"] == "More targets" and t.state["topic"] == "JR_STARTED"

@@ -247,3 +247,16 @@ def test_start_needs_a_beat_writer(cur):
     node = {"team_id": 2, "abbr": "ATL", "season": SEASON, "week": WEEK, "actors": [], "actor": None}
     with pytest.raises(InboxError):
         reporter.start(cur, node, {"topic": "The season"})
+
+
+# --------------------------------------------------------------------------------------------------- start ---
+
+def test_start_declares_no_start_form():
+    assert not hasattr(reporter, "START_FORM")
+
+
+def test_start_uses_the_typed_note_as_the_subject(cur):
+    node = {"team_id": CAR, "abbr": "CAR", "season": SEASON, "week": WEEK, "actors": [], "actor": None}
+    t = reporter.start(cur, node, {"note": "The trade for a pass rusher"})
+    assert t.subject == "The trade for a pass rusher" and t.facts["topic"] == "The trade for a pass rusher"
+    assert t.intent == "OPEN" and t.counterpart_id == "car_beat"
