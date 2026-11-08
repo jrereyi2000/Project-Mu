@@ -183,6 +183,16 @@ def test_model_done_closes_the_interview(db, cur):
     assert store.get_thread(cur, other["id"])["status"] == "WAITING_JR"
 
 
+def test_exchange_applies_the_models_done_to_the_thread(db, cur):
+    thread = interview_thread(cur)
+    answer = '{"message": "That is all I need. Thanks for your time.", "done": true}'
+    voice.exchange(cur, reporter, thread["id"], "ON_RECORD", {}, "He is out a month.",
+                   llm=lambda prompt: answer, budget_s=5)
+    after = store.get_thread(cur, thread["id"])
+    assert after["status"] == "CLOSED" and after["state"]["done"] is True
+    assert reporter.options(cur, after, None) == []
+
+
 def test_hard_cap_is_ten_questions(cur):
     assert reporter.INTERVIEW_MAX_QUESTIONS == 10
     thread = interview_thread(cur, body_source="LLM", asked=10)

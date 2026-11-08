@@ -368,6 +368,10 @@ def exchange(cur, kind, thread_id, option_id=None, payload=None, note=None, *, l
     options = [] if result.close else list(kind.options(cur, thread, result) or [])
     msg = store.add_message(cur, thread_id, _author(thread), reply.text, reply.source, options=options,  # 3. stored
                             facts=result.facts, engine_ref=result.engine_ref, appraisal=reply.appraisal, at=when)
+    if reply.data and reply.source == "LLM":            # the kind's extra JSON (e.g. REPORTER's "done"), as in scan
+        hook = getattr(kind, "on_reply", None)
+        if callable(hook):
+            hook(cur, store.get_thread(cur, thread_id), reply.data)
     if reply.appraisal:                                                     # 4. the event, in the outbox
         event = appraisal_mod.exchange_event(thread, msg, None, None, reply.appraisal, when)
         if event is not None:
