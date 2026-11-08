@@ -1,0 +1,20 @@
+# source: fixture://asap-overtime
+# date: 2024-12-08
+# season: 2024
+# team: ABC
+# team_name: ABC Roughriders
+# opponent: XYZ
+# opponent_name: XYZ Comets
+# result: W
+# score: 32-26
+# tags: win,overtime
+# speaker: Head Coach Test Case
+
+ABC 32, XYZ 26
+COACH TEST CASE: We found a way in the extra period.
+
+Q. What changed in overtime?
+COACH TEST CASE: We tightened the protection.
+
+Q. How did the defense hold up?
+COACH TEST CASE: They tackled well.

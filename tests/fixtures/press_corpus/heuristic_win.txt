@@ -1,0 +1,27 @@
+# source: fixture://heuristic-win
+# date: 2025-01-19
+# season: 2024
+# team: ABC
+# team_name: ABC Roughriders
+# opponent: XYZ
+# opponent_name: XYZ Comets
+# result: W
+# score: 31-28
+# tags: win,playoff
+# speaker: Head Coach Test Case
+
+HEAD COACH TEST CASE
+Opening Statement:
+"We executed better in the second half."
+
+What did you see on the touchdown drive?
+(Ben Fixture)
+"It was a great block by the tight end and the runner finished."
+
+How is the receiver's hamstring?
+(Ben Fixture)
+"He is sore, but we think he will be fine."
+
+How do you feel about the win?
+(Ben Fixture)
+"Proud of the group."
