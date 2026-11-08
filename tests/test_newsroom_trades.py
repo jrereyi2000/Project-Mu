@@ -1,7 +1,9 @@
 """Trades and rumors in the newsroom (docs/done/team_management/05_NEWSROOM_INTEGRATION_PLAN.md Phase 8). Pure helpers and
 fake cursors: no database, no model calls."""
+import json
 import re
 import unittest
+from contextlib import ExitStack
 from unittest import mock
 
 from newsroom import roster_moves as rm
@@ -25,6 +27,30 @@ def rumor(week=4, outcome="stalled", trigger="NEED", rid=7):
             "assets": [{"type": "PLAYER", "position": "TE", "from": "MIA", "to": "BUF"},
                        {"type": "PICK", "position": None, "from": "BUF", "to": "MIA"}],
             "status": "RUMOR", "outcome": outcome}
+
+
+def leak(week=4, stage="CLOSE", lid=12, named=None):
+    """A front_office.trade_rumors row from a gm_trade_leaks entry (the shape _leak_rumors returns)."""
+    return {"rumor_id": f"leak:{lid}", "week": week, "teams": ["NYJ", "NE"], "initiator": "NYJ",
+            "trigger": "NEED",
+            "assets": [{"type": "PLAYER", "position": "CB", "from": "NE", "to": "NYJ"}],
+            "named": [{"player_id": 5, "name": "Tre Reyes", "position": "CB"}] if named is None else named,
+            "stage": stage, "insider_key": "insider_a", "source": "LEAK", "status": "RUMOR"}
+
+
+def fake_leak_line(leak_row, team_names=None):
+    """Stand-in for roster_moves.leak_line until the unit that adds it (U6) is on this branch; the real one is used
+    when present. Same shape: labelled, named players, stage words, never a done deal."""
+    names = team_names or {}
+    nm = lambda abbr: names.get(abbr, abbr)
+    a, b = leak_row["teams"]
+    named = [f"{n.get('position') or ''} {n.get('name') or ''}".strip() for n in leak_row.get("named") or []]
+    about = f" about {', '.join(named)}" if named else ""
+    clause = {"OPENED": f"have opened talks{about}",
+              "CLOSE": f"have talked{about}; talks are close",
+              "STALLED": f"talked{about}; talks stalled, no deal"}.get(leak_row.get("stage"), "have talked")
+    return " · ".join([f"Week {leak_row['week']}", "RUMOR, not a done deal",
+                       f"per a source, the {nm(a)} and the {nm(b)} {clause}"])
 
 
 DONE_WORDS = re.compile(r"\b(traded|acquired|acquires|agreed|completed|executed|sent)\b", re.I)
@@ -126,26 +152,32 @@ class VisibilityTests(unittest.TestCase):
 
 class FakeCursor:
     def __init__(self, statuses):
-        self.statuses, self.rows = statuses, []
+        self.statuses, self.rows, self.queries = statuses, [], []
 
     def execute(self, sql, params=None):
-        self.rows = [(i, *self.statuses[i]) for i in params[0]] if "gm_trade_proposals" in sql else []
+        self.queries.append((sql, params))
+        self.rows = []
+        if "gm_trade_proposals" in sql and params:
+            # Only integer proposal ids are looked up; a leak's "leak:<id>" id is never sent to the query.
+            self.rows = [(i, *self.statuses[i]) for i in params[0] if isinstance(i, int) and i in self.statuses]
 
     def fetchall(self):
         return self.rows
 
 
 class FetchRumorTests(unittest.TestCase):
-    def run_fetch(self, ctx, rows, statuses):
+    def run_fetch(self, ctx, rows, statuses, cursor=False):
         from newsroom import db_tools
         calls = []
 
         def fake_rumors(cur, season, week):
             calls.append(week)
             return [r for r in rows if r["week"] <= week]
+        cur = FakeCursor(statuses)
         with mock.patch("engines.front_office.installed", return_value=True), \
                 mock.patch("engines.front_office.trade_rumors", side_effect=fake_rumors):
-            return db_tools.fetch_rumors(FakeCursor(statuses), 2036, ctx=ctx), calls
+            out = db_tools.fetch_rumors(cur, 2036, ctx=ctx)
+        return (out, calls, cur) if cursor else (out, calls)
 
     def test_cutoff_deadline_and_outcomes(self):
         rows = [rumor(week=3, rid=1), rumor(week=4, rid=2), rumor(week=5, rid=3)]
@@ -162,6 +194,54 @@ class FetchRumorTests(unittest.TestCase):
         rows = [rumor(week=3, rid=1)]
         out, _ = self.run_fetch((2036, 5, True), rows, {1: ("EXECUTED", 3)})
         self.assertEqual(out, [])
+
+    def test_leak_and_proposal_together(self):
+        rows = [leak(week=4, stage="STALLED"), rumor(week=3, rid=1)]
+        statuses = {1: ("REJECTED", 3)}
+        out, calls, cur = self.run_fetch((2036, 5, True), rows, statuses, cursor=True)
+        self.assertEqual([(r["rumor_id"], r["outcome"]) for r in out],
+                         [("leak:12", "stalled"), (1, "stalled")])
+        self.assertEqual(calls, [4])
+        self.assertEqual(len(cur.queries), 1)
+        sql, params = cur.queries[0]
+        self.assertIn("gm_trade_proposals", sql)
+        self.assertEqual(params[0], [1])           # the "leak:12" id never reaches the integer query
+
+    def test_leak_outcome_comes_from_its_stage(self):
+        for stage, outcome in (("OPENED", "open"), ("CLOSE", "open"), ("STALLED", "stalled")):
+            out, _ = self.run_fetch((2036, 5, True), [leak(week=4, stage=stage)], {})
+            self.assertEqual([r["outcome"] for r in out], [outcome], stage)
+        out, _, cur = self.run_fetch((2036, 5, True), [leak(week=4)], {}, cursor=True)
+        self.assertEqual(cur.queries, [])          # a leak-only week never looks up gm_trade_proposals
+        out, _ = self.run_fetch((2036, 5, True), [leak(week=5)], {})   # not from a week before the edition's
+        self.assertEqual(out, [])
+
+    def test_leak_and_proposal_past_deadline(self):
+        rows = [leak(week=4), rumor(week=3, rid=1)]
+        out, calls = self.run_fetch((2036, 9, True), rows, {1: ("REJECTED", 3)})
+        self.assertEqual((out, calls), ([], []))
+
+    def test_get_trade_rumors_renders_each_rumor_with_its_own_line(self):
+        from newsroom import db_tools
+        rows = [leak(week=4, stage="CLOSE"), rumor(week=3, rid=1, outcome="open")]
+        with ExitStack() as stack:
+            stack.enter_context(mock.patch("newsroom.db_tools.resolve_season", return_value=2036))
+            stack.enter_context(mock.patch("newsroom.db_tools._txn_context", return_value=(2036, 5, True)))
+            stack.enter_context(mock.patch("newsroom.db_tools.fetch_rumors", return_value=rows))
+            stack.enter_context(mock.patch("newsroom.db_tools._team_names", return_value=NAMES))
+            stack.enter_context(mock.patch("newsroom.db_tools.psycopg.connect"))
+            if not hasattr(rm, "leak_line"):       # U6 adds it; this branch uses the stand-in until then
+                stack.enter_context(mock.patch.object(rm, "leak_line", fake_leak_line, create=True))
+            data = json.loads(db_tools.get_trade_rumors.func("", 2036))
+        self.assertEqual(data["count"], 2)
+        leak_text, proposal_text = data["rumors"]          # newest first: the leak is Week 4, the proposal Week 3
+        self.assertIn("per a source, the Jets and the Patriots have talked about CB Tre Reyes", leak_text)
+        self.assertIn("talks are close", leak_text)
+        self.assertIsNone(DONE_WORDS.search(leak_text), leak_text)   # named, but never worded as traded
+        self.assertNotIn("$", leak_text)
+        self.assertIn("the Bills and the Dolphins discussed a trade", proposal_text)
+        self.assertIn("RUMOR, not a done deal", proposal_text)
+        self.assertIn("never a done deal", data["note"])
 
 
 class PackageToolTests(unittest.TestCase):

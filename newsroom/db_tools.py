@@ -3457,6 +3457,12 @@ def _team_names(cur) -> dict:
     return dict(cur.fetchall())
 
 
+def _is_leak_rumor(r) -> bool:
+    """A front_office.trade_rumors row from a gm_trade_leaks entry (source LEAK, id "leak:<id>"), not a proposal
+    rumor (an integer proposal id)."""
+    return r.get("source") == "LEAK" or not isinstance(r.get("rumor_id"), int)
+
+
 def fetch_trades(cur, season: int, ctx=None) -> list:
     """Executed GM trades of the season the article may see (front_office.executed_trades, oldest first). [] before
     step 3's tables exist."""
@@ -3468,8 +3474,9 @@ def fetch_trades(cur, season: int, ctx=None) -> list:
 
 
 def fetch_rumors(cur, season: int, ctx=None) -> list:
-    """Rumor material the article may see: rumor_ok proposals that were never executed (front_office.trade_rumors),
-    made before the article's week, only through the deadline, each with its `outcome` ('stalled' or 'open').
+    """Rumor material the article may see: rumor_ok proposals that were never executed and `gm_trade_leaks` rows
+    (front_office.trade_rumors), made before the article's week, only through the deadline, each with its `outcome`
+    ('stalled' or 'open'). A proposal's outcome comes from its status; a leak's from its stage (STALLED -> stalled).
     Another season's article gets none (rumors are live news)."""
     from engines import front_office as fo
     ctx_season, ctx_week, _ = ctx or _txn_context()
@@ -3484,13 +3491,22 @@ def fetch_rumors(cur, season: int, ctx=None) -> list:
     rows = fo.trade_rumors(cur, season, upto)
     if not rows:
         return []
-    cur.execute("SELECT id, status, expires_week FROM gm_trade_proposals WHERE id = ANY(%s);",
-                ([r["rumor_id"] for r in rows],))
-    info = {r[0]: (r[1], r[2]) for r in cur.fetchall()}
+    # Leaks carry "leak:<id>" ids; only the proposal rumors are looked up among the proposals (the query is skipped
+    # when there are none, so a leak-only week never sends a text id to the integer column).
+    proposal_ids = [r["rumor_id"] for r in rows if not _is_leak_rumor(r)]
+    info = {}
+    if proposal_ids:
+        cur.execute("SELECT id, status, expires_week FROM gm_trade_proposals WHERE id = ANY(%s);", (proposal_ids,))
+        info = {r[0]: (r[1], r[2]) for r in cur.fetchall()}
     out = []
     for r in rows:
+        if not rm.rumor_visible(r["week"], ctx_week):
+            continue
+        if _is_leak_rumor(r):
+            out.append({**r, "outcome": "stalled" if r.get("stage") == "STALLED" else "open"})
+            continue
         status, expires = info.get(r["rumor_id"], ("EXECUTED", None))
-        if status == "EXECUTED" or not rm.rumor_visible(r["week"], ctx_week):
+        if status == "EXECUTED":
             continue
         out.append({**r, "outcome": rm.rumor_outcome(status, expires, ctx_week)})
     return out
@@ -3510,7 +3526,7 @@ def new_week_trades(cur, season: int, week: int, team_abbr: str = None) -> tuple
 
 @tool
 def get_trade_rumors(team_identifier: str = "", season: int = 0) -> str:
-    """Fetch this season's trade rumors: real talks between two front offices that did not become a trade, through the Week 8 trade deadline. Each gives the two teams, who made the call, the kinds of assets (positions or draft picks, never names or figures) and whether talks stalled. A rumor is never a done deal: report it only as talks. Optional team filter. Call it only when trade talk bears on your story; executed trades are in get_league_transactions."""
+    """Fetch this season's trade rumors: real talks between two front offices that did not become a trade, through the Week 8 trade deadline. Each gives the two teams, who made the call, the kinds of assets (positions or draft picks, never figures) and whether talks stalled. A rumor is never a done deal: report it only as talks. A leak may name a player its leaker named, but still never as traded. Optional team filter. Call it only when trade talk bears on your story; executed trades are in get_league_transactions."""
     try:
         s_val = resolve_season(season)
         ctx_season, ctx_week, _ = _txn_context()
@@ -3535,7 +3551,8 @@ def get_trade_rumors(team_identifier: str = "", season: int = 0) -> str:
     return json.dumps({
         "season": s_val,
         "count": len(rumors),
-        "rumors": [rm.rumor_line(r, names) for r in sorted(rumors, key=lambda r: -r["week"])],
+        "rumors": [(rm.leak_line if _is_leak_rumor(r) else rm.rumor_line)(r, names)
+                   for r in sorted(rumors, key=lambda r: -r["week"])],
         "note": rm.RUMOR_NOTE,
     }, indent=2)
 
