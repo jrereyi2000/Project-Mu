@@ -260,6 +260,17 @@ def test_expiry_after_week_and_at_deadline():
     assert [p for p, _ in ge.expire_stale(props, ge.TRADE_DEADLINE_WEEK + 1)] == [1, 2]
 
 
+def test_an_auto_approved_proposal_survives_the_week_change():
+    """A talk-agreed CPU deal waits for the league office's retry (§2.5), so expire_stale leaves it alone; every
+    other APPROVED proposal still expires (V2.11 U8)."""
+    props = [{"id": 1, "status": "APPROVED", "expires_week": 4, "trade_window": "IN_SEASON",
+              "flags": ["talks:7", "auto_approved"]},
+             {"id": 2, "status": "APPROVED", "expires_week": 4, "trade_window": "IN_SEASON", "flags": []},
+             {"id": 3, "status": "APPROVED", "expires_week": 4, "trade_window": "IN_SEASON"}]
+    assert [p for p, _ in ge.expire_stale(props, 6)] == [2, 3]
+    assert [p for p, _ in ge.expire_stale(props, ge.TRADE_DEADLINE_WEEK + 1)] == [2, 3]
+
+
 def test_search_finds_legal_accepted_deal():
     b = star_books()
     v = ge.Valuer(b, FITS)
@@ -434,7 +445,7 @@ def test_read_books_applies_the_registry_overlay(monkeypatch):
 
 
 # ------------------------------------------------------- CPU-to-CPU talks (§2.6) ----
-def _run_week(monkeypatch, b, dry_run=False):
+def _run_week(monkeypatch, b, dry_run=False, cand=None):
     """run_week with every database boundary replaced: the search and the routing stay real."""
     calls = {"store": [], "talks": []}
     import engines.gm_direction as gd
@@ -450,6 +461,10 @@ def _run_week(monkeypatch, b, dry_run=False):
     monkeypatch.setattr(gd, "read_league", lambda *a, **k: {})
     monkeypatch.setattr(gd, "compute", lambda rows, week: {})
     monkeypatch.setattr(gd, "write", lambda *a, **k: None)
+    if cand is not None:                                 # a scripted pick, for the flags a CPU deal carries
+        monkeypatch.setattr(ge, "evaluate", lambda deals, books, valuer: [cand])
+        monkeypatch.setattr(ge, "choose_shaped", lambda cands, rng: cands[0])
+        monkeypatch.setattr(ge, "choose", lambda cands, rng: cands[0])
 
     def fake_talks(cur, books, valuer, deals, rng, llm, log=None):
         calls["talks"].append(list(deals))
@@ -466,6 +481,28 @@ def test_cpu_to_cpu_picks_go_to_talks_instead_of_being_stored(monkeypatch):
     picked = calls["talks"][0][0]
     assert (picked["a"], picked["b"]) == (1, 2) and any(x.get("player_id") == STAR for x in picked["assets"])
     assert rep["proposals"] == [] and rep["talks"]["agreed"] == [7] and rep["talks"]["stalled"] == []
+
+
+def test_a_cpu_pick_carries_the_stored_path_flags_onto_its_talk(monkeypatch):
+    """A collected CPU pick keeps the stored path's shape / trade-request flags (advisory: and the LLM flags stay
+    off), and a CPU blockbuster counts against the season cap across the run (V2.11 U8)."""
+    b = star_books()
+    cand = dict(deal([pl(STAR, 2, 1), pk(4, 1, 1, 2)]), hash="cpu-bb", da=1e6, db=-1e6, joint=-1e6,
+                legality={}, shape="BLOCKBUSTER", request_id=55)
+    rep, calls = _run_week(monkeypatch, b, cand=cand)
+    picked = calls["talks"][0][0]
+    assert "shape:BLOCKBUSTER" in picked["flags"] and "trade_request:55" in picked["flags"]
+    assert not any(f.startswith(("advisory:", "llm_")) for f in picked["flags"])
+    assert b["blockbusters"] == 1                                   # the cap holds within the run too
+    assert rep["proposals"] == []
+
+
+def test_a_cpu_pick_in_the_offseason_carries_its_stage():
+    b = star_books()
+    pick = dict(deal([pl(STAR, 2, 1), pk(4, 1, 1, 2)]), shape="RENTAL")
+    flags, _caps = ge.proposal_flags(b, pick, "OFFSEASON", 3)
+    assert "stage:3" in flags and "shape:RENTAL" in flags
+    assert not any(f.startswith(("advisory:", "stage:")) for f in ge.proposal_flags(b, pick, "IN_SEASON", None)[0])
 
 
 def test_a_deal_with_a_user_team_is_still_an_advisory_proposal(monkeypatch):

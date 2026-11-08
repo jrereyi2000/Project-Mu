@@ -6,7 +6,9 @@ PROPOSED proposal and waiting for JR (who, 2026-2033, has no team), the two GMs 
 turns. The numbers stay with the engines: `gm_negotiation.judge`, `gm_negotiation.counter_options` and
 `gm_trade_engine.check_legality` build and check every option, and the persona policy (`policy_choice`) or the
 model (`llm_choose`) only picks one of them. A completed deal is stored APPROVED with flags `talks:<id>` and
-`auto_approved` (the league office writes it); a breakdown is stored STALLED (decided for pacing, but it never bars
+`auto_approved` (the league office writes it, and it retries instead of expiring while that is pending) plus the
+flags the stored path gave the pick (`shape:`, `stage:`, `release:`, …; a resumed talk carries none); a breakdown
+is stored STALLED (decided for pacing, but it never bars
 its players the way a JR REJECTED proposal does). A CLOSE-mood talk may carry over one week; the next run resumes
 it first. Some turns leak to the newsroom: `leak_events` draws a leak from the GMs' sliders and traits, stored in
 `gm_trade_leaks`, positions only unless the leaker names the players he receives. Only AGREED CPU deals publish
@@ -424,6 +426,7 @@ def open_talk(cur, b, valuer, deal, rng):
     nid = cur.fetchone()[0]
     talk = _talk(cur, nid)
     talk["trigger"] = deal.get("trigger")
+    talk["flags"] = list(deal.get("flags") or [])    # the stored path's flags; a resumed talk has none
     opener = dict(talk, opening=True)
     options = options_for(b, valuer, opener, a, deal["assets"])
     key = policy_choice(options, _gm(b, a), random.Random(f"talk:{season}:{nid}:1"))
@@ -511,10 +514,11 @@ def _stall(cur, b, valuer, talk, offer_assets, reason, status="STALLED"):
     deal = {"a": _initiator(talk), "b": talk["gm_team_id"], "assets": offer_assets,
             "trigger": talk.get("trigger") or "NEED"}
     rat = _ge().rationale_for(b, deal, None)
+    flags = [f"talks:{nid}"] + list(talk.get("flags") or [])
     pid = None
     for v in (valuer, None):                     # an asset that moved may no longer be priceable
         try:
-            pid = _ge().store(cur, b, deal, v, rat, [f"talks:{nid}"], origin="ENGINE", status="STALLED",
+            pid = _ge().store(cur, b, deal, v, rat, flags, origin="ENGINE", status="STALLED",
                               trigger=deal.get("trigger"))
             break
         except Exception as e:
@@ -530,7 +534,8 @@ def _agree(cur, b, valuer, talk, offer_assets, llm):
             "trigger": talk.get("trigger") or "NEED"}
     checks = _ge().check_legality(deal, b, valuer)
     rat = _ge().rationale_for(b, deal, llm)
-    flags = [f"talks:{nid}", "auto_approved"] + _ge().release_flags(checks, b) + _ge().llm_flags(rat)
+    flags = ([f"talks:{nid}", "auto_approved"] + list(talk.get("flags") or [])
+             + _ge().release_flags(checks, b) + _ge().llm_flags(rat))
     pid = _ge().store(cur, b, deal, valuer, rat, flags, origin="ENGINE", status="APPROVED",
                       trigger=deal.get("trigger"))
     if pid is None:

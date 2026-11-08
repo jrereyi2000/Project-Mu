@@ -187,10 +187,14 @@ def expire_stale(open_props, week, window="IN_SEASON", stage=None, pick=None, ro
     """[(proposal_id, reason)] for PROPOSED/APPROVED proposals the league has moved past: their week is gone, the
     deadline passed, a later offseason stage started, a later pick is on the clock (draft day) or a later round
     started (round_no: Round 1's proposals carry no round flag). JR may still confirm an expired one he already made
-    at the console."""
+    at the console. An approved CPU deal (flag `auto_approved`) is left alone: the league office retries it next
+    write and expires it itself on the second refusal (TRADE_NEGOTIATIONS_PLAN §2.5), so expiring it here would
+    lose the retry."""
     out = []
     for p in open_props:
         if p["status"] not in ("PROPOSED", "APPROVED"):
+            continue
+        if "auto_approved" in (p.get("flags") or []):
             continue
         pw = p.get("trade_window", "IN_SEASON")
         if pw == "OFFSEASON" and stage is not None and (flag_value(p, "stage") or 0) < stage:
@@ -1198,6 +1202,23 @@ def release_flags(checks, b):
     return [f"release:{t}:{nm}" for t, nm in (checks.get("roster", {}).get("release") or {}).items()]
 
 
+def proposal_flags(b, pick, window, stage):
+    """The stored path's flags for a pick, minus `advisory:` and the LLM flags (written when the deal is stored):
+    cap re-scan / projected cap, offseason stage, release, trade request and shape. Returns (flags, cap effects).
+    A collected CPU pick carries these into its talk, which passes them on to the proposal it stores (V2.11 U8)."""
+    caps = cap_effects(pick, b)
+    flags = [f"{'projected_cap' if c['projected'] else 'rescan'}:{abbr(b, t)}" for t, c in caps.items()
+             if c["derived"] and c["after"] is not None and c["after"] < RESCAN_HEADROOM]
+    if window == "OFFSEASON":
+        flags.append(f"stage:{stage}")
+    flags += release_flags(pick.get("legality") or {}, b)
+    if pick.get("request_id"):
+        flags.append(f"trade_request:{pick['request_id']}")
+    if pick.get("shape"):
+        flags.append(f"shape:{pick['shape']}")
+    return flags, caps
+
+
 def legal(checks):
     return all(c["ok"] for c in checks.values())
 
@@ -1701,23 +1722,17 @@ def run_week(cur, season, week, dry_run=False, replace=False, llm=None, log=prin
             continue
         picked += 1
         used.update((pick["a"], pick["b"]))
+        carried, caps = proposal_flags(b, pick, window, stage)   # stored-path flags minus advisory: and LLM flags
+        if pick.get("shape"):                                    # the blockbuster cap holds across the whole run,
+            b["blockbusters"] = b.get("blockbusters", 0) + (pick["shape"] == "BLOCKBUSTER")   # talks included
         if cpu_deal(b, pick):                            # no user team: a talk decides it, nothing stored here
+            pick["flags"] = list(carried)
             b["hashes"].add(pick["hash"])
             collected.append(pick)
             log(f"  {abbr(b, pick['a'])} <-> {abbr(b, pick['b'])}: both GMs are CPU; the talk decides it")
             continue
         flags = [f"advisory:{abbr(b, t)}" for t in (pick["a"], pick["b"]) if b["gm"].get(t, {}).get("user_controlled")]
-        caps = cap_effects(pick, b)
-        flags += [f"{'projected_cap' if c['projected'] else 'rescan'}:{abbr(b, t)}" for t, c in caps.items()
-                  if c["derived"] and c["after"] is not None and c["after"] < RESCAN_HEADROOM]
-        if window == "OFFSEASON":
-            flags.append(f"stage:{stage}")
-        flags += release_flags(pick.get("legality") or {}, b)
-        if pick.get("request_id"):
-            flags.append(f"trade_request:{pick['request_id']}")
-        if pick.get("shape"):
-            flags.append(f"shape:{pick['shape']}")
-            b["blockbusters"] = b.get("blockbusters", 0) + (pick["shape"] == "BLOCKBUSTER")
+        flags += carried
         rat = rationale_for(b, pick, llm)
         flags += llm_flags(rat)
         pid = None if dry_run else store(cur, b, pick, valuer, rat, flags)

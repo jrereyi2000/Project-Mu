@@ -173,10 +173,11 @@ def test_a_breakdown_stores_a_stalled_proposal(monkeypatch):
     calls = {}
     monkeypatch.setattr(ge, "rationale_for", lambda b, d, llm: {"rationale_a": "", "rationale_b": "",
                                                                 "headline": "", "source": "TEMPLATE"})
-    monkeypatch.setattr(ge, "store", lambda *a, **k: (calls.update(kwargs=k), 9)[1])
+    monkeypatch.setattr(ge, "store", lambda *a, **k: (calls.update(kwargs=k, args=a), 9)[1])
     cur = ScriptedCur(lambda sql, params: [])
-    assert gt._stall(cur, b, v, TALK, OPENING, "broke down") == 9
+    assert gt._stall(cur, b, v, dict(TALK, flags=["stage:3", "shape:RENTAL"]), OPENING, "broke down") == 9
     assert calls["kwargs"]["status"] == "STALLED"
+    assert calls["args"][5] == ["talks:1", "stage:3", "shape:RENTAL"]     # the deal's flags ride along
     assert any("STALLED" in p for p in cur.params)
 
 
@@ -192,6 +193,48 @@ def test_an_agreement_stores_approved_with_the_talk_flags(monkeypatch):
     assert gt._agree(ScriptedCur(lambda sql, params: []), b, v, TALK, OPENING, None) == 9
     assert seen["kwargs"]["status"] == "APPROVED"
     assert "talks:1" in seen["flags"] and "auto_approved" in seen["flags"]
+
+
+def test_an_agreement_carries_the_deals_flags_and_a_resumed_talk_with_none_still_agrees(monkeypatch):
+    """A talk opened from a CPU pick stores that pick's flags too (talks:/auto_approved still first); a talk
+    resumed from the database (no "flags" key) keeps working with empty flags (V2.11 U8)."""
+    b, v = setup()
+    seen = {}
+    monkeypatch.setattr(ge, "check_legality", lambda d, b, valuer=None: {})
+    monkeypatch.setattr(ge, "rationale_for", lambda b, d, llm: {"rationale_a": "", "rationale_b": "",
+                                                                "headline": "", "source": "TEMPLATE"})
+    monkeypatch.setattr(ge, "release_flags", lambda checks, b: [])
+    monkeypatch.setattr(ge, "llm_flags", lambda rat: [])
+    monkeypatch.setattr(ge, "store", lambda *a, **k: (seen.update(flags=a[5]), 9)[1])
+    talk = dict(TALK, flags=["stage:3", "shape:BLOCKBUSTER"])
+    assert gt._agree(ScriptedCur(lambda sql, params: []), b, v, talk, OPENING, None) == 9
+    assert seen["flags"][:2] == ["talks:1", "auto_approved"]
+    assert "stage:3" in seen["flags"] and "shape:BLOCKBUSTER" in seen["flags"]
+    resumed = dict(TALK)                                        # what _talk returns: no "flags" key at all
+    assert gt._agree(ScriptedCur(lambda sql, params: []), b, v, resumed, OPENING, None) == 9
+    assert seen["flags"] == ["talks:1", "auto_approved"]
+
+
+OPEN_TALK_ROW = (7, 2036, 24, "OFFSEASON", 3, 1, 2, "CPU", 1, None, 0, None, "OPEN", None, 4, 4, None,
+                 "2026-01-01", "2026-01-02")
+
+
+def open_talk_router(sql, params):
+    if "INSERT INTO gm_trade_negotiations" in sql:
+        return [(7,)]
+    if "FROM gm_trade_negotiations WHERE id" in sql:
+        return [OPEN_TALK_ROW]
+    if "COALESCE(max(turn_no)" in sql:
+        return [(0,)]
+    return []
+
+
+def test_open_talk_remembers_the_deals_flags():
+    b, v = setup()
+    d = deal(OPENING)
+    d["flags"] = ["stage:3", "shape:BLOCKBUSTER"]
+    talk = gt.open_talk(ScriptedCur(open_talk_router), b, v, d, random.Random(1))
+    assert talk["id"] == 7 and talk["flags"] == ["stage:3", "shape:BLOCKBUSTER"]
 
 
 def _run_limit_turns():
