@@ -1,6 +1,10 @@
 # Project Mu: Live Multi-Turn Trade Negotiations Plan (V2.11)
 
-**Status:** approved by JR (2026-11-03); building, wave 1 of 2 (started 2026-11-08). All decisions recorded (§8). V2.9 is built and on main, so the precondition is met.
+**Status:** approved by JR (2026-11-03); building, wave 1 of 2 done (2026-11-08). All decisions recorded (§8). V2.9 is built and on main, so the precondition is met.
+- As built (wave 1): a follow-up **U7** was added for `newsroom/db_tools.py` (U6 found that `fetch_rumors` sent every rumor id to the integer proposal query, so a `leak:<id>` row would break it and be dropped; no unit owned the file). U7 splits leak rows from proposal rows and renders leaks with `leak_line`.
+- As built (U1): the migration also widens `gm_trade_negotiation_turns.actor` to `VARCHAR(4)` — `GM_A` does not fit the old `VARCHAR(2)`, and the plan's DDL only re-created the check. `gm_negotiation`'s turn reads/writes now include the new columns, so the `2027_01_22` migration is required on any database where JR's talks run (not just the CPU path). `run_talks` returns `{talks, agreed, stalled, teams}` (no `used` argument): U2 folds `teams` into its week's used set. A resumed talk has no stored trigger, so its outcome proposal uses `NEED`.
+- As built (U5): the inbox start body also carries `as: "GM"` (V2.9's `/inbox` refuses without it), and `assets` is the builder's send side in V2.9's `trade_assets` shape — the inbox form is one-directional, so the receive side is what the GM counters for.
+- As built (U6): `trade_rumors` suppresses a leaked talk's proposal at any status (not only STALLED), `_talk_quotes` treats the presence of `gm_trade_leaks` as the migration marker, and `rumor_facts`' "never name a player" grounding is relaxed only when the leak names one.
 **Builds on:** [`V2_MASTER_PLAN.md`](../in_progress/V2_MASTER_PLAN.md) §6 V2.11, §2.6 (Trade Machine), §5.3.2 (interactive latency boundary), §7.2 (the 2026–2033 all-CPU era); [`PERSONALITY_PLAN.md`](../in_progress/PERSONALITY_PLAN.md) §8 (agentic loops) and §9 phase 5; PROJECT_SPEC §2.17 (trade value, proposal engine, negotiation), §2.21a (league office), §3.3f (GM agents tables), §4.6b (franchise endpoints); [`V2_CORE_BUILD_PLAN.md`](../done/V2_CORE_BUILD_PLAN.md); [`FRONT_OFFICE_INBOX_PLAN.md`](../done/FRONT_OFFICE_INBOX_PLAN.md) (V2.9: JR's GM talks live in its `GM_TALK` inbox kind, `engines/inbox/kinds/gm_talk.py`, which this plan extends).
 **Precondition:** V2.9 is built and on main before this plan's wave 1 (its own Q1 recommends going first): its U1 owns `pipeline/weekly_capture.py`'s inbox hook and migration `2027_01_19`, its U2 `FranchisePage.tsx` and `types/franchiseInbox.ts`, its U4 `engines/inbox/kinds/gm_talk.py`, its U5 `server/api.py`. Nothing here edits `server/api.py` or `FranchisePage.tsx`; this plan's edits to `weekly_capture.py` and `gm_talk.py` start from V2.9's merged versions.
 
@@ -396,4 +400,8 @@ All decided by JR on 2026-11-03 (D1–D8 at the top). Nothing is open.
 
 | Unit | Wave | Branch | Worktree | Result | Merge |
 |---|---|---|---|---|---|
+| U1 | 1 | `worktree-agent-a6ad6293974380683` | `.claude/worktrees/agent-a6ad6293974380683` | merged (2 commits; two stall-path defects sent back and fixed) | `2a0b1a9` |
+| U5 | 1 | `worktree-agent-a03f7a9166eaff35c` | `.claude/worktrees/agent-a03f7a9166eaff35c` | merged | `f975697` |
+| U6 | 1 | `worktree-agent-a6fb118a78bb36451` | `.claude/worktrees/agent-a6fb118a78bb36451` | merged | `ca82520` |
+| U7 | 1 (follow-up to U6) | `worktree-agent-aa04ea8b2ad7c7c5c` | `.claude/worktrees/agent-aa04ea8b2ad7c7c5c` | merged | `b406c63` |
 
