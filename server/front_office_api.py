@@ -16,9 +16,11 @@ from typing import Optional
 
 import psycopg
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
 from newsroom import roster_moves as rm
 from engines import front_office
+from engines import report_card_engine as rce
 from engines.coach_profile import (PLACEHOLDER_COORDINATOR, TENDENCY_WORDS, coach_profile, effective_tendencies,
                                   fetch_observed, fetch_team_coach)
 from newsroom.db_tools import fetch_cap_rows, fetch_moves, fetch_team_contracts, fetch_trades
@@ -294,3 +296,249 @@ def team_front_office(abbr: str, season: Optional[int] = None):
                 out["contracts"] = contracts
                 out["committed"] = committed(contracts, season)
             return out
+
+
+# ------------------------------------------------------------- report cards ----
+# NFLPA team report cards (docs/in_progress/NFLPA_REPORT_CARD_PLAN.md §2.5, U3): the read-only card (current +
+# history, league rank and percentile, the OpEx policy toggles and the open CapEx projects), plus the two write
+# actions JR funds from the owner cash pool. Every read is guarded with to_regclass and a block is null/empty when
+# the migration isn't applied or a table has no rows; a grade is never invented. The validation/planning math is in
+# the pure helpers below (testable offline), the handlers stay thin and DB-guarded.
+
+REPORT_CARD_COLS = ("season", "weight_room", "training_room", "locker_room", "food_nutrition",
+                    "team_travel", "family_treatment", "head_coach", "ownership",
+                    "overall_score", "overall_grade", "summary_text")
+
+
+class UpgradeIn(BaseModel):
+    category: str
+    tier: str
+
+
+class PolicyIn(BaseModel):
+    policy: str
+    enabled: bool
+
+
+def shape_report_card(row: dict) -> dict:
+    """One team_report_cards row as the API's card: the eight category grades, the composite score/grade and the
+    summary. The numeric score is normalized to float (it arrives as NUMERIC)."""
+    return {
+        "season": row["season"],
+        "weight_room": row["weight_room"],
+        "training_room": row["training_room"],
+        "locker_room": row["locker_room"],
+        "food_nutrition": row["food_nutrition"],
+        "team_travel": row["team_travel"],
+        "family_treatment": row["family_treatment"],
+        "head_coach": row["head_coach"],
+        "ownership": row["ownership"],
+        "overall_score": float(row["overall_score"]),
+        "overall_grade": row["overall_grade"],
+        "summary_text": row["summary_text"],
+    }
+
+
+def rank_percentile(scores: list, value: float) -> tuple:
+    """(rank, percentile) of `value` among `scores` (the league's overall_scores for one season). rank is the 1-based
+    competition rank (1 = best/highest, ties share the top rank); percentile is the share of teams at or below
+    `value` as a 0-100 float rounded to one decimal. Empty scores -> (None, None)."""
+    if not scores:
+        return None, None
+    ordered = sorted(scores, reverse=True)
+    rank = next((i + 1 for i, s in enumerate(ordered) if s <= value), len(ordered))
+    at_or_below = sum(1 for s in scores if s <= value)
+    return rank, round(100.0 * at_or_below / len(scores), 1)
+
+
+def validate_upgrade_body(category: str, tier: str):
+    """400 for a category outside the eight report-card categories or a tier outside MINOR/STANDARD/OVERHAUL."""
+    if category not in rce.CATEGORIES:
+        raise HTTPException(400, f"category must be one of: {', '.join(rce.CATEGORIES)}")
+    if tier not in rce.CAPEX_TIERS:
+        raise HTTPException(400, f"tier must be one of: {', '.join(rce.CAPEX_TIERS)}")
+
+
+def plan_upgrade(card: dict, category: str, tier: str, season: int) -> dict:
+    """The facility_upgrades order for a validated CapEx request: cost and target grade from the engine
+    (upgrade_cost / upgrade_target_grade) and the engine's 1-season construction delay."""
+    return {
+        "category": category,
+        "cost_dollars": rce.upgrade_cost(tier),
+        "target_grade": rce.upgrade_target_grade(card.get(category), tier),
+        "completion_season": season + rce.CONSTRUCTION_DELAY_SEASONS,
+        "status": "IN_PROGRESS",
+    }
+
+
+def check_cash(available: int, cost: int):
+    """409 when the owner's remaining CapEx this season can't fund the order (the message carries both numbers)."""
+    if available < cost:
+        raise HTTPException(409, f"the owner cash pool can't fund this: ${cost:,} needed, ${available:,} available")
+
+
+def validate_policy(policy: str):
+    """400 for a policy outside luxury_travel / family_daycare / private_chef."""
+    if policy not in rce.OPEX_POLICIES:
+        raise HTTPException(400, f"policy must be one of: {', '.join(rce.OPEX_POLICIES)}")
+
+
+def policy_effect(toggles: dict, card: dict, policy: str, enabled: bool) -> tuple:
+    """(next_toggles, annual_opex_cost, updated_card) for toggling `policy` to `enabled`. The cost is the sum of
+    report_card_engine.opex_cost over every enabled policy after the change; the card gets the policy's immediate
+    grade effect (raised to target, never lowered) when enabling, and is unchanged when disabling (a cut only
+    affects the next season's survey, plan §2.3b)."""
+    next_toggles = dict(toggles)
+    next_toggles[policy] = enabled
+    cost = sum(rce.opex_cost(p) for p, on in next_toggles.items() if on)
+    updated = rce.apply_policy(card, policy) if enabled else dict(card)
+    return next_toggles, cost, updated
+
+
+def _resolve_team(cur, abbr: str) -> tuple:
+    """(team_id, name, abbreviation) with the ARI/WSH aliases; 404 for an unknown team."""
+    clean = (abbr or "").upper().strip()
+    cur.execute("SELECT id, name, abbreviation FROM teams WHERE abbreviation IN (%s, %s);",
+                (clean, ABBR_ALIASES.get(clean, clean)))
+    row = cur.fetchone()
+    if not row:
+        raise HTTPException(404, f"Team '{abbr}' not found")
+    return row[0], row[1], row[2]
+
+
+def _current_season(cur):
+    """league_state.current_season, or None."""
+    cur.execute("SELECT current_season FROM league_state LIMIT 1;")
+    row = cur.fetchone()
+    return row[0] if row else None
+
+
+@router.get("/api/team/{abbr}/report-card")
+def team_report_card(abbr: str, season: Optional[int] = None):
+    clean = (abbr or "").upper().strip()
+    with psycopg.connect(CONN_INFO) as conn:
+        with conn.cursor() as cur:
+            team_id, name, team_abbr = _resolve_team(cur, clean)
+            if season is None:
+                season = _current_season(cur)
+            out = {"season": season, "team": {"id": team_id, "name": name, "abbreviation": team_abbr},
+                   "cards": None, "current": None, "rank": None, "policies": None, "upgrades": None}
+            if not season:
+                return out
+            if _regclass(cur, "team_report_cards"):
+                cur.execute(f"""SELECT {', '.join(REPORT_CARD_COLS)} FROM team_report_cards
+                                WHERE team_id = %s ORDER BY season DESC;""", (team_id,))
+                cards = [shape_report_card(dict(zip(REPORT_CARD_COLS, r))) for r in cur.fetchall()]
+                out["cards"] = cards or None
+                current = next((c for c in cards if c["season"] == season), None)
+                out["current"] = current
+                if current is not None:
+                    cur.execute("SELECT overall_score FROM team_report_cards WHERE season = %s;", (season,))
+                    scores = [float(r[0]) for r in cur.fetchall()]
+                    if scores:
+                        rank, pct = rank_percentile(scores, current["overall_score"])
+                        out["rank"] = {"rank": rank, "percentile": pct, "teams": len(scores)}
+            if _regclass(cur, "team_operating_policies"):
+                cur.execute("""SELECT luxury_travel_enabled, family_daycare_enabled, private_chef_program,
+                                      annual_opex_cost
+                               FROM team_operating_policies WHERE team_id = %s;""", (team_id,))
+                p = cur.fetchone()
+                if p:
+                    out["policies"] = {"luxury_travel": bool(p[0]), "family_daycare": bool(p[1]),
+                                       "private_chef": bool(p[2]), "annual_opex_cost": int(p[3])}
+            if _regclass(cur, "facility_upgrades"):
+                cur.execute("""SELECT id, season_ordered, category, cost_dollars, target_grade, completion_season,
+                                      status
+                               FROM facility_upgrades WHERE team_id = %s AND status = 'IN_PROGRESS'
+                               ORDER BY id;""", (team_id,))
+                out["upgrades"] = [{"id": r[0], "season_ordered": r[1], "category": r[2],
+                                    "cost_dollars": int(r[3]), "target_grade": r[4], "completion_season": r[5],
+                                    "status": r[6]} for r in cur.fetchall()] or None
+            return out
+
+
+@router.post("/api/team/{abbr}/facilities/upgrade")
+def facilities_upgrade(abbr: str, body: UpgradeIn):
+    validate_upgrade_body(body.category, body.tier)
+    with psycopg.connect(CONN_INFO) as conn:
+        with conn.cursor() as cur:
+            team_id, name, team_abbr = _resolve_team(cur, abbr)
+            season = _current_season(cur)
+            if season is None:
+                raise HTTPException(409, "league_state has no season")
+            if not (_regclass(cur, "team_report_cards") and _regclass(cur, "owner_cash_ledgers")
+                    and _regclass(cur, "facility_upgrades")):
+                raise HTTPException(409, "the report card migration isn't applied")
+            cur.execute(f"""SELECT {', '.join(REPORT_CARD_COLS)} FROM team_report_cards
+                            WHERE team_id = %s AND season = %s;""", (team_id, season))
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(409, f"{team_abbr} has no report card for season {season}")
+            card = dict(zip(REPORT_CARD_COLS, row))
+            order = plan_upgrade(card, body.category, body.tier, season)
+            cur.execute("""SELECT total_cash_budget, capex_spent FROM owner_cash_ledgers
+                           WHERE season = %s AND team_id = %s;""", (season, team_id))
+            ledger = cur.fetchone()
+            if not ledger:
+                raise HTTPException(409, f"{team_abbr} has no owner cash ledger for season {season}")
+            check_cash(ledger[0] - ledger[1], order["cost_dollars"])
+            cur.execute("""INSERT INTO facility_upgrades (team_id, season_ordered, category, cost_dollars,
+                                                          target_grade, completion_season, status)
+                           VALUES (%s, %s, %s, %s, %s, %s, 'IN_PROGRESS') RETURNING id;""",
+                        (team_id, season, body.category, order["cost_dollars"], order["target_grade"],
+                         order["completion_season"]))
+            order["id"] = cur.fetchone()[0]
+            order["season_ordered"] = season
+            conn.commit()
+            return {"team": team_abbr, "season": season, "order": order}
+
+
+@router.post("/api/team/{abbr}/facilities/policy")
+def facilities_policy(abbr: str, body: PolicyIn):
+    validate_policy(body.policy)
+    with psycopg.connect(CONN_INFO) as conn:
+        with conn.cursor() as cur:
+            team_id, name, team_abbr = _resolve_team(cur, abbr)
+            season = _current_season(cur)
+            if season is None:
+                raise HTTPException(409, "league_state has no season")
+            if not (_regclass(cur, "team_report_cards") and _regclass(cur, "team_operating_policies")):
+                raise HTTPException(409, "the report card migration isn't applied")
+            cur.execute(f"""SELECT {', '.join(REPORT_CARD_COLS)} FROM team_report_cards
+                            WHERE team_id = %s AND season = %s;""", (team_id, season))
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(409, f"{team_abbr} has no report card for season {season}")
+            card = dict(zip(REPORT_CARD_COLS, row))
+            cur.execute("""SELECT luxury_travel_enabled, family_daycare_enabled, private_chef_program
+                           FROM team_operating_policies WHERE team_id = %s;""", (team_id,))
+            p = cur.fetchone()
+            toggles = ({"luxury_travel": bool(p[0]), "family_daycare": bool(p[1]), "private_chef": bool(p[2])}
+                       if p else {"luxury_travel": False, "family_daycare": False, "private_chef": False})
+            next_toggles, cost, updated = policy_effect(toggles, card, body.policy, body.enabled)
+            cur.execute("""INSERT INTO team_operating_policies (team_id, luxury_travel_enabled,
+                                                                family_daycare_enabled, private_chef_program,
+                                                                annual_opex_cost)
+                           VALUES (%s, %s, %s, %s, %s)
+                           ON CONFLICT (team_id) DO UPDATE SET
+                             luxury_travel_enabled = EXCLUDED.luxury_travel_enabled,
+                             family_daycare_enabled = EXCLUDED.family_daycare_enabled,
+                             private_chef_program = EXCLUDED.private_chef_program,
+                             annual_opex_cost = EXCLUDED.annual_opex_cost,
+                             updated_at = NOW();""",
+                        (team_id, next_toggles["luxury_travel"], next_toggles["family_daycare"],
+                         next_toggles["private_chef"], cost))
+            spec = rce.OPEX_POLICIES[body.policy]
+            score = round(rce.facility_score(updated), 3)
+            grade = rce.score_to_grade(score)
+            if body.enabled:
+                # Enabling raises the category immediately (never lowers); a cut only affects the next survey, so
+                # the current card's grade is left alone when a policy is turned off.
+                cur.execute(f"""UPDATE team_report_cards SET {spec['category']} = %s, overall_score = %s,
+                                       overall_grade = %s
+                                WHERE team_id = %s AND season = %s;""",
+                            (updated[spec["category"]], score, grade, team_id, season))
+            conn.commit()
+            return {"team": team_abbr, "season": season, "policy": body.policy, "enabled": body.enabled,
+                    "annual_opex_cost": cost, "policies": next_toggles, "category": spec["category"],
+                    "grade": updated[spec["category"]], "overall_score": score, "overall_grade": grade}
