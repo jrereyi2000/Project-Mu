@@ -151,6 +151,17 @@ def fetch_games(cur, season: int, before_week=None) -> list:
     return [dict(zip(cols, r)) for r in cur.fetchall()]
 
 
+def has_pick_suffix(cur) -> bool:
+    """Whether draft_picks carries the compensatory pick_suffix column (2027_02_06_compensatory_draft_picks.sql).
+    Until that migration is applied it doesn't, and every row is a standard pick: callers must then use the plain
+    32-per-round queries (server/draft_api.py makes the same check). `source` predates the migration, so only
+    pick_suffix is guarded."""
+    cur.execute("""SELECT 1 FROM information_schema.columns
+                   WHERE table_schema = current_schema() AND table_name = 'draft_picks'
+                   AND column_name = 'pick_suffix'""")
+    return cur.fetchone() is not None
+
+
 def is_comp_row(row: dict) -> bool:
     """A draft_picks row is compensatory when it carries a pick_suffix and/or a COMP/JC2A source (the same rule
     server/draft_api._draft_slots uses)."""
@@ -202,16 +213,23 @@ def draft_order_with_owners(cur, draft_season: int, rounds=(1,), before_week=Non
     32 standard picks, so a round with N comps has 32 + N slots and every later round's overall numbers shift by
     the comps awarded before it. A class with no comp rows returns exactly the old slots."""
     order = compute_draft_order(fetch_teams(cur), fetch_games(cur, draft_season - 1, before_week))["round_1_order"]
-    cur.execute("""SELECT round, original_team_id, owner_team_id, pick_suffix, source FROM draft_picks
-                   WHERE draft_season = %s""", (draft_season,))
-    cols = ("round", "original_team_id", "owner_team_id", "pick_suffix", "source")
-    rows = [dict(zip(cols, r)) for r in cur.fetchall()]
-    # standard rows only: a comp row must never shadow a standard pick's owner
-    owners = {(r["round"], r["original_team_id"]): r["owner_team_id"] for r in rows if not is_comp_row(r)}
-    comps = {}
-    for r in rows:
-        if is_comp_row(r):
-            comps.setdefault(int(r["round"]), []).append(r)
+    if has_pick_suffix(cur):
+        cur.execute("""SELECT round, original_team_id, owner_team_id, pick_suffix, source FROM draft_picks
+                       WHERE draft_season = %s""", (draft_season,))
+        cols = ("round", "original_team_id", "owner_team_id", "pick_suffix", "source")
+        rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+        # standard rows only: a comp row must never shadow a standard pick's owner
+        owners = {(r["round"], r["original_team_id"]): r["owner_team_id"] for r in rows if not is_comp_row(r)}
+        comps = {}
+        for r in rows:
+            if is_comp_row(r):
+                comps.setdefault(int(r["round"]), []).append(r)
+    else:
+        # the migration isn't applied: every row is a standard pick, exactly the old query and mapping
+        cur.execute("SELECT round, original_team_id, owner_team_id FROM draft_picks WHERE draft_season = %s",
+                    (draft_season,))
+        owners = {(r, o): w for r, o, w in cur.fetchall()}
+        comps = {}
     counts = {rd: len(rs) for rd, rs in comps.items()}
     out = []
     for rd in rounds:

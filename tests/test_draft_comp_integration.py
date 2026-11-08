@@ -37,7 +37,9 @@ class OrderCursor:
 
     def execute(self, sql, args=None):
         s = " ".join(sql.split())
-        if s.startswith("SELECT id, name, abbreviation, conference FROM teams"):
+        if s.startswith("SELECT 1 FROM information_schema.columns"):
+            self._ret = (1,)
+        elif s.startswith("SELECT id, name, abbreviation, conference FROM teams"):
             self._ret = teams_rows()
         elif s.startswith("SELECT home_team_id"):
             self._ret = []
@@ -67,7 +69,9 @@ class StoreCursor:
     def execute(self, sql, args=None):
         s = " ".join(sql.split())
         self._ret = None
-        if s.startswith("SELECT to_regclass('scout_draft_picks')"):
+        if s.startswith("SELECT 1 FROM information_schema.columns"):
+            self._ret = (1,)
+        elif s.startswith("SELECT to_regclass('scout_draft_picks')"):
             self._ret = (True,)
         elif s.startswith("SELECT count(*) FROM scout_draft_picks"):
             self._ret = (0,)
@@ -112,7 +116,9 @@ class SlotsCursor:
 
     def execute(self, sql, args=None):
         s = " ".join(sql.split())
-        if s.startswith("SELECT count(*) FROM draft_picks"):
+        if s.startswith("SELECT 1 FROM information_schema.columns"):
+            self._ret = (1,)
+        elif s.startswith("SELECT count(*) FROM draft_picks"):
             self._ret = (self.comps_before,)
         elif s.startswith("SELECT overall_pick, original_team_id, owner_team_id"):
             self._ret = list(self.rows)
@@ -146,7 +152,9 @@ class InputsCursor:
 
     def execute(self, sql, args=None):
         s = " ".join(sql.split())
-        if s.startswith("SELECT overall_pick, owner_team_id FROM draft_picks"):
+        if s.startswith("SELECT 1 FROM information_schema.columns"):
+            self._ret = (1,)
+        elif s.startswith("SELECT overall_pick, owner_team_id FROM draft_picks"):
             self._ret = [(1, 1), (97, 4)]
         elif s.startswith("SELECT round, count(*)"):
             self._ret = self.comps
@@ -156,6 +164,69 @@ class InputsCursor:
             self._ret = []
         else:
             raise AssertionError(f"unexpected SQL: {s}")
+
+    def fetchone(self):
+        return self._ret
+
+    def fetchall(self):
+        return self._ret
+
+
+class NoSuffixCursor:
+    """A database where 2027_02_06_compensatory_draft_picks.sql was never applied: draft_picks has no pick_suffix
+    column. Only the information_schema probe may name the column; every other query must be the old plain one."""
+
+    def __init__(self, rows):
+        self.rows = rows                       # (round, original_team_id, owner_team_id, source)
+        self.store = {(rnd, orig): {"overall_pick": None} for rnd, orig, _owner, _src in rows}
+        self.locked_rows = []
+        self.sql = []
+        self.many = []
+        self._ret = None
+
+    def execute(self, sql, args=None):
+        s = " ".join(sql.split())
+        self.sql.append(s)
+        if s.startswith("SELECT 1 FROM information_schema.columns"):
+            self._ret = None                   # the column does not exist
+        elif s.startswith("SELECT id, name, abbreviation, conference FROM teams"):
+            self._ret = teams_rows()
+        elif s.startswith("SELECT home_team_id"):
+            self._ret = []
+        elif s.startswith("SELECT round, original_team_id, owner_team_id FROM draft_picks"):
+            self._ret = [(rnd, orig, owner) for rnd, orig, owner, _src in self.rows]
+        elif s.startswith("SELECT overall_pick, original_team_id, owner_team_id FROM draft_picks"):
+            self._ret = list(self.locked_rows)
+        elif s.startswith("SELECT overall_pick, owner_team_id FROM draft_picks"):
+            self._ret = [(1, 1)]
+        elif s.startswith("SELECT to_regclass('scout_draft_picks')"):
+            self._ret = (True,)
+        elif s.startswith("SELECT count(*) FROM scout_draft_picks"):
+            self._ret = (0,)
+        elif s.startswith("SELECT t.id, t.abbreviation"):
+            self._ret = [(t, f"T{t}", f"Team {t}", False, None, None) for t in range(1, 33)]
+        elif s.startswith("SELECT max(step) FROM scout_team_boards"):
+            self._ret = (None,)
+        elif "choice_source = 'JR_TEAM'" in s:
+            self._ret = []
+        elif s.startswith("UPDATE draft_picks SET overall_pick = NULL"):
+            for v in self.store.values():
+                v["overall_pick"] = None
+        elif s.startswith("UPDATE draft_picks SET owner_team_id"):
+            raise AssertionError("no fixes expected")
+        elif "count(*) FROM draft_picks" in s:
+            raise AssertionError("the comp sweep must not run without pick_suffix")
+        else:
+            raise AssertionError(f"unexpected SQL: {s}")
+        assert "pick_suffix" not in s or "information_schema" in s, s
+
+    def executemany(self, sql, rows):
+        s = " ".join(sql.split())
+        assert "pick_suffix" not in s                      # the old 4-column update form
+        rows = list(rows)
+        self.many.append(rows)
+        for overall, _season, rnd, orig in rows:
+            self.store[(rnd, orig)]["overall_pick"] = overall
 
     def fetchone(self):
         return self._ret
@@ -308,3 +379,39 @@ def test_draft_inputs_builds_the_comp_schedule_from_draft_picks():
 
     _, _, _, none = lo.Deps().draft_inputs(InputsCursor([]), 2036)
     assert none == [0] * 7
+
+
+# ------------------------------------- pre-migration degradation (no pick_suffix column) ----
+def test_missing_pick_suffix_column_degrades_to_the_old_draft_flow(monkeypatch):
+    rows = [(rnd, tid, tid, "SEED") for rnd in range(1, 8) for tid in range(1, 33)]
+
+    # draft_order: 224 standard slots on the old formula, and no comp sweep
+    cur = NoSuffixCursor(rows)
+    slots = do.draft_order_with_owners(cur, DS, rounds=range(1, 8))
+    assert len(slots) == 224
+    assert [s["pick"] for s in slots] == list(range(1, 225))
+    assert all(s["pick"] == (s["round"] - 1) * 32 + s["round_pick"] for s in slots)
+    assert all(set(s) == {"pick", "round", "round_pick", "original_team_id", "owner_team_id", "locked"}
+               for s in slots)
+
+    # round_slots: plain 32-per-round numbering (Round 3 starts at overall 65, round_pick 1)
+    cur = NoSuffixCursor(rows)
+    cur.locked_rows = [(65 + i, i + 1, i + 1) for i in range(32)]
+    slots3 = dr.round_slots(cur, DS, 3)
+    assert [s["pick"] for s in slots3] == list(range(65, 97))
+    assert [s["round_pick"] for s in slots3] == list(range(1, 33))
+
+    # lock_order: the old 4-column write, every standard row filled
+    cur = NoSuffixCursor(rows)
+    monkeypatch.setattr(dr, "state", lambda *a, **k: {"ok": True})
+    monkeypatch.setattr(dr, "clock_trades", lambda *a, **k: None)
+    monkeypatch.setattr(dr.se, "stored_steps", lambda *a, **k: [dr.se.STEP_DRAFT])
+    dr.lock_order(cur, DS)
+    assert len(cur.store) == 224 and all(v["overall_pick"] is not None for v in cur.store.values())
+    assert len(cur.many) == 1 and all(len(r) == 4 for r in cur.many[0])
+    assert cur.store[(1, 1)]["overall_pick"] == 1 and cur.store[(7, 32)]["overall_pick"] == 224
+
+    # draft_inputs: an all-zero comp schedule, the comp query never runs
+    cur = NoSuffixCursor(rows)
+    _, _, _, schedule = lo.Deps().draft_inputs(cur, 2036)
+    assert schedule == [0] * 7

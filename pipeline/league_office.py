@@ -158,7 +158,7 @@ from collections import Counter, defaultdict
 from engines import cap_history
 from engines import contracts_engine as ce
 from engines import transactions_engine as te
-from engines.draft_order import COMP_SOURCES as DRAFT_COMP_SOURCES
+from engines.draft_order import COMP_SOURCES as DRAFT_COMP_SOURCES, has_pick_suffix
 from pipeline import load_save as ls
 from pipeline import retirement_window as rw
 from pipeline.retirement_edits import plan_retirement_edits
@@ -1141,13 +1141,14 @@ class Deps:
         cur.execute("""SELECT overall_pick, owner_team_id FROM draft_picks WHERE draft_season = %s
                        AND overall_pick IS NOT NULL ORDER BY overall_pick""", (ds,))
         slots = [{"overall_pick": n, "team_id": t} for n, t in cur.fetchall()]
-        cur.execute("""SELECT round, count(*) FROM draft_picks WHERE draft_season = %s
-                       AND (COALESCE(pick_suffix, '') <> '' OR upper(COALESCE(source, '')) = ANY(%s))
-                       GROUP BY round""", (ds, list(DRAFT_COMP_SOURCES)))
         comp_schedule = [0] * 7
-        for rnd, count in cur.fetchall():
-            if 1 <= int(rnd) <= 7:
-                comp_schedule[int(rnd) - 1] = int(count)
+        if has_pick_suffix(cur):             # no comp rows (and no suffix column) before the comp migration
+            cur.execute("""SELECT round, count(*) FROM draft_picks WHERE draft_season = %s
+                           AND (COALESCE(pick_suffix, '') <> '' OR upper(COALESCE(source, '')) = ANY(%s))
+                           GROUP BY round""", (ds, list(DRAFT_COMP_SOURCES)))
+            for rnd, count in cur.fetchall():
+                if 1 <= int(rnd) <= 7:
+                    comp_schedule[int(rnd) - 1] = int(count)
         cur.execute("SELECT max(step) FROM scout_team_boards WHERE draft_season = %s", (ds,))
         step = cur.fetchone()[0]
         boards = defaultdict(list)
