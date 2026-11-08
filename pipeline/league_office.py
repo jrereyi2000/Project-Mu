@@ -158,6 +158,7 @@ from collections import Counter, defaultdict
 from engines import cap_history
 from engines import contracts_engine as ce
 from engines import transactions_engine as te
+from engines.draft_order import COMP_SOURCES as DRAFT_COMP_SOURCES
 from pipeline import load_save as ls
 from pipeline import retirement_window as rw
 from pipeline.retirement_edits import plan_retirement_edits
@@ -1133,11 +1134,20 @@ class Deps:
 
     def draft_inputs(self, cur, season):
         """The coming draft: slots [{overall_pick, team_id}], boards {team_id: [(name, position), ...]}, JR's picks
-        {overall_pick: (name, position)}."""
+        {overall_pick: (name, position)}, and the class's comp schedule (per-round comp counts, index 0 = round 1:
+        contracts_engine.rookie_contract's `comp_schedule`). The schedule counts the class's draft_picks rows
+        carrying a pick_suffix or a COMP/JC2A source; no comp rows gives seven zeros, today's exact behaviour."""
         ds = season + 1
         cur.execute("""SELECT overall_pick, owner_team_id FROM draft_picks WHERE draft_season = %s
                        AND overall_pick IS NOT NULL ORDER BY overall_pick""", (ds,))
         slots = [{"overall_pick": n, "team_id": t} for n, t in cur.fetchall()]
+        cur.execute("""SELECT round, count(*) FROM draft_picks WHERE draft_season = %s
+                       AND (COALESCE(pick_suffix, '') <> '' OR upper(COALESCE(source, '')) = ANY(%s))
+                       GROUP BY round""", (ds, list(DRAFT_COMP_SOURCES)))
+        comp_schedule = [0] * 7
+        for rnd, count in cur.fetchall():
+            if 1 <= int(rnd) <= 7:
+                comp_schedule[int(rnd) - 1] = int(count)
         cur.execute("SELECT max(step) FROM scout_team_boards WHERE draft_season = %s", (ds,))
         step = cur.fetchone()[0]
         boards = defaultdict(list)
@@ -1153,7 +1163,7 @@ class Deps:
                        JOIN draft_prospects d ON d.id = sp.prospect_id
                        WHERE p.draft_season = %s AND p.choice_source = 'JR_TEAM'""", (ds,))
         jr = {n: (name, pos) for n, name, pos in cur.fetchall()}
-        return slots, dict(boards), jr
+        return slots, dict(boards), jr, comp_schedule
 
     # -- the save
     def league_state(self, save_path):
@@ -1772,8 +1782,11 @@ def step_salary_cap(plan, deps, cur):
     }
 
 
-def step_draft(plan, slots, boards, jr, seed):
-    """Every pick from the team boards (JR's from the war room) signed with a rookie deal."""
+def step_draft(plan, slots, boards, jr, seed, comp_schedule=None):
+    """Every pick from the team boards (JR's from the war room) signed with a rookie deal. `comp_schedule` is the
+    class's per-round comp-pick counts (index 0 = round 1; contracts_engine.round_for_overall_pick's shape), so a
+    compensatory pick's `drafted_round` lands in its awarded round (3-7). A class with no comp rows passes all
+    zeros (or None) and behaves exactly as before."""
     prospects = {g: p for g, p in plan.players.items() if p.get("status") == "Draft"}
     by_name = defaultdict(list)
     for g, p in prospects.items():
@@ -1794,7 +1807,8 @@ def step_draft(plan, slots, boards, jr, seed):
     cap = getattr(plan, "league_cap_dollars", None) or league_cap(getattr(plan, "state", None), getattr(plan, "snapshot", None))
     for pk in picks:
         team = plan.team_index.get(pk["team_id"])
-        c = ce.rookie_contract(min(max(1, pk["overall_pick"]), ce.CBA["DRAFT_PICKS"]), plan.target, cap)
+        c = ce.rookie_contract(min(max(1, pk["overall_pick"]), ce.CBA["DRAFT_PICKS"]), plan.target, cap,
+                               comp_schedule=comp_schedule)
         plan.sign_player(pk["pgid"], team, "Roster", c, PRIORITY_STAGE,
                          f"drafted {pk['overall_pick']} ({pk['source'].lower()})")
         plan.counts[f"draft_{pk['source'].lower()}"] += 1
@@ -2022,11 +2036,14 @@ def plan_stage(cur, snapshot, stage, seed, deps=None, wave=None, state=None, sou
         plan.step("free agency", step_free_agency, plan, deps, cur, seed)
     elif stage == DRAFT:
         def _draft():
-            slots, boards, jr = deps.draft_inputs(cur, season)
+            got = deps.draft_inputs(cur, season)
+            # a deps fake (tests) may still give only the three original values: then the class has no comp schedule
+            slots, boards, jr = got[0], got[1], got[2]
+            comp_schedule = got[3] if len(got) > 3 else None
             if not slots:
                 plan.warn("no draft order (draft_picks.overall_pick) for the coming draft: no picks planned")
                 return
-            step_draft(plan, slots, boards, jr, seed)
+            step_draft(plan, slots, boards, jr, seed, comp_schedule)
         plan.step("draft", _draft)
     elif stage == UDFA:
         plan.step("undrafted free agents", step_udfa, plan, deps, cur, seed)
