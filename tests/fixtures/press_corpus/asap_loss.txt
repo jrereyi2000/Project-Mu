@@ -1,0 +1,30 @@
+# source: fixture://asap-loss
+# date: 2024-11-03
+# season: 2024
+# competition: regular
+# team: ABC
+# team_name: ABC Roughriders
+# opponent: XYZ
+# opponent_name: XYZ Comets
+# result: L
+# score: 13-30
+# tags: loss,blowout_loss
+# speaker: Head Coach Test Case
+
+ABC 13, XYZ 30
+COACH TEST CASE: We did not play well enough in any phase.
+
+Q. How is your quarterback's ankle?
+COACH TEST CASE: We will look at the tape, but he finished the game.
+
+Q. Why did you go for it on fourth down in the second quarter?
+COACH TEST CASE: We wanted to keep the drive alive and we believed in the look.
+
+Q. Why?
+COACH TEST CASE: Because the numbers and the look told us to.
+
+Q. How do you feel about the effort?
+COACH TEST CASE: I am proud of how the players kept competing.
+
+Q. (Indiscernible.)
+COACH TEST CASE: (No answer given.)
