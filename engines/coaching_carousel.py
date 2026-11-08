@@ -41,6 +41,16 @@ SIDE = {"OC": "OFFENSIVE", "DC": "DEFENSIVE"}
 FIRST_SEASON = 2026               # a fresh franchise's first season: the carousel decides every season from it on
 HIRE_TICK = 23                     # the hiring cycle runs after the Super Bowl (week 22): tick 23 of the 32-tick year
 
+# Resolution JC-2A data path (COMPENSATORY_PICKS_PLAN follow-up U6). Program eligibility is reviewed by JR in
+# staff_development_eligibility; qualifying hire-aways are journalled in staff_development_departures for the comp
+# producer. Neither table's absence changes today's behaviour, and nobody's status is ever inferred: absent from the
+# registry means not eligible. The role sets mirror engines.compensatory_picks_engine.JC2A_FROM_ROLES / _TO_ROLES.
+STAFF_DEV_ELIGIBILITY = "staff_development_eligibility"
+STAFF_DEV_DEPARTURES = "staff_development_departures"
+STAFF_DEV_TENURE_YEARS = 2
+STAFF_DEV_FROM_ROLES = frozenset(("OC", "DC", "ASSISTANT_GM"))
+STAFF_DEV_TO_ROLES = frozenset(("HC", "GM"))
+
 
 # ----------------------------------------------------------------------------------------------- data helpers ----
 def unit_ranks(cur, season):
@@ -339,6 +349,71 @@ def _move(cur, season, team_id, role, action, person, **kw):
     cols = ["season", "team_id", "role", "action", "person"] + list(kw)
     cur.execute(f"INSERT INTO staff_moves ({', '.join(cols)}) VALUES ({', '.join(['%s'] * len(cols))})",
                 (season, team_id, role, action, person, *kw.values()))
+
+
+# ---------------------------------------------------------------------- staff development award data path ----
+# Resolution JC-2A's "minority" leg is a reviewed *program eligibility* fact, not anything this engine derives. A
+# person is either in the registry or absent (never guessed). Every read is guarded with to_regclass, so a database
+# without db/migrations/2027_02_07_staff_development_award.sql records nothing and behaves exactly as before.
+def _table_exists(cur, table):
+    cur.execute("SELECT to_regclass(%s) IS NOT NULL", (table,))
+    row = cur.fetchone()
+    return bool(row and row[0])
+
+
+def development_eligible(cur, person_kind, person_key):
+    """True when the reviewed staff_development_eligibility registry marks this person eligible for the development
+    award. person_kind is 'COACH', 'COORDINATOR' or 'EXECUTIVE'; person_key is matched as text (a db row id for
+    coaches/coordinators, or JR's reviewed key for an executive). An absent registry means not eligible, never an
+    error."""
+    if not _table_exists(cur, STAFF_DEV_ELIGIBILITY):
+        return False
+    cur.execute("SELECT eligible FROM staff_development_eligibility WHERE person_kind = %s AND person_key = %s",
+                (person_kind, str(person_key)))
+    row = cur.fetchone()
+    return bool(row and row[0])
+
+
+def record_staff_departure(cur, season, person_kind, person_key, person_name, from_team_id, to_team_id,
+                           from_role, to_role, tenure_years, source="coaching_carousel"):
+    """Journal one hire-away in staff_development_departures when the reviewed registry marks the person eligible
+    and the move qualifies: OC / DC / assistant-GM to another club as HC / GM after >= STAFF_DEV_TENURE_YEARS.
+    person_kind/person_key identify the reviewed registry row (a moved coordinator is 'COORDINATOR', his
+    coordinator_id). Returns True when a row was written. A missing registry or journal writes nothing and never
+    raises, so the carousel behaves exactly as today without the migration. The journal's eligible flag is always
+    true here: ineligible and absent people are simply never recorded."""
+    if from_team_id is None or to_team_id is None or from_team_id == to_team_id:
+        return False
+    if from_role not in STAFF_DEV_FROM_ROLES or to_role not in STAFF_DEV_TO_ROLES:
+        return False
+    if (tenure_years or 0) < STAFF_DEV_TENURE_YEARS:
+        return False
+    if not _table_exists(cur, STAFF_DEV_DEPARTURES):
+        return False
+    if not development_eligible(cur, person_kind, person_key):
+        return False
+    cur.execute("""INSERT INTO staff_development_departures
+                   (season, from_team_id, to_team_id, person_name, from_role, to_role, tenure_years, eligible, source)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, true, %s)""",
+                (season, from_team_id, to_team_id, person_name, from_role, to_role, int(tenure_years), source))
+    return True
+
+
+def eligible_departures(cur, season):
+    """The season's reviewed development-award hire-aways in the shape
+    engines.compensatory_picks_engine.jc2a_awards expects (team_id = the club that lost the person). The reviewed
+    `eligible` flag stands in for the engine's `is_minority` input and is never inferred. An absent journal means no
+    departures."""
+    if not _table_exists(cur, STAFF_DEV_DEPARTURES):
+        return []
+    cur.execute("""SELECT from_team_id, person_name, from_role, to_role, tenure_years, source
+                   FROM staff_development_departures WHERE season = %s AND eligible""", (season,))
+    out = []
+    for from_team, name, from_role, to_role, tenure, source in cur.fetchall():
+        out.append({"team_id": from_team, "person_name": name, "is_minority": True,
+                    "hire_from_role": from_role, "hire_to_role": to_role, "tenure_years": tenure,
+                    "hired_away": True, "source": source, "season": season})
+    return out
 
 
 # ------------------------------------------------------------------------------------------- person lifecycle ----
@@ -644,6 +719,10 @@ def hiring_cycle(cur, season, log=print, personality=None):
                         (season, c["coordinator_id"], ft, fr, season))
             _move(cur, season, ft, fr, "LEFT", name, coordinator_id=c["coordinator_id"],
                   notes=f"hired as {tm[tid]['city']} {tm[tid]['name']} head coach")
+            # Resolution JC-2A: a reviewed-eligible coordinator leaving for a head-coach job is journalled for the
+            # compensatory-picks producer. Additive only: the hiring decisions above are untouched.
+            record_staff_departure(cur, season, "COORDINATOR", c["coordinator_id"], name, ft, tid, fr, "HC",
+                                   years.get(c["coordinator_id"], 1), source="coaching_carousel:POACHED")
             if ft != tid:
                 promoted = promote(ft, fr, c, f"after {name} left to coach the {tm[tid]['name']}")
                 if ft in mine:
