@@ -274,8 +274,8 @@ PostgreSQL-backed narrative search index ([`newsroom/league_memory.py`](../../ne
 Can start with the personas that exist (GMs, writers); owners and scouts have catalogue odds but no profiles until [`PERSONALITY_PLAN.md`](./PERSONALITY_PLAN.md) phase 6, so they speak neutrally until then. Plan proposed, awaiting JR's approval: [`FRONT_OFFICE_INBOX_PLAN.md`](./FRONT_OFFICE_INBOX_PLAN.md); it is the shared conversation surface the V2.2, V2.10 and V2.11 plans plug into, so it builds first.
 Interactive messaging system allowing JR to communicate with team owners, player agents, rival GMs, beat reporters, and college prospects.
 
-### V2.10 Scouting Revamp & Combine Interviews (Not started; not blocked)
-Scout voices and regional biases need scout profiles (personality phase 6); reports and combine interviews can be built first with neutral scouts and prospect personalities added once [`PERSONALITY_DRAFT_INTEGRATION_PLAN.md`](../done/PERSONALITY_DRAFT_INTEGRATION_PLAN.md) is approved and built. Plan proposed, awaiting JR's approval: [`SCOUTING_REVAMP_PLAN.md`](../done/SCOUTING_REVAMP_PLAN.md).
+### V2.10 Scouting Revamp & Combine Interviews (Built and on main 2026-11-07; not blocked)
+Scout voices and regional biases need scout profiles (personality phase 6); reports and combine interviews can be built first with neutral scouts and prospect personalities added once [`PERSONALITY_DRAFT_INTEGRATION_PLAN.md`](../done/PERSONALITY_DRAFT_INTEGRATION_PLAN.md) is approved and built. Built 2026-11-07 (all six units): [`SCOUTING_REVAMP_PLAN.md`](../done/SCOUTING_REVAMP_PLAN.md).
 Comprehensive narrative reports for every draft prospect, individual scout voices with regional biases, and interactive combine/visit interviews.
 
 ### V2.11 Live Multi-Turn Trade Negotiations (Not started; unblocked)
