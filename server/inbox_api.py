@@ -7,15 +7,19 @@ shapes.
   DELETE /{abbr}/inbox/actors/{role}/{id}    -> 204
   GET    /{abbr}/inbox?status=&kind=&as=&limit=50 -> {team, actors: [Actor], unread, threads: [Thread]}
   GET    /{abbr}/inbox/kinds                 -> [{kind, actor_roles, can_start, start_form}]
+  GET    /{abbr}/inbox/targets?kind=         -> {kind, targets: [Target]} (wave 4: who a JR-started talk opens with)
   GET    /{abbr}/inbox/{thread_id}           -> {thread, messages, options} (runs the template scan, marks read)
   POST   /{abbr}/inbox/{thread_id}/draft     {text} -> {draft: {option_id, payload, summary} | null} (acts on nothing)
   POST   /{abbr}/inbox/{thread_id}/reply     {option_id, payload, note} -> {thread, messages, options}
   POST   /{abbr}/inbox                       {kind, as, ...kind fields, note} -> Thread (201)
   POST   /{abbr}/inbox/{thread_id}/close     -> Thread
 
-Actor = {role, id, name}; a Thread adds `actor` and `counterpart` and leaves out the kind-owned `state` (and the
-internal `team_id`). A Message never carries `facts` or a surplus, and its appraisal is only {outcome, reason}: the
-inbox never shows a trust number. Notes are at most 600 characters. Errors are FastAPI's {"detail": string} with
+Actor = {role, id, name}; a Target is {id, name, position, overall} for CONTRACT/ROLE_TALK (the team's active-roster
+players, `id` = players.id as text) or {id, name, team} for GM_TALK (another team's open GM tenure, `id` =
+gm_profiles.id as text, `team` = the abbreviation sent as gm_team); a targetless or unknown kind answers an empty
+list. A Thread adds `actor` and `counterpart` and leaves out the kind-owned `state` (and the internal `team_id`).
+A Message never carries `facts` or a surplus, and its appraisal is only {outcome, reason}: the inbox never shows a
+trust number. Notes are at most 600 characters. Errors are FastAPI's {"detail": string} with
 400 (bad body / kind), 403 (team outside the active franchise's user_teams, or `as` not a controlled role),
 404 (unknown team or thread) and 409 (refused persona, read-only thread, cap, missing migration).
 
@@ -175,6 +179,52 @@ def _candidate_view(candidate):
             "also": also or None}
 
 
+# -------------------------------------------------------------------- targets ----
+def _player_targets(cur, team_id):
+    """The team's active-roster players as §2.12 Target: an ACTIVE contract, not on IR, not released and not a
+    placeholder DEF row. This mirrors server/franchise_api.py's `_context` -> `roster["ACTIVE"]` shaping."""
+    when = scan.league_time(cur)
+    if when is None:                                        # no league_state row: nothing to list
+        return []
+    season, week = int(when[0]), int(when[1])
+    cur.execute("""SELECT ps.player_id, COALESCE(p.full_name, p.player_name), ps.position, ps.overall_rating
+                   FROM player_seasons ps JOIN players p ON p.id = ps.player_id
+                   WHERE ps.season = %s AND ps.team_id = %s AND ps.released_week IS NULL
+                     AND COALESCE(ps.position, '') <> 'DEF'
+                     AND EXISTS (SELECT 1 FROM player_contracts c
+                                 WHERE c.player_id = ps.player_id AND c.season = %s AND c.status = 'ACTIVE')
+                     AND NOT EXISTS (
+                         SELECT 1 FROM injuries i
+                         WHERE i.team_id = ps.team_id AND i.season = ps.season AND i.player_id = ps.player_id
+                           AND i.is_ir
+                           AND i.week = (SELECT max(i2.week) FROM injuries i2
+                                         WHERE i2.team_id = ps.team_id AND i2.season = ps.season AND i2.week <= %s))
+                   ORDER BY ps.overall_rating DESC NULLS LAST, COALESCE(p.full_name, p.player_name)""",
+                (season, team_id, season, week))
+    return [{"id": str(r[0]), "name": r[1] or "", "position": r[2], "overall": r[3]} for r in cur.fetchall()]
+
+
+def _gm_targets(cur, team_id):
+    """Every other team's open GM tenure as §2.12 Target {id, name, team}; `team` is the sendable abbreviation."""
+    cur.execute("SELECT id, abbreviation FROM teams ORDER BY abbreviation")
+    out = []
+    for tid, abbr in cur.fetchall():
+        if tid == team_id:
+            continue
+        gm = actors.current_gm(cur, tid)
+        if gm:
+            out.append({"id": str(gm["id"]), "name": gm["name"] or "", "team": str(abbr).upper()})
+    return out
+
+
+def _targets(cur, team_id, kind):
+    if kind in ("CONTRACT", "ROLE_TALK"):
+        return _player_targets(cur, team_id)
+    if kind == "GM_TALK":
+        return _gm_targets(cur, team_id)
+    return []
+
+
 def _detail(cur, thread_id):
     messages = store.messages(cur, thread_id)
     thread = store.get_thread(cur, thread_id)
@@ -230,6 +280,20 @@ def get_kinds(abbr: str):
                         "can_start": bool(getattr(kind, "CAN_START", True)),
                         "start_form": getattr(kind, "START_FORM", None)})
         return out
+
+
+# -------------------------------------------------------------------- targets ----
+@router.get("/{abbr}/inbox/targets")
+def get_targets(abbr: str, kind: str = Query(default=None)):
+    """Who a JR-started conversation can be opened with (wave 4): players for CONTRACT/ROLE_TALK, other teams'
+    open GMs for GM_TALK; an unknown or targetless kind answers an empty list. Missing kind: 400."""
+    if not kind or not str(kind).strip():
+        raise HTTPException(400, "kind is required")
+    wanted = str(kind).strip().upper()
+    with _cursor() as cur, _errors():
+        team = _team(cur, abbr)
+        _require_installed(cur)
+        return {"kind": wanted, "targets": _targets(cur, team[0], wanted)}
 
 
 # ----------------------------------------------------------------------- list ----
