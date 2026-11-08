@@ -37,6 +37,7 @@ MARKUP_SHARE, MARKUP_FLOOR, MARKUP_DECAY = 0.15, 500_000, 0.5
 EDIT_COST = 250_000                      # per edit away from JR's offer, when choosing the counter
 POOL_PLAYERS = 8                         # JR's non-starters the GM may ask for (best by the GM's value)
 TOP_SINGLES = 15                         # single edits combined into two-edit counters
+OPTION_K = 3                             # counters `counter_options` offers a chooser (gm_talks.OPTION_K)
 
 
 # ------------------------------------------------------------------- pure ----
@@ -108,10 +109,11 @@ def edits(deal, valuer, user, gm, pool):
     return out
 
 
-def counter(b, valuer, deal, user, gm, reserve, counters_made):
-    """The GM's counter to JR's deal, or None: legal, the GM's surplus at least floor + markup (else at least the
-    floor), the best for JR (his surplus minus EDIT_COST per edit). The same offer again gets the same counter or,
-    as the markup comes down, a softer one. Returns {assets, su, sg, edits, checks}."""
+def counter_options(b, valuer, deal, user, gm, reserve, counters_made, k=OPTION_K):
+    """Up to k distinct legal counters, best for JR first: legal, the GM's surplus at least floor + markup (else at
+    least the floor), ordered by JR's surplus minus EDIT_COST per edit. `counter_options(...)[0]` is exactly the old
+    single `counter` result; the dearest (last) is what a HOLD posture offers. Returns [{assets, su, sg, edits,
+    deal, checks}]."""
     pool = user_pool(b, valuer, deal, user, gm)
     seen = {ge.deal_hash(user, gm, deal["assets"])}
     cands = []
@@ -137,16 +139,28 @@ def counter(b, valuer, deal, user, gm, reserve, counters_made):
             consider(merged, 2)
     fl = gm_floor(b, deal, gm, reserve)
     target = fl + markup(b, valuer, deal, gm, counters_made)
+    out, chosen = [], set()
     for bar in (target, fl):
-        ok = []
+        if out:
+            break
         for c in sorted((c for c in cands if c["sg"] >= bar), key=lambda c: -(c["su"] - EDIT_COST * c["edits"])):
             checks = ge.check_legality(c["deal"], b, None)
-            if ge.legal(checks) and c["sg"] >= gm_floor(b, c["deal"], gm, reserve):
-                ok.append(dict(c, checks=checks))
+            if not ge.legal(checks) or c["sg"] < gm_floor(b, c["deal"], gm, reserve):
+                continue
+            h = ge.deal_hash(c["deal"]["a"], c["deal"]["b"], c["assets"])
+            if h in chosen:
+                continue
+            chosen.add(h)
+            out.append(dict(c, checks=checks))
+            if len(out) >= k:
                 break
-        if ok:
-            return ok[0]
-    return None
+    return out
+
+
+def counter(b, valuer, deal, user, gm, reserve, counters_made):
+    """The GM's counter to JR's deal, or None: the best of `counter_options` (behaviour unchanged)."""
+    opts = counter_options(b, valuer, deal, user, gm, reserve, counters_made)
+    return opts[0] if opts else None
 
 
 def _merge(base, a1, a2):
@@ -255,7 +269,7 @@ def message_sheet(b, user, gm, offer, counter_assets=None):
     return ge.fact_sheet(b, {"a": user, "b": gm, "assets": assets, "trigger": "USER"})
 
 
-def message_prompt(b, kind, user, gm, offer, counter_assets, mood, reasons, note, sheet):
+def message_prompt(b, kind, user, gm, offer, counter_assets, mood, reasons, note, sheet, posture=None):
     gm_info = b["gm"].get(gm, {})
     lab = lambda assets, t: ", ".join(ge.asset_label(b, x) for x in assets if x["to"] == t) or "nothing"
     lines = [
@@ -293,6 +307,12 @@ def message_prompt(b, kind, user, gm, offer, counter_assets, mood, reasons, note
     if mood:
         lines.append({"INSULTED": "His offer insulted you.", "APART": "You're a ways apart.",
                       "CLOSE": "You're close."}[mood])
+    if posture:
+        lines.append({"MEET": "Your stance right now is to meet him partway.",
+                      "HOLD": "Your stance right now is to hold the line.",
+                      "SQUEEZE": "You're above his floor and can afford to squeeze a little more.",
+                      "FIRM": "Your stance is firm: your first number stands.",
+                      "ANCHOR": "You're anchoring high, as a starting point."}.get(posture, ""))
     if reasons:
         lines.append("Why it can't work as offered (don't quote any figures): " + "; ".join(reasons))
     lines += ["FACT SHEET (JSON; the only facts you may state):", json.dumps(sheet, indent=1, default=str),
@@ -304,13 +324,19 @@ def message_prompt(b, kind, user, gm, offer, counter_assets, mood, reasons, note
 
 
 def gm_message(b, kind, user, gm, offer, counter_assets=None, mood=None, reasons=(), note=None, llm=None,
-               league=None):
-    """(text, source): the LLM's reply when it validates against the sheet, else the template."""
+               league=None, timeout=None, posture=None):
+    """(text, source): the LLM's reply when it validates against the sheet, else the template. timeout: the
+    reply-time budget (gm_talks.call_with_timeout); posture: the GM's stance this turn (prompt context only)."""
     from engines.gm_llm import call
     from engines.gm_rationale import validate_rationale
     if llm is not None:
         sheet = message_sheet(b, user, gm, offer, counter_assets)
-        raw = call(llm, message_prompt(b, kind, user, gm, offer, counter_assets, mood, reasons, note, sheet))
+        prompt = message_prompt(b, kind, user, gm, offer, counter_assets, mood, reasons, note, sheet, posture)
+        if timeout is not None:
+            from engines.gm_talks import call_with_timeout
+            raw = call_with_timeout(llm, prompt, timeout)
+        else:
+            raw = call(llm, prompt)
         try:
             m = re.search(r"\{.*\}", raw or "", re.S)
             text = (json.loads(m.group(0)) if m else {}).get("message", "").strip()
@@ -325,6 +351,12 @@ def gm_message(b, kind, user, gm, offer, counter_assets=None, mood=None, reasons
 def installed(cur):
     cur.execute("SELECT to_regclass('gm_trade_negotiations') IS NOT NULL")
     return bool(cur.fetchone()[0])
+
+
+def _column_exists(cur, table, column):
+    cur.execute("SELECT 1 FROM information_schema.columns WHERE table_name = %s AND column_name = %s",
+                (table, column))
+    return cur.fetchone() is not None
 
 
 def _books(cur):
@@ -359,24 +391,27 @@ def _neg(cur, nid):
 
 def _turns(cur, nid):
     cur.execute("""SELECT turn_no, actor, action, assets, surplus_user, surplus_gm, mood, legality, message,
-                          message_source, created_at FROM gm_trade_negotiation_turns WHERE negotiation_id = %s
-                   ORDER BY turn_no""", (nid,))
+                          message_source, actor_team_id, options, choice, choice_source, posture, created_at
+                   FROM gm_trade_negotiation_turns WHERE negotiation_id = %s ORDER BY turn_no""", (nid,))
     cols = ("turn_no", "actor", "action", "assets", "surplus_user", "surplus_gm", "mood", "legality", "message",
-            "message_source", "created_at")
+            "message_source", "actor_team_id", "options", "choice", "choice_source", "posture", "created_at")
     return [dict(zip(cols, r)) for r in cur.fetchall()]
 
 
 def _add_turn(cur, nid, actor, action, assets=None, su=None, sg=None, mood=None, legality=None, message=None,
-              source=None, abbr=None):
+              source=None, abbr=None, actor_team_id=None, options=None, choice=None, choice_source=None,
+              posture=None):
     cur.execute("SELECT COALESCE(max(turn_no), 0) + 1 FROM gm_trade_negotiation_turns WHERE negotiation_id = %s",
                 (nid,))
     n = cur.fetchone()[0]
     js = None if assets is None else json.dumps([_json_asset(x, abbr) for x in assets])
-    cur.execute("""INSERT INTO gm_trade_negotiation_turns (negotiation_id, turn_no, actor, action, assets,
-                       surplus_user, surplus_gm, mood, legality, message, message_source)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
-                (nid, n, actor, action, js, su, sg, mood, json.dumps(legality) if legality else None, message,
-                 source))
+    cur.execute("""INSERT INTO gm_trade_negotiation_turns (negotiation_id, turn_no, actor, action, actor_team_id,
+                       assets, options, choice, choice_source, posture, surplus_user, surplus_gm, mood, legality,
+                       message, message_source)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                (nid, n, actor, action, actor_team_id, js,
+                 json.dumps(options, default=str) if options is not None else None, choice, choice_source, posture,
+                 su, sg, mood, json.dumps(legality) if legality else None, message, source))
     cur.execute("UPDATE gm_trade_negotiations SET updated_at = now() WHERE id = %s", (nid,))
     return n
 
@@ -394,12 +429,16 @@ def _window_key(cur):
 
 
 def expire_stale(cur):
-    """OPEN negotiations from another week, window or offseason stage -> EXPIRED. Returns how many."""
+    """OPEN negotiations from another week, window or offseason stage -> EXPIRED. Returns how many. CPU talks are
+    owned by engines.gm_talks (their loop resumes or stalls them), so they are left alone; the filter only applies
+    on a database that has the 2027_01_22 migration."""
     season, week, window, stage = _window_key(cur)
-    cur.execute("""UPDATE gm_trade_negotiations SET status = 'EXPIRED', status_reason = 'the window moved on',
-                       updated_at = now()
-                   WHERE status = 'OPEN' AND (season <> %s OR week <> %s OR trade_window IS DISTINCT FROM %s
-                                              OR offseason_stage IS DISTINCT FROM %s)""",
+    skip_cpu = " AND COALESCE(kind, 'USER') <> 'CPU'" if _column_exists(
+        cur, "gm_trade_negotiations", "kind") else ""
+    cur.execute(f"""UPDATE gm_trade_negotiations SET status = 'EXPIRED', status_reason = 'the window moved on',
+                        updated_at = now()
+                    WHERE status = 'OPEN'{skip_cpu} AND (season <> %s OR week <> %s OR trade_window IS DISTINCT FROM %s
+                                               OR offseason_stage IS DISTINCT FROM %s)""",
                 (season, week, window, stage))
     return cur.rowcount
 
@@ -422,9 +461,10 @@ def _abbr(b):
     return {t: i["abbr"] for t, i in b["teams"].items()}
 
 
-def open_negotiation(cur, user_team, gm_team, assets, note=None, llm=None):
+def open_negotiation(cur, user_team, gm_team, assets, note=None, llm=None, timeout=None, posture=None):
     """JR opens talks with a GM: his first offer and the GM's answer. user_team must be user-controlled, the GM's
-    team must not be; one OPEN negotiation per pair; a GM who walked away won't reopen until the window moves."""
+    team must not be; one OPEN negotiation per pair; a GM who walked away won't reopen until the window moves.
+    timeout: the reply-time budget; posture: force the GM's counter stance (MEET or HOLD) instead of the policy's."""
     expire_stale(cur)
     ids = _team_ids(cur)
     user, gm = _team(ids, user_team), _team(ids, gm_team)
@@ -454,10 +494,10 @@ def open_negotiation(cur, user_team, gm_team, assets, note=None, llm=None):
                        gm_team_id, patience, patience_left) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
                 (b["season"], b["week"], b["window"], stage, user, gm, patience, patience))
     nid = cur.fetchone()[0]
-    return _jr_offer(cur, b, valuer, _neg(cur, nid), eng, note, llm)
+    return _jr_offer(cur, b, valuer, _neg(cur, nid), eng, note, llm, timeout, posture)
 
 
-def offer(cur, nid, assets, note=None, llm=None):
+def offer(cur, nid, assets, note=None, llm=None, timeout=None, posture=None):
     """JR's next offer in an OPEN negotiation."""
     expire_stale(cur)
     n = _neg(cur, nid)
@@ -465,15 +505,35 @@ def offer(cur, nid, assets, note=None, llm=None):
         raise FrontOfficeError(409, f"negotiation {nid} is {n['status']}")
     b, valuer = _books(cur)
     eng = _engine_assets(cur, b, n["user_team_id"], n["gm_team_id"], assets)
-    return _jr_offer(cur, b, valuer, n, eng, note, llm)
+    return _jr_offer(cur, b, valuer, n, eng, note, llm, timeout, posture)
 
 
-def _jr_offer(cur, b, valuer, n, eng, note, llm):
+def _pick_counter_option(b, opts, gm, season, nid, turn_no, posture=None):
+    """The GM's counter from `counter_options`, chosen by the persona policy (MEET = the softest, HOLD = the
+    dearest) or by the caller's posture. Returns (counter, choice, options as public-free dicts)."""
+    from engines.gm_talks import Option, policy_choice
+    meet, hold = opts[0], opts[-1]
+    options = [dict(key="MEET", action="COUNTER", posture="MEET", assets=meet["assets"], su=meet["su"],
+                    sg=meet["sg"]),
+               dict(key="HOLD", action="COUNTER", posture="HOLD", assets=hold["assets"], su=hold["su"],
+                    sg=hold["sg"])]
+    if posture in ("MEET", "HOLD"):
+        choice = posture
+    else:
+        choice = policy_choice([Option(**o) for o in options], b["gm"].get(gm) or {},
+                               random.Random(f"talk:{season}:{nid}:{turn_no}"))
+    return (meet if choice == "MEET" else hold), choice, \
+        [{k: o[k] for k in ("key", "action", "assets", "su", "sg")} for o in options]
+
+
+def _jr_offer(cur, b, valuer, n, eng, note, llm, timeout=None, posture=None):
     from engines.gm_rationale import league_names
     nid, user, gm = n["id"], n["user_team_id"], n["gm_team_id"]
     deal = {"a": user, "b": gm, "assets": eng}
     abbr = _abbr(b)
-    counters_made = sum(1 for t in _turns(cur, nid) if t["action"] == "COUNTER")
+    turns = _turns(cur, nid)
+    counters_made = sum(1 for t in turns if t["action"] == "COUNTER")
+    next_turn = (turns[-1]["turn_no"] + 1) if turns else 1
     reserve = reserve_for(n["season"], nid, b["gm"][gm]["aggressiveness"])
     res = respond(b, valuer, deal, user, gm, reserve, n["patience_left"], counters_made)
     j = res["judge"]
@@ -482,10 +542,18 @@ def _jr_offer(cur, b, valuer, n, eng, note, llm):
     league = league_names(b) if llm is not None else None
     act = res["action"]
     c = res.get("counter")
+    chosen, choice, options = None, None, None
+    if act == "COUNTER" and c is not None:
+        opts = counter_options(b, valuer, deal, user, gm, reserve, counters_made)
+        if opts:
+            c, choice, options = _pick_counter_option(b, opts, gm, n["season"], nid, next_turn, posture)
+            posture = choice
     text, src = gm_message(b, act, user, gm, eng, c["assets"] if c else None, j["mood"], res["reasons"], note, llm,
-                           league)
+                           league, timeout=timeout, posture=posture)
     if act == "COUNTER":
-        _add_turn(cur, nid, "GM", "COUNTER", c["assets"], c["su"], c["sg"], None, c["checks"], text, src, abbr)
+        _add_turn(cur, nid, "GM", "COUNTER", c["assets"], c["su"], c["sg"], None, c["checks"], text, src, abbr,
+                  actor_team_id=gm, options=options, choice=choice, choice_source="POLICY" if choice else None,
+                  posture=posture)
         _set_status(cur, nid, "OPEN", patience_left=res["patience_left"])
     elif act == "ACCEPT":
         _add_turn(cur, nid, "GM", "ACCEPT", eng, j["su"], j["sg"], None, j["checks"], text, src, abbr)
@@ -500,9 +568,10 @@ def _jr_offer(cur, b, valuer, n, eng, note, llm):
     return negotiation_json(cur, nid)
 
 
-def accept_counter(cur, nid, llm=None):
+def accept_counter(cur, nid, llm=None, timeout=None, posture=None):
     """JR takes the GM's last counter. It's re-judged against fresh books (a deal that is no longer legal, or no
-    longer clears the GM's floor, is refused and the talks stay open)."""
+    longer clears the GM's floor, is refused and the talks stay open). timeout/posture are accepted for the inbox's
+    uniform entry-point signature; accepting writes no reply line."""
     expire_stale(cur)
     n = _neg(cur, nid)
     if n["status"] != "OPEN":
@@ -547,6 +616,8 @@ def _agree(cur, b, valuer, nid, deal, llm):
     if pid is None:
         raise FrontOfficeError(409, "this deal is already stored")
     cur.execute("UPDATE gm_trade_proposals SET approved_at = now() WHERE id = %s", (pid,))
+    from engines.gm_talks import queue_trade_move
+    queue_trade_move(cur, pid)                 # TRADE pending move (no-op without franchise_pending_moves)
     return pid
 
 
@@ -585,6 +656,8 @@ def negotiation_json(cur, nid):
                       "legs": _legs_json(cur, x["assets"]) if x["assets"] else None,
                       "assets": x["assets"], "surplus_user": x["surplus_user"], "mood": x["mood"],
                       "failed_checks": failed, "message": x["message"], "message_source": x["message_source"],
+                      "actor_team_id": x.get("actor_team_id"), "posture": x.get("posture"),
+                      "choice": x.get("choice"), "choice_source": x.get("choice_source"),
                       "created_at": x["created_at"]})
     on_table = turns[-1] if turns and turns[-1]["action"] == "COUNTER" and n["status"] == "OPEN" else None
     return {"id": nid, "season": n["season"], "week": n["week"], "window": n["trade_window"],

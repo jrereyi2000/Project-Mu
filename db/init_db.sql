@@ -814,7 +814,7 @@ CREATE TABLE IF NOT EXISTS gm_trade_proposals (
     headline TEXT,
     rationale_source VARCHAR(8) CHECK (rationale_source IN ('LLM', 'TEMPLATE')),
     status VARCHAR(9) NOT NULL DEFAULT 'PROPOSED'
-        CHECK (status IN ('PROPOSED', 'APPROVED', 'EXECUTED', 'REJECTED', 'EXPIRED')),
+        CHECK (status IN ('PROPOSED', 'APPROVED', 'EXECUTED', 'REJECTED', 'EXPIRED', 'STALLED')),
     status_reason TEXT,
     approved_at TIMESTAMPTZ,
     executed_at TIMESTAMPTZ,
@@ -872,23 +872,29 @@ CREATE TABLE IF NOT EXISTS gm_offseason_state (
     proposals INT NOT NULL DEFAULT 0
 );
 
--- Trade negotiations with the GM agents (engines/gm_negotiation.py; 2026_12_21_gm_negotiations.sql): JR offers
--- from a user-controlled team, the GM accepts, counters, rejects or walks away; an agreed deal becomes an
--- APPROVED USER proposal (flag negotiated:<id>).
+-- Trade negotiations with the GM agents (engines/gm_negotiation.py; 2026_12_21_gm_negotiations.sql, extended by
+-- 2027_01_22_trade_talks.sql for engines/gm_talks.py): JR offers from a user-controlled team, the GM accepts,
+-- counters, rejects or walks away; an agreed deal becomes an APPROVED USER proposal (flag negotiated:<id>). A CPU
+-- talk (kind CPU) is two GMs: user_team_id / initiator_team_id is the initiator, gm_team_id the other GM.
 CREATE TABLE IF NOT EXISTS gm_trade_negotiations (
     id SERIAL PRIMARY KEY,
     season INT NOT NULL,
     week INT NOT NULL,                                -- engine week when opened (offseason 24)
     trade_window VARCHAR(10) NOT NULL CHECK (trade_window IN ('IN_SEASON', 'OFFSEASON')),
     offseason_stage SMALLINT,                         -- the offseason stage it was opened in (expires when it moves)
-    user_team_id INT NOT NULL REFERENCES teams(id),   -- JR's team
-    gm_team_id INT NOT NULL REFERENCES teams(id),     -- the GM agent's team
+    user_team_id INT NOT NULL REFERENCES teams(id),   -- JR's team (CPU: the initiator's)
+    gm_team_id INT NOT NULL REFERENCES teams(id),     -- the GM agent's team (CPU: the other GM)
+    kind VARCHAR(4) NOT NULL DEFAULT 'USER' CHECK (kind IN ('USER', 'CPU')),
+    initiator_team_id INT REFERENCES teams(id),       -- CPU: the GM who called; USER: NULL
+    source_proposal_id INT REFERENCES gm_trade_proposals(id) ON DELETE SET NULL,
+    carried_weeks SMALLINT NOT NULL DEFAULT 0,        -- weeks (or offseason stages) a CPU talk carried over
+    published_at TIMESTAMPTZ,                         -- a completed CPU deal's transcript is published
     status VARCHAR(11) NOT NULL DEFAULT 'OPEN'
-        CHECK (status IN ('OPEN', 'AGREED', 'WALKED_AWAY', 'CLOSED', 'EXPIRED')),
+        CHECK (status IN ('OPEN', 'AGREED', 'WALKED_AWAY', 'CLOSED', 'EXPIRED', 'STALLED')),
     status_reason TEXT,
-    patience SMALLINT NOT NULL,                       -- rounds the GM started with
-    patience_left SMALLINT NOT NULL,
-    proposal_id INT REFERENCES gm_trade_proposals(id) ON DELETE SET NULL,   -- the agreed deal
+    patience SMALLINT NOT NULL,                       -- rounds the GM started with (CPU: the initiator's)
+    patience_left SMALLINT NOT NULL,                  -- (CPU: the other GM's)
+    proposal_id INT REFERENCES gm_trade_proposals(id) ON DELETE SET NULL,   -- the agreed / stalled deal
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -898,9 +904,14 @@ CREATE TABLE IF NOT EXISTS gm_trade_negotiation_turns (
     id SERIAL PRIMARY KEY,
     negotiation_id INT NOT NULL REFERENCES gm_trade_negotiations(id) ON DELETE CASCADE,
     turn_no SMALLINT NOT NULL,
-    actor VARCHAR(2) NOT NULL CHECK (actor IN ('JR', 'GM')),
+    actor VARCHAR(4) NOT NULL CHECK (actor IN ('JR', 'GM', 'GM_A')),   -- GM_A: CPU talk's initiating GM
     action VARCHAR(9) NOT NULL CHECK (action IN ('OFFER', 'COUNTER', 'ACCEPT', 'REJECT', 'WALK_AWAY', 'CLOSE')),
+    actor_team_id INT REFERENCES teams(id),
     assets JSONB,                                     -- Front Office JSON assets of the package on the table
+    options JSONB,                                    -- [{key, action, assets, su, sg}] the chooser saw (never public)
+    choice TEXT,                                      -- the chosen option key
+    choice_source VARCHAR(6) CHECK (choice_source IN ('LLM', 'POLICY', 'JR')),
+    posture VARCHAR(8) CHECK (posture IN ('FIRM', 'ANCHOR', 'SQUEEZE', 'MEET', 'HOLD')),
     surplus_user BIGINT,                              -- JR's team's surplus by the model
     surplus_gm BIGINT,                                -- the GM's surplus (never shown to JR)
     mood VARCHAR(8),                                  -- the GM's read of an offer: CLOSE | APART | INSULTED
@@ -910,6 +921,24 @@ CREATE TABLE IF NOT EXISTS gm_trade_negotiation_turns (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (negotiation_id, turn_no)
 );
+
+-- Leaks from trade talks (engines/gm_talks.py; 2027_01_22_trade_talks.sql): a rumor from one talk, positions only
+-- unless the leaker names the players he receives.
+CREATE TABLE IF NOT EXISTS gm_trade_leaks (
+    id SERIAL PRIMARY KEY,
+    negotiation_id INT NOT NULL REFERENCES gm_trade_negotiations(id) ON DELETE CASCADE,
+    turn_no INT NOT NULL,
+    season INT NOT NULL,
+    week INT NOT NULL,                                -- engine week of the leak
+    leaker_team_id INT NOT NULL REFERENCES teams(id),
+    stage VARCHAR(7) NOT NULL CHECK (stage IN ('OPENED', 'CLOSE', 'STALLED')),
+    named_player_ids INT[] NOT NULL DEFAULT '{}',     -- empty: positions only
+    detail JSONB NOT NULL,                            -- {teams:[abbr,abbr], initiator, positions:[{pos, from, to}], picks:int}
+    insider_key TEXT,                                 -- agent_personas.json key of the writer who got it first
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (negotiation_id, turn_no)
+);
+CREATE INDEX IF NOT EXISTS gm_trade_leaks_week ON gm_trade_leaks (season, week);
 
 DO $$
 BEGIN
