@@ -1,5 +1,5 @@
 // #franchise: the Franchise Command Center (V2_CORE_BUILD_PLAN §2.9, V2_MASTER_PLAN §2). A header with the team
-// (GET /api/franchise/{abbr}/overview: record, user team or not), a team picker, and a tab bar for the nine modules
+// (GET /api/franchise/{abbr}/overview: record, user team or not), a team picker, and a tab bar for the ten modules
 // in V2 order (Inbox sits right after Game Center and carries the list endpoint's unread count). Each module is
 // standalone (`{ teamAbbr }`) and fetches its own data.
 //
@@ -20,6 +20,7 @@ import ContractRoomModule from "./ContractRoomModule";
 import TradeMachineModule from "./TradeMachineModule";
 import DraftWarRoomModule from "./DraftWarRoomModule";
 import TrainingRoomModule from "./TrainingRoomModule";
+import ReportCardModule from "./ReportCardPanel";
 
 type ModuleDef = { slug: string; label: string; Component: ComponentType<{ teamAbbr: string }> };
 
@@ -33,6 +34,7 @@ const MODULES: ModuleDef[] = [
   { slug: "trade-machine", label: "Trade Machine", Component: TradeMachineModule },
   { slug: "draft-war-room", label: "Draft War Room", Component: DraftWarRoomModule },
   { slug: "training-room", label: "Training Room", Component: TrainingRoomModule },
+  { slug: "report-card", label: "Report Card", Component: ReportCardModule },
 ];
 
 const DEFAULT_TEAM = "CAR";
