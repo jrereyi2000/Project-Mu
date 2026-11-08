@@ -194,6 +194,55 @@ def test_an_agreement_stores_approved_with_the_talk_flags(monkeypatch):
     assert "talks:1" in seen["flags"] and "auto_approved" in seen["flags"]
 
 
+def _run_limit_turns():
+    """Eight turns (the talk's maximum) whose last is a REJECT with no assets; the opening carries the offer."""
+    stored = [{"type": "PLAYER", "player_id": STAR, "from": "BBB", "to": "AAA"},
+              {"type": "PICK", "draft_season": 2037, "round": 4, "original_team": "AAA",
+               "from": "AAA", "to": "BBB"}]
+    turns = [{"turn_no": i, "actor": "GM_A" if i % 2 else "GM", "actor_team_id": 1 if i % 2 else 2,
+              "action": "OFFER" if i == 1 else "REJECT", "assets": stored if i == 1 else None,
+              "mood": "APART", "message": None, "surplus_user": None, "surplus_gm": None, "options": None,
+              "choice": None, "choice_source": None, "posture": None, "legality": None,
+              "message_source": None} for i in range(1, gt.TALK_MAX_TURNS + 1)]
+    return turns, stored
+
+
+def _run_limit_stall(monkeypatch, store=None, extra=None):
+    b, v = setup()
+    turns, stored = _run_limit_turns()
+    monkeypatch.setattr(gt, "_turns", lambda cur, nid: list(turns))
+    monkeypatch.setattr(gt, "carry_allowed", lambda *a, **k: False)
+    monkeypatch.setattr(ge, "rationale_for", lambda b, d, llm: {"rationale_a": "", "rationale_b": "",
+                                                                "headline": "", "source": "TEMPLATE"})
+    monkeypatch.setattr(ge, "store", store or (lambda *a, **k: 9))
+    for name, fn in dict({"leak_events": lambda *a, **k: []}, **(extra or {})).items():
+        monkeypatch.setattr(gt, name, fn)
+    talk = dict(TALK, status="OPEN")
+    status = gt.advance_talk(ScriptedCur(lambda sql, params: []), b, v, talk, random.Random(1), None)
+    return b, v, stored, talk, status
+
+
+def test_a_run_limit_stall_stores_the_last_offer_not_the_reject(monkeypatch):
+    seen = {}
+    b, v, stored, talk, status = _run_limit_stall(
+        monkeypatch, store=lambda *a, **k: (seen.update(deal=a[2]), 9)[1])
+    assert status == "STALLED" and talk["status"] == "STALLED"
+    # the STALLED row is the previous package, not the assetless REJECT turn
+    assert keys(seen["deal"]["assets"]) == keys(gt._engine_assets(b, stored))
+
+
+def test_a_run_limit_stall_leaks_at_the_stalled_stage(monkeypatch):
+    seen = []
+
+    def fake_events(talk, turn, books, rng):
+        seen.append((gt._leak_stage(talk, turn), bool(turn.get("assets"))))
+        return []
+
+    b, v, stored, talk, status = _run_limit_stall(monkeypatch, extra={"leak_events": fake_events})
+    assert status == "STALLED" and talk["status"] == "STALLED"
+    assert seen and seen[-1] == ("STALLED", True)            # highest weight, and the offer's positions
+
+
 def test_carry_over_only_from_close_never_past_the_deadline_at_most_once():
     b, v = setup()
     t = dict(TALK)

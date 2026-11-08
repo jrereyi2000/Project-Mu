@@ -504,6 +504,7 @@ def _stall(cur, b, valuer, talk, offer_assets, reason, status="STALLED"):
     """Store the last offer on the table as a STALLED proposal (decided for pacing, no player barred) and end the
     talk with `status` (STALLED, or WALKED_AWAY). Returns the proposal id or None."""
     nid = talk["id"]
+    talk["status"] = status                       # the dict follows the row (leaks read it)
     if not offer_assets:
         _set_status(cur, nid, status, reason)
         return None
@@ -606,7 +607,7 @@ def advance_talk(cur, b, valuer, talk, rng, llm):
             _set_status(cur, nid, "WALKED_AWAY", "the GM ran out of patience")
             talk["status"] = "WALKED_AWAY"
             turns = _turns(cur, nid)
-            _maybe_leak(cur, talk, turns[-1], b, rng)
+            _maybe_leak(cur, talk, dict(turns[-1], assets=offer_assets), b, rng)
             _stall(cur, b, valuer, talk, offer_assets, "the GM ran out of patience", status="WALKED_AWAY")
             played += 1
             break
@@ -638,14 +639,19 @@ def advance_talk(cur, b, valuer, talk, rng, llm):
     limit = played >= TURNS_PER_RUN or len(turns) >= TALK_MAX_TURNS
     if not limit:
         return "OPEN"
-    last_offer = _engine_assets(b, turns[-1].get("assets")) if turns else []
+    # "the last offer on the table": a REJECT (or any assetless turn) leaves the previous package standing
+    offer_turn = next((t for t in reversed(turns) if t.get("assets")), None)
+    last_offer = _engine_assets(b, offer_turn["assets"]) if offer_turn else []
     if len(turns) < TALK_MAX_TURNS and carry_allowed(talk, b, _last_mood(turns), rng):
         _set_status(cur, nid, "OPEN", "the sides are close; the talk carries over")
         _set_carried(cur, talk)
         return "OPEN"
     _stall(cur, b, valuer, talk, last_offer, "the sides could not get close enough")
     if turns:
-        _maybe_leak(cur, talk, turns[-1], b, rng)
+        leak_turn = dict(turns[-1])
+        if offer_turn is not None:
+            leak_turn["assets"] = last_offer
+        _maybe_leak(cur, talk, leak_turn, b, rng)
     return "STALLED"
 
 
