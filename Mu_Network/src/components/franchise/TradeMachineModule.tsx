@@ -4,16 +4,25 @@
 // both sides (trade_value V_T and pick curves, in dollars), cap legality for both teams (contracts_engine), and the
 // AI GM's verdict and dialogue (gm_negotiation.judge); a counter can be loaded back into the builder. Evaluating
 // never makes the trade. Shapes: types/franchiseMarket.ts.
+//
+// V2.11 (TRADE_NEGOTIATIONS_PLAN §2.8): **Talk to their GM** posts the package to POST /{abbr}/inbox as a GM_TALK
+// thread (V2.9 §2.7) and opens #franchise-inbox, or links there on a 409 when a talk with that GM is already open.
+// **League talks** reads the published CPU transcripts from GET /api/franchise/trade-talks?season=, newest first.
 import { useEffect, useMemo, useState } from "react";
+import { API_BASE } from "../../api";
 import { money, ordinal } from "../team/format";
 import "../team/frontOffice.css";
 import type { RosterPlayer, RosterResponse } from "../../types/franchiseRoster";
+import type { InboxStartRequest, InboxThread } from "../../types/franchiseInbox";
 import {
   TEAM_ABBRS,
-  type OwnedPick, type PicksResponse, type TradeEvaluation, type TradePick, type TradeRequest, type TradeSide,
+  type OwnedPick, type PicksResponse, type PublishedTradeTalk, type TradeEvaluation, type TradePick,
+  type TradeRequest, type TradeSide, type TradeTalksResponse,
 } from "../../types/franchiseMarket";
 import { NegotiationStyles } from "./FreeAgencyModule";
-import { SharedStyles, StateNote, franchiseFetch, toState, useFranchiseData, type FranchiseState } from "./RosterCapModule";
+import {
+  FranchiseApiError, SharedStyles, StateNote, franchiseFetch, toState, useFranchiseData, type FranchiseState,
+} from "./RosterCapModule";
 
 const pickKey = (p: TradePick) => `${p.season}-${p.round}-${p.original_team}`;
 const pickLabel = (p: TradePick | OwnedPick, owner: string) => {
@@ -56,6 +65,29 @@ const TM_CSS = `
 .fr-sbar strong { text-align: right; }
 .fr-sbar strong.pos { color: #2e7d32; }
 .fr-sbar strong.neg { color: var(--red); }
+.fr-talks { display: flex; flex-direction: column; gap: 8px; }
+.fr-talk { background: var(--white); border-top: 1px solid var(--gray-100); }
+.fr-talk summary { padding: 11px 14px; display: flex; align-items: baseline; justify-content: space-between; gap: 10px; cursor: pointer; list-style: none; }
+.fr-talk summary::-webkit-details-marker { display: none; }
+.fr-talk summary strong { font: 700 14px var(--font-sans); letter-spacing: -.02em; }
+.fr-talk-meta { color: var(--gray-500); font: 700 8px var(--font-mono); letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; }
+.fr-talk-turns { margin: 0; padding: 0 14px 8px; list-style: none; }
+.fr-talk-turns > li { padding: 10px 0; border-top: 1px solid var(--gray-100); }
+.fr-talk-turns header { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.fr-talk-turns header strong { font: 700 11px var(--font-sans); }
+.fr-talk-turns header small { color: var(--gray-500); font: 600 8px var(--font-mono); text-transform: uppercase; letter-spacing: .05em; }
+.fr-posture { padding: 2px 7px; border-radius: 10px; color: var(--white); background: var(--gray-500); font: 700 7px var(--font-mono); letter-spacing: .06em; }
+.fr-posture.anchor, .fr-posture.squeeze { background: var(--red); }
+.fr-posture.meet { background: #2e7d32; }
+.fr-posture.hold, .fr-posture.firm { background: var(--ink); }
+.fr-talk-assets { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 6px; color: #55575d; font: 600 9px var(--font-mono); }
+.fr-talk-turns .fr-quote { margin: 6px 0 0; }
+.fr-talk-final { padding: 10px 14px; background: var(--paper); font: 600 10px/1.6 var(--font-mono); }
+.fr-talk-final b { display: block; margin-bottom: 4px; color: var(--ink); font: 700 8px var(--font-mono); letter-spacing: .07em; text-transform: uppercase; }
+.fr-talk-final ul { margin: 0; padding-left: 16px; }
+.fr-talk-final small { color: var(--gray-500); }
+.fr-talk-note { margin: 0 0 12px; padding: 10px 14px; background: #fbe7ea; border-left: 3px solid var(--red); font: 600 10px/1.6 var(--font-mono); }
+.fr-talk-note a { margin-left: 8px; }
 @media (max-width: 760px) { .fr-tm, .fr-tm-sum { grid-template-columns: 1fr; } }
 `;
 
@@ -154,6 +186,83 @@ function usePicks(abbr: string): FranchiseState<PicksResponse> {
   return state;
 }
 
+/** GET a league-wide franchise path (no {abbr}); a 404 reads "unavailable" exactly like the team-scoped fetches. */
+async function leagueFetch<T>(path: string): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`);
+  if (!res.ok) {
+    let detail = `HTTP ${res.status}`;
+    try {
+      const j = await res.json();
+      if (j && typeof j.detail === "string") detail = j.detail;
+    } catch { /* not JSON */ }
+    throw new FranchiseApiError(res.status, detail);
+  }
+  return res.json() as Promise<T>;
+}
+
+/** One published CPU transcript, expandable to its turns and the agreed deal (§2.8). */
+function LeagueTalk({ talk }: { talk: PublishedTradeTalk }) {
+  const teams = talk.teams.map((t) => t.abbr).join(" ↔ ");
+  const weeks = talk.weeks.length === 1 ? `Week ${talk.weeks[0]}` : `Weeks ${talk.weeks.join(", ")}`;
+  return (
+    <details className="fr-talk">
+      <summary>
+        <strong>{teams}</strong>
+        <span className="fr-talk-meta">{weeks} · {talk.status}</span>
+      </summary>
+      <ol className="fr-talk-turns">
+        {talk.turns.map((turn) => (
+          <li key={turn.turn_no}>
+            <header>
+              <strong>{turn.team}</strong>
+              <span className={`fr-posture ${turn.posture.toLowerCase()}`}>{turn.posture}</span>
+              <small>{turn.action.replace("_", " ")} · Week {turn.week}</small>
+            </header>
+            {turn.assets.length > 0 && (
+              <div className="fr-talk-assets">
+                {turn.assets.map((a, i) => <span key={i}>{a.from} → {a.to}: {a.label}</span>)}
+              </div>
+            )}
+            {turn.message && <p className="fr-quote">“{turn.message}”</p>}
+          </li>
+        ))}
+      </ol>
+      <div className="fr-talk-final">
+        <b>Final deal</b>
+        {talk.final.assets.length === 0 ? <span>No assets recorded.</span> : (
+          <ul>{talk.final.assets.map((a, i) => <li key={i}>{a.label} <small>({a.from} → {a.to})</small></li>)}</ul>
+        )}
+      </div>
+    </details>
+  );
+}
+
+/** The season's published CPU transcripts, newest first (GET /api/franchise/trade-talks?season=). */
+function LeagueTalks({ season, roster }: { season: number | null; roster: FranchiseState<RosterResponse> }) {
+  const [state, setState] = useState<FranchiseState<TradeTalksResponse>>({ status: "loading" });
+  useEffect(() => {
+    if (season === null) return;
+    let live = true;
+    setState({ status: "loading" });
+    leagueFetch<TradeTalksResponse>(`/api/franchise/trade-talks?season=${season}`)
+      .then((d) => live && setState({ status: "ready", data: d }))
+      .catch((e) => live && setState(toState<TradeTalksResponse>(e)));
+    return () => { live = false; };
+  }, [season]);
+
+  const talks = state.status === "ready" ? [...state.data.talks].sort((a, b) => b.id - a.id) : [];
+  return (
+    <section className="fo-block">
+      <div className="team-section-title"><span>League-wide{season === null ? "" : ` · ${season}`}</span><h2>League Talks</h2></div>
+      {season === null ? <StateNote state={roster} what="the league talks" />
+        : state.status !== "ready" ? <StateNote state={state} what="the league's trade talks" />
+        : talks.length === 0 ? <p className="fo-state">No CPU trade talks have been published this season yet.</p>
+        : <div className="fr-talks">{talks.map((t) => <LeagueTalk key={t.id} talk={t} />)}</div>}
+      <p className="fo-basis">Published transcripts cover completed CPU deals only: the teams, each GM's posture, the words and the assets agreed. No values are shown.</p>
+    </section>
+  );
+}
+
 export default function TradeMachineModule({ teamAbbr }: { teamAbbr: string }) {
   const others = useMemo(() => TEAM_ABBRS.filter((t) => t !== teamAbbr), [teamAbbr]);
   const [other, setOther] = useState<string>(others[0]);
@@ -168,8 +277,10 @@ export default function TradeMachineModule({ teamAbbr }: { teamAbbr: string }) {
   const [receive, setReceive] = useState<Side>(emptySide);
   const [evaluation, setEvaluation] = useState<FranchiseState<TradeEvaluation> | null>(null);
   const [stale, setStale] = useState(false);
+  const [talking, setTalking] = useState(false);
+  const [talkNote, setTalkNote] = useState<{ conflict: boolean; message: string } | null>(null);
 
-  useEffect(() => { setReceive(emptySide()); setEvaluation(null); }, [other]);
+  useEffect(() => { setReceive(emptySide()); setEvaluation(null); setTalkNote(null); }, [other]);
 
   const toggle = (setter: typeof setSend) => (kind: "players" | "picks", key: number | string) => {
     setter((s) => {
@@ -213,7 +324,27 @@ export default function TradeMachineModule({ teamAbbr }: { teamAbbr: string }) {
       .then((d) => setEvaluation({ status: "ready", data: d }))
       .catch((e) => setEvaluation(toState<TradeEvaluation>(e)));
   };
-  const clear = () => { setSend(emptySide()); setReceive(emptySide()); setEvaluation(null); setStale(false); };
+
+  // V2.11 §2.8: open a GM_TALK thread with this package, then the inbox. `as` is the controlled GM persona (the
+  // inbox start requires it). `assets` is V2.9's `trade_assets` payload, which is one-directional (JR sends; the GM
+  // counters for his own side), so it carries the builder's send side. A 409 means a talk is open: link there.
+  const talkToGm = () => {
+    const body: InboxStartRequest = { kind: "GM_TALK", as: "GM", gm_team: other, assets: toWire(send) };
+    setTalking(true);
+    setTalkNote(null);
+    franchiseFetch<InboxThread>(teamAbbr, "/inbox", "POST", body)
+      .then(() => { window.location.hash = "#franchise-inbox"; })
+      .catch((e) => {
+        if (e instanceof FranchiseApiError && e.status === 409) {
+          setTalkNote({ conflict: true, message: e.message });
+        } else {
+          setTalkNote({ conflict: false, message: e instanceof Error ? e.message : String(e) });
+        }
+      })
+      .finally(() => setTalking(false));
+  };
+
+  const clear = () => { setSend(emptySide()); setReceive(emptySide()); setEvaluation(null); setStale(false); setTalkNote(null); };
 
   const ev = evaluation?.status === "ready" ? evaluation.data : null;
   const scale = ev ? Math.max(Math.abs(ev.surplus_us), Math.abs(ev.surplus_them), 1) : 1;
@@ -237,10 +368,20 @@ export default function TradeMachineModule({ teamAbbr }: { teamAbbr: string }) {
               </label>
               <span className="fr-grow">Tick what you send and what you want back, then ask {other}'s GM.</span>
               <button className="fr-btn" onClick={clear} disabled={empty && !ev}>Clear</button>
+              <button className="fr-btn" onClick={talkToGm} disabled={send.players.size + send.picks.size === 0 || talking}>
+                {talking ? "Opening…" : "Talk to their GM"}
+              </button>
               <button className="fr-btn primary" onClick={evaluate} disabled={empty || evaluation?.status === "loading"}>
                 {evaluation?.status === "loading" ? "Asking…" : "Evaluate trade"}
               </button>
             </div>
+            {talkNote && (
+              <p className="fr-talk-note" role="alert">
+                {talkNote.conflict
+                  ? <>A talk with {other}'s GM is already open. <a className="fr-btn" href="#franchise-inbox">Open the inbox</a></>
+                  : <>Couldn't open the talk: {talkNote.message}</>}
+              </p>
+            )}
             <div className="fr-tm">
               <SideColumn abbr={teamAbbr} label="You send" them={false} roster={ourRoster} picks={ourPicks} side={send} onToggle={toggle(setSend)} />
               <SideColumn abbr={other} label="You receive" them roster={theirRoster} picks={theirPicks} side={receive} onToggle={toggle(setReceive)} />
@@ -288,6 +429,7 @@ export default function TradeMachineModule({ teamAbbr }: { teamAbbr: string }) {
           </>
         )}
       </section>
+      <LeagueTalks season={ourRoster.status === "ready" ? ourRoster.data.season : null} roster={ourRoster} />
     </section>
   );
 }

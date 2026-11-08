@@ -16,6 +16,8 @@
  *   GET  /api/franchise/{abbr}/picks?seasons=3                     -> PicksResponse   (not in the §2.7 table yet)
  *   POST /api/franchise/{abbr}/trades/evaluate                     TradeRequest -> TradeEvaluation
  *   GET  /api/franchise/offers/{offer_id}/policy                   -> PolicyReceipt (contract-policy receipt)
+ *   GET  /api/franchise/trade-talks?season=                        -> TradeTalksResponse (published CPU transcripts)
+ *   GET  /api/franchise/trade-talks/{id}                           -> PublishedTradeTalk
  *
  * The Trade Machine also reads `GET /api/franchise/{abbr}/roster` (RosterResponse, §2.7a) for both teams.
  */
@@ -192,3 +194,50 @@ export type TradeEvaluation = {
   reasons: string[];
   dialogue: string | null;             // the AI GM's reply
 };
+
+// ---- Published trade talks (TRADE_NEGOTIATIONS_PLAN §2.3, §2.7) ----------------------------------------------
+
+/** One asset of a turn or of the final deal, already labelled for display. Never a value (§2.3). */
+export type PublishedTradeAsset = { from: string; to: string; label: string };
+
+/**
+ * A side of a published CPU talk. `role` is "initiator" on the GM who called (the §2.3 example omits it on the
+ * other side), so it is optional here.
+ */
+export type PublishedTradeTeam = { abbr: string; gm: string; role?: string };
+
+/** The moves a turn may name: an opening idea, a counter, or an end to the talk (§2.3 `options_for`). */
+export type PublishedTalkAction = "OFFER" | "COUNTER" | "ACCEPT" | "REJECT" | "WALK_AWAY";
+
+/** A GM's stance on a turn (§2.2); drawn as a chip, never as a number. */
+export type PublishedTalkPosture = "FIRM" | "ANCHOR" | "SQUEEZE" | "MEET" | "HOLD";
+
+/** One public turn. No surplus, options, choice_source or legality exists in the published shape (§2.3). */
+export type PublishedTradeTurn = {
+  turn_no: number;
+  week: number;
+  team: string;                        // the speaking team's abbreviation
+  action: PublishedTalkAction;
+  posture: PublishedTalkPosture;
+  assets: PublishedTradeAsset[];
+  message: string;
+};
+
+/**
+ * `GET /api/franchise/trade-talks` item, exactly the public shape of §2.3: only completed CPU deals are published
+ * (D6), so `kind` is CPU and `status` is AGREED. It carries no su/sg, options, choice_source or legality field.
+ */
+export type PublishedTradeTalk = {
+  id: number;
+  kind: "CPU";
+  season: number;
+  weeks: number[];
+  status: "AGREED";
+  proposal_id: number;
+  teams: PublishedTradeTeam[];
+  turns: PublishedTradeTurn[];
+  final: { assets: PublishedTradeAsset[] };
+};
+
+/** `GET /api/franchise/trade-talks?season=` answers with the season's published talks, newest first. */
+export type TradeTalksResponse = { talks: PublishedTradeTalk[] };
