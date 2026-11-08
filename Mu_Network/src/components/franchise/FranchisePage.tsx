@@ -1,6 +1,7 @@
 // #franchise: the Franchise Command Center (V2_CORE_BUILD_PLAN §2.9, V2_MASTER_PLAN §2). A header with the team
-// (GET /api/franchise/{abbr}/overview: record, user team or not), a team picker, and a tab bar for the eight modules
-// in V2 order. Each module is standalone (`{ teamAbbr }`) and fetches its own data.
+// (GET /api/franchise/{abbr}/overview: record, user team or not), a team picker, and a tab bar for the nine modules
+// in V2 order (Inbox sits right after Game Center and carries the list endpoint's unread count). Each module is
+// standalone (`{ teamAbbr }`) and fetches its own data.
 //
 // Routes: `#franchise` (Game Center), `#franchise-<module>` (e.g. `#franchise-depth-chart`), each optionally with
 // `?team=ABBR`. The team: `?team=` when given, else the last team picked here (localStorage), else CAR.
@@ -9,7 +10,9 @@ import "../team/frontOffice.css";
 import { teamLogo } from "../team/format";
 import { TEAM_ABBRS } from "../../types/franchiseMarket";
 import type { FranchiseOverview } from "../../types/franchiseGame";
+import type { InboxListResponse } from "../../types/franchiseInbox";
 import GameCenterModule from "./GameCenterModule";
+import InboxModule from "./InboxModule";
 import DepthChartModule from "./DepthChartModule";
 import RosterCapModule, { useFranchiseData } from "./RosterCapModule";
 import FreeAgencyModule from "./FreeAgencyModule";
@@ -22,6 +25,7 @@ type ModuleDef = { slug: string; label: string; Component: ComponentType<{ teamA
 
 const MODULES: ModuleDef[] = [
   { slug: "game-center", label: "Game Center", Component: GameCenterModule },
+  { slug: "inbox", label: "Inbox", Component: InboxModule },
   { slug: "depth-chart", label: "Depth Chart", Component: DepthChartModule },
   { slug: "roster-cap", label: "Roster & Cap", Component: RosterCapModule },
   { slug: "free-agency", label: "Free Agency", Component: FreeAgencyModule },
@@ -78,6 +82,7 @@ const PAGE_CSS = `
 .fr-tabs a { flex: none; padding: 12px 14px; color: var(--gray-500); font: 700 9px var(--font-mono); letter-spacing: .06em; text-transform: uppercase; text-decoration: none; border-bottom: 3px solid transparent; white-space: nowrap; }
 .fr-tabs a:hover { color: var(--ink); }
 .fr-tabs a.active { color: var(--ink); border-bottom-color: var(--team-color, var(--red)); }
+.fr-tab-count { margin-left: 5px; padding: 1px 5px; border-radius: 8px; color: var(--white); background: var(--team-color, var(--red)); font: 700 8px var(--font-mono); }
 .fr-page .team-data-view.fo-view { max-width: 1240px; }
 @media (max-width: 800px) { .fr-head { padding: 22px 16px 0; } .fr-tabs { padding: 0 16px; } }
 `;
@@ -86,7 +91,9 @@ export default function FranchisePage({ route }: { route: string }) {
   const parsed = parseFranchiseRoute(route);
   const team = parsed.team ?? cleanTeam(storedTeam()) ?? DEFAULT_TEAM;
   const [overview] = useFranchiseData<FranchiseOverview>(team, "/overview");
+  const [inbox] = useFranchiseData<InboxListResponse>(team, "/inbox");
   const o = overview.status === "ready" ? overview.data : null;
+  const unread = inbox.status === "ready" ? inbox.data.unread : 0;
   const active = MODULES.find((m) => m.slug === parsed.slug) ?? MODULES[0];
   const Module = active.Component;
 
@@ -125,6 +132,7 @@ export default function FranchisePage({ route }: { route: string }) {
         {MODULES.map((m) => (
           <a key={m.slug} href={href(m.slug, parsed.team)} className={m.slug === active.slug ? "active" : ""} aria-current={m.slug === active.slug ? "page" : undefined}>
             {m.label}
+            {m.slug === "inbox" && unread > 0 && <span className="fr-tab-count" aria-label={`${unread} unread`}>{unread}</span>}
           </a>
         ))}
       </nav>
