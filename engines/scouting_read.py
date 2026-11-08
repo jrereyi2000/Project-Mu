@@ -156,6 +156,48 @@ def prospect_story(cur, prospect_key, through_step=None):
             "events": events_for(cur, draft_season, [prospect_key], through_step=through_step).get(prospect_key, [])}
 
 
+def scout_report(cur, prospect_key, through_step=None):
+    """One prospect's latest scouting report edition (docs/in_progress/SCOUTING_REVAMP_PLAN.md §2.9; PROJECT_SPEC
+    §2.18). Resolves the prospect_key alias to its permanent prospect_uid, then returns the latest edition whose
+    `step <= through_step` (None = the latest stored). Public fields only: grade, rank, round label, role, trait
+    words and scores, strengths, concerns, flags and the body — never a rating, err, impact or hidden payload key.
+    For an article's cutoff, pass `visible_step` over the class's scout_runs as through_step. Interviews are
+    team-private and never readable here."""
+    cur.execute("SELECT to_regclass('scout_reports') IS NOT NULL")
+    if not cur.fetchone()[0]:
+        return None
+    cur.execute("SELECT to_regclass('scout_prospect_ids') IS NOT NULL")
+    if not cur.fetchone()[0]:
+        return None
+    draft_season = int(prospect_key.split(":")[0])
+    cur.execute("SELECT prospect_uid FROM scout_prospect_ids WHERE draft_season = %s AND prospect_key = %s "
+                "AND status = 'OK'", (draft_season, prospect_key))
+    row = cur.fetchone()
+    if not row:
+        return None
+    uid = str(row[0])
+    sql = """SELECT draft_season, step, prospect_key, edition, grade, rank, round_label, role, traits,
+                    strengths, concerns, flags, body, text_source
+             FROM scout_reports WHERE prospect_uid = %s"""
+    args = [uid]
+    if through_step is not None:
+        sql += " AND step <= %s"
+        args.append(through_step)
+    sql += " ORDER BY step DESC LIMIT 1"
+    cur.execute(sql, args)
+    row = cur.fetchone()
+    if not row:
+        return None
+    cols = ("draft_season", "step", "prospect_key", "edition", "grade", "rank", "round_label", "role", "traits",
+            "strengths", "concerns", "flags", "body", "text_source")
+    d = dict(zip(cols, row))
+    d["prospect_uid"] = uid
+    d["grade"] = float(d["grade"])
+    for k in ("traits", "strengths", "concerns", "flags", "body"):
+        d[k] = json.loads(d[k]) if isinstance(d[k], str) else d[k]
+    return d
+
+
 def public_grades(cur, season, week=None):
     """{draft_prospects.id: {grade, consensus_rank, round_label, delta_rank}} for the class season + 1 at the latest
     step visible at the article's cutoff ({} before the scouting layer has a visible step)."""
