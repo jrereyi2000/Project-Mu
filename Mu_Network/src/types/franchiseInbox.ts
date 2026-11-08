@@ -8,6 +8,7 @@
  *   DELETE /api/franchise/{abbr}/inbox/actors/{role}/{id}    -> 204 (no body)
  *   GET    /api/franchise/{abbr}/inbox?status=&kind=&as=&limit= -> InboxListResponse
  *   GET    /api/franchise/{abbr}/inbox/kinds                 -> InboxKindsResponse (an array)
+ *   GET    /api/franchise/{abbr}/inbox/targets?kind=         -> InboxTargetsResponse
  *   GET    /api/franchise/{abbr}/inbox/{thread_id}           -> InboxThreadResponse (marks it read)
  *   POST   /api/franchise/{abbr}/inbox/{thread_id}/draft     {text} -> InboxDraftResponse (acts on nothing)
  *   POST   /api/franchise/{abbr}/inbox/{thread_id}/reply     InboxReplyRequest -> InboxThreadResponse
@@ -69,8 +70,11 @@ export type InboxThread = {
   updated_at?: string;
 };
 
-/** The four reply forms (§2.3, §2.13). `option.form` names one; null is a plain button. */
-export type InboxFormKind = "contract_terms" | "trade_assets" | "promise" | "vision";
+/**
+ * A form id (§2.3, §2.13). A reply option names one and null is a plain button; a kind's `start_form` names the
+ * picker the New Conversation panel renders before a conversation exists (`player_pick`, `team_pick`, wave 4).
+ */
+export type InboxFormKind = "contract_terms" | "trade_assets" | "promise" | "vision" | "player_pick" | "team_pick";
 
 /** A reply option. `default` may seed the form's fields (the server owns its shape). */
 export type InboxOption = {
@@ -135,6 +139,22 @@ export type InboxKindInfo = {
 
 /** GET /inbox/kinds answers with a bare array. */
 export type InboxKindsResponse = InboxKindInfo[];
+
+/**
+ * One person a JR-started conversation can open with (§2.12 `Target`). `CONTRACT` / `ROLE_TALK` return the team's
+ * active players (`id` is `players.id` as text, with position and overall); `GM_TALK` returns a team with an open GM
+ * tenure (`id` is `gm_profiles.id`, `team` is the abbreviation posted back as `gm_team`).
+ */
+export type InboxTarget = {
+  id: string;
+  name: string;
+  position?: string | null;
+  overall?: number | null;
+  team?: string | null;
+};
+
+/** GET /inbox/targets?kind=: the targets for one kind; an unknown or targetless kind answers an empty list. */
+export type InboxTargetsResponse = { kind: string; targets: InboxTarget[] };
 
 /** GET /inbox/{id} and a reply's answer: the thread with its messages and current options. */
 export type InboxThreadResponse = {
