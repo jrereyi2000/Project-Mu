@@ -9,7 +9,9 @@ import "../team/frontOffice.css";
 import "../draft/draft.css";
 import ProspectModal from "../draft/ProspectModal";
 import type { PicksResponse } from "../../types/franchiseMarket";
-import { SharedStyles, StateNote, useFranchiseData } from "./RosterCapModule";
+import type { InboxThread } from "../../types/franchiseInbox";
+import type { EligibleProspect, InterviewsResponse } from "../../types/scoutingReports";
+import { SharedStyles, StateNote, franchiseFetch, useFranchiseData } from "./RosterCapModule";
 
 // The subset of GET /api/draft/war-room this module reads (engines/draft_room.state + server/draft_api.py).
 type WarRoomProspect = {
@@ -82,6 +84,172 @@ function useWarRoom(abbr: string): Load {
 }
 
 const roundLabel = (r: number) => ["1st", "2nd", "3rd"][r - 1] ?? `${r}th`;
+
+// ---- Interviews card (SCOUTING_REVAMP_PLAN §2.10) -----------------------------------------------------------------
+
+type InterviewsLoad =
+  | { status: "loading" }
+  | { status: "unavailable" }
+  | { status: "error"; message: string }
+  | { status: "ready"; data: InterviewsResponse };
+
+/** GET /api/draft/interviews?team= — a draft API, so fetch it directly (not through `useFranchiseData`). */
+function useInterviews(abbr: string, tick: number): InterviewsLoad {
+  const [state, setState] = useState<InterviewsLoad>({ status: "loading" });
+  useEffect(() => {
+    let live = true;
+    setState({ status: "loading" });
+    fetch(`${API_BASE}/api/draft/interviews?team=${encodeURIComponent(abbr)}`)
+      .then(async (r) => {
+        if (r.status === 404) return { status: "unavailable" } as const;
+        if (!r.ok) return { status: "error", message: `HTTP ${r.status}` } as const;
+        const data = (await r.json()) as InterviewsResponse;
+        return { status: "ready", data } as const;
+      })
+      .then((s) => { if (live) setState(s); })
+      .catch((e) => { if (live) setState({ status: "error", message: e instanceof Error ? e.message : String(e) }); });
+    return () => { live = false; };
+  }, [abbr, tick]);
+  return state;
+}
+
+const pct = (used: number, total: number) => (total > 0 ? Math.min(100, Math.round((used / total) * 100)) : 0);
+
+/** Budget meters, the window line, eligible prospects to interview, and the interviews already opened. */
+function InterviewsCard({ abbr }: { abbr: string }) {
+  const [tick, setTick] = useState(0);
+  const interviews = useInterviews(abbr, tick);
+  const [starting, setStarting] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [started, setStarted] = useState<string | null>(null);
+
+  const reload = () => setTick((t) => t + 1);
+
+  // Interview writes go through the V2.9 inbox API (§2.8): POST /api/franchise/{abbr}/inbox with the PROSPECT body.
+  const start = (p: EligibleProspect, kind: "COMBINE" | "VISIT") => {
+    setStarting(`${p.prospect_uid}:${kind}`);
+    setError(null);
+    setStarted(null);
+    franchiseFetch<InboxThread>(abbr, "/inbox", "POST", {
+      kind: "PROSPECT",
+      as: "GM",
+      prospect_uid: p.prospect_uid,
+      interview: kind,
+    })
+      .then(() => {
+        setStarted(`Started a ${kind === "COMBINE" ? "combine interview" : "visit"} with ${p.full_name}. Open the Inbox tab to keep talking.`);
+        reload();
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : String(e)))
+      .finally(() => setStarting(null));
+  };
+
+  const data = interviews.status === "ready" ? interviews.data : null;
+
+  return (
+    <section className="fo-block">
+      <div className="team-section-title">
+        <span>{abbr} · {data ? `${data.draft_season} class` : "Scouting"}</span>
+        <h2>Interviews</h2>
+      </div>
+      <p className="fo-basis">
+        Combine interviews open until the re-signing stage; top-30 visits open for the two pre-draft steps.
+        {data && !data.window.combine_open && !data.window.visit_open ? " No interview window is open right now." : ""}
+      </p>
+
+      {interviews.status === "loading" && <p className="fo-state">Loading interviews…</p>}
+      {interviews.status === "unavailable" && (
+        <p className="fo-state fr-unavailable">The interviews endpoint isn't available yet. It arrives with the scouting report backend.</p>
+      )}
+      {interviews.status === "error" && (
+        <p className="fo-state">Interviews couldn't load ({interviews.message}). Try again in a moment.</p>
+      )}
+
+      {data && (
+        <>
+          <div className="sr-budget">
+            <article>
+              <div className="sr-budget-top">
+                <span className="sr-budget-label">Combine interviews left</span>
+                <strong>{data.budget.combine_left}</strong>
+              </div>
+              <small>{data.budget.combine_used} of {data.budget.combine_used + data.budget.combine_left} used</small>
+              <div className="sr-meter"><div className="sr-meter-fill" style={{ width: `${pct(data.budget.combine_used, data.budget.combine_used + data.budget.combine_left)}%` }} /></div>
+            </article>
+            <article>
+              <div className="sr-budget-top">
+                <span className="sr-budget-label">Visits left</span>
+                <strong>{data.budget.visits_left}</strong>
+              </div>
+              <small>{data.budget.visits_used} of {data.budget.visits_used + data.budget.visits_left} used</small>
+              <div className="sr-meter"><div className="sr-meter-fill" style={{ width: `${pct(data.budget.visits_used, data.budget.visits_used + data.budget.visits_left)}%` }} /></div>
+            </article>
+          </div>
+
+          {error && <p className="fr-warn" role="alert">Couldn't start the interview: {error}</p>}
+          {started && <p className="fr-ok">{started}</p>}
+
+          {data.eligible.length === 0 ? (
+            <p className="fo-state">No prospects are eligible for a new interview right now.</p>
+          ) : (
+            <div className="fo-table-scroll" style={{ marginBottom: 22 }}>
+              <table className="fo-table" aria-label="Eligible prospects">
+                <thead><tr><th>Prospect</th><th>Position</th><th>College</th><th>Rank</th><th>Interview</th></tr></thead>
+                <tbody>
+                  {data.eligible.map((p) => (
+                    <tr key={p.prospect_uid}>
+                      <td><strong>{p.full_name}</strong></td>
+                      <td>{p.position}</td>
+                      <td>{p.college}</td>
+                      <td>#{p.rank}</td>
+                      <td>
+                        <div className="fr-actions">
+                          {p.kinds.map((kind) => (
+                            <button key={kind} className="fr-btn" disabled={starting !== null} onClick={() => start(p, kind)}>
+                              {kind === "COMBINE" ? "Combine interview" : "Visit"}
+                            </button>
+                          ))}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {data.interviews.length === 0 ? (
+            <p className="fo-state">No interviews opened yet.</p>
+          ) : (
+            <div className="fo-table-scroll">
+              <table className="fo-table" aria-label="Past interviews">
+                <thead><tr><th>Prospect</th><th>Kind</th><th>Status</th><th>Questions left</th><th>Summary grade</th><th>Thread</th></tr></thead>
+                <tbody>
+                  {data.interviews.map((iv) => (
+                    <tr key={iv.id}>
+                      <td><strong>{iv.full_name}</strong></td>
+                      <td>{iv.kind === "COMBINE" ? "Combine" : "Visit"}</td>
+                      <td>{String(iv.status).replace(/_/g, " ").toLowerCase()}</td>
+                      <td>{iv.questions_left}</td>
+                      <td>{iv.summary_grade ?? "—"}</td>
+                      <td>
+                        {iv.thread_id != null ? (
+                          <a className="fr-btn" href={`#franchise-inbox?team=${abbr}`}>Open in Inbox</a>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
 
 export default function DraftWarRoomModule({ teamAbbr }: { teamAbbr: string }) {
   const room = useWarRoom(teamAbbr);
@@ -167,6 +335,8 @@ export default function DraftWarRoomModule({ teamAbbr }: { teamAbbr: string }) {
           </>
         )}
       </section>
+
+      <InterviewsCard abbr={teamAbbr} />
 
       <section className="fo-block">
         <div className="team-section-title"><span>Next three drafts</span><h2>Draft Capital</h2></div>

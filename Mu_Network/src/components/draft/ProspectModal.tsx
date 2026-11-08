@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { API_BASE } from "../../api";
 import CollegeGameLog, { type GameLogEntry, type SeasonStatsBlock } from "./CollegeGameLog";
 import CombineCard, { type CombineProfileData } from "./CombineCard";
+import type { ScoutReport } from "../../types/scoutingReports";
 
 interface ProspectDossier {
   prospect_key: string;
@@ -59,6 +60,117 @@ interface ProspectDossier {
   }>;
 }
 
+function traitColor(score: number): string {
+  if (score >= 7) return "#10b981";
+  if (score >= 5) return "#3b82f6";
+  if (score >= 3.5) return "#f59e0b";
+  return "#ef4444";
+}
+
+const BODY_LABELS: Array<{ key: keyof ScoutReport["body"]; label: string }> = [
+  { key: "summary", label: "Summary" },
+  { key: "strengths", label: "Strengths" },
+  { key: "concerns", label: "Concerns" },
+  { key: "production", label: "Production" },
+  { key: "athletic", label: "Athletic profile" },
+  { key: "projection", label: "Projection" },
+  { key: "bottom_line", label: "Bottom line" },
+];
+
+/** The Scouting Report section: one edition's role/grade line, trait bars, chips, and prose. */
+function ScoutingReportView({ report, onEdition }: { report: ScoutReport; onEdition: (edition: string) => void }) {
+  const scout = report.scout?.name || "Mu Scouting Department";
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
+      {report.editions.length > 0 && (
+        <div className="sr-edition-tabs" role="group" aria-label="Report edition">
+          {report.editions.map((ed) => (
+            <button key={ed} className={ed === report.edition ? "active" : ""} onClick={() => onEdition(ed)}>
+              {ed}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Role, grade and byline */}
+      <div className="draft-section-card" style={{ padding: "16px 20px" }}>
+        <div className="sr-headline">
+          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+            <span className="sr-role">{report.role_words}</span>
+            <span className="sr-round">{report.round_label} · {report.step_label}</span>
+          </div>
+          <div className="sr-grade-box">
+            <span>Consensus grade</span>
+            <strong>{report.grade.toFixed(1)}</strong>
+            <small>Rank #{report.rank}</small>
+          </div>
+        </div>
+        <div className="sr-byline">{scout} · {report.edition} edition</div>
+      </div>
+
+      {/* Trait bars (1–9 with the word) */}
+      {report.traits.length > 0 && (
+        <div className="draft-section-card" style={{ padding: "18px 22px" }}>
+          <div className="sr-card-title">Trait grades · class-relative 1–9</div>
+          <div className="sr-traits">
+            {report.traits.map((t) => (
+              <div key={t.trait} className="sr-trait-row">
+                <div className="sr-trait-label">{t.label}</div>
+                <div className="sr-bar-track">
+                  <div className="sr-bar-fill" style={{ width: `${(t.score / 9) * 100}%`, background: traitColor(t.score) }} />
+                </div>
+                <div className="sr-trait-score" style={{ color: traitColor(t.score) }}>{t.score.toFixed(1)}</div>
+                <div className="sr-trait-word">{t.word}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Strengths / concerns / flags */}
+      <div className="sr-chip-row">
+        {report.strengths.length > 0 && (
+          <div className="sr-chip-group">
+            <span className="sr-chip-title">Strengths</span>
+            {report.strengths.map((s) => <span key={s} className="sr-chip pos">{s}</span>)}
+          </div>
+        )}
+        {report.concerns.length > 0 && (
+          <div className="sr-chip-group">
+            <span className="sr-chip-title">Concerns</span>
+            {report.concerns.map((c) => <span key={c} className="sr-chip neg">{c}</span>)}
+          </div>
+        )}
+        {report.flags.length > 0 && (
+          <div className="sr-chip-group">
+            <span className="sr-chip-title">Flags</span>
+            {report.flags.map((f) => (
+              <span key={f.flag} className="sr-chip flag" title={f.words}>{f.flag.replace(/_/g, " ")}</span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Body prose */}
+      <div className="draft-section-card" style={{ padding: "18px 22px" }}>
+        <div className="sr-card-title">Scouting report</div>
+        <div className="sr-body">
+          {BODY_LABELS.map(({ key, label }) => {
+            const text = report.body[key];
+            if (!text) return null;
+            return (
+              <div key={key}>
+                <h4>{label}</h4>
+                <p>{text}</p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export const ProspectModal: React.FC<{
   prospectKey: string;
   step?: number | null;
@@ -67,7 +179,9 @@ export const ProspectModal: React.FC<{
   const [dossier, setDossier] = useState<ProspectDossier | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>("");
-  const [tab, setTab] = useState<"gamelog" | "combine" | "timeline">("gamelog");
+  const [tab, setTab] = useState<"gamelog" | "combine" | "timeline" | "report">("gamelog");
+  const [report, setReport] = useState<ScoutReport | null>(null);
+  const [reportEdition, setReportEdition] = useState<string>("");
 
   useEffect(() => {
     setLoading(true);
@@ -87,6 +201,27 @@ export const ProspectModal: React.FC<{
         setLoading(false);
       });
   }, [prospectKey, step]);
+
+  // The Scouting Report (SCOUTING_REVAMP_PLAN §2.7). Hidden entirely when the endpoint 404s: only a 200 shows the
+  // "Scouting Report" sub-tab. `reportEdition` selects one of the stored editions.
+  useEffect(() => {
+    let live = true;
+    setReport(null);
+    const q = reportEdition ? `?edition=${encodeURIComponent(reportEdition)}` : "";
+    fetch(`${API_BASE}/api/draft/prospect/${encodeURIComponent(prospectKey)}/report${q}`)
+      .then(async (r) => {
+        if (r.status === 404) return null;
+        if (!r.ok) return null;
+        return r.json() as Promise<ScoutReport>;
+      })
+      .then((data) => {
+        if (live) setReport(data ?? null);
+      })
+      .catch(() => {
+        if (live) setReport(null);
+      });
+    return () => { live = false; };
+  }, [prospectKey, reportEdition]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -231,6 +366,23 @@ export const ProspectModal: React.FC<{
               >
                 📰 Scouting Storylines &amp; Stock Trajectory ({dossier.timeline.length})
               </button>
+              {report && (
+                <button
+                  onClick={() => setTab("report")}
+                  style={{
+                    background: tab === "report" ? "#f59e0b" : "rgba(255,255,255,0.08)",
+                    color: tab === "report" ? "#090e1a" : "#e2e8f0",
+                    border: "none",
+                    borderRadius: "6px",
+                    padding: "7px 14px",
+                    fontSize: "12px",
+                    fontWeight: 800,
+                    cursor: "pointer",
+                  }}
+                >
+                  📋 Scouting Report
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -317,6 +469,10 @@ export const ProspectModal: React.FC<{
                   )}
                 </div>
               </div>
+            )}
+
+            {tab === "report" && report && (
+              <ScoutingReportView report={report} onEdition={setReportEdition} />
             )}
           </div>
         )}
