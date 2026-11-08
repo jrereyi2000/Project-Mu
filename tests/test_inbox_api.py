@@ -56,6 +56,41 @@ def client(db):
     return TestClient(app)
 
 
+TARGETS_DDL = """
+ALTER TABLE players ADD COLUMN full_name TEXT;
+ALTER TABLE player_seasons ADD COLUMN position TEXT;
+ALTER TABLE player_seasons ADD COLUMN overall_rating INTEGER;
+ALTER TABLE player_seasons ADD COLUMN released_week INTEGER;
+CREATE TABLE player_contracts (id INTEGER PRIMARY KEY, player_id INT, team_id INT, season INT, status TEXT);
+CREATE TABLE injuries (id INTEGER PRIMARY KEY, player_id INT, team_id INT, season INT, week INT,
+                       injury_type TEXT, weeks_remaining INT, mu_weeks_out INT, is_ir BOOLEAN);
+"""
+
+
+@pytest.fixture
+def roster_db(db):
+    """`db` plus the few league columns/rows the targets endpoint reads: Carolina's 2026 active roster."""
+    db.conn.executescript(TARGETS_DDL)
+    db.conn.executemany("INSERT INTO players (id, player_name) VALUES (?, ?)",
+                        [(102, "Chuba Hubbard"), (103, "Jaycee Horn"), (104, "Adam Thielen")])
+    db.conn.executemany("UPDATE players SET full_name = ? WHERE id = ?",
+                        [("Bryce Young", 100), ("Xavier Legette", 101), ("Chuba Hubbard", 102),
+                         ("Jaycee Horn", 103), ("Adam Thielen", 104), ("Bijan Robinson", 200)])
+    db.conn.executemany("INSERT INTO player_seasons (player_id, team_id, season) VALUES (?, ?, ?)",
+                        [(102, 1, 2026), (103, 1, 2026), (104, 1, 2026)])
+    db.conn.executemany("UPDATE player_seasons SET position = ?, overall_rating = ? WHERE player_id = ?",
+                        [("QB", 78, 100), ("WR", 74, 101), ("RB", 71, 102), ("CB", 82, 103),
+                         ("WR", 76, 104), ("RB", 90, 200)])
+    # 100 and 103 are active; 101 is on IR; 102 has no contract (PS); 104 was released
+    db.conn.executemany("INSERT INTO player_contracts (player_id, team_id, season, status) VALUES (?, ?, ?, ?)",
+                        [(100, 1, 2026, "ACTIVE"), (101, 1, 2026, "ACTIVE"), (103, 1, 2026, "ACTIVE"),
+                         (104, 1, 2026, "ACTIVE"), (200, 2, 2026, "ACTIVE")])
+    db.conn.execute("UPDATE player_seasons SET released_week = 4 WHERE player_id = 104")
+    db.conn.execute("INSERT INTO injuries (player_id, team_id, season, week, injury_type, weeks_remaining, "
+                    "mu_weeks_out, is_ir) VALUES (101, 1, 2026, 5, 'Hamstring', 4, 4, 1)")
+    return db
+
+
 def control(db, role="GM", persona_id="10"):
     actors.take_control(db.cursor(), "CAR", role, persona_id)
 
@@ -125,6 +160,36 @@ def test_kinds_are_the_ones_a_controlled_actor_can_use(db, client):
     control(db, "COACH", "41")
     kinds = {k["kind"] for k in client.get("/api/franchise/CAR/inbox/kinds").json()}
     assert "ROLE_TALK" in kinds and "GM_TALK" in kinds
+
+
+# ---------------------------------------------------------------------- targets ---
+
+def test_contract_and_role_talk_targets_are_the_active_roster(roster_db, client):
+    body = client.get("/api/franchise/CAR/inbox/targets?kind=CONTRACT").json()
+    assert body == {"kind": "CONTRACT", "targets": [
+        {"id": "103", "name": "Jaycee Horn", "position": "CB", "overall": 82},
+        {"id": "100", "name": "Bryce Young", "position": "QB", "overall": 78}]}     # IR/PS/released left out
+    assert client.get("/api/franchise/CAR/inbox/targets?kind=role_talk").json() == {
+        "kind": "ROLE_TALK", "targets": body["targets"]}                            # kind echoed upper case
+
+
+def test_gm_talk_targets_are_other_teams_open_gms(db, client):
+    body = client.get("/api/franchise/CAR/inbox/targets?kind=GM_TALK").json()
+    assert body == {"kind": "GM_TALK", "targets": [
+        {"id": "20", "name": "Terry Fontenot", "team": "ATL"}]}    # not Dan Morgan (yours) or Fitterer (closed)
+
+
+def test_unknown_and_targetless_kinds_are_empty(db, client):
+    assert client.get("/api/franchise/CAR/inbox/targets?kind=REPORTER").json() == {
+        "kind": "REPORTER", "targets": []}
+    assert client.get("/api/franchise/CAR/inbox/targets?kind=BOGUS").json() == {"kind": "BOGUS", "targets": []}
+
+
+def test_targets_errors(db, client):
+    assert client.get("/api/franchise/CAR/inbox/targets").status_code == 400
+    assert client.get("/api/franchise/CAR/inbox/targets?kind=").status_code == 400
+    assert client.get("/api/franchise/ATL/inbox/targets?kind=CONTRACT").status_code == 403    # not a user team
+    assert client.get("/api/franchise/XYZ/inbox/targets?kind=CONTRACT").status_code == 404    # no such team
 
 
 # ------------------------------------------------------------------------- list ---
@@ -340,3 +405,4 @@ def test_without_the_migration_reads_are_empty_and_writes_are_409(monkeypatch):
                        json={"role": "GM", "persona_id": "10"}).status_code == 409
     assert client.post("/api/franchise/CAR/inbox",
                        json={"kind": "REPORTER", "as": "GM"}).status_code == 409
+    assert client.get("/api/franchise/CAR/inbox/targets?kind=CONTRACT").status_code == 409
