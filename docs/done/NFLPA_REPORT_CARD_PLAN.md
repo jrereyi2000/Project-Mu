@@ -1,6 +1,6 @@
 # Project Mu: NFLPA Team Report Cards & Facility Effects Plan
 
-**Status:** approved by JR (2026-11-07); building, wave 2 of 2 done.
+**Status:** built and on main (2026-11-08).
 
 **As built (orchestrator pre-build fixes):** baseline data committed at `engines/report_card_baseline.json` (the plan's `data/initial_team_report_cards.json` is git-ignored); migration dated `2027_02_08` (2027_02_05–07 already exist); §2.4's duplicated trailing block for `team_operating_policies` implemented once; the Delivers list now names all four tables. §2.3e CPU Owner Upgrade AI (`engines/owner_policy.py`) is not owned by any unit, so it is out of scope for U1–U3 (left unbuilt).
 
