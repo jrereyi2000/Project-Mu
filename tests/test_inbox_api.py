@@ -164,13 +164,62 @@ def test_kinds_are_the_ones_a_controlled_actor_can_use(db, client):
 
 # ---------------------------------------------------------------------- targets ---
 
-def test_contract_and_role_talk_targets_are_the_active_roster(roster_db, client):
+def test_role_talk_targets_are_the_active_roster(roster_db, client):
+    """ROLE_TALK keeps the active-roster query unchanged by U10."""
+    assert client.get("/api/franchise/CAR/inbox/targets?kind=role_talk").json() == {
+        "kind": "ROLE_TALK", "targets": [
+            {"id": "103", "name": "Jaycee Horn", "position": "CB", "overall": 82},
+            {"id": "100", "name": "Bryce Young", "position": "QB", "overall": 78}]}   # IR/PS/released left out
+
+
+def _contract_players():
+    """A patched `_context` player list: two active, one on IR, one without a contract."""
+    return [
+        {"player_id": 100, "name": "Bryce Young", "position": "QB", "overall": 78,
+         "contract": {"length": 2}, "injury": None},
+        {"player_id": 103, "name": "Jaycee Horn", "position": "CB", "overall": 82,
+         "contract": {"length": 3}, "injury": None},
+        {"player_id": 101, "name": "Xavier Legette", "position": "WR", "overall": 74,
+         "contract": {"length": 1}, "injury": {"on_ir": True}},
+        {"player_id": 102, "name": "Chuba Hubbard", "position": "RB", "overall": 71,
+         "contract": None, "injury": None}]
+
+
+def test_contract_targets_only_list_eligible_players(db, client, monkeypatch):
+    """CONTRACT lists only what `franchise_api._eligibility` accepts (U10); IR and contractless players never show."""
+    from server import franchise_api
+    players = _contract_players()
+    monkeypatch.setattr(franchise_api, "_context",
+                        lambda cur, abbr: {"season": 2026, "week": 5, "players": players})
+
+    def eligibility(p, ctx):
+        return (False, "not extension-eligible yet") if p["player_id"] == 100 else (True, "extension window")
+    monkeypatch.setattr(franchise_api, "_eligibility", eligibility)
+
     body = client.get("/api/franchise/CAR/inbox/targets?kind=CONTRACT").json()
     assert body == {"kind": "CONTRACT", "targets": [
-        {"id": "103", "name": "Jaycee Horn", "position": "CB", "overall": 82},
-        {"id": "100", "name": "Bryce Young", "position": "QB", "overall": 78}]}     # IR/PS/released left out
-    assert client.get("/api/franchise/CAR/inbox/targets?kind=role_talk").json() == {
-        "kind": "ROLE_TALK", "targets": body["targets"]}                            # kind echoed upper case
+        {"id": "103", "name": "Jaycee Horn", "position": "CB", "overall": 82}]}      # 100 refused; 101 IR; 102 PS
+
+
+def test_contract_targets_degrade_to_empty_when_context_or_eligibility_fail(db, client, monkeypatch):
+    """A `_context` (no league_state row) or `_eligibility` failure answers an empty list with 200, never a 500."""
+    from server import franchise_api
+
+    def boom(cur, abbr):
+        raise RuntimeError("league_state has no row")
+    monkeypatch.setattr(franchise_api, "_context", boom)
+    r = client.get("/api/franchise/CAR/inbox/targets?kind=CONTRACT")
+    assert r.status_code == 200 and r.json() == {"kind": "CONTRACT", "targets": []}
+
+    players = _contract_players()
+    monkeypatch.setattr(franchise_api, "_context",
+                        lambda cur, abbr: {"season": 2026, "week": 5, "players": players})
+
+    def broken_eligibility(p, ctx):
+        raise RuntimeError("eligibility blew up")
+    monkeypatch.setattr(franchise_api, "_eligibility", broken_eligibility)
+    r = client.get("/api/franchise/CAR/inbox/targets?kind=CONTRACT")
+    assert r.status_code == 200 and r.json() == {"kind": "CONTRACT", "targets": []}
 
 
 def test_gm_talk_targets_are_other_teams_open_gms(db, client):

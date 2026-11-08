@@ -14,10 +14,12 @@ shapes.
   POST   /{abbr}/inbox                       {kind, as, ...kind fields, note} -> Thread (201)
   POST   /{abbr}/inbox/{thread_id}/close     -> Thread
 
-Actor = {role, id, name}; a Target is {id, name, position, overall} for CONTRACT/ROLE_TALK (the team's active-roster
-players, `id` = players.id as text) or {id, name, team} for GM_TALK (another team's open GM tenure, `id` =
-gm_profiles.id as text, `team` = the abbreviation sent as gm_team); a targetless or unknown kind answers an empty
-list. A Thread adds `actor` and `counterpart` and leaves out the kind-owned `state` (and the internal `team_id`).
+Actor = {role, id, name}; a Target is {id, name, position, overall} for CONTRACT (the team's active players that
+franchise_api._eligibility accepts, so the picker never offers a player the kind would refuse) and ROLE_TALK (the
+team's active-roster players), `id` = players.id as text, or {id, name, team} for GM_TALK (another team's open GM
+tenure, `id` = gm_profiles.id as text, `team` = the abbreviation sent as gm_team); a targetless or unknown kind
+answers an empty list. A Thread adds `actor` and `counterpart` and leaves out the kind-owned `state` (and the
+internal `team_id`).
 A Message never carries `facts` or a surplus, and its appraisal is only {outcome, reason}: the inbox never shows a
 trust number. Notes are at most 600 characters. Errors are FastAPI's {"detail": string} with
 400 (bad body / kind), 403 (team outside the active franchise's user_teams, or `as` not a controlled role),
@@ -181,8 +183,9 @@ def _candidate_view(candidate):
 
 # -------------------------------------------------------------------- targets ----
 def _player_targets(cur, team_id):
-    """The team's active-roster players as §2.12 Target: an ACTIVE contract, not on IR, not released and not a
-    placeholder DEF row. This mirrors server/franchise_api.py's `_context` -> `roster["ACTIVE"]` shaping."""
+    """ROLE_TALK's picker: the team's active-roster players as §2.12 Target (an ACTIVE contract, not on IR, not
+    released and not a placeholder DEF row). This mirrors server/franchise_api.py's `_context` -> `roster["ACTIVE"]`
+    shaping."""
     when = scan.league_time(cur)
     if when is None:                                        # no league_state row: nothing to list
         return []
@@ -204,6 +207,29 @@ def _player_targets(cur, team_id):
     return [{"id": str(r[0]), "name": r[1] or "", "position": r[2], "overall": r[3]} for r in cur.fetchall()]
 
 
+def _eligible_player_targets(cur, abbr):
+    """CONTRACT's picker: only the players franchise_api._eligibility accepts, so Start never fails on a pick the
+    kind's own `start`/`scan` would refuse (FRONT_OFFICE_INBOX_PLAN.md §5 U10). franchise_api is imported lazily
+    (the plan's R4). Any failure -- no league_state row, a broken context or eligibility call -- leaves the list
+    empty rather than answering a 500."""
+    try:
+        from engines.inbox.kinds import contract
+        from server import franchise_api
+        ctx = franchise_api._context(cur, abbr)
+        out = []
+        for p in ctx.get("players") or []:
+            if not contract._active(p):                 # no contract, or on IR
+                continue
+            ok, _reason = franchise_api._eligibility(p, ctx)
+            if ok:
+                out.append({"id": str(p["player_id"]), "name": p.get("name") or "",
+                            "position": p.get("position"), "overall": p.get("overall")})
+        out.sort(key=lambda t: (-(t["overall"] if t["overall"] is not None else -1), t["name"]))
+        return out
+    except Exception:
+        return []
+
+
 def _gm_targets(cur, team_id):
     """Every other team's open GM tenure as §2.12 Target {id, name, team}; `team` is the sendable abbreviation."""
     cur.execute("SELECT id, abbreviation FROM teams ORDER BY abbreviation")
@@ -217,8 +243,10 @@ def _gm_targets(cur, team_id):
     return out
 
 
-def _targets(cur, team_id, kind):
-    if kind in ("CONTRACT", "ROLE_TALK"):
+def _targets(cur, team_id, abbr, kind):
+    if kind == "CONTRACT":
+        return _eligible_player_targets(cur, abbr)
+    if kind == "ROLE_TALK":
         return _player_targets(cur, team_id)
     if kind == "GM_TALK":
         return _gm_targets(cur, team_id)
@@ -285,15 +313,16 @@ def get_kinds(abbr: str):
 # -------------------------------------------------------------------- targets ----
 @router.get("/{abbr}/inbox/targets")
 def get_targets(abbr: str, kind: str = Query(default=None)):
-    """Who a JR-started conversation can be opened with (wave 4): players for CONTRACT/ROLE_TALK, other teams'
-    open GMs for GM_TALK; an unknown or targetless kind answers an empty list. Missing kind: 400."""
+    """Who a JR-started conversation can be opened with (wave 4): players `_eligibility` accepts for CONTRACT, the
+    active roster for ROLE_TALK, other teams' open GMs for GM_TALK; an unknown or targetless kind answers an empty
+    list. Missing kind: 400."""
     if not kind or not str(kind).strip():
         raise HTTPException(400, "kind is required")
     wanted = str(kind).strip().upper()
     with _cursor() as cur, _errors():
         team = _team(cur, abbr)
         _require_installed(cur)
-        return {"kind": wanted, "targets": _targets(cur, team[0], wanted)}
+        return {"kind": wanted, "targets": _targets(cur, team[0], team[1], wanted)}
 
 
 # ----------------------------------------------------------------------- list ----
