@@ -1,6 +1,6 @@
 # Project Mu: Live Multi-Turn Trade Negotiations Plan (V2.11)
 
-**Status:** approved by JR (2026-11-03), all decisions recorded (§8); not built. Builds after the whole V2.9 inbox plan is on main.
+**Status:** approved by JR (2026-11-03); building, wave 1 of 2 (started 2026-11-08). All decisions recorded (§8). V2.9 is built and on main, so the precondition is met.
 **Builds on:** [`V2_MASTER_PLAN.md`](../in_progress/V2_MASTER_PLAN.md) §6 V2.11, §2.6 (Trade Machine), §5.3.2 (interactive latency boundary), §7.2 (the 2026–2033 all-CPU era); [`PERSONALITY_PLAN.md`](../in_progress/PERSONALITY_PLAN.md) §8 (agentic loops) and §9 phase 5; PROJECT_SPEC §2.17 (trade value, proposal engine, negotiation), §2.21a (league office), §3.3f (GM agents tables), §4.6b (franchise endpoints); [`V2_CORE_BUILD_PLAN.md`](../done/V2_CORE_BUILD_PLAN.md); [`FRONT_OFFICE_INBOX_PLAN.md`](../in_progress/FRONT_OFFICE_INBOX_PLAN.md) (V2.9: JR's GM talks live in its `GM_TALK` inbox kind, `engines/inbox/kinds/gm_talk.py`, which this plan extends).
 **Precondition:** V2.9 is built and on main before this plan's wave 1 (its own Q1 recommends going first): its U1 owns `pipeline/weekly_capture.py`'s inbox hook and migration `2027_01_19`, its U2 `FranchisePage.tsx` and `types/franchiseInbox.ts`, its U4 `engines/inbox/kinds/gm_talk.py`, its U5 `server/api.py`. Nothing here edits `server/api.py` or `FranchisePage.tsx`; this plan's edits to `weekly_capture.py` and `gm_talk.py` start from V2.9's merged versions.
 
@@ -391,3 +391,9 @@ All decided by JR on 2026-11-03 (D1–D8 at the top). Nothing is open.
 | Q6 | Which transcripts are published? | Completed deals only (D6). |
 | Q7 | Build order with V2.9? | V2.9 first (D7). |
 | Q8 | Which list says which teams JR controls? | The franchise registry's `user_teams`; the GM books read it (§2.10, D8). |
+
+## 9. Build log
+
+| Unit | Wave | Branch | Worktree | Result | Merge |
+|---|---|---|---|---|---|
+
