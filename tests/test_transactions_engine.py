@@ -309,7 +309,7 @@ def test_rookie_deals_from_the_scale():
     assert [m["overall_pick"] for m in moves] == [1, 33, 224, 250]
     for m in moves:
         assert m["kind"] == "SIGN" and m["list"] == "Roster"
-        assert m["contract"] == ce.rookie_contract(min(m["overall_pick"], 224), T, CAP)
+        assert m["contract"] == ce.rookie_contract(min(m["overall_pick"], ce.CBA["DRAFT_PICKS"]), T, CAP)
     assert moves[0]["round"] == 1 and moves[1]["round"] == 2
 
 
