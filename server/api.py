@@ -18,7 +18,7 @@ export_active_dsn()
 from engines.gotw_engine import display_excitement
 from engines.nfl_history import read as nfl_read
 from pipeline.commentary_names import player_name_aliases_exist
-from server import debug_api, social_api, napper_api, front_office_api, draft_api, history_api, franchise_api, personality_api
+from server import debug_api, social_api, napper_api, front_office_api, draft_api, history_api, franchise_api, inbox_api, personality_api
 
 CONN_INFO = os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")
 
@@ -148,6 +148,7 @@ app.include_router(front_office_api.router)  # /api/team/{abbr}/front-office: th
 app.include_router(draft_api.router)   # /api/draft/*: Draft Central (big board, dossiers, honors, needs, mock, war room)
 app.include_router(history_api.router)  # /api/records/*: the #records Record Book
 app.include_router(franchise_api.router)  # /api/franchise/*: the #franchise page (depth chart, roster, cap, moves, market, launch)
+app.include_router(inbox_api.router)  # /api/franchise/{abbr}/inbox/*: the #franchise Inbox tab (§2.12)
 app.include_router(personality_api.router)  # /api/personality/*: Personality panels (profile read, trait catalogue, JR's audited override)
 
 _STATIC_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")
