@@ -171,8 +171,11 @@ class SeasonCallTests(unittest.TestCase):
 
 class PersonMemoryCursor:
     """Records every query; answers just enough for build_memory_block over a two-account person."""
-    def __init__(self):
+    def __init__(self, press_rows=None, press_installed=True, take_rows=None):
         self.calls, self._rows = [], []
+        self.press_rows = list(press_rows or [])
+        self.press_installed = press_installed
+        self.take_rows = take_rows
 
     def execute(self, sql, params=None):
         s = " ".join(sql.split())
@@ -183,12 +186,19 @@ class PersonMemoryCursor:
             self._rows = [(True,)]
         elif "to_regclass('public.agent_season_calls')" in s:
             self._rows = [(True,)]
+        elif "to_regclass('public.press_conferences')" in s:
+            self._rows = [(self.press_installed,)]
         elif "information_schema.columns" in s:
             self._rows = [(1,)]
         elif s.startswith("SELECT agent_id FROM agent_memories"):
             self._rows = [("Skip_Bayless_National",), ("Skip_Bayless",)]
+        elif "FROM agent_memory_entries" in s and "kind = 'PRESS'" in s:
+            self._rows = list(self.press_rows)
         elif "FROM agent_memory_entries" in s:
-            self._rows = [(2, "Skip's tweet take")] if "Skip_Bayless" in params[0] else []
+            if self.take_rows is not None:
+                self._rows = list(self.take_rows)
+            else:
+                self._rows = [(2, "Skip's tweet take")] if "Skip_Bayless" in params[0] else []
         elif "FROM agent_predictions" in s:
             self._rows = []
         elif "FROM agent_season_calls" in s:
@@ -214,6 +224,40 @@ class PersonMemoryTests(unittest.TestCase):
         self.assertTrue(reads)
         for params in reads:
             self.assertIn(["Skip_Bayless_National", "Skip_Bayless"], list(params))
+
+
+class PressMemoryTests(unittest.TestCase):
+    """PRESS rows (press_room.close_effects) show in their own section, before the publication week, never as takes."""
+
+    def test_press_section_lists_the_newest_rows_before_the_week(self):
+        cur = PersonMemoryCursor(take_rows=[], press_rows=[
+            (5, "Coach Whitfield's presser after the loss to Atlanta."),
+            (4, "Coach Whitfield's presser after the win over Tampa."),
+            (3, "Coach Whitfield's presser after the loss to New Orleans.")])
+        block = build_memory_block(cur, "Skip_Bayless_National", 2036, 6)
+        self.assertIn("YOUR RECENT PRESS CONFERENCES (you were in the room):", block)
+        self.assertIn("Week 5: Coach Whitfield's presser after the loss to Atlanta.", block)
+        self.assertNotIn("YOUR RECENT TAKES", block)          # PRESS rows are not takes
+        press_sql = [s for s, _ in cur.calls if "kind = 'PRESS'" in s]
+        self.assertTrue(press_sql)
+        self.assertIn("week < %s", press_sql[0])
+        self.assertIn("kind = 'TAKE'", " ".join(s for s, _ in cur.calls if "FROM agent_memory_entries" in s))
+
+    def test_press_section_absent_without_the_press_tables(self):
+        cur = PersonMemoryCursor(press_rows=[(5, "Week 5: Coach Whitfield's presser.")], press_installed=False)
+        block = build_memory_block(cur, "Skip_Bayless_National", 2036, 6)
+        self.assertNotIn("YOUR RECENT PRESS CONFERENCES", block)
+        self.assertNotIn("kind = 'PRESS'", " ".join(s for s, _ in cur.calls))
+
+    def test_press_rows_do_not_leak_into_the_takes(self):
+        cur = PersonMemoryCursor(press_rows=[(5, "Week 5: Coach Whitfield's presser.")])
+        cur.press_installed = True
+        # the TAKE queries still carry kind = 'TAKE' and never the PRESS row's text
+        block = build_memory_block(cur, "Skip_Bayless_National", 2036, 6)
+        self.assertIn("Skip's tweet take", block)
+        take_lines = [s for s, _ in cur.calls if "kind = 'TAKE'" in s]
+        self.assertTrue(take_lines)
+        self.assertTrue(all("PRESS" not in s for s in take_lines))
 
 
 if __name__ == "__main__":

@@ -34,6 +34,32 @@ from pipeline import mod_packs
 from pipeline.gpu_queue import process_check
 
 MANAGER_EXE = "MMCModManager.exe"
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# One detached process after Play Game (PRESS_CONFERENCE_PLAN §2.2): the reporters' judgments for the pressers
+# just declined or approved, then the team's beat wakeup. Read-only-with-respect-to-the-save, and never inside a
+# request JR waits on.
+PRESS_WAKEUP_CODE = r"""
+import json, sys
+from newsroom import press_room
+
+ids = json.loads(sys.argv[1])
+team_id, season, week = int(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4])
+conn_info = press_room._conn_info()
+for conference_id in ids:
+    try:
+        press_room.close_effects(conn_info, conference_id, None)
+    except Exception as e:
+        print("press effects failed for %s: %s" % (conference_id, e))
+try:
+    from newsroom.swarm_dispatcher import SwarmDispatcher, build_weekly_assignment_brief
+    dispatcher = SwarmDispatcher(debug_mode=False)
+    brief = build_weekly_assignment_brief(conn_info, season=season, week=week)
+    dispatcher.dispatch_team_local(team_id=team_id, brief=brief, season=season, week=week,
+                                   live=True, save_to_db=True, max_workers=5)
+except Exception as e:
+    print("press wakeup failed for team %s: %s" % (team_id, e))
+"""
 
 
 def manager_exe() -> str:
@@ -112,12 +138,67 @@ def _launch(cur, team: str, season, week, dry_run: bool) -> dict:
     return _result(pack, text, started=True, game=game)
 
 
+def _commit(cur) -> None:
+    conn = getattr(cur, "connection", None)
+    if conn is not None:
+        conn.commit()
+
+
+def _press_payload(cur, team: str, result: dict):
+    """Decline JR's unstarted presser (Play Game, §2.2) and return (conference ids, team id, season, week) for the
+    detached judgments + beat wakeup, or None when nothing was open. Table missing -> no decline, no spawn."""
+    from newsroom import press_room
+    game = result.get("game") or {}
+    season, week = int(game.get("season") or 0), int(game.get("week") or 0)
+    if not season or not week:
+        return None
+    aliases = {"ARI": "AZ", "CRD": "AZ", "WSH": "WAS", "WTC": "WAS"}
+    cur.execute("/* q:launch_team */ SELECT id FROM teams WHERE abbreviation IN (%s, %s)",
+                (team, aliases.get(team, team)))
+    row = cur.fetchone()
+    if not row:
+        return None
+    team_id = int(row[0])
+    ids = press_room.decline_open_for_launch(cur, team_id, season)
+    return (ids, team_id, season, week) if ids else None
+
+
+def _spawn_press_wakeup(payload) -> None:
+    ids, team_id, season, week = payload
+    subprocess.Popen(
+        [sys.executable, "-c", PRESS_WAKEUP_CODE, json.dumps(ids), str(team_id), str(season), str(week)],
+        cwd=ROOT, env={**os.environ}, start_new_session=True,
+        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+
+
 def launch(team, season=None, week=None, dry_run=False, cur=None) -> dict:
-    """Writes the game's mod pack and starts Madden through the Mod Manager (see the module docstring)."""
+    """Writes the game's mod pack and starts Madden through the Mod Manager (see the module docstring). A real launch
+    also counts JR's unstarted presser as declined and starts the judgments and the beat wakeup, detached."""
+    team = (team or "").upper().strip()
     if cur is not None:
-        return _launch(cur, team, season, week, dry_run)
+        out = _launch(cur, team, season, week, dry_run)
+        payload = None
+        if not dry_run and not out.get("refused"):
+            try:
+                payload = _press_payload(cur, team, out)
+            except Exception as e:      # noqa: BLE001 - the press hook never stops Play Game
+                print(f"⚠️  press conference not declined before launch: {e}")
+        _commit(cur)
+        if payload:
+            _spawn_press_wakeup(payload)
+        return out
     with mod_packs.connect() as conn, conn.cursor() as c:
-        return _launch(c, team, season, week, dry_run)
+        out = _launch(c, team, season, week, dry_run)
+        payload = None
+        if not dry_run and not out.get("refused"):
+            try:
+                payload = _press_payload(c, team, out)
+            except Exception as e:      # noqa: BLE001
+                print(f"⚠️  press conference not declined before launch: {e}")
+    if payload:
+        _spawn_press_wakeup(payload)
+    return out
 
 
 def main(argv=None):
