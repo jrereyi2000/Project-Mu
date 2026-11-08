@@ -1,6 +1,8 @@
 # Project Mu: Press Conferences Plan (V2.2)
 
-**Status:** approved by JR (2026-11-03), with his changes to the redesign recorded in §8 (decisions taken); building, wave 3 of 4 done (2026-11-08).
+**Status:** approved by JR (2026-11-03), with his changes to the redesign recorded in §8 (decisions taken); built and on main (2026-11-08).
+- As built (U7): the watcher derives the press week from the database (`MAX(week)` of COMPLETED games that season) rather than `save_week - 1`, because the save is made after Advance Week. `game_launch` has no CLI verb that runs judgments for declined pressers, so it spawns one detached `python3 -c` process (a constant code string; the ids travel as argv) that runs `close_effects` for the declined ids and then the team's beat wakeup directly. The press hook never stops Play Game.
+- As built (U8): `ACTOR_ROLES` is `('COACH',)` (the presser is the head coach's), so a PRESS notice needs JR to control the coach persona, as the rest of the inbox does. Closing is done inside `scan` (the built protocol has no separate close hook), and it also closes on `FAILED` or a deleted conference row.
 - As built (U6, deviation from §2.7): the drafted hand questions are persisted in `press_conferences.patience` JSONB (keys `drafts`, `round`, `picks`, `hand_counts`, `done`, `passes_in_a_row`, `questions_asked`, `questions_by_agent`, `follow_ups_in_a_row`, `wants_to_end`, `seq`), because the fixed schema has no draft column. That is what makes `pick_user` instant and lets a reopened LIVE presser keep its raised hands; `budget`/`spent`/`mood` are unchanged. The migration was applied twice cleanly to a throwaway `mu_scratch_press_u6` database (all CHECKs verified, then dropped); no `madden_*` database was touched.
 - As built (U4): `state` and `conference` are plain dicts documented in `newsroom/press_agents.py`'s docstring; U6 builds them. The appraisal's declined-presser rule applies only when a treatment is supplied (the neutral fallback carries none), so a declined presser can fall back neutrally. `judgment_events` envelopes validate against `personality.relationship_events.validate_event`; U6 appends them through `flush_relationship_events`.
 - As built (U5): `Conference` interprets `team`/`opponent` as abbreviations, `score` as a string from the subject's side ("24-17") and `result` as W/L/T, and adds an optional `hands` field so a reopened LIVE presser keeps its raised hands (the GET body in §2.11 has none). U6 should return those shapes.
@@ -756,3 +758,5 @@ All decided by JR, 2026-11-03.
 | U4 | 2 | worktree-agent-a42407b539e4ee843 | .claude/worktrees/agent-a42407b539e4ee843 | merged | 0ad861f |
 | U5 | 2 | worktree-agent-a05cf03f87acf9f8a | .claude/worktrees/agent-a05cf03f87acf9f8a | merged | 2e42190 |
 | U6 | 3 | worktree-agent-a9c75b0608ae107ed | .claude/worktrees/agent-a9c75b0608ae107ed | merged | 1e12761 |
+| U7 | 4 | worktree-agent-a31a84d6959cb2e12 | .claude/worktrees/agent-a31a84d6959cb2e12 | merged | 57946cc |
+| U8 | 4 | worktree-agent-a9d81c4cd0f3c397b | .claude/worktrees/agent-a9d81c4cd0f3c397b | merged | a7ed796 |
