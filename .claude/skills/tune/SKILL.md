@@ -8,7 +8,7 @@ argument-hint: progression [--seasons 5] [--budget 200] [--seed 0] | supersim <r
 
 Request: $ARGUMENTS
 
-Plan: `docs/in_progress/MADDEN_PILOT_AND_TUNING_PLAN.md` §2.4, §2.5 (and R4, R6). Code: `engines/tuning/` (`targets.py`, `compare.py`, `progression_fit.py`, `supersim_loop.py`; each module's docstring explains its method). Run every command from the main checkout `/home/jrereyi/Project-Mu` with `.venv/bin/python3`. Outputs go to `data/tuning/` (git-ignored).
+Plan: `docs/done/MADDEN_PILOT_AND_TUNING_PLAN.md` §2.4, §2.5 (and R4, R6). Code: `engines/tuning/` (`targets.py`, `compare.py`, `progression_fit.py`, `supersim_loop.py`; each module's docstring explains its method). Run every command from the main checkout `/home/jrereyi/Project-Mu` with `.venv/bin/python3`. Outputs go to `data/tuning/` (git-ignored).
 
 ## Hard rules
 

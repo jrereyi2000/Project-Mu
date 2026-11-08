@@ -1,6 +1,6 @@
 # Project Mu: Madden Pilot and Tuning Plan
 
-**Status:** approved by JR (2026-10-30); waves 0–2 built and merged; the first live `sim-season` run (U3's Done when) is still to do with JR's OK, so the plan stays in progress.
+**Status:** approved by JR (2026-10-30); waves 0–2 built and merged (all five units). Moved to `docs/done/` 2026-11-08. The first live `sim-season` run and a real supersim-loop iteration remain to do with JR's OK — both are follow-ups in `docs/FOLLOW_UPS.md`.
 **Builds on:** [`V2_MASTER_PLAN.md`](../in_progress/V2_MASTER_PLAN.md) §8.1 route 2 (UI automation from Windows); [`MOD_BUILDER_PLAN.md`](../done/MOD_BUILDER_PLAN.md) (tuning mods are built with `tools/mod_builder`); [`PROGRESSION_PLAN.md`](../in_progress/PROGRESSION_PLAN.md) (Project Mu's own progression engine); PROJECT_SPEC §1.1 (`madden_capture.py`, `pipeline/save_reader/`, `pipeline/load_save.py`).
 
 **Goal:** two agents that let Madden run experiments while JR is away.

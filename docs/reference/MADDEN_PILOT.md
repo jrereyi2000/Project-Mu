@@ -1,6 +1,6 @@
 # Madden Pilot
 
-The pilot drives Madden 27 on JR's PC so Madden can run experiments while JR is away. It launches the game with a mod pack, checks mods, changes a setting, sims a tuning franchise forward and quits, leaving the save for Project Mu to read. Plan: [`MADDEN_PILOT_AND_TUNING_PLAN.md`](../in_progress/MADDEN_PILOT_AND_TUNING_PLAN.md). Skill: `/madden <task>` (`.claude/skills/madden/SKILL.md`).
+The pilot drives Madden 27 on JR's PC so Madden can run experiments while JR is away. It launches the game with a mod pack, checks mods, changes a setting, sims a tuning franchise forward and quits, leaving the save for Project Mu to read. Plan: [`MADDEN_PILOT_AND_TUNING_PLAN.md`](../done/MADDEN_PILOT_AND_TUNING_PLAN.md). Skill: `/madden <task>` (`.claude/skills/madden/SKILL.md`).
 
 ## 1. How it works
 
