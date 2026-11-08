@@ -175,10 +175,19 @@ class Jc2aTest(unittest.TestCase):
         self.assertTrue(all(a["round"] == 3 and a["award_kind"] == "JC2A" for a in awards))
 
     def test_jc2a_picks_do_not_count_against_the_cba_caps(self):
-        result = E.calculate_comp_picks([], [], LEAGUE_APYS, jc2a_departures=[self._dep()], draft_season=2026)
+        result = E.calculate_comp_picks([], [], LEAGUE_APYS, jc2a_departures=[self._dep()], draft_season=2026,
+                                        jc2a_enabled=True)
         self.assertEqual(len(result["cba_picks"]), 0)
         self.assertEqual(len(result["jc2a_picks"]), 2)
         self.assertEqual(result["total"], 2)
+
+    def test_jc2a_is_off_by_default(self):
+        # JR 2026-11-08: the rule stays available but nothing is awarded unless switched on.
+        self.assertFalse(E.JC2A_ENABLED)
+        result = E.calculate_comp_picks([], [], LEAGUE_APYS, jc2a_departures=[self._dep()], draft_season=2026)
+        self.assertEqual(result["jc2a_picks"], [])
+        self.assertEqual(result["total"], 0)
+        self.assertEqual(E.jc2a_awards([self._dep()], 2026)[0]["award_kind"], "JC2A")   # the rule itself still works
 
 
 class FullCalculationTest(unittest.TestCase):
@@ -200,7 +209,8 @@ class FullCalculationTest(unittest.TestCase):
 
     def test_missing_draft_season_for_jc2a_is_rejected(self):
         with self.assertRaises(ValueError):
-            E.calculate_comp_picks([], [], LEAGUE_APYS, jc2a_departures=[{"team_id": 1}], draft_season=None)
+            E.calculate_comp_picks([], [], LEAGUE_APYS, jc2a_departures=[{"team_id": 1}], draft_season=None,
+                                   jc2a_enabled=True)
 
 
 if __name__ == "__main__":

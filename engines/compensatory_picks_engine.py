@@ -40,6 +40,8 @@ compensatory pick in his round tier, capped at FRANCHISE_COMP_PICK_CAP (4) per f
 Resolution JC-2A (plan §1/§2.2).  A minority OC / DC / assistant-GM hired away by another club as a Head Coach or
 GM with at least two years of tenure awards the originating club two Round-3 picks, one in each of the two
 subsequent drafts.  JC-2A picks are NOT counted against the 4-pick franchise limit or the 32-pick league ceiling.
+    OFF BY DEFAULT (JR, 2026-11-08): `calculate_comp_picks` awards no JC-2A picks unless called with
+    `jc2a_enabled=True`; the rule and `jc2a_awards` stay available for when it is switched on.
 
     IMPORTANT SCHEMA GAP (see NOTES at the bottom): there is NO demographic/minority field on coaches, coordinators
     or staff_moves, and staff_moves tracks only HC/OC/DC (no GM / assistant-GM or executive roles).  This engine does
@@ -77,6 +79,7 @@ HONOR_PRO_BOWL = 10            # Pro Bowl
 
 JC2A_FROM_ROLES = frozenset(("OC", "DC", "ASSISTANT_GM"))
 JC2A_TO_ROLES = frozenset(("HC", "GM"))
+JC2A_ENABLED = False           # off by default (JR, 2026-11-08): calculate_comp_picks awards CBA picks only
 
 
 # ---------------------------------------------------------------- QFA qualification ----
@@ -248,16 +251,20 @@ def jc2a_awards(departures, draft_season):
 # ---------------------------------------------------------------- full season calculation ----
 def calculate_comp_picks(lost, gained, league_apys, *, post_draft_deadline=None, jc2a_departures=(),
                          draft_season=None, league_cap=LEAGUE_COMP_PICK_CAP,
-                         franchise_cap=FRANCHISE_COMP_PICK_CAP):
+                         franchise_cap=FRANCHISE_COMP_PICK_CAP, jc2a_enabled=JC2A_ENABLED):
     """Run the whole season: QFA qualification, valuation, cancellation and allocation.
 
     `lost` / `gained`: QFA dicts (see module docstring).  `league_apys`: every league contract APY for percentile
     ranking.  `post_draft_deadline`: optional date for the signing-date check.  `jc2a_departures`: JC-2A departure
     dicts; `draft_season` required only when any are supplied.  `league_cap` / `franchise_cap` default to 32 / 4.
 
+    `jc2a_enabled` (default `JC2A_ENABLED`, False): Resolution JC-2A is off by default (JR, 2026-11-08), so a run
+    awards only CBA Article 6 picks. Pass True to award the two Round-3 JC-2A picks per eligible departure;
+    departures supplied while it is off are ignored rather than erroring.
+
     Returns {cba_picks, jc2a_picks, total, uncancelled}: `cba_picks` are the awarded CBA picks (uncancelled lost
-    QFAs, cap applied), `jc2a_picks` the JC-2A awards, `total` their sum, and `uncancelled` every survivor before
-    the caps (so callers can see what the caps dropped)."""
+    QFAs, cap applied), `jc2a_picks` the JC-2A awards ([] unless `jc2a_enabled`), `total` their sum, and
+    `uncancelled` every survivor before the caps (so callers can see what the caps dropped)."""
     lost_ev = [evaluate_qfa(q, league_apys) for q in lost if qfa_eligible(q, post_draft_deadline)]
     gained_ev = [evaluate_qfa(q, league_apys) for q in gained if qfa_eligible(q, post_draft_deadline)]
     lost_ev = [v for v in lost_ev if v["qualifies"]]
@@ -276,9 +283,10 @@ def calculate_comp_picks(lost, gained, league_apys, *, post_draft_deadline=None,
 
     cba_picks = allocate_comp_picks(uncancelled, league_cap=league_cap, franchise_cap=franchise_cap)
 
-    if jc2a_departures and draft_season is None:
+    if jc2a_enabled and jc2a_departures and draft_season is None:
         raise ValueError("JC-2A awards need draft_season")
-    jc2a_picks = jc2a_awards(jc2a_departures, draft_season) if draft_season is not None else []
+    jc2a_picks = (jc2a_awards(jc2a_departures, draft_season)
+                  if jc2a_enabled and draft_season is not None else [])
 
     return {"cba_picks": cba_picks, "jc2a_picks": jc2a_picks,
             "total": len(cba_picks) + len(jc2a_picks), "uncancelled": uncancelled}
