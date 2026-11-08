@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { API_BASE } from "../../api";
 import { teamLogo } from "../team/format";
 import { gradeTierClass } from "./ConsensusBigBoard";
+import type { CompensatoryAward, CompensatoryResponse } from "../../types/draftPicks";
 
 const TOKEN_KEY = "mu_debug_token";
 
@@ -105,6 +106,7 @@ export const DraftWarRoom: React.FC<{
   const [fixes, setFixes] = useState<string>("");
   const [offScriptSearch, setOffScriptSearch] = useState<string>("");
   const [soundOn, setSoundOn] = useState<boolean>(true);
+  const [compAwards, setCompAwards] = useState<CompensatoryAward[]>([]);
 
   const saveToken = (val: string) => {
     setToken(val);
@@ -128,6 +130,24 @@ export const DraftWarRoom: React.FC<{
   useEffect(() => {
     loadWarRoom();
   }, [loadWarRoom]);
+
+  // Compensatory picks for the class (read-only, additive): a database without the migration returns [].
+  useEffect(() => {
+    const ds = wr?.draft_season;
+    if (!ds) return;
+    let cancelled = false;
+    fetch(`${API_BASE}/api/draft/compensatory?draft_season=${ds}`)
+      .then((r) => r.json())
+      .then((data: CompensatoryResponse) => {
+        if (!cancelled) setCompAwards(Array.isArray(data.awards) ? data.awards : []);
+      })
+      .catch(() => {
+        if (!cancelled) setCompAwards([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [wr?.draft_season]);
 
   const executeAction = async (path: string, body?: unknown, confirmMsg?: string, chime = false) => {
     if (confirmMsg && !window.confirm(confirmMsg)) return;
@@ -203,6 +223,65 @@ export const DraftWarRoom: React.FC<{
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+      {/* Official Compensatory Picks (CBA Article 6 + Resolution JC-2A) */}
+      {compAwards.length > 0 && (
+        <div className="draft-section-card" style={{ borderLeft: "4px solid #7c3aed", background: "#faf5ff" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px", marginBottom: "10px" }}>
+            <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 900, color: "#0f172a" }}>
+              🏅 {wr?.draft_season} Official Compensatory Picks
+            </h3>
+            <span style={{ fontSize: "12px", fontWeight: 700, color: "#6d28d9" }}>
+              {compAwards.length} awarded pick{compAwards.length === 1 ? "" : "s"}
+            </span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            {compAwards.map((a) => {
+              const isJc2a = a.award_kind === "JC2A";
+              const badge = isJc2a
+                ? { background: "#ede9fe", color: "#6d28d9", border: "1px solid #c4b5fd" }
+                : { background: "#fef3c7", color: "#b45309", border: "1px solid #fcd34d" };
+              return (
+                <div
+                  key={a.id}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "10px",
+                    flexWrap: "wrap",
+                    padding: "8px 12px",
+                    borderRadius: "8px",
+                    border: "1px solid #ede9fe",
+                    background: "#ffffff",
+                  }}
+                >
+                  <span
+                    style={{
+                      ...badge,
+                      fontSize: "10.5px",
+                      fontWeight: 900,
+                      letterSpacing: "0.04em",
+                      padding: "2px 7px",
+                      borderRadius: "4px",
+                    }}
+                    title={isJc2a ? "Resolution JC-2A award" : "CBA Article 6 compensatory pick"}
+                  >
+                    {isJc2a ? "JC2A" : "COMP"}
+                  </span>
+                  <img src={teamLogo(a.team)} alt={a.team} style={{ width: "22px", height: "22px", objectFit: "contain" }} />
+                  <strong style={{ fontSize: "13px", color: "#0f172a" }}>{a.team_name}</strong>
+                  <span style={{ fontFamily: "monospace", fontSize: "12px", color: "#475569" }}>
+                    Round {a.round} · Pick {a.slot_in_round} · No. {a.overall_pick} overall
+                  </span>
+                  {a.reason && (
+                    <span style={{ fontSize: "12px", color: "#6d28d9", flexBasis: "100%" }}>{a.reason}</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Top Operator Authorization & Controls Strip */}
       <div className="draft-filter-card" style={{ padding: "12px 18px" }}>
         <div className="draft-filter-row">
