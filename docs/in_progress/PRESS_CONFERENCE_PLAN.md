@@ -1,6 +1,7 @@
 # Project Mu: Press Conferences Plan (V2.2)
 
-**Status:** approved by JR (2026-11-03), with his changes to the redesign recorded in §8 (decisions taken); building, wave 2 of 4 done (2026-11-08).
+**Status:** approved by JR (2026-11-03), with his changes to the redesign recorded in §8 (decisions taken); building, wave 3 of 4 done (2026-11-08).
+- As built (U6, deviation from §2.7): the drafted hand questions are persisted in `press_conferences.patience` JSONB (keys `drafts`, `round`, `picks`, `hand_counts`, `done`, `passes_in_a_row`, `questions_asked`, `questions_by_agent`, `follow_ups_in_a_row`, `wants_to_end`, `seq`), because the fixed schema has no draft column. That is what makes `pick_user` instant and lets a reopened LIVE presser keep its raised hands; `budget`/`spent`/`mood` are unchanged. The migration was applied twice cleanly to a throwaway `mu_scratch_press_u6` database (all CHECKs verified, then dropped); no `madden_*` database was touched.
 - As built (U4): `state` and `conference` are plain dicts documented in `newsroom/press_agents.py`'s docstring; U6 builds them. The appraisal's declined-presser rule applies only when a treatment is supplied (the neutral fallback carries none), so a declined presser can fall back neutrally. `judgment_events` envelopes validate against `personality.relationship_events.validate_event`; U6 appends them through `flush_relationship_events`.
 - As built (U5): `Conference` interprets `team`/`opponent` as abbreviations, `score` as a string from the subject's side ("24-17") and `result` as W/L/T, and adds an optional `hands` field so a reopened LIVE presser keeps its raised hands (the GET body in §2.11 has none). U6 should return those shapes.
 - As built (U1): the corpus is 175 real head-coach pressers from the ASAP Sports team media-conference archives (2023-09-10 to 2026-01-12; 30 of 32 teams, 161 regular season and 14 postseason, 2,092 questions — not the 40 the plan asked for as a minimum). The cloud half of the latency spike was **not** measured: the worktree has no `.env`/`GEMINI_API_KEY`, and no numbers were invented. The local half was measured on Ollama `gemma4:12b`: one warm five-call round 5.3 s, ~74 s and 64 calls per presser extrapolated.
@@ -754,3 +755,4 @@ All decided by JR, 2026-11-03.
 | U3 | 1 | worktree-agent-a4920c59d5fd33383 | .claude/worktrees/agent-a4920c59d5fd33383 | merged | 2f0042d |
 | U4 | 2 | worktree-agent-a42407b539e4ee843 | .claude/worktrees/agent-a42407b539e4ee843 | merged | 0ad861f |
 | U5 | 2 | worktree-agent-a05cf03f87acf9f8a | .claude/worktrees/agent-a05cf03f87acf9f8a | merged | 2e42190 |
+| U6 | 3 | worktree-agent-a9c75b0608ae107ed | .claude/worktrees/agent-a9c75b0608ae107ed | merged | 1e12761 |
