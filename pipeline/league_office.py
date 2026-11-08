@@ -37,7 +37,11 @@ earned in `season`); setup bootstraps application year `season` in season and at
 Every stage plans, in this order (eligibility is decided as the plan goes: a player takes part in one of release /
 sign / trade per write and the first claim stands; a second, different contract for the same player is refused; a
 players-edit field already planned with a different value is a CompositionError, never last-writer-wins):
-  1. JR's PENDING franchise_pending_moves (marked WRITTEN, or REFUSED with the reason, after the write).
+  1. JR's PENDING franchise_pending_moves (marked WRITTEN, or REFUSED with the reason, after the write), then the
+     engine's APPROVED CPU deals with flag auto_approved (TRADE_NEGOTIATIONS_PLAN §2.5): their player legs are
+     planned at PRIORITY_ENGINE_TRADE (below JR, above the stage's moves) and their picks are left to
+     record_written (Mu's books only). A player claimed already refuses the whole deal for this write (retried
+     next write, expired on the second refusal through front_office.could_not_make).
   2. contract_offers JR's targets ACCEPTED (from_user): FREE_AGENT / UDFA -> a Roster signing, RESIGN / EXTENSION /
      TENDER -> the player's contract rewritten.
   3. drift_check.diff write-back: a player Madden signed is released, one Madden cut is signed back with Project Mu's
@@ -111,8 +115,9 @@ nothing is acknowledged. Otherwise the candidate's sha256 is committed (phase CA
 atomically from the copy under the franchise-closed guard, the output file's sha256 is checked against the candidate's
 and committed (phase REPLACED), the output save is read, progression_checkpoint.acknowledge_pass(cur, prepared,
 output_snapshot, output_fingerprint=output_sha256, writer_verified=True) runs, record_written stores the plan's DB side
-and the run becomes WRITTEN (phase ACKNOWLEDGED) in one commit. If anything after the replacement fails, the run is
-left PLANNED for --recover. --recover <run_id> never recalculates, re-rolls or advances: it reads the stored
+(every trade this write carried is executed once through front_office._execute, its proposal set EXECUTED, and a CPU
+deal's transcript published with gm_talks.publish_talk) and the run becomes WRITTEN (phase ACKNOWLEDGED) in one
+commit. If anything after the replacement fails, the run is left PLANNED for --recover. --recover <run_id> never recalculates, re-rolls or advances: it reads the stored
 operation, hashes the save as it is now and (a) when that equals the recorded candidate / output sha256 the
 replacement happened: it reads that save and acknowledges the ORIGINAL prepared envelope with the observed output
 fingerprint, then records and commits; (b) when it equals the input sha256 the save was never replaced: the run is
@@ -223,8 +228,9 @@ FREE_AGENT_TEAM = ls.FREE_AGENT_TEAM_INDEX
 FRANCHISE_CLOSED_ENV = "LEAGUE_OFFICE_FRANCHISE_CLOSED"
 
 # Claim order (informational: the first claim on a player stands) and depth-chart precedence (JR > JR_STORED >
-# MU_COACH > DRIFT).
-PRIORITY_JR, PRIORITY_OFFER, PRIORITY_DRIFT, PRIORITY_STAGE = 0, 1, 2, 3
+# MU_COACH > DRIFT). ENGINE_TRADE sits below JR's pending moves and above every engine/stage move: an agreed CPU
+# deal neither jumps JR's queue nor loses to the stage's own moves (TRADE_NEGOTIATIONS_PLAN §2.5).
+PRIORITY_JR, PRIORITY_ENGINE_TRADE, PRIORITY_OFFER, PRIORITY_DRIFT, PRIORITY_STAGE = 0, 1, 2, 3, 4
 
 PREPARED_KEYS = ("document", "event_ids", "source_fingerprint", "edits_hash")
 PHASES = ("PREPARED", "CANDIDATE_VERIFIED", "REPLACED", "ACKNOWLEDGED", "FAILED")
@@ -508,7 +514,10 @@ class Plan:
         self.deferred, self.warnings, self.errors = [], [], []
         self.counts = Counter()
         self.cap = defaultdict(lambda: [0, 0, 0])   # team_index -> [room, next-year room, base salary] change (units)
-        self.db = {"pending": [], "charts": [], "injuries": [], "retirements": [], "offers": [],
+        # the part of self.cap a trade that record_written executes in the DB contributes: trade_moves already
+        # moves those cap rows, so _apply_db must not move them a second time
+        self.trade_cap_db = defaultdict(lambda: [0, 0, 0])
+        self.db = {"pending": [], "engine_trades": [], "charts": [], "injuries": [], "retirements": [], "offers": [],
                    "written_offer_ids": [], "salary_cap": None}
         # what a retirement edit writes for a player whose view stays ("Retired", None) this write (the roster image
         # stores what the save holds after the write; RETIREMENT_WINDOW_PLAN §2.2)
@@ -620,7 +629,7 @@ class Plan:
         self.view[pgid] = ("Signed" if lst == "Roster" else "PracticeSquad", team_index)
         return True
 
-    def trade_player(self, pgid, to_index, priority, reason, tag=None):
+    def trade_player(self, pgid, to_index, priority, reason, tag=None, db_executed=False):
         if pgid not in self.players:
             return self.note(tag, False, f"pgid {pgid} not in the save")
         status, team = self.roster_status(pgid)
@@ -637,6 +646,10 @@ class Plan:
             hit, nxt, base = cap_change(snapshot_block(self.players[pgid].get("contract")))
             self._cap(team, hit, nxt, -base)
             self._cap(to_index, -hit, -nxt, base)
+            if db_executed:                      # trade_moves will move these cap rows itself
+                for idx, delta in ((team, (hit, nxt, -base)), (to_index, (-hit, -nxt, base))):
+                    for i, v in enumerate(delta):
+                        self.trade_cap_db[idx][i] += v
         self.view[pgid] = (status, to_index)
         self.counts["trade"] += 1
         return self.note(tag, True, reason)
@@ -866,6 +879,31 @@ class Deps:
         for i, t, k, p in cur.fetchall():
             out.append({"id": i, "team_id": t, "kind": k, "payload": json.loads(p) if isinstance(p, str) else (p or {})})
         return out
+
+    def engine_trades(self, cur, season):
+        """APPROVED CPU deals this write should make: `season = the plan's season`, `status = 'APPROVED'` and
+        `'auto_approved' = ANY(flags)` (TRADE_NEGOTIATIONS_PLAN §2.5). Each carries `refusals`, how many WRITTEN
+        runs already refused it (the second refusal expires it). Empty without the GM migration."""
+        cur.execute("SELECT to_regclass('gm_trade_proposals') IS NOT NULL")
+        if not cur.fetchone()[0]:
+            return []
+        from engines import gm_trade_engine as ge
+        refused = self.engine_trade_refusals(cur, season)
+        out = []
+        for p in ge.read_proposals(cur, season, statuses=["APPROVED"]):
+            if "auto_approved" in (p.get("flags") or []):
+                out.append(dict(p, refusals=refused.get(p["id"], 0)))
+        return out
+
+    def engine_trade_refusals(self, cur, season):
+        """{proposal_id: refusals} from the WRITTEN runs' `engine_trades_failed_ids` (a CPU deal retried next write)."""
+        cur.execute("SELECT summary FROM league_office_runs WHERE status = 'WRITTEN' AND season = %s", (season,))
+        out = Counter()
+        for (s,) in cur.fetchall():
+            s = json.loads(s) if isinstance(s, str) else (s or {})
+            for pid in s.get("engine_trades_failed_ids") or []:
+                out[int(pid)] += 1
+        return dict(out)
 
     def accepted_offers(self, cur, season):
         cur.execute("SELECT summary FROM league_office_runs WHERE status = 'WRITTEN'")
@@ -1224,24 +1262,64 @@ def step_pending(plan, moves):
 
 def step_pending_trade(plan, team, p, tag):
     """A TRADE payload: {other_team_id, send: {players, picks}, receive: {players, picks}} (or {to_team_id,
-    players}). Picks need the save's DraftPick rows, which the league office doesn't map yet: refused."""
+    players}). The player legs go into the save; the picks are moved in Mu's books only by record_written
+    (trade_moves), because the save's DraftPick rows have no mapping yet (TRADE_NEGOTIATIONS_PLAN §2.5, Q1)."""
     other = plan.team_index.get(p.get("other_team_id") or p.get("to_team_id"))
     send = p.get("send") or {"players": p.get("players") or [], "picks": p.get("picks") or []}
     recv = p.get("receive") or {"players": [], "picks": []}
     if other is None:
         plan.note(tag, False, "no other team in the trade")
         return
-    if send.get("picks") or recv.get("picks"):
-        plan.note(tag, False, "traded draft picks aren't mapped to the save's DraftPick rows yet")
-        return
     out_g, in_g = _payload_pgids(plan, send.get("players")), _payload_pgids(plan, recv.get("players"))
     bad = [g for g in out_g if plan.roster_status(g)[1] != team] + [g for g in in_g if plan.roster_status(g)[1] != other]
     if bad:
         plan.note(tag, False, f"not on the trading teams: {', '.join(plan.name(g) for g in bad)}")
         return
-    ok = all([plan.trade_player(g, other, PRIORITY_JR, "JR's trade") for g in out_g]
-             + [plan.trade_player(g, team, PRIORITY_JR, "JR's trade") for g in in_g])
+    db_executed = p.get("proposal_id") is not None
+    ok = all([plan.trade_player(g, other, PRIORITY_JR, "JR's trade", db_executed=db_executed) for g in out_g]
+             + [plan.trade_player(g, team, PRIORITY_JR, "JR's trade", db_executed=db_executed) for g in in_g])
+    if send.get("picks") or recv.get("picks"):
+        if p.get("proposal_id") is not None:
+            plan.warn(f"trade #{p['proposal_id']}: picks moved in Mu's books only (record_written)")
+        else:
+            plan.warn("JR's trade: picks not moved (no proposal_id, and the save's DraftPick rows have no mapping)")
     plan.note(tag, ok, "JR's trade" if ok else "part of the trade could not be planned")
+
+
+def step_engine_trades(plan, proposals):
+    """An APPROVED CPU deal (flag `auto_approved`): its player legs go into the save at PRIORITY_ENGINE_TRADE and its
+    picks are left to record_written (Mu's books only). A player already claimed this write refuses the WHOLE trade
+    (the proposal stays APPROVED and is retried next write; a second refusal expires it, record_written)."""
+    for p in proposals or []:
+        pid = p["id"]
+        tag = ("trade", pid)
+        plan.db["engine_trades"].append({"id": pid, "tag": tag, "flags": list(p.get("flags") or []),
+                                         "refusals": int(p.get("refusals") or 0), "status": None, "reason": None})
+        legs = [a for a in p.get("assets") or [] if a.get("type") == "PLAYER"]
+        targets, bad = {}, None
+        for a in legs:                       # every leg is checked first, so a refusal leaves nothing planned
+            g, to_index = plan.pgid(a.get("player_id")), plan.team_index.get(a.get("to"))
+            if g is None:
+                bad = f"player {a.get('player_id')} has no madden_pgid"
+                break
+            if to_index is None:
+                bad = f"team {a.get('to')} not in the save"
+                break
+            if g in plan.claimed:
+                bad = f"{plan.name(g)} already has a {plan.claimed[g][0]} this write"
+                break
+            status, on = plan.roster_status(g)
+            if status not in ("Signed", "PracticeSquad") or on is None or on >= FREE_AGENT_TEAM:
+                bad = f"{plan.name(g)} is {status}, not on a roster"
+                break
+            targets[g] = to_index
+        if bad is None:
+            for g, to_index in targets.items():
+                if not plan.trade_player(g, to_index, PRIORITY_ENGINE_TRADE, f"trade #{pid}", tag=tag,
+                                         db_executed=True):
+                    bad = plan.results.get(tag, (False, "could not be planned"))[1]
+                    break
+        plan.note(tag, bad is None, f"trade #{pid}" if bad is None else bad)
 
 
 def step_accepted_offers(plan, offers):
@@ -1890,8 +1968,9 @@ def plan_stage(cur, snapshot, stage, seed, deps=None, wave=None, state=None, sou
     if state is None:
         plan.warn("no league state from the save: team cap fields and spare contract rows unknown")
 
-    # 1-2. JR
+    # 1-2. JR, then this week's auto-approved CPU deals (they lose to JR's claims, beat the stage's)
     plan.step("pending moves", lambda: step_pending(plan, deps.pending_moves(cur)))
+    plan.step("engine trades", lambda: step_engine_trades(plan, deps.engine_trades(cur, season)))
     plan.step("accepted offers", lambda: step_accepted_offers(plan, deps.accepted_offers(cur, season)))
     # 3. drift
     stored = plan.step("stored contracts", deps.stored_contracts, cur, calendar) or {}
@@ -1990,6 +2069,13 @@ def plan_stage(cur, snapshot, stage, seed, deps=None, wave=None, state=None, sou
     summary["written_offer_ids"] = sorted(set(plan.db["written_offer_ids"]))
     summary["pending_written"] = sum(1 for p in plan.db["pending"] if p["status"] == "WRITTEN")
     summary["pending_refused"] = sum(1 for p in plan.db["pending"] if p["status"] == "REFUSED")
+    for t in plan.db["engine_trades"]:
+        ok, reason = plan.results.get(t["tag"], (False, "not planned"))
+        t["status"], t["reason"] = ("WRITTEN" if ok else "REFUSED"), (None if ok else reason)
+    summary["engine_trades"] = len(plan.db["engine_trades"])
+    summary["engine_trades_written"] = sum(1 for t in plan.db["engine_trades"] if t["status"] == "WRITTEN")
+    summary["engine_trades_failed"] = sum(1 for t in plan.db["engine_trades"] if t["status"] == "REFUSED")
+    summary["engine_trades_failed_ids"] = [t["id"] for t in plan.db["engine_trades"] if t["status"] == "REFUSED"]
     summary["drift"] = {k: len(v) for k, v in drift.items() if isinstance(v, list)}
     summary["drift_ratings_left_to_progression"] = plan.counts.get("drift_ratings_left_to_progression", 0)
     summary["progression"] = prog_info
@@ -2005,7 +2091,8 @@ def plan_stage(cur, snapshot, stage, seed, deps=None, wave=None, state=None, sou
             "seed": seed, "edits": edits, "edits_hash": canonical_hash(edits), "league_edits": league_edits,
             "prepared": prepared, "progression": prog_info, "summary": summary, "drift": drift,
             "deferred": plan.deferred, "warnings": plan.warnings, "errors": plan.errors, "db": plan.db,
-            "team_ids": plan.teams, "pid_by_pgid": plan.pid_by_pgid, "cap": plan.cap}
+            "team_ids": plan.teams, "pid_by_pgid": plan.pid_by_pgid, "cap": plan.cap,
+            "trade_cap_db": plan.trade_cap_db}
 
 
 def retirement_window_summary(plan):
@@ -2116,8 +2203,9 @@ def _finish_run(cur, run_id, status, edits=None, summary=None, drift=None, error
 
 
 def record_written(cur, plan, run_id, deps=None):
-    """What a successful write makes true in the database: pending moves' statuses, depth charts stored (MU_COACH,
-    JR), injuries.mu_weeks_out, retirement_decisions, offer statuses."""
+    """What a successful write makes true in the database: pending moves' statuses, the trades this write made
+    (players in the save, picks in Mu's books, proposals EXECUTED, CPU transcripts published), depth charts stored
+    (MU_COACH, JR), injuries.mu_weeks_out, retirement_decisions, offer statuses."""
     from engines import depth_chart_engine as dce
     db, season, week = plan["db"], plan["calendar_year"], plan["week"]
     for p in db["pending"]:
@@ -2147,7 +2235,53 @@ def record_written(cur, plan, run_id, deps=None):
         if o.get("skip") or not o.get("status"):
             continue
         cur.execute("UPDATE contract_offers SET status = %s WHERE id = %s", (o["status"], o["id"]))
+    _record_trades(cur, plan, run_id)
     _apply_db(cur, plan, deps)
+
+
+def _record_trades(cur, plan, run_id):
+    """Every trade tag this write carried is executed in the database ONCE (TRADE_NEGOTIATIONS_PLAN §2.5): JR's
+    TRADE pending moves that carry a `proposal_id`, and the engine's auto-approved deals (`("trade", pid)`). The
+    save already got the player legs; front_office._execute moves the players, contracts, cap rows and picks in
+    Mu's books and marks the proposal EXECUTED. An already-EXECUTED proposal is not executed again. A CPU deal
+    whose flags carry `talks:<nid>` has its transcript published. A deal refused a second time (a player claimed
+    each write) is expired through front_office.could_not_make. An old JR payload with no proposal_id is left to
+    today's behaviour (nothing to execute)."""
+    from engines import front_office as fo
+    from engines import gm_talks
+    db = plan.get("db") or {}
+    talks = defaultdict(list)
+    ids = []
+    for p in db.get("pending") or []:
+        payload = p.get("payload") or {}
+        if p.get("kind") == "TRADE" and p.get("status") == "WRITTEN" and payload.get("proposal_id") is not None:
+            ids.append(int(payload["proposal_id"]))
+    for t in db.get("engine_trades") or []:
+        if t.get("status") != "WRITTEN":
+            continue
+        ids.append(int(t["id"]))
+        for f in t.get("flags") or []:
+            nid = f.split(":", 1)[1] if isinstance(f, str) and f.startswith("talks:") else ""
+            if nid.isdigit():
+                talks[int(t["id"])].append(int(nid))
+    for pid in dict.fromkeys(ids):
+        try:
+            proposal = fo._proposal(cur, pid)
+        except Exception as e:      # noqa: BLE001 - a vanished proposal must not fail a save already written
+            log.warning("trade #%s: not executed (%s)", pid, e)
+            continue
+        if proposal.get("status") != "EXECUTED":
+            fo._execute(cur, proposal, "PROPOSED")
+            cur.execute("UPDATE gm_trade_proposals SET status = 'EXECUTED', "
+                        "executed_at = COALESCE(executed_at, now()) WHERE id = %s", (pid,))
+        for nid in talks.get(pid, []):
+            gm_talks.publish_talk(cur, nid)
+    for t in db.get("engine_trades") or []:
+        if t.get("status") == "REFUSED" and int(t.get("refusals") or 0) >= 1:
+            try:
+                fo.could_not_make(cur, t["id"], "the league office couldn't make it")
+            except Exception as e:      # noqa: BLE001 - already expired / gone: the retry is over either way
+                log.warning("trade #%s: could not be expired (%s)", t["id"], e)
 
 
 def _apply_db(cur, plan, deps=None):
@@ -2167,6 +2301,9 @@ def _apply_db(cur, plan, deps=None):
     cap_deltas = plan.cap if hasattr(plan, "cap") else (plan.get("cap") or {})
     teams = plan.teams if hasattr(plan, "teams") else (plan.get("team_ids") or {})
     teams_map = {int(k): v for k, v in teams.items()}
+    # trades record_written executes move their own team_cap_seasons rows (trade_moves); leave their room out here
+    trade_cap = plan.trade_cap_db if hasattr(plan, "trade_cap_db") else (plan.get("trade_cap_db") or {})
+    trade_room = {int(k): v[0] for k, v in trade_cap.items()}
 
     madden_cap = info.get("madden_cap")
     if madden_cap is not None:
@@ -2178,7 +2315,7 @@ def _apply_db(cur, plan, deps=None):
         team_id = teams_map.get(int(team_idx))
         if team_id is None:
             continue
-        room_units = deltas[0]
+        room_units = deltas[0] - trade_room.get(int(team_idx), 0)
         move_room = room_units - cap_delta_units
         if move_room == 0:
             continue
@@ -2204,7 +2341,8 @@ def plan_record(plan):
     return {"db": plan["db"], "season": plan["season"], "week": plan["week"], "calendar_year": plan["calendar_year"],
             "team_ids": {str(k): v for k, v in plan["team_ids"].items()},
             "pid_by_pgid": {str(k): v for k, v in plan["pid_by_pgid"].items()},
-            "cap": {str(k): v for k, v in (plan.get("cap") or {}).items()}}
+            "cap": {str(k): v for k, v in (plan.get("cap") or {}).items()},
+            "trade_cap_db": {str(k): v for k, v in (plan.get("trade_cap_db") or {}).items()}}
 
 
 def plan_from_record(record, edits):
@@ -2213,7 +2351,8 @@ def plan_from_record(record, edits):
             "calendar_year": record["calendar_year"], "edits": edits,
             "team_ids": {int(k): v for k, v in record["team_ids"].items()},
             "pid_by_pgid": {int(k): v for k, v in record["pid_by_pgid"].items()},
-            "cap": {int(k): v for k, v in (record.get("cap") or {}).items()}}
+            "cap": {int(k): v for k, v in (record.get("cap") or {}).items()},
+            "trade_cap_db": {int(k): v for k, v in (record.get("trade_cap_db") or {}).items()}}
 
 
 def new_operation(plan, run_id, save_path, input_sha256):
