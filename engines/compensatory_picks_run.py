@@ -20,9 +20,10 @@ Data the producer reads (all read-only):
     team, the player's `player_seasons` team for `season` is the old team, and APY = total_value / years.
   * A player released/waived during the season (`transactions` type='RELEASED', or `player_seasons.released_week`
     set) is not a QFA; the engine's `qfa_eligible` enforces it and the ledger row records qualifies=false.
-  * Honors: `awards` for the season. The live `awards` table stores `'First Team All-Pro'`, `'Second Team
-    All-Pro'`, `'Pro Bowl'` and the major awards (inspected 2026-11-08); only first-team All-Pro (+20) and Pro Bowl
-    (+10) score, so second-team is ignored and a season with neither maps to 0.
+  * Honors: `awards` for the season. The databases inspected 2026-11-08 hold `'First Team All-Pro'` and `'Second
+    Team All-Pro'` (plus the major awards) and no `'Pro Bowl'` rows; `'Pro Bowl'` is recognised if the awards feed
+    adds it. Only first-team All-Pro (+20) and Pro Bowl (+10) score, so second-team is ignored and a season with
+    neither maps to 0.
   * Snap share: there is no reliable live snap-share table, so `snap_pct_for` returns 0.0; that function is the hook
     a future snap-count source plugs into.
   * JC-2A (opt-in): `staff_development_departures` through `coaching_carousel.eligible_departures`, which guards the
