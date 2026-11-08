@@ -1,7 +1,7 @@
 # Real Postgame Press Conference Corpus (U1)
 
 **Status:** built 2026-11-08 as wave 1 of
-[`PRESS_CONFERENCE_PLAN.md`](../in_progress/PRESS_CONFERENCE_PLAN.md) (U1, the
+[`PRESS_CONFERENCE_PLAN.md`](../done/PRESS_CONFERENCE_PLAN.md) (U1, the
 research spike). **Owner:** U1. **Material:** reference and test material only.
 
 This document records the corpus of real NFL head-coach postgame press

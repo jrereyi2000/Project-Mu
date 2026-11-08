@@ -243,8 +243,8 @@ Historical V2 feature IDs remain stable for older references. Entries marked **M
 ### V2.1 Project Mu News Inside Madden (Dropped, JR 2026-11-02)
 Was: inject top Project Mu headlines into Madden's `NewsCenterArticle` and `NewsCenterArticleData` save tables so they show in Madden's menus. Dropped because JR never uses Madden's menus (status note at the top, §8): the headlines live in `Mu_Network`. Nothing was built.
 
-### V2.2 Interactive Press Conferences (Not started)
-Plan proposed, awaiting JR's approval: [`PRESS_CONFERENCE_PLAN.md`](../not_started/PRESS_CONFERENCE_PLAN.md).
+### V2.2 Interactive Press Conferences (Built and on main 2026-11-08)
+Approved by JR with the §8 redesign decisions and built in four waves (all eight units), on the built V2.9 inbox and personality plans: [`PRESS_CONFERENCE_PLAN.md`](../done/PRESS_CONFERENCE_PLAN.md).
 Postgame press conferences where newsroom personas question JR based on real box-score events, scoring swings, and player usage. JR's answers become quotes in weekly articles and update reporter memories ([`newsroom/agent_memory.py`](../../newsroom/agent_memory.py)). V2 owns the interactive surface; V3 owns downstream media generation and consumes those approved quotes.
 
 ### V2.3 Authentic Player Voices (Moved to V3)
