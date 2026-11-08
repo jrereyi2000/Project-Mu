@@ -210,8 +210,11 @@ class RookieScaleTest(unittest.TestCase):
         last = E.rookie_contract(224, 2036, E.CBA["REFERENCE_CAP"])
         self.assertEqual((last["drafted_round"], last["guaranteed"]), (7, 0))
         self.assertGreaterEqual(last["salary_by_year"][0], E.minimum_salary(0))
+        # Picks 225+ are valid past the 224-pick ceiling (comp picks); static rounds keep counting 32 a round.
+        extra = E.rookie_contract(225, 2036, E.CBA["REFERENCE_CAP"])
+        self.assertEqual((extra["length"], extra["drafted_round"], extra["guaranteed"]), (4, 8, 0))
         with self.assertRaises(ValueError):
-            E.rookie_contract(225, 2036, E.CBA["REFERENCE_CAP"])
+            E.rookie_contract(257, 2036, E.CBA["REFERENCE_CAP"])
 
     def test_scales_with_cap(self):
         a = E.rookie_contract(10, 2036, 200 * M)
