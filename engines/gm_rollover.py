@@ -85,6 +85,36 @@ def rollover_actions(state):
             "mark_used": state["unused_past"] > 0}
 
 
+# -------------------------------------------------------------------- competitive GM hiring search ----
+def gm_candidate_pool(abbr, season):
+    """Pure. The personnel-director candidates for one GM opening (STAFF_CONTRACTS_AND_FULL_CONTROL_PLAN §1): an
+    ELITE architect, an established STANDARD director and a first-time PROMOTION, each at U1's market salary with a
+    seeded stature. ELITE always outranks STANDARD always outranks PROMOTION on stature; the owner's budget decides
+    which tier the team can afford."""
+    from engines import staff_contracts_engine as sce
+    rng = random.Random(f"gmsearch:{abbr}:{season}")
+    pool = []
+    for tier, experience, championships, base in (("ELITE", 6, 1, 0.85), ("STANDARD", 4, 0, 0.55),
+                                                  ("PROMOTION", 1, 0, 0.30)):
+        pool.append({"key": f"{abbr}:{tier}", "tier": tier, "experience": experience,
+                     "championships": championships,
+                     "salary": sce.market_salary("GM", experience=experience, championships=championships),
+                     "stature": round(base + rng.uniform(-0.08, 0.08), 3)})
+    return pool
+
+
+def gm_search(candidates, *, appeal, budget):
+    """Pure. The best candidate the owner can afford: the highest (stature + appeal) whose market salary fits the
+    budget; if none fit, the cheapest candidate (a team must have a GM)."""
+    affordable = [c for c in candidates if (c.get("salary") or 0) <= budget]
+    if affordable:
+        return max(affordable, key=lambda c: (round((c.get("stature") or 0) + appeal, 3),
+                                              -(c.get("salary") or 0), c["key"]))
+    if candidates:
+        return min(candidates, key=lambda c: ((c.get("salary") or 0), -round(c.get("stature") or 0, 3), c["key"]))
+    return None
+
+
 def read_state(cur, season):
     prior = season - 1
     cur.execute("SELECT id FROM teams WHERE abbreviation IS NOT NULL")
@@ -134,10 +164,83 @@ def front_office_scores(cur, season, team_ids):
     return [{"fo_score": by[t]["score"], "fo_rank": by[t]["rank"]} if t in by else {} for t in team_ids]
 
 
+def _gm_budget(cur, season, team_id, abbr):
+    """The owner's cash left for a GM: the annual cash pool (owner_cash_ledgers, else the baseline wealth band)
+    minus the non-GM staff payroll already committed in staff_contracts."""
+    from engines import report_card_engine, staff_contracts_engine as sce
+    pool = None
+    try:
+        cur.execute("SAVEPOINT gm_budget")
+        cur.execute("""SELECT total_cash_budget FROM owner_cash_ledgers
+                       WHERE team_id = %s AND season <= %s ORDER BY season DESC LIMIT 1""", (team_id, season))
+        row = cur.fetchone()
+        cur.execute("RELEASE SAVEPOINT gm_budget")
+        if row and row[0] is not None:
+            pool = int(row[0])
+    except Exception:
+        cur.execute("ROLLBACK TO SAVEPOINT gm_budget")
+    if pool is None:
+        try:
+            card = report_card_engine.load_baseline().get(abbr)
+            if card and card.get("wealth_band"):
+                pool = report_card_engine.base_budget(card["wealth_band"])
+        except Exception:
+            pool = 0
+    payroll = 0
+    try:
+        cur.execute("SAVEPOINT gm_payroll")
+        cur.execute("""SELECT person_kind, annual_salary FROM staff_contracts
+                       WHERE team_id = %s AND remaining_years > 0 AND person_kind <> 'GM'""", (team_id,))
+        payroll = sce.staff_payroll([{"person_kind": k, "annual_salary": s} for k, s in cur.fetchall()])
+        cur.execute("RELEASE SAVEPOINT gm_payroll")
+    except Exception:
+        cur.execute("ROLLBACK TO SAVEPOINT gm_payroll")
+    return max(0, int(pool) - int(payroll))
+
+
+def _hire_gm(cur, season, prior, abbr, team_id, llm, *, why, log=print):
+    """The competitive GM hiring search (plan S3): close the old tenure, score the personnel-director pool by the
+    team's enhanced opening appeal and the owner's staff budget, and seed the winner's persona. Returns the search
+    report."""
+    from engines import coaching_carousel as cc
+    from engines import gm_personas
+    appeal = 0.5
+    try:
+        parts = cc.opening_parts(cur, prior, [team_id])
+        appeal = cc.opening_appeal(parts.get(team_id, {}))
+    except Exception:
+        pass
+    budget = _gm_budget(cur, season, team_id, abbr)
+    winner = gm_search(gm_candidate_pool(abbr, season), appeal=appeal, budget=budget) or \
+        {"tier": "STANDARD", "salary": 0, "stature": 0.5}
+    teams = gm_personas.read_teams(cur, season)
+    open_ = gm_personas.read_open(cur)
+    others = {a: t for a, t in open_.items() if a != abbr}
+    traits = gm_personas.replacement_traits(abbr, season, others)
+    taken = [g["gm_name"] for g in open_.values() if g.get("gm_name")]
+    cur.execute("UPDATE gm_profiles SET end_season = %s, end_reason = %s "
+                "WHERE team_id = %s AND end_season IS NULL", (prior, why, team_id))
+    p = gm_personas.make_persona(abbr, teams[abbr], traits, season, llm, taken,
+                                 seed_key=f"gm:{abbr}:{season}", start=season)
+    p = dict(p, first_draft_season=season + 1)      # hired after this season's draft (Season scan / hot seat)
+    gid = gm_personas.insert_gm(cur, teams[abbr]["id"], p, traits, f"gm:{abbr}:{season}")
+    try:
+        cur.execute("""INSERT INTO staff_contracts (team_id, person_id, person_kind, annual_salary, total_years,
+                                                    remaining_years, signed_season, full_control, buyout_owed)
+                       VALUES (%s, %s, 'GM', %s, 4, 4, %s, false, 0)""",
+                    (team_id, gid, winner["salary"], season))
+    except Exception:
+        pass
+    log(f"  gm search: {abbr} hires a {winner['tier']} GM (appeal {appeal:.3f}, budget ${budget:,}, "
+        f"${winner['salary']:,})")
+    return {"gm": p["gm_name"], "tier": winner["tier"], "salary": winner["salary"],
+            "appeal": round(appeal, 3), "budget": budget}
+
+
 def rollover(cur, season, llm=None, log=print):
     """Run the rollover for new `season` inside the caller's transaction. Returns a report."""
     from engines import gm_direction
-    from engines.gm_personas import ensure_team_seasons, seed, seed_picks
+    from engines.gm_personas import ensure_team_seasons, seed_picks
     from engines import owner_context as oc
     prior = season - 1
     state = read_state(cur, season)
@@ -170,14 +273,10 @@ def rollover(cur, season, llm=None, log=print):
                            LEFT JOIN gm_profiles g ON g.team_id = t.id AND g.end_season IS NULL WHERE t.id = %s""",
                         (tid,))
             abbr, coach_gm = cur.fetchone()
-            seed(cur, season, llm, replace=abbr, log=log)
             # A head coach who was also GM loses the GM job only: Madden decides who coaches.
             why = f"hot seat after {prior}: score {h['score']}" + ("; stays head coach" if coach_gm else "")
-            cur.execute("""UPDATE gm_profiles SET end_season = %s, end_reason = %s
-                           WHERE id = (SELECT id FROM gm_profiles WHERE team_id = %s AND end_season IS NOT NULL
-                                       ORDER BY id DESC LIMIT 1)""",
-                        (prior, why, tid))
-            rep["fired"].append({"team": abbr, "score": h["score"]})
+            hire = _hire_gm(cur, season, prior, abbr, tid, llm, why=why, log=log)
+            rep["fired"].append({"team": abbr, "score": h["score"], **hire})
             if tid in acts["fo_carry"]:
                 acts["fo_carry"].remove(tid)      # the new GM starts at the baseline, not his predecessor's q
             log(f"  hot seat: {abbr} replaces its GM (score {h['score']})")
