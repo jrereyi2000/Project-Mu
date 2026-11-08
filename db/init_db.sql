@@ -3452,3 +3452,55 @@ SELECT s.*, p.display_name, l.player_id, 'NFL'::varchar(8) AS source
 FROM nfl_player_seasons s
 JOIN nfl_players p ON p.gsis_id = s.gsis_id
 LEFT JOIN nfl_player_links l ON l.gsis_id = s.gsis_id;
+
+-- ---------------------------------------------------------------------------
+-- Owners, scouting directors and media-voter ballots
+-- (db/migrations/2027_02_02_owners_scouts_voters.sql; OWNERS_SCOUTS_VOTERS_PLAN §2.6)
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS team_owners (
+    id           SERIAL PRIMARY KEY,
+    team_id      INT NOT NULL REFERENCES teams(id),
+    owner_name   TEXT NOT NULL,
+    profile_key  TEXT NOT NULL,
+    start_season INT NOT NULL,
+    end_season   INT,
+    UNIQUE (team_id, start_season)
+);
+
+-- move_ref is JSONB, which Postgres can't index in a plain B-tree UNIQUE constraint, so the idempotency key is a
+-- unique index on its canonical text form (jsonb text is deterministic for one value).
+CREATE TABLE IF NOT EXISTS owner_decisions (
+    id               BIGSERIAL PRIMARY KEY,
+    season           INT NOT NULL,
+    tick             SMALLINT NOT NULL,
+    team_id          INT NOT NULL REFERENCES teams(id),
+    move_kind        TEXT NOT NULL CHECK (move_kind IN ('TRADE', 'SIGNING', 'HIRE')),
+    move_ref         JSONB NOT NULL,
+    decision         TEXT NOT NULL CHECK (decision IN ('APPROVE', 'VETO', 'PUSH')),
+    alternative      JSONB,
+    loop_decision_id BIGINT,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS owner_decisions_once
+    ON owner_decisions (season, tick, team_id, move_kind, (move_ref::text));
+
+CREATE TABLE IF NOT EXISTS scout_directors (
+    id           SERIAL PRIMARY KEY,
+    team_id      INT NOT NULL REFERENCES teams(id),
+    name         TEXT NOT NULL,
+    persona_id   VARCHAR(64),
+    start_season INT NOT NULL,
+    end_season   INT,
+    UNIQUE (team_id, start_season)
+);
+
+CREATE TABLE IF NOT EXISTS award_ballots (
+    season         INT NOT NULL,
+    award          TEXT NOT NULL,
+    voter          TEXT NOT NULL,
+    ranking        JSONB NOT NULL,
+    ballot_version TEXT NOT NULL,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (season, award, voter)
+);
