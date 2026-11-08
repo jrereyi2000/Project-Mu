@@ -26,8 +26,9 @@ class FakeCursor:
     """The source tables and the three ledgers the producer touches, with the producer's SQL shapes."""
 
     def __init__(self, *, offers=(), player_seasons=(), transactions=(), awards=(), contracts=(),
-                 departures=None):
+                 departures=None, season_stats=()):
         self.offers = list(offers)
+        self.season_stats = list(season_stats)   # season_stat_general: downs_played per player and season
         self.player_seasons = {(r["player_id"], r["season"]): dict(r) for r in player_seasons}
         self.transactions = list(transactions)
         self.awards = list(awards)
@@ -53,6 +54,17 @@ class FakeCursor:
                            if t.get("season") == season and t.get("type") == "RELEASED"
                            and t.get("player_id") is not None})
             self._result = [(pid,) for pid in pids]
+        elif text.startswith("SELECT g.player_id, COALESCE(g.position, ps.position)"):
+            season = p[0]
+            rows = []
+            for r in self.season_stats:
+                if r.get("season") != season:
+                    continue
+                ps = self.player_seasons.get((r["player_id"], season), {})
+                rows.append((r["player_id"], r.get("position") or ps.get("position"),
+                             r.get("team_id") if r.get("team_id") is not None else ps.get("team_id"),
+                             r.get("downs_played")))
+            self._result = rows
         elif text.startswith("SELECT player_id, award_type FROM awards"):
             season = p[0]
             self._result = [(a["player_id"], a["award_type"]) for a in self.awards
@@ -318,3 +330,42 @@ def test_two_consecutive_class_runs_persist_both_jc2a_picks():
     jc_picks = sorted((p["draft_season"], p["overall_pick"]) for p in cur.draft_picks if p["source"] == "JC2A")
     # In DRAFT it follows the Round-3 CBA comp (overall 98); in DRAFT+1 it is the only Round-3 comp (overall 97).
     assert jc_picks == [(DRAFT, 98), (DRAFT + 1, 97)]
+
+
+# --------------------------------------------------------------- snap share (§4.5) ----
+def _snap_cursor():
+    """Team 1: an every-down LT (1,000), a 600-down WR, an 800-down guard and an 80-down backup QB, plus team 2's
+    own 500-down safety. The offensive unit's snap count is the largest offensive downs (1,000) and the defensive
+    unit's the largest defensive downs (500)."""
+    return FakeCursor(season_stats=[
+        {"player_id": 1, "season": SEASON, "position": "LT", "team_id": 1, "downs_played": 1000},
+        {"player_id": 2, "season": SEASON, "position": "WR", "team_id": 1, "downs_played": 600},
+        {"player_id": 3, "season": SEASON, "position": "RG", "team_id": 1, "downs_played": 800},
+        {"player_id": 4, "season": SEASON, "position": "QB", "team_id": 1, "downs_played": 80},
+        {"player_id": 5, "season": SEASON, "position": "FS", "team_id": 2, "downs_played": 500},
+        {"player_id": 6, "season": SEASON, "position": "K", "team_id": 2, "downs_played": 40},
+    ])
+
+
+def test_snap_share_is_down_played_over_the_units_snaps():
+    shares = run.snap_shares(_snap_cursor(), SEASON)
+    assert shares[1] == 1.0          # the every-down left tackle
+    assert shares[2] == 0.6          # 600 of 1,000 offensive snaps -> +5 (>= 50%)
+    assert shares[3] == 0.8          # 800 of 1,000 -> +10 (>= 75%)
+    assert shares[4] == 0.08         # a backup quarterback
+    assert shares[5] == 1.0          # the only defender on his team
+    assert shares[6] == 0.0          # a kicker has no side of the ball
+
+
+def test_snap_pct_for_reads_one_player():
+    cur = _snap_cursor()
+    assert run.snap_pct_for(cur, 2, SEASON) == 0.6
+    assert run.snap_pct_for(cur, 99, SEASON) == 0.0      # no season stat row
+
+
+def test_snap_bonus_reaches_the_formula_score():
+    # A Round-3-APY player at 80% snaps scores 100 + 10; the same player with no stat row scores 100.
+    qfa = {"player_id": 2, "team_id": 1, "apy": 20_000_000, "snap_pct": 0.8}
+    assert E.evaluate_qfa(qfa, LEAGUE_APYS)["score"] == 110
+    qfa["snap_pct"] = 0.0
+    assert E.evaluate_qfa(qfa, LEAGUE_APYS)["score"] == 100

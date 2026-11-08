@@ -24,8 +24,9 @@ Data the producer reads (all read-only):
     Team All-Pro'` (plus the major awards) and no `'Pro Bowl'` rows; `'Pro Bowl'` is recognised if the awards feed
     adds it. Only first-team All-Pro (+20) and Pro Bowl (+10) score, so second-team is ignored and a season with
     neither maps to 0.
-  * Snap share: there is no reliable live snap-share table, so `snap_pct_for` returns 0.0; that function is the hook
-    a future snap-count source plugs into.
+  * Snap share: `season_stat_general.downs_played` over the largest `downs_played` on the player's team and side
+    of the ball that season (`snap_shares`; docs/reference/MADDEN_STATS_AND_ADVANCED_METRICS.md §4.5). K/P/LS have
+    no side and score 0. A player with no season stat row also scores 0.
   * JC-2A (opt-in): `staff_development_departures` through `coaching_carousel.eligible_departures`, which guards the
     table with `to_regclass`; an absent table means no departures (never an error).
 
@@ -113,10 +114,57 @@ def _as_date(value, season):
 
 
 # ------------------------------------------------------------------ QFA derivation ----
+# Snap share (docs/reference/MADDEN_STATS_AND_ADVANCED_METRICS.md §4.5: Snap Share = DOWNSPLAYED / total team
+# snaps). The save loader writes every player's season `DOWNSPLAYED` to `season_stat_general.downs_played`
+# (pipeline/load_save.py), so the share is computable: a player's downs over his unit's snaps that season. The
+# unit's snap count is not stored as a team total, so it is taken as the largest `downs_played` on that side of
+# the ball for the team (a full-time starter plays essentially every snap); K/P/LS have no side and score 0.
+OFFENSE_POS = {"QB", "HB", "RB", "FB", "WR", "TE", "LT", "LG", "C", "RG", "RT", "T", "G", "OT", "OG", "OL"}
+DEFENSE_POS = {"LEDG", "REDG", "LE", "RE", "DE", "EDGE", "DT", "NT", "DL", "LOLB", "ROLB", "MLB", "MIKE", "WILL",
+               "SAM", "LB", "OLB", "ILB", "CB", "DB", "FS", "SS", "S"}
+
+
+def side_of(position):
+    """'OFF' / 'DEF' / None for a position (K, P and LS have no snap share to speak of)."""
+    pos = str(position or "").upper()
+    if pos in OFFENSE_POS:
+        return "OFF"
+    if pos in DEFENSE_POS:
+        return "DEF"
+    return None
+
+
+def snap_shares(cur, season):
+    """{player_id: snap share 0..1} for the season, from `season_stat_general.downs_played`.
+
+    Each player's share is his downs over the largest `downs_played` on his team and side of the ball that season.
+    A player with no season row, no side (K/P/LS) or a team with no other downs gets 0.0. Position comes from the
+    stat row, falling back to `player_seasons.position`."""
+    cur.execute("""SELECT g.player_id, COALESCE(g.position, ps.position), COALESCE(g.team_id, ps.team_id),
+                          g.downs_played
+                   FROM season_stat_general g
+                   LEFT JOIN player_seasons ps ON ps.player_id = g.player_id AND ps.season = g.season
+                   WHERE g.season = %s""", (season,))
+    rows = cur.fetchall()
+    unit_max = {}
+    for _pid, position, team_id, downs in rows:
+        side = side_of(position)
+        if side is None or team_id is None or not downs:
+            continue
+        key = (team_id, side)
+        unit_max[key] = max(unit_max.get(key, 0), int(downs))
+    shares = {}
+    for pid, position, team_id, downs in rows:
+        side = side_of(position)
+        top = unit_max.get((team_id, side), 0) if side is not None else 0
+        shares[pid] = round(min(1.0, int(downs or 0) / top), 3) if top and downs else 0.0
+    return shares
+
+
 def snap_pct_for(cur, player_id, season):
-    """Snap share (fraction 0..1) for the season. There is no reliable live snap-share table in the project yet, so
-    this returns 0.0; a future snap-count source plugs in here (the engine scores +5 at 50%, +10 at 75%)."""
-    return 0.0
+    """One player's snap share (fraction 0..1) for the season; see `snap_shares`. The engine scores +5 at 50% and
+    +10 at 75%."""
+    return snap_shares(cur, season).get(player_id, 0.0)
 
 
 def _honors(cur, season):
@@ -144,6 +192,7 @@ def build_qfas(cur, season, deadline=None):
     cur.execute(RELEASED_SQL, (season,))
     released = {r[0] for r in cur.fetchall() if r[0] is not None}
     all_pro, pro_bowl = _honors(cur, season)
+    shares = snap_shares(cur, season)
     cur.execute(QFA_SIGNINGS_SQL, (season, season))
     by_player = {}
     for _oid, player_id, new_team, total_value, years, created_at, old_team, released_week in cur.fetchall():
@@ -163,7 +212,7 @@ def build_qfas(cur, season, deadline=None):
             "apy": apy,
             "total_value": total_value,
             "years": years,
-            "snap_pct": snap_pct_for(cur, player_id, season),
+            "snap_pct": shares.get(player_id, 0.0),
             "all_pro_first": player_id in all_pro,
             "pro_bowl": player_id in pro_bowl,
             "honors_points": E.honor_points(player_id in all_pro, player_id in pro_bowl),
