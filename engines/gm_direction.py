@@ -1,9 +1,11 @@
 """
 Team direction and positional needs (docs/done/team_management/03_GM_AGENTS_PLAN.md §2.2, Phase 2; PROJECT_SPEC §2.16).
 
-Pure parts: direction_scores (the league's D values), assign_directions (bands, overrides, hysteresis),
-starter_slots and positional_needs. The loader reads team_seasons, rosters, injuries and contracts and writes
-gm_team_seasons: the direction only at checkpoint weeks (or when a team has none yet), the needs every run.
+Pure parts: direction_scores (the league's D values), assign_directions (bands, overrides, hysteresis), apply_pin
+(a coach-GM vision's direction pin, FRONT_OFFICE_INBOX_PLAN §2.9; the overrides still win), starter_slots and
+positional_needs (with an optional vision emphasis). The loader reads team_seasons, rosters, injuries, contracts
+and team_vision, and writes gm_team_seasons: the direction only at checkpoint weeks (or when a team has none yet,
+or when a vision pins it, at any week), the needs every run.
 
   python3 -m engines.gm_direction [--season 2036] [--week W] [--dry-run]
 """
@@ -27,6 +29,9 @@ EXPIRING_REBUILD_MULT = 1.5
 SLOT_PERCENTILE = 0.60
 SURPLUS_WITHIN = 3
 EMPTY_SLOT_OVR = 40
+VISION_EMPHASIS_WEIGHT = 1.15           # a vision's OFFENSE / DEFENSE emphasis on that side's need scores
+OFFENSE_GROUPS = ("QB", "RB", "WR", "TE", "OT", "IOL")
+DEFENSE_GROUPS = ("EDGE", "DT", "LB", "CB", "S")
 
 # Starter slots per group (S10's group map, with K and P apart).
 SLOTS = {"QB": 1, "RB": 1, "WR": 3, "TE": 1, "OT": 2, "IOL": 3, "EDGE": 2, "DT": 2, "LB": 2, "CB": 3, "S": 2,
@@ -144,6 +149,20 @@ def assign_directions(scores, previous=None, cap_space=None, edges=None):
     return out
 
 
+def apply_pin(pin, score_row, cap_space):
+    """The vision's pinned direction (FRONT_OFFICE_INBOX_PLAN §2.9), with assign_directions' overrides still last.
+    pin: a team_vision row/dict (None = no pin). Returns (direction, reason): ("vision") when the pin holds, the
+    override that beat it ("proj_wins >= 10.5" / "over the cap"), or (None, None) when there is no pin."""
+    direction = (pin or {}).get("direction")
+    if direction not in ("CONTEND", "RETOOL", "REBUILD"):
+        return None, None
+    if (score_row.get("proj_wins") or 0) >= ALWAYS_CONTEND_WINS and direction != "CONTEND":
+        return "CONTEND", "proj_wins >= 10.5"
+    if direction == "REBUILD" and cap_space is not None and cap_space < 0:
+        return "RETOOL", "over the cap"
+    return direction, "vision"
+
+
 # ------------------------------------------------------------------ needs ----
 def starter_slots(players, injured=()):
     """players: [{id, group, ovr, age}] of one team -> {group: [starters, best first]} (healthy only), plus the
@@ -179,13 +198,15 @@ def league_lines(team_slot_ovrs, pct=SLOT_PERCENTILE):
     return out
 
 
-def positional_needs(players, injured, expiring, lines, direction=None):
+def positional_needs(players, injured, expiring, lines, direction=None, emphasis=None):
     """One team's ranked needs and surplus.
 
     For each group: slot_gap = sum over slots of max(0, league line - team slot OVR) with injured starters left
     out (out >= 3 weeks or IR); injury = the part of that gap the injuries cause; expiring = for each starter on
     an expiring deal (years_remaining 1, no extension), 0.5 x the gap his slot would have if he left (the next
-    healthy player steps up), x1.5 for REBUILD and RETOOL. score = (slot_gap + expiring) x TRADE_POS_WEIGHT.
+    healthy player steps up), x1.5 for REBUILD and RETOOL. score = (slot_gap + expiring) x TRADE_POS_WEIGHT;
+    an agreed vision's emphasis (FRONT_OFFICE_INBOX_PLAN §2.9) multiplies that side's scores by
+    VISION_EMPHASIS_WEIGHT (OFFENSE: QB, RB, WR, TE, OT, IOL; DEFENSE: EDGE, DT, LB, CB, S).
     Surplus: depth players within 3 OVR of the group's weakest starter, tradeable without opening a need.
     Returns (needs [{group, slot_gap, injury, expiring, score}] score-ranked and > 0, surplus [{group, player_ids}])."""
     healthy = starter_slots(players, injured)
@@ -207,6 +228,8 @@ def positional_needs(players, injured, expiring, lines, direction=None):
                 exp += EXPIRING_WEIGHT * max(0.0, gap_without - gap) * mult
         w = TRADE_POS_WEIGHT[g]
         score = (gap + exp) * w
+        if (emphasis == "OFFENSE" and g in OFFENSE_GROUPS) or (emphasis == "DEFENSE" and g in DEFENSE_GROUPS):
+            score *= VISION_EMPHASIS_WEIGHT
         if score > 0:
             needs.append({"group": g, "slot_gap": round(gap, 2), "injury": round(max(0.0, gap - gap_full), 2),
                           "expiring": round(exp, 2), "score": round(score, 2)})
@@ -245,7 +268,13 @@ def read_league(cur, season, week):
     cur.execute("""SELECT player_id FROM player_contracts WHERE season = %s AND status = 'ACTIVE'
                      AND years_remaining = 1 AND extension_years IS NULL""", (season,))
     expiring = {r[0] for r in cur.fetchall()}
-    return {"teams": teams, "roster": roster, "injuries": injuries, "expiring": expiring}
+    visions = {}
+    cur.execute("SELECT to_regclass('team_vision') IS NOT NULL")
+    row = cur.fetchone()
+    if row and row[0]:
+        cur.execute("SELECT team_id, direction, emphasis, playing_time FROM team_vision WHERE season = %s", (season,))
+        visions = {r[0]: {"direction": r[1], "emphasis": r[2], "playing_time": r[3]} for r in cur.fetchall()}
+    return {"teams": teams, "roster": roster, "injuries": injuries, "expiring": expiring, "visions": visions}
 
 
 def read_injuries(cur, season, week):
@@ -263,8 +292,11 @@ def out_ids(injuries, weeks=INJURY_OUT_WEEKS):
 
 
 def compute(league, week, force_direction=False):
-    """The pure pipeline over read_league's data -> {team_id: row for gm_team_seasons}."""
+    """The pure pipeline over read_league's data -> {team_id: row for gm_team_seasons}. A team's vision pin
+    (league["visions"], FRONT_OFFICE_INBOX_PLAN §2.9) sets its direction at any week; the overrides still win.
+    Without vision rows the output is exactly the pre-vision output."""
     teams, roster = league["teams"], league["roster"]
+    visions = league.get("visions") or {}
     injured = out_ids(league["injuries"])
     slots = {t["team_id"]: starter_slots(roster.get(t["team_id"], []), injured) for t in teams}
     for t in teams:
@@ -278,11 +310,16 @@ def compute(league, week, force_direction=False):
     for t in teams:
         tid = t["team_id"]
         new_dir, reason = dirs[tid]
-        keep = t["previous"] and not (force_direction or is_checkpoint(week))
-        direction = t["previous"] if keep else new_dir
-        needs, surplus = positional_needs(roster.get(tid, []), injured, league["expiring"], lines, direction)
-        out[tid] = {"abbr": t["abbr"], "direction": direction, "set_direction": not keep,
-                    "reason": "kept (not a checkpoint)" if keep else reason,
+        pin_direction, pin_reason = apply_pin(visions.get(tid), scores[tid], t["cap_space"])
+        if pin_direction is not None:
+            direction, set_direction, reason = pin_direction, True, pin_reason
+        else:
+            keep = t["previous"] and not (force_direction or is_checkpoint(week))
+            direction, set_direction = (t["previous"] if keep else new_dir), not keep
+            reason = "kept (not a checkpoint)" if keep else reason
+        needs, surplus = positional_needs(roster.get(tid, []), injured, league["expiring"], lines, direction,
+                                          emphasis=(visions.get(tid) or {}).get("emphasis"))
+        out[tid] = {"abbr": t["abbr"], "direction": direction, "set_direction": set_direction, "reason": reason,
                     "D": scores[tid]["D"], "inputs": dict(scores[tid], cap_space=t["cap_space"]),
                     "needs": needs, "surplus": surplus}
     return out

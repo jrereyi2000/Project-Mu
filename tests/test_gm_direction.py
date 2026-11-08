@@ -1,6 +1,9 @@
 """Team direction and needs (docs/done/team_management/03_GM_AGENTS_PLAN.md Phase 2). Pure: no database."""
-from engines.gm_direction import (CONTEND_N, REBUILD_N, SLOTS, assign_directions, band_edges, compute,
-                                  direction_scores, league_lines, positional_needs, slot_ovrs, starter_slots)
+import pytest
+
+from engines.gm_direction import (CONTEND_N, REBUILD_N, SLOTS, apply_pin, assign_directions, band_edges, compute,
+                                  direction_scores, league_lines, positional_needs, read_league, slot_ovrs,
+                                  starter_slots)
 
 
 def team(i, wins=1, losses=2, ovr=82, prior=8, **kw):
@@ -101,3 +104,111 @@ def test_def_rows_ignored_and_direction_kept_off_checkpoint():
     assert all(r["direction"] == "RETOOL" and not r["set_direction"] for r in rows.values())
     rows = compute(data, week=6)                                          # checkpoint: re-banded
     assert any(r["direction"] != "RETOOL" for r in rows.values())
+
+
+# ---------------------------------------------------------------------------- vision pins (inbox U6, plan §2.9) ---
+
+def _league_data(lg):
+    return {"teams": lg, "roster": {t["team_id"]: roster(t["team_id"]) for t in lg}, "injuries": {},
+            "expiring": set()}
+
+
+class _ReadCur:
+    """The minimal cursor read_league needs; `table` says whether team_vision exists."""
+
+    def __init__(self, table):
+        self.table, self.sql = table, []
+
+    def execute(self, sql, params=()):
+        self.sql.append(sql)
+        self._last = []
+        if "to_regclass('team_vision')" in sql:
+            self._last = [(self.table,)]
+        elif "FROM team_vision" in sql:
+            self._last = [(1, "REBUILD", "DEFENSE", "YOUTH")]
+
+    def fetchone(self):
+        return self._last[0] if self._last else None
+
+    def fetchall(self):
+        return list(self._last)
+
+
+def test_read_league_reads_visions_only_when_the_table_exists():
+    cur = _ReadCur(False)
+    assert read_league(cur, 2036, 4)["visions"] == {}
+    assert not any("FROM team_vision" in sql for sql in cur.sql)
+    cur = _ReadCur(True)
+    assert read_league(cur, 2036, 4)["visions"] == {1: {"direction": "REBUILD", "emphasis": "DEFENSE",
+                                                        "playing_time": "YOUTH"}}
+
+
+def test_compute_without_vision_rows_is_unchanged():
+    lg = league(32)
+    data = _league_data(lg)
+    without = compute(data, week=4)                                       # no "visions" key at all
+    empty = compute(dict(data, visions={}), week=4)                       # guarded reader found no rows
+    assert without == empty
+    scores = direction_scores(lg)
+    dirs = assign_directions(scores, {}, {t["team_id"]: t["cap_space"] for t in lg})
+    for tid, row in without.items():
+        assert row["direction"] == dirs[tid][0]
+        assert row["reason"] == dirs[tid][1]
+        assert row["set_direction"] is True
+
+
+def test_apply_pin_and_the_override_that_beats_it():
+    pin = {"direction": "REBUILD"}
+    assert apply_pin(None, {"proj_wins": 7}, 100) == (None, None)
+    assert apply_pin({"direction": None}, {"proj_wins": 7}, 100) == (None, None)
+    assert apply_pin(pin, {"proj_wins": 7}, 100) == ("REBUILD", "vision")
+    assert apply_pin(pin, {"proj_wins": 11}, 100) == ("CONTEND", "proj_wins >= 10.5")
+    assert apply_pin(pin, {"proj_wins": 7}, -1) == ("RETOOL", "over the cap")
+    assert apply_pin({"direction": "CONTEND"}, {"proj_wins": 11}, -1) == ("CONTEND", "vision")
+
+
+def test_compute_applies_a_pin_at_any_week():
+    lg = league(32)
+    data = _league_data(lg)
+    tid = lg[0]["team_id"]
+    data["visions"] = {tid: {"direction": "REBUILD", "emphasis": "BALANCED", "playing_time": "MERIT"}}
+    for t in lg:
+        t["previous"] = "RETOOL"                                          # an off-checkpoint keep must not win
+    row = compute(data, week=4)[tid]
+    assert row["direction"] == "REBUILD" and row["reason"] == "vision" and row["set_direction"] is True
+
+
+def test_compute_pin_still_loses_to_the_overrides():
+    lg = league(32)
+    data = _league_data(lg)
+    tid = lg[0]["team_id"]
+    data["visions"] = {tid: {"direction": "REBUILD"}}
+    lg[0].update(wins=12, losses=0, prior_wins=14)
+    row = compute(data, week=4)[tid]
+    assert row["direction"] == "CONTEND" and row["reason"] == "proj_wins >= 10.5"
+    lg[0].update(wins=0, losses=3, prior_wins=6, cap_space=-1)
+    row = compute(data, week=4)[tid]
+    assert row["direction"] == "RETOOL" and row["reason"] == "over the cap"
+
+
+def test_positional_needs_emphasis_weights_only_that_side():
+    r = roster(1, qb=60)
+    for p in r:
+        if p["group"] == "EDGE":
+            p["ovr"] = 60
+    lines = lines_for(r, roster(2, qb=90))
+    base, _ = positional_needs(r, set(), set(), lines)
+    off, _ = positional_needs(r, set(), set(), lines, emphasis="OFFENSE")
+    dfn, _ = positional_needs(r, set(), set(), lines, emphasis="DEFENSE")
+    balanced, _ = positional_needs(r, set(), set(), lines, emphasis="BALANCED")
+    explicit_none, _ = positional_needs(r, set(), set(), lines, None, None)
+    assert balanced == base and explicit_none == base
+
+    def score(needs, group):
+        return next(n["score"] for n in needs if n["group"] == group)
+
+    assert score(base, "QB") > 0 and score(base, "EDGE") > 0
+    assert score(off, "QB") == pytest.approx(score(base, "QB") * 1.15, abs=0.01)
+    assert score(off, "EDGE") == score(base, "EDGE")
+    assert score(dfn, "EDGE") == pytest.approx(score(base, "EDGE") * 1.15, abs=0.01)
+    assert score(dfn, "QB") == score(base, "QB")
