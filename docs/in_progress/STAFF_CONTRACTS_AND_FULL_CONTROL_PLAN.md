@@ -1,6 +1,6 @@
 # Project Mu: Staff Contracts, Young Talent Appeal & Full Control Plan
 
-**Status:** approved by JR (2026-11-07), decisions Q1–Q3 settled as recommended (§8); not built.
+**Status:** approved by JR (2026-11-07); building, wave 1 of 2 done.
 **Builds on:** PROJECT_SPEC §2.19, §3.3f, §4.2; [`V2_MASTER_PLAN.md`](../in_progress/V2_MASTER_PLAN.md) §2.3; [`OWNERS_SCOUTS_VOTERS_PLAN.md`](../in_progress/OWNERS_SCOUTS_VOTERS_PLAN.md) §2.1 (owner spending policies); [`COACH_SLANTS_AND_COORDINATORS_PLAN.md`](../done/COACH_SLANTS_AND_COORDINATORS_PLAN.md); [`NFLPA_REPORT_CARD_PLAN.md`](../done/NFLPA_REPORT_CARD_PLAN.md) (Owner Cash Budget pool).
 
 **Goal:** Establish uncapped multi-year contracts and market salaries for Head Coaches, Coordinators, and General Managers paid directly out of the Owner Cash Budget ($10M–$50M/year base plus up to +$10M on-field Success Dividend), upgrade destination `opening_appeal()` for both HC and GM candidates to heavily factor in star/promising young QBs and under-25 blue-chip roster talent, and implement an authentic, strictly governed "Godfather Offer" mechanic allowing rare desperate owners to hire elite dual-hat Head Coach + GM leaders with full 53-man roster control (reflecting the historical rarity of Marcus Whitfield and Charles Grant).
@@ -298,3 +298,9 @@ Shared files: `PROJECT_SPEC.md`, this plan, `CLAUDE.md`.
 | Q1 | If a coach with Full Control is fired, should the team automatically fire the GM position as well (complete clean sweep)? | **Yes (Recommended).** Because the coach *was* the GM, firing him naturally vacates both seats simultaneously. |
 | Q2 | Should coach buyouts for fired staff offset if they are hired elsewhere (the real NFL offset clause)? | **Yes (Recommended).** If a fired coach owed \$10M gets an \$8M job with another team, the original owner only pays the \$2M difference. |
 | Q3 | Can JR as user GM offer a head coach Full Control and willingly surrender final 53-man roster say? | **No (Recommended).** JR's user team is user-controlled; user GMs keep interactive roster authority unless explicitly running an autonomous spectator league. |
+
+## 9. Build log
+
+| Unit | Wave | Branch | Worktree | Result | Merge |
+|---|---|---|---|---|---|
+| U1 | 1 | worktree-agent-a1572c54687db3f01 | agent-a1572c54687db3f01 | merged | dd6b606 |

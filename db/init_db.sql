@@ -2101,6 +2101,32 @@ CREATE TABLE IF NOT EXISTS team_operating_policies (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Staff contracts & full control (2027_02_07_staff_contracts_and_full_control.sql, STAFF_CONTRACTS_AND_FULL_CONTROL_PLAN §2.4):
+-- uncapped multi-year HC/GM/OC/DC contracts funded from the owner cash pool and the league-wide Godfather-offer ledger.
+CREATE TABLE IF NOT EXISTS staff_contracts (
+    id SERIAL PRIMARY KEY,
+    team_id INT NOT NULL REFERENCES teams(id),
+    person_id INT NOT NULL,
+    person_kind VARCHAR(6) NOT NULL CHECK (person_kind IN ('HC', 'GM', 'OC', 'DC')),
+    annual_salary BIGINT NOT NULL,
+    total_years SMALLINT NOT NULL,
+    remaining_years SMALLINT NOT NULL,
+    signed_season INT NOT NULL,
+    full_control BOOLEAN NOT NULL DEFAULT false,
+    buyout_owed BIGINT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS full_control_history (
+    id SERIAL PRIMARY KEY,
+    season INT NOT NULL,
+    team_id INT NOT NULL REFERENCES teams(id),
+    coach_id INT NOT NULL REFERENCES coaches(id),
+    annual_salary BIGINT NOT NULL,
+    contract_years SMALLINT NOT NULL,
+    trigger_reason TEXT NOT NULL
+);
+
 -- ---------------------------------------------------------------------------
 -- Media & content
 -- ---------------------------------------------------------------------------
