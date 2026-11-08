@@ -7,15 +7,16 @@
 //
 // The module has four parts: the take-control panel (no actors yet), the list (acting-as filter, open/all, kind chips,
 // unread dots), the conversation (messages, template tags, appraisal markers, options, the four forms, a text box and
-// its draft card, and a Depth Chart link in role talks), and the new-conversation picker from /inbox/kinds.
+// its draft card, and a Depth Chart link in role talks), and the new-conversation picker from /inbox/kinds (with the
+// wave-4 player and team pickers fed by /inbox/targets).
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { API_BASE } from "../../api";
 import "../team/frontOffice.css";
 import { DEPTH_CHART_SLOTS, DEPTH_PER_SLOT } from "../../types/franchiseRoster";
 import type {
   InboxActor, InboxActorsResponse, InboxCandidate, InboxDraft, InboxDraftResponse, InboxFormKind, InboxKindInfo,
-  InboxKindsResponse, InboxListResponse, InboxMessage, InboxOption, InboxReplyRequest, InboxStartRequest, InboxThread,
-  InboxThreadResponse, InboxTradePick,
+  InboxKindsResponse, InboxListResponse, InboxMessage, InboxOption, InboxReplyRequest, InboxStartRequest, InboxTarget,
+  InboxTargetsResponse, InboxThread, InboxThreadResponse, InboxTradePick,
 } from "../../types/franchiseInbox";
 import { NegotiationStyles, TermsForm } from "./FreeAgencyModule";
 import { SharedStyles, StateNote, franchiseFetch, useFranchiseData, type FranchiseState } from "./RosterCapModule";
@@ -595,6 +596,51 @@ function Conversation({ abbr, threadId, onChanged }: { abbr: string; threadId: n
 
 // ---- New conversation ------------------------------------------------------------------------------------------
 
+/**
+ * The start-time pickers of wave 4, fed by GET /inbox/targets?kind= (never mock data). `player_pick` lists the
+ * team's active players as NAME · POS · OVR and posts `player_id`; `team_pick` lists teams with an open GM tenure as
+ * NAME · TEAM and posts that team's abbreviation as `gm_team`. A failed fetch leaves Start disabled.
+ */
+function TargetPicker({ abbr, kind, form, busy, blocked, submitLabel, onSubmit }: {
+  abbr: string; kind: string; form: "player_pick" | "team_pick"; busy: boolean; blocked: boolean;
+  submitLabel: string; onSubmit: FormSubmit;
+}) {
+  const [targets] = useFranchiseData<InboxTargetsResponse>(abbr, `/inbox/targets?kind=${encodeURIComponent(kind)}`);
+  const [picked, setPicked] = useState("");
+  const list = targets.status === "ready" ? targets.data.targets : [];
+  const selected = list.find((t) => t.id === picked) ?? null;
+  // player_pick posts the player id as text; team_pick posts the team abbreviation, which the API reads as `gm_team`.
+  const payload: Record<string, unknown> | null = form === "player_pick"
+    ? (selected ? { player_id: selected.id } : null)
+    : (selected?.team ? { gm_team: selected.team } : null);
+  const targetLabel = (t: InboxTarget) => form === "player_pick"
+    ? [t.name, t.position, t.overall === null || t.overall === undefined ? null : String(t.overall)].filter(Boolean).join(" · ")
+    : [t.name, t.team].filter(Boolean).join(" · ");
+  const failed = targets.status === "unavailable" || targets.status === "error";
+
+  if (targets.status === "ready" && list.length === 0) {
+    return <p className="fo-state">There's nobody to start this conversation with.</p>;
+  }
+
+  return (
+    <form onSubmit={(e) => { e.preventDefault(); if (payload) onSubmit(payload); }}>
+      <div className="fr-form fr-form-2">
+        <label>{form === "player_pick" ? "Player" : "Team / GM"}
+          <select value={picked} onChange={(e) => setPicked(e.target.value)} disabled={targets.status !== "ready" || busy || blocked}>
+            <option value="">{form === "player_pick" ? "Pick a player" : "Pick a team"}</option>
+            {list.map((t) => <option key={t.id} value={t.id}>{targetLabel(t)}</option>)}
+          </select>
+        </label>
+      </div>
+      {targets.status === "loading" && <p className="fr-form-note">Loading targets…</p>}
+      {failed && <p className="fo-state fr-unavailable">Targets unavailable.</p>}
+      <footer>
+        <button type="submit" className="fr-btn primary" disabled={!payload || busy || blocked}>{busy ? "Starting…" : submitLabel}</button>
+      </footer>
+    </form>
+  );
+}
+
 function NewConversation({ abbr, kinds, actors, onStarted }: {
   abbr: string; kinds: FranchiseState<InboxKindsResponse>; actors: InboxActor[]; onStarted: (t: InboxThread) => void;
 }) {
@@ -653,7 +699,10 @@ function NewConversation({ abbr, kinds, actors, onStarted }: {
                   <input value={note} maxLength={600} placeholder="Optional" onChange={(e) => setNote(e.target.value)} />
                 </label>
               </div>
-              {info.start_form ? (
+              {info.start_form === "player_pick" || info.start_form === "team_pick" ? (
+                <TargetPicker key={info.kind} abbr={abbr} kind={info.kind} form={info.start_form}
+                  busy={busy} blocked={!effectiveAs} submitLabel="Start conversation" onSubmit={(payload) => start(payload)} />
+              ) : info.start_form ? (
                 <FormFor form={info.start_form} team={abbr} week={null} seed={undefined} busy={busy} blocked={!effectiveAs}
                   submitLabel="Start conversation" onSubmit={(payload) => start(payload)} />
               ) : (
