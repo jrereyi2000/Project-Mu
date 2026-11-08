@@ -6,6 +6,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { API_BASE } from "../../api";
 import DraftCapital, { type DraftPicks } from "./DraftCapital";
 import StaffCards, { type Staff } from "./StaffCards";
+import StaffContractCard from "../franchise/StaffContractCard";
+import type { StaffContract } from "../../types/staffContracts";
 import { PersonalityPanel } from "../personality/PersonalityPanel";
 import type { PersonalityKind, PersonalityProfile } from "../../types/personality";
 import TransactionsTimeline, { type Transactions } from "./TransactionsTimeline";
@@ -58,6 +60,7 @@ type FrontOffice = {
   transactions: Transactions | null;
   draft_picks: DraftPicks | null;
   staff: Staff | null;
+  staff_contracts: StaffContract[] | null;
 };
 
 const GROUPS: Record<string, string[]> = {
@@ -288,6 +291,7 @@ export default function FrontOfficeTab({ abbr, season, focus }: { abbr: string; 
     <section className="team-data-view fo-view">
       {data.staff && <StaffCards staff={data.staff} season={data.season} />}
       <FrontOfficePeople abbr={data.team.abbreviation} gm={data.staff?.gm} />
+      <StaffContractCard teamAbbr={data.team.abbreviation} season={data.season} contracts={data.staff_contracts} />
       {data.cap
         ? <CapSheet cap={data.cap} />
         : <p className="fo-state">No cap sheet recorded for {data.season}.</p>}

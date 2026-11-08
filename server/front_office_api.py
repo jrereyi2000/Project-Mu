@@ -21,6 +21,7 @@ from pydantic import BaseModel
 from newsroom import roster_moves as rm
 from engines import front_office
 from engines import report_card_engine as rce
+from engines.staff_contracts_engine import godfather_gate
 from engines.coach_profile import (PLACEHOLDER_COORDINATOR, TENDENCY_WORDS, coach_profile, effective_tendencies,
                                   fetch_observed, fetch_team_coach)
 from newsroom.db_tools import fetch_cap_rows, fetch_moves, fetch_team_contracts, fetch_trades
@@ -266,11 +267,13 @@ def team_front_office(abbr: str, season: Optional[int] = None):
             out = {"season": season, "team": {"id": team_id, "name": name, "abbreviation": team_abbr},
                    "year_columns": list(range(season, season + YEAR_COLUMNS)) if season else [],
                    "cap": None, "contracts": None, "committed": None, "transactions": None, "draft_picks": None,
-                   "staff": None}
+                   "staff": None, "staff_contracts": None}
             if not season:
                 return out
             if _regclass(cur, "coach_tenures"):
                 out["staff"] = fetch_staff(cur, team_id, season)
+            if _regclass(cur, "staff_contracts"):
+                out["staff_contracts"] = fetch_staff_contracts(cur, team_id)
             if front_office.installed(cur) and _regclass(cur, "draft_picks"):
                 picks = fetch_picks(cur, team_id, season)
                 out["draft_picks"] = {"drafts": list(range(season + 1, season + 1 + DRAFTS_AHEAD)), "picks": picks}
@@ -542,3 +545,96 @@ def facilities_policy(abbr: str, body: PolicyIn):
             return {"team": team_abbr, "season": season, "policy": body.policy, "enabled": body.enabled,
                     "annual_opex_cost": cost, "policies": next_toggles, "category": spec["category"],
                     "grade": updated[spec["category"]], "overall_score": score, "overall_grade": grade}
+
+
+# ------------------------------------------------------------- staff contracts ----
+# Staff contracts & full control (STAFF_CONTRACTS_AND_FULL_CONTROL_PLAN §2.5, U3): the read-only staff_contracts block
+# on GET /api/team/{abbr}/front-office (HC, GM, OC, DC salary, years and full control), and POST /api/team/{abbr}/
+# staff/offer so JR can construct a custom offer during the coaching carousel. The read is guarded with to_regclass
+# and the block is null/empty when the migration isn't applied or no rows remain; a salary is never invented. The
+# offer validates its shape offline and enforces the engine's Godfather rarity gate (at most 2 active full-control
+# coaches, a 5-season league-wide cooldown) on a full-control head-coach offer.
+
+STAFF_CONTRACT_COLS = ("person_id", "person_kind", "annual_salary", "total_years", "remaining_years",
+                       "signed_season", "full_control")
+STAFF_OFFER_KINDS = ("HC", "GM", "OC", "DC")
+FULL_CONTROL_KIND = "HC"
+
+
+def shape_staff_contract(row: dict) -> dict:
+    """One staff_contracts row as the page's contract: the role, the annual salary, the total and remaining years,
+    and whether it carries full control (a head coach with the final 53-man roster say)."""
+    return {
+        "person_id": row["person_id"],
+        "person_kind": row["person_kind"],
+        "annual_salary": int(row["annual_salary"]),
+        "total_years": row["total_years"],
+        "remaining_years": row["remaining_years"],
+        "signed_season": row["signed_season"],
+        "full_control": bool(row["full_control"]),
+    }
+
+
+def fetch_staff_contracts(cur, team_id: int) -> list | None:
+    """Every active staff contract (remaining_years > 0) in HC, GM, OC, DC order; None without rows. The person's
+    name is the StaffCard's job (person_id is polymorphic), so only the contract terms are served here."""
+    cur.execute(f"""SELECT {', '.join(STAFF_CONTRACT_COLS)} FROM staff_contracts
+                    WHERE team_id = %s AND remaining_years > 0
+                    ORDER BY CASE person_kind WHEN 'HC' THEN 1 WHEN 'GM' THEN 2 WHEN 'OC' THEN 3 ELSE 4 END;""",
+                (team_id,))
+    rows = [shape_staff_contract(dict(zip(STAFF_CONTRACT_COLS, r))) for r in cur.fetchall()]
+    return rows or None
+
+
+class StaffOfferIn(BaseModel):
+    person_kind: str
+    person_id: int
+    annual_salary: int
+    total_years: int
+    full_control: bool = False
+    signed_season: Optional[int] = None
+
+
+def validate_staff_offer(person_kind: str, annual_salary: int, total_years: int, full_control: bool):
+    """400 for an offer the staff-contract rules don't allow: an unknown role, a non-positive salary or length, or
+    full control on anything but a head-coach offer."""
+    if person_kind not in STAFF_OFFER_KINDS:
+        raise HTTPException(400, f"person_kind must be one of: {', '.join(STAFF_OFFER_KINDS)}")
+    if annual_salary <= 0:
+        raise HTTPException(400, "annual_salary must be a positive whole number of dollars")
+    if total_years <= 0:
+        raise HTTPException(400, "total_years must be a positive number of seasons")
+    if full_control and person_kind != FULL_CONTROL_KIND:
+        raise HTTPException(400, "full_control is only available on a head-coach offer")
+
+
+@router.post("/api/team/{abbr}/staff/offer")
+def staff_offer(abbr: str, body: StaffOfferIn):
+    validate_staff_offer(body.person_kind, body.annual_salary, body.total_years, body.full_control)
+    with psycopg.connect(CONN_INFO) as conn:
+        with conn.cursor() as cur:
+            team_id, name, team_abbr = _resolve_team(cur, abbr)
+            season = _current_season(cur)
+            if season is None:
+                raise HTTPException(409, "league_state has no season")
+            if not _regclass(cur, "staff_contracts"):
+                raise HTTPException(409, "the staff contracts migration isn't applied")
+            if body.full_control:
+                gate = godfather_gate(cur, season)
+                if not gate["eligible"]:
+                    raise HTTPException(409, "full control is blocked by the Godfather rarity gate: "
+                                             f"{gate['active_full_control']} active and last offered season "
+                                             f"{gate['last_godfather_season']}")
+            signed = body.signed_season if body.signed_season is not None else season
+            cur.execute("""INSERT INTO staff_contracts
+                           (team_id, person_id, person_kind, annual_salary, total_years, remaining_years,
+                            signed_season, full_control)
+                           VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                           RETURNING person_id, person_kind, annual_salary, total_years, remaining_years,
+                                     signed_season, full_control;""",
+                        (team_id, body.person_id, body.person_kind, body.annual_salary, body.total_years,
+                         body.total_years, signed, body.full_control))
+            row = cur.fetchone()
+            conn.commit()
+            return {"team": team_abbr, "season": season,
+                    "contract": shape_staff_contract(dict(zip(STAFF_CONTRACT_COLS, row)))}
