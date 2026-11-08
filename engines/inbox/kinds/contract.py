@@ -18,6 +18,7 @@ KIND = "CONTRACT"
 COUNTERPART_TYPE = "player"
 ACTOR_ROLES = ("GM",)
 CAN_START = True
+START_FORM = "player_pick"          # wave 4: the new-conversation picker's form
 VOICE = "a professional football player talking privately with the general manager about your own contract"
 MAX_YEARS = 5                       # franchise_api.MAX_OFFER_YEARS
 OUT_WEEKS = 3                       # a starter out this long (or on IR) doesn't count, as gm_direction does

@@ -324,7 +324,7 @@ def start(cur, team, body):
     writer = _beat_writer(cur, team["team_id"])
     if writer is None:
         raise InboxError(400, f"{team['abbr']} has no beat writer to interview with")
-    topic = str(body.get("topic") or "The team").strip()[:120]
+    topic = str(body.get("topic") or body.get("note") or "The team").strip()[:120]
     facts = {"topic": topic, "season": team.get("season"), "week": team.get("week"), "opening": "JR"}
     actor = team.get("actor")
     return Trigger(KIND, team["team_id"], COUNTERPART_TYPE, str(writer["agent_id"]), writer["name"], topic,

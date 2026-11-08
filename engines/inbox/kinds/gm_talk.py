@@ -21,6 +21,7 @@ KIND = "GM_TALK"
 COUNTERPART_TYPE = "gm"
 ACTOR_ROLES = ("GM",)
 CAN_START = True
+START_FORM = "team_pick"            # wave 4: the new-conversation picker's form
 VOICE = "a rival NFL general manager: direct, competitive, protective of your roster and your reputation"
 
 # engine action -> the decision the inbox voice must convey
@@ -177,8 +178,9 @@ def start(cur, team, body):
     if gm_id is None:
         raise InboxError(400, f"{_abbr(cur, gm_team_id)} has no GM")
     source_ref = f"gm_talk:start:{user}:{_abbr(cur, gm_team_id)}"
+    subject = str(body.get("topic") or body.get("note") or "Trade talks")[:120]
     facts = _facts(cur, {"counterpart_name": gm_name}, user, gm_team_id)
-    return Trigger(KIND, team["team_id"], COUNTERPART_TYPE, str(gm_id), gm_name, "Trade talks", source_ref,
+    return Trigger(KIND, team["team_id"], COUNTERPART_TYPE, str(gm_id), gm_name, subject, source_ref,
                    facts, "OPEN_TALKS", actor_role="GM",
                    state={"gm_team_id": gm_team_id, "phase": "TALKS"})
 

@@ -103,6 +103,17 @@ def test_start_opens_a_talk_thread_without_running_the_engine(cur):
         gm_talk.start(cur, {"team_id": 1, "abbr": "CAR"}, {})
 
 
+def test_start_declares_the_team_pick_form(cur):
+    assert gm_talk.START_FORM == "team_pick"
+
+
+def test_start_uses_the_typed_note_as_the_subject(cur):
+    t = gm_talk.start(cur, {"team_id": 1, "abbr": "CAR"}, {"gm_team": "ATL", "note": "Legette for a second"})
+    assert t.subject == "Legette for a second"
+    t = gm_talk.start(cur, {"team_id": 1, "abbr": "CAR"}, {"gm_team": "ATL", "topic": "Draft capital"})
+    assert t.subject == "Draft capital"
+
+
 # ------------------------------------------------------------------------------------------------- options ---
 
 def test_options_inbound_and_in_talks(cur):

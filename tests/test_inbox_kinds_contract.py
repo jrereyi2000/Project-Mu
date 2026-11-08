@@ -219,6 +219,12 @@ def test_template_lines():
     assert "play out my deal" in contract.template("WALKED_AWAY", {"player": "Xavier Legette"})
 
 
+# --------------------------------------------------------------------------------------------------- start ---
+
+def test_start_declares_the_player_pick_form():
+    assert contract.START_FORM == "player_pick"
+
+
 # --------------------------------------------------------------------------------------------- the helpers ---
 
 def test_the_franchise_api_helpers_this_kind_imports_exist():

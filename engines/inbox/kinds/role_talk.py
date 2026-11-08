@@ -23,6 +23,7 @@ from engines.inbox.registry import ActResult, Trigger
 KIND = "ROLE_TALK"
 COUNTERPART_TYPE = "player"
 ACTOR_ROLES = ("COACH",)
+START_FORM = "player_pick"          # wave 4: the new-conversation picker's form
 VOICE = "a professional football player: direct, competitive, careful not to sound like a problem"
 PROMISE_REVIEW_WEEKS = 2
 MAX_REVIEW_WEEK = 23                 # the last regular-season tick a depth chart is checked against
@@ -337,7 +338,7 @@ def start(cur, team, body):
     player = roster.get(player_id)
     if player is None:
         raise InboxError(404, f"player {player_id} isn't on {team['abbr']}'s roster")
-    topic = str(body.get("topic") or "His role").strip()[:120]
+    topic = str(body.get("topic") or body.get("note") or "His role").strip()[:120]
     facts = {"team": team["abbr"], "player": player["name"], "player_id": player_id,
              "position": player["position"], "season": team.get("season"), "week": team.get("week"),
              "topic": topic, "slot": body.get("slot")}
