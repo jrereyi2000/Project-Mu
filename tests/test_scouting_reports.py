@@ -304,5 +304,5 @@ def test_scout_voice_hook_is_neutral():
     assert dept.scout_id is None and dept.name is None and dept.region is None and dept.lens is None
     assert sv.regional_bias(dept, {}) == 0.0
     assert sv.regional_bias(sv.ScoutVoice(scout_id=1, region="SEC", lens="TAPE"), {}) == 0.0
-    assert sv.REGIONS == {}
+    assert sv.REGIONS == {"AFC": "AFC", "NFC": "NFC"}
     assert sv.voice_prompt(dept) == "a neutral national scouting service"
