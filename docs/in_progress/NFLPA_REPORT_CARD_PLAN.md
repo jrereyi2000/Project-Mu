@@ -1,6 +1,6 @@
 # Project Mu: NFLPA Team Report Cards & Facility Effects Plan
 
-**Status:** approved by JR (2026-11-07); building, wave 1 of 2.
+**Status:** approved by JR (2026-11-07); building, wave 1 of 2 done.
 
 **As built (orchestrator pre-build fixes):** baseline data committed at `engines/report_card_baseline.json` (the plan's `data/initial_team_report_cards.json` is git-ignored); migration dated `2027_02_08` (2027_02_05–07 already exist); §2.4's duplicated trailing block for `team_operating_policies` implemented once; the Delivers list now names all four tables. §2.3e CPU Owner Upgrade AI (`engines/owner_policy.py`) is not owned by any unit, so it is out of scope for U1–U3 (left unbuilt).
 **Builds on:** PROJECT_SPEC §2.4, §2.17, §3.3f, §4.2; [`V2_MASTER_PLAN.md`](../in_progress/V2_MASTER_PLAN.md) §2.3, §2.4; [`OWNERS_SCOUTS_VOTERS_PLAN.md`](../in_progress/OWNERS_SCOUTS_VOTERS_PLAN.md) §2.1 (owner spending policies); [`PERSONALITY_CONTRACT_POLICY_PLAN.md`](../done/PERSONALITY_CONTRACT_POLICY_PLAN.md); [`FRONT_OFFICE_INBOX_PLAN.md`](../done/FRONT_OFFICE_INBOX_PLAN.md).
@@ -344,3 +344,4 @@ Shared files: `PROJECT_SPEC.md`, this plan, `CLAUDE.md`.
 
 | Unit | Wave | Branch | Worktree | Result | Merge |
 |---|---|---|---|---|---|
+| U1 | 1 | worktree-agent-af05b4ae41b8faa33 | .claude/worktrees/agent-af05b4ae41b8faa33 | merged | 964a3d3 |

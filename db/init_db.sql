@@ -2046,6 +2046,61 @@ CREATE TABLE IF NOT EXISTS staff_development_departures (
     created_at   TIMESTAMPTZ DEFAULT now()
 );
 
+-- NFLPA team report cards (2027_02_08_nflpa_report_cards.sql, NFLPA_REPORT_CARD_PLAN §2.4/§2.17h/§3.3z):
+-- annual player-evaluated report cards, owner facility investment and the owner's off-cap cash pool.
+CREATE TABLE IF NOT EXISTS owner_cash_ledgers (
+    season INT NOT NULL,
+    team_id INT NOT NULL REFERENCES teams(id),
+    wealth_band VARCHAR(12) NOT NULL CHECK (wealth_band IN ('TIER_1', 'TIER_2', 'TIER_3', 'TIER_4')),
+    base_budget BIGINT NOT NULL,
+    success_dividend BIGINT NOT NULL DEFAULT 0,
+    total_cash_budget BIGINT NOT NULL,
+    staff_payroll BIGINT NOT NULL DEFAULT 0,
+    opex_committed BIGINT NOT NULL DEFAULT 0,
+    capex_spent BIGINT NOT NULL DEFAULT 0,
+    accumulated_reserve BIGINT NOT NULL DEFAULT 0,
+    PRIMARY KEY (season, team_id)
+);
+
+CREATE TABLE IF NOT EXISTS team_report_cards (
+    season INT NOT NULL,
+    team_id INT NOT NULL REFERENCES teams(id),
+    weight_room VARCHAR(2) NOT NULL,
+    training_room VARCHAR(2) NOT NULL,
+    locker_room VARCHAR(2) NOT NULL,
+    food_nutrition VARCHAR(2) NOT NULL,
+    team_travel VARCHAR(2) NOT NULL,
+    family_treatment VARCHAR(2) NOT NULL,
+    head_coach VARCHAR(2) NOT NULL,
+    ownership VARCHAR(2) NOT NULL,
+    overall_score NUMERIC(4,3) NOT NULL,
+    overall_grade VARCHAR(2) NOT NULL,
+    summary_text TEXT,
+    last_renovated_season INT,
+    PRIMARY KEY (season, team_id)
+);
+
+CREATE TABLE IF NOT EXISTS facility_upgrades (
+    id SERIAL PRIMARY KEY,
+    team_id INT NOT NULL REFERENCES teams(id),
+    season_ordered INT NOT NULL,
+    category VARCHAR(20) NOT NULL,
+    cost_dollars BIGINT NOT NULL,
+    target_grade VARCHAR(2) NOT NULL,
+    completion_season INT NOT NULL,
+    status VARCHAR(12) NOT NULL DEFAULT 'IN_PROGRESS' CHECK (status IN ('IN_PROGRESS', 'COMPLETED', 'CANCELLED'))
+);
+
+CREATE TABLE IF NOT EXISTS team_operating_policies (
+    team_id INT PRIMARY KEY REFERENCES teams(id),
+    luxury_travel_enabled BOOLEAN NOT NULL DEFAULT false,
+    no_roommate_policy BOOLEAN NOT NULL DEFAULT false,
+    family_daycare_enabled BOOLEAN NOT NULL DEFAULT false,
+    private_chef_program BOOLEAN NOT NULL DEFAULT false,
+    annual_opex_cost BIGINT NOT NULL DEFAULT 0,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- ---------------------------------------------------------------------------
 -- Media & content
 -- ---------------------------------------------------------------------------
