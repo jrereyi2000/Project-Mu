@@ -18,7 +18,7 @@ export_active_dsn()
 from engines.gotw_engine import display_excitement
 from engines.nfl_history import read as nfl_read
 from pipeline.commentary_names import player_name_aliases_exist
-from server import debug_api, social_api, napper_api, front_office_api, draft_api, history_api, franchise_api, inbox_api, personality_api
+from server import debug_api, social_api, napper_api, front_office_api, draft_api, history_api, franchise_api, inbox_api, personality_api, press_api
 
 CONN_INFO = os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")
 
@@ -95,6 +95,36 @@ def start_local_wakeup(team_id: int, season: int, week: int, label: str = "") ->
     return True
 
 
+def _presser_holds_wakeup(cur, team_id: int, season: int) -> bool:
+    """True while the team's presser for its last completed game is SCHEDULED, LIVE or REVIEW, and it is a user
+    team's: JR's beat coverage waits until he takes the podium or declines (PRESS_CONFERENCE_PLAN §2.2). Missing
+    press tables, no completed game or no presser all mean False, so old behaviour stands."""
+    try:
+        cur.execute("SELECT to_regclass('press_conferences') IS NOT NULL AS press_installed;")
+        row = cur.fetchone()
+        installed = (row.get("press_installed") if isinstance(row, dict) else (row[0] if row else False))
+        if not installed:
+            return False
+        cur.execute("""/* q:wakeup_last_game */ SELECT id FROM games
+                       WHERE season = %s AND status = 'COMPLETED' AND (home_team_id = %s OR away_team_id = %s)
+                       ORDER BY week DESC, id DESC LIMIT 1;""", (season, team_id, team_id))
+        game = cur.fetchone()
+        if not game:
+            return False
+        game_id = game.get("id") if isinstance(game, dict) else game[0]
+        cur.execute("""/* q:wakeup_presser */ SELECT status, controller FROM press_conferences
+                       WHERE game_id = %s AND team_id = %s ORDER BY id LIMIT 1;""", (game_id, team_id))
+        presser = cur.fetchone()
+        if not presser:
+            return False
+        status = presser.get("status") if isinstance(presser, dict) else presser[0]
+        controller = presser.get("controller") if isinstance(presser, dict) else presser[1]
+        return (str(controller or "").upper() == "USER"
+                and str(status or "").upper() in ("SCHEDULED", "LIVE", "REVIEW"))
+    except Exception:
+        return False
+
+
 def maybe_start_team_wakeup(cur, team_id: int, season: int, label: str = "") -> bool:
     """Starts the team's local wakeup (beat portfolio + Agent Wire posts) if this is the current season and the team
     has no 'Local Beat N' article for the current week yet. Used by the team news page and the Agent Wire Team Hub."""
@@ -103,6 +133,9 @@ def maybe_start_team_wakeup(cur, team_id: int, season: int, label: str = "") -> 
     curr_season = st["current_season"] if st else 2035
     curr_week = st["current_week"] if st else 18
     if season != curr_season or not AUTO_LOCAL_WAKEUP:
+        return False
+    # A user team's presser for its last game holds the wakeup until it is CLOSED or DECLINED (§2.2).
+    if _presser_holds_wakeup(cur, team_id, season):
         return False
     cur.execute("""
         SELECT COUNT(*) AS cnt
@@ -150,6 +183,7 @@ app.include_router(history_api.router)  # /api/records/*: the #records Record Bo
 app.include_router(franchise_api.router)  # /api/franchise/*: the #franchise page (depth chart, roster, cap, moves, market, launch)
 app.include_router(inbox_api.router)  # /api/franchise/{abbr}/inbox/*: the #franchise Inbox tab (§2.12)
 app.include_router(personality_api.router)  # /api/personality/*: Personality panels (profile read, trait catalogue, JR's audited override)
+app.include_router(press_api.router)  # /api/franchise/{abbr}/press*: live postgame press conferences (§4.6c)
 
 _STATIC_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")
 os.makedirs(_STATIC_DIR, exist_ok=True)

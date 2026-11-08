@@ -97,6 +97,7 @@ from newsroom.db_tools import (
     get_front_office_rankings,
     get_gm_record,
     search_league_memory,
+    get_press_conference,
     fetch_cap_rows,
     fetch_moves,
     fetch_rumors,
@@ -885,6 +886,7 @@ class SwarmDispatcher:
             get_front_office_rankings,
             get_gm_record,
             search_league_memory,
+            get_press_conference,
         ]
 
         self.entity_tagger = EntityTaggingService(self.db.db_conn_info)
@@ -1151,6 +1153,7 @@ CRITICAL BEAT WRITER RESEARCH & LOCAL REPORTING DIRECTIVE:
 1. TEAM-SPECIFIC INVESTIGATION: Your focus is strictly your assigned franchise. Do NOT review unrelated games across the national schedule.
 2. RESEARCH TOOLS:
 - Query your team's most recent box score and player performances with `get_game_box_score`.
+- Query your team's recent postgame head-coach press conferences (transcripts with every on-record question and answer, through this publication week) with `get_press_conference`. Quote the head coach only from those transcripts, word for word.
 - Query your team's complete game schedule, results, and margins with `get_team_season_schedule`.
 - Query individual roster stats, age and experience with `get_player_season_stats` and `get_player_context`.
 - Query all-time franchise and NFL records with `get_record_book`.
@@ -1164,11 +1167,12 @@ CRITICAL BEAT WRITER RESEARCH & LOCAL REPORTING DIRECTIVE:
 - Query your team's executed trades and trade rumors with `get_league_transactions` and `get_trade_rumors` when they bear on the story: an executed trade is fact; a rumor is only ever reported as a rumor, never as done, and never with a player's name or a figure it doesn't give.
 - Query your team's roster moves with `get_league_transactions`, its cap sheet with `get_team_cap_sheet`, and a player's deal with `get_player_contract`, only when a move or contract bears on the story. CONTRACT FACTS RULE: moves, contract terms and cap figures come only from these three tools or the Assignment Brief, and only when they matter to your subject: most articles carry no cap numbers at all. Years and totals are fact. A figure marked `est.` is a projected year of a new deal: hedge it in prose ("roughly", "projected", "about"). An estimated cap row is approximate. Never fill in what a tool says is "not known" (no guaranteed money, incentive details or option years). Invent the colour freely (how talks went, an agent's stance, unnamed, unpriced interest from other teams, locker-room reaction) but never a term, a figure or a move.
 - Query your team's and the opponent's defensive and special-teams leaders (sacks, interceptions, tackles for loss, forced fumbles, kicking, returns) with `get_defense_special_teams_leaders` and the team name. Madden lists only its leaders, so a player with no line has unknown numbers, not zeros; don't add them up into team totals. Pressures, snap counts, targets and blitz or coverage rates aren't recorded, so never give them as numbers; in words, consistent with the game script, they're fine.
-3. AUTHENTIC BEAT REPORTING: Deliver your reporting with the immediacy, nuance, and accountability of an everyday beat writer inside the building. Quote coaching staff sentiment, cite specific situational downs (3rd down conversions, red zone execution, line protection), and speak directly to the local fan base without academic or algebraic math.
+3. AUTHENTIC BEAT REPORTING: Deliver your reporting with the immediacy, nuance, and accountability of an everyday beat writer inside the building. Cite specific situational downs (3rd down conversions, red zone execution, line protection), and speak directly to the local fan base without academic or algebraic math.
+HEAD-COACH QUOTING RULE: A head coach is quoted only from his press conference transcript, word for word (`press_conference` in your brief, or `get_press_conference`). If there is none, do not put words in his mouth. Coordinators, players and team captains may be quoted as before.
 BEAT WRITER OPENING VARIETY RULE:
 Never open your article with 'The mood inside the locker room...', 'The atmosphere inside the building...', or 'Walk through the facility...'. Instead, actively vary your opening across four distinct hooks:
 1. The Film Breakdown Hook: Start with a specific failed or successful play from last week that the coaches spent Tuesday correcting.
-2. The Press Conference / Quote Hook: Open with a candid quote from a coordinator or team captain addressing this week's challenge.
+2. The Press Conference / Quote Hook: Open with a candid quote from a coordinator or team captain addressing this week's challenge. Never put a quote in the head coach's mouth: his words come only from his press conference transcript (`press_conference` in your brief, or `get_press_conference`).
 3. The Personnel Angle: Highlight an unheralded starter, a backup thrust into action, or an offensive lineman adjusting to a new scheme.
 4. The Historical / Matchup Stakes Hook: Ground the opening in how this specific matchup or opponent has tested the franchise's identity.
 """
@@ -1257,6 +1261,9 @@ Where natural in your prose, refer to decorated players by their earned hardware
 - If a player won Rookie of the Year or Player of the Year: refer to them by that honor (e.g., "former Defensive Rookie of the Year", "the 2033 Offensive Player of the Year").
 - If a player won Super Bowl MVP: refer to them as "Super Bowl MVP".
 - STRICT ACCURACY RULE: NEVER invent unearned awards. Only cite accolades that actually exist in their recorded `career_awards`. If a player has "None recorded", do not fabricate All-Pros, MVPs, or Pro Bowls.
+
+HEAD-COACH QUOTING RULE:
+A head coach is quoted only from his press conference transcript, word for word (`press_conference` in your brief, or `get_press_conference`). If there is none, do not put words in his mouth. Coordinators, players and team captains may be quoted as before.
 
 GAME SCRIPTS ARE CANON (WHAT YOU MAY AND MAY NOT INVENT):
 Every completed game has a game script: the `game_script` at the end of `get_game_box_score`, summarized as `game_story` in the brief's recap slate. Its quarter scores, scoring plays (who scored, how, from how far, on what drive, at what point on the clock), lead changes, the score that won it, key moments, adjustments and defensive standouts are the official account every writer shares. When you describe how a game unfolded, follow it and never contradict it. Beyond it, invent the texture no data records: the snaps between the scores, play calls, pressure and coverage, a block, a drop, a sideline scene, the crowd, quotes. Keep it consistent with the script and the box score. Never invent anything the data records (scores, stats, records, standings, injuries), and a defender with no recorded line for a game gets praise in words, not numbers.
@@ -1404,6 +1411,21 @@ EDITORIAL DESK ASSIGNMENT (MANDATORY):
                         brief_for_agent["team_trades"] = block
             except Exception as e:
                 print(f"⚠️  Could not load beat trades for team {assigned_team_id}: {e}")
+            # Press conference (PRESS_CONFERENCE_PLAN §2.9): the team's CLOSED presser for its last game, or the
+            # note when the coach declined. Missing tables -> neither key, old behaviour.
+            try:
+                from newsroom import press_room
+                with psycopg.connect(self.db.db_conn_info) as pconn, pconn.cursor() as pcur:
+                    press_block = press_room.brief_block(pcur, assigned_team_id, season, week)
+                    press_note = press_room.declined_note(pcur, assigned_team_id, season, week)
+                if press_block:
+                    brief_for_agent = dict(brief_for_agent)
+                    brief_for_agent["press_conference"] = press_block
+                if press_note:
+                    brief_for_agent = dict(brief_for_agent)
+                    brief_for_agent["press_conference_note"] = press_note
+            except Exception as e:
+                print(f"⚠️  Could not load beat press conference for team {assigned_team_id}: {e}")
 
         task_instruction = f"""ASSIGNMENT BRIEF:
 {json.dumps(brief_for_agent, indent=2)}
@@ -2294,6 +2316,16 @@ If you need specific stats, use your database tools before producing your final 
         the team's Agent Wire posts (newsroom/social_publish.run_team_social), which also share the new articles."""
         print(f"\n📍 --- INITIATING LOCAL TEAM WAKEUP (Team {team_id}, Week {week}) ---")
         print(f"-> Concurrency Level: {max_workers} worker threads")
+
+        # Press conference first (PRESS_CONFERENCE_PLAN §2.2): an AI team whose presser for its last game is
+        # missing or FAILED runs it inline, so the beat coverage can quote the transcript. A user team's presser
+        # that is still open is left alone; server.api.maybe_start_team_wakeup holds the wakeup for it.
+        try:
+            from newsroom import press_room
+            status = press_room.ensure_team_presser(self.db.db_conn_info, team_id, season, week - 1)
+            print(f"-> Presser for Week {week - 1}: {status}")
+        except Exception as e:
+            print(f"⚠️  Could not ensure the presser for team {team_id}, Week {week - 1}: {e}")
 
         with psycopg.connect(self.db.db_conn_info) as conn:
             with conn.cursor() as cur:

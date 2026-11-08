@@ -1285,6 +1285,33 @@ def ingest_snapshot(snapshot_path, save_season, save_week, dry_run=False, no_art
     return result()
 
 
+def press_week(dsn, season):
+    """The season's latest week with completed games: the games an ingest just loaded (the save is made after
+    Advance Week, so its own week is Madden's next unplayed one). None when the season has no completed game or the
+    press tables aren't installed (an unmigrated database simply has no pressers)."""
+    if season is None:
+        return None
+    import psycopg
+    with psycopg.connect(dsn) as conn, conn.cursor() as cur:
+        cur.execute("""SELECT to_regclass('public.press_conferences') IS NOT NULL AS press_installed,
+                              (SELECT MAX(week) FROM games WHERE season = %s AND status = 'COMPLETED') AS latest_week""",
+                    (int(season),))
+        row = cur.fetchone()
+    if not row or not row[0] or row[1] is None:
+        return None
+    return int(row[1])
+
+
+def start_press_week(dsn, season, week, log_fn=log):
+    """Spawn `newsroom.press_room run-week` detached after the articles and the mod pack (PRESS_CONFERENCE_PLAN
+    §2.2); never waits for it and never fails the ingest."""
+    cmd = [sys.executable, "-m", "newsroom.press_room", "run-week",
+           "--season", str(int(season)), "--week", str(int(week))]
+    subprocess.Popen(cmd, cwd=ROOT, env={**os.environ, "DATABASE_URL": dsn}, start_new_session=True,
+                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    log_fn(f"Press conferences: run-week for season {season} week {week} started in the background.")
+
+
 def run_ingest(snapshot_path, dsn, save_season, save_week, dry_run=False, no_articles=False, no_engines=False,
                save_name="", log_fn=log, save_path=None, league_office=False, league_office_dry_run=False,
                save_sha256=None, stage_only=False):
@@ -1313,7 +1340,18 @@ def run_ingest(snapshot_path, dsn, save_season, save_week, dry_run=False, no_art
     if p.returncode != 0 or not os.path.exists(result_path):
         raise WatcherError(f"Ingest of {save_name} into {db_name_of(dsn)} failed (exit {p.returncode}); see the log above.")
     with open(result_path) as fh:
-        return json.load(fh)
+        result = json.load(fh)
+    # Press conferences (PRESS_CONFERENCE_PLAN §2.2): the ingest has loaded, run the engines, written the
+    # national slate and the mod pack; now start this week's pressers in a detached process. Never on a dry
+    # run, with the articles or engines skipped, or for a preseason / no-week save.
+    if not dry_run and not no_articles and not no_engines and save_week is not None:
+        try:
+            press = press_week(dsn, save_season)
+            if press is not None:
+                start_press_week(dsn, save_season, press, log_fn)
+        except Exception as e:      # noqa: BLE001 - a presser never fails the week
+            log_fn(f"[WARN] press conference week not started: {e}")
+    return result
 
 
 def run_league_office_child(snapshot_path, dsn, save_path, save_sha256=None, dry_run=False):

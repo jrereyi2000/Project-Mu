@@ -861,6 +861,16 @@ def get_coach_profile(team_identifier: str, season: int = 0) -> str:
     except Exception as e:
         return f"Error: {str(e)}"
 
+@tool
+def get_press_conference(team_identifier: str, season: int = 0, week: int = 0) -> str:
+    """Fetch a team's recent postgame head-coach press conference transcripts (the six most recent CLOSED or DECLINED pressers, newest first, through this article's publication week): the subject, the game and result, how the presser ended, and every on-record question and answer, plus the note when the coach declined to take questions. Quote the head coach only from these transcripts, word for word; never invent a head-coach quote. Accepts a team name, city, abbreviation or team ID."""
+    try:
+        from newsroom import press_room
+        return press_room.get_press_conference(team_identifier, resolve_season(season), int(week or 0))
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+
 CAREER_STATS = ("games_played", "completions", "pass_attempts", "pass_yards", "pass_tds", "interceptions",
                 "rush_attempts", "rush_yards", "rush_tds", "receptions", "rec_yards", "rec_tds", "def_tackles",
                 "def_sacks", "def_tfl", "def_ints", "def_deflections", "def_forced_fumbles", "kick_fgm", "kick_fga",

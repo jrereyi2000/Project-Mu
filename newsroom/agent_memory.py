@@ -25,6 +25,7 @@ MAX_TAKES_PER_ARTICLE = 3
 RECENT_TAKES = 6
 SUBJECT_TAKES = 3
 RECENT_PREDICTIONS = 5
+PRESS_SHOWN = 3
 OPEN_CALLS_SHOWN = 5
 SUMMARY_MIN_NEW_TAKES = 3
 TAKE_MAX_CHARS = 280
@@ -133,9 +134,10 @@ def _call_text(c: dict) -> str:
 
 
 def format_memory_block(summary: str, takes: list, subject_takes: list, predictions: list, record: tuple,
-                        open_calls: list = None, graded_calls: list = None) -> str:
+                        open_calls: list = None, graded_calls: list = None, press: list = None) -> str:
     """Prompt section appended under the identity line. Empty string when there is nothing to remember.
-    open_calls / graded_calls: this season's season calls ({made_week, call_type, subject_name, detail, result})."""
+    open_calls / graded_calls: this season's season calls ({made_week, call_type, subject_name, detail, result}).
+    press: this person's recent head-coach press conferences ({week, text}), never mixed with takes."""
     parts = []
     if summary:
         parts.append(f"YOUR SEASON SO FAR (your own running memory):\n{summary.strip()}")
@@ -145,6 +147,9 @@ def format_memory_block(summary: str, takes: list, subject_takes: list, predicti
     if subject_takes:
         parts.append("WHAT YOU'VE SAID BEFORE ABOUT THIS ARTICLE'S SUBJECT:\n"
                      + "\n".join(f"- Week {t['week']}: {t['text']}" for t in subject_takes))
+    if press:
+        parts.append("YOUR RECENT PRESS CONFERENCES (you were in the room):\n"
+                     + "\n".join(f"- Week {p['week']}: {p['text']}" for p in press))
     graded = [p for p in predictions if p["result"] != "pending"]
     if graded or any(record):
         wins, losses = record
@@ -287,11 +292,23 @@ def build_memory_block(cur, agent_id: str, season: int, week: int, subject_team_
                     (ids, season, week, subject_team_id, SUBJECT_TAKES + RECENT_TAKES))
         recent = {(t["week"], t["text"]) for t in takes}
         subject_takes = [{"week": w, "text": t} for w, t in cur.fetchall() if (w, t) not in recent][:SUBJECT_TAKES]
+    # Press memories (press_room.close_effects) are kind = 'PRESS' rows, so they never mix with takes. Only read
+    # them when the press tables are installed: without them old behaviour stands (no section, no error).
+    press = []
+    cur.execute("SELECT to_regclass('public.press_conferences') IS NOT NULL AS press_installed;")
+    press_row = cur.fetchone()
+    installed = (press_row.get("press_installed") if isinstance(press_row, dict)
+                 else (press_row[0] if press_row else False))
+    if installed:
+        cur.execute("""SELECT week, text FROM agent_memory_entries
+                       WHERE agent_id = ANY(%s) AND season = %s AND week < %s AND kind = 'PRESS'
+                       ORDER BY week DESC, id DESC LIMIT %s;""", (ids, season, week, PRESS_SHOWN))
+        press = [{"week": w, "text": t} for w, t in cur.fetchall()]
     preds = fetch_predictions(cur, ids, season, week)
     record = (sum(p["result"] == "correct" for p in preds), sum(p["result"] == "wrong" for p in preds))
     open_calls, graded_calls = fetch_season_calls(cur, ids, season, week) if calls_table_exists(cur) else ([], [])
     return format_memory_block(summary, takes, subject_takes, preds[:RECENT_PREDICTIONS], record,
-                               open_calls, graded_calls)
+                               open_calls, graded_calls, press)
 
 
 def store_takes(cur, agent_id: str, season: int, week: int, article_id: int, takes: list, team_index: list) -> int:
