@@ -5,7 +5,7 @@ A free agent never signs with one click: he scores every offer with a utility an
 the best one. Pure functions over plain dicts, money in whole dollars, no DB access; randomness comes only from
 sha256 of a seed string (no global random state), so a run is reproducible for its seed.
 
-  U = w_money S_financial + w_role S_opportunity + w_team S_contention + w_scheme S_scheme + e_persona
+  U = w_money S_financial + w_role S_opportunity + w_team S_org + w_scheme S_scheme + e_persona
       W_DEFAULT = money 0.45, role 0.25, team 0.20, scheme 0.10 (plan weights); e_persona is 0 (plan D4: persona
       traits ship at 0; the argument is accepted and ignored).
   S_financial    w_val s_value + w_guar s_guar + w_term s_term, weights (0.70, 0.15, 0.15), veterans 30+
@@ -21,6 +21,12 @@ sha256 of a seed string (no global random state), so a run is reproducible for i
   S_contention   0.45 win_pct + 0.35 playoff_odds + 0.20 popularity_index / 100 (each 0.5 when missing),
                  +0.05 CONTEND / -0.05 REBUILD direction. A contender gets the same utility for less money (the
                  contender discount); a rebuilder must pay more (the rebuilder tax).
+  S_org          the team term's input. S_contention alone by default; when the team dict carries
+                 team["facility_score"] (the team's S_facility from engines.report_card_engine.facility_score, a
+                 float in [0, 1]), S_org = 0.70 S_contention + 0.30 facility_score (§2.2). Top facilities raise the
+                 team term (the facility discount, up to ~+0.06 utility); bottom facilities lower it (the misery
+                 tax). The returned contention stays the raw S_contention; a facility key is added only when
+                 facility_score is present.
   S_scheme       team["scheme_fit"][player_id] in 0..1, else 0.5.
 
   acceptance     ACCEPT when U >= bar; bar = 0.68 + 0.005 (ovr - 75) clamped to [0.55, 0.80], minus 0.15 in
@@ -81,6 +87,8 @@ BACKLOAD_PENALTY = 1.0                  # x (back-half share - front-half share)
 CONTENTION_WEIGHTS = (0.45, 0.35, 0.20)  # win pct, playoff odds, popularity / 100
 DIRECTION_SHIFT = {"CONTEND": 0.05, "REBUILD": -0.05}
 NEUTRAL = 0.5
+# facility (NFLPA report cards, §2.2): the team term blends contention with the team's facility score
+ORG_CONTENTION_W, ORG_FACILITY_W = 0.70, 0.30
 # acceptance
 BASE_BAR, BAR_PER_OVR, BAR_CLAMP = 0.68, 0.005, (0.55, 0.80)
 IN_SEASON_DISCOUNT = 0.15
@@ -216,20 +224,25 @@ def _fingerprint(offer, player, team, market, persona, contract_context, policy)
 def offer_utility(offer, player, team, market, persona=None, *, contract_context=None, policy=None):
     """Score one offer for one player. offer: {team_id, player_id, years, total_value, bonus, guaranteed,
     projected_depth?, salary_by_year?}; player: {id, group, ovr, age, accrued_seasons?}; team: {team_id,
-    win_pct?, playoff_odds?, popularity_index?, direction?, projected_depth?: {pid: depth}, scheme_fit?: {pid:
-    0..1}}; market: a trade_value.fit_market dict, or None for the league-minimum market. Returns {utility,
-    financial, opportunity, contention, scheme, persona: 0.0}. Without a policy (or mode off) persona is ignored
-    (D4). With a shadow/active policy, persona is the core's contracts feature view and the result adds
-    base_utility and policy_explanation (module docstring)."""
+    win_pct?, playoff_odds?, popularity_index?, direction?, facility_score?, projected_depth?: {pid: depth},
+    scheme_fit?: {pid: 0..1}}; market: a trade_value.fit_market dict, or None for the league-minimum market.
+    Returns {utility, financial, opportunity, contention, scheme, persona: 0.0}, plus facility only when
+    facility_score is present. Without a policy (or mode off) persona is ignored (D4). With a shadow/active
+    policy, persona is the core's contracts feature view and the result adds base_utility and policy_explanation
+    (module docstring)."""
     fin = financial_score(offer, player, market)
     opp = role_score(_depth(offer, player, team), player.get("ovr"))
     con = contention_score(team)
+    fac = team.get("facility_score")
+    team_term = con if fac is None else ORG_CONTENTION_W * con + ORG_FACILITY_W * float(fac)
     fit = (team.get("scheme_fit") or {}).get(_pid(player))
     sch = NEUTRAL if fit is None else _clamp(float(fit))
     w = W_DEFAULT
-    u = w["money"] * fin + w["role"] * opp + w["team"] * con + w["scheme"] * sch + 0.0
+    u = w["money"] * fin + w["role"] * opp + w["team"] * team_term + w["scheme"] * sch + 0.0
     out = {"utility": round(u, 4), "financial": round(fin, 4), "opportunity": round(opp, 4),
            "contention": round(con, 4), "scheme": round(sch, 4), "persona": 0.0}
+    if fac is not None:
+        out["facility"] = round(float(fac), 4)
     if not _policy_on(policy):
         return out
     from engines.personality_contract_policy import contract_personality_delta
