@@ -12,6 +12,7 @@ import type {
 } from "../../types/franchiseGame";
 import { RANK_STATS } from "../../types/franchiseGame";
 import { MOVE_LABEL, SharedStyles, StateNote, franchiseFetch, useFranchiseData } from "./RosterCapModule";
+import PressConferencePanel, { useTeamPresser } from "./PressConferencePanel";
 
 const GC_CSS = `
 .gc-next { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; padding: 22px 24px; margin-bottom: 22px; background: var(--white); border-top: 3px solid var(--team-color, var(--red)); }
@@ -39,6 +40,11 @@ const GC_CSS = `
 .gc-pending li { display: flex; justify-content: space-between; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--gray-100); font: 600 10px var(--font-mono); }
 .gc-pending li span { color: var(--gray-500); }
 .gc-h3 { margin: 0 0 10px; color: var(--gray-500); font: 700 9px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
+.gc-podium { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 22px; padding: 14px 20px; background: #fff4d6; border-left: 3px solid #e0a800; }
+.gc-podium > div { display: flex; flex-direction: column; gap: 3px; }
+.gc-podium span { color: #7a5c00; font: 700 8px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
+.gc-podium strong { font: 700 16px var(--font-sans); }
+.gc-podium small { color: #55575d; font: 600 9px var(--font-mono); }
 @media (max-width: 800px) { .gc-grid { grid-template-columns: 1fr; } .fo-cap-tiles.gc-tiles { grid-template-columns: 1fr 1fr; } .gc-launch { align-items: flex-start; } }
 `;
 
@@ -261,9 +267,14 @@ function Matchups({ gc }: { gc: GameCenterResponse }) {
 export default function GameCenterModule({ teamAbbr }: { teamAbbr: string }) {
   const [overview] = useFranchiseData<FranchiseOverview>(teamAbbr, "/overview");
   const [center] = useFranchiseData<GameCenterResponse>(teamAbbr, "/game-center");
+  const [presser, reloadPresser] = useTeamPresser(teamAbbr);
+  const [podiumOpen, setPodiumOpen] = useState(false);
   const o = overview.status === "ready" ? overview.data : null;
   const gc = center.status === "ready" ? center.data : null;
   const next = gc?.next_game ?? o?.next_game ?? null;
+  const pressConference = presser?.conference ?? null;
+  const podiumReady = !!pressConference && pressConference.controller === "USER"
+    && ["SCHEDULED", "LIVE", "REVIEW"].includes(pressConference.status);
 
   return (
     <section className="team-data-view fo-view">
@@ -292,6 +303,20 @@ export default function GameCenterModule({ teamAbbr }: { teamAbbr: string }) {
           </div>
           <LaunchPanel abbr={teamAbbr} pending={o?.pending_moves.length ?? 0} next={next} />
         </div>
+        {podiumReady && pressConference && (
+          <div className="gc-podium">
+            <div>
+              <span>Postgame press conference · {pressConference.status}</span>
+              <strong>{pressConference.subject_name}</strong>
+              <small>
+                Week {pressConference.week} · {pressConference.team}
+                {pressConference.score ? ` ${pressConference.score} ` : " v "}
+                {pressConference.opponent}
+              </small>
+            </div>
+            <button className="fr-btn primary" onClick={() => setPodiumOpen(true)}>Go to the podium</button>
+          </div>
+        )}
         {o && !o.user_controlled && (
           <p className="fr-warn">{teamAbbr} isn't one of your franchise's user teams: launching and every move will be refused (403).</p>
         )}
@@ -318,6 +343,10 @@ export default function GameCenterModule({ teamAbbr }: { teamAbbr: string }) {
           <Matchups gc={gc} />
           <p className="fo-basis">Per-game values over the season's completed regular-season games; rank 1 is the league's best. An edge needs the better rank by more than 3 places.</p>
         </section>
+      )}
+
+      {podiumOpen && (
+        <PressConferencePanel teamAbbr={teamAbbr} onClose={() => { setPodiumOpen(false); reloadPresser(); }} />
       )}
     </section>
   );
