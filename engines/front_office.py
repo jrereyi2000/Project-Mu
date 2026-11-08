@@ -7,8 +7,9 @@ Read helpers (the hand-off surface for steps 4 and 5; all read-only, plain tuple
   team_directions(cur, season)                     {team_id: direction}
   draft_pick_owner(cur, draft_season, round, original_team_id)
   trade_value(cur, season, team_id=None, player_id=None, pick=None)   (+ player_value / pick_value re-exported)
-  executed_trades(cur, season, week=None)          EXECUTED trades with their legs
-  trade_rumors(cur, season, week)                  non-executed rumor_ok proposals: teams, asset types/positions
+  controlled_team_ids(cur)                         JR's teams from the franchise registry (None: no entry)
+  executed_trades(cur, season, week=None)          EXECUTED trades with their legs (+ talk quotes when published)
+  trade_rumors(cur, season, week)                  non-executed rumor_ok proposals + gm_trade_leaks: teams, positions
   deadline_summary(cur, season)                    buyers / sellers by direction, executed trades by week
   legality_check(cur, season, week, team_a, team_b, assets)
   front_office_state(cur, season)                  everything the #debug Front Office card shows
@@ -42,6 +43,28 @@ def installed(cur):
 def current_state(cur):
     cur.execute("SELECT current_season, current_week FROM league_state WHERE id = 1")
     return cur.fetchone()
+
+
+def controlled_team_ids(cur):
+    """The team ids JR controls, from the franchise registry (plan §2.10, D8): the registry entry whose `db` is
+    `current_database()`, its `user_teams` abbreviations mapped to team ids. None when this database has no registry
+    entry (tests, madden_test, madden_2036) or the registry can't be read: the old `gm_team_settings` fallback then
+    applies. An entry with an empty list is `set()`: no team is JR's (the all-CPU era)."""
+    try:
+        cur.execute("SELECT current_database()")
+        row = cur.fetchone()
+        db = row[0] if row else None
+        if not db:
+            return None
+        from db.franchises import load_registry
+        registry = load_registry()
+    except Exception:
+        return None
+    entry = next((e for e in (registry.get("franchises") or {}).values() if e.get("db") == db), None)
+    if entry is None:
+        return None
+    ids = _team_ids(cur)
+    return {ids[a] for a in entry.get("user_teams") or [] if a in ids}
 
 
 # ----------------------------------------------------------------- read ----
@@ -124,30 +147,139 @@ def _legs(cur, ids):
     return out
 
 
+def _apply_control(teams, controlled):
+    """Set `user_controlled` from the registry overlay (§2.10) when it exists (None: leave the rows' fallback)."""
+    if controlled is not None:
+        for t in teams:
+            t["user_controlled"] = t["team_id"] in controlled
+    return teams
+
+
+def _talk_flag(flags):
+    """The negotiation id in a proposal's `talks:<nid>` flag, else None."""
+    for f in flags or []:
+        if isinstance(f, str) and f.startswith("talks:"):
+            try:
+                return int(f.split(":", 1)[1])
+            except (ValueError, IndexError):
+                return None
+    return None
+
+
+def _talk_quotes(cur, nids):
+    """{negotiation_id: [{gm, line, source}]} for every published talk in `nids` (an empty list when the talk is
+    published but has no GM lines). Up to 3 GM lines, LLM-sourced lines first. {} without the talks migration
+    (`gm_trade_leaks` is created by it, so its absence marks the migration's absence)."""
+    if not nids:
+        return {}
+    cur.execute("SELECT to_regclass('gm_trade_leaks') IS NOT NULL")
+    row = cur.fetchone()
+    if not row or not row[0]:
+        return {}
+    cur.execute("""SELECT id FROM gm_trade_negotiations WHERE id = ANY(%s) AND published_at IS NOT NULL""",
+                (list(nids),))
+    published = [r[0] for r in cur.fetchall()]
+    if not published:
+        return {}
+    cur.execute("""SELECT n.id, n.user_team_id, n.gm_team_id, t.actor, t.message, t.message_source, t.turn_no
+                   FROM gm_trade_negotiations n
+                   JOIN gm_trade_negotiation_turns t ON t.negotiation_id = n.id
+                   WHERE n.id = ANY(%s) AND n.published_at IS NOT NULL
+                   ORDER BY n.id, t.turn_no""", (published,))
+    turns = cur.fetchall()
+    team_ids = sorted({r[1] for r in turns} | {r[2] for r in turns})
+    names = {}
+    if team_ids:
+        cur.execute("""SELECT team_id, gm_name FROM gm_profiles
+                       WHERE team_id = ANY(%s) AND end_season IS NULL""", (team_ids,))
+        names = dict(cur.fetchall())
+    by_talk = {}
+    for nid, user_team, gm_team, actor, message, source, turn_no in turns:
+        if actor not in ("GM", "GM_A") or not message:
+            continue
+        team = user_team if actor == "GM_A" else gm_team
+        by_talk.setdefault(nid, []).append({"gm": names.get(team), "line": message.strip(),
+                                            "source": source or "TEMPLATE", "_turn": turn_no})
+    out = {}
+    for nid in published:
+        quotes = by_talk.get(nid, [])
+        quotes.sort(key=lambda q: (q["source"] != "LLM", q["_turn"]))     # LLM lines first, then turn order
+        out[nid] = [{"gm": q["gm"], "line": q["line"], "source": q["source"]} for q in quotes[:3]]
+    return out
+
+
 def executed_trades(cur, season, week=None):
     """EXECUTED trades (in Madden and in Mu), oldest first: [{proposal_id, week, team_a, team_b, executed_at,
-    executed_as, origin, headline, rationale_a, rationale_b, legs}]. With week: that week's only."""
+    executed_as, origin, headline, rationale_a, rationale_b, legs}]. With week: that week's only. A trade whose
+    proposal carries a `talks:<nid>` flag for a published talk also gets `talk_id` and `talk_quotes` (up to 3 GM
+    lines from the published transcript, LLM-sourced first)."""
     cur.execute("""SELECT p.id, p.week, ta.abbreviation, tb.abbreviation, p.executed_at, p.executed_as, p.origin,
-                          p.headline, p.rationale_a, p.rationale_b, p.trade_window
+                          p.headline, p.rationale_a, p.rationale_b, p.trade_window, p.flags
                    FROM gm_trade_proposals p JOIN teams ta ON ta.id = p.team_a_id JOIN teams tb ON tb.id = p.team_b_id
                    WHERE p.season = %s AND p.status = 'EXECUTED' AND (%s::int IS NULL OR p.week = %s)
                    ORDER BY p.executed_at, p.id""", (season, week, week))
     rows = cur.fetchall()
+    talk_ids = [_talk_flag(r[11]) for r in rows]
+    quotes = _talk_quotes(cur, {nid for nid in talk_ids if nid})
     legs = _legs(cur, [r[0] for r in rows])
-    return [{"proposal_id": r[0], "week": r[1], "team_a": r[2], "team_b": r[3], "executed_at": r[4],
-             "executed_as": r[5], "origin": r[6], "headline": r[7], "rationale_a": r[8], "rationale_b": r[9],
-             "trade_window": r[10], "status": "EXECUTED", "legs": legs.get(r[0], [])} for r in rows]
+    out = []
+    for r, nid in zip(rows, talk_ids):
+        trade = {"proposal_id": r[0], "week": r[1], "team_a": r[2], "team_b": r[3], "executed_at": r[4],
+                 "executed_as": r[5], "origin": r[6], "headline": r[7], "rationale_a": r[8], "rationale_b": r[9],
+                 "trade_window": r[10], "status": "EXECUTED", "legs": legs.get(r[0], [])}
+        if nid in quotes:
+            trade["talk_id"] = nid
+            trade["talk_quotes"] = quotes[nid]
+        out.append(trade)
+    return out
+
+
+def _leak_rumors(cur, season, week):
+    """(leak rumor rows made by `week`, the negotiation ids they belong to). Only when `gm_trade_leaks` exists."""
+    cur.execute("SELECT to_regclass('gm_trade_leaks') IS NOT NULL")
+    row = cur.fetchone()
+    if not row or not row[0]:
+        return [], set()
+    cur.execute("""SELECT l.id, l.negotiation_id, l.week, l.stage, l.insider_key, l.detail, l.named_player_ids
+                   FROM gm_trade_leaks l WHERE l.season = %s AND l.week <= %s ORDER BY l.week, l.id""",
+                (season, week))
+    rows = cur.fetchall()
+    nids = {r[1] for r in rows}
+    player_ids = sorted({pid for r in rows for pid in (r[6] or [])})
+    names = {}
+    if player_ids:
+        cur.execute("""SELECT DISTINCT ON (p.id) p.id, COALESCE(p.full_name, p.player_name), ps.position
+                       FROM players p LEFT JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
+                       WHERE p.id = ANY(%s) ORDER BY p.id, ps.id DESC""", (season, player_ids))
+        names = {r[0]: {"player_id": r[0], "name": r[1], "position": r[2]} for r in cur.fetchall()}
+    out = []
+    for lid, nid, wk, stage, insider, detail, named_ids in rows:
+        detail = detail or {}
+        teams = detail.get("teams") or []
+        if len(teams) < 2:
+            continue
+        assets = [{"type": "PLAYER", "position": p.get("pos") or p.get("position"),
+                   "from": p.get("from"), "to": p.get("to")} for p in detail.get("positions") or []]
+        out.append({"rumor_id": f"leak:{lid}", "week": wk, "teams": teams,
+                    "initiator": detail.get("initiator") or teams[0], "trigger": detail.get("trigger"),
+                    "assets": assets, "named": [names[i] for i in named_ids or [] if i in names],
+                    "stage": stage, "insider_key": insider, "source": "LEAK", "status": "RUMOR"})
+    return out, nids
 
 
 def trade_rumors(cur, season, week):
-    """Rumor material for step 5: proposals made by `week` that were never executed and have rumor_ok. Teams and
-    asset types/positions only: no names, no package, no cap figures, never marked as done (status RUMOR)."""
-    cur.execute("""SELECT p.id, p.week, ta.abbreviation, tb.abbreviation, p.status, p.trigger_kind
+    """Rumor material for step 5: proposals made by `week` that were never executed and have rumor_ok, plus one row
+    per `gm_trade_leaks` row made by `week` when that table exists. Teams and asset types/positions only (a leak may
+    name a player its leaker named): no package, no cap figures, never marked as done (status RUMOR). A leaked
+    talk's proposal is carried by its leak row, never duplicated as a plain rumor."""
+    cur.execute("""SELECT p.id, p.week, ta.abbreviation, tb.abbreviation, p.status, p.trigger_kind, p.flags
                    FROM gm_trade_proposals p JOIN teams ta ON ta.id = p.team_a_id JOIN teams tb ON tb.id = p.team_b_id
                    WHERE p.season = %s AND p.week <= %s AND p.rumor_ok AND p.status <> 'EXECUTED'
                      AND p.origin = 'ENGINE'
                    ORDER BY p.week, p.id""", (season, week))
-    rows = cur.fetchall()
+    prop_rows = cur.fetchall()
+    leaks, leak_nids = _leak_rumors(cur, season, week)
+    rows = [r for r in prop_rows if _talk_flag(r[6]) not in leak_nids]
     legs = _legs(cur, [r[0] for r in rows])
     out = []
     for r in rows:
@@ -155,7 +287,7 @@ def trade_rumors(cur, season, week):
                    "from": l["from"], "to": l["to"]} for l in legs.get(r[0], [])]
         out.append({"rumor_id": r[0], "week": r[1], "teams": [r[2], r[3]], "initiator": r[2],
                     "trigger": r[5], "assets": assets, "status": "RUMOR"})
-    return out
+    return out + leaks
 
 
 def deadline_summary(cur, season):
@@ -659,7 +791,11 @@ def apply_sighting(cur, sighting_id, assets=None):
 
 
 def set_team_control(cur, team_id, user_controlled=None, suggestions_on=None):
-    """JR runs this team (its GM only advises) and/or switches its GM's suggestions on or off (§7 Q1)."""
+    """JR runs this team (its GM only advises) and/or switches its GM's suggestions on or off (§7 Q1). When the
+    franchise registry lists this database, team control comes from its `user_teams` (§2.10): changing
+    `user_controlled` is refused (409); `suggestions_on` still saves."""
+    if user_controlled is not None and controlled_team_ids(cur) is not None:
+        raise FrontOfficeError(409, "team control comes from the franchise registry (python3 -m db.franchises)")
     cur.execute("""INSERT INTO gm_team_settings (team_id, user_controlled, suggestions_on, updated_at)
                    VALUES (%s, COALESCE(%s, false), COALESCE(%s, true), now())
                    ON CONFLICT (team_id) DO UPDATE SET
@@ -712,6 +848,7 @@ def front_office_state(cur, season=None):
               "direction_score": float(r[7]) if r[7] is not None else None, "needs": (r[8] or [])[:4],
               "urgent_need": r[9], "user_controlled": r[10], "suggestions_on": r[11],
               "fo_quality": float(r[12]) if r[12] is not None else None} for r in cur.fetchall()]
+    _apply_control(teams, controlled_team_ids(cur))     # the registry is the source of truth (§2.10)
     control = {t["team_id"]: t["user_controlled"] for t in teams}
     names = {t["team_id"]: t["team"] for t in teams}
     props = ge.read_proposals(cur, season)
