@@ -63,7 +63,7 @@ class FakeDeps(lo.Deps):
 
     def __init__(self, snap=None, **kw):
         self.snap = snap
-        self.pending, self.offers, self.drift_report, self.stored = [], [], {}, {}
+        self.pending, self.engine_props, self.offers, self.drift_report, self.stored = [], [], [], {}, {}
         self.resign, self.cpu, self.decisions, self.cut, self.ps, self.claims, self.udfa = [], [], [], [], [], [], []
         self.prep_doc = {"players": [], "records": [SLIDERS]}
         self.event_ids = ["ev-1"]
@@ -96,6 +96,9 @@ class FakeDeps(lo.Deps):
 
     def pending_moves(self, cur):
         return self.pending
+
+    def engine_trades(self, cur, season):
+        return self.engine_props
 
     def accepted_offers(self, cur, season):
         return self.offers
@@ -807,6 +810,119 @@ def test_record_written_updates_pending_and_stores_charts():
     assert [x for x in cur2.sql if not x[0].startswith("SELECT")] == [x for x in cur.sql if not x[0].startswith("SELECT")]
 
 
+def test_engine_trades_plan_player_legs_and_skip_picks():
+    deps = FakeDeps()
+    deps.engine_props = [{"id": 41, "status": "APPROVED", "flags": ["talks:9", "auto_approved"], "refusals": 0,
+                          "assets": [{"type": "PLAYER", "player_id": pid(1), "from": CHI, "to": AZ},
+                                     {"type": "PLAYER", "player_id": pid(3), "from": AZ, "to": CHI},
+                                     {"type": "PICK", "pick": (SEASON + 1, 2, AZ), "from": AZ, "to": CHI}]}]
+    p = plan("REGULAR_WEEK", deps=deps)
+    t = p["db"]["engine_trades"][0]
+    assert t["id"] == 41 and t["status"] == "WRITTEN" and t["flags"] == ["talks:9", "auto_approved"]
+    assert {(x["from_team_index"], x["to_team_index"], tuple(x["pgids"])) for x in p["edits"]["trade"]} == \
+           {(0, 1, (1,)), (1, 0, (3,))}
+    assert all(not x["picks"] for x in p["edits"]["trade"])          # picks are never written to the save
+    assert p["summary"]["engine_trades"] == 1
+    assert p["summary"]["engine_trades_written"] == 1 and p["summary"]["engine_trades_failed"] == 0
+    assert p["summary"]["engine_trades_failed_ids"] == []
+
+
+def test_engine_trade_with_a_claimed_player_is_refused_whole():
+    deps = FakeDeps()
+    deps.pending = [{"id": 1, "team_id": CHI, "kind": "RELEASE", "payload": {"player_id": pid(2)}}]
+    deps.engine_props = [{"id": 41, "status": "APPROVED", "flags": ["auto_approved"], "refusals": 0,
+                          "assets": [{"type": "PLAYER", "player_id": pid(2), "from": CHI, "to": AZ},
+                                     {"type": "PLAYER", "player_id": pid(3), "from": AZ, "to": CHI}]}]
+    p = plan("REGULAR_WEEK", deps=deps)
+    t = p["db"]["engine_trades"][0]
+    assert t["status"] == "REFUSED" and "already has a release" in t["reason"]
+    assert not any(x["pgids"] == [3] for x in p["edits"].get("trade") or [])   # the other leg wasn't planned either
+    assert p["summary"]["engine_trades_failed"] == 1
+    assert p["summary"]["engine_trades_failed_ids"] == [41]
+
+
+def test_second_engine_trade_refusal_calls_could_not_make(monkeypatch):
+    from engines import front_office as fo
+    from engines import gm_talks
+    monkeypatch.setattr(gm_talks, "publish_talk", lambda cur, nid: None)
+    deps = FakeDeps()
+    deps.pending = [{"id": 1, "team_id": CHI, "kind": "RELEASE", "payload": {"player_id": pid(2)}}]
+    deps.engine_props = [{"id": 41, "status": "APPROVED", "flags": ["auto_approved"], "refusals": 0,
+                          "assets": [{"type": "PLAYER", "player_id": pid(2), "from": CHI, "to": AZ}]}]
+    first = plan("REGULAR_WEEK", deps=deps)
+    calls = []
+    monkeypatch.setattr(fo, "could_not_make", lambda cur, proposal_id, reason=None: calls.append((proposal_id, reason)))
+    lo.record_written(FakeCursor(), first, 77)
+    assert calls == []                                    # one refusal: stays APPROVED, retried next write
+    deps.engine_props[0]["refusals"] = 1                  # the previous WRITTEN run refused it
+    second = plan("REGULAR_WEEK", deps=deps)
+    lo.record_written(FakeCursor(), second, 78)
+    assert calls == [(41, "the league office couldn't make it")]
+
+
+def test_pending_trade_with_a_pick_is_written():
+    deps = FakeDeps()
+    deps.pending = [{"id": 7, "team_id": CHI, "kind": "TRADE",
+                     "payload": {"proposal_id": 55, "other_team_id": AZ,
+                                 "send": {"players": [pid(1)], "picks": [(SEASON + 1, 2, CHI)]},
+                                 "receive": {"players": [pid(3)], "picks": []}}}]
+    p = plan("REGULAR_WEEK", deps=deps)
+    assert p["db"]["pending"][0]["status"] == "WRITTEN"
+    assert any("trade #55: picks moved in Mu's books only" in w for w in p["warnings"])
+    assert {(x["from_team_index"], x["to_team_index"], tuple(x["pgids"])) for x in p["edits"]["trade"]} == \
+           {(0, 1, (1,)), (1, 0, (3,))}
+
+
+def test_old_trade_payload_without_proposal_is_not_executed(monkeypatch):
+    from engines import front_office as fo
+    called = []
+    monkeypatch.setattr(fo, "_execute", lambda *a, **kw: called.append(a))
+    deps = FakeDeps()
+    deps.pending = [{"id": 7, "team_id": CHI, "kind": "TRADE",
+                     "payload": {"other_team_id": AZ,
+                                 "send": {"players": [pid(1)], "picks": [(SEASON + 1, 2, CHI)]},
+                                 "receive": {"players": [pid(3)], "picks": []}}}]
+    p = plan("REGULAR_WEEK", deps=deps)
+    assert p["db"]["pending"][0]["status"] == "WRITTEN"
+    assert any("picks not moved (no proposal_id" in w for w in p["warnings"])
+    lo.record_written(FakeCursor(), p, 77)
+    assert called == []
+
+
+def test_record_written_executes_written_trades_once_and_publishes(monkeypatch):
+    from engines import front_office as fo
+    from engines import gm_talks
+    executed, published, done = [], [], set()
+
+    def fake_proposal(cur, proposal_id):
+        return {"id": proposal_id, "season": SEASON, "week": 3, "assets": [],
+                "status": "EXECUTED" if proposal_id in done else "APPROVED"}
+
+    def fake_execute(cur, proposal, executed_as):
+        executed.append((proposal["id"], executed_as))
+        done.add(proposal["id"])
+        return {"warnings": [], "transactions": [], "contracts": []}
+
+    monkeypatch.setattr(fo, "_proposal", fake_proposal)
+    monkeypatch.setattr(fo, "_execute", fake_execute)
+    monkeypatch.setattr(gm_talks, "publish_talk", lambda cur, nid: published.append(nid))
+    deps = FakeDeps()
+    deps.pending = [{"id": 7, "team_id": CHI, "kind": "TRADE",
+                     "payload": {"proposal_id": 55, "other_team_id": AZ,
+                                 "send": {"players": [pid(1)], "picks": []},
+                                 "receive": {"players": [pid(3)], "picks": []}}}]
+    deps.engine_props = [{"id": 41, "status": "APPROVED", "flags": ["talks:9", "auto_approved"], "refusals": 0,
+                          "assets": [{"type": "PLAYER", "player_id": pid(2), "from": CHI, "to": AZ}]}]
+    p = plan("REGULAR_WEEK", deps=deps)
+    cur = FakeCursor()
+    lo.record_written(cur, p, 77)
+    lo.record_written(cur, p, 77)                       # already EXECUTED: never executed twice
+    assert executed == [(55, "PROPOSED"), (41, "PROPOSED")]
+    assert published == [9, 9]                          # publish_talk is idempotent
+    updates = [a for s, a in cur.sql if s.startswith("UPDATE gm_trade_proposals SET status = 'EXECUTED'")]
+    assert updates == [(55,), (41,)]
+
+
 def test_accepted_offers_become_sign_and_extension():
     deps = FakeDeps(state=dict(STATE, spare_contract_rows=1))
     deps.offers = [{"id": 10, "kind": "FREE_AGENT", "player_id": pid(4), "team_id": CHI, "years": 2,
@@ -1387,6 +1503,17 @@ def test_apply_db_sync_team_caps():
     assert neg_delta == -800_000
     assert team_id == CHI
     assert season == 2027
+
+    # A trade record_written executes moves its own team_cap_seasons rows (trade_moves): its room is left out here
+    cur_trade = FakeCursor()
+    trade_plan = {
+        "db": {"salary_cap": {"season": 2027, "cap": 301_200_000, "madden_cap": 280_000_000}},
+        "team_ids": {0: CHI, 1: AZ},
+        "cap": {0: [2120 + 30, 0, 0], 1: [2120 - 30, 0, 0]},
+        "trade_cap_db": {0: [30, 0, 0], 1: [-30, 0, 0]},
+    }
+    lo._apply_db(cur_trade, trade_plan, deps)
+    assert not [a for s, a in cur_trade.sql if "SET cap_space = cap_space + %s" in s]
 
     # When db has no salary_cap info
     cur_noop = FakeCursor()
