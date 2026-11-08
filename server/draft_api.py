@@ -9,7 +9,7 @@ Public endpoints never expose hidden scouting values (`true_value`, `true_rank`,
 or raw Madden `ovr`. War Room write actions (`lock-order`, `pick`, `undo`) require `X-Debug-Token`.
 """
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import psycopg
 from fastapi import APIRouter, Header, HTTPException
@@ -17,6 +17,7 @@ from psycopg.rows import tuple_row
 from pydantic import BaseModel
 
 from engines import college_stats as cs
+from engines import contracts_engine as contracts
 from engines import draft_order as do
 from engines import draft_room as dr
 from engines import scouting_events as sev
@@ -58,8 +59,11 @@ def _league_state(cur) -> tuple[int, int]:
 
 
 def _pick_chart_value(overall_pick: int) -> int:
-    """Standard draft trade value points (1st overall = 3000, smooth decay through pick 224)."""
-    p = max(1, min(260, int(overall_pick)))
+    """Standard draft trade value points (1st overall = 3000, smooth monotone decay past the 224 standard
+    picks). Compensatory slots (overall 225-256+) simply continue the same non-increasing curve; the floor of 2
+    lets every awarded comp pick carry a sane, non-negative value. The clamp is 300 (the CBA ceiling plus
+    Resolution JC-2A awards can push a class past 256) and the curve never increases with the pick number."""
+    p = max(1, min(300, int(overall_pick)))
     if p == 1:
         return 3000
     if p == 2:
@@ -73,6 +77,160 @@ def _pick_chart_value(overall_pick: int) -> int:
     if p <= 100:
         return int(round(580 * (0.968 ** (p - 33))))
     return max(2, int(round(64 * (0.975 ** (p - 101)))))
+
+
+# ------------------------------------------------ compensatory picks (optional tables) ----
+# The comp-pick tables arrive with db/migrations/2027_02_06_compensatory_draft_picks.sql. Every read below is
+# guarded the same way the rest of this file guards optional tables (to_regclass), so a database without the
+# migration degrades to the standard 224-pick view instead of erroring.
+COMP_SOURCES = ("COMP", "JC2A")
+
+
+def _table_exists(cur, name: str) -> bool:
+    cur.execute("SELECT to_regclass(%s) IS NOT NULL", (name,))
+    row = cur.fetchone()
+    return bool(row and row[0])
+
+
+def _column_exists(cur, table: str, column: str) -> bool:
+    cur.execute("""SELECT 1 FROM information_schema.columns
+                   WHERE table_schema = current_schema() AND table_name = %s AND column_name = %s""",
+                (table, column))
+    return cur.fetchone() is not None
+
+
+def _rollback_quietly(cur) -> None:
+    try:
+        cur.connection.rollback()
+    except Exception:
+        pass
+
+
+def _pick_suffix_digits(pick_suffix: str) -> Optional[int]:
+    digits = "".join(c for c in str(pick_suffix or "") if c.isdigit())
+    return int(digits) if digits else None
+
+
+def _is_comp_row(row: Dict[str, Any]) -> bool:
+    """A draft_picks row is compensatory when it carries a pick_suffix and/or a COMP/JC2A source (plan §1)."""
+    return bool(row.get("pick_suffix")) or str(row.get("source") or "").upper() in COMP_SOURCES
+
+
+def _load_draft_pick_rows(cur, draft_season: int) -> List[Dict[str, Any]]:
+    """Every draft_picks row for the class, or [] when the table/its comp columns aren't installed."""
+    if not _table_exists(cur, "draft_picks"):
+        return []
+    has_suffix = _column_exists(cur, "draft_picks", "pick_suffix")
+    suffix_expr = "COALESCE(pick_suffix, '')" if has_suffix else "''"
+    try:
+        cur.execute(f"""SELECT round, original_team_id, owner_team_id, COALESCE(source, 'SEED'),
+                               overall_pick, {suffix_expr}
+                        FROM draft_picks WHERE draft_season = %s""", (draft_season,))
+        rows = cur.fetchall()
+    except psycopg.Error:
+        _rollback_quietly(cur)
+        return []
+    return [{
+        "round": int(rnd),
+        "original_team_id": int(orig),
+        "owner_team_id": int(owner) if owner is not None else int(orig),
+        "source": (source or "SEED"),
+        "overall_pick": int(overall) if overall else None,
+        "pick_suffix": suffix or "",
+    } for rnd, orig, owner, source, overall, suffix in rows]
+
+
+def _draft_slots(cur, draft_season: int) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]],
+                                                  List[int], Dict[Tuple[int, int], Dict[str, Any]]]:
+    """Comp-pick-aware draft order for rounds 1-7.
+
+    Standard slots come from `do.compute_draft_order` mapped through the *standard* draft_picks owners only, so a
+    comp row can never shadow a standard pick's owner. Each round's overall numbers shift by every compensatory
+    pick awarded in the earlier rounds (4 Round-3 comps make Round 4 start at 101). Comp rows are returned
+    separately for the caller to append after their round's 32 standard picks. Returns
+    (slots, comp_rows, comp_counts_per_round, standard_rows_by_(round, original_team))."""
+    rows = _load_draft_pick_rows(cur, draft_season)
+    standard = [r for r in rows if not _is_comp_row(r)]
+    comps = [r for r in rows if _is_comp_row(r)]
+    comp_counts = [0] * 7
+    for r in comps:
+        rnd = int(r["round"] or 0)
+        if 1 <= rnd <= 7:
+            comp_counts[rnd - 1] += 1
+    standard_by_key = {(r["round"], r["original_team_id"]): r for r in standard}
+    owners = {(r["round"], r["original_team_id"]): r["owner_team_id"] for r in standard}
+    order = do.compute_draft_order(do.fetch_teams(cur), do.fetch_games(cur, draft_season - 1))["round_1_order"]
+    slots = []
+    for rd in range(1, 8):
+        comps_before = sum(comp_counts[:rd - 1])
+        for s in do.apply_owners(order, owners, rd):
+            s = dict(s)
+            s["pick"] = (rd - 1) * 32 + int(s["round_pick"]) + comps_before
+            slots.append(s)
+    return slots, comps, comp_counts, standard_by_key
+
+
+def _load_comp_awards(cur, draft_season: int) -> List[Dict[str, Any]]:
+    """The class's rows from compensatory_pick_awards joined to teams (and the player/coach behind a JC-2A
+    award). [] when the migration isn't applied or the class has no awards."""
+    if not _table_exists(cur, "compensatory_pick_awards"):
+        return []
+    try:
+        cur.execute("""
+            SELECT a.id, a.draft_season, a.team_id, t.abbreviation, t.city, t.name,
+                   a.round, a.slot_in_round, a.overall_pick, a.award_kind, a.reason,
+                   a.source_player_id, p.full_name, a.source_coach_id, c.coach_name
+            FROM compensatory_pick_awards a
+            LEFT JOIN teams t ON t.id = a.team_id
+            LEFT JOIN players p ON p.id = a.source_player_id
+            LEFT JOIN coaches c ON c.id = a.source_coach_id
+            WHERE a.draft_season = %s
+            ORDER BY a.round, a.overall_pick, a.slot_in_round, a.team_id
+        """, (draft_season,))
+        rows = cur.fetchall()
+    except psycopg.Error:
+        _rollback_quietly(cur)
+        return []
+    out = []
+    for aid, season, tid, abbr, city, name, rnd, slot, overall, kind, reason, pid, pname, cid, cname in rows:
+        team_name = " ".join(x for x in (city, name) if x) or (abbr or "NFL")
+        out.append({
+            "id": aid,
+            "draft_season": season,
+            "team_id": tid,
+            "team": abbr or "NFL",
+            "team_name": team_name,
+            "round": rnd,
+            "slot_in_round": slot,
+            "slot": slot,
+            "overall_pick": overall,
+            "award_kind": kind,
+            "reason": reason,
+            "source_player_id": pid,
+            "source_player": pname,
+            "source_coach_id": cid,
+            "source_coach": cname,
+        })
+    return out
+
+
+@router.get("/compensatory")
+def get_compensatory_picks(season: Optional[int] = None, draft_season: Optional[int] = None):
+    """The class's official compensatory pick awards (CBA Article 6 and Resolution JC-2A), from
+    compensatory_pick_awards. Returns an empty awards list (never an error) when the table isn't installed or
+    the class has none. `draft_season` wins; `season` means the league season (draft_season = season + 1)."""
+    with _connect() as conn:
+        cur = conn.cursor()
+        cur_season, _ = _league_state(cur)
+        s_val = season if season is not None else cur_season
+        ds = draft_season if draft_season is not None else s_val + 1
+        awards = _load_comp_awards(cur, ds)
+        return {
+            "season": s_val,
+            "draft_season": ds,
+            "total": len(awards),
+            "awards": awards,
+        }
 
 
 @router.get("/state")
@@ -430,8 +588,9 @@ def get_team_needs_matrix(season: Optional[int] = None):
                     })
                 teams_map[tid]["needs"] = formatted_needs
 
-        # Compute 7-round draft order & ownership
-        slots = do.draft_order_with_owners(cur, draft_season, rounds=range(1, 8))
+        # Compute the 7-round draft order & ownership. Comp rows shift every later round's overall numbers and
+        # are appended after their round's 32 standard picks (R1: never assume 7 x 32; count the table).
+        slots, comp_rows, comp_counts, standard_by_key = _draft_slots(cur, draft_season)
         r1_base_order = {s["original_team_id"]: s["round_pick"] for s in slots if s["round"] == 1}
 
         for s in slots:
@@ -442,6 +601,7 @@ def get_team_needs_matrix(season: Optional[int] = None):
             pts = _pick_chart_value(overall)
             orig_abbr = teams_map.get(orig_id, {}).get("abbreviation", "NFL")
             owner_abbr = teams_map.get(owner_id, {}).get("abbreviation", "NFL")
+            std = standard_by_key.get((rnd, orig_id), {})
 
             if owner_id in teams_map:
                 pick_obj = {
@@ -453,6 +613,10 @@ def get_team_needs_matrix(season: Optional[int] = None):
                     "owner_team_id": owner_id,
                     "owner_team": owner_abbr,
                     "status": "OWN" if owner_id == orig_id else "ACQUIRED",
+                    "source": std.get("source", "SEED"),
+                    "pick_suffix": "",
+                    "is_compensatory": False,
+                    "comp_slot": None,
                     "value_points": pts,
                     "locked": s.get("locked", False),
                 }
@@ -461,6 +625,74 @@ def get_team_needs_matrix(season: Optional[int] = None):
                 teams_map[owner_id]["draft_capital_points"] += pts
                 if rnd == 1:
                     teams_map[owner_id]["round_1_picks"].append(overall)
+
+        # Append the compensatory picks themselves: each sits after its round's 32 standard picks, ordered by
+        # its comp slot, and counts toward total_picks and draft capital (plan §1, risk R1).
+        awards = _load_comp_awards(cur, draft_season)
+        award_by_key = {(a["team_id"], a["round"], a["slot_in_round"]): a for a in awards}
+        awards_by_team_round: Dict[Tuple[int, int], List[Dict[str, Any]]] = {}
+        for a in awards:
+            awards_by_team_round.setdefault((a["team_id"], a["round"]), []).append(a)
+
+        comps_by_round: Dict[int, List[Dict[str, Any]]] = {}
+        for c in comp_rows:
+            comps_by_round.setdefault(int(c["round"]), []).append(c)
+
+        for rnd, crows in sorted(comps_by_round.items()):
+            if not (1 <= rnd <= 7):
+                continue
+            comps_before = sum(comp_counts[:rnd - 1])
+            crows.sort(key=lambda r: (_pick_suffix_digits(r["pick_suffix"]) or 10_000,
+                                      r["original_team_id"], r["pick_suffix"]))
+            for idx, c in enumerate(crows, 1):
+                owner_id = c["owner_team_id"]
+                orig_id = c["original_team_id"]
+                comp_slot = _pick_suffix_digits(c["pick_suffix"]) or idx
+                slot_no = 32 + comp_slot
+
+                # The awards ledger carries the authoritative overall pick; fall back to the round's tail.
+                award = (award_by_key.get((orig_id, rnd, comp_slot))
+                         or award_by_key.get((orig_id, rnd, slot_no)))
+                if award is None:
+                    matches = awards_by_team_round.get((orig_id, rnd), [])
+                    if len(matches) == 1:
+                        award = matches[0]
+                    elif matches:
+                        award = min(matches, key=lambda a: abs((a.get("slot_in_round") or 0) - slot_no))
+                overall = int(award["overall_pick"]) if award and award.get("overall_pick") else None
+                if overall is None:
+                    overall = (rnd - 1) * 32 + 32 + idx + comps_before
+
+                # Round from the API's own dynamic boundaries (contracts_engine), not a fixed 32 per round.
+                # The awards ledger's own round stays authoritative when it has the row.
+                calc_round = contracts.round_for_overall_pick(overall, comp_counts)
+                shown_round = rnd if award else (calc_round if 1 <= calc_round <= 7 else rnd)
+                pts = _pick_chart_value(overall)
+                orig_abbr = teams_map.get(orig_id, {}).get("abbreviation", "NFL")
+                owner_abbr = teams_map.get(owner_id, {}).get("abbreviation", "NFL")
+
+                if owner_id in teams_map:
+                    pick_obj = {
+                        "round": shown_round,
+                        "round_pick": slot_no,
+                        "overall_pick": overall,
+                        "original_team_id": orig_id,
+                        "original_team": orig_abbr,
+                        "owner_team_id": owner_id,
+                        "owner_team": owner_abbr,
+                        "status": "OWN" if owner_id == orig_id else "ACQUIRED",
+                        "source": c["source"],
+                        "pick_suffix": c["pick_suffix"],
+                        "is_compensatory": True,
+                        "comp_slot": comp_slot,
+                        "award_kind": award.get("award_kind") if award else c["source"],
+                        "award_reason": award.get("reason") if award else None,
+                        "value_points": pts,
+                        "locked": False,
+                    }
+                    teams_map[owner_id]["picks"].append(pick_obj)
+                    teams_map[owner_id]["total_picks"] += 1
+                    teams_map[owner_id]["draft_capital_points"] += pts
 
         teams_list = list(teams_map.values())
         by_capital = sorted(teams_list, key=lambda t: (-t["draft_capital_points"], r1_base_order.get(t["team_id"], 32)))
