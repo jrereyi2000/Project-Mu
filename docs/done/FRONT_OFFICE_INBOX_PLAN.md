@@ -55,7 +55,7 @@ Engines decide every outcome. The agent on the other side answers in its own voi
 - D2: One inbox per team. The team's beat writer can message JR. Players speak for themselves. JR's on-record answers are stored for articles later.
 - D3: No owner threads in this build and no stub kind; `owner` stays a valid counterpart type. A short options section says what owner agents could own later. When they come, start with the cap mandate and job security.
 - D4: Reporter talks in the inbox are one-on-one interviews. Postgame press conferences are a separate multi-agent panel owned by [`PRESS_CONFERENCE_PLAN.md`](../done/PRESS_CONFERENCE_PLAN.md); the inbox only carries its `PRESS` notice.
-- D5: The inbox is built first; [`TRADE_NEGOTIATIONS_PLAN.md`](../in_progress/TRADE_NEGOTIATIONS_PLAN.md) (V2.11) then extends `GM_TALK`.
+- D5: The inbox is built first; [`TRADE_NEGOTIATIONS_PLAN.md`](./TRADE_NEGOTIATIONS_PLAN.md) (V2.11) then extends `GM_TALK`.
 - D6: The franchise registry's `user_teams` is the source of truth for which teams JR controls, not `gm_team_settings.user_controlled`. Madden keeps all 32 teams as user teams to stop CPU moves.
 - D7: The language model is the default way counterparts speak (`MU_INBOX_LLM` on, `=0` for templates). It runs with an 8 s budget set by the spike, and the `llm_compare` gate runs before the plan closes; if the gate fails, templates stay the default until the prompt is fixed.
 - D8 (Q1): **By default JR controls no one.** A persona is controlled only when JR explicitly takes control of it, which stores a `controlled_personas` row. A registry user team with no rows has no inbox actors. There is no coach-plus-GM default.
@@ -568,7 +568,7 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 ### U4: GM-side kinds (trades and contracts)
 
 - **Owns:** `engines/inbox/kinds/gm_talk.py` (new), `engines/inbox/kinds/contract.py` (new), `tests/test_inbox_kinds_gm_talk.py` (new), `tests/test_inbox_kinds_contract.py` (new).
-- **Reads:** §2.2–§2.8, §2.14; U1's package; `server/franchise_api.py:945-1290`; `engines/gm_negotiation.py:325-638`; `engines/front_office.py:480-520`; `engines/gm_trade_engine.py:1440-1450`; `docs/in_progress/TRADE_NEGOTIATIONS_PLAN.md` §2.7.
+- **Reads:** §2.2–§2.8, §2.14; U1's package; `server/franchise_api.py:945-1290`; `engines/gm_negotiation.py:325-638`; `engines/front_office.py:480-520`; `engines/gm_trade_engine.py:1440-1450`; `docs/done/TRADE_NEGOTIATIONS_PLAN.md` §2.7.
 - **Depends on:** U1.
 - **Done when:** both kinds pass their tests; `franchise_api.py` and `gm_negotiation.py` are unchanged.
 - **Verify:** `pytest -m "not integration" tests/test_inbox_kinds_gm_talk.py tests/test_inbox_kinds_contract.py tests/test_gm_negotiation.py tests/test_franchise_api.py` pass.
