@@ -112,7 +112,7 @@ undone" rule made concrete.
 
 | ☐ | ID | Item | Done when | Size |
 |---|---|---|---|---|
-| ☑ | **P1-05** | **Agent loops U3 wiring** (follow-up #21). ✅ Built (2026-11-09) as U3a + U3b: league office coach charts and CPU contract counters (`counter_chooser` seam), inbox `CONTRACT`/`ROLE_TALK` replies, social desk `PLAYER_STATEMENT` posts, and the `coach_loop`/`player_loop` switchboard features (installed, off by default). `tests/test_agent_loops_wiring.py` (16) and `tests/test_agent_loops_statements.py` (11) are green. The coach-promise watcher (`coach.promise_options`/`decide_promise`/`review_promises`) still has no caller, and CPU contract cases pass `marquee_floor=None` (policy-only); both are filed in FOLLOW_UPS. | `tests/test_agent_loops_wiring.py` green; a shadow run records CHART / CONTRACT / LEAK decisions. | L |
+| ☑ | **P1-05** | **Agent loops U3 wiring** (follow-up #21). ✅ Built (2026-11-09) as U3a + U3b: league office coach charts and CPU contract counters (`counter_chooser` seam), inbox `CONTRACT`/`ROLE_TALK` replies, social desk `PLAYER_STATEMENT` posts, and the `coach_loop`/`player_loop` switchboard features (installed, off by default). `tests/test_agent_loops_wiring.py` (16), `tests/test_agent_loops_statements.py` (11) and `tests/test_agent_loops_promises_wiring.py` are green. The coach-promise watcher (`coach.promise_options`/`decide_promise`/`review_promises`) and the CPU contract marquee floor followed in `AGENT_LOOPS_FOLLOWUPS_PLAN` (2026-11-09). | `tests/test_agent_loops_wiring.py` green; a shadow run records CHART / CONTRACT / LEAK decisions. | L |
 | ☑ | **P1-06** | **Agent Wire U3 planner** (follow-up #22). ✅ Built (2026-11-09): U3 was reworked onto the trade-talks `newsroom/social_desk.py` and merged; the whole plan (U1–U5) is on main, so `week_mix`, league topics, `PICKS`/`HOT_TAKE`/`SEASON_CALL`, structured output, graded picks/calls, relationship wiring and the quality report are all in. **This is the item that makes tweets stop reading like captioned box scores.** | `python3 -m newsroom.social_desk --season 2035 --week 12` prints a plan; `tools/social_quality_report` reproduces the 2036 archive baseline (553/317) — reproducing or beating the live target waits for a live season (P8-02). | L |
 | ☐ | **P1-07** | **Retirement restore authority (G4)** (follow-up #23). Produce the save-authority proof file. Until then late native retirements stay observe-only, and the `retirement` feature cannot be activated. Needs the PC. | `docs/reference/RETIREMENT_AUTHORITY.md` §5 proof file exists; G4 passes. | M |
 | ☐ | **P1-08** | **Free-agency contract-row creation** (follow-up #24, V2 §7.3 item 6). Signing currently needs a matching release in the same write to free a `PlayerContract` row. Free agency signs more than it releases. | A signing with no release lands and reads back. | L |
@@ -156,7 +156,7 @@ checkpoint 2 and is handled in P8, not here.)
 
 | Plan | Closes when | Moves to |
 |---|---|---|
-| `COACH_PLAYER_AGENT_LOOPS_PLAN.md` | ✅ P1-05 landed 2026-11-09 (promise watcher filed as a follow-up) | `done/` |
+| `COACH_PLAYER_AGENT_LOOPS_PLAN.md` | ✅ P1-05 landed 2026-11-09; the promise watcher and marquee floor followed the same day (`AGENT_LOOPS_FOLLOWUPS_PLAN`) | `done/` |
 | `AGENT_WIRE_VOICE_PLAN.md` | P1-06 lands | `done/` |
 | `FRONT_OFFICE_INBOX_PLAN.md` (in `done/`, still listed) | P1-09 + P8-02 land | remove from FOLLOW_UPS |
 | `PERSONALITY_PLAN.md` | P6 activates every feature | `done/` |
