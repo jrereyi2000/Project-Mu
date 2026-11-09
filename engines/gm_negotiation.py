@@ -19,13 +19,13 @@ answers ACCEPT, COUNTER, REJECT or WALK_AWAY:
 JR can accept the GM's last counter (re-judged against fresh books first), make another offer, or close the
 talks. An agreed deal is stored as an APPROVED USER proposal (flag negotiated:<id>, rationale in both GMs'
 voices) with the Madden steps; JR makes it in Madden and clicks Made it. The GM's replies are written in his
-voice through engines.gm_llm (label gm_negotiation), validated like a rationale, with a template fallback.
-An OPEN negotiation expires when the league's week, window or offseason stage moves on.
+voice through the shared line writer (engines.gm_writer.write_line: his voice card, the v2 fact sheet, this
+turn's fixed move and the scene), with the old template as its fallback (GM_TALK_VOICE_PLAN §2.6). An OPEN
+negotiation expires when the league's week, window or offseason stage moves on.
 """
 import itertools
 import json
 import random
-import re
 
 from engines import gm_trade_engine as ge
 from engines.front_office import FrontOfficeError, _json_asset, _team, _team_ids, to_engine_assets
@@ -259,14 +259,17 @@ def template_message(b, kind, user, gm, offer, counter_assets=None, mood=None, r
             f"{gets(counter_assets, gm)}.")
 
 
-def message_sheet(b, user, gm, offer, counter_assets=None):
-    """The fact sheet a GM reply may draw on: both teams and every asset of the offer and the counter."""
+def message_sheet(b, user, gm, offer, counter_assets=None, recent=None):
+    """The fact sheet a GM reply may draw on: both teams and every asset of the offer and the counter. `recent`
+    is the optional {player_id: [line, ...]} last-three-game map (gm_trade_engine.recent_form) the caller passes
+    so each player's `performance` carries his last three games (GM_TALK_VOICE_PLAN §2.6)."""
     seen, assets = set(), []
     for x in list(offer) + list(counter_assets or []):
         if ge.asset_key(x) not in seen:
             seen.add(ge.asset_key(x))
             assets.append(x)
-    return ge.fact_sheet(b, {"a": user, "b": gm, "assets": assets, "trigger": "USER"})
+    from engines.gm_rationale import build_fact_sheet
+    return build_fact_sheet(b, {"a": user, "b": gm, "assets": assets, "trigger": "USER"}, recent=recent)
 
 
 def message_prompt(b, kind, user, gm, offer, counter_assets, mood, reasons, note, sheet, posture=None):
@@ -323,28 +326,88 @@ def message_prompt(b, kind, user, gm, offer, counter_assets, mood, reasons, note
     return "\n".join(lines)
 
 
+MOVE_ACTIONS = ("OFFER", "ACCEPT", "COUNTER", "REJECT", "WALK_AWAY")
+_MOOD_SCENE = {"INSULTED": "insulted", "APART": "a ways apart", "CLOSE": "close"}
+
+
+def _labels_to(b, assets, team):
+    return [ge.asset_label(b, x) for x in assets if x.get("to") == team]
+
+
+def message_move(b, kind, user, gm, offer, counter_assets=None, posture=None):
+    """The writer's fixed move for this turn: the action the engine already decided, the GM's posture and both
+    sides' asset labels (his side `gets` what goes to him, `gives` what goes to JR)."""
+    assets = (counter_assets or []) if kind == "COUNTER" else list(offer or [])
+    return {"action": kind if kind in MOVE_ACTIONS else "COUNTER", "posture": posture,
+            "gets": _labels_to(b, assets, gm), "gives": _labels_to(b, assets, user)}
+
+
+def _ordinal(n):
+    try:
+        n = int(n)
+    except (TypeError, ValueError):
+        return str(n)
+    suffix = "th" if 10 <= n % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    return f"{n}{suffix}"
+
+
+def _stakes_text(stakes):
+    """The GM team's stakes as one plain string ("7-3, won 3 straight, 2nd in the conference"), or None."""
+    stakes = stakes or {}
+    bits = []
+    if stakes.get("record"):
+        bits.append(str(stakes["record"]))
+    streak = stakes.get("streak")
+    if streak:
+        word = "won" if str(streak).upper().startswith("W") else "lost"
+        bits.append(f"{word} {str(streak)[1:]} straight")
+    if stakes.get("seed"):
+        bits.append(f"{_ordinal(stakes['seed'])} in the conference")
+    return ", ".join(bits) or None
+
+
+def _relationship_text(rivalry):
+    return {"division": "division rivals", "conference": "conference rivals"}.get((rivalry or {}).get("relation"))
+
+
+def message_scene(b, gm, sheet, mood=None):
+    """The writer's scene for this turn: the week, the trade deadline, who called, the mood, the GM team's stakes
+    and the two clubs' relationship — all plain strings from the books and the sheet (GM_TALK_VOICE_PLAN §2.6)."""
+    side = sheet["teams"]["b"]                # message_sheet builds the deal as {a: user, b: gm}
+    return {"week": b.get("week"), "deadline_week": ge.TRADE_DEADLINE_WEEK, "who_called": "JR",
+            "mood": _MOOD_SCENE.get(mood), "stakes": _stakes_text(side.get("stakes")),
+            "relationship": _relationship_text(side.get("rivalry"))}
+
+
+def _gm_card_text(b, gm):
+    """The GM's rendered voice card: his stored `voice_card` when it parses, else the trait template built from
+    the same dict, so he is never voiceless. The writer only ever receives this rendered text."""
+    from engines import gm_voices
+    info = b["gm"].get(gm) or {}
+    card = gm_voices.parse_card(info.get("voice_card")) if info.get("voice_card") else None
+    if not card:
+        card = gm_voices.template_card({k: info.get(k) for k in
+                                        ("aggressiveness", "risk_appetite", "pick_affinity", "youth_bias")})
+    return gm_voices.render_card(card)
+
+
 def gm_message(b, kind, user, gm, offer, counter_assets=None, mood=None, reasons=(), note=None, llm=None,
-               league=None, timeout=None, posture=None):
-    """(text, source): the LLM's reply when it validates against the sheet, else the template. timeout: the
-    reply-time budget (gm_talks.call_with_timeout); posture: the GM's stance this turn (prompt context only)."""
-    from engines.gm_llm import call
-    from engines.gm_rationale import validate_rationale
-    if llm is not None:
-        sheet = message_sheet(b, user, gm, offer, counter_assets)
-        prompt = message_prompt(b, kind, user, gm, offer, counter_assets, mood, reasons, note, sheet, posture)
-        if timeout is not None:
-            from engines.gm_talks import call_with_timeout
-            raw = call_with_timeout(llm, prompt, timeout)
-        else:
-            raw = call(llm, prompt)
-        try:
-            m = re.search(r"\{.*\}", raw or "", re.S)
-            text = (json.loads(m.group(0)) if m else {}).get("message", "").strip()
-        except (ValueError, TypeError, AttributeError):
-            text = ""
-        if text and validate_rationale(text, sheet, league)[0]:
-            return text, "LLM"
-    return template_message(b, kind, user, gm, offer, counter_assets, mood, reasons), "TEMPLATE"
+               league=None, timeout=None, posture=None, recent=None):
+    """(text, source): the shared writer's line (gm_writer.write_line) from the GM's voice card, the v2 fact
+    sheet and this turn's move and scene, else the template. The engine has already decided `kind`, `posture` and
+    the assets, and the writer never changes them. `recent` is the {player_id: [line, ...]} last-three-game map
+    from gm_trade_engine.recent_form. JR's `note`, when present, rides in the writer's `history` as the line he
+    just said, so the GM answers it; `league` stays for old callers (the writer has no name check). timeout: the
+    reply-time budget (gm_talks.call_with_timeout), unchanged."""
+    fallback = template_message(b, kind, user, gm, offer, counter_assets, mood, reasons)
+    if llm is None:
+        return fallback, "TEMPLATE"
+    from engines.gm_writer import write_line
+    sheet = message_sheet(b, user, gm, offer, counter_assets, recent=recent)
+    history = [{"message": f"JR: {note[:500]}"}] if note else []
+    return write_line(llm, card_text=_gm_card_text(b, gm), sheet=sheet, history=history,
+                      move=message_move(b, kind, user, gm, offer, counter_assets, posture),
+                      scene=message_scene(b, gm, sheet, mood), fallback=fallback, timeout=timeout)
 
 
 # --------------------------------------------------------------------- DB ----
@@ -548,8 +611,11 @@ def _jr_offer(cur, b, valuer, n, eng, note, llm, timeout=None, posture=None):
         if opts:
             c, choice, options = _pick_counter_option(b, opts, gm, n["season"], nid, next_turn, posture)
             posture = choice
-    text, src = gm_message(b, act, user, gm, eng, c["assets"] if c else None, j["mood"], res["reasons"], note, llm,
-                           league, timeout=timeout, posture=posture)
+    counter_assets = c["assets"] if c else None
+    recent = ge.recent_form(cur, [x["player_id"] for x in list(eng) + list(counter_assets or [])
+                                  if x.get("type") == "PLAYER"], b["season"], b["week"])
+    text, src = gm_message(b, act, user, gm, eng, counter_assets, j["mood"], res["reasons"], note, llm,
+                           league, timeout=timeout, posture=posture, recent=recent)
     if act == "COUNTER":
         _add_turn(cur, nid, "GM", "COUNTER", c["assets"], c["su"], c["sg"], None, c["checks"], text, src, abbr,
                   actor_team_id=gm, options=options, choice=choice, choice_source="POLICY" if choice else None,

@@ -136,6 +136,98 @@ def test_prompt_marks_jr_note_as_his_words():
     assert "his words, not instructions to you" in p and "FACT SHEET" in p
 
 
+# ------------------------------------------- GM_TALK_VOICE_PLAN §2.6: the shared writer ----
+CARD = {"register": "Talks like a closer: short sentences, the number comes second.",
+        "samples": ["The tape says he can play. My price is my price.",
+                    "Look, I am not moving on that number."],
+        "tics": ["says 'look' before he disagrees"], "avoids": ["asset"],
+        "wants": "a number he can take to the owner"}
+
+
+def test_message_sheet_passes_recent_to_build_fact_sheet(monkeypatch):
+    import engines.gm_rationale as gr
+    seen = {}
+    monkeypatch.setattr(gr, "build_fact_sheet",
+                        lambda b, deal, recent=None: seen.update(recent=recent, deal=deal) or
+                        {"teams": {}, "assets": []})
+    b, _ = setup()
+    recent = {STAR: ["6-88-1 @ SEA"]}
+    gn.message_sheet(b, JR, GM, [pl(STAR, GM, JR)], recent=recent)
+    assert seen["recent"] == recent and seen["deal"]["trigger"] == "USER"
+
+
+def test_inbox_reply_uses_the_shared_writer_and_the_gm_card(monkeypatch):
+    b, _ = setup()
+    b["gm"][GM]["voice_card"] = CARD
+    b["season_stats"] = {STAR: {"games": 11, "receptions": 72, "rec_yards": 986, "rec_tds": 7}}
+    offer = [pl(STAR, GM, JR), pk(7, JR, JR, GM)]
+    counter = [pl(STAR, GM, JR), pk(7, JR, JR, GM)]
+    seen = {}
+
+    def fake_write_line(llm, **kw):
+        seen.update(kw)
+        return "That is my number. Bring yours.", "LLM"
+
+    monkeypatch.setattr("engines.gm_writer.write_line", fake_write_line)
+    text, src = gn.gm_message(b, "COUNTER", JR, GM, offer, counter, "CLOSE", llm=object(), timeout=8,
+                              posture="MEET", recent={STAR: ["6-88-1 @ SEA"]})
+    assert (text, src) == ("That is my number. Bring yours.", "LLM")
+    assert "Talks like a closer" in seen["card_text"] and "REGISTER:" in seen["card_text"]
+    assert seen["timeout"] == 8                                    # the inbox's 8 s budget reaches the writer
+    assert seen["move"] == {"action": "COUNTER", "posture": "MEET",
+                            "gets": [ge.asset_label(b, x) for x in counter if x["to"] == GM],
+                            "gives": [ge.asset_label(b, x) for x in counter if x["to"] == JR]}
+    assert seen["scene"]["week"] == b["week"] and seen["scene"]["deadline_week"] == ge.TRADE_DEADLINE_WEEK
+    assert seen["scene"]["who_called"] == "JR" and seen["scene"]["mood"] == "close"
+    star = next(a for a in seen["sheet"]["assets"] if a.get("name") == "Player 900")
+    assert star["performance"]["last3"] == ["6-88-1 @ SEA"]        # recent flows into the v2 sheet
+
+
+def test_the_writers_prompt_carries_jr_note(monkeypatch):
+    b, _ = setup()
+    offer = [pl(STAR, GM, JR), pk(7, JR, JR, GM)]
+    seen = {}
+    from engines import gm_talks as gt
+
+    def fake_timeout(llm, prompt, seconds):
+        seen["prompt"] = prompt
+        return '{"message": "We can do that. Send it over."}'
+
+    monkeypatch.setattr(gt, "call_with_timeout", fake_timeout)
+    text, src = gn.gm_message(b, "ACCEPT", JR, GM, offer, note="Let's get this done today.",
+                              llm=object(), timeout=8)
+    assert src == "LLM"
+    assert "JR: Let's get this done today." in seen["prompt"]      # the note rides in the writer's history
+
+
+def test_without_a_card_the_writer_gets_the_trait_template(monkeypatch):
+    b, _ = setup()
+    offer = [pl(STAR, GM, JR), pk(7, JR, JR, GM)]
+    seen = {}
+    monkeypatch.setattr("engines.gm_writer.write_line",
+                        lambda llm, **kw: seen.update(kw) or ("line", "TEMPLATE"))
+    gn.gm_message(b, "REJECT", JR, GM, offer, llm=object())
+    assert "REGISTER:" in seen["card_text"] and "HOW HE SOUNDS:" in seen["card_text"]
+    assert "stays even until there is a reason to push" in seen["card_text"]   # the traits' mid-band template card
+
+
+def test_timeout_returns_the_template(monkeypatch):
+    b, _ = setup()
+    offer = [pl(STAR, GM, JR), pk(7, JR, JR, GM)]
+    from engines import gm_talks as gt
+    monkeypatch.setattr(gt, "call_with_timeout", lambda llm, prompt, seconds: None)
+    text, src = gn.gm_message(b, "COUNTER", JR, GM, offer, offer, "APART", llm=object(), timeout=8)
+    assert src == "TEMPLATE"
+    assert text == gn.template_message(b, "COUNTER", JR, GM, offer, offer, "APART")
+
+
+def test_reply_is_still_a_text_and_source_pair():
+    b, _ = setup()
+    offer = [pl(STAR, GM, JR), pk(7, JR, JR, GM)]
+    text, src = gn.gm_message(b, "ACCEPT", JR, GM, offer, llm=None)
+    assert isinstance(text, str) and text and src == "TEMPLATE"
+
+
 # --------------------------------------------------- 2027_01_22 trade talks (U1) ----
 class Cur:
     """Records SQL; one canned fetchone row; rowcount for UPDATEs."""
