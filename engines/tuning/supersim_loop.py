@@ -1,7 +1,7 @@
 """
 Supersim tuning loop (docs/in_progress/MADDEN_PILOT_AND_TUNING_PLAN.md §2.4, R4, R6).
 
-  python3 -m engines.tuning.supersim_loop --run <name> --space <space.json> [--max-iters 20] [--from CAREER-WEEK1]
+  python3 -m engines.tuning.supersim_loop --run <name> --space <space.json> [--max-iters 20] [--from CAREER-MUBASE]
                                           [--to regular-season-end] [--repeats 1] [--targets PATH] [--dry-run]
 
 Tunes Madden's own supersim data (ebx under football/attribsys/data/supersim_*, S5) with tuning mods: one asset field
@@ -49,7 +49,7 @@ import time
 ROOT = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", ".."))
 RUNS_DIR = os.path.join(ROOT, "data", "tuning", "runs")
 PACK = "Mu Tune"
-BASE_SAVE = "CAREER-WEEK1"
+BASE_SAVE = "CAREER-MUBASE"
 TUNE_PREFIX = "CAREER-TUNE-"
 DEFAULT_TO = "regular-season-end"
 SAVES_DIR = os.environ.get("MADDEN_SAVES_DIR", "/mnt/c/Users/jrere/Documents/Madden NFL 27/saves")

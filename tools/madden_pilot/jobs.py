@@ -9,7 +9,7 @@ result dict. `status` is one of:
   pass / fail / unknown   verify_mods' check result
 
     launch(pilot, pack="Mu Base")
-    clone_save(pilot, src="CAREER-WEEK1", dst="CAREER-TUNE-<name>")
+    clone_save(pilot, src="CAREER-MUBASE", dst="CAREER-TUNE-<name>")
     sim_season(pilot, save="CAREER-TUNE-<name>", to="week N" | "regular-season-end" | "playoffs-end")
     set_setting(pilot, path="A>B>C", value="V")
     verify_mods(pilot, check="first_down_line")
@@ -40,7 +40,7 @@ from tools.madden_pilot.screens import UNKNOWN, label_match, norm
 DEFAULT_SAVES_DIR = "/mnt/c/Users/jrere/Documents/Madden NFL 27/saves/"
 TUNE_SAVE_PREFIX = "CAREER-TUNE-"
 CAREER_PREFIX = "CAREER-"
-BASELINE_SAVE = "CAREER-WEEK1"
+BASELINE_SAVE = "CAREER-MUBASE"
 DEFAULT_PACK = "Mu Base"
 MANAGER_EXE = "MMCModManager.exe"
 DEFAULT_MANAGER_DIR = "/mnt/c/Madden27Modding/MMC_Modding_Tools_v1.1.0.7/MMC_ModManager_v1.1.0.7"

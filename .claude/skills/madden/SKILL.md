@@ -25,7 +25,7 @@ Read `docs/reference/MADDEN_PILOT.md` first. It has the keys, every catalogued s
 - **Never open roster cards.** Don't press Space on the Weekly Hub or on any roster decision (Place on IR, Activate from IR, Keep...). Project Mu makes every roster decision through the save writer, never in Madden. The catalog enforces this (`never_select`). Don't add a policy that lifts it.
 - **Never confirm on a screen that isn't in the catalog.** On UNKNOWN, stop and look (below). Don't press Space or Enter to "see what happens".
 - **Never play online, buy anything, or delete anything:** no saves, no franchises, no mods. On the franchise list, Q is Delete and is forbidden.
-- **Only `CAREER-TUNE-*` saves, and never while the watcher runs.** `sim-season` refuses other names, and it refuses while `pipeline.watch_save` runs: a clone keeps the real franchise's LeagueID, so the watcher would ingest it. If the watcher is running, ask JR to stop it. Don't kill it yourself. Tuning saves are clones of `CAREER-WEEK1` (`clone-save`). Never sim `CAREER-WEEK1` itself.
+- **Only `CAREER-TUNE-*` saves, and never while the watcher runs.** `sim-season` refuses other names, and it refuses while `pipeline.watch_save` runs: a clone keeps the real franchise's LeagueID, so the watcher would ingest it. If the watcher is running, ask JR to stop it. Don't kill it yourself. Tuning saves are clones of the tuning baseline `CAREER-MUBASE` (`clone-save`; it replaced `CAREER-WEEK1` on 2026-11-09 because WEEK1 lacks the roster-size mod). Never sim `CAREER-MUBASE` itself.
 - **Ask JR before quitting a franchise that isn't `TUNE-*`.** Quitting writes `<save>-AUTOSAVE`. The hub never shows which save is loaded, so if you didn't load it in this run, ask him which one is open. Use `quit --franchise TUNE-<x>` only when you know, and `--allow-quit` only after his yes.
 - Don't kill Madden or the Mod Manager unless JR asks.
 - Never connect to a database from this skill.
@@ -34,7 +34,7 @@ Read `docs/reference/MADDEN_PILOT.md` first. It has the keys, every catalogued s
 
 ```
 .venv/bin/python3 -m tools.madden_pilot launch      [--pack "Mu Base"]
-.venv/bin/python3 -m tools.madden_pilot clone-save  [--from CAREER-WEEK1] --to CAREER-TUNE-<name>
+.venv/bin/python3 -m tools.madden_pilot clone-save  [--from CAREER-MUBASE] --to CAREER-TUNE-<name>
 .venv/bin/python3 -m tools.madden_pilot sim-season  --save CAREER-TUNE-<name> --to "week N" | regular-season-end | playoffs-end
 .venv/bin/python3 -m tools.madden_pilot set-setting --path "A>B>Setting" --value V
 .venv/bin/python3 -m tools.madden_pilot verify-mods --check first_down_line

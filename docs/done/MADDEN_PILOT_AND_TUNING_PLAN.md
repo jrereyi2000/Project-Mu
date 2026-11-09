@@ -111,6 +111,16 @@ WSL wrapper (`tools/madden_pilot/win.py`): `call(cmd: list[str], timeout=60) -> 
 
 ### 2.4 Tuning (`engines/tuning/`)
 
+> **Revised (JR, 2026-11-09): supersim tuning starts from Sabos, not vanilla.** `Mu Base` already carries
+> **Sabos Franchise Mod 1.3**, which tunes **157 `supersim_*` assets** (compound abilities, tackle chances,
+> injury, fatigue, play time, run/pass/punt/FG play) against the last three real seasons. So the supersim pass is
+> a **measurement**: sim one season with `Mu Base` active, score it with `compare`, and if it meets the
+> acceptance gates in `docs/reference/TUNING_ACCEPTANCE_THRESHOLDS.md` §3, **record "Sabos used as-is; supersim
+> not tuned" and stop** — that is a completed P4, not a shortcut. If it fails, build the search space from the
+> worst stats and set every `start` to the **running Sabos value**, never a vanilla one. The tuning baseline is
+> also `CAREER-MUBASE` (the 65-man, +$40M-cap franchise), not `CAREER-WEEK1`, which lacks the roster-size mod.
+> Current programme: [`docs/CLOSE_OUT_CHECKLIST.md`](../CLOSE_OUT_CHECKLIST.md) P4 / P2-09.
+
 - `targets.py`:
   - `build_targets(seasons=range(2015, 2026)) -> dict` downloads nflverse `stats_player` (regular season) through `engines.history_backfill.sources._get` (same cache). For each stat and position group it keeps the league-leader values (ranks 1, 5, 10, 25), the percentiles (p50, p75, p90) of qualifying players, the league totals per team-game, and the per-team season totals (points, yards, sacks, turnovers). Per-season values are averaged, with the min and max across seasons as the band.
   - The result is written to `data/tuning/targets_2015_2025.json`.
