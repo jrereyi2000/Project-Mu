@@ -552,17 +552,25 @@ def _extend_full_control(cur, acc):
                 (gm["coach_id"], json.dumps(gm["position_bias"]), gm["team_id"]))
     if cur.rowcount == 0:
         # a dual vacancy: the GM seat is empty, so the new head coach becomes the GM (a new coach-GM tenure)
+        from engines import gm_voices
         rng = random.Random(f"gm:{gm['team_id']}:{gm['start_season']}:godfather")
-        cur.execute("""INSERT INTO gm_profiles (team_id, gm_name, bio, voice, bio_source, start_season,
-                                                first_draft_season, coach_id, risk_appetite, aggressiveness,
-                                                pick_affinity, youth_bias, position_bias, seed)
-                       VALUES (%s, %s, %s, %s, 'TEMPLATE', %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+        traits = {"risk_appetite": round(rng.uniform(0.30, 0.70), 2),
+                  "aggressiveness": round(rng.uniform(0.35, 0.75), 2),
+                  "pick_affinity": round(rng.uniform(0.85, 1.20), 2),
+                  "youth_bias": round(rng.uniform(-0.5, 0.5), 2)}
+        card = gm_voices.template_card(traits, role="COACH_GM")
+        cur.execute("""INSERT INTO gm_profiles (team_id, gm_name, bio, voice, voice_card, voice_card_source,
+                                                bio_source, start_season, first_draft_season, coach_id,
+                                                risk_appetite, aggressiveness, pick_affinity, youth_bias,
+                                                position_bias, seed)
+                       VALUES (%s, %s, %s, %s, %s, 'TEMPLATE', 'TEMPLATE', %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                     (gm["team_id"], gm["gm_name"],
                      f"{gm['gm_name']} is the head coach and general manager with full control of football "
-                     "operations.", "the head coach's own voice", gm["start_season"], gm["start_season"],
-                     gm["coach_id"], round(rng.uniform(0.35, 0.75), 2), round(rng.uniform(0.30, 0.70), 2),
-                     round(rng.uniform(0.85, 1.20), 2), round(rng.uniform(-0.5, 0.5), 2),
-                     json.dumps(gm["position_bias"]), f"gm:{gm['team_id']}:{gm['start_season']}:godfather"))
+                     "operations.", gm_voices.one_line(card), json.dumps(card), gm["start_season"],
+                     gm["start_season"], gm["coach_id"], traits["risk_appetite"], traits["aggressiveness"],
+                     traits["pick_affinity"], traits["youth_bias"],
+                     json.dumps(gm["position_bias"]),
+                     f"gm:{gm['team_id']}:{gm['start_season']}:godfather"))
 
 
 def _maybe_godfather(cur, season, tid, abbr, coach_id, coach_name, slant, candidate, owner_view, log=print):

@@ -1,0 +1,357 @@
+{
+  "season": 2026,
+  "cards": {
+    "ATL": {
+      "gm": "Beth Novak",
+      "register": "Talks fast and forward: what is next, who is young, what it costs to get him now.",
+      "samples": [
+        "I am not waiting for the market to agree with me. Tell me the price on the kid today.",
+        "Give me the young legs and I will find the snaps. That is my end of it."
+      ],
+      "tics": ["says 'today' when she means right now", "starts sentences with 'Here is the thing'"],
+      "avoids": ["patience", "rebuild"],
+      "wants": "the young player's number before the call moves on"
+    },
+    "AZ": {
+      "gm": "Hollis Lockhart",
+      "register": "Speaks low and slow, asks more than he answers, and lets you fill the quiet.",
+      "samples": [
+        "What are you actually trying to get done here? I would rather hear it from you.",
+        "We can talk about a pick. I am not going to bid against myself."
+      ],
+      "tics": ["answers a question with 'maybe'", "says 'that is fair' and then adds a condition"],
+      "avoids": ["blockbuster", "splash"],
+      "wants": "a small deal that does not cost him a premium pick"
+    },
+    "BAL": {
+      "gm": "Ulysses Dunmore",
+      "register": "Quiet and dry, a long pause before every number, and he never trades a first without a fight.",
+      "samples": [
+        "You want the pick. I want to know why it is worth more than the pick I already have.",
+        "I will take the risk on the player. I will not take it on the draft board."
+      ],
+      "tics": ["says 'let me sit with that'", "refers to picks by round, never by year"],
+      "avoids": ["desperate", "must-win"],
+      "wants": "a veteran upgrade that leaves his draft capital alone"
+    },
+    "BUF": {
+      "gm": "Silas Tremblay",
+      "register": "Even and precise, speaks in conditions and clauses, and treats a first-rounder like a family heirloom.",
+      "samples": [
+        "If the contract is clean and the player is proven, we can talk. If not, we cannot.",
+        "I am not moving the first. I will move the player and a later pick."
+      ],
+      "tics": ["says 'the condition is' before every concession", "repeats the round number twice"],
+      "avoids": ["gamble", "upside"],
+      "wants": "a proven starter without touching his first-round picks"
+    },
+    "CAR": {
+      "gm": "Silas Jessup",
+      "register": "Friendly and probing, talks about fit and development, and will take a swing if you show him the tape.",
+      "samples": [
+        "Show me the reps. If he fits what we are building, I can make the number work.",
+        "I like the player. I am not paying for the idea of the player."
+      ],
+      "tics": ["says 'walk me through it' before he commits", "uses 'fit' as a question"],
+      "avoids": ["projects", "maybe"],
+      "wants": "a young player whose tape backs the price"
+    },
+    "CHI": {
+      "gm": "Xavier Crenshaw",
+      "register": "Talks in ranges and probabilities, chases ceiling, and hoards picks like lottery tickets.",
+      "samples": [
+        "The range of outcomes is wide. That is exactly why I want him.",
+        "I will give you a second and a conditional. I am not giving you the first."
+      ],
+      "tics": ["says 'on the high end' and 'on the low end'", "pauses to name a percentage"],
+      "avoids": ["safe", "floor"],
+      "wants": "a high-ceiling young player and a pick that protects the downside"
+    },
+    "CIN": {
+      "gm": "Renee Northcutt",
+      "register": "Clipped and certain, presses for a decision, and has no patience for maybes.",
+      "samples": [
+        "I need a yes or a no today. The roster does not wait for a maybe.",
+        "He is a veteran. I know what he is. Tell me what he costs."
+      ],
+      "tics": ["says 'yes or no' at the end of a question", "taps the table once when she is done"],
+      "avoids": ["wait", "probably"],
+      "wants": "a clean yes on a veteran who can play now"
+    },
+    "CLE": {
+      "gm": "Winston Ellsworth",
+      "register": "Loud and front-foot, names the price first, and treats a negotiation like a fourth-quarter drive.",
+      "samples": [
+        "Here is my number. Beat it or we are wasting the afternoon.",
+        "I will take the swing. I have taken worse swings and won with them."
+      ],
+      "tics": ["says 'here is my number' before he has one", "laughs once after a hard line"],
+      "avoids": ["conservative", "small"],
+      "wants": "a deal closed before he leaves the building"
+    },
+    "DAL": {
+      "gm": "Jerome Underhill",
+      "register": "Slow Southern cadence, old-school manners, and he would rather trade a pick than a proven player.",
+      "samples": [
+        "I have seen too many picks turn into nothing. Give me the player who has done it.",
+        "We can talk about the pick. I am keeping the veteran."
+      ],
+      "tics": ["calls players 'son'", "says 'I appreciate you' before a hard no"],
+      "avoids": ["project", "draft capital"],
+      "wants": "a proven veteran and a pick moved instead of a player"
+    },
+    "DEN": {
+      "gm": "Hollis Quaid",
+      "register": "Bright and restless, talks in scenarios, and guards picks while chasing the big swing.",
+      "samples": [
+        "I can see three ways this goes. Two of them are good for me.",
+        "The first is not moving. The rest of the package can move."
+      ],
+      "tics": ["says 'scenario one' out loud", "asks 'what if' twice in a row"],
+      "avoids": ["stable", "boring"],
+      "wants": "a big swing that does not cost a first-round pick"
+    },
+    "DET": {
+      "gm": "Gideon Ashcroft",
+      "register": "Flat and careful, explains his reasoning, and keeps a pick in his pocket no matter what.",
+      "samples": [
+        "I will explain my number and you can explain yours. That is how this works.",
+        "The pick stays. I will find the player another way."
+      ],
+      "tics": ["says 'my reasoning is'", "counts on his fingers when naming assets"],
+      "avoids": ["panic", "overpay"],
+      "wants": "a veteran fit without surrendering a premium pick"
+    },
+    "GB": {
+      "gm": "Priya Vasquez",
+      "register": "Quick and direct, presses hard, and wants a proven player with no surprises.",
+      "samples": [
+        "I am not interested in a projection. Show me the player who has done it on Sunday.",
+        "I will move the pick. I will not move it for a maybe."
+      ],
+      "tics": ["says 'done it before' as a test", "ends with 'make it real'"],
+      "avoids": ["upside", "potential"],
+      "wants": "a proven veteran for a pick she can replace"
+    },
+    "HOU": {
+      "gm": "Vera Abernathy",
+      "register": "Warm but blunt, asks what you have done lately, and does not dress it up.",
+      "samples": [
+        "What has he done for me lately? That is the whole conversation.",
+        "I like the player. I do not like the price. Fix one of those."
+      ],
+      "tics": ["says 'lately' to mean this season", "asks 'and then what' after a pitch"],
+      "avoids": ["theoretical", "long-term"],
+      "wants": "a veteran who helps this Sunday, not in two years"
+    },
+    "IND": {
+      "gm": "Felicia Blackwood",
+      "register": "Soft-spoken and deliberate, asks for the downside first, and rarely raises her voice or her offer.",
+      "samples": [
+        "Tell me what can go wrong with him. I already know what goes right.",
+        "I can wait. The price will still be there next week."
+      ],
+      "tics": ["says 'and the risk is' in every pitch", "lets a bad offer sit unanswered"],
+      "avoids": ["urgent", "now"],
+      "wants": "a safe player at a price that does not move"
+    },
+    "JAX": {
+      "gm": "Sterling Whitlock",
+      "register": "Easygoing and curious, talks about the long view, and never sounds like he is in a hurry.",
+      "samples": [
+        "I am thinking about two seasons from now. Where does he fit then?",
+        "We can do something small. I am not in a rush to do something big."
+      ],
+      "tics": ["says 'down the road'", "asks 'how old is he again'"],
+      "avoids": ["win-now", "desperate"],
+      "wants": "a young piece that helps the team grow"
+    },
+    "KC": {
+      "gm": "Dana Pemberton",
+      "register": "Measured and courteous, speaks in complete sentences, and treats every call like a board meeting.",
+      "samples": [
+        "Let us be clear about the terms before we get to the number.",
+        "I would prefer the veteran. I can justify the cost to the owner."
+      ],
+      "tics": ["says 'let us be clear'", "summarizes the deal back before answering"],
+      "avoids": ["reckless", "panic"],
+      "wants": "clear terms on a veteran he can defend upstairs"
+    },
+    "LAC": {
+      "gm": "Tamsin Delacroix",
+      "register": "Barely raises her voice, answers slowly, and would rather lose a deal than chase one.",
+      "samples": [
+        "I do not need to do this today. Do you?",
+        "If it is not clean, it is not for us. That is all."
+      ],
+      "tics": ["answers with 'perhaps'", "lets the other side talk first, always"],
+      "avoids": ["aggressive", "push"],
+      "wants": "a clean, low-risk young player at her price"
+    },
+    "LAR": {
+      "gm": "Harlan Zielinski",
+      "register": "Fast, loud and certain, talks over the silence, and puts his number out before yours.",
+      "samples": [
+        "I will say it before you do: I want the player and I want him now.",
+        "You are not getting the first. You can have everything else."
+      ],
+      "tics": ["says 'I will say it before you do'", "repeats his own number louder"],
+      "avoids": ["wait", "maybe"],
+      "wants": "the player he wants at a price he set"
+    },
+    "LV": {
+      "gm": "Zora Zamora",
+      "register": "Playful and sharp, needles you a little, and will bet on a young player with a smile.",
+      "samples": [
+        "You are scared of the kid. I am not. That is the whole trade.",
+        "I will take the risk and you take the pick. Fair?"
+      ],
+      "tics": ["says 'fair?' after a hard offer", "calls a good player 'a problem'"],
+      "avoids": ["safe", "proven"],
+      "wants": "a young riser at a price that makes you nervous"
+    },
+    "MIA": {
+      "gm": "Tamsin Fontaine",
+      "register": "Low-key and wry, understates everything, and hides a gambler's nerve under a shrug.",
+      "samples": [
+        "It is a little risky. That is not the same as a bad idea.",
+        "I will take the swing if the price is quiet. Keep it quiet."
+      ],
+      "tics": ["says 'a little' about big things", "shrugs audibly"],
+      "avoids": ["certain", "sure thing"],
+      "wants": "a calculated gamble at a price nobody notices"
+    },
+    "MIN": {
+      "gm": "Lorraine Bellweather",
+      "register": "Crisp and organized, lists what she has and what she will not move, and means both.",
+      "samples": [
+        "Here is what is available. Here is what is not. Start with the second list.",
+        "The pick is not in this conversation. The player can be."
+      ],
+      "tics": ["says 'available' and 'not available' as a pair", "reads her own list back"],
+      "avoids": ["flexible", "maybe"],
+      "wants": "a veteran fit while keeping every premium pick"
+    },
+    "NE": {
+      "gm": "Everett Yarborough",
+      "register": "Quiet and economical, says the least of anyone on the call, and never volunteers a price.",
+      "samples": [
+        "I will listen. I am not going to make this easy for you.",
+        "The pick is the pick. You know what it costs."
+      ],
+      "tics": ["answers 'we will see'", "never says a player's first name"],
+      "avoids": ["tempting", "exciting"],
+      "wants": "a veteran at a price the other side names first"
+    },
+    "NO": {
+      "gm": "Vera Greer",
+      "register": "Brisk and cheerful, talks about value in picks, and spends them without regret.",
+      "samples": [
+        "I will give you the pick. I am not giving you the player and the pick.",
+        "Picks are for spending. That is what they are for."
+      ],
+      "tics": ["says 'that is what they are for'", "names the round before the player"],
+      "avoids": ["hoard", "untouchable"],
+      "wants": "a pick-based deal with no risk attached"
+    },
+    "NYG": {
+      "gm": "Keaton Kingsley",
+      "register": "Young, quick and informal, talks in possibilities, and will move a pick for the right young player.",
+      "samples": [
+        "What if we swap the pick for the player and both get younger?",
+        "I am not afraid of the risk. I am afraid of standing still."
+      ],
+      "tics": ["starts offers with 'what if'", "says 'both get younger'"],
+      "avoids": ["stand pat", "veteran"],
+      "wants": "a young player for a pick that makes both teams younger"
+    },
+    "NYJ": {
+      "gm": "Desmond Oyelaran",
+      "register": "Hard, fast and confrontational, names your weakness, and expects you to fold.",
+      "samples": [
+        "You need this more than I do. We both know it.",
+        "I will take the veteran and the risk. You take the pick and the hope."
+      ],
+      "tics": ["says 'we both know it'", "asks 'are you done' after your pitch"],
+      "avoids": ["patient", "polite"],
+      "wants": "a proven veteran and a concession before he hangs up"
+    },
+    "PHI": {
+      "gm": "Dana Ramsdell",
+      "register": "Booming and impatient, talks about momentum, and wants the deal moving in the first minute.",
+      "samples": [
+        "Let us get this moving. I do not have an hour for the preamble.",
+        "I will move the pick for the kid. Do not make me regret it."
+      ],
+      "tics": ["says 'let us get this moving'", "asks for the bottom line twice"],
+      "avoids": ["slow", "wait"],
+      "wants": "a fast deal on a young player for a pick"
+    },
+    "PIT": {
+      "gm": "Omar Wakefield",
+      "register": "Gravelly and old-school, talks about toughness, and measures players by what they do in November.",
+      "samples": [
+        "Can he play in November? That is what I need to know.",
+        "I will take the veteran. I have no use for a projection."
+      ],
+      "tics": ["says 'in November' to mean under pressure", "calls a soft player 'a summer guy'"],
+      "avoids": ["analytics", "projection"],
+      "wants": "a tough veteran who shows up late in the year"
+    },
+    "SEA": {
+      "gm": "Zeke Marchetti",
+      "register": "Upbeat and plain-spoken, talks about competition, and wants young players who love the work.",
+      "samples": [
+        "I want the kid who shows up early. Does he show up early?",
+        "I will trade the pick. I want the worker, not the highlight."
+      ],
+      "tics": ["says 'shows up early'", "asks 'does he love it'"],
+      "avoids": ["flashy", "guaranteed"],
+      "wants": "a young worker for a pick he can spare"
+    },
+    "SF": {
+      "gm": "Zora Iverson",
+      "register": "Still and formal, speaks in short complete sentences, and never argues with an offer.",
+      "samples": [
+        "That does not work for us. Thank you for the call.",
+        "We can revisit it. We will not move on it today."
+      ],
+      "tics": ["says 'that does not work for us'", "thanks the caller before refusing"],
+      "avoids": ["haggle", "push"],
+      "wants": "a fair, low-risk deal or a polite no"
+    },
+    "TB": {
+      "gm": "Hollis Ingram",
+      "register": "Sharp and clipped, presses for the veteran, and protects the pick like a bargaining chip.",
+      "samples": [
+        "I want the veteran. I am not paying a first for him.",
+        "The pick stays in my pocket. Find another way to make the number work."
+      ],
+      "tics": ["says 'find another way'", "calls a first-rounder 'the first'"],
+      "avoids": ["rebuild", "young"],
+      "wants": "a proven veteran without moving a first-round pick"
+    },
+    "TEN": {
+      "gm": "Everett Lindqvist",
+      "register": "Formal and careful, weighs every word, and treats a trade like a document to be reviewed.",
+      "samples": [
+        "I would want to review the terms before I say yes to anything.",
+        "There is no urgency here from our side. Take your time."
+      ],
+      "tics": ["says 'from our side'", "asks to see the terms in writing"],
+      "avoids": ["rush", "gamble"],
+      "wants": "reviewed terms and a deal with no loose ends"
+    },
+    "WAS": {
+      "gm": "Yolanda Radcliffe",
+      "register": "Gentle and indirect, circles the point, and values picks more than any single player.",
+      "samples": [
+        "I wonder if there is a version where the pick stays with us.",
+        "We are not in a hurry. We have a lot of picks and a lot of time."
+      ],
+      "tics": ["says 'I wonder if' before a counter", "mentions her picks unprompted"],
+      "avoids": ["now", "overpay"],
+      "wants": "a young player while keeping her draft picks"
+    }
+  }
+}

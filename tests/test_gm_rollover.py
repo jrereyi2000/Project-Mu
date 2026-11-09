@@ -1,5 +1,5 @@
 """GM offseason, draft day and season rollover (docs/done/team_management/03_GM_AGENTS_PLAN.md Phase 7). Pure: no DB."""
-from engines import gm_trade_engine as ge
+from engines import gm_personas, gm_rollover as gr, gm_trade_engine as ge, gm_voices
 from engines.gm_personas import pick_seed_rows, picks_to_seed
 from engines.gm_rollover import MAX_FIRES, hot_seat, rollover_actions
 
@@ -131,6 +131,42 @@ def test_offseason_moves_use_the_new_cap_year():
     assert next(o for o in ops if o["op"] == "txn")["txn_date"] == "2036 OFFSEASON"
     _, warnings = tm.plan_trade_ops(prop, dict(state, cap_rows=set()))
     assert any("no 2037 cap row" in w for w in warnings)
+
+
+def test_hot_seat_hire_writes_a_card(monkeypatch):
+    """gm_rollover._hire_gm -> make_persona -> insert_gm: the hired GM always carries a card and a source."""
+    from engines import coaching_carousel as cc
+    monkeypatch.setattr(cc, "opening_parts", lambda cur, prior, ids: {})
+    monkeypatch.setattr(cc, "opening_appeal", lambda parts: 0.5)
+    monkeypatch.setattr(gr, "_gm_budget", lambda *a, **k: 20_000_000)
+    monkeypatch.setattr(gr, "gm_candidate_pool", lambda abbr, season: [])
+    monkeypatch.setattr(gr, "gm_search",
+                        lambda pool, appeal=None, budget=None:
+                        {"tier": "STANDARD", "salary": 1_000_000, "stature": 0.5})
+    monkeypatch.setattr(gm_personas, "read_teams",
+                        lambda cur, season: {"ATL": {"id": 1, "city": "Atlanta", "name": "Falcons",
+                                                     "coach": "X"}})
+    monkeypatch.setattr(gm_personas, "read_open", lambda cur: {})
+    captured = {}
+
+    def fake_insert(cur, team_id, p, traits, seed):
+        captured.update({"p": p, "team_id": team_id, "traits": traits, "seed": seed})
+        return 99
+
+    monkeypatch.setattr(gm_personas, "insert_gm", fake_insert)
+
+    class Cur:
+        def execute(self, q, a=None):
+            pass
+
+        def fetchone(self):
+            return None
+
+    rep = gr._hire_gm(Cur(), 2037, 2036, "ATL", 1, None, why="hot seat", log=lambda *a: None)
+    p = captured["p"]
+    assert gm_voices.parse_card(p["voice_card"]) is not None
+    assert p["voice_card_source"] in {"AUTHORED", "LLM", "TEMPLATE"}
+    assert rep["gm"] == p["gm_name"]
 
 
 def test_step_gm_next_stage(monkeypatch):

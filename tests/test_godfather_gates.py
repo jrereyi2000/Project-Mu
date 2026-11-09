@@ -3,10 +3,11 @@
 Offline: the carousel's candidate sliders come from legacy `persona_sliders` or the person lifecycle, and the GM
 hot seat runs before the carousel so a same-cycle HC+GM sweep is a genuine dual vacancy.
 """
+import json
 import sqlite3
 
 from engines import coaching_carousel as cc
-from engines import gm_rollover as gr
+from engines import gm_rollover as gr, gm_voices
 from tests.test_inbox_store import FakeCursor
 
 
@@ -100,6 +101,36 @@ def test_the_gm_seat_is_vacant_right_after_the_hot_seat_fires_it():
     assert cc._gm_vacant(cur, 5) is False
     conn.execute("UPDATE gm_profiles SET end_season = 2036 WHERE team_id = 5")
     assert cc._gm_vacant(cur, 5) is True                       # the carousel then sees the dual vacancy
+
+
+def test_the_godfather_coach_gm_insert_writes_a_template_card():
+    """A dual HC+GM vacancy inserts a coach-GM with a COACH_GM template card instead of a placeholder voice."""
+    acc = cc.godfather_acceptance(2036, 5, 41, "Charles Grant", salary=cc.GODFATHER_SALARY,
+                                  years=cc.GODFATHER_YEARS, slant="OFFENSIVE",
+                                  trigger_reason="dual HC+GM vacancy")
+
+    class Cur:
+        def __init__(self):
+            self.statements = []
+            self.rowcount = 0
+
+        def execute(self, sql, params=()):
+            self.statements.append((sql, tuple(params)))
+            self.rowcount = 0 if "UPDATE gm_profiles" in sql else 1
+
+        def fetchone(self):
+            return None
+
+    cur = Cur()
+    cc._extend_full_control(cur, acc)
+    inserts = [(sql, params) for sql, params in cur.statements if "INSERT INTO gm_profiles" in sql]
+    assert len(inserts) == 1
+    sql, params = inserts[0]
+    assert "voice_card" in sql and "voice_card_source" in sql
+    assert sql.count("'TEMPLATE'") == 2                              # bio_source and voice_card_source
+    card = gm_voices.parse_card(json.loads(params[4]))
+    assert card is not None and card["register"].startswith("Talks like a coach")
+    assert params[3] == gm_voices.one_line(card)                     # the voice one-liner, not a placeholder
 
 
 def test_hot_seat_only_waits_for_the_super_bowl():
