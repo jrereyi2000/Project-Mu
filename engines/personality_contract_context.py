@@ -129,7 +129,9 @@ def load_contract_context(cur, *, universe_id, player_id, alias_namespace, exter
 # ------------------------------------------------------------- evaluation ----
 def evaluate_voluntary_contract(league, ctx, player, contract, *, contract_inputs, seed):
     """A CPU re-sign/extension offer put to the player (module docstring). contract: {years, total_value, bonus,
-    guaranteed, salary_by_year?}; contract_inputs: {view, context, policy} for this player."""
+    guaranteed, salary_by_year?}; contract_inputs: {view, context, policy, counter_chooser?} for this player. A
+    counter_chooser (the player loop) may pick another clearing counter; the team's surplus and cap checks stay in
+    transactions_engine on whatever counter comes back."""
     from engines import transactions_engine as te
     inp = contract_inputs or {}
     years_ahead = league['target'] - league['season']
@@ -148,6 +150,7 @@ def evaluate_voluntary_contract(league, ctx, player, contract, *, contract_input
     score = fae.offer_utility(offer, fplayer, team, market, inp.get('view'), **kw)
     trace = {'seed': seed}
     status, counter = fae.acceptance({'offer': offer, 'team': team, 'market': market, 'score': score}, fplayer,
-                                     False, persona=inp.get('view'), trace=trace, **kw)
+                                     False, persona=inp.get('view'), trace=trace,
+                                     counter_chooser=inp.get('counter_chooser'), **kw)
     return {'status': status, 'counter': counter, 'score': score, 'bar': round(fae.accept_bar(fplayer, False), 4),
             'trace': trace, 'offer': offer}

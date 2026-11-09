@@ -258,6 +258,27 @@ def act(cur, thread, option_id, payload, note):
     raise InboxError(400, "answer the player with PROMISE, EXPLAIN or NO_CHANGE")
 
 
+# -------------------------------------------------------------------------------------------- the loop ---
+
+def loop_reply(cur, thread, intent, facts, llm, history=(), note=None):
+    """The player's own words in this role talk (COACH_PLAYER_AGENT_LOOPS_PLAN §2.5), or None when the player_loop
+    feature is off. The thread state's `unhappy_weeks`, when present, is passed as a stance weight."""
+    from engines.inbox import voice
+    from personality import features as pf
+    league_id = voice.loop_league_id(cur, thread)
+    if league_id is None or pf.mode(cur, league_id, 'player_loop') == 'off':
+        return None
+    from engines.agent_loops import player
+    loop_facts = dict(facts or {})
+    state = thread.get("state") or {}
+    if "unhappy_weeks" in state:
+        loop_facts["unhappy_weeks"] = state["unhappy_weeks"]
+    view = voice.persona_view(cur, "player", thread.get("counterpart_id"))
+    res = player.respond_inbox(cur, voice.loop_thread(thread), view, loop_facts, llm=llm, league_id=league_id,
+                               message_seq=len(history or ()))
+    return (res or {}).get("text") or None
+
+
 # ------------------------------------------------------------------------------------------------ template ---
 
 def template(intent, facts):

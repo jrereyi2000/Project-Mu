@@ -14,6 +14,10 @@ Optional hooks a kind may define (scan.py and voice.py call them when present):
   validate(text, facts) -> bool | (ok, why)        extra check on the model's words
   draft(cur, thread, text, llm=None) -> {"option_id", "payload", "summary"} | None
   review_promises(cur, season, week, team) -> int  due-promise review in the weekly scan (ROLE_TALK)
+  loop_reply(cur, thread, intent, facts, llm, history=(), note=None) -> str | None
+                                                   the player's own words from the player agent loop when the
+                                                   player_loop feature is not off (voice.compose asks it first;
+                                                   None/off keeps today's voice)
   PERSONA_ROLE: str | None                         the personality role voice.persona_view reads (default:
                                                    from COUNTERPART_TYPE; None -> neutral)
 """

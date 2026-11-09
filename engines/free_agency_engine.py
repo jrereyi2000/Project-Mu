@@ -36,6 +36,8 @@ sha256 of a seed string (no global random state), so a run is reproducible for i
                  bar is a COUNTER {years, total_value, bonus, guaranteed}; none -> REJECT.
   counter_options  the first clearing step and the next k - 1 steps that still clear (default k 3), for the
                  player agent loop's choice of ask (engines/agent_loops/player.py); the first equals _counter's.
+                 acceptance(..., counter_chooser=) lets that loop pick another of these clearing steps (a value
+                 outside counter_options is ignored); the player loop never changes acceptance or valuation.
   waves          offseason: 1 superstars (OVR >= 85), 2 quality starters (>= 75), 3 depth. Wave n considers every
                  unsigned player of tier <= n; a player past his tier's wave lowers his bar 0.03 a wave (market
                  cools). Each player gets one decision: offers ranked by U plus seeded noise (+-0.03), the first
@@ -321,12 +323,15 @@ def counter_options(offer, player, team, market, bar, k=3, *, persona=None, cont
     return out
 
 
-def acceptance(best, player, in_season, *, persona=None, contract_context=None, policy=None, trace=None):
+def acceptance(best, player, in_season, *, persona=None, contract_context=None, policy=None, trace=None,
+               counter_chooser=None):
     """best: {offer, team, market, score?, bar_shift?} (score = offer_utility's result, computed when missing;
     bar_shift moves the bar, run_wave's seeded mood and wave cooling). Returns (ACCEPT | REJECT | COUNTER,
     counter {years, total_value, bonus, guaranteed} or None). With a shadow/active policy the score is checked
     against the inputs' fingerprint (recomputed when stale) and a trace dict, when given, receives the bar, the
-    hard rejection, the counter attempts and (shadow) the adjusted alternative."""
+    hard rejection, the counter attempts and (shadow) the adjusted alternative. counter_chooser(offer, player,
+    team, market, bar, accepts) may pick another of counter_options' clearing counters (the player loop); a value
+    outside that set is ignored. Acceptance itself never changes."""
     offer, team, market = best["offer"], best.get("team") or {}, best.get("market")
     kw = {"contract_context": contract_context, "policy": policy}
     if _policy_on(policy):
@@ -363,6 +368,13 @@ def acceptance(best, player, in_season, *, persona=None, contract_context=None, 
         c = _counter(offer, player, team, market, bar, persona=persona, trace=trace, **kw)
     else:
         c = _counter(offer, player, team, market, bar)
+    if c is not None and counter_chooser is not None:
+        chosen = counter_chooser(offer, player, team, market, bar, False)
+        if chosen is not None:
+            legal = counter_options(offer, player, team, market, bar, persona=persona,
+                                    contract_context=contract_context, policy=policy)
+            if chosen in legal:
+                c = chosen
     return ("COUNTER", c) if c else ("REJECT", None)
 
 
@@ -378,6 +390,7 @@ def wave_tier(player):
 def _decide(player, scored, in_season, bar_shift, seed, tag, inputs=None):
     """scored: [(index, offer, team, market, score)]. One decision for the player. inputs {view, context, policy}
     switches to the recorded path (_decide_recorded)."""
+    chooser = (inputs or {}).get("counter_chooser")
     if inputs is not None:
         return _decide_recorded(player, scored, in_season, bar_shift, seed, tag, inputs)
     pid = _pid(player)
@@ -386,7 +399,7 @@ def _decide(player, scored, in_season, bar_shift, seed, tag, inputs=None):
     first_counter = None
     for idx, offer, team, market, score in ranked:
         status, counter = acceptance({"offer": offer, "team": team, "market": market, "score": score,
-                                      "bar_shift": bar_shift}, player, in_season)
+                                      "bar_shift": bar_shift}, player, in_season, counter_chooser=chooser)
         row = {"player_id": pid, "team_id": offer.get("team_id"), "offer_index": idx, "offer": offer,
                "status": status, "utility": score["utility"], "counter": counter}
         if status == "ACCEPT":
@@ -405,7 +418,8 @@ def _decide_recorded(player, scored, in_season, bar_shift, seed, tag, inputs):
     pid = _pid(player)
     draws = {s[0]: _noise(CHOICE_NOISE, seed, tag, pid, s[1].get("team_id"), s[0]) for s in scored}
     ranked = sorted(scored, key=lambda s: (-(s[4]["utility"] + draws[s[0]]), s[0]))
-    kw = {"persona": inputs.get("view"), "contract_context": inputs.get("context"), "policy": inputs.get("policy")}
+    kw = {"persona": inputs.get("view"), "contract_context": inputs.get("context"), "policy": inputs.get("policy"),
+          "counter_chooser": inputs.get("counter_chooser")}
     candidates, chosen, first_counter = [], None, None
     for rank, (idx, offer, team, market, score) in enumerate(ranked):
         trace = {}
@@ -442,9 +456,13 @@ def canonical_offer_order(offers):
 
 
 def _inputs_for(contract_inputs, pid):
-    """The player's {view, context, policy}, or None (no inputs, or mode off: the exact original path)."""
+    """The player's {view, context, policy}, or None (no inputs, or mode off and no counter chooser: the exact
+    original path). An entry carrying a counter_chooser is kept even with the contract policy off, so the player
+    loop works independently of contracts_*; the recorded path handles persona/context/policy None."""
     inp = (contract_inputs or {}).get(pid)
-    return inp if inp and _policy_on(inp.get("policy")) else None
+    if not inp:
+        return None
+    return inp if _policy_on(inp.get("policy")) or inp.get("counter_chooser") is not None else None
 
 
 def _score_with(inputs, offer, player, team, market):
