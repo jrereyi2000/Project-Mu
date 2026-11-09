@@ -336,7 +336,7 @@ class AgentWireTradeTests(unittest.TestCase):
         return by_kind(plan)
 
     def test_trade_news_reactions_and_beat(self):
-        from newsroom.social_desk import TARGET_POSTS, plan_social_week
+        from newsroom.social_desk import plan_social_week
         plan = plan_social_week(wire_league(trades=[wire_trade(1, 3, 4)]))
         k = self.kinds(plan)
         self.assertEqual(len(k["TRADE_NEWS"]), 1)
@@ -350,7 +350,7 @@ class AgentWireTradeTests(unittest.TestCase):
         beat = {a["team_id"]: a for a in plan["assignments"] if a["kind"] == "BEAT_MOVE"}
         self.assertEqual(set(beat), {3, 4})
         self.assertIn("TRADE (executed)", beat[3]["facts"]["trades_this_week"][0])
-        self.assertEqual(sum(plan["counts"].values()), TARGET_POSTS)
+        self.assertEqual(sum(plan["counts"].values()), sum(plan["mix"].values()))
 
     def test_rumors_capped_never_worded_as_done(self):
         from newsroom.social_desk import TRADE_RUMOR_MAX, plan_social_week

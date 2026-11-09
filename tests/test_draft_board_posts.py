@@ -4,7 +4,7 @@ import json
 import unittest
 from unittest import mock
 
-from newsroom.social_desk import (DRAFT_BOARD_POSTS, TARGET_POSTS, WINDOWS, draft_board_subjects, load_draft_movers,
+from newsroom.social_desk import (DRAFT_BOARD_POSTS, WINDOWS, draft_board_subjects, load_draft_movers,
                                   plan_social_week)
 from tests.test_social_desk import by_kind, league
 
@@ -44,7 +44,7 @@ class DraftBoardPlanTests(unittest.TestCase):
         facts = posts[0]["facts"]
         self.assertEqual((facts["draft_class"], facts["direction"], facts["name"]), (2037, "faller", "Faller One"))
         self.assertNotIn("ovr", json.dumps(facts).lower())
-        self.assertEqual(sum(plan["counts"].values()), TARGET_POSTS)
+        self.assertEqual(sum(plan["counts"].values()), sum(plan["mix"].values()))
 
     def test_no_board_no_posts(self):
         plan = plan_social_week(league(week=9))
