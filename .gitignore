@@ -57,3 +57,6 @@ PC_MODS/
 
 # Claude Code subagent worktrees
 .claude/worktrees/
+
+# Live agent-to-agent message board (see CLAUDE.md, "Talking to other agents")
+AGENT_CONVERSATION.md

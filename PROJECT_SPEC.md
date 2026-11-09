@@ -23,6 +23,7 @@ Project Mu/
 ├── AUDIT_LEDGER.md            # 4-Phase Deprecation & Lineage Audit Ledger (v0/v1/v2 reachability; V3 studio planning boundary and supersession matrix; §3b: what the fresh 2034 save makes obsolete; Tiers 1–5 of what to prune)
 ├── CLAUDE.md                  # Claude Code session rules (read this spec first; keep it updated)
 ├── AGENTS.md                  # Codex session rules; relative symlink to CLAUDE.md, tracked by Git
+├── AGENT_CONVERSATION.md      # Live, append-only message board between concurrent agents (Claude, DeepSeek, Gemini, Codex); git-ignored, one copy in the main checkout; format and rules in its header, usage in CLAUDE.md
 ├── .claude/                   # Claude Code project files; worktrees/ (subagent git worktrees) is git-ignored
 │   └── skills/                #   Project skills (typed as /<name>); index: docs/reference/AGENTS.md
 │       ├── commit-audit/      #     /commit-audit: SKILL.md (run the auditor on a range now, show status, read the latest report)
