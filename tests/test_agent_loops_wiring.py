@@ -366,3 +366,27 @@ def test_inbox_role_talk_keeps_its_voice_when_player_loop_off(monkeypatch, cur):
     reply = voice.compose(cur, role_talk_kind, role_thread(cur), 'LOST_STARTING_JOB',
                           {'team': 'CAR', 'player': 'Xavier Legette', 'slot': 'WR'}, [], llm=FakeLLM())
     assert reply.source == 'TEMPLATE' and 'I was starting' in reply.text
+
+
+def test_inbox_role_talk_turns_get_distinct_decisions_and_replay(monkeypatch, memory, cur):
+    """message_seq = len(history): each new turn records its own INBOX_REPLY; the same turn replays."""
+    monkeypatch.setattr(pf, 'mode', lambda cur, league, feature: 'active')
+    real = player_loop.respond_inbox
+    decisions = []
+
+    def spy(*a, **kw):
+        res = real(*a, **kw)
+        decisions.append(res['decision'])
+        return res
+
+    monkeypatch.setattr(player_loop, 'respond_inbox', spy)
+    thread = role_thread(cur)
+    facts = {'team': 'CAR', 'player': 'Xavier Legette', 'slot': 'WR'}
+    llm = FakeLLM()                      # its words don't ground, but the decision is still recorded
+    assert role_talk_kind.loop_reply(cur, thread, 'LOST_STARTING_JOB', facts, llm, history=[{}, {}]) is None
+    assert role_talk_kind.loop_reply(cur, thread, 'LOST_STARTING_JOB', facts, llm, history=[{}, {}]) is None
+    assert role_talk_kind.loop_reply(cur, thread, 'LOST_STARTING_JOB', facts, llm,
+                                     history=[{}, {}, {}]) is None
+    subjects = sorted(r['subject_key'] for r in memory.find(LEAGUE, SEASON, 'INBOX_REPLY'))
+    assert subjects == [f"thread:{thread['id']}:msg:2", f"thread:{thread['id']}:msg:3"]
+    assert [d['replayed'] for d in decisions] == [False, True, False]

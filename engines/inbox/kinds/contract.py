@@ -269,7 +269,8 @@ def loop_reply(cur, thread, intent, facts, llm, history=(), note=None):
     if counter and not loop_facts.get("counters"):
         loop_facts["counters"] = {"COUNTER_MIN": counter}
     view = voice.persona_view(cur, "player", thread.get("counterpart_id"))
-    res = player.respond_inbox(cur, voice.loop_thread(thread), view, loop_facts, llm=llm)
+    res = player.respond_inbox(cur, voice.loop_thread(thread), view, loop_facts, llm=llm, league_id=league_id,
+                               message_seq=len(history or ()))
     return (res or {}).get("text") or None
 
 
