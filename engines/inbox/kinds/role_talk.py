@@ -227,14 +227,14 @@ def act(cur, thread, option_id, payload, note):
         max_depth = _int(p.get("max_depth", p.get("depth")), 1)
         if not 1 <= max_depth <= dce.DEPTH:
             raise InboxError(400, f"the promised depth must be 1-{dce.DEPTH}")
-        due_week = _int(p.get("due_week", p.get("week")), this_week + PROMISE_REVIEW_WEEKS)
-        if due_week < this_week + 1:
-            raise InboxError(400, "the review week must be after this week")
-        if not 1 <= due_week <= MAX_REVIEW_WEEK:
-            raise InboxError(400, f"the review week must fall in weeks 1-{MAX_REVIEW_WEEK}")
         due_season = _int(p.get("due_season"), this_season)
         if due_season is None or not this_season <= due_season <= this_season + 1:
             raise InboxError(400, "the review season must be this season or the next")
+        due_week = _int(p.get("due_week", p.get("week")), this_week + PROMISE_REVIEW_WEEKS)
+        if not 1 <= due_week <= MAX_REVIEW_WEEK:
+            raise InboxError(400, f"the review week must fall in weeks 1-{MAX_REVIEW_WEEK}")
+        if (due_season, due_week) <= (this_season, this_week):   # a next-season week 3 IS after this season's week 20
+            raise InboxError(400, "the review week must be after this week")
         promises = list(state.get("promises") or [])
         promise_id = appraisal.promise_id_for(thread, len(promises) + 1)
         made_at = _depth_at(_chart_in_force(cur, thread["team_id"], this_season, this_week), slot,
@@ -335,9 +335,10 @@ def review_promises(cur, season, week, team):
                 continue
             if _int(promise.get("due_season")) != int(season) or _int(promise.get("due_week"), 99999) > week:
                 continue
-            # Judge against the chart in force at the due week: a promotion made after the deadline isn't a kept
-            # promise, and the current chart would call it one.
-            force = _chart_in_force(cur, tid, thread.get("season"), _int(promise.get("due_week"), week))
+            # Judge against the chart in force at the due week (in the promise's own season): a promotion made
+            # after the deadline isn't a kept promise, and the current chart would call it one.
+            force = _chart_in_force(cur, tid, _int(promise.get("due_season"), thread.get("season")),
+                                    _int(promise.get("due_week"), week))
             depth = _depth_at(force, promise.get("slot"), thread.get("counterpart_id"))
             chart_row = ({"depth": depth, "source": force["source"], "season": force["season"],
                           "week": force["week"]} if force is not None and depth is not None else None)

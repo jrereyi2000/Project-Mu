@@ -128,6 +128,12 @@ def test_start_refuses_when_jr_controls_both_roles(cur):
     assert e.value.status == 400 and "both" in e.value.message
 
 
+def test_the_fact_sheet_names_the_team_in_uppercase(cur):
+    cur.execute("UPDATE teams SET abbreviation = 'car' WHERE id = 1")
+    assert vision._abbr(cur, 1) == "CAR"
+    assert vision._abbr(cur, 999) == "999"                    # a missing row falls back to the id
+
+
 def test_propose_carries_the_form_the_page_needs(cur):
     """Without `form` the page sends payload null and the server answers 400, so the vision form never renders."""
     thread = make_thread(cur)

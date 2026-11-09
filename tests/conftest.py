@@ -268,3 +268,40 @@ def guard_llm_usage_logging_in_unit_tests(request, monkeypatch):
             pass
 
 
+
+
+# ----------------------------------------------------------------- scratch Postgres (savepoint tests) ---
+SAVEPOINT_TEST_DSN_ENV = "INBOX_SAVEPOINT_TEST_DSN"
+
+
+def savepoint_dsn():
+    """The DSN the Postgres-only savepoint tests use, or None. `mu_scratch_*` or madden_test only."""
+    dsn = os.environ.get(SAVEPOINT_TEST_DSN_ENV)
+    if not dsn:
+        return None
+    name = _extract_dbname(dsn)
+    return dsn if (name == "madden_test" or _is_scratch_db(name)) else None
+
+
+@pytest.fixture
+def scratch_pg():
+    """A cursor inside a throwaway schema of the savepoint scratch database, dropped afterwards. These tests pin
+    behaviour the SQLite fake cannot show: only the PostgreSQL server aborts a transaction on a statement error."""
+    dsn = savepoint_dsn()
+    if not dsn:
+        pytest.skip(f"set {SAVEPOINT_TEST_DSN_ENV} to madden_test or a mu_scratch_* database")
+    import psycopg
+    import uuid
+    schema = "inboxsp_" + uuid.uuid4().hex[:12]
+    conn = psycopg.connect(dsn)
+    try:
+        cur = conn.cursor()
+        cur.execute(f"CREATE SCHEMA {schema}")
+        cur.execute(f"SET search_path TO {schema}")
+        yield cur
+    finally:
+        conn.rollback()
+        with conn.cursor() as c:
+            c.execute(f"DROP SCHEMA IF EXISTS {schema} CASCADE")
+            conn.commit()
+        conn.close()

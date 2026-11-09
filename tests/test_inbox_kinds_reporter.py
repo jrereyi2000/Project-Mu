@@ -269,3 +269,12 @@ def test_start_uses_the_typed_note_as_the_subject(cur):
     t = reporter.start(cur, node, {"note": "The trade for a pass rusher"})
     assert t.subject == "The trade for a pass rusher" and t.facts["topic"] == "The trade for a pass rusher"
     assert t.intent == "OPEN" and t.counterpart_id == "car_beat"
+
+
+@pytest.mark.integration
+def test_a_failed_beat_writer_fallback_leaves_the_transaction_usable(scratch_pg):
+    """Both reads fail without the agent_memories columns; the second is the one the savepoint was missing."""
+    scratch_pg.execute("CREATE TABLE agent_memories (id SERIAL PRIMARY KEY, agent_id TEXT)")
+    assert reporter._beat_writer(scratch_pg, 1) is None
+    scratch_pg.execute("SELECT count(*) FROM agent_memories")           # InFailedSqlTransaction without a savepoint
+    assert scratch_pg.fetchone()[0] == 0

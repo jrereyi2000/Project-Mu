@@ -190,13 +190,20 @@ def start(cur, team, body):
     gm_id, gm_name = _gm(cur, gm_team_id)
     if gm_id is None:
         raise InboxError(400, f"{_abbr(cur, gm_team_id)} has no GM")
-    # One open talk per GM and a fresh ref per attempt: (team, kind, source_ref) is unique over closed threads
-    # too, so a fixed ref made every later talk with that GM a permanent 409.
-    from engines.inbox import store
+    # One open talk per GM, and a fresh ref per attempt: (team, kind, source_ref) is unique over closed threads too,
+    # so a fixed ref made every later talk with that GM a permanent 409. Both reads are in SQL rather than over
+    # store.list_threads, whose default page is 50 rows.
+    from engines.inbox import Conflict
     base = f"gm_talk:start:{user}:{_abbr(cur, gm_team_id)}"
-    prior = sum(1 for t in store.list_threads(cur, team["team_id"], kind=KIND)
-                if str(t.get("source_ref") or "").startswith(base + ":"))
-    source_ref = f"{base}:{prior + 1}"
+    cur.execute("SELECT id FROM inbox_threads WHERE team_id = %s AND kind = %s AND source_ref LIKE %s "
+                "AND status IN ('OPEN','WAITING_JR') LIMIT 1", (team["team_id"], KIND, base + ":%"))
+    if cur.fetchone():
+        raise Conflict(f"a trade talk with {_abbr(cur, gm_team_id)} is already open")
+    cur.execute("SELECT source_ref FROM inbox_threads WHERE team_id = %s AND kind = %s AND source_ref LIKE %s",
+                (team["team_id"], KIND, base + ":%"))
+    attempts = [int(str(r[0]).rsplit(":", 1)[-1]) for r in cur.fetchall()
+                if str(r[0]).rsplit(":", 1)[-1].isdigit()]
+    source_ref = f"{base}:{(max(attempts) + 1) if attempts else 1}"
     subject = str(body.get("topic") or body.get("note") or "Trade talks")[:120]
     facts = _facts(cur, {"counterpart_name": gm_name}, user, gm_team_id)
     return Trigger(KIND, team["team_id"], COUNTERPART_TYPE, str(gm_id), gm_name, subject, source_ref,

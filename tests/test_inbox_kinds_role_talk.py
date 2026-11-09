@@ -187,6 +187,34 @@ def test_a_promise_made_in_a_later_week_uses_the_league_week(db, cur):
     assert ev["payload"]["due_at"] == {"season": SEASON, "tick": 8}
 
 
+def test_a_next_season_promise_is_after_this_week_and_stays_in_its_own_season(db, cur):
+    """Comparing the due WEEK alone refused 2027 week 3 from 2026 week 20, and judged it on the 2026 chart."""
+    t = make_thread(cur, source_ref="wants:next", state={"topic": "WANTS_MORE", "slot": "WR"},
+                    player="101", name="Xavier Legette")
+    db.conn.execute("UPDATE league_state SET current_week = 20")
+    with pytest.raises(InboxError):
+        role_talk.act(cur, t, "PROMISE", {"slot": "WR", "max_depth": 1, "due_season": SEASON, "due_week": 20}, None)
+    with pytest.raises(InboxError):                               # only this season or the next
+        role_talk.act(cur, t, "PROMISE", {"slot": "WR", "max_depth": 1, "due_season": SEASON + 5, "due_week": 3}, None)
+    res = role_talk.act(cur, t, "PROMISE", {"slot": "WR", "max_depth": 1, "due_season": SEASON + 1, "due_week": 3}, None)
+    assert (res.state["promises"][0]["due_season"], res.state["promises"][0]["due_week"]) == (SEASON + 1, 3)
+
+
+def test_an_overdue_next_season_promise_reads_its_own_season_chart(db, cur):
+    t = make_thread(cur, source_ref="wants:next2", state={"topic": "WANTS_MORE", "slot": "WR"},
+                    player="101", name="Xavier Legette")
+    res = role_talk.act(cur, t, "PROMISE", {"slot": "WR", "max_depth": 1, "due_season": SEASON + 1, "due_week": 3}, None)
+    store.update_state(cur, t["id"], res.state)
+    store.close_thread(cur, t["id"])
+    put_chart(db, 3, "MU_COACH", {"WR": [101]})                   # 2026 week 3: promoted, the wrong season
+    db.conn.executemany("INSERT INTO depth_charts VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        [(CAR, SEASON + 1, 3, "WR", 1, 100, "MU_COACH"),    # 2027 week 3: still second
+                         (CAR, SEASON + 1, 3, "WR", 2, 101, "MU_COACH")])
+    assert role_talk.review_promises(cur, SEASON + 1, 3, {"team_id": CAR, "abbr": "CAR"}) == 1
+    ev = cur.execute("SELECT event FROM inbox_relationship_events WHERE kind = 'promise_resolved'").fetchone()[0]
+    assert ev["payload"]["resolution"] == "broken" and ev["payload"]["criterion_result"]["chart_season"] == SEASON + 1
+
+
 def test_promise_validation(cur):
     t = make_thread(cur)
     with pytest.raises(InboxError):
