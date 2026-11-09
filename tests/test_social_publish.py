@@ -368,6 +368,27 @@ class RelationshipAndPickStorageTests(unittest.TestCase):
         self.assertEqual(captured["kwargs"]["relationship_block"], "You can't stand the Team2.")
         self.assertIn(captured["kwargs"]["shape"], SW.POST_SHAPES)
 
+    def test_generated_post_prompt_has_the_bias_block_once(self):
+        class Cur:
+            def execute(self, *a, **k):
+                pass
+            def fetchone(self):
+                return None
+            def fetchall(self):
+                return []
+        ctx = {"season": 2035, "week": 9, "teams": {1: {"name": "Team1"}, 2: {"name": "Team2"}}}
+        acct = {"agent_id": "fan", "archetype": "DIE_HARD_FAN", "team_id": 1, "handle": "@fan",
+                "display_name": "Fan", "persistent_memory": ""}
+        a = {"agent_id": "fan", "kind": "REACTION", "subject": {"type": "game", "id": 3},
+             "subjects": [{"type": "team", "id": 2}], "facts": {"week": 9}, "team_id": 1, "handle": "@fan"}
+        writer = social._Writer(Cur(), ctx, {"fan": acct}, CFG, None, "gemini-3.8-flash", 1, lambda *args: None)
+        with mock.patch("newsroom.relationships.relationship_block",
+                        return_value="You can't stand the Team2.") as rel:
+            system, _ = writer.prompt(a)
+        self.assertEqual(rel.call_count, 1)                     # posts get it only through build_post_prompt
+        self.assertEqual(system.count("YOUR BIASES"), 1)
+        self.assertIn("You can't stand the Team2.", system)
+
 
 class FantasySuppressionTests(unittest.TestCase):
     def test_publishable_blocks_fantasy_when_inactive(self):

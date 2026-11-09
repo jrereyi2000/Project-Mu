@@ -573,7 +573,7 @@ class _Writer:
         persona = build_persona_block(
             self.cur, self.personas.get(acct["archetype"], ""), agent_id=a["agent_id"], season=self.ctx["season"],
             week=self.ctx["week"], fmt="POST", post_kind=kind_key(a), position=(a.get("facts") or {}).get("position"),
-            team_id=a.get("team_id"), subject_key=str(a.get("subject", {}).get("id") or ""))
+            team_id=a.get("team_id"), subject_key=str(a.get("subject", {}).get("id") or ""), relationships=False)
         from newsroom import relationships
         person = self._person_keys.get(a["agent_id"])
         if person is None:                                        # one person-key lookup per account
