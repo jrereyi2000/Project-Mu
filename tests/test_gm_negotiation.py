@@ -183,6 +183,23 @@ def test_inbox_reply_uses_the_shared_writer_and_the_gm_card(monkeypatch):
     assert star["performance"]["last3"] == ["6-88-1 @ SEA"]        # recent flows into the v2 sheet
 
 
+def test_the_writers_prompt_carries_jr_note(monkeypatch):
+    b, _ = setup()
+    offer = [pl(STAR, GM, JR), pk(7, JR, JR, GM)]
+    seen = {}
+    from engines import gm_talks as gt
+
+    def fake_timeout(llm, prompt, seconds):
+        seen["prompt"] = prompt
+        return '{"message": "We can do that. Send it over."}'
+
+    monkeypatch.setattr(gt, "call_with_timeout", fake_timeout)
+    text, src = gn.gm_message(b, "ACCEPT", JR, GM, offer, note="Let's get this done today.",
+                              llm=object(), timeout=8)
+    assert src == "LLM"
+    assert "JR: Let's get this done today." in seen["prompt"]      # the note rides in the writer's history
+
+
 def test_without_a_card_the_writer_gets_the_trait_template(monkeypatch):
     b, _ = setup()
     offer = [pl(STAR, GM, JR), pk(7, JR, JR, GM)]

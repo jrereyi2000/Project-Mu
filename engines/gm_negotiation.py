@@ -396,14 +396,16 @@ def gm_message(b, kind, user, gm, offer, counter_assets=None, mood=None, reasons
     """(text, source): the shared writer's line (gm_writer.write_line) from the GM's voice card, the v2 fact
     sheet and this turn's move and scene, else the template. The engine has already decided `kind`, `posture` and
     the assets, and the writer never changes them. `recent` is the {player_id: [line, ...]} last-three-game map
-    from gm_trade_engine.recent_form; `note` and `league` stay for old callers (the writer has no place for
-    them). timeout: the reply-time budget (gm_talks.call_with_timeout), unchanged."""
+    from gm_trade_engine.recent_form. JR's `note`, when present, rides in the writer's `history` as the line he
+    just said, so the GM answers it; `league` stays for old callers (the writer has no name check). timeout: the
+    reply-time budget (gm_talks.call_with_timeout), unchanged."""
     fallback = template_message(b, kind, user, gm, offer, counter_assets, mood, reasons)
     if llm is None:
         return fallback, "TEMPLATE"
     from engines.gm_writer import write_line
     sheet = message_sheet(b, user, gm, offer, counter_assets, recent=recent)
-    return write_line(llm, card_text=_gm_card_text(b, gm), sheet=sheet, history=[],
+    history = [{"message": f"JR: {note[:500]}"}] if note else []
+    return write_line(llm, card_text=_gm_card_text(b, gm), sheet=sheet, history=history,
                       move=message_move(b, kind, user, gm, offer, counter_assets, posture),
                       scene=message_scene(b, gm, sheet, mood), fallback=fallback, timeout=timeout)
 
