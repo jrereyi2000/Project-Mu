@@ -2185,7 +2185,8 @@ CREATE TABLE IF NOT EXISTS news_feed (
     reposts INT,
     reply_count INT,
     views INT,
-    hashtags TEXT[]
+    hashtags TEXT[],
+    post_shape VARCHAR(32)      -- the sampled social_writer.POST_SHAPES label (posts only; 2027_02_10)
 );
 CREATE INDEX IF NOT EXISTS idx_news_feed_social_week ON news_feed (season, week, content_type, posted_at);
 CREATE INDEX IF NOT EXISTS idx_news_feed_agent ON news_feed (agent_id);
@@ -3893,5 +3894,6 @@ INSERT INTO schema_migrations (version, filename, checksum, source) VALUES
     ('2027_02_07_staff_contracts_and_full_control', '2027_02_07_staff_contracts_and_full_control.sql', '33ab9fb7edbf269944dba103da8685970c1dc76c69cfb82258a4d7fe1b1e46c1', 'init_db.sql'),
     ('2027_02_07_staff_development_award', '2027_02_07_staff_development_award.sql', '7ff467816bf01c9680cfd6999e10120317181ec288e6cbee1f196b53247542dd', 'init_db.sql'),
     ('2027_02_08_nflpa_report_cards', '2027_02_08_nflpa_report_cards.sql', 'aedd087a2367f031bb6aecb2ed883d4ee896611af2fbb4ddbf3a59a09c858166', 'init_db.sql'),
-    ('2027_02_09_init_db_parity', '2027_02_09_init_db_parity.sql', 'f3d728858dd69f738514a575d055ed9d8831c22ed89927db530cce2df3be5aa0', 'init_db.sql')
+    ('2027_02_09_init_db_parity', '2027_02_09_init_db_parity.sql', 'f3d728858dd69f738514a575d055ed9d8831c22ed89927db530cce2df3be5aa0', 'init_db.sql'),
+    ('2027_02_10_news_feed_post_shape', '2027_02_10_news_feed_post_shape.sql', '85f1d2db9cd238dc9e889010dcab8d0311e09d5b27ad271fddaceb56f58cc5ba', 'init_db.sql')
 ON CONFLICT (version) DO NOTHING;

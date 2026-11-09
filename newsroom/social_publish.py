@@ -444,13 +444,13 @@ def save_post(cur, ctx, a, post, posted_at, eng, slot, tagger=None, parent_id=No
     cur.execute("""
         INSERT INTO news_feed (season, week, team_id, content_type, persona, slot, content, created_at,
                                agent_id, post_kind, posted_at, reply_to_id, linked_article_id, subject_game_id,
-                               subject_player_id, likes, reposts, reply_count, views, hashtags)
-        VALUES (%s, %s, %s, 'TWEET', %s, %s, %s, NOW(), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                               subject_player_id, likes, reposts, reply_count, views, hashtags, post_shape)
+        VALUES (%s, %s, %s, 'TWEET', %s, %s, %s, NOW(), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         RETURNING id
     """, (ctx["season"], ctx["week"], a.get("team_id"), a["archetype"], slot, post["text"], a["agent_id"], a["kind"],
           posted_at, parent_id, subj["id"] if a["kind"] == "SHARE" else None, game_id,
           subj["id"] if subj["type"] == "player" else None, eng["likes"], eng["reposts"], eng["reply_count"],
-          eng["views"], post.get("hashtags") or []))
+          eng["views"], post.get("hashtags") or [], a.get("post_shape")))
     post_id = cur.fetchone()[0]
     if tagger:
         tagger.extract_and_store_entities(cur=cur, article_id=post_id, headline="", content=post["text"],
@@ -512,10 +512,20 @@ def infer_post_shape(text: str) -> str:
 
 
 def recent_post_shapes(cur, agent_id: str, limit: int = 15) -> list:
-    """The account's recent post shapes (most recent last), inferred from the last `limit` posts in news_feed."""
-    cur.execute("""SELECT content FROM news_feed WHERE agent_id = %s AND content_type = 'TWEET'
-                   ORDER BY season DESC, week DESC, id DESC LIMIT %s;""", (agent_id, limit))
-    return [infer_post_shape(text) for text in reversed([r[0] for r in cur.fetchall() if r[0]])]
+    """The account's recent post shapes (most recent last). Reads the stored `post_shape`; rows written before
+    `2027_02_10_news_feed_post_shape.sql` (or on a database without the column) fall back to infer_post_shape."""
+    cur.execute("SAVEPOINT recent_post_shapes")
+    try:
+        cur.execute("""SELECT post_shape, content FROM news_feed WHERE agent_id = %s AND content_type = 'TWEET'
+                       ORDER BY season DESC, week DESC, id DESC LIMIT %s;""", (agent_id, limit))
+        rows = cur.fetchall()
+        cur.execute("RELEASE SAVEPOINT recent_post_shapes")
+    except Exception:
+        cur.execute("ROLLBACK TO SAVEPOINT recent_post_shapes")
+        cur.execute("""SELECT content FROM news_feed WHERE agent_id = %s AND content_type = 'TWEET'
+                       ORDER BY season DESC, week DESC, id DESC LIMIT %s;""", (agent_id, limit))
+        rows = [(None, r[0]) for r in cur.fetchall()]
+    return [shape or infer_post_shape(text) for shape, text in reversed(rows) if shape or text]
 
 
 def normalized_assignment(a: dict) -> dict:
@@ -581,6 +591,7 @@ class _Writer:
         bias = relationships.relationship_block(self.cur, person, a.get("subjects") or [])
         shape = pick_shape(acct, a["kind"], recent_post_shapes(self.cur, a["agent_id"]),
                            seed=f"{self.ctx['season']}:{self.ctx['week']}:{a.get('subject', {}).get('id')}")
+        a["post_shape"] = shape                                # stored with the post (2027_02_10)
         return build_post_prompt(a, acct, persona, team, memory, a.get("parent"), relationship_block=bias, shape=shape)
 
     def write(self, assignments):

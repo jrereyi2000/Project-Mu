@@ -320,8 +320,43 @@ class RelationshipAndPickStorageTests(unittest.TestCase):
 
     def test_recent_post_shapes_come_back_most_recent_last(self):
         cur = MagicMock()
-        cur.fetchall.return_value = [("what a catch?",), ("ok",)]
+        cur.fetchall.return_value = [("question", "what a catch?"), (None, "ok")]
         self.assertEqual(social.recent_post_shapes(cur, "fan"), ["one_liner", "question"])
+
+    def test_recent_post_shapes_prefer_the_stored_column(self):
+        cur = MagicMock()
+        cur.fetchall.return_value = [("sarcasm", "great, another fourth-quarter collapse"), (None, "go team")]
+        self.assertEqual(social.recent_post_shapes(cur, "fan"), ["one_liner", "sarcasm"])
+
+    def test_recent_post_shapes_fall_back_when_the_column_is_missing(self):
+        class Cur:
+            def __init__(self):
+                self.calls = 0
+
+            def execute(self, sql, *a):
+                self.calls += 1
+                if "post_shape, content" in sql:
+                    raise RuntimeError('column "post_shape" does not exist')
+
+            def fetchall(self):
+                return [("what a catch?",), ("ok",)]
+        self.assertEqual(social.recent_post_shapes(Cur(), "fan"), ["one_liner", "question"])
+
+    def test_save_post_stores_the_sampled_shape(self):
+        cur = MagicMock()
+        cur.fetchall.return_value = []
+        cur.fetchone.side_effect = [None, (555,)]
+        ctx = {"season": 2035, "week": 9, "recap_games": [], "preview_games": []}
+        a = {"agent_id": "writer", "kind": "BEAT", "archetype": "LOCAL_BEAT_REPORTER", "handle": "@writer",
+             "subject": {"type": "team", "id": 1, "label": "Team1", "team_id": 1}, "team_id": 1,
+             "post_shape": "sarcasm"}
+        post = {"text": "ok", "about": [], "picks": [], "season_calls": []}
+        eng = {"likes": 1, "reposts": 0, "reply_count": 0, "views": 1}
+        with mock.patch("newsroom.social_publish._record_post_relationships"):
+            self.assertEqual(save_post(cur, ctx, a, post, dt.datetime(2035, 9, 1), eng, "Agent Wire"), 555)
+        insert = next(c for c in cur.execute.call_args_list if "INSERT INTO news_feed" in c.args[0])
+        self.assertIn("post_shape", insert.args[0])
+        self.assertEqual(insert.args[1][-1], "sarcasm")
 
     def test_write_gives_the_parser_the_normalized_assignment(self):
         class Cur:
