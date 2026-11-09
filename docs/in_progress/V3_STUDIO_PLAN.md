@@ -23,6 +23,8 @@ Local rookie headshots stay local. Native save ingestion replaces OCR. V3 reuses
 
 ## 2. Deterministic Dossiers and Continuity
 
+> The social-post family this section plans lives in PROJECT_SPEC §7.8; writer voices, weekly picks, season calls and relationship biases are built by [AGENT_WIRE_VOICE_PLAN](../done/AGENT_WIRE_VOICE_PLAN.md) (2026-11-09). Model choice and local posts remain here (§10).
+
 ### Context contract
 
 The target writing prompt has three layers:

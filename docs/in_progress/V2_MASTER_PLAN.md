@@ -387,6 +387,8 @@ All five phases were built by [`V2_CORE_BUILD_PLAN.md`](../done/V2_CORE_BUILD_PL
 
 ### 7.2 Final Milestone: The 2026–2033 All-CPU Era and JR's 2034 Takeover (JR, 2026-10-30)
 
+> Weekly Agent Wire picks and graded season calls (built 2026-11-09, [AGENT_WIRE_VOICE_PLAN](../done/AGENT_WIRE_VOICE_PLAN.md)) are the memory source for the CPU years, when few articles are written.
+
 > **Revised (JR, 2026-11-08): tuning happens *before* 2026 week 1, not during the 2026–2033 run.**
 > The bullet below calling 2026–2033 "V2's acceptance run" no longer means retuning mid-run: constants are
 > frozen before the canonical franchise starts, and any later change is a documented, versioned break. The

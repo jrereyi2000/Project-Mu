@@ -113,7 +113,7 @@ undone" rule made concrete.
 | ☐ | ID | Item | Done when | Size |
 |---|---|---|---|---|
 | ☐ | **P1-05** | **Agent loops U3 wiring** (follow-up #21). The last unit of `COACH_PLAYER_AGENT_LOOPS_PLAN`: league office, inbox `CONTRACT`/`ROLE_TALK`, social desk `PLAYER_STATEMENT`, switchboard `coach_loop`/`player_loop`. Both dependencies are merged, so there is no code blocker — only JR's go-ahead. **Without this, coach close-calls, player counters and leaks never fire, so checkpoint 1's "agent decisions" cannot be tested.** | `tests/test_agent_loops_wiring.py` green; a shadow run records CHART / CONTRACT / LEAK decisions. | L |
-| ☐ | **P1-06** | **Agent Wire U3 planner** (follow-up #22). Rebase/rework onto the trade-talks version of `newsroom/social_desk.py` rather than a straight merge. `week_mix`, league topics, `PICKS`/`HOT_TAKE`/`SEASON_CALL`, structured output, picks grading. **This is the item that makes tweets stop reading like captioned box scores.** | `python3 -m newsroom.social_desk --season 2035 --week 12` prints a plan; `tools/social_quality_report` reproduces or beats the 2036 baseline (distinct openers ≥85%, forward-looking ≥30%). | L |
+| ☑ | **P1-06** | **Agent Wire U3 planner** (follow-up #22). ✅ Built (2026-11-09): U3 was reworked onto the trade-talks `newsroom/social_desk.py` and merged; the whole plan (U1–U5) is on main, so `week_mix`, league topics, `PICKS`/`HOT_TAKE`/`SEASON_CALL`, structured output, graded picks/calls, relationship wiring and the quality report are all in. **This is the item that makes tweets stop reading like captioned box scores.** | `python3 -m newsroom.social_desk --season 2035 --week 12` prints a plan; `tools/social_quality_report` reproduces the 2036 archive baseline (553/317) — reproducing or beating the live target waits for a live season (P8-02). | L |
 | ☐ | **P1-07** | **Retirement restore authority (G4)** (follow-up #23). Produce the save-authority proof file. Until then late native retirements stay observe-only, and the `retirement` feature cannot be activated. Needs the PC. | `docs/reference/RETIREMENT_AUTHORITY.md` §5 proof file exists; G4 passes. | M |
 | ☐ | **P1-08** | **Free-agency contract-row creation** (follow-up #24, V2 §7.3 item 6). Signing currently needs a matching release in the same write to free a `PlayerContract` row. Free agency signs more than it releases. | A signing with no release lands and reads back. | L |
 | ☐ | **P1-09** | **Inbox latency spike + `llm_compare` gate** (follow-up #25). 20× `make_llm("inbox")` on a filled CONTRACT prompt with Madden open; record p50/p95; set `INBOX_LLM_BUDGET_S`. Gate inbox replies and appraisals through `tools/llm_compare`. | Constants set from measurement; report filed. | M |
@@ -398,7 +398,7 @@ the live league.
 
 | ☐ | ID | Item | Size |
 |---|---|---|---|
-| ☐ | **P8-01** | Agent Wire U3 planner lands (same item as P1-06; listed here for checkpoint 2). | — |
+| ☑ | **P8-01** | Agent Wire U3 planner lands (same item as P1-06; listed here for checkpoint 2). ✅ Built 2026-11-09. | — |
 | ☐ | **P8-02** | **Measure against the 2036 baseline.** `tools/social_quality_report --db madden_2036 --season 2036` must reproduce the baseline (REACTION 553 posts / 317 distinct openers), then the live league must beat it: distinct openers ≥85%, forward-looking ≥30%, posts citing 3+ numbers ≤15%. | M |
 | ☐ | **P8-03** | Blind-read a week of live posts: do they read like real tweets (one moment, short, unfinished, rivalry trolling, label-first aggregator, stat account)? JR verdict. | M |
 
