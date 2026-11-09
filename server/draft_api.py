@@ -416,16 +416,23 @@ def get_draft_board(
 
 @router.get("/prospect/{prospect_key:path}/report")
 def get_prospect_report(prospect_key: str, draft_season: Optional[int] = None, edition: Optional[str] = None,
-                        team_id: Optional[int] = None):
+                        team: Optional[str] = None):
     """One prospect's latest (or named) scouting report edition (SCOUTING_REVAMP_PLAN.md §2.7). Public fields only:
-    no rating, err, impact or OVR leaves this endpoint. team_id reads that team's director-voiced row when it
-    exists (grade = consensus + his bounded bias), falling back to the department row. 404 when there is none."""
+    no rating, err, impact or OVR leaves this endpoint. `team=ABBR` reads that team's director-voiced row when it
+    exists (grade = consensus + his bounded bias), falling back to the department row; it is limited to the
+    franchise's user teams, because a private row is that team's own scouting. 404 when there is none."""
     from engines import prospect_ids
     from engines import scouting_reports
+    from server import franchise_api
     with _connect() as conn:
         cur = conn.cursor()
         cur_season, _ = _league_state(cur)
         ds = draft_season if draft_season is not None else (cur_season + 1)
+        team_id = None
+        if team:
+            row = franchise_api.team_row(cur, team)               # 404 for an unknown team
+            franchise_api.require_user_team(row)                  # 403 for anyone else's team
+            team_id = row["id"]
         uid = prospect_ids.uid_for(cur, ds, prospect_key)
         if uid is None:
             raise HTTPException(404, f"No scouting report for prospect '{prospect_key}'")
@@ -434,6 +441,10 @@ def get_prospect_report(prospect_key: str, draft_season: Optional[int] = None, e
             raise HTTPException(404, f"No scouting report for prospect '{prospect_key}'")
         report["step_label"] = cs.step_label(report["step"])
         voice = report.get("voice") or {}
+        if team_id is None:                                      # the department row carries no team's private lens
+            report.pop("voice", None)
+            report.pop("scout_id", None)
+            report["team_id"] = None
         report["scout"] = {"name": voice.get("name") or "Mu Scouting Department",
                            "scout_id": report.get("scout_id"), "lens": voice.get("lens")}
         report["editions"] = scouting_reports.editions_for(cur, uid)

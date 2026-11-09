@@ -227,13 +227,18 @@ def test_act_typed_question_uses_the_classifier(cur):
     assert res.engine_ref["classified_by"] == "RULE"
 
 
-def test_last_question_closes_with_a_summary(cur):
+def test_last_question_is_answered_then_closes(cur):
+    """The 4th (combine) question is graded and stored; it used to be thrown away in favour of the memo."""
     interview = open_combine(cur)
     t = thread(interview["id"])
-    for topic in ("FOOTBALL_IQ", "SCHEME", "WORK_HABITS", "LEADERSHIP"):
-        res = prospect.act(cur, t, f"ASK_{topic}", {}, None)
-    assert res.intent == "SUMMARY" and res.close
-    assert res.facts["summary_grade"] is not None
+    results = [prospect.act(cur, t, f"ASK_{topic}", {}, None)
+               for topic in ("FOOTBALL_IQ", "SCHEME", "WORK_HABITS", "LEADERSHIP")]
+    assert all(r.intent.startswith("ANSWER_") for r in results), [r.intent for r in results]
+    last = results[-1]
+    assert last.close and last.engine_ref["summary_grade"] is not None
+    cur.execute("SELECT turns, summary_grade, status FROM scout_interviews WHERE id = %s", (interview["id"],))
+    turns, summary_grade, status = cur.fetchone()
+    assert len(turns) == 4 and summary_grade is not None and status == "CLOSED"
 
 
 def test_end_interview_closes(cur):

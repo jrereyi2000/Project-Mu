@@ -1,4 +1,4 @@
-"""Scouting reports (docs/in_progress/SCOUTING_REVAMP_PLAN.md §2.3; PROJECT_SPEC §2.18).
+"""Scouting reports (docs/done/SCOUTING_REVAMP_PLAN.md §2.3; PROJECT_SPEC §2.18).
 
 Every prospect in a draft class gets a written scouting report in three editions a year (FALL at the class's first
 stored step, BOWLS at step 21, FINAL at step 26). The engine decides every grade, trait score, role, flag and body
@@ -245,8 +245,9 @@ def _position_words(p):
     return sv.POSITION_WORDS.get((p.get("position") or "").upper(), "prospect")
 
 
-def flags_for(p, events, edition, volatile):
-    """Public-fact flags from stored events/payloads, the board's school and age, and the class's volatility."""
+def flags_for(p, events, volatile):
+    """Public-fact flags from stored events/payloads, the board's school and age, and the class's volatility.
+    INTERVIEWS_MIXED is a property of the combine profile, so it flags on every edition, not only FINAL."""
     flags = []
     for e in events:
         kind = e.get("kind")
@@ -257,7 +258,7 @@ def flags_for(p, events, edition, volatile):
             flags.append("INJURY_HISTORY")
         elif kind == "STORYLINE" and payload.get("subtype") in ("character", "rough_outing"):
             flags.append("CONSISTENCY")
-        elif kind == "COMBINE" and edition == "FINAL" and payload.get("interviews") == "mixed":
+        elif kind == "COMBINE" and payload.get("interviews") == "mixed":
             flags.append("INTERVIEWS_MIXED")
     if (p.get("school") or {}).get("level") not in ("FBS", "P4"):
         flags.append("SMALL_SCHOOL")
@@ -306,7 +307,7 @@ def build_report(p, cons_row, events, obs, dossier_bits, edition, step):
     fact sheet doesn't hold."""
     rank = cons_row["rank"]
     role = role_for(rank)
-    flags = flags_for(p, events, edition, bool(dossier_bits.get("volatile")))
+    flags = flags_for(p, events, bool(dossier_bits.get("volatile")))
     strengths = [t["label"] for t in obs if t["score"] >= 7][:3]
     concerns = [t["label"] for t in sorted(obs, key=lambda t: t["score"]) if t["score"] <= 3.5][:2]
     concerns += [FLAG_WORDS[f] for f in flags]
@@ -483,14 +484,17 @@ def director_signals(cur, cls, step, draft_season, vols, edition=None):
     """{key: {athleticism, production, flags, volatility}} for scout_directors.board_bias, from stored events
     through `step`. Review-only proxies: athleticism is the combine composite (0-100, absent when he didn't work
     out); production is the prospect's percentile of his group's primary college stat (PRIMARY_STAT, 0-100);
-    flags are the public report flags; volatility is the step's consensus-move sd."""
+    flags are the public report flags (STORYLINE and MEDICAL events included, so CHARACTER_HAWK can see
+    CONSISTENCY); volatility is the step's consensus-move sd, flagged in the class's top quartile as the report
+    rows flag it."""
     keys = [p["key"] for p in cls]
     if not keys:
         return {}
     marks = ", ".join(["%s"] * len(keys))
     cur.execute(f"""SELECT prospect_key, kind, payload, headline, blurb FROM scout_events
                     WHERE draft_season = %s AND step <= %s AND prospect_key IN ({marks})
-                      AND kind IN ('GAME', 'COMBINE') ORDER BY step""", (draft_season, step, *keys))
+                      AND kind IN ('GAME', 'COMBINE', 'STORYLINE', 'MEDICAL') ORDER BY step""",
+                (draft_season, step, *keys))
     by_key = {}
     for key, kind, payload, headline, blurb in cur.fetchall():
         payload = _json(payload) or {}
@@ -510,6 +514,7 @@ def director_signals(cur, cls, step, draft_season, vols, edition=None):
             if isinstance(v, (int, float)):
                 production += float(v)
         totals.setdefault(group, {})[p["key"]] = production
+    volatile = volatile_keys(vols)
     out = {}
     for p in cls:
         key, group = p["key"], group_of[p["key"]]
@@ -518,7 +523,7 @@ def director_signals(cur, cls, step, draft_season, vols, edition=None):
         profile = college_stats.combine_profile([combine] if combine else [], p.get("position"),
                                                 p.get("height_in"), p.get("weight")) if combine else {}
         athletic = profile.get("athletic_score")
-        flags = flags_for(p, evs, edition, bool((vols or {}).get(key)))
+        flags = flags_for(p, evs, key in volatile)
         out[key] = {
             "athleticism": None if athletic is None else float(athletic) * 10.0,
             "production": _percentile(totals.get(group, {}).get(key, 0.0), list(totals.get(group, {}).values())),
@@ -575,7 +580,9 @@ def report_for(cur, prospect_uid, edition=None, team_id=None):
     """The latest (or named) edition for a prospect_uid: public fields only. None when there is none.
 
     team_id None reads the department (public consensus) row; a team_id reads that team's private row when its
-    director has written one, falling back to the department row."""
+    director has written one, falling back to the department row. A team's rows cover only its stored top 100, so
+    both are read and the later step wins (the team row only on a tie): a prospect who fell off the team's newer
+    board must not be served the team's older edition while the department has the newer one."""
     if not _table(cur, "scout_reports"):
         return None
     cols = ("draft_season", "step", "prospect_key", "edition", "grade", "rank", "round_label", "role", "traits",
@@ -592,9 +599,12 @@ def report_for(cur, prospect_uid, edition=None, team_id=None):
         cur.execute(sql, args)
         return cur.fetchone()
 
-    row = _read(team_id)
-    if not row and team_id is not None:
+    if team_id is None:
         row = _read(None)
+    else:
+        row, dept = _read(team_id), _read(None)
+        if row is None or (dept is not None and int(dept[1]) > int(row[1])):     # index 1 is `step`
+            row = dept
     if not row:
         return None
     d = dict(zip(cols, row))
@@ -627,14 +637,20 @@ def _print_counts(cur, draft_season, edition=None):
     if edition:
         where += " AND edition = %s"
         args.append(edition)
-    cur.execute(f"SELECT edition, count(*) FROM scout_reports {where} GROUP BY edition ORDER BY edition", args)
     print(f"scouting reports {draft_season}{' (' + edition + ')' if edition else ''}:")
-    print("  by edition: " + ", ".join(f"{e}:{n}" for e, n in cur.fetchall()) or "(none)")
+    cur.execute(f"SELECT edition, count(*) FROM scout_reports {where} GROUP BY edition ORDER BY edition", args)
+    print("  by edition: " + _counts(cur.fetchall()))
     cur.execute(f"SELECT role, count(*) FROM scout_reports {where} GROUP BY role ORDER BY role", args)
-    print("  by role: " + ", ".join(f"{r}:{n}" for r, n in cur.fetchall()) or "(none)")
+    print("  by role: " + _counts(cur.fetchall()))
     cur.execute(f"""SELECT flag, count(*) FROM scout_reports, jsonb_array_elements_text(flags) AS flag
                     {where} GROUP BY flag ORDER BY flag""", args)
-    print("  by flag: " + ", ".join(f"{f}:{n}" for f, n in cur.fetchall()) or "(none)")
+    print("  by flag: " + _counts(cur.fetchall()))
+
+
+def _counts(rows):
+    """`"FALL:3, FINAL:4"`, or "(none)" when there are no rows (the old expression concatenated first, so the
+    fallback could never print)."""
+    return ", ".join(f"{k}:{n}" for k, n in rows) or "(none)"
 
 
 def _template_keys(cur, draft_season, edition, limit):
@@ -676,7 +692,10 @@ def main(argv=None):
                     print(f"rewrite {a.draft_season}: {total} reports rewritten")
         else:
             _print_counts(cur, a.draft_season, a.edition)
-        conn.rollback()
+        if a.dry_run or not a.rewrite:
+            conn.rollback()                       # reading, or a rehearsal: nothing to keep
+        else:
+            conn.commit()                         # --rewrite really saves; it used to roll back every time
     return 0
 
 

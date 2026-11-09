@@ -1,4 +1,4 @@
-"""PROSPECT: JR's GM interviews a college prospect (docs/in_progress/SCOUTING_REVAMP_PLAN.md §2.6, §2.8; V2.10 U5).
+"""PROSPECT: JR's GM interviews a college prospect (docs/done/SCOUTING_REVAMP_PLAN.md §2.6, §2.8; V2.10 U5).
 
 The counterpart is the prospect (COUNTERPART_TYPE "prospect"; PERSONA_ROLE None until the personality draft plan).
 JR starts the thread from the Draft War Room's Interviews card: `start` opens a `scout_interviews` row through
@@ -133,13 +133,14 @@ def _ask(cur, thread, interview, topic=None, text=None):
     except si.InterviewError as e:
         raise InboxError(409, e.message) from None
     turn = result["turn"]
-    if result["questions_left"] <= 0:               # the last question closes with the scout's summary
-        facts = si.close(cur, interview["id"])
-        return ActResult(facts=facts, intent="SUMMARY", engine_ref={"interview_id": interview["id"]},
+    engine_ref = {"interview_id": interview["id"], "topic": turn["topic"], "grade": turn["grade"],
+                  "classified_by": turn["classified_by"]}
+    if result["questions_left"] <= 0:               # the last question still gets its answer, then the thread closes
+        summary = si.close(cur, interview["id"])
+        engine_ref["summary_grade"] = summary.get("summary_grade")
+        return ActResult(facts=result["facts"], intent=f"ANSWER_{turn['grade']}", engine_ref=engine_ref,
                          close=True, judge=False)
-    return ActResult(facts=result["facts"], intent=f"ANSWER_{turn['grade']}",
-                     engine_ref={"interview_id": interview["id"], "topic": turn["topic"], "grade": turn["grade"],
-                                 "classified_by": turn["classified_by"]})
+    return ActResult(facts=result["facts"], intent=f"ANSWER_{turn['grade']}", engine_ref=engine_ref)
 
 
 def act(cur, thread, option_id, payload, note):

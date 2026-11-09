@@ -1,4 +1,4 @@
-"""SCOUT: the Mu Scouting Department writes to JR's GM (docs/in_progress/SCOUTING_REVAMP_PLAN.md §2.6, §2.8; V2.10 U5).
+"""SCOUT: the Mu Scouting Department writes to JR's GM (docs/done/SCOUTING_REVAMP_PLAN.md §2.6, §2.8; V2.10 U5).
 
 A neutral inbox kind that tells JR when the combine and top-30 visit windows open and when a new report edition
 lands, and answers a shortlist request. The counterpart is the department (COUNTERPART_TYPE "scout", counterpart id

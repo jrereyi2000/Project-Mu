@@ -157,7 +157,7 @@ def prospect_story(cur, prospect_key, through_step=None):
 
 
 def scout_report(cur, prospect_key, through_step=None):
-    """One prospect's latest scouting report edition (docs/in_progress/SCOUTING_REVAMP_PLAN.md §2.9; PROJECT_SPEC
+    """One prospect's latest scouting report edition (docs/done/SCOUTING_REVAMP_PLAN.md §2.9; PROJECT_SPEC
     §2.18). Resolves the prospect_key alias to its permanent prospect_uid, then returns the latest edition whose
     `step <= through_step` (None = the latest stored). Public fields only: grade, rank, round label, role, trait
     words and scores, strengths, concerns, flags and the body — never a rating, err, impact or hidden payload key.

@@ -1,4 +1,4 @@
-"""Scouting directors (docs/in_progress/OWNERS_SCOUTS_VOTERS_PLAN.md §2.4; PROJECT_SPEC §2.18).
+"""Scouting directors (docs/done/OWNERS_SCOUTS_VOTERS_PLAN.md §2.4; PROJECT_SPEC §2.18).
 
 One generated scouting director per team, kept across seasons (a GM firing never costs him his director, plan Q4).
 A director is a generated role-'scout' person created through the personality lifecycle: `ensure_directors` calls

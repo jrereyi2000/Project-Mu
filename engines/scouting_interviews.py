@@ -1,4 +1,4 @@
-"""Combine interviews and top-30 visits (docs/in_progress/SCOUTING_REVAMP_PLAN.md §2.6, V2.10 U3; PROJECT_SPEC §3.3g).
+"""Combine interviews and top-30 visits (docs/done/SCOUTING_REVAMP_PLAN.md §2.6, V2.10 U3; PROJECT_SPEC §3.3g).
 
 Interviews are never personality evidence: the words, answer grades, summaries, tone and `turns` are never read by the
 personality core and never create, seed or change a prospect's profile. Once prospect personalities exist they only

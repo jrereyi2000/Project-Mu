@@ -542,6 +542,9 @@ def step_scouting(season):
             if board and not scouted:
                 se.init(cur, s + 1, step, log=log)
             done = se.catch_up(cur, s + 1, step, log=log, extras=se.default_extras, llm=llm)
+            # The steps are stored first: a SQL error in the rewrite aborts its transaction, and committing
+            # afterwards would have silently rolled them back.
+            conn.commit()
             # Step 7c report editions (§2.5): rewrite each new edition's consensus top LLM_TOP with the LLM.
             # The rows are already stored as templates, so a failure here only logs a warning.
             llm_report = make_llm("scout_report")

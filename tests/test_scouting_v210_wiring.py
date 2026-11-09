@@ -115,7 +115,7 @@ def test_write_step_keeps_llm_prose_when_grade_and_rank_unchanged():
                 "production": "p", "athletic": "", "projection": "p"}
     out = {"events": {}, "cons": {}, "boards": [], "reports": [_report(uid, key)]}
     cur = WriteCursor(conn)
-    se._write_step(cur, 2037, 4, 2036, out, None, {(uid, "FALL"): (80.0, 1, llm_body)})
+    se._write_step(cur, 2037, 4, 2036, out, None, {(uid, "FALL", None): (80.0, 1, llm_body)})
     cur.execute("SELECT body, text_source FROM scout_reports WHERE prospect_uid = %s", (uid,))
     body, src = cur.fetchone()
     assert src == "LLM" and body == llm_body
@@ -126,7 +126,7 @@ def test_write_step_drops_llm_prose_when_grade_changes():
     uid, key = _uid(0), "2037:QB0:QB"
     out = {"events": {}, "cons": {}, "boards": [], "reports": [_report(uid, key)]}   # grade 80.0, rank 1
     cur = WriteCursor(conn)
-    se._write_step(cur, 2037, 4, 2036, out, None, {(uid, "FALL"): (79.0, 1, {"summary": "stale"})})
+    se._write_step(cur, 2037, 4, 2036, out, None, {(uid, "FALL", None): (79.0, 1, {"summary": "stale"})})
     cur.execute("SELECT text_source FROM scout_reports")
     assert cur.fetchone()[0] == "TEMPLATE"
 
@@ -150,7 +150,24 @@ def test_run_replace_captures_llm_reports():
         se.run(cur, 2037, 4, replace=True, log=lambda *a: None)
     args, kwargs = write.call_args
     assert args[5] == {}
-    assert args[6] == {(uid, "FALL"): (80.0, 1, llm_body)}
+    assert args[6] == {(uid, "FALL", None): (80.0, 1, llm_body)}
+
+
+def test_keep_reports_is_keyed_by_team_so_department_prose_cannot_land_on_a_team_row():
+    """`--replace` keeps LLM prose only on the row that had it; the department row must not upgrade a team row."""
+    uid, key = _uid(0), "2037:QB0:QB"
+    llm_body = {"summary": "kept", "bottom_line": "kept bottom", "strengths": "s", "concerns": "c",
+                "production": "p", "athletic": "", "projection": "p"}
+    team_row = _report(uid, key)
+    team_row.update(team_id=1, body={"summary": "template"}, text_source="TEMPLATE")
+    dept_row = _report(uid, key)
+    dept_row.update(team_id=None, body={"summary": "template"}, text_source="TEMPLATE")
+    conn = _write_db()
+    cur = WriteCursor(conn)
+    out = {"events": {}, "cons": {}, "boards": [], "reports": [dept_row, team_row]}
+    se._write_step(cur, 2037, 4, 2036, out, None, {(uid, "FALL", None): (80.0, 1, llm_body)})
+    cur.execute("SELECT team_id, text_source FROM scout_reports WHERE prospect_uid = %s ORDER BY team_id", (uid,))
+    assert cur.fetchall() == [(None, "LLM"), (1, "TEMPLATE")]
 
 
 # ----------------------------------------------------------------------------------------- T-W2 ----
@@ -277,6 +294,25 @@ def test_step_scouting_survives_a_rewrite_error():
         result = wc.step_scouting(2036)
     assert result == done
     assert conn.committed
+
+
+def test_step_scouting_commits_the_stored_steps_before_the_rewrite():
+    """A SQL error inside the rewrite aborts its transaction; committing afterwards silently lost every step the
+    catch-up had just stored."""
+    import pipeline.weekly_capture as wc
+    order = []
+
+    def rewrite(c, ds, ed, llm):
+        order.append("rewrite")
+        return 1
+
+    conn, patches = _patch_step_scouting([21], {21: ["BOWLS"]}, rewrite)
+    conn.commit = lambda: order.append("commit")
+    with ExitStack() as stack:
+        for p in patches:
+            stack.enter_context(p)
+        wc.step_scouting(2036)
+    assert order[0] == "commit" and order[-1] == "commit" and "rewrite" in order
 
 
 # ----------------------------------------------------------------------------------------- T-W4 ----

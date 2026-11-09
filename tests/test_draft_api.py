@@ -322,3 +322,60 @@ def test_interviews_endpoint_403_for_non_user_team():
          mock.patch("server.franchise_api.require_user_team", side_effect=forbidden):
         r = client.get("/api/draft/interviews?team=ATL&draft_season=2037")
     assert r.status_code == 403
+
+
+def _private_report(team_id=None):
+    return {"prospect_uid": "00000000-0000-0000-0000-000000000001", "prospect_key": "2037:QB0:QB",
+            "draft_season": 2037, "edition": "FINAL", "step": 26, "grade": 80.5, "rank": 1,
+            "round_label": "1st round", "role": "DAY1_STARTER", "role_words": "x", "traits": [],
+            "strengths": [], "concerns": [], "flags": [], "body": {}, "text_source": "TEMPLATE",
+            "team_id": team_id, "scout_id": 11 if team_id else None,
+            "voice": ({"scout_id": 11, "name": "Pat Scout", "region": "AFC", "lens": "TAPE"} if team_id else None)}
+
+
+def _report_call(query, *, allowed=True):
+    from server import franchise_api as fapi
+    from fastapi import HTTPException
+    app = FastAPI()
+    app.include_router(dapi.router)
+    client = TestClient(app)
+    uid = uuid.UUID("00000000-0000-0000-0000-000000000001")
+    seen = {}
+
+    def report_for(cur, u, edition=None, team_id=None):
+        seen["team_id"] = team_id
+        return _private_report(team_id)
+
+    def gate(team):
+        if not allowed:
+            raise HTTPException(403, "not your team")
+
+    with mock.patch.object(dapi, "_connect", return_value=_fake_conn(mock.MagicMock())), \
+         mock.patch.object(dapi, "_league_state", return_value=(2036, 1)), \
+         mock.patch("engines.prospect_ids.uid_for", return_value=uid), \
+         mock.patch("engines.scouting_reports.report_for", side_effect=report_for), \
+         mock.patch("engines.scouting_reports.editions_for", return_value=["FINAL"]), \
+         mock.patch("engines.college_stats.step_label", return_value="Pre-draft"), \
+         mock.patch.object(fapi, "team_row", lambda c, a: {"id": 7, "abbr": "CAR", "name": "Panthers"}), \
+         mock.patch.object(fapi, "require_user_team", gate):
+        return client.get(f"/api/draft/prospect/2037:QB0:QB/report{query}"), seen
+
+
+def test_report_endpoint_serves_jr_s_own_private_row():
+    r, seen = _report_call("?team=CAR")
+    assert r.status_code == 200 and seen["team_id"] == 7
+    assert r.json()["scout"]["name"] == "Pat Scout" and r.json()["voice"]["lens"] == "TAPE"
+
+
+def test_report_endpoint_refuses_another_team_s_private_row():
+    """The row is that team's own scouting: a director's grade, name, region and lens."""
+    r, seen = _report_call("?team=CAR", allowed=False)
+    assert r.status_code == 403 and seen == {}                     # refused before any read
+
+
+def test_report_endpoint_department_read_carries_no_private_voice():
+    r, seen = _report_call("")
+    assert r.status_code == 200 and seen["team_id"] is None
+    body = r.json()
+    assert "voice" not in body and "scout_id" not in body
+    assert body["scout"] == {"name": "Mu Scouting Department", "scout_id": None, "lens": None}

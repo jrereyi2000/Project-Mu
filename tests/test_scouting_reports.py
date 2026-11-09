@@ -8,6 +8,7 @@ import pathlib
 import sqlite3
 
 import pytest
+from unittest import mock
 
 from engines import scouting_read as sr_read
 from engines import scouting_reports as sr
@@ -133,15 +134,15 @@ def test_flags_only_from_stored_events_and_payloads():
         {"kind": "MEDICAL", "payload": {"result": "cleared"}},
         {"kind": "COMBINE", "payload": {"interviews": "mixed"}},
     ]
-    assert set(sr.flags_for(p, evs, "FINAL", volatile=False)) == \
+    assert set(sr.flags_for(p, evs, volatile=False)) == \
         {"INJURY_HISTORY", "CONSISTENCY", "INTERVIEWS_MIXED"}
-    assert sr.flags_for(p, evs, "FALL", volatile=False) == ["INJURY_HISTORY", "CONSISTENCY"]    # mixed only at FINAL
-    assert sr.flags_for(p, [], "FINAL", volatile=False) == []                                    # P4 school, age 22
+    assert sr.flags_for(p, [], volatile=False) == []                     # P4 school, age 22
+    assert sr.flags_for(p, evs, volatile=True) == ["INJURY_HISTORY", "CONSISTENCY", "INTERVIEWS_MIXED", "VOLATILE"]
 
     small = dict(p, school={"display": "Delaware", "level": "FCS"}, age=24)
-    assert set(sr.flags_for(small, [], "FINAL", volatile=False)) == {"SMALL_SCHOOL", "AGE"}
+    assert set(sr.flags_for(small, [], volatile=False)) == {"SMALL_SCHOOL", "AGE"}
     # a GAME event and an unrelated payload number never become a flag
-    assert sr.flags_for(p, [{"kind": "GAME", "payload": {"stats": {"pass_td": 4}}}], "FINAL", volatile=False) == []
+    assert sr.flags_for(p, [{"kind": "GAME", "payload": {"stats": {"pass_td": 4}}}], volatile=False) == []
 
 
 def test_volatile_is_the_top_quartile_only():
@@ -307,3 +308,79 @@ def test_scout_voice_hook_is_neutral():
     assert sv.regional_bias(sv.ScoutVoice(scout_id=1, region="SEC", lens="TAPE"), {}) == 0.0
     assert sv.REGIONS == {"AFC": "AFC", "NFC": "NFC"}
     assert sv.voice_prompt(dept) == "a neutral national scouting service"
+
+
+def _insert_team_report(conn, uid, key, rank, edition, step, team_id, text_source="TEMPLATE"):
+    conn.execute("""INSERT INTO scout_reports (draft_season, step, prospect_uid, prospect_key, edition, grade, rank,
+                       round_label, role, traits, strengths, concerns, flags, body, text_source, team_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                 (2037, step, uid, key, edition, 80.0, rank, "1st round", "DAY1_STARTER", "[]", "[]", "[]", "[]",
+                  json.dumps(BODY), text_source, team_id))
+
+
+def test_report_for_takes_the_later_step_across_the_team_and_department_rows():
+    """A team's rows cover only its stored top 100: a prospect off its newer board must not fall back to an older
+    team edition while the department already has the newer one. QB1's department row is FINAL at step 26."""
+    conn = _reader_db()
+    cur = FakeCursor(conn)
+    _insert_team_report(conn, _uid(1), "2037:QB1:QB", 2, "FALL", 24, team_id=1)
+    assert sr.report_for(cur, _uid(1), team_id=1)["edition"] == "FINAL"
+    _insert_team_report(conn, _uid(1), "2037:QB1:QB", 2, "FINAL", 26, team_id=1)     # a tie: the team row wins
+    assert sr.report_for(cur, _uid(1), team_id=1)["team_id"] == 1
+
+
+def test_director_signals_see_storyline_and_medical_flags():
+    """CHARACTER_HAWK can only lean on CONSISTENCY if the signals load the STORYLINE events that produce it."""
+    conn = _db()
+    conn.execute("""CREATE TABLE scout_events (draft_season INT, step INT, prospect_key TEXT, kind TEXT,
+                      team_id INT, payload TEXT, impact TEXT, headline TEXT, blurb TEXT, text_source TEXT, seq INT)""")
+    cur = FakeCursor(conn)
+    for kind, payload in (("STORYLINE", {"subtype": "character"}), ("MEDICAL", {"result": "cleared"})):
+        conn.execute("""INSERT INTO scout_events (draft_season, step, prospect_key, kind, payload, impact, headline,
+                           blurb, text_source, seq) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                     (2037, 4, "2037:QB0:QB", kind, json.dumps(payload), None, "h", "b", "TEMPLATE", 0))
+    cls = [{"key": "2037:QB0:QB", "position": "QB", "school": {"level": "P4"}}]
+    flags = sr.director_signals(cur, cls, 4, 2037, {})["2037:QB0:QB"]["flags"]
+    assert "CONSISTENCY" in flags and "INJURY_HISTORY" in flags
+
+
+class _FakeCliConn:
+    def __init__(self):
+        self.committed = self.rolled_back = 0
+
+    def cursor(self):
+        return mock.MagicMock()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def commit(self):
+        self.committed += 1
+
+    def rollback(self):
+        self.rolled_back += 1
+
+
+def test_cli_rewrite_saves_what_it_rewrote(monkeypatch):
+    """The CLI rolled back unconditionally, so every `--rewrite` was discarded."""
+    conn = _FakeCliConn()
+    monkeypatch.setattr(sr, "_connect", lambda: conn)
+    monkeypatch.setattr(sr, "rewrite", lambda cur, ds, ed, llm, limit=sr.LLM_TOP: 3)
+    monkeypatch.setattr(sr.gm_llm, "make_llm", lambda label: object())
+    assert sr.main(["--class", "2037", "--rewrite", "--edition", "FALL"]) == 0
+    assert conn.committed == 1 and conn.rolled_back == 0
+
+
+def test_cli_dry_run_and_reads_write_nothing(monkeypatch):
+    monkeypatch.setattr(sr, "rewrite", lambda *a, **k: 0)
+    monkeypatch.setattr(sr, "_template_keys", lambda cur, ds, ed, limit: [])
+    monkeypatch.setattr(sr, "_print_counts", lambda cur, ds, ed=None: None)
+    monkeypatch.setattr(sr.gm_llm, "make_llm", lambda label: object())
+    for argv in (["--class", "2037", "--rewrite", "--dry-run"], ["--class", "2037"]):
+        conn = _FakeCliConn()
+        monkeypatch.setattr(sr, "_connect", lambda: conn)
+        assert sr.main(argv) == 0
+        assert conn.committed == 0 and conn.rolled_back == 1

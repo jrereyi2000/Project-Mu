@@ -442,7 +442,7 @@ def _write_step(cur, draft_season, step, season, out, keep_llm=None, keep_report
         rows = list(out["reports"])
         if keep_reports:
             for r in rows:
-                old = keep_reports.get((str(r.get("prospect_uid")), r.get("edition")))
+                old = keep_reports.get((str(r.get("prospect_uid")), r.get("edition"), r.get("team_id")))
                 if old and old[0] == float(r.get("grade")) and old[1] == int(r.get("rank")):
                     r["body"], r["text_source"] = old[2], "LLM"
         cur.executemany(
@@ -494,11 +494,13 @@ def run(cur, draft_season, step, dry_run=False, replace=False, log=print, extras
         cur.execute("""SELECT prospect_key, kind, seq, headline, blurb, text_source FROM scout_events
                        WHERE draft_season = %s AND step = %s AND text_source = 'LLM'""", (draft_season, step))
         keep = {(k, kind, seq): (h, b, src) for k, kind, seq, h, b, src in cur.fetchall()}
-        cur.execute("""SELECT prospect_uid, edition, grade, rank, body FROM scout_reports
-                       WHERE draft_season = %s AND step = %s AND text_source = 'LLM' AND team_id IS NULL""",
+        cur.execute("""SELECT prospect_uid, edition, grade, rank, body, team_id FROM scout_reports
+                       WHERE draft_season = %s AND step = %s AND text_source = 'LLM'""",
                     (draft_season, step))
-        keep_reports = {(str(uid), ed): (float(g), r, json.loads(b) if isinstance(b, str) else b)
-                        for uid, ed, g, r, b in cur.fetchall()}
+        # Keyed by team too: the department's kept prose must not turn a team row into LLM text with a different
+        # grade, and only the rows that had LLM prose can keep it.
+        keep_reports = {(str(uid), ed, tid): (float(g), r, json.loads(b) if isinstance(b, str) else b)
+                        for uid, ed, g, r, b, tid in cur.fetchall()}
         cur.execute("DELETE FROM scout_runs WHERE draft_season = %s AND step = %s", (draft_season, step))
     out = compute(cur, draft_season, step, dry_run)
     out["params"] = params()

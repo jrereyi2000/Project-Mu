@@ -1,4 +1,4 @@
-"""Permanent prospect IDs (docs/in_progress/SCOUTING_REVAMP_PLAN.md §2.1b; PROJECT_SPEC §3.3g).
+"""Permanent prospect IDs (docs/done/SCOUTING_REVAMP_PLAN.md §2.1b; PROJECT_SPEC §3.3g).
 
 Every prospect gets one `prospect_uid` that never changes: uuid5(MU_PROSPECT_NS, birth_key), with birth_key
 `save-pgid:<draft_season>:<pgid>` for a class read from the PC save, else `board:<draft_season>:<prospect_key at first

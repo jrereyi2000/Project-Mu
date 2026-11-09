@@ -1,4 +1,4 @@
-"""Owner wiring context (docs/in_progress/OWNERS_SCOUTS_VOTERS_PLAN.md §2.3, U5): the shared reads behind the four
+"""Owner wiring context (docs/done/OWNERS_SCOUTS_VOTERS_PLAN.md §2.3, U5): the shared reads behind the four
 owner features, so the engines that use them (coach_hot_seat, gm_rollover, coaching_carousel, transactions_engine,
 the league office's personality layer and the inbox OWNER kind) stay small.
 
