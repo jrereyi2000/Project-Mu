@@ -941,6 +941,16 @@ def _dsn():
     return os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")
 
 
+def replay_target(league, season=None, week=None):
+    """(season, week, window) for --replay-week. An explicit --week replays in that week's own window; without one,
+    the league's current season/week/window. A past week must not inherit the league's current window: the 2036
+    archive sits at week 21, past the deadline, so `--week 6` used to find the window closed and replay nothing."""
+    current_season, current_week, current_window = league
+    if week is None:
+        return season or current_season, current_week, current_window
+    return season or current_season, week, _ge().window_for(week)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     g = ap.add_mutually_exclusive_group(required=True)
@@ -959,8 +969,7 @@ def main(argv=None):
         if a.show is not None:
             print(json.dumps(talk_json(cur, a.show, public=True), indent=1, default=str))
             return
-        s, w, window = _ge().league_window(cur)
-        season, week = a.season or s, a.week or w
+        season, week, window = replay_target(_ge().league_window(cur), a.season, a.week)
         if window is None:
             print(f"trade window closed (week {week})")
             return

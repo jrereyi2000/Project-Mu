@@ -106,7 +106,7 @@ undone" rule made concrete.
 | ☑ | **P1-01** | **Reconcile migration state. ✅ Applied (2026-11-09).** `madden_test` was verified **behind six** migrations: `2027_01_20` press, `2027_02_02` owners/scouts/voters, `2027_02_06` comp picks, both `2027_02_07` staff files, `2027_02_08` report cards. (`2027_01_22` trade talks and its trigger `2027_02_05` were already applied on 2026-11-08; `persona_focus` and `nfl_history` too.) All six applied with `db/migrate.py`; every table and added column verified with `to_regclass`. | `select to_regclass(...)` returns non-null for every table listed in the migrations; `madden_test` matches a fresh `init_db.sql` build. | M |
 | ☑ | **P1-02** | **Add migration-state tracking. ✅ Built (2026-11-09).** `schema_migrations` (`version`, `filename`, `checksum`, `applied_at`, `source`) plus `db/migrate.py` (`status`, `apply`, `baseline`, `diff`, `sync-init-db`). `init_db.sql` ends with a generated ledger block, so a fresh build is at head and `apply` is a no-op. `madden_test` was baselined to 124/124 after the parity proof. | A new database reports its applied set; re-running is a no-op. | M |
 | ☑ | **P1-03** | **Verify every migration is mirrored in `db/init_db.sql`. ✅ Proven (2026-11-09).** `db/migrate.py diff` compared `madden_test` against a fresh `init_db.sql` build object by object (tables/columns/types/defaults, views, indexes, constraints, sequences, functions, triggers): identical. It found two real drifts, now closed by `2027_02_09_init_db_parity.sql` (`napper_leagues`/`napper_drafts.season` NOT NULL; `gm_profiles.start_season >= 1970`), and the seven newest migrations replay as no-ops on a fresh build (`tests/test_migrate.py`). | A fresh DB from `init_db.sql` diffed against a fully-migrated DB shows no difference. | M |
-| ☐ | **P1-04** | **Apply migrations to a franchise database** (resolves follow-ups #12, #17, #24, #29 at once, and the six-feature activation gate). Today **no live franchise database exists at all** — only `madden_2036`, `madden_test`, `madden_v3_eval_20261030`. | A franchise DB has every table; `personality.features show` runs against it. | S |
+| ☑ | **P1-04** | **Apply migrations to a franchise database. ✅ Done (2026-11-09).** `madden_mu2026` was created and seeded from `CAREER-MUBASE` by `watch_save --once --auto-init --franchise-name mu2026 --no-engines --no-articles --no-league-office` (no user team; LeagueID 1287775425 registered and active; league state 2026 week 1, 2,847 players, 208 public tables). `db.migrate status` reports **127 applied, 0 pending, 0 drifted** — every file sourced from `init_db.sql` — and `db.migrate apply` is a no-op. `personality.features show` runs and reports all 20 features `off`. Resolves follow-ups #12, #17, #24, #29 and the six-feature activation gate. | A franchise DB has every table; `personality.features show` runs against it. | S |
 
 ### 3.2 Held and unwired units
 
@@ -145,7 +145,7 @@ league-office step (gated, warning-only, like `compensatory_picks_run.py`).
 | ☐ | ID | Item | Done when | Size |
 |---|---|---|---|---|
 | ☑ | **P1-24** | **`watch_save` must skip `CAREER-TUNE-*` saves. ✅ Built (2026-11-09).** A clone keeps the real franchise's `LeagueID`, so the watcher would ingest a tuning season into the real franchise database. `find_save_files` now skips `CAREER-TUNE-*` (directory scans and a directly named file), `--allow-tune-save` (or a `--dsn` naming a `madden_tune_*` database, which is P2-04's deliberate tuning path) opts in, and `process_save` refuses a tuning clone whose destination is any other database as defence in depth. `--pattern "CAREER-MU*"` remains the primary isolation. | `tests/test_watch_save` covers the refusal; the watcher ignores a tuning save. | S |
-| ☐ | **P1-25** | **Trade-talks replay + transcript review** (follow-up #34). `--replay-week --season 2036 --week 6 --dry-run --no-llm` on a copy of `madden_2036`; JR reads three transcripts. Confirms talks converge at the rate `--talk-stall` assumes. | Convergence rate matches the assumption; transcripts approved. | M |
+| ◐ | **P1-25** | **Trade-talks replay + transcript review** (follow-up #34). **Built; awaiting JR's read (2026-11-09).** The documented `--replay-week --week 6` used to exit "trade window closed" because the window came from the archive's `league_state` (week 21), not the replayed week; `gm_talks.replay_target` now replays an explicit `--week` in that week's own window. On a scratch copy of `madden_2036` (all teams CPU, the three talk migrations applied) weeks 4–8 produced **7 CPU talks: 7 AGREED, 0 STALLED/WALKED_AWAY, 0 carried/resumed, 0 leaks**, every one decided in **2 turns** (open → ACCEPT). **Stall share 0%, not the 25% `TALK_STALL` assumes** — the search only sends mutually accepted deals to talks, so the responder always has ACCEPT. Three transcripts (agreed; no stall or leak occurred) in `verify_output/p1_25/transcripts/`; the replay copy `madden_tt_replay` is kept until JR has read them. | Convergence rate matches the assumption; transcripts approved. | M |
 | ☑ | **P1-26** | **Retirement rows at the season boundary.** ✅ Built (2026-11-09): `pipeline/load_save.load_retirements` reads every Player row the save exports with `ContractStatus = Retired`, writes one `player_retirements` row per `(season, player_id)` and sets `players.retired_season` (a later roster row or signing clears it); the season ledger now labels those departures `RETIRED`. `SEASON_CONTINUITY_PLAN` phase 2b is built and the plan moved to `docs/done/` (`tests/test_load_retirements.py`). | A season rollover writes `player_retirements` + `players.retired_season`. | M |
 | ☑ | **P1-27** | **Godfather trigger gates** (follow-up #47), part 1. ✅ Built (2026-11-09): carousel candidates carry `drive`/`ego` (`candidate_sliders`: lifecycle `db-coach`/`db-coordinator` profiles or legacy coach personas; `ego` = the confidence slider), so the `drive`/`ego ≥ 8` stature branch fires; and the GM hot seat runs **before** the coaching carousel (`gm_rollover.hot_seat_only` from `weekly_capture.step_gm_hot_seat`, Super-Bowl-gated and idempotent), so a genuine same-cycle HC+GM sweep is a dual vacancy (`tests/test_godfather_gates.py`). | The trigger can fire beyond its rarity gates in a test. | M |
 
@@ -177,10 +177,13 @@ when every item's "done when" holds and the relevant tests pass.
 | **1** | **P1-01, P1-02, P1-03** (migration state, ledger, `init_db.sql` parity) and **P1-24** (watcher `CAREER-TUNE-*` guard) and **P1-15** (`OPEN_PRESSER` navigation). **Done 2026-11-09.** | Local, self-contained, no Madden. P1-01/02/03 are one investigation of the schema machinery and should be one unit; P1-24 and P1-15 are independent single-file changes. Unblocks P1-04 and every tuning run. | No |
 | **2** | **P1-05** (agent loops U3), **P1-06** (Agent Wire U3–U5). **Done 2026-11-09.** | The two units that actually unlock the checkpoints: without them, agent decisions and tweet quality cannot be tuned. Both are existing plans with file ownership already defined. | No |
 | **3** | P1-08, P1-11, P1-12, P1-13, P1-14, P1-16, P1-17, P1-18, P1-19, P1-20, P1-21, P1-22, P1-23, P1-26, P1-27. **Done 2026-11-09.** | The long tail of wiring and producers. Independent of each other; several are small. | No |
-| **4** | P1-07 (retirement G4), P1-09 (inbox latency), P1-10 (press cloud), P1-25 (trade replay) | Everything that needs the PC, Madden, or credentials. Batch into one PC session. | Yes |
+| **4** | P1-07 (retirement G4), P1-09 (inbox latency), P1-10 (press cloud) | Everything that needs the PC, Madden, or credentials. Batch into one PC session. | Yes |
 
 **P1-04** (apply migrations to a franchise DB) is not in a wave: it waits for the franchise database, which is
-created by seeding `CAREER-MUBASE` (P7-00b). Run it as soon as that database exists, after Wave 1.
+created by seeding `CAREER-MUBASE` (P7-00b). **Done 2026-11-09:** `madden_mu2026` exists and is at head.
+
+**P1-25** (trade-talks replay) left Wave 4: the replay is local and was run on 2026-11-09; only JR's read of the
+three transcripts remains.
 
 **Wave 1 file ownership** (no path appears twice):
 
@@ -490,14 +493,17 @@ Every open row in `docs/FOLLOW_UPS.md`, mapped. Nothing is dropped.
 
 ---
 
-## 13. Appendix B — Verified state at 2026-11-09 (after P1 Wave 1)
+## 13. Appendix B — Verified state at 2026-11-09 (after P1 waves 1–3, P1-04 and P1-25)
 
-- **Databases:** `madden_2036` (read-only archive), `madden_test`, `madden_v3_eval_20261030`. **No live
-  franchise database exists** (P1-04 waits for P7-00b).
-- **`madden_test` is at the head of `db/migrations/`:** all **124** SQL migrations applied and recorded in
+- **Databases:** `madden_mu2026` (**the live franchise database**, LeagueID 1287775425, seeded from
+  `CAREER-MUBASE` 2026-11-09; 127/127 migrations, every personality feature `off`), `madden_2036` (read-only
+  archive), `madden_test`, `madden_v3_eval_20261030`. `madden_tt_replay` is a scratch copy of the archive used
+  for P1-25, not a franchise.
+- **`madden_test` is at the head of `db/migrations/`:** all **127** SQL migrations applied and recorded in
   `schema_migrations` (the six it was behind, `2027_01_20`/`2027_02_02`/`2027_02_06`/both `2027_02_07`/
-  `2027_02_08`, plus the parity repair `2027_02_09`; the other 117 are `baseline`, because they were applied
-  before the ledger existed and the parity diff proves the schema is at head). Trade talks (`2027_01_22`) and
+  `2027_02_08`, plus the parity repair `2027_02_09` and wave-3's `2027_02_10`/`2027_02_11`/`2027_02_12`; the
+  others are `baseline`, because they were applied before the ledger existed and the parity diff proves the
+  schema is at head). Trade talks (`2027_01_22`) and
   its trigger (`2027_02_05`) were already applied on 2026-11-08. `persona_focus`, `nfl_history`,
   `persona_relationships`, `agent_loop_decisions`, `agent_season_calls`, `player_progression_history`,
   `agent_predictions` are applied.
@@ -515,8 +521,8 @@ Every open row in `docs/FOLLOW_UPS.md`, mapped. Nothing is dropped.
   draft outcomes. The decision *comparator* (`compare_decisions`) is still to build (P3-07).
 - **Dynamic presentation research:** G0/G1/G2 pass; R3 native-only route viable (v0.5.1); resource audit
   complete (956 unique resources, 160 unresolved). No production integration.
-- **Uncommitted work in the tree:** `PROJECT_SPEC.md`, `docs/MOD_INSTALL.md`, several plans, plus untracked
-  research and Colab-result ZIPs. Left untouched.
+- **Uncommitted work in the tree:** `docs/MOD_INSTALL.md`, several plans, plus untracked research and
+  Colab-result ZIPs. Left untouched.
 
 ---
 

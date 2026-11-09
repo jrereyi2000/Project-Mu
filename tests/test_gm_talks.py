@@ -529,3 +529,13 @@ def test_queue_trade_move_no_op_when_the_table_is_absent():
     cur = ScriptedCur(queue_router(exists=False))
     assert gt.queue_trade_move(cur, 512) is None
     assert not any("INSERT" in s for s in cur.sql)
+
+
+# ------------------------------------------------------------------ replay wk window ----
+def test_a_replayed_week_uses_its_own_window_not_the_leagues_current_one():
+    # The 2036 archive sits at week 21, past the deadline: --week 6 must still replay in season.
+    assert gt.replay_target((2036, 21, None), 2036, 6) == (2036, 6, "IN_SEASON")
+    assert gt.replay_target((2036, 26, "OFFSEASON"), week=24) == (2036, 24, "OFFSEASON")
+    # No --week: the league's own season/week/window, unchanged.
+    assert gt.replay_target((2036, 7, "IN_SEASON")) == (2036, 7, "IN_SEASON")
+    assert gt.replay_target((2036, 21, None)) == (2036, 21, None)
