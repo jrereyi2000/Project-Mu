@@ -6,8 +6,11 @@
 -- Note: IF NOT EXISTS will not add columns to a table that already exists;
 -- columns added later must ship as migrations under db/migrations/.
 --
--- Column order mirrors the live database so `pg_dump --schema-only` of a fresh
--- database matches the live one. Apply with:
+-- Column order matches the live franchise database `madden_mu2026` column for column, so
+-- `pg_dump --schema-only` of a fresh database matches it (checked 2026-11-09). Columns a
+-- migration appends go last, where the migration put them. `python3 -m db.migrate diff` keys
+-- columns by name, so it does not check order and will not catch a column placed mid-table.
+-- Apply with:
 --   docker exec -i madden-db psql -U postgres -d <db> -v ON_ERROR_STOP=1 < db/init_db.sql
 --
 -- The file ends with a generated `schema_migrations` block (db/migrate.py): because this file mirrors every
@@ -718,8 +721,6 @@ CREATE TABLE IF NOT EXISTS gm_profiles (
     gm_name TEXT NOT NULL,
     bio TEXT,                                         -- short, invented (untracked narrative)
     voice TEXT,                                       -- style notes for the rationale writer
-    voice_card JSONB,                                 -- the GM's speech card (2027_02_13_gm_voice_cards.sql)
-    voice_card_source TEXT CHECK (voice_card_source IN ('AUTHORED', 'LLM', 'TEMPLATE')),  -- how the card was made
     bio_source VARCHAR(8) NOT NULL DEFAULT 'TEMPLATE' CHECK (bio_source IN ('LLM', 'TEMPLATE')),
     start_season INT NOT NULL CHECK (start_season >= 1970),   -- tenure start
     first_draft_season INT,                           -- first class he picks (a hot-seat hire: start + 1)
@@ -732,7 +733,9 @@ CREATE TABLE IF NOT EXISTS gm_profiles (
     youth_bias NUMERIC(3,2) NOT NULL CHECK (youth_bias BETWEEN -1 AND 1),
     position_bias JSONB NOT NULL DEFAULT '{}'::jsonb,
     seed TEXT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    voice_card JSONB,                                 -- the GM's speech card (2027_02_13_gm_voice_cards.sql)
+    voice_card_source TEXT CHECK (voice_card_source IN ('AUTHORED', 'LLM', 'TEMPLATE'))  -- how the card was made
 );
 CREATE UNIQUE INDEX IF NOT EXISTS gm_profiles_open_tenure ON gm_profiles (team_id) WHERE end_season IS NULL;
 

@@ -227,10 +227,10 @@ def test_every_change_writes_history():
 
 
 def test_uninstalled_code_cannot_go_to_shadow(monkeypatch):
-    monkeypatch.undo()
-    ok, why = pf.installed('scout_directors')
-    if ok:                                   # once the owners plan's U6 lands this feature is installed
-        pytest.skip('scout_directors is installed')
+    # Keep the autouse `everything_installed` stub and report one feature uninstalled, so the refusal is
+    # tested whether or not that feature's code happens to exist on disk.
+    monkeypatch.setattr(pf, 'installed', lambda feature: (False, f'{feature} code is not installed')
+                        if feature == 'scout_directors' else (True, None))
     with pytest.raises(pf.FeatureRefused, match='not installed'):
         pf.set_mode(FakeCursor(), LEAGUE, 'scout_directors', 'shadow', version='v1', review_ref='r', now=NOW)
     assert pf.installed('producers') == (True, None)
