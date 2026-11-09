@@ -1,8 +1,9 @@
 # Project Mu: GM Talk Voice & Negotiation Dialogue Plan
 
-**Status:** built and on main (2026-11-09); transcripts approved by JR (2026-11-09). The 32 authored cards are
-not applied to `madden_mu2026` yet: Q1 waits for JR to read `data/gm_voices_2026.json` (a dry run matches all 32
-with no name mismatches; `2027_02_13` is applied to `madden_mu2026` and `madden_test`).
+**Status:** built and on main (2026-11-09); transcripts approved by JR (2026-11-09), and JR read and approved
+`data/gm_voices_2026.json`, so the 32 authored cards were applied to `madden_mu2026` on 2026-11-09
+(`gm_voices apply --season 2026`: 32 updated, 0 mismatches; all 32 GMs now read `AUTHORED`). `2027_02_13` is
+applied to `madden_mu2026` and `madden_test` (both 128/128).
 
 **As built — wave 1 (2026-11-09):** U1 added `gm_profiles.voice_card` / `voice_card_source` (`2027_02_13`), the
 32 authored cards, `engines/gm_voices.py`, and card generation at seed, hot-seat hire and the Godfather coach-GM
