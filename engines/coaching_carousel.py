@@ -554,10 +554,11 @@ def _extend_full_control(cur, acc):
         # a dual vacancy: the GM seat is empty, so the new head coach becomes the GM (a new coach-GM tenure)
         from engines import gm_voices
         rng = random.Random(f"gm:{gm['team_id']}:{gm['start_season']}:godfather")
-        traits = {"risk_appetite": round(rng.uniform(0.30, 0.70), 2),
-                  "aggressiveness": round(rng.uniform(0.35, 0.75), 2),
-                  "pick_affinity": round(rng.uniform(0.85, 1.20), 2),
-                  "youth_bias": round(rng.uniform(-0.5, 0.5), 2)}
+        agg = round(rng.uniform(0.35, 0.75), 2)          # draw order is part of the seed: keep it
+        risk = round(rng.uniform(0.30, 0.70), 2)
+        picks = round(rng.uniform(0.85, 1.20), 2)
+        youth = round(rng.uniform(-0.5, 0.5), 2)
+        traits = {"aggressiveness": agg, "risk_appetite": risk, "pick_affinity": picks, "youth_bias": youth}
         card = gm_voices.template_card(traits, role="COACH_GM")
         cur.execute("""INSERT INTO gm_profiles (team_id, gm_name, bio, voice, voice_card, voice_card_source,
                                                 bio_source, start_season, first_draft_season, coach_id,

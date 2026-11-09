@@ -4,6 +4,7 @@ Offline: the carousel's candidate sliders come from legacy `persona_sliders` or 
 hot seat runs before the carousel so a same-cycle HC+GM sweep is a genuine dual vacancy.
 """
 import json
+import random
 import sqlite3
 
 from engines import coaching_carousel as cc
@@ -131,6 +132,14 @@ def test_the_godfather_coach_gm_insert_writes_a_template_card():
     card = gm_voices.parse_card(json.loads(params[4]))
     assert card is not None and card["register"].startswith("Talks like a coach")
     assert params[3] == gm_voices.one_line(card)                     # the voice one-liner, not a placeholder
+
+    # The RNG draw order is part of the seed. Rebuild the old order: aggressiveness, risk, picks, youth.
+    rng = random.Random("gm:5:2037:godfather")
+    agg = round(rng.uniform(0.35, 0.75), 2)
+    risk = round(rng.uniform(0.30, 0.70), 2)
+    picks = round(rng.uniform(0.85, 1.20), 2)
+    youth = round(rng.uniform(-0.5, 0.5), 2)
+    assert (params[8], params[9], params[10], params[11]) == (risk, agg, picks, youth)
 
 
 def test_hot_seat_only_waits_for_the_super_bowl():
