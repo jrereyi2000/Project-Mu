@@ -2407,7 +2407,7 @@ CREATE TABLE IF NOT EXISTS agent_season_summaries (
 );
 CREATE INDEX IF NOT EXISTS idx_article_players_team_id ON article_players(team_id);
 
--- Postgame press conferences (2027_01_20_press_conferences.sql, newsroom/press_room.py; PROJECT_SPEC §3.3r, §7.14).
+-- Postgame press conferences (2027_01_20_press_conferences.sql, newsroom/press_room.py; PROJECT_SPEC §3.3y, §7.14).
 CREATE TABLE IF NOT EXISTS press_conferences (
     id SERIAL PRIMARY KEY,
     season INT NOT NULL,

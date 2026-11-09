@@ -1,5 +1,5 @@
 {
-  "_comment": "National press pool for postgame press conference casting (docs/in_progress/PRESS_CONFERENCE_PLAN.md §2.4). Tiers are approved (D6). The notes field gives a one-line reason for every archetype's placement, read from newsroom/config/agent_personas.json. relationship_bonus stays 0 until PERSONALITY_RELATIONSHIPS_PLAN's relationship_context exists for this consumer.",
+  "_comment": "National press pool for postgame press conference casting (docs/done/PRESS_CONFERENCE_PLAN.md §2.4). Tiers are approved (D6). The notes field gives a one-line reason for every archetype's placement, read from newsroom/config/agent_personas.json. relationship_bonus stays 0 until PERSONALITY_RELATIONSHIPS_PLAN's relationship_context exists for this consumer.",
   "tiers": {
     "INSIDER": ["SCHEFTER", "RAPOPORT"],
     "REPORTER": ["ROSENTHAL", "SANDO", "CHADIHA", "THE_ATHLETIC", "ESPN", "YATES"],

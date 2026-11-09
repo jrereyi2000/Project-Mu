@@ -1,4 +1,4 @@
-"""The PRESS inbox notice (docs/in_progress/PRESS_CONFERENCE_PLAN.md §2.13; U8).
+"""The PRESS inbox notice (docs/done/PRESS_CONFERENCE_PLAN.md §2.13; U8).
 
 Offline: the inbox SQLite fake shared by the other `tests/test_inbox_*.py` files, plus the real press migration
 (dialect-translated: uppercase NOW(), the JSONB cast). No PostgreSQL connection is opened and no live database is

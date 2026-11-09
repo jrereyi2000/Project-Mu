@@ -1,5 +1,5 @@
 """Press conference session engine, storage, runner and CLI
-(docs/in_progress/PRESS_CONFERENCE_PLAN.md §2.2, §2.6–§2.9; PROJECT_SPEC §3.3r, §7.14).
+(docs/done/PRESS_CONFERENCE_PLAN.md §2.2, §2.6–§2.9; PROJECT_SPEC §3.3y, §7.14).
 
 One postgame presser per head coach per completed game. The module owns the four tables of migration
 ``2027_01_20_press_conferences.sql`` (``press_conferences``, ``press_attendees``, ``press_hands``,
@@ -179,12 +179,20 @@ def _universe_id(cur) -> str | None:
 
 
 def _league_id(cur) -> int | None:
+    """The franchise's personality league key: `league_state.madden_league_id`, which `personality_feature_modes`
+    is keyed by. Returning a hardcoded 1 made every `pf.config` read the wrong league and report 'off'."""
     try:
         cur.execute("/* q:league */ SELECT current_season, current_week FROM league_state WHERE id = 1")
-        row = cur.fetchone()
-        return 1 if row else None
+        if not cur.fetchone():
+            return None
     except Exception:  # noqa: BLE001
         return None
+    try:
+        cur.execute("/* q:madden_league */ SELECT madden_league_id FROM league_state WHERE id = 1")
+        row = cur.fetchone()
+        return int(row[0]) if row and row[0] is not None else 1
+    except Exception:  # noqa: BLE001 - a save without the column keeps the old behaviour
+        return 1
 
 
 def _league_state(cur):
@@ -429,10 +437,32 @@ def _game_label(row):
     return label
 
 
-def _subject(row):
+def _coach_persona(cur, subject_id):
+    """(persona_id, identity fields) for a coach: his lifecycle persona through the `db-coach:<id>` alias when one
+    exists, else the raw coaches.id with no identity. `relationship_store` admits only personas it finds in
+    `persona_core_profiles`, so the raw id had every presser event rejected as unknown_identity."""
+    raw = str(subject_id)
+    try:
+        from engines.relationship_producers import sources
+        from personality import store as pstore
+        universe = sources.universe_id(cur, sources.league_id(cur))
+        if not universe:
+            return raw, None
+        identity = pstore.resolve_alias(cur, universe, "coach", "db-coach", raw)
+        if identity is None:
+            return raw, None
+        return identity.persona_id, {"universe_id": identity.universe_id, "role": identity.role,
+                                     "birth_key": identity.birth_key}
+    except Exception:  # noqa: BLE001 - a save with no lifecycle data keeps the old shape
+        return raw, None
+
+
+def _subject(row, cur=None):
     team = _team_facts(row) or {}
     coach = team.get("coach") or {}
     subject_id = (row or {}).get("subject_id")
+    persona_id, identity = _coach_persona(cur, subject_id) if cur is not None else (
+        str(subject_id) if subject_id is not None else None, None)
     subject = {
         "id": subject_id,
         "name": (row or {}).get("subject_name") or coach.get("name") or "the head coach",
@@ -440,14 +470,14 @@ def _subject(row):
         "team_name": team.get("name") or (row or {}).get("team_name"),
         "team_abbr": (row or {}).get("abbreviation") or team.get("abbr"),
         "team_key": f"team:{(row or {}).get('team_id')}" if (row or {}).get("team_id") is not None else None,
-        "persona_id": str(subject_id) if subject_id is not None else None,
+        "persona_id": persona_id,
+        "identity": identity,
         "role": (row or {}).get("subject_type") or "coach",
         "tenure": coach.get("tenure"),
         "schemes": coach.get("schemes"),
         "tendencies": coach.get("tendencies"),
         "record": team.get("record_after"),
         "hot_seat": coach.get("hot_seat"),
-        "profile": coach,
     }
     return subject
 
@@ -540,7 +570,7 @@ def _session_state(cur, row, attendees=None, turns=None, bag=None):
     attendees = _load_attendees(cur, row["id"]) if attendees is None else attendees
     turns = _load_turns(cur, row["id"]) if turns is None else turns
     bag = _bag(row) if bag is None else bag
-    subject = _subject(row)
+    subject = _subject(row, cur)
     controller = str(row.get("controller") or "AGENT").upper()
     picks = bag.get("picks") or {}
     hand_counts = bag.get("hand_counts") or {}
@@ -852,7 +882,7 @@ def _ask(cur, row, bag, state, attendee, action, pick_source):
 
 
 def _answer_ai(cur, row, bag, state, llm, question_turn):
-    reply = press_agents.coach_turn(_subject(row), state, llm, "ANSWER")
+    reply = press_agents.coach_turn(_subject(row, cur), state, llm, "ANSWER")
     kind = "ANSWER"
     turn_id, seq = _insert_turn(cur, row, bag, "SUBJECT", kind, reply.get("text") or "",
                                 reply_to=question_turn.get("id"), source=reply.get("source") or "AGENT",
@@ -876,7 +906,7 @@ def _answer_user(cur, row, bag, question_turn, text, no_comment):
     issues = []
     if not no_comment:
         try:
-            issues = press_facts.check_line(body, _sheet(row), _subject(row).get("name") or "") or []
+            issues = press_facts.check_line(body, _sheet(row), _subject(row, cur).get("name") or "") or []
         except Exception:  # noqa: BLE001 - warnings only for JR's words
             issues = []
     turn_id, seq = _insert_turn(cur, row, bag, "SUBJECT", kind, body, reply_to=question_turn.get("id"),
@@ -890,7 +920,7 @@ def _answer_user(cur, row, bag, question_turn, text, no_comment):
 
 
 def _close_ai(cur, row, bag, state, llm, reason):
-    reply = press_agents.coach_turn(_subject(row), state, llm, "CLOSING")
+    reply = press_agents.coach_turn(_subject(row, cur), state, llm, "CLOSING")
     _insert_turn(cur, row, bag, "SUBJECT", "CLOSING", reply.get("text") or "", source=reply.get("source") or "AGENT",
                  issues=reply.get("issues"), retries=reply.get("retries", 0))
     _save_patience(cur, row["id"], bag)
@@ -926,7 +956,7 @@ def run_session(cur_factory, conference_id, llm, user_answer=None):
             if isinstance(user_answer, str):
                 answer_text, no_comment = user_answer, False
             else:
-                answer_text = (user_answer or {}).get("text")
+                answer_text = (user_answer or {}).get("text") or (user_answer or {}).get("answer")
                 no_comment = bool((user_answer or {}).get("no_comment"))
             answer = _answer_user(cur, row, bag, question, answer_text, no_comment)
             state = _session_state(cur, row, bag=bag)
@@ -936,6 +966,11 @@ def run_session(cur_factory, conference_id, llm, user_answer=None):
                 return {"conference_id": row["id"], "status": "REVIEW", "answer": _turn_payload(row, answer),
                         "hands": [], "ended": True, "end_reason": reason}
             hands = _run_round(cur, row, bag, state, llm)
+            _save_counters(cur, row["id"], llm)
+            if not hands:                       # nobody raised a hand: the room is done, as in answer_user
+                _save_status(cur, row["id"], "REVIEW", "RAN_OUT")
+                return {"conference_id": row["id"], "status": "REVIEW", "answer": _turn_payload(row, answer),
+                        "hands": [], "ended": True, "end_reason": "RAN_OUT"}
             return {"conference_id": row["id"], "answer": _turn_payload(row, answer),
                     "hands": _public_hands(hands), "ended": False, "end_reason": None}
         if bag.get("picked_turn_id") is not None:
@@ -950,7 +985,7 @@ def run_session(cur_factory, conference_id, llm, user_answer=None):
         return {"conference_id": row["id"], "status": "LIVE", "awaiting_pick": hands}
 
     # ------- AI subject: OPENING, then rounds until an end condition
-    opening = press_agents.coach_turn(_subject(row), state, llm, "OPENING")
+    opening = press_agents.coach_turn(_subject(row, cur), state, llm, "OPENING")
     _insert_turn(cur, row, bag, "SUBJECT", "OPENING", opening.get("text") or "",
                  source=opening.get("source") or "AGENT", issues=opening.get("issues"),
                  retries=opening.get("retries", 0))
@@ -968,7 +1003,7 @@ def run_session(cur_factory, conference_id, llm, user_answer=None):
         if not hands:
             state = _session_state(cur, row, bag=bag)
             return _close_ai(cur, row, bag, state, llm, "RAN_OUT")
-        pick = press_agents.coach_pick(_subject(row), hands, state, llm)
+        pick = press_agents.coach_pick(_subject(row, cur), hands, state, llm)
         agent_id = pick.get("agent_id")
         attendee = next((a for a in state["attendees"] if a["agent_id"] == agent_id), None)
         if attendee is None:
@@ -1286,7 +1321,7 @@ def start_user(cur, conference_id, opening=None):
     if opening:
         issues = []
         try:
-            issues = press_facts.check_line(opening, _sheet(row), _subject(row).get("name") or "") or []
+            issues = press_facts.check_line(opening, _sheet(row), _subject(row, cur).get("name") or "") or []
         except Exception:  # noqa: BLE001
             issues = []
         _insert_turn(cur, row, bag, "SUBJECT", "OPENING", opening, source="USER", issues=issues)
@@ -1376,7 +1411,7 @@ def edit_user(cur, conference_id, turn_id, text=None, on_record=None):
     issues = turn.get("issues") or []
     if text is not None:
         try:
-            issues = press_facts.check_line(new_text, _sheet(row), _subject(row).get("name") or "") or []
+            issues = press_facts.check_line(new_text, _sheet(row), _subject(row, cur).get("name") or "") or []
         except Exception:  # noqa: BLE001
             issues = []
     cur.execute("/* q:update_turn */ UPDATE press_turns SET text = %s, on_record = %s, issues = %s "
@@ -1459,7 +1494,7 @@ def _conference_for_agents(cur, row, attendees=None):
             "skipped": int(attendee.get("hands") or 0) > int(attendee.get("picked") or 0),
         }
     skip = {}
-    subject = _subject(row)
+    subject = _subject(row, cur)
     if subject.get("id") is not None:
         for attendee in attendees:
             key = attendee.get("person_key") or attendee.get("agent_id")
@@ -1609,10 +1644,13 @@ def _relationship_store():
 
 
 def _effects_pending_ids(cur, season, week):
+    """Settled pressers whose judgments, memories and events haven't been applied: this week's or earlier (a
+    background thread can be interrupted, and `expire_user_pressers` closes leftovers as DECLINED a week later)."""
     if not _installed(cur):
         return []
-    cur.execute("/* q:effects_pending */ SELECT id FROM press_conferences WHERE season = %s AND week = %s "
-                "AND status = 'CLOSED' AND effects_applied = FALSE ORDER BY id", (int(season), int(week)))
+    cur.execute("/* q:effects_pending */ SELECT id FROM press_conferences WHERE season = %s AND week <= %s "
+                "AND status IN ('CLOSED', 'DECLINED') AND effects_applied = FALSE ORDER BY id",
+                (int(season), int(week)))
     return [r[0] for r in cur.fetchall()]
 
 
@@ -1719,12 +1757,24 @@ def _latest_conference_id(cur, team_id, season, week, statuses):
     return row[0] if row else None
 
 
+def _settled_conference(cur, team_id, season, week):
+    """(id, status) of the team's most recent CLOSED or DECLINED presser before this publication week, or
+    (None, None). One row decides both `brief_block` and `declined_note`: looked up separately, a week-4 decline
+    rode along beside a week-5 transcript (and the reverse), and `week <= %s` let a week-N pregame article read
+    week-N's postgame presser (`newsroom/run_context.py`: the publication week covers the previous game week)."""
+    if not _installed(cur):
+        return None, None
+    cur.execute("/* q:team_conference_settled */ SELECT id, status FROM press_conferences "
+                "WHERE team_id = %s AND season = %s AND week < %s AND status IN ('CLOSED', 'DECLINED') "
+                "ORDER BY week DESC, id DESC LIMIT 1", (team_id, int(season), int(week)))
+    row = cur.fetchone()
+    return (row[0], row[1]) if row else (None, None)
+
+
 def brief_block(cur, team_id, season, week):
     """The beat brief's ``press_conference`` block (§2.9), or None when the team has no CLOSED presser."""
-    if not _installed(cur):
-        return None
-    conference_id = _latest_conference_id(cur, team_id, season, week, ("CLOSED",))
-    if conference_id is None:
+    conference_id, status = _settled_conference(cur, team_id, season, week)
+    if conference_id is None or str(status).upper() != "CLOSED":
         return None
     row = get_conference_row(cur, conference_id)
     if row is None:
@@ -1752,10 +1802,8 @@ def brief_block(cur, team_id, season, week):
 
 def declined_note(cur, team_id, season, week):
     """The beat brief's note when the team's latest presser was DECLINED (§2.9), else None."""
-    if not _installed(cur):
-        return None
-    conference_id = _latest_conference_id(cur, team_id, season, week, ("DECLINED",))
-    if conference_id is None:
+    conference_id, status = _settled_conference(cur, team_id, season, week)
+    if conference_id is None or str(status).upper() != "DECLINED":
         return None
     row = get_conference_row(cur, conference_id)
     if row is None:
@@ -1794,17 +1842,17 @@ def _resolve_tool_season(cur, season):
     return int(row[0]) if row and row[0] else 0
 
 
-def _resolve_cutoff_week(season, week):
-    if week:
-        return int(week)
+def _resolve_cutoff_week(season, week=0):
+    """(cutoff, only_week): the first hidden week for `season` (`run_context.cutoff_week`) and the single week the
+    caller asked for, if any. The cutoff is always applied — an explicit `week` used to bypass temporal isolation
+    entirely, and a future season's cutoff of 0 was treated as falsy, exposing that whole season."""
     try:
         from newsroom.run_context import cutoff_week
-        cutoff = cutoff_week(season)
-        if cutoff:
-            return int(cutoff)
+        cut = cutoff_week(season)
     except Exception:  # noqa: BLE001
-        pass
-    return None
+        cut = None
+    only = int(week) if week and int(week) else None
+    return (None if cut is None else int(cut)), only
 
 
 def get_press_conference(team_identifier, season=0, week=0):
@@ -1825,13 +1873,18 @@ def get_press_conference(team_identifier, season=0, week=0):
                 return f"No team matches '{team_identifier}'."
             team_id = row[0]
             season = _resolve_tool_season(cur, season)
-            cutoff = _resolve_cutoff_week(season, week)
+            cutoff, only_week = _resolve_cutoff_week(season, week)
+            if cutoff == 0:
+                return f"No press conferences for the {row[2]} in {season} yet."      # a future season
             sql = ("/* q:tool_conferences */ SELECT id, status FROM press_conferences WHERE team_id = %s "
                    "AND season = %s AND status IN ('CLOSED', 'DECLINED')")
             params = [team_id, season]
-            if cutoff:
-                sql += " AND week <= %s"
+            if cutoff is not None:
+                sql += " AND week < %s"
                 params.append(int(cutoff))
+            if only_week is not None:
+                sql += " AND week = %s"
+                params.append(int(only_week))
             sql += " ORDER BY week DESC, id DESC LIMIT 6"
             cur.execute(sql, tuple(params))
             ids = cur.fetchall()
@@ -1849,11 +1902,18 @@ def get_press_conference(team_identifier, season=0, week=0):
                     note = declined_note(cur, team_id, season, conf.get("week"))
                     if note:
                         lines.append(note)
-                for turn in conf.get("turns") or []:
+                turns = conf.get("turns") or []
+                for i, turn in enumerate(turns):
+                    kind = str(turn.get("kind")).upper()
                     if turn.get("speaker") == "REPORTER":
+                        answer = next((t for t in turns[i + 1:] if t.get("speaker") == "SUBJECT"), None)
+                        if answer is not None and not answer.get("on_record", True):
+                            continue          # the question goes with its off-the-record answer
                         lines.append(f"Q {(turn.get('reporter') or {}).get('handle') or ''}: {turn.get('text')}")
-                    elif str(turn.get("kind")).upper() in ("ANSWER", "NO_COMMENT", "OPENING", "CLOSING"):
-                        label = "A" if str(turn.get("kind")).upper() != "OPENING" else "OPENING"
+                    elif kind in ("ANSWER", "NO_COMMENT", "OPENING", "CLOSING"):
+                        if not turn.get("on_record", True):
+                            continue          # §2.6: only on-record answers reach the newsroom tool
+                        label = "A" if kind != "OPENING" else "OPENING"
                         lines.append(f"{label}: {turn.get('text')}")
                 blocks.append("\n".join(lines))
             return "\n\n".join(blocks)
@@ -1927,7 +1987,8 @@ def main(argv=None):
     wake = sub.add_parser("wakeup", help="ensure a team's presser then start its beat wakeup")
     wake.add_argument("--team", required=True)
     wake.add_argument("--season", type=int, required=True)
-    wake.add_argument("--week", type=int, required=True)
+    wake.add_argument("--week", type=int, required=True,
+                      help="the game week the presser covers (the wakeup itself runs for the league's current week)")
 
     cast = sub.add_parser("cast", help="casts only")
     cast.add_argument("--season", type=int, required=True)
@@ -1971,8 +2032,12 @@ def main(argv=None):
         status = ensure_team_presser(conn_info, team["id"], args.season, args.week)
         print(f"{args.team}: presser {status}")
         try:  # U7 wires the real wakeup; guarded so U6 runs alone
+            import psycopg
+            from psycopg.rows import dict_row
             from server.api import maybe_start_team_wakeup
-            with _connect(conn_info) as conn:
+            # maybe_start_team_wakeup reads dict rows; a default tuple cursor raised TypeError and the wakeup
+            # silently never started from the CLI either.
+            with psycopg.connect(conn_info, row_factory=dict_row) as conn:
                 with conn.cursor() as cur:
                     maybe_start_team_wakeup(cur, team["id"], args.season)
                 conn.commit()

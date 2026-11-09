@@ -1,5 +1,5 @@
 """Live postgame press conference API (`/api/franchise/{abbr}/press*`; PRESS_CONFERENCE_PLAN §2.11, §4.6c;
-PROJECT_SPEC §3.3r, §4.6c).
+PROJECT_SPEC §3.3y, §4.6c).
 
 JR's podium: the Game Center reads his last game's presser, opens it, lets him pick a reporter, answer (or say
 "no comment"), end it, review and edit his answers, then approve. AI coaches' closed pressers are readable
@@ -17,6 +17,7 @@ import threading
 
 import psycopg
 from fastapi import APIRouter, HTTPException
+from psycopg.rows import dict_row
 from pydantic import BaseModel
 
 from newsroom import press_room
@@ -105,7 +106,9 @@ def _start_close_and_wakeup(conference_id: int, team: dict, season: int, week: i
             pass
         try:
             from server.api import maybe_start_team_wakeup
-            with _connect() as conn:
+            # maybe_start_team_wakeup reads dict rows (it is written for server.api's dict_row pool); a default
+            # tuple cursor raises TypeError here inside the swallowed except, so the wakeup never started.
+            with psycopg.connect(CONN_INFO, row_factory=dict_row) as conn:
                 with conn.cursor() as cur:
                     maybe_start_team_wakeup(cur, team["id"], season)
                 conn.commit()

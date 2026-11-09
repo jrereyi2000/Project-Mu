@@ -737,3 +737,16 @@ def test_constants_are_set_from_the_u1_corpus():
     assert 0.05 <= stats["overall"]["follow_up_rate"] <= 0.20
     assert press_agents.MAX_FOLLOW_UPS_IN_A_ROW == 2
     assert press_agents.MIN_PATIENCE <= press_agents.BASE_PATIENCE <= press_agents.MAX_PATIENCE
+
+
+def test_only_a_coach_under_real_pressure_is_on_the_hot_seat():
+    """`coach_hot_seat` writes a row for all 32 teams each offseason with fired=false, so 'a retained row exists'
+    flagged every returning coach and docked him patience."""
+    retained_champ = {"score": -1.0, "fired": False, "line": "Hot seat: score -1.00, retained"}
+    under_pressure = {"score": 0.6, "fired": False, "line": "Hot seat: score 0.60, retained"}
+    assert press_agents._hot_seat_for({"hot_seat": retained_champ}, {}) is False
+    assert press_agents._hot_seat_for({"hot_seat": under_pressure}, {}) is True
+    assert press_agents._hot_seat_for({"hot_seat": {"score": 0.9, "fired": True}}, {}) is False
+    assert press_agents._hot_seat_for({"hot_seat": True}, {}) is True            # a caller that already decided
+    assert press_agents._hot_seat_for({}, {}) is False
+    assert press_agents._hot_seat_for({}, {"coach": {"hot_seat": retained_champ}}) is False

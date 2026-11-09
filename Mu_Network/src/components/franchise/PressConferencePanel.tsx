@@ -305,7 +305,11 @@ function ReviewScreen({ conference, busy, onEdit, onApprove }: {
   onEdit: (turnId: number, body: PressEditTurnRequest) => Promise<boolean>;
   onApprove: () => void;
 }) {
-  const editable = (t: Turn) => t.speaker === "SUBJECT" && (t.kind === "ANSWER" || t.kind === "NO_COMMENT");
+  // The opening statement is checked and published like an answer (press_room.start_user checks it and
+  // edit_user accepts it); a warning on it needs the same Edit and on/off-record controls.
+  const editable = (t: Turn) =>
+    t.speaker === "SUBJECT" && (t.kind === "ANSWER" || t.kind === "NO_COMMENT" ||
+      (t.kind === "OPENING" && t.source === "USER"));
   const turns = [...(conference.turns ?? [])].sort((a, b) => a.seq - b.seq);
   return (
     <section className="pc-review pc-section">

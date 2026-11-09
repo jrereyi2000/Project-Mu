@@ -1,5 +1,5 @@
 """
-PRESS: a notice when JR's postgame press conference is waiting (docs/in_progress/PRESS_CONFERENCE_PLAN.md §2.13; U8).
+PRESS: a notice when JR's postgame press conference is waiting (docs/done/PRESS_CONFERENCE_PLAN.md §2.13; U8).
 
 A notice, not a conversation: the press room (`newsroom/press_room.py`) owns the podium. The scan finds the team's
 user-controlled pressers (`press_conferences.controller = 'USER'`) that are SCHEDULED, LIVE or REVIEW, one notice

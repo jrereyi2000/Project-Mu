@@ -118,6 +118,9 @@ BLOWOUT_MARGIN = 17
 LOSING_STREAK_FREE_GAMES = 2
 LOSING_STREAK_PENALTY = -1      # per game of a losing streak beyond the first two
 HOT_SEAT_PENALTY = -2
+# The producer rules' own threshold, so a coach the relationship producers call job pressure is the one the
+# podium docks: a kept coach at or above this share of his firing line.
+from engines.relationship_producers.rules import FIRING_LINE, HOT_SEAT_PRESSURE   # noqa: E402
 TEMPERAMENT_COEFFICIENT = 0.5
 MIN_PATIENCE = 6
 MAX_PATIENCE = 20
@@ -1131,14 +1134,22 @@ def _team_streak(team):
 
 
 def _hot_seat_for(subject, team):
+    """True only when the coach is genuinely under pressure. `coach_hot_seat` writes a row for all 32 teams each
+    offseason with `fired = false`, so "a retained row exists" meant every returning coach, including a Super Bowl
+    winner, was on the hot seat and lost HOT_SEAT_PENALTY patience."""
     value = (subject or {}).get("hot_seat")
     if value is None:
         value = ((team or {}).get("coach") or {}).get("hot_seat")
     if not value:
         return False
-    if isinstance(value, dict) and value.get("fired"):
+    if not isinstance(value, dict):
+        return True                                     # a caller that already decided
+    if value.get("fired"):
         return False
-    return True
+    if "score" not in value:
+        return True
+    line = float(value.get("firing_line") or FIRING_LINE)
+    return float(value.get("score") or 0.0) >= HOT_SEAT_PRESSURE * line
 
 
 def _temperament(subject):

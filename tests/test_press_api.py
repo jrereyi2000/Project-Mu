@@ -227,3 +227,52 @@ class LifecycleTest(ApiTest):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_approve_runs_the_beat_wakeup_on_a_dict_cursor(monkeypatch):
+    """maybe_start_team_wakeup indexes st["current_season"], so a default tuple cursor raised TypeError inside a
+    swallowed except and the beat wakeup never started after Approve or Decline."""
+    from psycopg.rows import dict_row
+    import server.api as api
+    from server import press_api as pa
+    from newsroom import press_room
+
+    seen = {}
+
+    class FakeCursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    class FakeConn:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def cursor(self):
+            return FakeCursor()
+
+        def commit(self):
+            seen["committed"] = True
+
+    def fake_connect(dsn, **kw):
+        seen["row_factory"] = kw.get("row_factory")
+        return FakeConn()
+
+    class SyncThread:                                  # run the background work inline
+        def __init__(self, target, **kw):
+            self.target = target
+
+        def start(self):
+            self.target()
+
+    monkeypatch.setattr(pa.psycopg, "connect", fake_connect)
+    monkeypatch.setattr(pa.threading, "Thread", SyncThread)
+    monkeypatch.setattr(press_room, "close_effects", lambda *a, **k: None)
+    monkeypatch.setattr(api, "maybe_start_team_wakeup", lambda cur, tid, season: seen.setdefault("woke", tid))
+    pa._start_close_and_wakeup(1, {"id": 12}, 2026, 5)
+    assert seen["row_factory"] is dict_row and seen.get("woke") == 12 and seen.get("committed")

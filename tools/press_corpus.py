@@ -1,7 +1,7 @@
 """Press conference corpus statistics and generated-presser evaluation (U1).
 
 This is the research tool for the press-conference plan
-(docs/in_progress/PRESS_CONFERENCE_PLAN.md, U1). It reads real postgame
+(docs/done/PRESS_CONFERENCE_PLAN.md, U1). It reads real postgame
 head-coach press-conference transcripts kept locally in
 ``data/press_corpus/*.txt`` (that directory is git-ignored), splits each
 transcript into question and answer turns, and writes a derived statistics

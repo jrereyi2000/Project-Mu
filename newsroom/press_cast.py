@@ -1,5 +1,5 @@
 """Press conference casting: pre-game interest and the national press pool
-(docs/in_progress/PRESS_CONFERENCE_PLAN.md §2.4; PROJECT_SPEC §2.22).
+(docs/done/PRESS_CONFERENCE_PLAN.md §2.4; PROJECT_SPEC §2.22).
 
 Casting answers two questions, using only what was known before kickoff:
 who is interested in a game, and which reporters attend which coach's postgame presser.

@@ -13,6 +13,7 @@ record book with many queries. Both are module-level names so callers and tests 
 from __future__ import annotations
 
 import re
+from engines.relationship_producers.rules import FIRING_LINE, HOT_SEAT_PRESSURE
 
 from engines import game_script_engine
 from engines.coach_profile import fetch_team_coach
@@ -429,10 +430,13 @@ def _coach_facts(cur, team_id, season):
         row = None
     if row:
         score, fired, phase = row[0], bool(row[1]), row[2]
-        verdict = "fired" if fired else "retained"
-        line = f"Hot seat: score {float(score):.2f}, {verdict}" + (f" ({phase})" if phase else "")
-        out["hot_seat"] = {"score": float(score) if score is not None else None,
-                           "fired": fired, "phase": phase, "line": line}
+        # Every team gets a `coach_hot_seat` row each offseason, so a retained coach with a negative score is not
+        # under pressure; only a fired coach or one past the producer rules' pressure share gets a line.
+        if fired or float(score or 0.0) >= HOT_SEAT_PRESSURE * FIRING_LINE:
+            verdict = "fired" if fired else "retained"
+            line = f"Hot seat: score {float(score or 0.0):.2f}, {verdict}" + (f" ({phase})" if phase else "")
+            out["hot_seat"] = {"score": float(score) if score is not None else None,
+                               "fired": fired, "phase": phase, "line": line}
     return out
 
 
@@ -1054,7 +1058,9 @@ class _CheckContext:
             value = self._value({"kind": "team", "team": team}, team_aliases) if team else None
             if value is None:
                 continue
-            if int(value) != n:
+            # A per-game average is spoken rounded ("averaging 80 yards" for 79.6), so either truncation or the
+            # rounded integer is right; comparing only int() flagged correct roundings as fact errors.
+            if n not in (int(value), round(float(value))):
                 out.append(_issue("NUMBER", m.start(), m.end(), m.group(0), value))
 
         for m in self.STAT_RE.finditer(text):

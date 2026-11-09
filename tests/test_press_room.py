@@ -307,8 +307,8 @@ class FakeCursor:
         if tag == "effects_pending":
             season, week = params
             return None, [[r["id"]] for r in db.conferences.values()
-                          if r["season"] == season and r["week"] == week and r["status"] == "CLOSED"
-                          and not r["effects_applied"]]
+                          if r["season"] == season and r["week"] <= week
+                          and r["status"] in ("CLOSED", "DECLINED") and not r["effects_applied"]]
         if tag == "waiting_events":
             seen = sorted({a["conference_id"] for a in db.attendees
                            if isinstance(a.get("judgment"), dict) and not a["judgment"].get("appended")})
@@ -344,6 +344,13 @@ class FakeCursor:
                        and r["season"] == season and r["week"] <= week and r["status"] in statuses]
             matches.sort(key=lambda r: (r["week"], r["id"]), reverse=True)
             return (matches[0]["id"],) if matches else None, []
+        if tag == "team_conference_settled":
+            team_id, season, week = params[0], params[1], params[2]
+            matches = [r for r in db.conferences.values() if r["team_id"] == team_id
+                       and r["season"] == season and r["week"] < week
+                       and r["status"] in ("CLOSED", "DECLINED")]
+            matches.sort(key=lambda r: (r["week"], r["id"]), reverse=True)
+            return ((matches[0]["id"], matches[0]["status"]) if matches else None), []
         if tag == "history":
             season, week = params
             return None, [[r["id"]] for r in sorted(db.conferences.values(), key=lambda r: (r["game_id"], r["team_id"]))
@@ -833,7 +840,7 @@ class ReaderTest(RoomTest):
 
     def test_brief_block(self):
         self.seed_closed()
-        block = press_room.brief_block(self.cursor(), CAR, SEASON, WEEK)
+        block = press_room.brief_block(self.cursor(), CAR, SEASON, WEEK + 1)   # the week that briefs game week 5
         self.assertEqual(block["subject"], "Marcus Whitfield")
         self.assertIn("Week 5", block["game"])
         self.assertEqual(block["exchanges"][0]["reporter"], "@beat_car")
@@ -843,9 +850,21 @@ class ReaderTest(RoomTest):
 
     def test_declined_note(self):
         self.conference(attendees=("beat_car",), status="DECLINED")
-        note = press_room.declined_note(self.cursor(), CAR, SEASON, WEEK)
+        note = press_room.declined_note(self.cursor(), CAR, SEASON, WEEK + 1)
         self.assertIn("did not take questions", note)
-        self.assertIsNone(press_room.declined_note(self.cursor(), ATL, SEASON, WEEK))
+        self.assertIsNone(press_room.declined_note(self.cursor(), ATL, SEASON, WEEK + 1))
+
+    def test_the_brief_takes_only_the_latest_settled_presser(self):
+        """A week-4 decline must not ride along with a week-5 transcript, and a week-N postgame presser must not
+        appear in week N's pregame brief."""
+        self.conference(attendees=("beat_car",), status="DECLINED", week=WEEK - 1)
+        self.conference(attendees=("beat_car",), status="CLOSED", week=WEEK)
+        # week 5 briefs game week 4: the decline, never the week-5 transcript that hadn't happened yet
+        self.assertIsNone(press_room.brief_block(self.cursor(), CAR, SEASON, WEEK))
+        self.assertIsNotNone(press_room.declined_note(self.cursor(), CAR, SEASON, WEEK))
+        # week 6 briefs game week 5: the transcript, and not the week-4 decline riding along beside it
+        self.assertIsNotNone(press_room.brief_block(self.cursor(), CAR, SEASON, WEEK + 1))
+        self.assertIsNone(press_room.declined_note(self.cursor(), CAR, SEASON, WEEK + 1))
 
     def test_build_conference_shape(self):
         cid = self.conference(attendees=("beat_car",), status="CLOSED")
@@ -900,3 +919,141 @@ class CliAndSchemaTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class _ToolCursor:
+    """Scripted cursor for get_press_conference: team row, then conference ids."""
+    def __init__(self):
+        self.out = []
+
+    def execute(self, sql, params=()):
+        s = str(sql)
+        if "/* q:tool_team */" in s:
+            self.out = [(12, "CAR", "Panthers", "Carolina")]
+        elif "/* q:tool_conferences */" in s:
+            self.out = [(1, "CLOSED")]
+        else:
+            self.out = []
+
+    def fetchone(self):
+        return self.out[0] if self.out else None
+
+    def fetchall(self):
+        return list(self.out)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+
+class _ToolConn:
+    def __init__(self, cur):
+        self._cur = cur
+
+    def cursor(self):
+        return self._cur
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+
+def test_get_press_conference_never_quotes_an_off_the_record_answer(monkeypatch):
+    """§2.6: only on-record answers reach the newsroom tool; a question goes with its off-record answer."""
+    conf = {"team": "CAR", "subject_name": "Dave Canales", "week": 5, "opponent": "ATL", "result": "W",
+            "score": "24-17", "end_reason": None, "turns": [
+                {"speaker": "REPORTER", "reporter": {"handle": "joe"}, "text": "ON RECORD QUESTION"},
+                {"speaker": "SUBJECT", "kind": "ANSWER", "text": "ON RECORD ANSWER", "on_record": True},
+                {"speaker": "REPORTER", "reporter": {"handle": "joe"}, "text": "SECRET QUESTION"},
+                {"speaker": "SUBJECT", "kind": "ANSWER", "text": "OFF THE RECORD ANSWER", "on_record": False},
+            ]}
+    cur = _ToolCursor()
+    monkeypatch.setattr(press_room, "_tool_connect", lambda: _ToolConn(cur))
+    monkeypatch.setattr(press_room, "_installed", lambda c: True)
+    monkeypatch.setattr(press_room, "_resolve_tool_season", lambda c, s: 2026)
+    monkeypatch.setattr(press_room, "_resolve_cutoff_week", lambda s, w=0: (None, None))
+    monkeypatch.setattr(press_room, "build_conference", lambda c, cid, include_hands=False: conf)
+    text = press_room.get_press_conference("CAR")
+    assert "ON RECORD ANSWER" in text and "ON RECORD QUESTION" in text
+    assert "OFF THE RECORD ANSWER" not in text and "SECRET QUESTION" not in text
+
+
+def test_league_id_reads_the_personality_league_key():
+    """personality_feature_modes is keyed by league_state.madden_league_id; a hardcoded 1 always read 'off'."""
+    import re as _re
+
+    class C:
+        def __init__(self, mapping):
+            self.mapping, self.out = mapping, None
+
+        def execute(self, sql, params=()):
+            tag = _re.search(r"/\* q:(\w+) \*/", sql).group(1)
+            self.out = self.mapping.get(tag)
+
+        def fetchone(self):
+            return self.out
+
+    assert press_room._league_id(C({"league": (2036, 5), "madden_league": (2085659472,)})) == 2085659472
+    assert press_room._league_id(C({"league": (2036, 5)})) == 1          # a save without the column
+    assert press_room._league_id(C({})) is None                          # no league_state row
+
+
+def test_subject_does_not_hand_the_coach_sheet_over_as_a_profile():
+    """`profile` used to hold the scheme dict, so `_personality_view` skipped its lookup and stored personas were
+    never loaded in a real presser."""
+    row = {"subject_id": 10, "subject_name": "Marcus Whitfield", "team_id": CAR}
+    subject = press_room._subject(row)
+    assert "profile" not in subject and subject["identity"] is None
+    assert subject["persona_id"] == "10"
+
+
+def test_subject_resolves_the_coach_lifecycle_persona(monkeypatch):
+    """The coach's persona is the lifecycle one behind the db-coach:<id> alias; the raw coaches.id was rejected by
+    relationship_store as unknown_identity, so no presser event was ever written."""
+    from personality.core import Identity
+    import personality.store as pstore
+    from engines.relationship_producers import sources
+
+    monkeypatch.setattr(sources, "league_id", lambda cur: 4242)
+    monkeypatch.setattr(sources, "universe_id", lambda cur, league: "mu:00000000-0000-4000-8000-000000000001")
+    monkeypatch.setattr(pstore, "resolve_alias",
+                        lambda cur, u, role, ns, ext: Identity.adopted(u, role, "kyle-shanahan"))
+    persona_id, identity = press_room._coach_persona(object(), 10)
+    assert persona_id == "kyle-shanahan"
+    assert identity == {"universe_id": "mu:00000000-0000-4000-8000-000000000001", "role": "coach",
+                        "birth_key": "legacy:coach:kyle-shanahan"}
+
+
+def test_effects_pending_covers_declined_and_earlier_weeks():
+    """A DECLINED presser (and one whose background thread was interrupted) never got its judgments or events."""
+    import unittest
+    test = _StandaloneRoom()
+    test.setUp()
+    declined = test.conference(attendees=("beat_car",), status="DECLINED")
+    earlier = test.conference(attendees=("beat_car",), status="CLOSED", week=WEEK - 1)
+    current = test.conference(attendees=("beat_car",), status="CLOSED")
+    ids = press_room._effects_pending_ids(test.cursor(), SEASON, WEEK)
+    assert {declined, earlier, current} <= set(ids)
+
+
+class _StandaloneRoom(RoomTest):
+    """RoomTest without unittest's test runner, so a plain pytest function can reuse its fixtures."""
+    def runTest(self):
+        pass
+
+
+def test_the_cutoff_is_always_applied(monkeypatch):
+    """An explicit week used to return early and skip run_context entirely, and a future season's cutoff of 0 was
+    treated as falsy."""
+    from newsroom import run_context
+    monkeypatch.setattr(run_context, "cutoff_week", lambda s: 5)
+    assert press_room._resolve_cutoff_week(2036) == (5, None)
+    assert press_room._resolve_cutoff_week(2036, 18) == (5, 18)      # a filter, never a bypass
+    monkeypatch.setattr(run_context, "cutoff_week", lambda s: 0)
+    assert press_room._resolve_cutoff_week(2037) == (0, None)        # a future season: nothing visible
+    monkeypatch.setattr(run_context, "cutoff_week", lambda s: None)
+    assert press_room._resolve_cutoff_week(2035) == (None, None)
