@@ -268,3 +268,48 @@ def test_exchange_refuses_read_only_and_long_notes(cur):
     with pytest.raises(InboxError) as e:
         voice.exchange(cur, FakeKind(), 999, None, None, "hi")
     assert e.value.status == 404
+
+
+def test_a_talk_reply_does_not_rebuild_an_old_decision(db, cur):
+    """GM_TALK's template echoed "Here's our counter: ..." on every talk turn, because the decision facts (the GM's
+    own message, the action, the counter) were still on the sheet."""
+    actors.take_control(cur, "CAR", "GM", "10")
+    t = gm_thread(cur)
+    stale = dict(FACTS, gm_message="Here's our counter: your 1st for Bijan.", action="COUNTER", status="OPEN",
+                 counter={"assets": []})
+    store.add_message(cur, t["id"], "COUNTERPART", "Here's our counter.", "TEMPLATE", facts=stale)
+    voice.exchange(cur, FakeKind(), t["id"], option_id=None, note="How's your week?", llm=None)
+    last = store.messages(cur, t["id"])[-1]
+    for key in ("gm_message", "action", "status", "counter", "decision", "offer_id"):
+        assert key not in last["facts"]
+    assert "[TALK]" in last["body"] and "counter" not in last["body"]
+
+
+def test_a_talk_reply_cannot_settle_anything(db, cur):
+    """Nothing is being decided on a talk turn, so either direction of a deal is a contradiction."""
+    assert voice.intent_ok("We have a deal, I accept.", "TALK") is False
+    assert voice.intent_ok("No deal, we decline.", "TALK") is False
+    assert voice.intent_ok("We'll look at the numbers again tomorrow.", "TALK") is True
+    # and the ordinary decision guard still works
+    assert voice.intent_ok("We have a deal.", "REJECT") is False
+
+
+def test_a_talk_turn_with_a_settling_model_reply_falls_back(db, cur):
+    actors.take_control(cur, "CAR", "GM", "10")
+    t = gm_thread(cur)
+    store.add_message(cur, t["id"], "COUNTERPART", "We are apart.", "TEMPLATE", facts=dict(FACTS))
+    kind = FakeKind()
+    voice.exchange(cur, kind, t["id"], option_id=None, note="Can we close this?",
+                   llm=FakeLLM("We have a deal, I accept."))
+    last = store.messages(cur, t["id"])[-1]
+    assert last["body_source"] == "TEMPLATE" and "deal" not in last["body"].lower()
+
+
+def test_a_talk_reply_does_not_walk_back_past_empty_facts(db, cur):
+    """The newest counterpart turn is the one being answered, even when its facts are empty (SCOUT's ACKNOWLEDGED)."""
+    actors.take_control(cur, "CAR", "GM", "10")
+    t = gm_thread(cur)
+    store.add_message(cur, t["id"], "COUNTERPART", "Older line.", "TEMPLATE", facts=dict(FACTS, extra="OLD"))
+    store.add_message(cur, t["id"], "COUNTERPART", "Thanks, noted.", "TEMPLATE", facts={})
+    voice.exchange(cur, FakeKind(), t["id"], option_id=None, note="Anything else?", llm=None)
+    assert "extra" not in store.messages(cur, t["id"])[-1]["facts"]

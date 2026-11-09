@@ -286,9 +286,11 @@ def prompt(thread, intent, facts, history, note, view, ask_appraisal, kind=None,
         lines += hist
     if note:
         lines.append(f"Their latest message to you: {note}")
+    closing = ("and do not settle, accept or reject anything: nothing is being decided."
+               if str(intent or "").upper() == "TALK" else "and never contradict the decision.")
     lines += ["FACT SHEET (JSON; the only facts you may state):", json.dumps(_sheet(facts), indent=1, default=str),
               "Write 1-4 sentences in your own voice. Never state a number, dollar amount, player, team or contract "
-              "fact that isn't on the fact sheet, and never contradict the decision."]
+              "fact that isn't on the fact sheet, " + closing]
     keys = '"message": "..."'
     if ask_appraisal:
         lines.append("Also judge, privately, how they treated you in their latest message (respectful and in depth, "
@@ -307,6 +309,8 @@ def prompt(thread, intent, facts, history, note, view, ask_appraisal, kind=None,
 def intent_ok(text, intent):
     """False when the words contradict the decision (a refusal that sounds like a deal, or the reverse)."""
     up = str(intent or "").upper()
+    if up == "TALK":                     # nothing is being decided, so either direction of a deal is a contradiction
+        return not (_CONTRADICTS["negative"].search(text) or _CONTRADICTS["positive"].search(text))
     if any(w in up for w in _NEGATIVE_INTENTS) and _CONTRADICTS["negative"].search(text):
         return False
     if any(w in up for w in _POSITIVE_INTENTS) and not any(w in up for w in _NEGATIVE_INTENTS) \
@@ -404,10 +408,13 @@ def _talk_result(history):
     no agent loop re-conveys a decision that is already on the table."""
     facts = {}
     for m in reversed(history or ()):
-        if m.get("author") != "JR" and m.get("facts"):
-            facts = dict(m["facts"])
+        if m.get("author") != "JR":          # the newest counterpart turn even with empty facts: walking back past
+            facts = dict(m.get("facts") or {})   # it re-told an older decision (SCOUT's ACKNOWLEDGED carries {})
             break
-    for key in ("decision", "engine_status", "reply", "offer_id", "pending_move_id"):
+    # Every fact a kind's act sets to describe its decision, across the kinds: a talk reply that reuses them
+    # re-conveys a decision that is already on the table (GM_TALK's template echoed "Here's our counter: ...").
+    for key in ("decision", "engine_status", "reply", "offer_id", "pending_move_id", "gm_message", "action",
+                "status", "counter", "counter_reasons", "option", "question", "direction", "reasons"):
         facts.pop(key, None)
     from engines.inbox.registry import ActResult
     return ActResult(facts=facts, intent="TALK", engine_ref=None, close=False, judge=True)
