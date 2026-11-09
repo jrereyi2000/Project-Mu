@@ -154,6 +154,21 @@ def run_weekly_swarm(
                     from newsroom.agent_memory import refresh_season_summaries
                     n = refresh_season_summaries(conn_info, dispatcher.api_key, model or DEFAULT_MODEL, season, week)
                     print(f"[Newsroom] Refreshed {n} agent season summaries through Week {week - 1}.")
+                    # Writer relationships: grade last week's picks and season calls once per run; a season's
+                    # first run (Week 1) decays the rows no event touched last season instead (AGENT_WIRE §2.5).
+                    try:
+                        from newsroom import relationships
+                        with psycopg.connect(conn_info) as rel_conn, rel_conn.cursor() as rel_cur:
+                            if week == 1:
+                                changed = relationships.decay(rel_cur, season)
+                            else:
+                                changed = relationships.apply_graded(rel_cur, season, week - 1)
+                            rel_conn.commit()
+                        if changed:
+                            print(f"[Newsroom] Updated {changed} writer relationships "
+                                  f"({'season rollover' if week == 1 else f'from Week {week - 1}'}).")
+                    except Exception as e:                       # never block the slate on relationship upkeep
+                        print(f"[Newsroom] Writer relationships not updated: {e}")
 
                 if todo["national"] is None:
                     print(f"[Newsroom] Publishing Season {season} Week {week} national slate"

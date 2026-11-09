@@ -3,6 +3,7 @@
 import json
 import re
 import unittest
+from unittest import mock
 
 from newsroom import personas as P
 
@@ -200,6 +201,28 @@ class RenderTests(unittest.TestCase):
         system, _ = build_post_prompt(a, acct, P.load_personas()["ORLOVSKY"])
         self.assertIn("Dan Orlovsky", system)
         self.assertIn("misread shell", system)
+
+    def test_build_persona_block_appends_the_relationship_block_for_subjects(self):
+        class Cur:
+            def execute(self, *a, **k):
+                pass
+            def fetchall(self):
+                return []
+        subjects = [{"type": "team", "id": 2}]
+        cur = Cur()
+        with mock.patch("newsroom.relationships.person_key", return_value="pk"), \
+                mock.patch("newsroom.relationships.relationship_block",
+                           return_value="- The Team2 are your rival, and you enjoy every loss they take.") as rel:
+            out = P.build_persona_block(cur, self.barnwell, agent_id="a", season=2036, week=5, fmt="POST",
+                                        subjects=subjects)
+        self.assertEqual(rel.call_args.args[1:], ("pk", subjects))
+        self.assertIn("YOUR BIASES", out)
+        self.assertIn("The Team2 are your rival", out)
+        with mock.patch("newsroom.relationships.person_key", return_value="pk"), \
+                mock.patch("newsroom.relationships.relationship_block", return_value=""):
+            plain = P.build_persona_block(cur, self.barnwell, agent_id="a", season=2036, week=5, fmt="POST",
+                                          subjects=subjects)
+        self.assertNotIn("YOUR BIASES", plain)
 
 
 if __name__ == "__main__":

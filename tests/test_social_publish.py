@@ -4,14 +4,19 @@ Run: python3 -m unittest tests.test_social_publish
 """
 import ast
 import datetime as dt
+import json
 import os
 import unittest
+from unittest import mock
 from unittest.mock import MagicMock
 
+from newsroom import social_publish as social
+from newsroom import social_writer as SW
 from newsroom.social_desk import PUNDIT_EXCLUDED, plan_replies, plan_social_week, plan_team_wakeup
 from newsroom.social_publish import (GAME_LENGTH, compute_trends, engagement, find_duplicate_content_tweet,
                                      followers_for, kickoff, load_config, normalize_tweet_text, post_time,
                                      publishable, save_post, subject_heat, week_thursday, _publish)
+from newsroom.social_writer import parse_post_json
 from tests.test_social_desk import dominate, league
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -168,16 +173,20 @@ class ReplyAndWakeupTests(unittest.TestCase):
         quiet = plan_team_wakeup(ctx, 32)                         # popularity 68 -> 1 pundit
         self.assertEqual(len([a for a in quiet["assignments"] if a["archetype"] not in ("DIE_HARD_FAN", "LOCAL_BEAT_REPORTER", "FORMER_PLAYER")]), 1)
 
-    def test_sibling_replies_take_different_stances_and_fans_get_angles(self):
+    def test_sibling_replies_quote_and_angles_need_a_strong_relationship(self):
+        """U3 replaced reply stances with the quote form and made the angle relationship-driven only."""
         ctx = league(week=9)
         plan = plan_social_week(ctx)
         replies = plan_replies(ctx, plan, saved_posts(ctx, plan))
-        first = [r for r in replies if r["parent"]["id"] == replies[0]["parent"]["id"]]
-        self.assertEqual(len({r["stance"] for r in first}), len(first))
-        fans = [a for a in plan["assignments"] if a["archetype"] == "DIE_HARD_FAN" and a["kind"] == "REACTION"]
-        self.assertTrue(all(a["angle"] for a in fans))
-        self.assertGreater(len({a["angle"] for a in fans}), 4)
-        self.assertFalse([a for a in plan["assignments"] if a["kind"] == "BEAT" and a["angle"]])
+        self.assertTrue(all("quote" in r and "stance" not in r for r in replies))
+        self.assertFalse([a for a in plan["assignments"] if a.get("relationship_angle")])
+        from newsroom.social_desk import _relationship_line
+        ctx["strong_relationships"] = {("fan_1_0", "team", "1"): _relationship_line("team", "Team1", 0.8)}
+        strong = plan_social_week(ctx)
+        angled = [a for a in strong["assignments"] if a.get("relationship_angle")]
+        self.assertTrue(angled)
+        self.assertTrue(all(a["agent_id"] == "fan_1_0" and a["angle"] for a in angled))
+        self.assertFalse([a for a in strong["assignments"] if a["kind"] == "BEAT" and a.get("relationship_angle")])
 
     def test_planned_posts_land_in_waking_hours(self):
         ctx = league(week=9)
@@ -238,6 +247,126 @@ class DeduplicationTests(unittest.TestCase):
         saved, failed = _publish(conn=MagicMock(), cur=cur, ctx=ctx, assignments=[a], writer=writer,
                                  followers={"agent_1": 1000}, cfg=CFG, slot="Agent Wire", tagger=None, log=lambda *args: None)
         writer.write.assert_not_called()
+
+
+class RelationshipAndPickStorageTests(unittest.TestCase):
+    """A post's structured JSON grows takes, stores picks and season calls, and reaches the prompt (U4)."""
+
+    @staticmethod
+    def pick_assignment():
+        """The planner's real card shape (social_desk._pick_card): labels as strings, ids as away_id/home_id."""
+        return {
+            "kind": "PICKS", "week": 9,
+            "subject": {"type": "slate", "id": None, "label": "Week 9 picks"},
+            "subjects": [{"type": "team", "id": 1}, {"type": "team", "id": 2},
+                         {"type": "player", "id": 9, "name": "Jalen Hurts"}],
+            "focus": ["Team1 @ Team2"],
+            "facts": {"week": 9, "games": ["Team1 @ Team2"]},
+            "pick_games": [{"game_id": 77, "game": "T1 @ T2", "away": "Team1", "home": "Team2",
+                            "away_id": 1, "home_id": 2, "kickoff": "Sun 1:00 PM"}],
+        }
+
+    def fake_json(self):
+        return json.dumps({
+            "text": "T2 all day. 24-17.",
+            "about": [{"type": "team", "name": "T2", "lean": 1},
+                      {"type": "player", "name": "Jalen Hurts", "lean": 1}],
+            "picks": [{"game": "T1 @ T2", "winner": "T2", "score": "24-17", "confidence": "lock"}],
+            "calls": [{"call_type": "MVP", "subject": "Jalen Hurts", "detail": "wire to wire"}],
+        })
+
+    def test_picks_calls_and_about_are_stored_from_the_writers_json(self):
+        parsed = parse_post_json(self.fake_json(), social.normalized_assignment(self.pick_assignment()))
+        self.assertTrue(parsed["structured"])
+        self.assertEqual(len(parsed["picks"]), 1, parsed)
+        self.assertEqual(len(parsed["calls"]), 1, parsed)
+        self.assertEqual(len(parsed["about"]), 2, parsed)
+        cur = MagicMock()
+        with mock.patch("newsroom.relationships.person_key", return_value="pk"), \
+                mock.patch("newsroom.relationships.apply_take", return_value=2) as take:
+            social._record_post_relationships(cur, {"season": 2035, "week": 9},
+                                              {"agent_id": "writer", "kind": "PICKS"}, parsed, 555)
+        take.assert_called_once()
+        self.assertEqual(take.call_args.args, (cur, "pk", 2035, 9, parsed["about"]))
+        params = {call.args[0]: call.args[1] for call in cur.execute.call_args_list}
+        pred = next(p for sql, p in params.items() if "INSERT INTO agent_predictions" in sql)
+        self.assertEqual(pred, ("writer", 2035, 9, 555, 77, "lock", 1, 17, 2, 24, "SCORE", 2))
+        season = next(p for sql, p in params.items() if "INSERT INTO agent_season_calls" in sql)
+        self.assertEqual(season, ("writer", "pk", 2035, 9, 555, "MVP", "player", 9, "wire to wire"))
+
+    def test_normalized_assignment_leaves_the_planner_card_untouched(self):
+        a = self.pick_assignment()
+        norm = social.normalized_assignment(a)
+        self.assertEqual(a["pick_games"][0]["away"], "Team1")
+        card = norm["pick_games"][0]
+        self.assertEqual((card["away"]["id"], card["away"]["abbr"]), (1, "T1"))
+        self.assertEqual((card["home"]["id"], card["home"]["abbr"]), (2, "T2"))
+        self.assertEqual((card["away_team_id"], card["home_team_id"]), (1, 2))
+        self.assertEqual(card["game"], "T1 @ T2")               # the prompt sees the same card
+
+    def test_save_post_records_the_relationships_after_it_posts(self):
+        cur = MagicMock()
+        cur.fetchall.return_value = []
+        cur.fetchone.side_effect = [None, (555,)]              # no existing assignment, then the insert's id
+        ctx = {"season": 2035, "week": 9, "recap_games": [], "preview_games": []}
+        a = {"agent_id": "writer", "kind": "BEAT", "archetype": "LOCAL_BEAT_REPORTER", "handle": "@writer",
+             "subject": {"type": "team", "id": 1, "label": "Team1", "team_id": 1}, "team_id": 1}
+        post = {"text": "ok", "about": [], "picks": [], "season_calls": []}
+        eng = {"likes": 1, "reposts": 0, "reply_count": 0, "views": 1}
+        with mock.patch("newsroom.social_publish._record_post_relationships") as rec:
+            pid = save_post(cur, ctx, a, post, dt.datetime(2035, 9, 1), eng, "Agent Wire")
+        self.assertEqual(pid, 555)
+        rec.assert_called_once_with(cur, ctx, a, post, 555)
+
+    def test_recent_post_shapes_come_back_most_recent_last(self):
+        cur = MagicMock()
+        cur.fetchall.return_value = [("what a catch?",), ("ok",)]
+        self.assertEqual(social.recent_post_shapes(cur, "fan"), ["one_liner", "question"])
+
+    def test_write_gives_the_parser_the_normalized_assignment(self):
+        class Cur:
+            def execute(self, *a, **k):
+                pass
+            def fetchone(self):
+                return None
+            def fetchall(self):
+                return []
+        ctx = {"season": 2035, "week": 9, "teams": {1: {"name": "Team1"}, 2: {"name": "Team2"}}}
+        acct = {"agent_id": "fan", "archetype": "PUNDIT_PANEL", "team_id": None, "handle": "@fan",
+                "display_name": "Fan", "persistent_memory": ""}
+        a = dict(self.pick_assignment(), agent_id="fan", handle="@fan", team_id=None, archetype="PUNDIT_PANEL")
+        writer = social._Writer(Cur(), ctx, {"fan": acct}, CFG, None, "gemini-3.8-flash", 1, lambda *args: None)
+        with mock.patch.object(social, "write_post", return_value={"text": "ok", "problems": []}) as wp:
+            writer.write([a])
+        passed = wp.call_args.kwargs["assignment"]
+        self.assertEqual((passed["pick_games"][0]["away_team_id"], passed["pick_games"][0]["home_team_id"]), (1, 2))
+
+    def test_prompt_passes_the_relationship_block_and_shape(self):
+        class Cur:
+            def execute(self, *a, **k):
+                pass
+            def fetchone(self):
+                return None
+            def fetchall(self):
+                return []
+        ctx = {"season": 2035, "week": 9, "teams": {1: {"name": "Team1"}, 2: {"name": "Team2"}}}
+        acct = {"agent_id": "fan", "archetype": "DIE_HARD_FAN", "team_id": 1, "handle": "@fan",
+                "display_name": "Fan", "persistent_memory": ""}
+        a = {"agent_id": "fan", "kind": "REACTION", "subject": {"type": "game", "id": 3},
+             "subjects": [{"type": "team", "id": 2}], "facts": {"week": 9}, "team_id": 1, "handle": "@fan"}
+        writer = social._Writer(Cur(), ctx, {"fan": acct}, CFG, None, "gemini-3.8-flash", 1, lambda *args: None)
+        captured = {}
+
+        def fake_prompt(*args, **kwargs):
+            captured["args"], captured["kwargs"] = args, kwargs
+            return "system", "prompt"
+
+        with mock.patch.object(social, "build_post_prompt", fake_prompt), \
+                mock.patch("newsroom.relationships.relationship_block",
+                           return_value="You can't stand the Team2."):
+            writer.prompt(a)
+        self.assertEqual(captured["kwargs"]["relationship_block"], "You can't stand the Team2.")
+        self.assertIn(captured["kwargs"]["shape"], SW.POST_SHAPES)
 
 
 class FantasySuppressionTests(unittest.TestCase):

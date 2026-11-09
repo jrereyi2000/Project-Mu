@@ -23,7 +23,8 @@ from concurrent.futures import ThreadPoolExecutor
 
 from newsroom.social_desk import (REGULAR_SEASON_FINAL_WEEK, Week, format_plan, load_week_context, plan_replies,
                                   plan_social_week, plan_team_wakeup)
-from newsroom.social_writer import MONEY_PROBLEM, RUMOR_PROBLEM, allowed_money, build_post_prompt, kind_key, money_values, write_post
+from newsroom.social_writer import (MONEY_PROBLEM, RUMOR_PROBLEM, allowed_money, build_post_prompt, kind_key,
+                                    money_values, pick_shape, write_post)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WEEKLY_SLOT = "Agent Wire"
@@ -379,6 +380,46 @@ def find_existing_tweet_for_assignment(cur, ctx: dict, a: dict, slot: str, paren
     return None
 
 
+def _record_post_relationships(cur, ctx, a, post, post_id) -> None:
+    """Stores what a saved post did beyond the timeline (AGENT_WIRE_VOICE_PLAN §2.5): the structured `about`
+    grows the writer's takes (relationships.apply_take), `picks` go to agent_predictions (WINNER or SCORE,
+    article_id = the post) and `calls` to agent_season_calls. Never blocks the post; callers guard."""
+    from newsroom import relationships
+    agent_id = a.get("agent_id")
+    if not agent_id:
+        return
+    person = relationships.person_key(cur, agent_id)
+    about = post.get("about") or []
+    if about:
+        relationships.apply_take(cur, person, ctx["season"], ctx["week"], about)
+    for pick in post.get("picks") or []:
+        game_id, winner = pick.get("game_id"), pick.get("winner_team_id")
+        away, home = pick.get("away_team_id"), pick.get("home_team_id")
+        if not game_id or not winner or away is None or home is None:
+            continue
+        score_pick = pick.get("pick_type") == "SCORE" and pick.get("winner_score") is not None
+        score_a, score_b = (pick["winner_score"], pick["loser_score"]) if score_pick else (None, None)
+        if score_pick and winner == home:                       # team_a is the away side
+            score_a, score_b = score_b, score_a
+        cur.execute("""INSERT INTO agent_predictions (agent_id, season, week, article_id, game_id, label, team_a_id,
+                                                      score_a, team_b_id, score_b, pick_type, winner_team_id)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                       ON CONFLICT (article_id, game_id, label) DO NOTHING;""",
+                    (agent_id, ctx["season"], ctx["week"], post_id, game_id, pick.get("confidence") or "lean",
+                     away, score_a, home, score_b, "SCORE" if score_pick else "WINNER", winner))
+    calls = post.get("season_calls")
+    if not isinstance(calls, list):                            # write_post's "calls" is its LLM call count
+        calls = post.get("calls") if isinstance(post.get("calls"), list) else []
+    for call in calls:
+        if not call.get("call_type") or not call.get("subject_id"):
+            continue
+        cur.execute("""INSERT INTO agent_season_calls (agent_id, person_key, season, made_week, article_id, call_type,
+                                                       subject_type, subject_id, detail)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s);""",
+                    (agent_id, person, ctx["season"], ctx["week"], post_id, call["call_type"],
+                     call.get("subject_type"), call.get("subject_id"), call.get("detail") or None))
+
+
 def save_post(cur, ctx, a, post, posted_at, eng, slot, tagger=None, parent_id=None) -> int | None:
     """Insert one post into news_feed, tag its teams and players, and record it as the author's take.
     Returns post_id, or None if duplicate content or assignment already exists in news_feed."""
@@ -428,6 +469,10 @@ def save_post(cur, ctx, a, post, posted_at, eng, slot, tagger=None, parent_id=No
             agent_memory.store_tweet_take(cur, a["agent_id"], ctx["season"], ctx["week"], post_id, post["text"], a.get("team_id"))
         except Exception as e:  # memory never blocks a post
             print(f"⚠️  MEMORY NOT RECORDED for post #{post_id}: {e}")
+    try:
+        _record_post_relationships(cur, ctx, a, post, post_id)   # takes, picks and calls never block a post
+    except Exception as e:
+        print(f"⚠️  RELATIONSHIPS/PICKS NOT RECORDED for post #{post_id}: {e}")
     return post_id
 
 
@@ -443,6 +488,59 @@ def publishable(post: dict, fantasy_active: bool = True) -> bool:
 
 
 # --------------------------------------------------------------------------------------------------- run ---
+def infer_post_shape(text: str) -> str:
+    """Best-guess POST_SHAPES label for a stored post (news_feed keeps no shape column). Used only to keep
+    pick_shape from repeating an account's recent shapes."""
+    t = (text or "").strip()
+    if not t:
+        return "plain_statement"
+    lines = [line for line in t.splitlines() if line.strip()]
+    low = t.lower()
+    if t.rstrip().endswith("?"):
+        return "question"
+    if len(lines) >= 3 and all(len(line.split()) <= 8 for line in lines[:3]):
+        return "list_of_three"
+    if len(lines) >= 2 and len(t.split()) <= 40:
+        return "fragmented_live"
+    if re.search(r"\b(will|gonna|going to|call it|next week|this week|by week)\b", low):
+        return "prediction"
+    if re.search(r"\b(but|than|however|whereas|compared)\b", low):
+        return "contrast"
+    if len(t.split()) <= 8:
+        return "one_liner"
+    return "plain_statement"
+
+
+def recent_post_shapes(cur, agent_id: str, limit: int = 15) -> list:
+    """The account's recent post shapes (most recent last), inferred from the last `limit` posts in news_feed."""
+    cur.execute("""SELECT content FROM news_feed WHERE agent_id = %s AND content_type = 'TWEET'
+                   ORDER BY season DESC, week DESC, id DESC LIMIT %s;""", (agent_id, limit))
+    return [infer_post_shape(text) for text in reversed([r[0] for r in cur.fetchall() if r[0]])]
+
+
+def normalized_assignment(a: dict) -> dict:
+    """A copy of an assignment whose pick_games resolve in social_writer.parse_post_json. The planner's pick cards
+    name the sides only as labels ('AZ @ ATL', away_id/home_id); parse_post_json reads team ids and aliases from
+    away/home dicts and away_team_id/home_team_id, so both are added (the prompt still sees the same card)."""
+    games = []
+    for card in a.get("pick_games") or []:
+        c = dict(card)
+        abbrs = [p.strip() for p in str(c.get("game") or "").split(" @ ")] if " @ " in str(c.get("game") or "") \
+            else [None, None]
+        for side, abbr in (("away", abbrs[0]), ("home", abbrs[1])):
+            label, tid = c.get(side), c.get(f"{side}_id")
+            if isinstance(label, str) and tid is not None:
+                c[side] = {"id": tid, "name": label, "abbr": abbr}
+            elif isinstance(label, dict) and tid is None:
+                tid = label.get("id")
+            if tid is not None:
+                c.setdefault(f"{side}_team_id", tid)
+        games.append(c)
+    out = dict(a)
+    out["pick_games"] = games
+    return out
+
+
 class _Writer:
     """Builds prompts (needs the DB for memory blocks) and writes posts in parallel."""
 
@@ -450,6 +548,7 @@ class _Writer:
         self.cur, self.ctx, self.cfg, self.client, self.log = cur, ctx, cfg, client, log
         self.accounts = accounts_full
         self.model, self.max_workers = model, max_workers
+        self._person_keys = {}
         from newsroom.personas import load_personas
         self.personas = load_personas()
         self.usage = collections.Counter()
@@ -475,7 +574,14 @@ class _Writer:
             self.cur, self.personas.get(acct["archetype"], ""), agent_id=a["agent_id"], season=self.ctx["season"],
             week=self.ctx["week"], fmt="POST", post_kind=kind_key(a), position=(a.get("facts") or {}).get("position"),
             team_id=a.get("team_id"), subject_key=str(a.get("subject", {}).get("id") or ""))
-        return build_post_prompt(a, acct, persona, team, memory, a.get("parent"))
+        from newsroom import relationships
+        person = self._person_keys.get(a["agent_id"])
+        if person is None:                                        # one person-key lookup per account
+            person = self._person_keys[a["agent_id"]] = relationships.person_key(self.cur, a["agent_id"])
+        bias = relationships.relationship_block(self.cur, person, a.get("subjects") or [])
+        shape = pick_shape(acct, a["kind"], recent_post_shapes(self.cur, a["agent_id"]),
+                           seed=f"{self.ctx['season']}:{self.ctx['week']}:{a.get('subject', {}).get('id')}")
+        return build_post_prompt(a, acct, persona, team, memory, a.get("parent"), relationship_block=bias, shape=shape)
 
     def write(self, assignments):
         prompts = [self.prompt(a) for a in assignments]
@@ -490,7 +596,7 @@ class _Writer:
                     return write_post(self.client, model, system, prompt, fantasy_active=fantasy_active,
                                       allowed=allowed_money(a.get("facts"))
                                       | money_values((a.get("parent") or {}).get("text", "")),
-                                      rumor=a["kind"] == "TRADE_RUMOR")
+                                      rumor=a["kind"] == "TRADE_RUMOR", assignment=normalized_assignment(a))
             except Exception as e:
                 return {"error": f"{type(e).__name__}: {e}", "text": "", "problems": ["call failed"]}
 
