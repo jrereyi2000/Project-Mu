@@ -1,6 +1,6 @@
 # Project Mu: GM Talk Voice & Negotiation Dialogue Plan
 
-**Status:** approved by JR (2026-11-09); building, wave 1 of 2 done.
+**Status:** built and on main (2026-11-09); JR's blind voice read pending.
 
 **As built — wave 1 (2026-11-09):** U1 added `gm_profiles.voice_card` / `voice_card_source` (`2027_02_13`), the
 32 authored cards, `engines/gm_voices.py`, and card generation at seed, hot-seat hire and the Godfather coach-GM
@@ -11,6 +11,15 @@ card columns in a separate query; `last3` is newest-first. U3 implemented the ve
 the previous two lines, because `check_style` has no package object (the plan's wording implied one). A pre-existing
 `db/migrate.checksum` line-ending mismatch on `2027_01_16_personality_core` was surfaced and deliberately left
 alone (the ledger row stays `c31c1c…`, matching this machine's working tree); it needs its own follow-up.
+
+**As built — wave 2 (2026-11-09):** U4 made CPU talks writer-only (`llm_choose`, `opening_line` and the key-in-JSON
+prompt deleted; `choice_source` is always `POLICY`, the turn's `source` is the writer's LLM/TEMPLATE; the model
+never sees the options). U5 moved the inbox reply onto the same writer; `message_prompt` stays for
+`tools/llm_compare.py` and `tests/test_personas_db.py` but is off the reply path, `league` keeps its argument but
+the writer has no league-name check, and JR's `note` rides in the writer's `history` as `JR: <note>`. The
+`--no-llm` talk path still builds the v2 sheet (three read-only `recent_form` reads per turn); harmless, noted for
+the P3 pacing work.
+
 **Builds on:** `PROJECT_SPEC.md` §2.17 (Negotiation, Talks), §2.21b (Front-Office Inbox), §3.3f (GM agents); [`TRADE_NEGOTIATIONS_PLAN.md`](../done/TRADE_NEGOTIATIONS_PLAN.md) (V2.11); [`UNILATERAL_TRADE_ENGINE_PLAN.md`](../done/UNILATERAL_TRADE_ENGINE_PLAN.md) (U1–U2); [`FRONT_OFFICE_INBOX_PLAN.md`](../done/FRONT_OFFICE_INBOX_PLAN.md); [`CLOSE_OUT_CHECKLIST.md`](../CLOSE_OUT_CHECKLIST.md) (P1-25, P5-07, P8-03, P8-10).
 
 **Goal:** Make CPU-to-CPU trade talks and JR's inbox GM negotiations read like two people who watch tape. Today the engine picks good moves but the words are corporate-analyst filler ("efficiency", "asset value", "framework") because the writer is given no performance facts and each GM's "voice" is a trait template in the same register. This plan gives the writer concrete facts, a per-GM speech card, a writer-only turn (the policy picks the move), and a style contract with a filler/repetition check.
@@ -427,3 +436,5 @@ Traits are from `gm_profiles` (open tenure, 2026), read 2026-11-09. The current 
 | U1 | 1 | worktree-agent-abb217dcf07714c1d | .claude/worktrees/agent-abb217dcf07714c1d | merged | 0994421 |
 | U2 | 1 | worktree-agent-a2ba86f0829b7b5e2 | .claude/worktrees/agent-a2ba86f0829b7b5e2 | merged | b758c5b |
 | U3 | 1 | worktree-agent-a5038c0efc02e1496 | .claude/worktrees/agent-a5038c0efc02e1496 | merged | 4485741 |
+| U4 | 2 | worktree-agent-a6d640cabdc8747fe | .claude/worktrees/agent-a6d640cabdc8747fe | merged | d93b819 |
+| U5 | 2 | worktree-agent-a606cf569d390dbfd | .claude/worktrees/agent-a606cf569d390dbfd | merged | 69bd764 |
