@@ -349,3 +349,5 @@ Shared files: `PROJECT_SPEC.md`, this plan, `CLAUDE.md`.
 | U1 | 1 | worktree-agent-af05b4ae41b8faa33 | .claude/worktrees/agent-af05b4ae41b8faa33 | merged | 964a3d3 |
 | U2 | 2 | worktree-agent-a0def0437b0e08fee | .claude/worktrees/agent-a0def0437b0e08fee | merged | ae190b6 |
 | U3 | 2 | worktree-agent-a8e1b42fb99541f59 | .claude/worktrees/agent-a8e1b42fb99541f59 | merged | 1038a46 |
+
+- As built (P1-20/P1-21/P1-23, 2026-11-09): `engines/report_card_run.annual` is the annual producer (last season's card or the baseline → completed renovations → degradation → OpEx → `team_report_cards` + `owner_cash_ledgers`, with staff payroll deducted), run by the league office at FREE_AGENCY wave 1 and followed by `newsroom/report_card_article`; `engines/owner_policy.facility_style`/`facility_upgrade_orders` is the CPU owner auto-upgrade AI (aggressive/balanced/frugal), applied to CPU teams only.

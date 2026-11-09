@@ -307,3 +307,5 @@ Shared files: `PROJECT_SPEC.md`, this plan, `CLAUDE.md`.
 | U1 | 1 | worktree-agent-a1572c54687db3f01 | agent-a1572c54687db3f01 | merged | dd6b606 |
 | U2 | 2 | worktree-agent-a5f27eab5e9ebeecc | agent-a5f27eab5e9ebeecc | merged | b106412 |
 | U3 | 2 | worktree-agent-a1df09261bb0da42f | agent-a1df09261bb0da42f | merged | 709a690 |
+
+- As built (P1-22/P1-27, 2026-11-09): `engines/staff_contracts_run.annual` files each current HC/OC/DC at the engine's market salary, rolls `remaining_years` deterministically (`total_years - (season - signed_season)`) and moves a fired staffer's remaining guaranteed salary into `buyout_owed`; the league office runs it at FREE_AGENCY wave 1 and the report-card producer writes the resulting payroll into `owner_cash_ledgers.staff_payroll`. The Godfather gates' part 1: carousel candidates carry `drive`/`ego` from the person lifecycle or legacy coach personas, and the GM hot seat runs before the carousel so a same-cycle HC+GM sweep is a dual vacancy.

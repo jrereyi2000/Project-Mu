@@ -482,3 +482,5 @@ No path appears twice.
 | U4 | 2 | worktree-agent-a24897859fa645656 | .claude/worktrees/agent-a24897859fa645656 | merged | a8e758f |
 | U5 | 2 | worktree-agent-ae5f720f3b489b173 | .claude/worktrees/agent-ae5f720f3b489b173 | merged | d3d5652 |
 | U6 | 2 | worktree-agent-a756f50cd247bdf4f | .claude/worktrees/agent-a756f50cd247bdf4f | merged | c25158d |
+
+- As built (P1-11, 2026-11-09): the phase-6 scout hooks are wired. `scouting_engine.run(..., personality=)` creates each team's director through the reviewed `staff:scout` lifecycle context when `scout_directors` is active, leans the team board (`scouting_boards.board(extra_bias=)`) and adds each team's private report row (`scout_reports.team_id/scout_id/voice`, grade = consensus + the bounded bias; migration `2027_02_11_scout_report_team_rows.sql`). The department row and the consensus never move.

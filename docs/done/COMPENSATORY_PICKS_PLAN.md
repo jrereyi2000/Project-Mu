@@ -263,3 +263,5 @@ Shared files: `PROJECT_SPEC.md`, this plan, `CLAUDE.md`.
 | U1 | 1 | worktree-agent-aefa2bc86d7f1964e | .claude/worktrees/agent-aefa2bc86d7f1964e | merged | 757dff1 |
 | U2 | 2 | worktree-agent-a7e07300bad31a384 | .claude/worktrees/agent-a7e07300bad31a384 | merged (retried after an API 402 cut the first run short; also fixed the existing 224-pick expectations in `tests/test_contracts_engine.py` and `tests/test_transactions_engine.py`) | 7c1eb65 |
 | U3 | 3 | worktree-agent-aa7037e017bc6fb81 | .claude/worktrees/agent-aa7037e017bc6fb81 | merged | cab476d |
+
+- As built (P1-18/P1-19, 2026-11-09): wired. The league office's `annual_offseason_steps` runs `compensatory_picks_run.award_and_persist(cur, season, season+1)` at FREE_AGENCY wave 1 (before DRAFT, so the lock order sees the comp rows) and then publishes `newsroom/compensatory_picks_article` for the class. Both are optional and warning-only.
