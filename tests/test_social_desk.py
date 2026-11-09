@@ -8,7 +8,7 @@ import re
 import unittest
 from unittest import mock
 
-from newsroom.social_desk import ROLE_CAPS, TARGET_POSTS, Accounts, Week, plan_social_week, plan_team_wakeup, tidy_name
+from newsroom.social_desk import ROLE_CAPS, Accounts, Week, plan_social_week, plan_team_wakeup, tidy_name
 
 PUNDITS = ("STEPHEN_A", "MCAFEE", "SHANNON", "OCHOCINCO", "JJ_WATT", "RG3", "COWHERD", "WINGO", "EISEN", "CLARK", "SKIP_TWEET")
 
@@ -86,9 +86,10 @@ def by_kind(plan):
 
 
 class SocialDeskTests(unittest.TestCase):
-    def test_regular_week_is_100_posts_with_one_reaction_per_team(self):
+    def test_regular_week_follows_the_mix_with_one_reaction_per_team(self):
         plan = plan_social_week(league(week=9))
-        self.assertEqual(sum(plan["counts"].values()), TARGET_POSTS)
+        self.assertEqual(sum(plan["counts"].values()), sum(plan["mix"].values()))
+        self.assertTrue(80 <= sum(plan["counts"].values()) <= 130)
         reacting_teams = {a["team_id"] for a in by_kind(plan)["REACTION"] if a["archetype"] == "DIE_HARD_FAN"}
         self.assertEqual(reacting_teams, set(range(1, 33)))
 
@@ -100,12 +101,13 @@ class SocialDeskTests(unittest.TestCase):
     def test_player_first_mix(self):
         plan = plan_social_week(league(week=9))
         kinds = by_kind(plan)
-        self.assertGreaterEqual(len(kinds["PERFORMANCE"]), 14)
+        self.assertGreaterEqual(len(kinds["PERFORMANCE"]), plan["mix"]["PERFORMANCE"])
         self.assertNotIn("DIE_HARD_FAN", {a["archetype"] for a in kinds["PERFORMANCE"]})
         self.assertIn("BANDWAGON_FAN", {a["archetype"] for a in kinds["PERFORMANCE"]})
         self.assertIn("FORMER_PLAYER", {a["archetype"] for a in kinds["PERFORMANCE"]})
-        self.assertEqual(len(kinds["COMPARISON"]), 10)
-        self.assertTrue(10 <= len(kinds["REPLY"]) <= 15)
+        self.assertEqual(len(kinds["COMPARISON"]), plan["mix"]["COMPARISON"])
+        self.assertEqual(len(kinds["REPLY"]), plan["mix"]["REPLY"])
+        self.assertTrue(10 <= len(kinds["REPLY"]) <= 20)
 
     def test_bad_games_clown_the_flop(self):
         plan = plan_social_week(league(week=9))
@@ -116,15 +118,17 @@ class SocialDeskTests(unittest.TestCase):
         self.assertGreater(bad[0]["facts"]["season_average_before_this_game_ppr"], bad[0]["facts"]["fantasy_points_ppr"])
 
     def test_comparisons(self):
-        comps = by_kind(plan_social_week(league(week=9)))["COMPARISON"]
+        plan = plan_social_week(league(week=9))
+        comps = by_kind(plan)["COMPARISON"]
+        n = plan["mix"]["COMPARISON"]
         fans = [a for a in comps if a["archetype"] == "DIE_HARD_FAN"]
-        self.assertEqual(len(fans), 5)
+        self.assertEqual(len(fans), n // 2)
         for a in fans:
             self.assertEqual(a["facts"]["your_player"]["player"].split("(")[1].split(",")[0],
                              a["facts"]["their_player"]["player"].split("(")[1].split(",")[0])   # same position
             self.assertIn(f"City{a['team_id']} Team{a['team_id']}", a["facts"]["your_player"]["player"])
         legends = [a for a in comps if a["archetype"] == "FORMER_PLAYER"]
-        self.assertEqual(len(legends), 3)
+        self.assertEqual(len(legends), (n * 3) // 10)
         for a in legends:
             self.assertTrue(a["slant_team"].startswith("City"))
             self.assertIn("top_five_this_season", a["facts"])
@@ -141,15 +145,16 @@ class SocialDeskTests(unittest.TestCase):
         self.assertEqual(len(shares), 3)                       # the roundtable panel never posts
         skip = next(s for s in shares if s["subject"]["id"] == 2)
         self.assertEqual(skip["archetype"], "SKIP_TWEET")       # Skip's column is shared from @RealSkipBayless
-        self.assertEqual(sum(plan["counts"].values()), TARGET_POSTS)
+        self.assertEqual(sum(plan["counts"].values()), sum(plan["mix"].values()))
 
     def test_previews_never_show_this_weeks_scores(self):
         ctx = league(week=9)
         for g in ctx["preview_games"]:                          # replanning an old week: games already played
-            g.update(status="COMPLETED", home_score=99, away_score=98)
+            g.update(status="COMPLETED", home_score=997, away_score=998)
         plan = plan_social_week(ctx)
         text = json.dumps(plan)
-        self.assertNotIn("99", text)
+        self.assertNotIn("997", text)
+        self.assertNotIn("998", text)
         self.assertFalse([a for a in by_kind(plan)["PREVIEW"] if re.search(r" \d+ @ \S+ \d+$", a["subject"]["label"])])
 
     def test_weekly_caps_hold(self):
@@ -192,16 +197,16 @@ class SocialDeskTests(unittest.TestCase):
         kinds = by_kind(plan)
         self.assertFalse(kinds["REACTION"])
         self.assertFalse(kinds["PERFORMANCE"])
-        self.assertEqual(sum(plan["counts"].values()), TARGET_POSTS)
+        self.assertEqual(sum(plan["counts"].values()), sum(plan["mix"].values()))
         self.assertEqual({a["team_id"] for a in kinds["PREVIEW"] if a["archetype"] == "DIE_HARD_FAN"}, set(range(1, 33)))
 
-    def test_postseason_keeps_100_and_eliminated_fans_post_about_players(self):
+    def test_postseason_follows_the_mix_and_eliminated_fans_post_about_players(self):
         # Week 20 (Divisional) after a Wild Card round: 4 teams scheduled this week, 6 played last week.
         wc = [(17, 1, "COMPLETED"), (18, 2, "COMPLETED"), (19, 3, "COMPLETED"), (20, 4, "COMPLETED"), (21, 5, "COMPLETED"), (22, 6, "COMPLETED")]
         div = [(1, 7, "SCHEDULED"), (2, 8, "SCHEDULED")]
         ctx = league(week=20, played_weeks=range(1, 19), playoff={19: wc, 20: div})
         plan = plan_social_week(ctx)
-        self.assertEqual(sum(plan["counts"].values()), TARGET_POSTS)
+        self.assertEqual(sum(plan["counts"].values()), sum(plan["mix"].values()))
         player_posts = by_kind(plan)["PLAYER"]
         self.assertTrue(player_posts)
         alive = {1, 2, 7, 8}
@@ -212,7 +217,7 @@ class SocialDeskTests(unittest.TestCase):
         conf = [(1, 2, "COMPLETED"), (17, 18, "COMPLETED")]       # home teams 2 and 18 win
         ctx = league(week=22, played_weeks=range(1, 19), playoff={21: conf, 22: []})
         plan = plan_social_week(ctx)
-        self.assertEqual(sum(plan["counts"].values()), TARGET_POSTS)
+        self.assertEqual(sum(plan["counts"].values()), sum(plan["mix"].values()))
         self.assertFalse([a for a in by_kind(plan)["PLAYER"] if a["team_id"] in (2, 18)])
 
 
@@ -244,7 +249,7 @@ class BuzzTests(unittest.TestCase):
         ranking = [a for a in by_kind(plan)["COMPARISON"] if a.get("buzz_tier")]
         self.assertEqual(len(ranking), 1)
         self.assertIn("best_WR_games_this_season", ranking[0]["facts"])
-        self.assertEqual(sum(plan["counts"].values()), TARGET_POSTS)
+        self.assertEqual(sum(plan["counts"].values()), sum(plan["mix"].values()))
 
     def test_ordinary_lines_and_common_milestones_are_not_news(self):
         ctx = league(week=9)
@@ -286,7 +291,7 @@ class BuzzTests(unittest.TestCase):
         self.assertEqual({a["team_id"] for a in on_three}, {3})          # filed under the team
         self.assertIn("nfl_history_through_2025", on_three[0]["facts"])
         self.assertTrue(all(a["archetype"] not in ("DIE_HARD_FAN", "LOCAL_BEAT_REPORTER") for a in story_posts))
-        self.assertEqual(sum(plan["counts"].values()), TARGET_POSTS)
+        self.assertEqual(sum(plan["counts"].values()), sum(plan["mix"].values()))
         wake = plan_team_wakeup(ctx, 3)
         self.assertEqual([a["kind"] for a in wake["assignments"] if a["kind"] == "TEAM_STORY"], ["TEAM_STORY"])
 
@@ -318,8 +323,16 @@ def def_line(ctx, game_id, team, pid, name, position, **stats):
 
 
 class DefensePerformanceTests(unittest.TestCase):
-    def captured(self):
+    @staticmethod
+    def quiet():
+        """A week with no buzz games, so the performance posts have ordinary slots."""
         ctx = league(week=9)
+        for l in ctx["player_lines"]:
+            l["fantasy_points"] = min(l["fantasy_points"], 30.0)
+        return ctx
+
+    def captured(self):
+        ctx = self.quiet()
         g = next(g for g in ctx["recap_games"] if g["home_team_id"] == 3)
         def_line(ctx, g["id"], 3, 9001, "Edge Rusher", "LE", def_tackles=5, def_sacks=3, def_tfl=3, def_forced_fumbles=1)
         def_line(ctx, g["id"], 19, 9002, "Ball Hawk", "CB", def_tackles=4, def_ints=1, def_tds=1)
@@ -331,15 +344,15 @@ class DefensePerformanceTests(unittest.TestCase):
 
     def test_big_defensive_and_kicking_games_join_the_performances(self):
         ctx, g = self.captured()
-        base = len(by_kind(plan_social_week(league(week=9)))["PERFORMANCE"])
+        base = len(by_kind(plan_social_week(self.quiet()))["PERFORMANCE"])
         plan = plan_social_week(ctx)
         perf = by_kind(plan)["PERFORMANCE"]
         self.assertEqual(len(perf), base)                                   # same count, mixed in
-        self.assertEqual(sum(plan["counts"].values()), TARGET_POSTS)
+        self.assertEqual(sum(plan["counts"].values()), sum(plan["mix"].values()))
         ordinary = [a["subject"]["id"] for a in perf if not a.get("buzz_tier")]
-        self.assertEqual(len(ordinary), 7)                                  # the rest are buzz posts
-        self.assertEqual([i for i in ordinary if i >= 9000], [9003, 9001])  # biggest first, ordinary lines left out
-        self.assertEqual([ordinary.index(i) for i in (9003, 9001)], [1, 4])  # 2nd and 5th ordinary post
+        self.assertGreaterEqual(len(ordinary), 8)                           # a quiet week: all ordinary slots
+        self.assertEqual([i for i in ordinary if i >= 9000], [9003, 9001, 9002])  # biggest first, ordinary lines left out
+        self.assertEqual([ordinary.index(i) for i in (9003, 9001, 9002)], [1, 4, 7])  # 2nd, 5th and 8th ordinary post
         self.assertNotIn("DIE_HARD_FAN", {a["archetype"] for a in perf})
         self.assertEqual(Week(ctx).defense_performances()[2]["player_id"], 9002)   # next in line on a lighter week
         rusher = next(a for a in perf if a["subject"]["id"] == 9001)
@@ -451,13 +464,13 @@ class AgentWireMoveTests(unittest.TestCase):
         self.assertEqual({a["archetype"] for a in news}, {"SCHEFTER_TWEET", "RAPOPORT"})
         self.assertEqual([a["subject"]["id"] for a in news], [9001, 9002, 9003])   # most notable first
         self.assertIn("$3.93M", news[0]["facts"]["move"])
-        self.assertEqual(sum(plan["counts"].values()), TARGET_POSTS)
+        self.assertEqual(sum(plan["counts"].values()), sum(plan["mix"].values()))
 
     def test_no_moves_no_move_posts(self):
         plan = plan_social_week(moves_league([]))
         for kind in ("MOVE_NEWS", "BEAT_MOVE", "MOVE_REACTION", "CAP_TAKE"):
             self.assertFalse(by_kind(plan)[kind], kind)
-        self.assertEqual(sum(plan["counts"].values()), TARGET_POSTS)
+        self.assertEqual(sum(plan["counts"].values()), sum(plan["mix"].values()))
 
     def test_beat_move_replaces_the_note_but_not_a_starter_injury(self):
         injury = {"team_id": 32, "player_name": "Hurt Guy", "position": "QB", "injury_type": "Knee", "duration": "4 weeks",
@@ -500,6 +513,410 @@ class AgentWireMoveTests(unittest.TestCase):
         self.assertNotIn("BEAT_MOVE", [a["kind"] for a in plan["assignments"]])
 
 
+# ------------------------------------------------------------------------- AGENT_WIRE_VOICE_PLAN U3 (planner) ---
+
+import newsroom.social_desk as desk  # noqa: E402
+from newsroom.social_desk import (MIX_KINDS, SEASON_CALL_WEEKS, TRADE_DEADLINE_WEEK, load_desk_config,  # noqa: E402
+                                  load_league_topics, plan_draft_position, plan_live_moments, plan_picks,
+                                  plan_quarter_updates, plan_replies, plan_season_calls, plan_trade_ideas, week_mix,
+                                  week_signals)
+
+
+def script_for(ctx, g):
+    """A small game script in the engine's shape (§2.14) for a recap game."""
+    a, h = ctx["teams"][g["away_team_id"]]["abbr"], ctx["teams"][g["home_team_id"]]["abbr"]
+    hs, as_ = g["home_score"], g["away_score"]
+    return {
+        "quarter_scores": {a: [0, 7, 0, as_ - 7], h: [7, 0, 3, hs - 10]},
+        "scoring": [
+            {"period": "Q1", "clock": "8:00", "team": h, "play": f"{h} 12-yard touchdown run", "points": 7,
+             "tags": ["opening score"], "score": f"{h} 7-0", "score_after": {a: 0, h: 7}},
+            {"period": "Q2", "clock": "1:10", "team": a, "play": f"{a} 40-yard touchdown catch", "points": 7,
+             "tags": ["tying"], "score": "7-7", "score_after": {a: 7, h: 7}},
+            {"period": "Q3", "clock": "5:00", "team": h, "play": f"{h} 31-yard field goal", "points": 3,
+             "tags": ["go-ahead", "lead for good"], "score": f"{h} 10-7", "score_after": {a: 7, h: 10}},
+        ],
+        "key_moments": [{"period": "Q4", "clock": "2:00", "team": a, "type": "takeaway",
+                         "text": f"{a} intercepted at midfield"}],
+        "adjustments": [], "storyline": f"{h} held on", "halftime": f"{a} 7, {h} 7",
+    }
+
+
+def with_scripts(ctx):
+    ctx["game_scripts"] = {g["id"]: script_for(ctx, g) for g in ctx["recap_games"]}
+    return ctx
+
+
+def add_national(ctx, *archs):
+    for arch in archs:
+        ctx["accounts"].append({"agent_id": arch.lower(), "archetype": arch, "team_id": None,
+                                "handle": f"@{arch.lower()}", "display_name": "x"})
+    return ctx
+
+
+class WeekMixTests(unittest.TestCase):
+    def test_total_stays_in_range_and_matches_the_formula(self):
+        cfg = load_desk_config()["mix_total"]
+        for w, kw in ((9, {}), (1, {"played_weeks": []}), (12, {}), (5, {})):
+            ctx = league(week=w, **kw)
+            mix = week_mix(ctx, "s")
+            self.assertTrue(80 <= sum(mix.values()) <= 130, (w, mix))
+            sig = week_signals(ctx)
+            expect = max(cfg["min"], min(cfg["max"], cfg["base"] + cfg["tier1"] * sig["tier1"] + cfg["tier2"] * sig["tier2"]
+                                         + cfg["trade"] * sig["trades"] + cfg["one_score"] * sig["one_score"]
+                                         + cfg["playoff"] * sig["playoff"]))
+            self.assertEqual(sum(mix.values()), expect, w)
+
+    def test_deterministic_per_seed_and_jittered_across_seeds(self):
+        ctx = league(week=12)
+        self.assertEqual(week_mix(ctx, "a"), week_mix(ctx, "a"))
+        self.assertTrue(any(week_mix(ctx, s) != week_mix(ctx, "a") for s in ("b", "c", "d", "e")))
+
+    def quiet(self, week=5):
+        """No buzz games, no storylines (too early for runs and streaks), no one-score games."""
+        ctx = league(week=week)
+        for l in ctx["player_lines"]:
+            l["fantasy_points"] = min(l["fantasy_points"], 30.0)
+        for g in ctx["recap_games"]:                       # no one-score games either
+            g["home_score"], g["away_score"] = 30, 10
+        return ctx
+
+    def test_buzz_and_trades_grow_the_week(self):
+        ctx = self.quiet()
+        base = sum(week_mix(ctx, "s").values())
+        self.assertEqual(base, 80)
+        self.assertEqual(week_signals(ctx)["tier1"] + week_signals(ctx)["tier2"], 0)
+        star = next(l for l in ctx["player_lines"] if l["week"] == 4 and l["team_id"] == 20 and l["position"] == "WR")
+        star.update(receptions=12, rec_yards=212, rec_tds=3, fantasy_points=57.2)     # one tier-2 game
+        buzz_mix = week_mix(ctx, "s")
+        self.assertGreater(sum(buzz_mix.values()), base)
+        self.assertGreaterEqual(buzz_mix["PERFORMANCE"], 4)                          # its posts are a floor
+        ctx = self.quiet()
+        ctx["trades"] = [{"id": i, "week": 9, "teams": [i, i + 1], "line": f"trade {i}", "money": [], "players": [],
+                          "gm_said": {}} for i in (1, 3)]
+        traded = week_mix(ctx, "s")
+        self.assertEqual(sum(traded.values()), base + 2 * load_desk_config()["mix_total"]["trade"])
+        self.assertEqual(traded["TRADE_NEWS"], 2)
+        self.assertEqual(traded["TRADE_REACTION"], 4)
+
+    def test_floors_and_ceilings_hold(self):
+        limits = load_desk_config()["mix_limits"]
+        for w in (5, 9, 12, 15):
+            ctx = with_scripts(league(week=w))
+            for seed in ("x", "y"):
+                mix = week_mix(ctx, seed)
+                for k in MIX_KINDS:
+                    if k in ("PERFORMANCE", "PREVIEW", "PLAYER"):    # spill kinds may pass their ceiling
+                        continue
+                    self.assertLessEqual(mix.get(k, 0), limits[k][1], (w, k, mix))
+                self.assertTrue(limits["PICKS"][0] <= mix["PICKS"] <= limits["PICKS"][1])
+                self.assertTrue(limits["REPLY"][0] <= mix["REPLY"] <= limits["REPLY"][1])
+                self.assertGreaterEqual(mix.get("LIVE_MOMENT", 0), limits["LIVE_MOMENT"][0])
+                self.assertEqual(mix["REACTION"], 32)                 # event-driven, inside the total
+
+    def test_kinds_only_when_they_apply(self):
+        mix = week_mix(league(week=1, played_weeks=[]), "s")
+        for k in ("PERFORMANCE", "REACTION", "LIVE_MOMENT", "DRAFT_POSITION", "STANDINGS"):
+            self.assertNotIn(k, mix)
+        self.assertIn("SEASON_CALL", mix)
+        self.assertNotIn("SEASON_CALL", week_mix(league(week=12), "s"))
+        self.assertNotIn("LIVE_MOMENT", week_mix(league(week=12), "s"))    # no scripts, no live posts
+
+    def test_new_kinds_have_kind_factors(self):
+        factors = load_desk_config()["kind_factor"]
+        for k in ("PICKS", "HOT_TAKE", "AWARD_RACE", "POWER_TAKE", "QUESTION", "SEASON_CALL", "LIVE_MOMENT",
+                  "QUARTER_UPDATE", "TRADE_IDEA", "DRAFT_POSITION"):
+            self.assertIn(k, factors)
+            self.assertIn(k, desk.WINDOWS)
+
+
+class OldBucketsGoneTests(unittest.TestCase):
+    def test_fixed_buckets_and_angle_lists_are_removed(self):
+        for name in ("BUCKET_SIZES", "TRIM_ORDER", "TARGET_POSTS", "FAN_ANGLES", "BANDWAGON_ANGLES", "BEAT_ANGLES",
+                     "PREVIEW_ANGLES", "REPLY_STANCES", "REPLY_RANGE"):
+            self.assertFalse(hasattr(desk, name), name)
+
+    def test_every_assignment_carries_the_new_fields(self):
+        ctx = with_scripts(league(week=9))
+        plan = plan_social_week(ctx)
+        for a in plan["assignments"]:
+            for k in ("focus", "pick_games", "subjects", "topic_id"):
+                self.assertIn(k, a)
+            for s in a["subjects"]:
+                self.assertEqual(set(s), {"type", "id"})
+        fans = [a for a in by_kind(plan)["REACTION"]]
+        self.assertTrue(all(a["angle"] is None for a in fans))          # angle is only an optional hint now
+        self.assertTrue(all(len(a["focus"]) == 1 for a in fans))
+        self.assertTrue(all("records_after_game" not in a["facts"] for a in fans))
+        self.assertTrue(all("result" in a["facts"] for a in fans))       # the score stays as background
+        g = ctx["recap_games"][0]
+        two = [a for a in fans if a["subject"]["id"] == g["id"]]
+        self.assertEqual(len(two), 2)
+        self.assertTrue(all(a["subjects"] for a in plan["assignments"] if a["subject"]["type"] == "game"))
+        wake = plan_team_wakeup(ctx, 1)
+        self.assertTrue(all("focus" in a for a in wake["assignments"]))
+        self.assertFalse([a for a in wake["assignments"] if a["kind"] == "BEAT" and a["angle"]])
+
+
+class PicksAndCallsTests(unittest.TestCase):
+    def test_plan_picks_assigns_valid_spread_cards(self):
+        ctx = league(week=9)
+        W = Week(ctx)
+        acc = Accounts(ctx["accounts"], seed="p")
+        picks = plan_picks(ctx, acc, 14, W)
+        self.assertEqual(len(picks), 14)
+        slate = {g["id"]: g for g in ctx["preview_games"]}
+        firsts = set()
+        for a in picks:
+            self.assertEqual(a["kind"], "PICKS")
+            self.assertTrue(1 <= len(a["pick_games"]) <= desk.PICK_GAMES_MAX)
+            for c in a["pick_games"]:
+                self.assertIn(c["game_id"], slate)
+                g = slate[c["game_id"]]
+                self.assertEqual((c["away_id"], c["home_id"]), (g["away_team_id"], g["home_team_id"]))
+                self.assertEqual(c["game"], f"T{g['away_team_id']:02d} @ T{g['home_team_id']:02d}")
+            self.assertEqual(len({c["game_id"] for c in a["pick_games"]}), len(a["pick_games"]))
+            self.assertNotIn("score", json.dumps(a["facts"]).lower().replace("a score if you like", ""))
+            if a["archetype"] == "DIE_HARD_FAN":
+                own = a["pick_games"][0]
+                self.assertIn(a["team_id"], (own["away_id"], own["home_id"]))   # die-hards pick their own game
+            firsts.add(a["pick_games"][0]["game_id"])
+        self.assertGreater(len(firsts), 3)                                       # spread across the slate
+        roles = collections.Counter(acc.role[a["agent_id"]] for a in picks)
+        self.assertGreaterEqual(roles["pundit"], 5)
+        self.assertGreaterEqual(roles["fan"], 3)
+
+    def test_least_used_writers_pick_first(self):
+        ctx = league(week=9)
+        ctx["pick_history"] = {p.lower(): 5 for p in PUNDITS[:6]}
+        picks = plan_picks(ctx, Accounts(ctx["accounts"], seed="p"), 10)
+        chosen = {a["agent_id"] for a in picks}
+        self.assertFalse(chosen & set(ctx["pick_history"]))
+
+    def test_week_plan_has_10_to_16_pickers(self):
+        for w in (3, 9, 12):
+            n = len(by_kind(plan_social_week(league(week=w)))["PICKS"])
+            self.assertTrue(10 <= n <= 16, (w, n))
+
+    def test_season_calls_only_in_call_weeks(self):
+        self.assertEqual(set(SEASON_CALL_WEEKS), {1, 9, TRADE_DEADLINE_WEEK})
+        for w, kw in ((1, {"played_weeks": []}), (9, {}), (TRADE_DEADLINE_WEEK, {})):
+            calls = by_kind(plan_social_week(league(week=w, **kw)))["SEASON_CALL"]
+            self.assertTrue(6 <= len(calls) <= 10, (w, len(calls)))
+            self.assertTrue(all(len(a["call_types"]) == 2 and a["focus"] for a in calls))
+            self.assertTrue(all(a["archetype"] not in ("DIE_HARD_FAN", "LOCAL_BEAT_REPORTER") for a in calls))
+        self.assertFalse(by_kind(plan_social_week(league(week=12)))["SEASON_CALL"])
+        ctx = league(week=12)
+        self.assertEqual(plan_season_calls(ctx, Accounts(ctx["accounts"], seed="c"), 8), [])
+
+
+class LiveAndFanKindsTests(unittest.TestCase):
+    def test_live_moments_know_only_the_score_at_the_time(self):
+        ctx = with_scripts(league(week=9))
+        W = Week(ctx)
+        live = plan_live_moments(ctx, Accounts(ctx["accounts"], seed="l"), 6, W)
+        self.assertEqual(len(live), 6)
+        for a in live:
+            g = next(g for g in ctx["recap_games"] if g["id"] == a["live"]["game_id"])
+            self.assertNotIn(W.game_label(g), json.dumps(a["facts"]))          # no final score
+            self.assertIn(a["live"]["period"], ("Q1", "Q2", "Q3", "Q4"))
+            self.assertEqual(len(a["focus"]), 1)
+            if a["facts"]["when"].startswith("Q1"):
+                self.assertTrue(a["facts"]["score_at_the_time"].endswith("7") or " 7" in a["facts"]["score_at_the_time"])
+        self.assertTrue({"DIE_HARD_FAN"} & {a["archetype"] for a in live})
+        self.assertTrue(set(PUNDITS) & {a["archetype"] for a in live})
+
+    def test_quarter_updates_come_from_beat_writers(self):
+        ctx = with_scripts(league(week=9))
+        W = Week(ctx)
+        ups = plan_quarter_updates(ctx, Accounts(ctx["accounts"], seed="q"), 4, W)
+        self.assertEqual(len(ups), 4)
+        for a in ups:
+            self.assertEqual(a["archetype"], "LOCAL_BEAT_REPORTER")
+            g = next(g for g in ctx["recap_games"] if g["id"] == a["live"]["game_id"])
+            self.assertIn(a["team_id"], (g["home_team_id"], g["away_team_id"]))
+            self.assertIn(a["facts"]["end_of"], desk.QUARTER_NAMES.values())
+            self.assertNotIn(W.game_label(g), json.dumps(a["facts"]))
+        plan = plan_social_week(ctx)
+        self.assertTrue(by_kind(plan)["LIVE_MOMENT"])
+        self.assertTrue(by_kind(plan)["QUARTER_UPDATE"])
+
+    def test_trade_ideas_and_draft_position(self):
+        ctx = league(week=12)
+        ctx["team_needs"] = {t: ["CB", "OT"] for t in range(1, 33)}
+        W = Week(ctx)
+        acc = Accounts(ctx["accounts"], seed="t")
+        ideas = plan_trade_ideas(ctx, acc, 4, W)
+        self.assertEqual(len(ideas), 4)
+        self.assertTrue(all(a["facts"]["biggest_needs"] == ["CB", "OT"] and "$" not in json.dumps(a["facts"]) for a in ideas))
+        self.assertIn("DIE_HARD_FAN", {a["archetype"] for a in ideas})
+        dp = plan_draft_position(ctx, acc, 3, W)
+        self.assertTrue(dp)
+        losers = {W.winner_loser(g)[1] for g in ctx["recap_games"]}
+        for a in dp:
+            self.assertEqual(a["archetype"], "DIE_HARD_FAN")
+            self.assertIn(a["team_id"], losers)
+            self.assertIn("if the season ended today", a["focus"][0])
+
+    def test_aggregator_and_stats_desk_join_the_mix(self):
+        ctx = add_national(league(week=9), "AGGREGATOR", "STATS_DESK")
+        ctx["trades"] = [{"id": 1, "week": 8, "teams": [1, 2], "line": "Team1 trade Team2", "money": [], "players": [],
+                          "gm_said": {}}]
+        add_national(ctx, "SCHEFTER_TWEET", "RAPOPORT")
+        plan = plan_social_week(ctx)
+        agg = [a for a in plan["assignments"] if a["archetype"] == "AGGREGATOR"]
+        stats = [a for a in plan["assignments"] if a["archetype"] == "STATS_DESK"]
+        self.assertIn("TRADE_NEWS", {a["kind"] for a in agg})
+        self.assertIn("PERFORMANCE", {a["kind"] for a in agg})
+        self.assertIn("PERFORMANCE", {a["kind"] for a in stats})
+        self.assertNotIn("AGGREGATOR", {a["archetype"] for a in by_kind(plan)["PREVIEW"]})   # never a random pundit
+
+    def test_quote_replies(self):
+        ctx = add_national(league(week=9), "SCHEFTER_TWEET", "RAPOPORT")
+        ctx["trades"] = [{"id": 1, "week": 8, "teams": [1, 2], "line": "Team1 trade Team2", "money": [], "players": [],
+                          "gm_said": {}}]
+        plan = plan_social_week(ctx)
+        posts = []
+        first = [a for a in plan["assignments"] if a["kind"] == "TRADE_NEWS"] + \
+            [a for a in plan["assignments"] if a["kind"] not in ("REPLY", "TRADE_NEWS") and a["agent_id"]]
+        for i, a in enumerate(first):
+            posts.append({"id": 1000 + i, "assignment": a, "text": f"post {i}", "likes": 10_000 - i,
+                          "agent_id": a["agent_id"], "handle": a["handle"], "display_name": a["handle"]})
+        replies = plan_replies(ctx, plan, posts)
+        self.assertTrue(all("quote" in r and "stance" not in r for r in replies))
+        on_insider = [r for r in replies if r["parent"]["id"] == 1000]
+        self.assertTrue(on_insider and all(r["quote"] for r in on_insider))
+        self.assertEqual(on_insider[0]["archetype"], "LOCAL_BEAT_REPORTER")          # a beat writer quotes the insider
+        self.assertIn(on_insider[0]["team_id"], (1, 2))
+        self.assertTrue(any(not r["quote"] for r in replies))
+        self.assertEqual(len(replies), plan["mix"]["REPLY"])
+
+
+class TopicPostTests(unittest.TestCase):
+    def test_topic_posts_carry_topic_and_subjects(self):
+        plan = plan_social_week(league(week=12))
+        topical = [a for a in plan["assignments"] if a["kind"] in ("HOT_TAKE", "AWARD_RACE", "POWER_TAKE", "QUESTION")]
+        self.assertTrue(topical)
+        for a in topical:
+            self.assertTrue(a["topic_id"])
+            self.assertTrue(a["focus"])
+            self.assertEqual(a["subject"]["id"], a["topic_id"])
+        self.assertIn("mvp_race:2035:12", {a["topic_id"] for a in topical})
+
+
+class RelationshipAngleTests(unittest.TestCase):
+    def test_a_strong_relationship_becomes_the_assignment_angle(self):
+        from newsroom.social_desk import _relationship_line
+        ctx = league(week=9)
+        line = _relationship_line("team", "Team1", 0.8)
+        ctx["strong_relationships"] = {("fan_1_0", "team", "1"): line}
+        plan = plan_social_week(ctx)
+        on_team = next(a for a in plan["assignments"] if a["agent_id"] == "fan_1_0"
+                       and {"type": "team", "id": 1} in a["subjects"])
+        self.assertEqual(on_team["angle"], line)
+        self.assertTrue(on_team["relationship_angle"])
+
+    def test_relationship_line_reads_plainly_both_ways(self):
+        from newsroom.social_desk import _relationship_line
+        self.assertIn("believer", _relationship_line("player", "Jalen Hurts", 0.6))
+        self.assertIn("can't stand", _relationship_line("team", "Cowboys", -0.6))
+        self.assertIn("all in", _relationship_line("team", "Bills", 0.7))
+
+
+class FakeCursor:
+    """Answers the planner's tagged queries (/* topics:x */, /* desk:x */) from canned rows; a tag without rows
+    raises like a missing table."""
+
+    def __init__(self, data, missing=()):
+        self.data, self.missing, self.rows, self.log = data, set(missing), [], []
+
+    def execute(self, sql, params=None):
+        self.log.append((sql, params))
+        if sql.split()[0] in ("SAVEPOINT", "ROLLBACK", "RELEASE"):
+            return
+        m = re.search(r"/\* (\w+:\w+) \*/", sql)
+        tag = m.group(1) if m else None
+        if tag is None or tag in self.missing or tag not in self.data:
+            raise RuntimeError(f'relation for "{tag}" does not exist')
+        self.rows = list(self.data[tag])
+
+    def fetchall(self):
+        return self.rows
+
+    def fetchone(self):
+        return self.rows[0] if self.rows else None
+
+
+def topic_data(week=10, season=2036):
+    ctx = league(season=season, week=week + 1)                   # games and lines through Week N (inclusive)
+    teams = [(t["id"], t["name"], t["city"], t["abbr"], t["conference"], t["division"]) for t in ctx["teams"].values()]
+    games = [(g["id"], g["week"], g["home_team_id"], g["away_team_id"], g["home_score"], g["away_score"], g["status"],
+              g["game_time"], g["game_type"], g["excitement_index"], g["projected_excitement"]) for g in ctx["games"]]
+    cols = ("week", "game_id", "team_id", "position", "short_name", "name", "player_id", "popularity", "completions",
+            "pass_attempts", "pass_yards", "pass_tds", "interceptions", "rush_attempts", "rush_yards", "rush_tds",
+            "receptions", "rec_yards", "rec_tds", "fantasy_points")
+    lines = []
+    for l in ctx["player_lines"]:
+        if l["week"] == week and l["team_id"] == 9 and l["position"] == "QB":
+            l = {**l, "pass_yards": 9000, "pass_tds": 40}          # Week N: must never count
+        lines.append(tuple(l[c] for c in cols))
+    return {
+        "desk:teams": teams, "desk:games": games, "desk:player_lines": lines,
+        "topics:power": [(week - 1, 1, 5, 2, "7-2"), (week - 1, 2, 6, -4, "7-2"), (week, 1, 7, 9, "9-1")],
+        "topics:coty": [(1, 3, "Coach Three", ["undefeated"], 33)],
+        "topics:hot_seat": [(season - 1, 11, 111, "Shaky Coach", 0.9, False, "BLACK_MONDAY"),
+                            (season, 12, 112, "Fired Coach", 1.4, True, "BLACK_MONDAY")],
+        "topics:contract_year": [(501, "Walk Year", "WR", 4)],
+        "topics:rookies": [(601, "Rookie Late", "HB", 8, week, 1, 0, 0, 500, 0, 3)],
+        "topics:injuries": [(week - 1, 2, 701, "Hurt Star", "QB", "6 weeks", "Knee", False),
+                            (week, 3, 702, "Future Hurt", "QB", "8 weeks", "Ankle", True)],
+    }
+
+
+class LeagueTopicTests(unittest.TestCase):
+    def test_topics_use_only_data_before_week_n(self):
+        week = 10
+        topics = load_league_topics(FakeCursor(topic_data(week)), 2036, week)
+        ids = {t["topic_id"] for t in topics}
+        text = json.dumps(topics)
+        for t in topics:
+            self.assertEqual(set(t), {"topic_id", "kind_hint", "label", "subjects", "focus", "heat"})
+        self.assertNotIn("9,000", text)                         # Week N's line never counts
+        self.assertNotIn("Future Hurt", text)                   # Week N's injury report never counts
+        top = next(t for t in topics if t["topic_id"].startswith("power_top"))
+        self.assertEqual(top["subjects"], [{"type": "team", "id": 5}])        # Week N-1's ranking, not Week N's
+        self.assertIn("power_move:6:2036:9", ids)
+        self.assertFalse([i for i in ids if i.startswith(("coty_race", "coaches_fired"))])   # no week on those rows
+        self.assertIn("hot_seat:2036:10", ids)                  # last season's survivor
+        self.assertIn("contract_year:2036:10", ids)
+        self.assertFalse([i for i in ids if i.startswith("roy_race")])          # its latest game is Week N
+        self.assertIn("injury:701:2036:9", ids)
+        self.assertIn("mvp_race:2036:10", ids)
+        self.assertEqual(topics, sorted(topics, key=lambda t: -t["heat"]))
+        cur = FakeCursor(topic_data(week))
+        load_league_topics(cur, 2036, week)
+        for sql, params in cur.log:
+            if "week <" in sql and params:
+                self.assertIn(week, params)
+
+    def test_after_the_regular_season_coty_and_firings_join(self):
+        topics = load_league_topics(FakeCursor(topic_data(20)), 2036, 20)
+        ids = {t["topic_id"] for t in topics}
+        self.assertIn("coty_race:2036", ids)
+        self.assertIn("coaches_fired:2036", ids)
+        coty = next(t for t in topics if t["topic_id"] == "coty_race:2036")
+        self.assertNotIn("score", json.dumps(coty).lower())
+
+    def test_missing_tables_mean_no_topics_of_that_type(self):
+        data = topic_data(10)
+        topics = load_league_topics(FakeCursor(data, missing=("topics:power", "topics:hot_seat")), 2036, 10)
+        ids = {t["topic_id"] for t in topics}
+        self.assertFalse([i for i in ids if i.startswith(("power_", "hot_seat"))])
+        self.assertIn("contract_year:2036:10", ids)
+        self.assertEqual(load_league_topics(FakeCursor({}), 2036, 10), [])
+
+
+# --------------------------------------------------------------- trade leaks (commit 8376564, kept by U3) ---
 class FakeTradeCursor:
     """Answers every query with the same team rows; load_trades' other reads are patched."""
 
@@ -542,6 +959,10 @@ class LeakRoutingTests(unittest.TestCase):
                       rumors[0]["line"])
         self.assertEqual([r["teams"] for r in rumors], [[3, 4], [3, 4]])
 
+    def test_older_leak_seen_this_edition_is_not_duplicated(self):
+        _, rumors = self.load(8, [trade_leak(7, 7)], [trade_leak(7, 7)])
+        self.assertEqual([r["id"] for r in rumors], ["leak:7"])          # de-duplicated by rumor_id
+
     def test_planner_gives_a_fresh_leak_to_its_insider(self):
         from newsroom.social_desk import plan_social_week
         ctx = moves_league([])
@@ -551,6 +972,14 @@ class LeakRoutingTests(unittest.TestCase):
         rumors = by_kind(plan_social_week(ctx))["TRADE_RUMOR"]
         self.assertEqual([a["archetype"] for a in rumors], ["SCHEFTER_TWEET"])
         self.assertIn("A player the leak names may be named", rumors[0]["facts"]["grounding"])
+
+    def test_a_named_leak_and_an_unnamed_rumor_ground_differently(self):
+        from newsroom.social_desk import Week
+        W = Week(moves_league([]))
+        named = W.rumor_facts({"teams": [3, 4], "line": "x", "named": [{"name": "Tre Reyes"}]})
+        unnamed = W.rumor_facts({"teams": [3, 4], "line": "x"})
+        self.assertIn("may be named", named["grounding"])
+        self.assertIn("Never name a player", unnamed["grounding"])
 
     def test_the_two_rumor_cap_still_applies(self):
         from newsroom.social_desk import TRADE_RUMOR_MAX, plan_social_week
