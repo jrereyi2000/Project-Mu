@@ -284,6 +284,23 @@ def test_start_names_the_player(cur):
     assert t.source_ref == "role:jr:101:2026:6" and t.state["slot"] is None
 
 
+def test_start_refuses_a_player_the_picker_would_not_offer(db, cur):
+    """The picker lists ACTIVE players who aren't on IR; a typed id has to be held to the same rule."""
+    db.conn.executescript("""
+        CREATE TABLE player_contracts (id INTEGER PRIMARY KEY, player_id INT, team_id INT, season INT, status TEXT);
+        CREATE TABLE injuries (id INTEGER PRIMARY KEY, player_id INT, team_id INT, season INT, week INT, is_ir INT);
+        INSERT INTO player_contracts (player_id, team_id, season, status) VALUES (100, 1, 2026, 'ACTIVE');
+        INSERT INTO player_contracts (player_id, team_id, season, status) VALUES (101, 1, 2026, 'PRACTICE_SQUAD');
+        INSERT INTO player_contracts (player_id, team_id, season, status) VALUES (102, 1, 2026, 'ACTIVE');
+        INSERT INTO injuries (player_id, team_id, season, week, is_ir) VALUES (102, 1, 2026, 5, 1);
+    """)
+    assert role_talk.start(cur, dict(team(cur), week=6), {"player_id": 100}).counterpart_id == "100"
+    for pid in (101, 102):                                        # practice squad, then on IR
+        with pytest.raises(InboxError) as e:
+            role_talk.start(cur, dict(team(cur), week=6), {"player_id": pid})
+        assert e.value.status == 409 and "active roster" in e.value.message
+
+
 def test_start_declares_the_player_pick_form(cur):
     assert role_talk.START_FORM == "player_pick"
 

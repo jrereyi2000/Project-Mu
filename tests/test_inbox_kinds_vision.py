@@ -192,6 +192,19 @@ def test_keep_current_closes_without_a_pin(cur):
     assert team_vision.current(cur, 1, SEASON) is None
 
 
+def test_draft_turns_typed_direction_into_a_propose(cur):
+    thread = make_thread(cur)
+    d = vision.draft(cur, thread, "Let's rebuild and lean on defense with young players")
+    assert d["option_id"] == "PROPOSE"
+    assert d["payload"] == {"direction": "REBUILD", "emphasis": "DEFENSE", "playing_time": "YOUTH"}
+    assert d["summary"].startswith("Propose a vision: REBUILD")
+    assert vision.draft(cur, thread, "how are you today") is None       # no direction, no draft
+    # the unstressed fields fall back to the pinned vision
+    team_vision.upsert(cur, 1, SEASON, VISION)
+    assert vision.draft(cur, thread, "let's retool")["payload"] == {
+        "direction": "RETOOL", "emphasis": "DEFENSE", "playing_time": "YOUTH"}
+
+
 def test_propose_rejects_a_bad_form(cur):
     thread = make_thread(cur)
     with pytest.raises(InboxError):

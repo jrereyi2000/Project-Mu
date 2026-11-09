@@ -357,6 +357,29 @@ def review_promises(cur, season, week, team):
 
 # --------------------------------------------------------------------------------------------------- start ---
 
+def _active_roster_player(cur, team_id, player_id, season):
+    """The picker's rule (`server/inbox_api._player_targets`): an ACTIVE contract and not on IR, so a typed start
+    and the picker offer the same players. A database without those tables can't say otherwise and allows it."""
+    from engines.inbox import scan
+    week = (scan.league_time(cur) or (None, None))[1]
+    if _regclass(cur, "player_contracts"):
+        cur.execute("SELECT count(*) FROM player_contracts WHERE player_id = %s AND season = %s "
+                    "AND status = 'ACTIVE'", (player_id, season))
+        row = cur.fetchone()
+        if not (row and row[0]):
+            return False
+    if _regclass(cur, "injuries") and week is not None:
+        cur.execute("""SELECT count(*) FROM injuries i
+                       WHERE i.team_id = %s AND i.season = %s AND i.player_id = %s AND i.is_ir
+                         AND i.week = (SELECT max(i2.week) FROM injuries i2
+                                       WHERE i2.team_id = i.team_id AND i2.season = i.season AND i2.week <= %s)""",
+                    (team_id, season, player_id, week))
+        row = cur.fetchone()
+        if row and row[0]:
+            return False
+    return True
+
+
 def start(cur, team, body):
     """JR (as his coach) opens a role talk about a named player."""
     player_id = _int(body.get("player_id", body.get("player")))
@@ -366,6 +389,8 @@ def start(cur, team, body):
     player = roster.get(player_id)
     if player is None:
         raise InboxError(404, f"player {player_id} isn't on {team['abbr']}'s roster")
+    if not _active_roster_player(cur, team["team_id"], player_id, team.get("season")):
+        raise InboxError(409, f"{player['name']} isn't on the active roster")
     topic = str(body.get("topic") or body.get("note") or "His role").strip()[:120]
     facts = {"team": team["abbr"], "player": player["name"], "player_id": player_id,
              "position": player["position"], "season": team.get("season"), "week": team.get("week"),

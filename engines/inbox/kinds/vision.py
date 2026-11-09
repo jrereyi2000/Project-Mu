@@ -13,8 +13,8 @@ Triggers, each once per source_ref:
                   pinned direction (source vision:shift:<season>:<week>)
 
 JR answers PROPOSE (form `vision`: direction, emphasis, playing time), ACCEPT_COUNTER (after a COUNTER) or
-KEEP_CURRENT. AGREED upserts team_vision and closes the thread. JR-started any time
-(source vision:jr:<season>:<week>); one open per team (the store's VISION cap is 1).
+KEEP_CURRENT. AGREED upserts team_vision and closes the thread. A typed line drafts the PROPOSE (`draft`). JR-started
+any time (source vision:jr:<season>:<week>); one open per team (the store's VISION cap is 1).
 """
 from engines import gm_direction, team_vision
 from engines.inbox import InboxError
@@ -32,7 +32,7 @@ JR_SOURCE = "vision:jr:{season}:{week}"
 def _abbr(cur, team_id):
     cur.execute("SELECT abbreviation FROM teams WHERE id = %s", (team_id,))
     row = cur.fetchone()
-    return str(row[0]) if row and row[0] else str(team_id)
+    return str(row[0]).upper() if row and row[0] else str(team_id)
 
 
 def _actor(team):
@@ -162,6 +162,38 @@ def act(cur, thread, option_id, payload, note):
                  "direction": (current or {}).get("direction")}
         return ActResult(facts=facts, intent="KEPT", engine_ref={"kept": True, "vision": current}, close=True)
     raise InboxError(400, f"unknown vision option {option_id}")
+
+
+DRAFT_WORDS = (
+    ("direction", (("CONTEND", ("contend", "win now", "go for it", "all in", "compete now")),
+                   ("RETOOL", ("retool", "reset", "stay competitive")),
+                   ("REBUILD", ("rebuild", "blow it up", "tear it down", "start over", "youth movement")))),
+    ("emphasis", (("OFFENSE", ("offense", "offence", "attack", "passing game")),
+                  ("DEFENSE", ("defense", "defence", "stop the run", "secondary")),
+                  ("BALANCED", ("balanced", "both sides")))),
+    ("playing_time", (("YOUTH", ("youth", "young", "kids", "rookies")),
+                      ("VETERANS", ("veteran", "vets")),
+                      ("MERIT", ("merit", "earn it", "best players")))),
+)
+
+
+def draft(cur, thread, text, llm=None):
+    """Typed direction text -> a PROPOSE draft JR confirms (FRONT_OFFICE_INBOX_PLAN D10): "let's rebuild and lean
+    on defense with young players" -> REBUILD / DEFENSE / YOUTH. No direction in the text means no draft; the
+    emphasis and playing time fall back to the pinned vision, then to the engine defaults."""
+    low = str(text or "").lower()
+    if not low.strip():
+        return None
+    payload = {key: next((value for value, words in choices if any(w in low for w in words)), None)
+               for key, choices in DRAFT_WORDS}
+    if payload["direction"] is None:
+        return None
+    current = team_vision.current(cur, thread["team_id"], thread["season"]) or {}
+    payload["emphasis"] = payload["emphasis"] or current.get("emphasis") or "BALANCED"
+    payload["playing_time"] = payload["playing_time"] or current.get("playing_time") or "MERIT"
+    return {"option_id": "PROPOSE", "payload": payload,
+            "summary": f"Propose a vision: {payload['direction']}, lean {payload['emphasis'].lower()}, "
+                       f"{payload['playing_time'].lower()} players."}
 
 
 def template(intent, facts):
