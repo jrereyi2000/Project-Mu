@@ -1,7 +1,6 @@
 """Two-GM CPU trade talks (engines/gm_talks.py). Synthetic books: no database except scripted cursors."""
 import json
 import random
-import re
 import time
 
 from engines import gm_negotiation as gn
@@ -31,28 +30,37 @@ def persona(agg=0.5, traits=(), **sl):
     return {"gm_name": "Bob B", "aggressiveness": agg, "traits": list(traits), "sliders": sliders}
 
 
-def _choose(b, v, talk, actor, offer, opening=False, llm=None, turn_no=1):
+class NoRowsCur:
+    """A cursor for the pure turn core: every query answers no rows (recent_form finds no games)."""
+
+    def execute(self, sql, params=()):
+        return self
+
+    def fetchone(self):
+        return None
+
+    def fetchall(self):
+        return []
+
+
+def turn_choice(b, v, talk, turns, actor, offer, opening=False, llm=None):
+    """The real turn core (options + policy + writer) with no database behind it."""
     opts = gt.options_for(b, v, dict(talk, opening=True) if opening else talk, actor, offer)
-    if llm is not None:
-        sheet = gn.message_sheet(b, 1 if actor == 2 else 2, actor, offer)
-        key, text, source = gt.llm_choose(llm, sheet, dict(b["gm"][actor]), opts, [])
-    else:
-        key = gt.policy_choice(opts, dict(b["gm"][actor]),
-                               random.Random(f"talk:{talk['season']}:{talk['id']}:{turn_no}"))
-        text, source = gt._template_line(b["gm"][actor], next(o for o in opts if o.key == key)), "POLICY"
-    return next(o for o in opts if o.key == key), text, source
+    offerer = talk["gm_team_id"] if opening else (1 if actor == 2 else 2)
+    return gt._choose(NoRowsCur(), b, dict(talk, opening=opening), actor, offerer, offer, opts, turns,
+                      random.Random(1), llm)
 
 
 def simulate(b, v, opening=OPENING, llm=None, patience=(4, 4), max_turns=8, nid=1):
-    """A scripted two-persona talk (the pure turn core: options + policy/model), no database."""
+    """A scripted two-persona talk (the pure turn core: options + policy + writer), no database."""
     talk = dict(TALK, id=nid, patience=patience[0], patience_left=patience[1])
     turns = []
-    opt, text, source = _choose(b, v, talk, 1, opening, opening=True, llm=llm, turn_no=1)
+    opt, text, source = turn_choice(b, v, talk, turns, 1, opening, opening=True, llm=llm)
     turns.append({"actor_team_id": 1, "action": "OFFER", "assets": opt.assets, "message": text})
     offer = opt.assets
     for n in range(2, max_turns + 1):
         actor = 2 if turns[-1]["actor_team_id"] == 1 else 1
-        opt, text, source = _choose(b, v, talk, actor, offer, llm=llm, turn_no=n)
+        opt, text, source = turn_choice(b, v, talk, turns, actor, offer, llm=llm)
         if opt.action == "ACCEPT":
             return "AGREED", offer
         if opt.action == "WALK_AWAY":
@@ -66,11 +74,15 @@ def simulate(b, v, opening=OPENING, llm=None, patience=(4, 4), max_turns=8, nid=
     return "STALLED", offer
 
 
-def fake_model(prompt):
-    """A model that takes ACCEPT when it is legal, else the FIRM/first move: drives a talk to AGREED."""
-    found = re.findall(r"- \[([^\]]+)\]", prompt)
-    key = "ACCEPT" if "ACCEPT" in found else ("FIRM" if "FIRM" in found else (found[0] if found else "REJECT"))
-    return json.dumps({"choice": key, "message": "We can do that. Send it over."})
+def fake_writer(prompt):
+    """A writer-only model: it answers a line and never a move key."""
+    return json.dumps({"message": "That works for us. Send the paperwork."})
+
+
+CARD = {"register": "Calls players by last name and gets straight to the point.",
+        "samples": ["Look, I need a receiver who can play.", "That works for me. Send it."],
+        "tics": ["says look before he disagrees"], "avoids": ["asset"],
+        "wants": "a receiver who can help on Sunday."}
 
 
 # ------------------------------------------------------------------ options ----
@@ -160,23 +172,73 @@ def test_policy_is_seeded_and_follows_sliders():
 
 
 # ------------------------------------------------------------------ model ----
-def test_model_choice_outside_the_list_falls_back_to_policy():
+def test_the_policy_alone_picks_the_move_and_the_model_cannot_change_it():
+    """The writer is never shown the legal keys: a model answering a different key still gets its line said, but
+    the move is the policy's."""
     b, v = setup()
     opts = gt.options_for(b, v, TALK, 2, OPENING)
-    sheet = gn.message_sheet(b, 1, 2, OPENING)
-    key, text, source = gt.llm_choose(lambda p: '{"choice": "NOPE", "message": "We can do that."}',
-                                      sheet, persona(), opts, [])
-    assert source == "POLICY" and key in {o.key for o in opts}
+    expected = gt.policy_choice(opts, dict(b["gm"][2]), random.Random("talk:2036:1:1"))
+    prompts = []
+
+    def fake(prompt):
+        prompts.append(prompt)
+        return '{"choice": "WALK_AWAY", "message": "We can do that. Send it over."}'
+
+    opt, text, source = gt._choose(NoRowsCur(), b, TALK, 2, 1, OPENING, opts, [], random.Random(1), fake)
+    assert opt.key == expected and opt.action != "WALK_AWAY"
+    assert text == "We can do that. Send it over." and source == "LLM"
+    assert "WALK_AWAY" not in prompts[0] and "LEGAL MOVES" not in prompts[0]   # no move list, no key to parse
 
 
-def test_invalid_message_falls_back_to_the_template():
+def test_the_writer_receives_the_card_the_sheet_and_the_move(monkeypatch):
+    b, v = setup()
+    b["gm"][2]["voice_card"] = CARD
+    opts = gt.options_for(b, v, TALK, 2, OPENING)
+    seen = {}
+    from engines import gm_writer
+    monkeypatch.setattr(gm_writer, "write_line", lambda llm, **kw: (seen.update(kw), ("spoken", "LLM"))[1])
+    opt, text, source = gt._choose(NoRowsCur(), b, TALK, 2, 1, OPENING, opts, [], random.Random(1), object())
+    assert "REGISTER: Calls players by last name" in seen["card_text"] and "TICS:" in seen["card_text"]
+    assert seen["sheet"]["teams"]["b"]["abbr"] == "BBB" and seen["sheet"]["assets"]
+    assert seen["move"]["action"] == opt.action
+    assert seen["move"]["gives"] == [ge.asset_label(b, x) for x in opt.assets if x["from"] == 2]
+    assert seen["move"]["gets"] == [ge.asset_label(b, x) for x in opt.assets if x["to"] == 2]
+    assert seen["scene"]["deadline_week"] == ge.TRADE_DEADLINE_WEEK and seen["scene"]["week"] == b["week"]
+    assert "AAA" in seen["scene"]["who_called"]
+    assert "AAA" in seen["scene"]["stakes"] and "BBB" in seen["scene"]["stakes"]
+    assert isinstance(seen["scene"]["relationship"], str)
+    assert seen["history"] == []
+    assert text == "spoken" and source == "LLM"
+
+
+def test_a_gm_without_a_card_gets_a_template_card(monkeypatch):
+    b, v = setup()
+    b["gm"][2]["voice_card"] = None
+    opts = gt.options_for(b, v, TALK, 2, OPENING)
+    seen = {}
+    from engines import gm_writer
+    monkeypatch.setattr(gm_writer, "write_line", lambda llm, **kw: (seen.update(kw), ("spoken", "LLM"))[1])
+    gt._choose(NoRowsCur(), b, TALK, 2, 1, OPENING, opts, [], random.Random(1), object())
+    assert "REGISTER:" in seen["card_text"] and "HOW HE SOUNDS:" in seen["card_text"]
+    assert "WANTS:" in seen["card_text"]
+
+
+def test_a_style_failure_falls_back_to_the_template():
     b, v = setup()
     opts = gt.options_for(b, v, TALK, 2, OPENING)
-    sheet = gn.message_sheet(b, 1, 2, OPENING)
-    key, text, source = gt.llm_choose(
-        lambda p: '{"choice": "ACCEPT", "message": "Give me 3 firsts and he is yours."}', sheet, persona(), opts, [])
-    assert key == "ACCEPT" and source == "LLM" and "3 firsts" not in text
-    assert text.startswith("Bob B:")
+    bad = lambda p: json.dumps({"message": "We need to improve our value proposition."})
+    opt, text, source = gt._choose(NoRowsCur(), b, TALK, 2, 1, OPENING, opts, [], random.Random(1), bad)
+    assert source == "TEMPLATE"
+    assert text == gt._template_line(dict(b["gm"][2]), opt)
+
+
+def test_history_keeps_the_last_three_lines():
+    b, _ = setup()
+    turns = [{"turn_no": i, "actor": "GM", "actor_team_id": 2, "action": "COUNTER", "message": f"line {i}"}
+             for i in range(1, 7)]
+    h = gt._history(turns, TALK, b)
+    assert [x["message"] for x in h] == ["line 4", "line 5", "line 6"]
+    assert h[-1]["team"] == "BBB"
 
 
 # ------------------------------------------------------------------ talks ----
@@ -189,22 +251,11 @@ def test_two_fixed_personas_converge_to_agreed_and_the_deal_passes_accepts():
     assert ge.accepts(deal(final), v, b)[0]
 
 
-def test_the_same_talk_agrees_with_a_fake_model():
+def test_a_writer_model_cannot_change_a_talk():
+    """The model only writes words: the same policy run with and without it reaches the same status and package."""
     b, v = setup()
     b["gm"][1].update(sliders=persona(confidence=1, warmth=10)["sliders"])
-    status, final = simulate(b, v, llm=fake_model)
-    assert status == "AGREED" and ge.accepts(deal(final), v, b)[0]
-
-
-def test_the_opening_line_uses_the_model_but_the_search_keeps_the_package():
-    b, v = setup()
-    opt = gt.options_for(b, v, dict(TALK, opening=True), 1, OPENING)[0]
-    sheet = gn.message_sheet(b, 1, 2, opt.assets)
-    assets = list(opt.assets)
-    text, source = gt.opening_line(dict(b["gm"][1]), opt, fake_model, sheet)
-    assert source == "LLM" and opt.assets == assets          # the model writes the words, never the package
-    tpl, tpl_source = gt.opening_line(dict(b["gm"][1]), opt)
-    assert tpl_source == "POLICY" and "offer on the table" in tpl
+    assert simulate(b, v) == simulate(b, v, llm=fake_writer)
 
 
 def test_an_anchor_met_with_no_patience_stalls():
@@ -291,6 +342,25 @@ def test_a_resumed_talk_reads_its_stored_flags():
     row = OPEN_TALK_ROW[:-1] + (["stage:3", "shape:BLOCKBUSTER"],)
     talk = gt._talk(ScriptedCur(lambda sql, params: [row]), 7)
     assert talk["flags"] == ["stage:3", "shape:BLOCKBUSTER"]
+
+
+def test_open_talk_writes_the_opening_through_the_writer(monkeypatch):
+    """The opening turn's words come from gm_writer.write_line; the search/policy still owns the package."""
+    b, v = setup()
+    seen = {}
+    from engines import gm_writer
+    monkeypatch.setattr(gm_writer, "write_line",
+                        lambda llm, **kw: (seen.update(kw), ("You called about the receiver.", "LLM"))[1])
+    cur = ScriptedCur(open_talk_router)
+    gt.open_talk(cur, b, v, deal(OPENING), random.Random(1), llm=object())
+    i = next(i for i, s in enumerate(cur.sql) if "INSERT INTO gm_trade_negotiation_turns" in s)
+    params = cur.params[i]
+    assert seen["move"]["action"] == "OFFER" and seen["move"]["gives"]
+    assert seen["scene"]["deadline_week"] == ge.TRADE_DEADLINE_WEEK
+    assert seen["history"] == []
+    assert params[14] == "You called about the receiver."      # the writer's line
+    assert params[15] == "LLM"                                 # message_source
+    assert params[8] == "POLICY"                               # the policy chose the move
 
 
 def test_open_talk_opens_with_the_personality_selected_anchor():

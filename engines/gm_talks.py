@@ -4,8 +4,10 @@ Two-GM CPU trade talks (docs/in_progress/TRADE_NEGOTIATIONS_PLAN.md §2.3; PROJE
 `run_week` hands this module the deals its search found and both GMs accept; instead of storing each one as a
 PROPOSED proposal and waiting for JR (who, 2026-2033, has no team), the two GMs talk it out over one or more
 turns. The numbers stay with the engines: `gm_negotiation.judge`, `gm_negotiation.counter_options` and
-`gm_trade_engine.check_legality` build and check every option, and the persona policy (`policy_choice`) or the
-model (`llm_choose`) only picks one of them. A completed deal is stored APPROVED with flags `talks:<id>` and
+`gm_trade_engine.check_legality` build and check every option, and the persona policy (`policy_choice`, plus
+`_opening_choice` on turn 1) alone picks one of them. A model never picks a move: `gm_writer.write_line` only
+writes the line for the move the policy chose (the opening included), from the GM's voice card, the fact sheet,
+the fixed move and the scene. A completed deal is stored APPROVED with flags `talks:<id>` and
 `auto_approved` (the league office writes it, and it retries instead of expiring while that is pending) plus the
 flags the stored path gave the pick (`shape:`, `stage:`, `release:`, …; a resumed talk carries none); a breakdown
 is stored STALLED (decided for pacing, but it never bars
@@ -21,7 +23,6 @@ import argparse
 import functools
 import json
 import random
-import re
 import threading
 from dataclasses import dataclass
 
@@ -275,7 +276,7 @@ def policy_choice(options, persona, rng):
     return (hold or reject or meet)["key"]
 
 
-# --------------------------------------------------------------- model ----
+# --------------------------------------------------------------- voice ----
 def _template_line(persona, option, sheet=None):
     name = persona.get("gm_name") or "The GM"
     action = _as_dict(option)["action"] if option else "COUNTER"
@@ -290,85 +291,65 @@ def _template_line(persona, option, sheet=None):
     return f"{name}: Here's where we'd get it done. Take a look at the package."
 
 
-def _leg_line(a):
-    if a.get("type") == "PLAYER":
-        return f"player {a.get('player_id')} from {a.get('from')} to {a.get('to')}"
-    pick = a.get("pick")
-    ds, rd, orig = pick if pick else (a.get("draft_season"), a.get("round"), a.get("original_team"))
-    return f"{ds} R{rd} ({orig}) from {a.get('from')} to {a.get('to')}"
+def _card_text(gm):
+    """The GM's rendered voice card: his own `voice_card`, or a deterministic template card from the same traits
+    when the row has none (a GM hired before the cards)."""
+    from engines import gm_voices
+    gm = gm or {}
+    card = gm.get("voice_card")
+    if not card:
+        card = gm_voices.template_card({"aggressiveness": gm.get("aggressiveness", 0.5),
+                                        "risk_appetite": gm.get("risk_appetite", 0.5),
+                                        "pick_affinity": gm.get("pick_affinity", 1.0),
+                                        "youth_bias": gm.get("youth_bias", 0.0)})
+    return gm_voices.render_card(card)
 
 
-def _choice_prompt(sheet, persona, options, history):
-    sl = _sliders(persona)
-    lines = [f"You are {persona.get('gm_name') or 'a general manager'} of a simulated NFL team, in a trade talk "
-             f"with another general manager.",
-             f"Voice: {persona.get('voice') or 'plain'}."]
-    try:
-        from newsroom.personas import slider_sentence, load_traits
-        s = slider_sentence(persona.get("sliders") or sl)
-        if s:
-            lines.append(f"Disposition: {s}")
-        cat = load_traits()
-        for tid in persona.get("traits") or []:
-            entry = cat.get(tid)
-            if entry:
-                lines.append(f"- {entry.get('name', tid)}: {entry.get('prompt', '')}")
-    except Exception:
-        pass
-    lines += ["FACT SHEET (JSON; the only facts you may state):", json.dumps(sheet, indent=1, default=str)]
-    for h in history or []:
-        lines.append(f"{h.get('team', '?')} {h.get('action', '')}: {h.get('message') or ''}")
-    lines.append("LEGAL MOVES (pick one of these keys; never invent another):")
-    for o in options:
-        o = _as_dict(o)
-        assets = ", ".join(_leg_line(a) for a in (o.get("assets") or [])) or "nothing on the table"
-        lines.append(f"- [{o['key']}] {o['action']} {o.get('posture') or ''}: {assets}")
-    lines += ["Write 2-4 sentences in your own voice. Never state a number, dollar amount, player, team or contract "
-              "fact that isn't on the fact sheet, and never say the trade is final or completed.",
-              'Answer with JSON only: {"choice": "<key>", "message": "..."}']
-    return "\n".join(lines)
+def _move(b, actor, option):
+    """The already-decided move the writer may speak: action, posture and its labelled legs."""
+    o = _as_dict(option)
+    assets = o.get("assets") or []
+    return {"action": o.get("action"), "posture": o.get("posture"),
+            "gets": [_ge().asset_label(b, x) for x in assets if x.get("to") == actor],
+            "gives": [_ge().asset_label(b, x) for x in assets if x.get("from") == actor]}
 
 
-def _parse_choice(raw):
-    m = re.search(r"\{.*\}", raw or "", re.S)
-    try:
-        d = json.loads(m.group(0) if m else (raw or ""))
-    except (ValueError, TypeError, AttributeError):
-        return None, ""
-    if not isinstance(d, dict):
-        return None, ""
-    return d.get("choice"), str(d.get("message") or "").strip()
+def _stakes(sheet):
+    """Both teams' stakes as plain text, e.g. 'GB 7-10, L2; PIT 13-4, W3' (from the v2 sheet)."""
+    parts = []
+    for side in ("a", "b"):
+        t = (sheet.get("teams") or {}).get(side) or {}
+        st = t.get("stakes") or {}
+        bits = [t["abbr"]] if t.get("abbr") else []
+        bits += [str(st[k]) for k in ("record", "streak") if st.get(k)]
+        if bits:
+            parts.append(" ".join(bits))
+    return "; ".join(parts)
 
 
-def _parse_seed(persona, history):
-    return f"llm:{persona.get('gm_id') or persona.get('gm_name') or 'gm'}:{len(history or [])}"
+def _relationship(sheet, side="b"):
+    """The speaking side's rivalry relation and tax, in plain words."""
+    r = ((sheet.get("teams") or {}).get(side) or {}).get("rivalry") or {}
+    rel, tax = r.get("relation"), r.get("tax") or 0
+    base = {"division": "division rivals", "conference": "same-conference teams"}.get(rel, "different conferences")
+    return f"{base}, {round(float(tax) * 100)}% tax" if tax else base
 
 
-def llm_choose(llm, sheet, persona, options, history):
-    """(key, text, source): one model call picks among `options` and writes the line. A key outside `options`
-    falls back to the policy (source POLICY); a message that fails `validate_rationale` falls back to the template.
-    With llm=None the policy picks and the template speaks."""
-    opts = [_as_dict(o) for o in options]
-    keys = {o["key"] for o in opts}
-    if not opts:
-        return None, None, None
-    if llm is None:
-        key = policy_choice(opts, persona, random.Random(_parse_seed(persona, history)))
-        opt = next((o for o in opts if o["key"] == key), opts[0])
-        return key, _template_line(persona, opt, sheet), "POLICY"
-    from engines.gm_llm import call
-    from engines.gm_rationale import validate_rationale
-    raw = call(llm, _choice_prompt(sheet, persona, opts, history))
-    key, text = _parse_choice(raw)
-    if key not in keys:
-        pkey = policy_choice(opts, persona, random.Random(_parse_seed(persona, history)))
-        opt = next((o for o in opts if o["key"] == pkey), opts[0])
-        good = bool(text) and validate_rationale(text, sheet, None)[0]
-        return pkey, (text if good else _template_line(persona, opt, sheet)), "POLICY"
-    opt = next(o for o in opts if o["key"] == key)
-    if text and validate_rationale(text, sheet, None)[0]:
-        return key, text, "LLM"
-    return key, _template_line(persona, opt, sheet), "LLM"
+def _scene(b, talk, sheet, side="b", mood=None):
+    """The turn's scene (both teams' stakes and the rivalry from the sheet; the week and deadline from the books)."""
+    return {"week": b.get("week"), "deadline_week": _ge().TRADE_DEADLINE_WEEK,
+            "who_called": f"the {_abbr(b, _initiator(talk))} GM", "mood": mood,
+            "stakes": _stakes(sheet), "relationship": _relationship(sheet, side)}
+
+
+def _writer_line(b, actor, option, sheet, scene, history, llm):
+    """(text, source) from the shared writer for a move the policy already picked. The writer never sees the
+    options, so no model answer can change the move."""
+    from engines import gm_writer
+    persona = _gm(b, actor)
+    return gm_writer.write_line(llm, card_text=_card_text(persona), sheet=sheet, history=history,
+                                move=_move(b, actor, option), scene=scene,
+                                fallback=_template_line(persona, option, sheet))
 
 
 def call_with_timeout(llm, prompt, seconds):
@@ -487,7 +468,7 @@ def open_talk(cur, b, valuer, deal, rng, llm=None):
     """Insert a CPU negotiation for the initiator's offer and play the opening turn. A deal from the unilateral
     search opens with its personality-selected offer (`opening_posture`, seeded with the search's
     `opening_options`); a legacy deal without those keys keeps the policy's FIRM/ANCHOR choice. The search picks
-    the package; `llm` writes the initiator's line (None: the template). Returns the talk."""
+    the package; `gm_writer.write_line` writes the initiator's line (None: the template). Returns the talk."""
     season, week = b["season"], b["week"]
     window = b["window"] if b.get("window") in ("IN_SEASON", "OFFSEASON") else "IN_SEASON"
     stage = _ge().read_stage(cur, season) if window == "OFFSEASON" else None
@@ -508,23 +489,35 @@ def open_talk(cur, b, valuer, deal, rng, llm=None):
         su, sg = _gn().surpluses({"a": a, "b": other, "assets": deal["assets"]}, valuer, a)
         options = [Option("FIRM", "OFFER", deal.get("opening_posture") or "FIRM", list(deal["assets"]), su, sg)]
     opt = _opening_choice(options, deal, _gm(b, a), random.Random(f"talk:{season}:{nid}:1"))
-    template = _template_line(_gm(b, a), opt)
-    text, source = opening_line(_gm(b, a), opt, llm, _sheet(b, a, other, opt.assets) if llm is not None else None)
+    sheet = _sheet(cur, b, a, other, opt.assets)
+    scene = _scene(b, talk, sheet, side="a")
+    text, source = _writer_line(b, a, opt, sheet, scene, [], llm)
     _add_turn(cur, nid, "GM_A", "OFFER", a, assets=opt.assets, su=opt.su, sg=opt.sg,
-              message=text, source="LLM" if text != template else "TEMPLATE",
+              message=text, source=source,
               options=[{"key": o.key, "action": o.action, "assets": o.assets, "su": o.su, "sg": o.sg}
                        for o in options],
-              choice=opt.key, choice_source=source, posture=opt.posture, books=b)
+              choice=opt.key, choice_source="POLICY", posture=opt.posture, books=b)
     return talk
 
 
-def _sheet(b, offerer, responder, offer_assets, counter_assets=None):
-    return _gn().message_sheet(b, offerer, responder, offer_assets, counter_assets)
+def _sheet(cur, b, offerer, responder, offer_assets, counter_assets=None):
+    """The fact sheet for this turn with each dealt player's last three games (v2 §2.3); the offer and any counter
+    legs are merged once each, like `gm_negotiation.message_sheet`."""
+    from engines.gm_rationale import build_fact_sheet
+    seen, assets = set(), []
+    for x in list(offer_assets or []) + list(counter_assets or []):
+        if _ge().asset_key(x) not in seen:
+            seen.add(_ge().asset_key(x))
+            assets.append(x)
+    ids = [x["player_id"] for x in assets if x.get("type") == "PLAYER"]
+    recent = _ge().recent_form(cur, ids, b["season"], b["week"])
+    return build_fact_sheet(b, {"a": offerer, "b": responder, "assets": assets, "trigger": "USER"}, recent=recent)
 
 
 def _history(turns, talk, books):
+    """The last three lines verbatim, so the writer reacts to the man, not the deal."""
     out = []
-    for t in turns[-6:]:
+    for t in turns[-3:]:
         tid = _turn_actor_team(t, talk)
         out.append({"team": _abbr(books, tid) if tid else "?", "action": t.get("action"),
                     "message": t.get("message")})
@@ -539,30 +532,18 @@ def _turn_actor_team(t, talk):
     return talk["gm_team_id"]
 
 
-def opening_line(persona, opt, llm=None, sheet=None):
-    """(text, source) for the initiator's opening turn: the model's line when there is one (the search still picks
-    the package), else the template. One option only, so a model reply outside it falls back to the policy text."""
-    if llm is not None:
-        key, said, source = llm_choose(llm, sheet, persona, [opt], [])
-        if said:
-            return said, source
-    return _template_line(persona, opt), "POLICY"
-
-
-def _choose(b, talk, actor, offerer, offer_assets, options, turns, rng, llm):
-    """(option, text, source) for this turn."""
+def _choose(cur, b, talk, actor, offerer, offer_assets, options, turns, rng, llm):
+    """(option, text, source) for this turn. The policy alone picks the move; `gm_writer.write_line` writes the
+    line (source "LLM" or "TEMPLATE"). The model is never shown the options, so it cannot change the move."""
     persona = dict(_gm(b, actor))
     if any(t.get("mood") == "INSULTED" and _turn_actor_team(t, talk) == actor for t in turns):
         persona["insulted"] = True
-    if llm is not None:
-        sheet = _sheet(b, offerer, actor, offer_assets)
-        key, text, source = llm_choose(llm, sheet, persona, options, _history(turns, talk, b))
-        opt = next((o for o in options if o.key == key), None)
-        if opt is not None:
-            return opt, text, source
     key = policy_choice(options, persona, random.Random(f"talk:{talk['season']}:{talk['id']}:{len(turns) + 1}"))
     opt = next((o for o in options if o.key == key), options[0])
-    return opt, _template_line(persona, opt), "POLICY"
+    sheet = _sheet(cur, b, offerer, actor, offer_assets)
+    scene = _scene(b, talk, sheet, side="b", mood=_last_mood(turns))
+    text, source = _writer_line(b, actor, opt, sheet, scene, _history(turns, talk, b), llm)
+    return opt, text, source
 
 
 def _last_mood(turns):
@@ -685,24 +666,23 @@ def advance_talk(cur, b, valuer, talk, rng, llm):
         actor = other if last_actor == initiator else initiator
         offer_assets = _engine_assets(b, last.get("assets"))
         options = options_for(b, valuer, talk, actor, offer_assets)
-        opt, text, source = _choose(b, talk, actor, last_actor, offer_assets, options, turns, rng, llm)
-        # message_source is JR | LLM | TEMPLATE; the chooser's POLICY/LLM source lives in choice_source
-        msg_source = "TEMPLATE" if source == "POLICY" else source
+        opt, text, source = _choose(cur, b, talk, actor, last_actor, offer_assets, options, turns, rng, llm)
+        # source is the writer's LLM | TEMPLATE (message_source); the policy chose the move (choice_source)
         label = "GM_A" if actor == initiator else "GM"
         opts_json = [{"key": o.key, "action": o.action, "assets": o.assets, "su": o.su, "sg": o.sg}
                      for o in options]
         if opt.action == "ACCEPT":
             n = _add_turn(cur, nid, label, "ACCEPT", actor, assets=offer_assets, su=opt.su, sg=opt.sg,
-                          message=text, source=msg_source, options=opts_json, choice=opt.key,
-                          choice_source=source, posture=opt.posture, books=b)
+                          message=text, source=source, options=opts_json, choice=opt.key,
+                          choice_source="POLICY", posture=opt.posture, books=b)
             turns = _turns(cur, nid)
             pid = _agree(cur, b, valuer, talk, offer_assets, llm)
             talk["status"] = "AGREED" if pid else "STALLED"
             played += 1
             break
         if opt.action == "WALK_AWAY":
-            _add_turn(cur, nid, label, "WALK_AWAY", actor, message=text, source=msg_source, options=opts_json,
-                      choice=opt.key, choice_source=source, books=b)
+            _add_turn(cur, nid, label, "WALK_AWAY", actor, message=text, source=source, options=opts_json,
+                      choice=opt.key, choice_source="POLICY", books=b)
             _set_patience(cur, talk, actor, 0)
             _set_status(cur, nid, "WALKED_AWAY", "the GM ran out of patience")
             talk["status"] = "WALKED_AWAY"
@@ -720,13 +700,13 @@ def advance_talk(cur, b, valuer, talk, rng, llm):
         _set_patience(cur, talk, actor, left)
         if opt.action == "COUNTER":
             _add_turn(cur, nid, label, "COUNTER", actor, assets=opt.assets, su=opt.su, sg=opt.sg, mood=j["mood"],
-                      message=text, source=msg_source, options=opts_json, choice=opt.key, choice_source=source,
+                      message=text, source=source, options=opts_json, choice=opt.key, choice_source="POLICY",
                       posture=opt.posture, books=b)
             talk["counter_counts"][actor] = talk["counter_counts"].get(actor, 0) + 1
             _set_status(cur, nid, "OPEN")
         else:                                              # REJECT
-            _add_turn(cur, nid, label, "REJECT", actor, mood=j["mood"], message=text, source=msg_source,
-                      options=opts_json, choice=opt.key, choice_source=source, books=b)
+            _add_turn(cur, nid, label, "REJECT", actor, mood=j["mood"], message=text, source=source,
+                      options=opts_json, choice=opt.key, choice_source="POLICY", books=b)
         turns = _turns(cur, nid)
         played += 1
         _maybe_leak(cur, talk, turns[-1], b, rng, turns)
