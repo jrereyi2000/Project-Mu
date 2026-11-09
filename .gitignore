@@ -13,6 +13,7 @@ venv/
 data/*
 !data/scouting/
 !data/history/
+!data/gm_voices_2026.json
 data/history/.cache/
 
 # Database dumps

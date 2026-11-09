@@ -1,6 +1,16 @@
 # Project Mu: GM Talk Voice & Negotiation Dialogue Plan
 
-**Status:** approved by JR (2026-11-09); building, wave 1 of 2.
+**Status:** approved by JR (2026-11-09); building, wave 1 of 2 done.
+
+**As built — wave 1 (2026-11-09):** U1 added `gm_profiles.voice_card` / `voice_card_source` (`2027_02_13`), the
+32 authored cards, `engines/gm_voices.py`, and card generation at seed, hot-seat hire and the Godfather coach-GM
+hire (the trait draw order is restored, so the seeded traits are unchanged); `data/gm_voices_2026.json` is committed
+(`!data/gm_voices_2026.json` in `.gitignore`). U2 added the v2 sheet and the loaders; `contract.guaranteed` is
+`player_contracts.bonus`, `dead_money` is `cut_penalty`, `apy` is `total_value/length`; `read_books` reads the two
+card columns in a separate query; `last3` is newest-first. U3 implemented the verbatim-restatement check against
+the previous two lines, because `check_style` has no package object (the plan's wording implied one). A pre-existing
+`db/migrate.checksum` line-ending mismatch on `2027_01_16_personality_core` was surfaced and deliberately left
+alone (the ledger row stays `c31c1c…`, matching this machine's working tree); it needs its own follow-up.
 **Builds on:** `PROJECT_SPEC.md` §2.17 (Negotiation, Talks), §2.21b (Front-Office Inbox), §3.3f (GM agents); [`TRADE_NEGOTIATIONS_PLAN.md`](../done/TRADE_NEGOTIATIONS_PLAN.md) (V2.11); [`UNILATERAL_TRADE_ENGINE_PLAN.md`](../done/UNILATERAL_TRADE_ENGINE_PLAN.md) (U1–U2); [`FRONT_OFFICE_INBOX_PLAN.md`](../done/FRONT_OFFICE_INBOX_PLAN.md); [`CLOSE_OUT_CHECKLIST.md`](../CLOSE_OUT_CHECKLIST.md) (P1-25, P5-07, P8-03, P8-10).
 
 **Goal:** Make CPU-to-CPU trade talks and JR's inbox GM negotiations read like two people who watch tape. Today the engine picks good moves but the words are corporate-analyst filler ("efficiency", "asset value", "framework") because the writer is given no performance facts and each GM's "voice" is a trait template in the same register. This plan gives the writer concrete facts, a per-GM speech card, a writer-only turn (the policy picks the move), and a style contract with a filler/repetition check.
@@ -154,14 +164,21 @@ Hiring, so a later GM is never voiceless:
 ```python
 STYLE_BANNED = re.compile(r"\b(efficiency|asset value|framework|process|leverage|value proposition|"
                           r"market efficiency|floor[- ]raising)\b", re.I)
-def check_style(text, prior, card) -> tuple[bool, str | None]
-def write_line(llm, *, card, sheet, history, move, scene, fallback, timeout=None) -> tuple[str, str]
+def check_style(text, prior, max_words=45) -> tuple[bool, str | None]
+def write_line(llm, *, card_text, sheet, history, move, scene, fallback,
+               max_words=45, timeout=None) -> tuple[str, str]
 ```
 
-- `check_style`: rejects a line over `card`-derived length (default 45 words; a laconic register 25), a banned
-  phrase, more than one ellipsis, a sentence that repeats a 5-word run from either of the previous two lines, and a
-  line that restates the package verbatim. It runs *after* `gm_rationale.validate_rationale`, so facts still bind.
-- `write_line`: one model call with the rendered card, the scene, the fact sheet JSON, the last three lines and
+- `card_text` is `gm_voices.render_card(card)` (the caller renders it; the writer does not import `gm_voices`, so
+  wave 1's units stay independent). `max_words` comes from the card when it sets one, else 45.
+- `move` is `{"action": "OFFER" | "ACCEPT" | "COUNTER" | "REJECT" | "WALK_AWAY", "posture": str | None,
+  "gets": [label, …], "gives": [label, …]}`; the labels are already-legal text from `asset_label`.
+- `scene` is `{"week", "deadline_week", "who_called", "mood", "stakes", "relationship"}`; `stakes` and
+  `relationship` are plain strings taken from the sheet.
+- `check_style`: rejects a line over `max_words`, a banned phrase, more than one ellipsis, a sentence that repeats a
+  5-word run from either of the previous two lines, and a line that restates the package verbatim. It runs *after*
+  `gm_rationale.validate_rationale`, so facts still bind.
+- `write_line`: one model call with `card_text`, the scene, the fact sheet JSON, the last three lines and
   the style rules; answers `{"message": "..."}`. On a failed fact or style check it retries once with the reason
   appended; then returns `(fallback, "TEMPLATE")`. `source` is `"LLM"` or `"TEMPLATE"`. With `llm=None` it
   returns the fallback immediately. `timeout` uses `gm_talks.call_with_timeout` (the inbox keeps its 8 s budget).
@@ -407,3 +424,6 @@ Traits are from `gm_profiles` (open tenure, 2026), read 2026-11-09. The current 
 
 | Unit | Wave | Branch | Worktree | Result | Merge |
 |---|---|---|---|---|---|
+| U1 | 1 | worktree-agent-abb217dcf07714c1d | .claude/worktrees/agent-abb217dcf07714c1d | merged | 0994421 |
+| U2 | 1 | worktree-agent-a2ba86f0829b7b5e2 | .claude/worktrees/agent-a2ba86f0829b7b5e2 | merged | b758c5b |
+| U3 | 1 | worktree-agent-a5038c0efc02e1496 | .claude/worktrees/agent-a5038c0efc02e1496 | merged | 4485741 |
