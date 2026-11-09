@@ -65,7 +65,14 @@ def _editions(cur, draft_season):
 
 
 def _risers(cur, draft_season, step, team_id, limit=RISER_MAX):
-    """The biggest consensus risers at `step` that sit on JR's team board (his needs), names and ranks only."""
+    """The biggest consensus risers at `step` that sit on JR's team board, names and ranks only.
+
+    **Needs proxy, accepted in writing (P1-14, 2026-11-09).** Membership in JR's stored team board stands in for
+    "among JR's needs": the board is built with the GM's needs-weighted `fit` (scouting_boards.fit_bias), so a
+    prospect there is one his front office has already weighed against what the roster lacks. The stricter
+    alternative — filtering on the positions in `gm_team_seasons.needs` — would make the scouting inbox read a
+    non-scouting table and couple it to the season-scan schema for a five-name courtesy line. Revisit only if the
+    line reads wrong on a live board (then the fix is a positional filter, not a different message)."""
     if not (_regclass(cur, "scout_team_boards") and _regclass(cur, "scout_consensus")):
         return []
     cur.execute("""
