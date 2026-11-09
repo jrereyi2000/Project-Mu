@@ -652,6 +652,93 @@ def step_relationship_producers(snapshot_path, save_season, dsn=None, log_fn=log
                 pass
 
 
+# --------------------------------------------------------------------------------------- coach promises ---
+# The CPU coach loop's promises (AGENT_LOOPS_FOLLOWUPS_PLAN.md §2.1), after the relationship producers wrote this
+# tick's role windows and before the trade-request reviews. It uses the switchboard's coach_loop feature; the
+# environment variable is the kill switch (off) and operator override (on), as for every personality step.
+COACH_PROMISES_ENV = "MU_COACH_PROMISES"
+
+
+def step_coach_promises(snapshot_path, save_season, dsn=None, log_fn=log, connect=None, modes=None):
+    """CPU coach promises for this save (AGENT_LOOPS_FOLLOWUPS_PLAN.md §2.1), right after the relationship
+    producers so this tick's role windows exist, and before the trade-request reviews. Its own connection and
+    transaction; runs by the switchboard `modes` (feature_gate: the MU_COACH_PROMISES kill switch wins). Reviews
+    first, then creation for every team not in the registry's `user_teams` (JR's coach never runs). shadow records
+    the decisions only; active also appends promise_made / promise_resolved through the relationships store. The
+    decisions table is the record, so the transaction commits in both modes. Skipped (with a logged reason) when the
+    decisions, lifecycle or relationships tables aren't migrated or the league has no lifecycle universe. Never
+    fails the ingest: an error is logged, notified and returned as a failed result."""
+    mode, why = feature_gate("coach_loop", COACH_PROMISES_ENV, modes)
+    if mode == "off":
+        log_fn(f"Coach promises off ({why}).")
+        return {"status": "off"}
+    season = tick = universe = league = None
+    conn = None
+    try:
+        from engines.agent_loops import watcher as agent_watcher
+        from engines.relationship_producers import calendar as rcal, sources
+        from personality import lifecycle_store
+        from pipeline import league_office as lo
+        with open(snapshot_path) as fh:
+            snapshot = json.load(fh)
+        stage = lo.detect_stage(snapshot)
+        season = lo.league_season(snapshot, stage)
+        tick = rcal.tick_for(snapshot, lo.league_week(snapshot, stage) if stage in lo.IN_SEASON else None)
+        if connect is None:
+            import psycopg
+            connect = psycopg.connect
+        conn = connect(dsn or os.environ.get("DATABASE_URL"))
+        with conn.cursor() as cur:
+            cur.execute("SELECT to_regclass('agent_loop_decisions') IS NOT NULL, "
+                        "to_regclass('persona_lifecycle_universes') IS NOT NULL, "
+                        "to_regclass('persona_relationship_events') IS NOT NULL")
+            have_decisions, have_lifecycle, have_relationships = cur.fetchone()
+            missing = [name for name, ok in (("agent_loop_decisions", have_decisions),
+                                             ("persona_lifecycle_universes", have_lifecycle),
+                                             ("persona_relationship_events", have_relationships)) if not ok]
+            if missing:
+                conn.rollback()
+                log_fn(f"Coach promises skipped: {', '.join(missing)} tables not migrated.")
+                return {"status": "skipped", "reason": "not_migrated", "missing": missing}
+            league = sources.league_id(cur)
+            universe = lifecycle_store.universe_for_league(cur, league)
+            if universe is None:
+                conn.rollback()
+                log_fn("Coach promises skipped: no lifecycle universe for this league.")
+                return {"status": "skipped", "reason": "no_universe"}
+            result = agent_watcher.promise_tick(cur, league_id=league, season=season, tick=tick,
+                                                universe_id=universe["universe_id"], mode=mode,
+                                                user_team_ids=registry_user_team_ids(cur), snapshot=snapshot)
+        # The decisions table is the record in shadow too; active also appended its envelopes above.
+        conn.commit()
+        log_fn(f"Coach promises {season}:{tick} ({mode}): {result['made']} made, {result['reviewed']} reviewed "
+               f"({result['kept']} kept, {result['broken']} broken, {result['unknown']} unknown, "
+               f"{result['deferred']} deferred), {result['errors']} error(s)")
+        return {"status": result["status"], "season": season, "tick": tick,
+                "counts": {k: result[k] for k in ("made", "reviewed", "kept", "broken", "unknown", "deferred",
+                                                  "errors")}}
+    except Exception as e:  # noqa: BLE001 - never fatal to the ingest
+        msg = f"Coach promises failed for season {season} tick {tick}: {e}"
+        log_fn(msg)
+        traceback.print_exc()
+        if conn is not None:
+            try:
+                conn.rollback()
+            except Exception:  # noqa: BLE001
+                pass
+        try:
+            send_notify(msg, title="Mu: coach promises failed", priority="default", tags=("warning",))
+        except Exception:  # noqa: BLE001
+            pass
+        return {"status": "failed", "error": str(e)}
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:  # noqa: BLE001
+                pass
+
+
 # ------------------------------------------------------------------------------------- personality evolution ---
 EVOLUTION_ENV = "MU_PERSONALITY_EVOLUTION"
 EVOLUTION_TICK = 24   # league_office.STAGE_WEEKS["OFFSEASON_START"]
@@ -1226,6 +1313,8 @@ def ingest_snapshot(snapshot_path, save_season, save_week, dry_run=False, no_art
     modes = personality_modes(dsn, log_fn=log_fn)
     # Step: relationship producers (after the load, before the stage_only branch; off by default; never fatal)
     producers = step_relationship_producers(snapshot_path, save_season, dsn=dsn, log_fn=log_fn, modes=modes)
+    # Step: CPU coach promises (after the producers wrote this tick's role windows; off by default; never fatal)
+    coach_promises = step_coach_promises(snapshot_path, save_season, dsn=dsn, log_fn=log_fn, modes=modes)
     # Step: personality evolution (OFFSEASON_START only, after the producers, before the league office; off by default)
     evolution = step_personality_evolution(snapshot_path, save_season, dsn=dsn, log_fn=log_fn, modes=modes)
     # Step: focus refresh (OFFSEASON_START only, right after evolution, before the league office; off by default)
@@ -1248,8 +1337,8 @@ def ingest_snapshot(snapshot_path, save_season, save_week, dry_run=False, no_art
     def result():
         return {"status": "success", "dry_run": False, "season": save_season, "week": save_week,
                 "load_report": load_report, "league_office": lo_result, "relationship_producers": producers,
-                "personality_evolution": evolution, "focus_refresh": focus_refresh,
-                "trade_requests": trade_requests}
+                "coach_promises": coach_promises, "personality_evolution": evolution,
+                "focus_refresh": focus_refresh, "trade_requests": trade_requests}
 
     if stage_only:
         # An offseason stop: no current week, so no weekly engines, articles or mod pack.
