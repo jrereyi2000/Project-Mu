@@ -1,6 +1,7 @@
 # Project Mu: Unilateral Trade Engine & Rivalry Contention Plan
 
-**Status:** approved by JR (2026-11-09); building, wave 1 of 2.
+**Status:** approved by JR (2026-11-09); building, wave 1 of 2 done.
+**As built (U1):** `packages` keeps the initiator's own picks in its outgoing candidate pool (ranked by neutral league value like the rest) because the neutral pick chart prices Day-2/3 picks below depth players, which emptied the ladder-rental pool; `public_seller_value` takes the receiver from `asset["to"]` (its fixed signature has no buyer); `persona_target_weight` reads the market fit from `b["fits"]` (set by `run_week`) for CAP_MIND and falls back to the stub market.
 **Builds on:** `PROJECT_SPEC.md` §2.17 (Trade Value, Proposal Engine, Negotiation, Talks), [`03_GM_AGENTS_PLAN.md`](../done/team_management/03_GM_AGENTS_PLAN.md) §2.4–2.5, [`TRADE_NEGOTIATIONS_PLAN.md`](../done/TRADE_NEGOTIATIONS_PLAN.md) (V2.11), [`CLOSE_OUT_CHECKLIST.md`](../CLOSE_OUT_CHECKLIST.md) (`P1-25`, `P3-07`, `P5-07`, `P5-14`, `P8-10`).
 
 **Goal:** Stop the trade engine from pre-screening offers through both GMs' private valuations before a talk starts. Each initiating GM searches for targets and builds an opening offer using only their own valuation, their own personality (aggressiveness, risk appetite, sliders, traits), and public league facts; the receiving GM then evaluates that offer against their own internal standards—including a rivalry-and-contention tax that makes trading with a division rival or fellow conference contender much costlier than trading with a rebuilding team in the other conference—and chooses whether to accept, counter, reject, or walk away.
@@ -298,3 +299,4 @@ After `/execute-plan docs/not_started/UNILATERAL_TRADE_ENGINE_PLAN.md` finishes 
 
 | Unit | Wave | Branch | Worktree | Result | Merge |
 |---|---|---|---|---|---|
+| U1 | 1 | `worktree-agent-ac5165cdc996f99fd` | `.claude/worktrees/agent-ac5165cdc996f99fd` | merged | `478f6aa` |
