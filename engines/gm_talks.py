@@ -1,5 +1,5 @@
 """
-Two-GM CPU trade talks (docs/in_progress/TRADE_NEGOTIATIONS_PLAN.md §2.3; PROJECT_SPEC §2.17 Talks, §3.3f).
+Two-GM CPU trade talks (docs/done/TRADE_NEGOTIATIONS_PLAN.md §2.3; PROJECT_SPEC §2.17 Talks, §3.3f).
 
 `run_week` hands this module the deals its search found and both GMs accept; instead of storing each one as a
 PROPOSED proposal and waiting for JR (who, 2026-2033, has no team), the two GMs talk it out over one or more
@@ -498,6 +498,11 @@ def open_talk(cur, b, valuer, deal, rng, llm=None):
               options=[{"key": o.key, "action": o.action, "assets": o.assets, "su": o.su, "sg": o.sg}
                        for o in options],
               choice=opt.key, choice_source="POLICY", posture=opt.posture, books=b)
+    # The opening turn is the OPENED stage (e9673eb staged OPENED on the first GM turn), and nothing drew on it, so
+    # a CPU talk's first leak only ever came from turn 2.
+    turns = _turns(cur, nid)
+    if turns:
+        _maybe_leak(cur, talk, dict(turns[-1], assets=opt.assets), b, rng, turns)
     return talk
 
 
@@ -637,11 +642,13 @@ def _store_leak(cur, leak):
     return True
 
 
-def record_leaks(cur, talk, turn, b, rng, turns=None):
+def record_leaks(cur, talk, turn, b, rng, turns=None, user_team_id=None):
     """Draw this turn's leaks and store them; the public seam for callers outside the loop (the inbox's GM_TALK).
     Returns how many rows were stored. Pass `turns` (the transcript so far) so the OPENED stage lands on the first
-    turn a GM speaks."""
-    return sum(bool(_store_leak(cur, leak)) for leak in leak_events(talk, turn, b, rng, turns))
+    turn a GM speaks. `user_team_id` marks a talk JR is in (D4): positions only, and nothing at all once JR has
+    insulted the GM."""
+    return sum(bool(_store_leak(cur, leak))
+               for leak in leak_events(talk, turn, b, rng, turns, user_team_id=user_team_id))
 
 
 def _maybe_leak(cur, talk, turn, b, rng, turns=None):
@@ -665,7 +672,10 @@ def advance_talk(cur, b, valuer, talk, rng, llm):
         last = turns[-1]
         last_actor = _turn_actor_team(last, talk)
         actor = other if last_actor == initiator else initiator
-        offer_assets = _engine_assets(b, last.get("assets"))
+        # The package on the table is the last turn that carried one: a REJECT has none, and handing the next GM an
+        # empty offer turned the talk into a REJECT ping-pong that only burned patience.
+        offer_turn = next((t for t in reversed(turns) if t.get("assets")), None)
+        offer_assets = _engine_assets(b, offer_turn["assets"]) if offer_turn else []
         options = options_for(b, valuer, talk, actor, offer_assets)
         opt, text, source = _choose(cur, b, talk, actor, last_actor, offer_assets, options, turns, rng, llm)
         # source is the writer's LLM | TEMPLATE (message_source); the policy chose the move (choice_source)
@@ -710,7 +720,9 @@ def advance_talk(cur, b, valuer, talk, rng, llm):
                       options=opts_json, choice=opt.key, choice_source="POLICY", books=b)
         turns = _turns(cur, nid)
         played += 1
-        _maybe_leak(cur, talk, turns[-1], b, rng, turns)
+        # Stored turn assets carry abbreviations; leak_events compares team ids, so convert them first or the
+        # "aggressive leaker names players" rule never fires.
+        _maybe_leak(cur, talk, dict(turns[-1], assets=_engine_assets(b, turns[-1].get("assets"))), b, rng, turns)
         if left <= 0:
             _set_status(cur, nid, "WALKED_AWAY", "the GM ran out of patience")
             talk["status"] = "WALKED_AWAY"
@@ -758,6 +770,7 @@ def resume_talks(cur, b, valuer, rng, llm, log=None):
     {"talks": [...], "agreed": [...], "stalled": [...], "teams": set()}."""
     log = log or (lambda *a, **k: None)
     rep = {"talks": [], "agreed": [], "stalled": [], "teams": set()}
+    stall_orphan_talks(cur, b, window=b.get("window") or "IN_SEASON", log=log)   # a carry from another season/window
     cur.execute("""SELECT id FROM gm_trade_negotiations
                    WHERE season = %s AND kind = 'CPU' AND status = 'OPEN' AND trade_window = %s ORDER BY id""",
                 (b["season"], b.get("window") or "IN_SEASON"))
@@ -767,8 +780,9 @@ def resume_talks(cur, b, valuer, rng, llm, log=None):
             continue
         rep["teams"].update((_initiator(talk), talk["gm_team_id"]))
         turns = _turns(cur, nid)
-        if turns:
-            offer = _engine_assets(b, turns[-1].get("assets"))
+        offer_turn = next((t for t in reversed(turns) if t.get("assets")), None)
+        if offer_turn is not None:
+            offer = _engine_assets(b, offer_turn["assets"])
             why = _rejudge(b, valuer, talk, offer)
             if why:
                 _stall(cur, b, valuer, talk, offer, why)
@@ -786,6 +800,26 @@ def resume_talks(cur, b, valuer, rng, llm, log=None):
         rep["talks"].append(entry)
         log(f"  talk #{nid}: {status}")
     return rep
+
+
+def stall_orphan_talks(cur, b, window="keep", log=None):
+    """Stall OPEN CPU talks the engine can no longer continue: one from an earlier season, one whose window has
+    changed, or — `window=None`, the deadline passed — every open one. Without this, a talk missed by a batch-simmed
+    week or a season rollover stays OPEN for ever: nothing else updates a CPU talk's status."""
+    if window is None:
+        cur.execute("UPDATE gm_trade_negotiations SET status = 'STALLED', status_reason = %s "
+                    "WHERE kind = 'CPU' AND status = 'OPEN' AND season = %s RETURNING id",
+                    ("the trade deadline passed", b["season"]))
+    else:
+        window = b.get("window") if window == "keep" else window
+        cur.execute("UPDATE gm_trade_negotiations SET status = 'STALLED', status_reason = %s "
+                    "WHERE kind = 'CPU' AND status = 'OPEN' "
+                    "AND (season < %s OR (season = %s AND trade_window <> %s)) RETURNING id",
+                    ("its trade window closed", b["season"], b["season"], window or "IN_SEASON"))
+    ids = [r[0] for r in cur.fetchall()]
+    if ids and log:
+        log(f"  {len(ids)} open CPU talk(s) stalled: the window closed")
+    return ids
 
 
 def run_talks(cur, b, valuer, deals, rng, llm, log=None):
@@ -845,7 +879,7 @@ def _leak_stage(talk, turn, turns=None):
     return None
 
 
-def leak_events(talk, turn, books, rng, turns=None):
+def leak_events(talk, turn, books, rng, turns=None, user_team_id=None):
     """Leaks a turn may produce (pure, at most one per talk per week): per GM p = LEAK_BASE x (0.5 +
     sociability/10) x (0.5 GUARDED) x (1.5 QUOTABLE) x STAGE_W[stage]. An aggressive leaker names the players he
     receives; otherwise positions only. `books` may carry "insider_relationships": {team_id: {insider_key}} to
@@ -854,8 +888,12 @@ def leak_events(talk, turn, books, rng, turns=None):
     stage = _leak_stage(talk, turn, turns)
     if stage is None:
         return []
+    if user_team_id is not None and str(turn.get("mood") or "").upper() == "INSULTED":
+        return []                     # D4: a GM JR insulted doesn't leak the talk at all
     initiator, other = _initiator(talk), talk["gm_team_id"]
     for tid in (initiator, other):
+        if user_team_id is not None and tid == user_team_id:
+            continue                  # D4: JR's counterpart leaks, JR's own front office doesn't
         gm = _gm(books, tid)
         p = LEAK_BASE * (0.5 + _sliders(gm)["sociability"] / 10)
         if "GUARDED" in (gm.get("traits") or []):
@@ -867,7 +905,9 @@ def leak_events(talk, turn, books, rng, turns=None):
             continue
         assets = turn.get("assets") or []
         named = [a["player_id"] for a in assets if a.get("type") == "PLAYER" and a.get("to") == tid]
-        named = named if gm.get("aggressiveness", 0.5) >= 0.65 else []
+        # D4: a leak about JR's talk is positions only whatever the leaker's aggressiveness; on a CPU talk an
+        # aggressive leaker names the players he receives.
+        named = named if user_team_id is None and gm.get("aggressiveness", 0.5) >= 0.65 else []
         positions = []
         for a in assets:
             if a.get("type") == "PLAYER":
@@ -881,7 +921,7 @@ def leak_events(talk, turn, books, rng, turns=None):
             rel = (books.get("insider_relationships") or {}).get(tid) or set()
             weights = [2.0 if k in rel else 1.0 for k in insiders]
             insider = rng.choices(insiders, weights=weights)[0]
-        detail = {"teams": [_abbr(books, initiator), _abbr(books, other)], "initiator": initiator,
+        detail = {"teams": [_abbr(books, initiator), _abbr(books, other)], "initiator": _abbr(books, initiator),
                   "positions": positions, "picks": picks}
         return [Leak(negotiation_id=talk["id"], turn_no=turn.get("turn_no") or 0, season=talk["season"],
                      week=books.get("week") or talk.get("week"), leaker_team_id=tid, stage=stage,

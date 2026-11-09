@@ -329,7 +329,7 @@ def test_template_names_the_queued_move_on_agreement():
 def test_a_leak_draw_runs_after_every_gm_turn_and_never_speaks(cur, monkeypatch):
     draws = []
 
-    def draw(talk, turn, books, rng, turns=None):
+    def draw(talk, turn, books, rng, turns=None, user_team_id=None):
         draws.append((talk["id"], turn["turn_no"], turn["action"], gm_talks._leak_stage(talk, turn, turns)))
         return []
 

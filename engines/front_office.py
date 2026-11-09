@@ -240,8 +240,16 @@ def _leak_rumors(cur, season, week):
     row = cur.fetchone()
     if not row or not row[0]:
         return [], set()
+    # A rumor is a talk that did NOT become a trade: a leak from a talk that agreed, or whose deal executed, would
+    # otherwise keep reading as "talks are close, outcome open" for the rest of the season.
     cur.execute("""SELECT l.id, l.negotiation_id, l.week, l.stage, l.insider_key, l.detail, l.named_player_ids
-                   FROM gm_trade_leaks l WHERE l.season = %s AND l.week <= %s ORDER BY l.week, l.id""",
+                   FROM gm_trade_leaks l
+                   JOIN gm_trade_negotiations n ON n.id = l.negotiation_id
+                   LEFT JOIN gm_trade_proposals p ON p.id = n.proposal_id
+                   WHERE l.season = %s AND l.week <= %s
+                     AND COALESCE(n.status, '') <> 'AGREED'
+                     AND COALESCE(p.status, '') <> 'EXECUTED'
+                   ORDER BY l.week, l.id""",
                 (season, week))
     rows = cur.fetchall()
     nids = {r[1] for r in rows}

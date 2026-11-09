@@ -1298,11 +1298,21 @@ def step_engine_trades(plan, proposals):
     """An APPROVED CPU deal (flag `auto_approved`): its player legs go into the save at PRIORITY_ENGINE_TRADE and its
     picks are left to record_written (Mu's books only). A player already claimed this write refuses the WHOLE trade
     (the proposal stays APPROVED and is retried next write; a second refusal expires it, record_written)."""
+    from engines import gm_trade_engine as ge
+    window = ge.window_for(plan.week)
     for p in proposals or []:
         pid = p["id"]
         tag = ("trade", pid)
-        plan.db["engine_trades"].append({"id": pid, "tag": tag, "flags": list(p.get("flags") or []),
-                                         "refusals": int(p.get("refusals") or 0), "status": None, "reason": None})
+        rec = {"id": pid, "tag": tag, "flags": list(p.get("flags") or []),
+               "refusals": int(p.get("refusals") or 0), "status": None, "reason": None}
+        plan.db["engine_trades"].append(rec)
+        # The deadline and the season/stage are checked here too: an auto-approved deal the league office refused
+        # once used to be retried and written in a later week, past the deadline.
+        why = ge.stale_reason(p, plan.week, window, plan.stage if window == "OFFSEASON" else None)
+        if why:
+            rec["status"], rec["reason"] = "EXPIRED", why
+            plan.note(tag, False, f"trade #{pid}: {why}")
+            continue
         legs = [a for a in p.get("assets") or [] if a.get("type") == "PLAYER"]
         targets, bad = {}, None
         for a in legs:                       # every leg is checked first, so a refusal leaves nothing planned
@@ -1319,6 +1329,10 @@ def step_engine_trades(plan, proposals):
             status, on = plan.roster_status(g)
             if status not in ("Signed", "PracticeSquad") or on is None or on >= FREE_AGENT_TEAM:
                 bad = f"{plan.name(g)} is {status}, not on a roster"
+                break
+            from_index = plan.team_index.get(a.get("from"))
+            if from_index is not None and on != from_index:
+                bad = f"{plan.name(g)} is not on {a.get('from')} any more"     # step_pending_trade checks this too
                 break
             targets[g] = to_index
         if bad is None:
@@ -2085,12 +2099,15 @@ def plan_stage(cur, snapshot, stage, seed, deps=None, wave=None, state=None, sou
     summary["pending_written"] = sum(1 for p in plan.db["pending"] if p["status"] == "WRITTEN")
     summary["pending_refused"] = sum(1 for p in plan.db["pending"] if p["status"] == "REFUSED")
     for t in plan.db["engine_trades"]:
+        if t.get("status") == "EXPIRED":           # past its window: expired below, never retried
+            continue
         ok, reason = plan.results.get(t["tag"], (False, "not planned"))
         t["status"], t["reason"] = ("WRITTEN" if ok else "REFUSED"), (None if ok else reason)
     summary["engine_trades"] = len(plan.db["engine_trades"])
     summary["engine_trades_written"] = sum(1 for t in plan.db["engine_trades"] if t["status"] == "WRITTEN")
     summary["engine_trades_failed"] = sum(1 for t in plan.db["engine_trades"] if t["status"] == "REFUSED")
     summary["engine_trades_failed_ids"] = [t["id"] for t in plan.db["engine_trades"] if t["status"] == "REFUSED"]
+    summary["engine_trades_expired"] = [t["id"] for t in plan.db["engine_trades"] if t["status"] == "EXPIRED"]
     summary["drift"] = {k: len(v) for k, v in drift.items() if isinstance(v, list)}
     summary["drift_ratings_left_to_progression"] = plan.counts.get("drift_ratings_left_to_progression", 0)
     summary["progression"] = prog_info
@@ -2286,15 +2303,22 @@ def _record_trades(cur, plan, run_id):
             log.warning("trade #%s: not executed (%s)", pid, e)
             continue
         if proposal.get("status") != "EXECUTED":
-            fo._execute(cur, proposal, "PROPOSED")
+            try:
+                fo._execute(cur, proposal, "PROPOSED")
+            except Exception as e:      # noqa: BLE001 - the save is already replaced; --recover must not wedge on it
+                log.warning("trade #%s: not executed (%s)", pid, e)
+                continue
             cur.execute("UPDATE gm_trade_proposals SET status = 'EXECUTED', "
                         "executed_at = COALESCE(executed_at, now()) WHERE id = %s", (pid,))
         for nid in talks.get(pid, []):
             gm_talks.publish_talk(cur, nid)
     for t in db.get("engine_trades") or []:
-        if t.get("status") == "REFUSED" and int(t.get("refusals") or 0) >= 1:
+        expired = t.get("status") == "EXPIRED"
+        if expired or (t.get("status") == "REFUSED" and int(t.get("refusals") or 0) >= 1):
+            why = (t.get("reason") or "its trade window closed") if expired else \
+                "the league office couldn't make it"
             try:
-                fo.could_not_make(cur, t["id"], "the league office couldn't make it")
+                fo.could_not_make(cur, t["id"], why)
             except Exception as e:      # noqa: BLE001 - already expired / gone: the retry is over either way
                 log.warning("trade #%s: could not be expired (%s)", t["id"], e)
 

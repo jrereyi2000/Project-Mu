@@ -215,7 +215,9 @@ function LeagueTalk({ talk }: { talk: PublishedTradeTalk }) {
           <li key={turn.turn_no}>
             <header>
               <strong>{turn.team}</strong>
-              <span className={`fr-posture ${turn.posture.toLowerCase()}`}>{turn.posture}</span>
+              {turn.posture && (
+                <span className={`fr-posture ${turn.posture.toLowerCase()}`}>{turn.posture}</span>
+              )}
               <small>{turn.action.replace("_", " ")} · Week {turn.week}</small>
             </header>
             {turn.assets.length > 0 && (

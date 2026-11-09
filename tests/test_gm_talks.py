@@ -443,7 +443,7 @@ def test_a_run_limit_stall_stores_the_last_offer_not_the_reject(monkeypatch):
 def test_a_run_limit_stall_leaks_at_the_stalled_stage(monkeypatch):
     seen = []
 
-    def fake_events(talk, turn, books, rng, turns=None):
+    def fake_events(talk, turn, books, rng, turns=None, user_team_id=None):
         seen.append((gt._leak_stage(talk, turn, turns), bool(turn.get("assets"))))
         return []
 
@@ -674,3 +674,19 @@ def test_a_replayed_week_uses_its_own_window_not_the_leagues_current_one():
     # No --week: the league's own season/week/window, unchanged.
     assert gt.replay_target((2036, 7, "IN_SEASON")) == (2036, 7, "IN_SEASON")
     assert gt.replay_target((2036, 21, None)) == (2036, 21, None)
+
+
+def test_a_talk_jr_is_in_leaks_positions_only_and_stops_after_an_insult():
+    """D4: GMs may leak JR's talks, positions only, unless JR insulted the GM."""
+    b, v = setup()
+    b["gm"][1].update(aggressiveness=0.9, traits=[])
+    b["gm"][2].update(aggressiveness=0.9, traits=[])
+    turn = _leak_turn()
+    leaks = [e for i in range(300)
+             for e in gt.leak_events(dict(TALK, status="OPEN"), turn, b, random.Random(i), user_team_id=1)]
+    assert leaks
+    assert all(not e.named_player_ids for e in leaks)          # positions only, whatever the leaker's appetite
+    assert all(e.leaker_team_id != 1 for e in leaks)           # JR's own front office doesn't leak
+    insulted = dict(turn, mood="INSULTED")
+    assert all(gt.leak_events(dict(TALK, status="OPEN"), insulted, b, random.Random(i), user_team_id=1) == []
+               for i in range(100))

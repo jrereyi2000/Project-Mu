@@ -1714,3 +1714,50 @@ def test_run_report_leaves_out_the_roster_image():
     assert lo.report_summary(s)["retirement_window"] == {"role": "window"}
     assert s["retirement_window"]["roster_image"]           # the stored summary keeps it
     assert lo.report_summary({"stage": "X"}) == {"stage": "X"}
+
+
+def test_an_engine_trade_past_its_window_is_expired_not_written(monkeypatch):
+    """A deal agreed in week 8 and refused once by the league office used to be retried and written weeks later,
+    past the deadline: step_engine_trades checked nothing."""
+    from engines import front_office as fo
+    deps = FakeDeps()
+    deps.engine_props = [{"id": 41, "status": "APPROVED", "flags": ["auto_approved"], "refusals": 0,
+                          "trade_window": "OFFSEASON",
+                          "assets": [{"type": "PLAYER", "player_id": pid(1), "from": CHI, "to": AZ}]}]
+    p = plan("REGULAR_WEEK", deps=deps)
+    t = p["db"]["engine_trades"][0]
+    assert t["status"] == "EXPIRED" and "offseason is over" in t["reason"]
+    assert not [x for x in p["edits"].get("trade") or []]
+    assert p["summary"]["engine_trades_expired"] == [41]
+    assert p["summary"]["engine_trades_failed_ids"] == []          # not queued for a retry
+    calls = []
+    monkeypatch.setattr(fo, "could_not_make",
+                        lambda cur, proposal_id, reason=None: calls.append((proposal_id, reason)))
+    lo.record_written(FakeCursor(), p, 79)
+    assert calls == [(41, "the offseason is over")]
+
+
+def test_an_engine_trade_leg_from_the_wrong_team_is_refused():
+    """Only "on some roster" was checked, so a player traded by a team that no longer has him moved anyway."""
+    deps = FakeDeps()
+    deps.engine_props = [{"id": 41, "status": "APPROVED", "flags": ["auto_approved"], "refusals": 0,
+                          "assets": [{"type": "PLAYER", "player_id": pid(1), "from": AZ, "to": AZ}]}]  # 1 is CHI's
+    p = plan("REGULAR_WEEK", deps=deps)
+    t = p["db"]["engine_trades"][0]
+    assert t["status"] == "REFUSED" and "any more" in t["reason"]
+    assert not [x for x in p["edits"].get("trade") or []]
+
+
+def test_a_failed_execution_after_the_save_is_written_does_not_wedge_recover(monkeypatch):
+    from engines import front_office as fo
+    deps = FakeDeps()
+    deps.engine_props = [{"id": 41, "status": "APPROVED", "flags": ["auto_approved"], "refusals": 0,
+                          "assets": [{"type": "PLAYER", "player_id": pid(1), "from": CHI, "to": AZ}]}]
+    p = plan("REGULAR_WEEK", deps=deps)
+    monkeypatch.setattr(fo, "_proposal", lambda cur, proposal_id: {"id": proposal_id, "status": "APPROVED"})
+
+    def boom(*a, **k):
+        raise RuntimeError("no row this season")
+
+    monkeypatch.setattr(fo, "_execute", boom)
+    lo.record_written(FakeCursor(), p, 80)          # the save is already replaced: log it, never raise

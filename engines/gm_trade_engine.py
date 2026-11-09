@@ -205,24 +205,36 @@ def expire_stale(open_props, week, window="IN_SEASON", stage=None, pick=None, ro
     for p in open_props:
         if p["status"] not in ("PROPOSED", "APPROVED"):
             continue
-        if "auto_approved" in (p.get("flags") or []):
+        why = stale_reason(p, week, window, stage, pick, round_no)
+        if why is None:
             continue
-        pw = p.get("trade_window", "IN_SEASON")
-        if pw == "OFFSEASON" and stage is not None and (flag_value(p, "stage") or 0) < stage:
-            out.append((p["id"], f"offseason stage {flag_value(p, 'stage')} is over"))
-        elif pw == "DRAFT_DAY" and round_no is not None and (flag_value(p, "round") or 1) < round_no:
-            out.append((p["id"], f"Round {flag_value(p, 'round') or 1} was simmed"))
-        elif pw == "DRAFT_DAY" and (pick is not None and (flag_value(p, "pick") or 0) < pick or
-                                    window == "OFFSEASON" and (stage or 0) > DRAFT_STAGE):
-            out.append((p["id"], "the pick was made"))
-        elif pw in ("OFFSEASON", "DRAFT_DAY"):
-            if window == "IN_SEASON":
-                out.append((p["id"], "the offseason is over"))
-        elif pw == "IN_SEASON" and not trades_open(week, "IN_SEASON"):
-            out.append((p["id"], "trade deadline passed"))
-        elif p.get("expires_week") is not None and week > p["expires_week"]:
-            out.append((p["id"], f"expired after week {p['expires_week']}"))
+        if "auto_approved" in (p.get("flags") or []) and window is not None \
+                and p.get("trade_window", "IN_SEASON") == window:
+            continue                 # its window is still open: the league office retries, and record_written
+            #                          expires it on the second refusal. Past the window it expires here, or a
+            #                          leftover deal would be written after the deadline.
+        out.append((p["id"], why))
     return out
+
+
+def stale_reason(p, week, window="IN_SEASON", stage=None, pick=None, round_no=None):
+    """Why the league has moved past this proposal, or None. The one rule `expire_stale` and the league office's
+    `step_engine_trades` share, so an approved CPU deal can't be written past its own window."""
+    pw = p.get("trade_window", "IN_SEASON")
+    if pw == "OFFSEASON" and stage is not None and (flag_value(p, "stage") or 0) < stage:
+        return f"offseason stage {flag_value(p, 'stage')} is over"
+    if pw == "DRAFT_DAY" and round_no is not None and (flag_value(p, "round") or 1) < round_no:
+        return f"Round {flag_value(p, 'round') or 1} was simmed"
+    if pw == "DRAFT_DAY" and (pick is not None and (flag_value(p, "pick") or 0) < pick or
+                              window == "OFFSEASON" and (stage or 0) > DRAFT_STAGE):
+        return "the pick was made"
+    if pw in ("OFFSEASON", "DRAFT_DAY") and window == "IN_SEASON":
+        return "the offseason is over"
+    if pw == "IN_SEASON" and not trades_open(week, "IN_SEASON"):
+        return "trade deadline passed"
+    if p.get("expires_week") is not None and week > p["expires_week"]:
+        return f"expired after week {p['expires_week']}"
+    return None
 
 
 # ------------------------------------------------------------------ budget ----
@@ -2127,6 +2139,8 @@ def run_week(cur, season, week, dry_run=False, replace=False, llm=None, log=prin
             for pid, why in expire_stale(read_proposals(cur, season, ("PROPOSED", "APPROVED")), week):
                 set_status(cur, pid, "EXPIRED", why)
                 rep["expired"].append((pid, why))
+            from engines import gm_talks
+            gm_talks.stall_orphan_talks(cur, {"season": season}, window=None, log=log)
         return rep
     if replace and not dry_run:
         cur.execute("""DELETE FROM gm_trade_proposals WHERE season = %s AND week = %s AND origin = 'ENGINE'

@@ -218,7 +218,7 @@ export type PublishedTradeTurn = {
   week: number;
   team: string;                        // the speaking team's abbreviation
   action: PublishedTalkAction;
-  posture: PublishedTalkPosture;
+  posture: PublishedTalkPosture | null;   // REJECT and WALK_AWAY turns store none
   assets: PublishedTradeAsset[];
   message: string;
 };
