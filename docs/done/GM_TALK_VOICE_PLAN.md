@@ -1,6 +1,8 @@
 # Project Mu: GM Talk Voice & Negotiation Dialogue Plan
 
-**Status:** built and on main (2026-11-09); JR's blind voice read pending.
+**Status:** built and on main (2026-11-09); transcripts approved by JR (2026-11-09). The 32 authored cards are
+not applied to `madden_mu2026` yet: Q1 waits for JR to read `data/gm_voices_2026.json` (a dry run matches all 32
+with no name mismatches; `2027_02_13` is applied to `madden_mu2026` and `madden_test`).
 
 **As built — wave 1 (2026-11-09):** U1 added `gm_profiles.voice_card` / `voice_card_source` (`2027_02_13`), the
 32 authored cards, `engines/gm_voices.py`, and card generation at seed, hot-seat hire and the Godfather coach-GM
