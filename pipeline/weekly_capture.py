@@ -593,6 +593,33 @@ def step_season_archive(season):
         return None
 
 
+def step_gm_hot_seat(season):
+    """engines/gm_rollover.hot_seat_only (P1-27): the GM hot seat for the season just finished, run BEFORE the
+    coaching carousel so a team that fires both its head coach and its GM is dual-vacant when the carousel hires
+    (the §2.3 Godfather trigger). Skipped until the Super Bowl is complete and once decided; the next preseason's
+    rollover then sees the scores written. Optional, never stops the run."""
+    try:
+        import psycopg
+        from pipeline.load_capture import DSN
+        from engines import gm_rollover
+        with psycopg.connect(DSN) as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT to_regclass('gm_profiles') IS NOT NULL")
+            if not cur.fetchone()[0]:
+                return None
+            rep = gm_rollover.hot_seat_only(cur, season + 1, log=log)
+            conn.commit()
+        if rep.get("fired"):
+            who = "; ".join(f"{f['team']} (score {f['score']})" for f in rep["fired"])
+            log(f"  GM hot seat {season}: {len(rep['fired'])} GM(s) replaced: {who}")
+            notify(f"Mu has replaced these GMs: {who}.", title="Mu: GMs fired", tags=("door",))
+        return rep
+    except Exception as e:
+        traceback.print_exc()
+        log(f"  [WARN] GM hot seat skipped: {e!r}")
+        return None
+
+
 def step_coach_hot_seat(season):
     """engines/coaching_carousel.py (Step 7d): whatever of the coaching carousel is ready, once each: Black Monday
     head-coach firings (the Week 18 run, before the Week 19 articles), a playoff team's coach once it is out, the
@@ -675,6 +702,8 @@ def run_weekly_engines(season, mode="weekly", log_fn=log):
     if mode in ("weekly", "playoff", "postgame"):
         log_fn("Step 7d: season archive")
         step_season_archive(season)
+        log_fn("Step 7d: GM hot seat (before the carousel)")
+        step_gm_hot_seat(season)
         log_fn("Step 7d: coaching carousel")
         step_coach_hot_seat(season)
 

@@ -139,13 +139,17 @@ def read_state(cur, season):
     cur_rows = cur.fetchall()
     cur.execute("SELECT team_id FROM gm_team_seasons WHERE season = %s AND fo_quality_at IS NOT NULL", (prior,))
     prior_fo = {r[0] for r in cur.fetchall()}
+    # Only a GM who was already in the job before the prior season inherits his predecessor's q (a GM fired in the
+    # post-Super Bowl hot seat, P1-27, must start at the baseline).
+    cur.execute("SELECT team_id FROM gm_profiles WHERE end_season IS NULL AND start_season <= %s", (prior,))
+    carry_ok = {r[0] for r in cur.fetchall()}
     cur.execute("SELECT draft_season, round, original_team_id FROM draft_picks WHERE draft_season > %s", (season,))
     existing = {tuple(r) for r in cur.fetchall()}
     cur.execute("SELECT count(*) FROM draft_picks WHERE draft_season <= %s AND NOT used", (season,))
     unused = cur.fetchone()[0]
     return {"season": season, "team_ids": team_ids, "hot_seat_decided": n == 0 or decided > 0, "hot_seat_rows": rows,
             "team_rows": {r[0] for r in cur_rows}, "direction_missing": {r[0] for r in cur_rows if r[1]},
-            "fo_carry": {r[0] for r in cur_rows if r[2]} & prior_fo, "picks_existing": existing,
+            "fo_carry": {r[0] for r in cur_rows if r[2]} & prior_fo & carry_ok, "picks_existing": existing,
             "unused_past": unused}
 
 
@@ -237,49 +241,94 @@ def _hire_gm(cur, season, prior, abbr, team_id, llm, *, why, log=print):
             "appeal": round(appeal, 3), "budget": budget}
 
 
+def _owner_state(cur, season, state, rep):
+    """The `owner_patience` overlay on the hot-seat rows (active: the owner's terms; shadow: record the comparison;
+    off: unchanged)."""
+    from engines import owner_context as oc
+    mode = oc.feature_mode(cur, "owner_patience")
+    if mode == "off":
+        return state
+    terms = oc.patience_terms(cur)
+    owned = [dict(r, owner=terms[r["team_id"]]) if r["team_id"] in terms and not r.get("user_controlled")
+             else r for r in state["hot_seat_rows"]]
+    rep["owner_mode"] = mode
+    if mode == "active":
+        return dict(state, hot_seat_rows=owned)
+    if not state["hot_seat_decided"]:
+        base, alt = hot_seat(state["hot_seat_rows"], season - 1), hot_seat(owned, season - 1)
+        rep["owner_shadow"] = [{"team_id": t, "fired": bool(base.get(t, {}).get("fire")),
+                                "owner_fired": bool(alt[t]["fire"]), "owner": alt[t]["inputs"].get("owner")}
+                               for t in sorted(alt) if bool(base.get(t, {}).get("fire")) != bool(alt[t]["fire"])]
+    return state
+
+
+def _fire_hot_seat(cur, season, decisions, rep, llm, log):
+    """Writes the hot seat's scores for season-1 and fires the GMs it names. Returns the fired team ids."""
+    prior = season - 1
+    if decisions is None:
+        return []
+    for tid, h in decisions.items():
+        cur.execute("UPDATE gm_team_seasons SET hot_seat_score = %s, hot_seat_inputs = %s "
+                    "WHERE team_id = %s AND season = %s", (h["score"], json.dumps(h["inputs"]), tid, prior))
+    fired_tids = []
+    for tid, h in sorted(decisions.items(), key=lambda kv: -kv[1]["score"]):
+        if not h["fire"]:
+            continue
+        cur.execute("""SELECT t.abbreviation, g.coach_id IS NOT NULL FROM teams t
+                       LEFT JOIN gm_profiles g ON g.team_id = t.id AND g.end_season IS NULL WHERE t.id = %s""",
+                    (tid,))
+        abbr, coach_gm = cur.fetchone()
+        # A head coach who was also GM loses the GM job only: Madden decides who coaches.
+        why = f"hot seat after {prior}: score {h['score']}" + ("; stays head coach" if coach_gm else "")
+        hire = _hire_gm(cur, season, prior, abbr, tid, llm, why=why, log=log)
+        rep["fired"].append({"team": abbr, "score": h["score"], **hire})
+        fired_tids.append(tid)
+        log(f"  hot seat: {abbr} replaces its GM (score {h['score']})")
+    return fired_tids
+
+
+def super_bowl_complete(cur, season):
+    """True once `season`'s Super Bowl is a completed game (the point the carousel hires and the GM hot seat runs)."""
+    cur.execute("SELECT count(*) FROM games WHERE season = %s AND game_type = 'SUPER_BOWL' "
+                "AND status = 'COMPLETED'", (season,))
+    return bool(cur.fetchone()[0])
+
+
+def hot_seat_only(cur, season, llm=None, log=print):
+    """The GM hot seat for the season just finished, run BEFORE the coaching carousel (P1-27) so a team that fires
+    both its head coach and its GM is dual-vacant when the carousel hires (the §2.3 Godfather trigger reads it).
+    `season` is the season starting. Skipped until the Super Bowl is complete and once the hot seat is decided; the
+    next preseason's `rollover(season)` sees the scores written and does not decide it again.
+    Returns {season, fired, skipped}."""
+    rep = {"season": season, "fired": [], "skipped": None}
+    if not super_bowl_complete(cur, season - 1):
+        rep["skipped"] = "the Super Bowl isn't complete"
+        return rep
+    state = read_state(cur, season)
+    if state["hot_seat_decided"]:
+        rep["skipped"] = "already decided"
+        return rep
+    state = _owner_state(cur, season, state, rep)
+    fired = _fire_hot_seat(cur, season, rollover_actions(state)["hot_seat"], rep, llm, log)
+    rep["fired_team_ids"] = fired
+    return rep
+
+
 def rollover(cur, season, llm=None, log=print):
     """Run the rollover for new `season` inside the caller's transaction. Returns a report."""
     from engines import gm_direction
     from engines.gm_personas import ensure_team_seasons, seed_picks
-    from engines import owner_context as oc
     prior = season - 1
     state = read_state(cur, season)
     rep = {"season": season, "fired": [], "team_rows": 0, "directions": 0, "fo_carried": 0, "picks": 0, "used": 0}
-    mode = oc.feature_mode(cur, "owner_patience")
-    if mode != "off":
-        terms = oc.patience_terms(cur)
-        owned = [dict(r, owner=terms[r["team_id"]]) if r["team_id"] in terms and not r.get("user_controlled")
-                 else r for r in state["hot_seat_rows"]]
-        rep["owner_mode"] = mode
-        if mode == "active":
-            state = dict(state, hot_seat_rows=owned)
-        elif not state["hot_seat_decided"]:
-            base, alt = hot_seat(state["hot_seat_rows"], prior), hot_seat(owned, prior)
-            rep["owner_shadow"] = [{"team_id": t, "fired": bool(base.get(t, {}).get("fire")),
-                                    "owner_fired": bool(alt[t]["fire"]), "owner": alt[t]["inputs"].get("owner")}
-                                   for t in sorted(alt) if bool(base.get(t, {}).get("fire")) != bool(alt[t]["fire"])]
+    state = _owner_state(cur, season, state, rep)
     acts = rollover_actions(state)
     cur.execute("""UPDATE gm_trade_proposals SET status = 'EXPIRED', status_reason = 'the offseason is over'
                    WHERE season = %s AND status IN ('PROPOSED', 'APPROVED')""", (prior,))
     rep["expired"] = cur.rowcount
-    if acts["hot_seat"] is not None:
-        for tid, h in acts["hot_seat"].items():
-            cur.execute("UPDATE gm_team_seasons SET hot_seat_score = %s, hot_seat_inputs = %s "
-                        "WHERE team_id = %s AND season = %s", (h["score"], json.dumps(h["inputs"]), tid, prior))
-        for tid, h in sorted(acts["hot_seat"].items(), key=lambda kv: -kv[1]["score"]):
-            if not h["fire"]:
-                continue
-            cur.execute("""SELECT t.abbreviation, g.coach_id IS NOT NULL FROM teams t
-                           LEFT JOIN gm_profiles g ON g.team_id = t.id AND g.end_season IS NULL WHERE t.id = %s""",
-                        (tid,))
-            abbr, coach_gm = cur.fetchone()
-            # A head coach who was also GM loses the GM job only: Madden decides who coaches.
-            why = f"hot seat after {prior}: score {h['score']}" + ("; stays head coach" if coach_gm else "")
-            hire = _hire_gm(cur, season, prior, abbr, tid, llm, why=why, log=log)
-            rep["fired"].append({"team": abbr, "score": h["score"], **hire})
-            if tid in acts["fo_carry"]:
-                acts["fo_carry"].remove(tid)      # the new GM starts at the baseline, not his predecessor's q
-            log(f"  hot seat: {abbr} replaces its GM (score {h['score']})")
+    for tid in _fire_hot_seat(cur, season, acts["hot_seat"], rep, llm, log):
+        if tid in acts["fo_carry"]:
+            acts["fo_carry"].remove(tid)          # the new GM starts at the baseline, not his predecessor's q
     rep["team_rows"] = ensure_team_seasons(cur, season) if acts["team_rows"] else 0
     if acts["directions"]:
         league = gm_direction.read_league(cur, season, 1)

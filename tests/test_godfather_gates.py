@@ -1,0 +1,122 @@
+"""Godfather trigger gates, part 1 (STAFF_CONTRACTS_AND_FULL_CONTROL_PLAN §2.3; CLOSE_OUT_CHECKLIST P1-27).
+
+Offline: the carousel's candidate sliders come from legacy `persona_sliders` or the person lifecycle, and the GM
+hot seat runs before the carousel so a same-cycle HC+GM sweep is a genuine dual vacancy.
+"""
+import sqlite3
+
+from engines import coaching_carousel as cc
+from engines import gm_rollover as gr
+from tests.test_inbox_store import FakeCursor
+
+
+def _personas_db():
+    conn = sqlite3.connect(":memory:", isolation_level=None)
+    conn.executescript("""
+        CREATE TABLE persona_sliders (persona_type TEXT, persona_id TEXT, temperament INT, sociability INT,
+                                      confidence INT, openness INT, warmth INT, drive INT);
+        CREATE TABLE persona_core_aliases (universe_id TEXT, persona_type TEXT, namespace TEXT, external_id TEXT,
+                                           persona_id TEXT);
+        CREATE TABLE persona_core_profiles (universe_id TEXT, persona_type TEXT, persona_id TEXT, birth_key TEXT);
+        CREATE TABLE persona_lifecycle_universes (universe_id TEXT, league_id TEXT, registration TEXT);
+        CREATE TABLE league_state (id INT, madden_league_id BIGINT);
+    """)
+    return conn
+
+
+def test_candidate_sliders_from_legacy_personas():
+    conn = _personas_db()
+    conn.execute("INSERT INTO persona_sliders VALUES ('coach', '41', 5, 5, 8, 5, 5, 9)")
+    cur = FakeCursor(conn)
+    sliders = cc.candidate_sliders(cur)
+    assert sliders[("db-coach", "41")] == {"drive": 9, "ego": 8}          # ego is the confidence slider
+    assert cc._sliders_for(sliders, "db-coach", 41) == {"drive": 9, "ego": 8}
+
+
+def test_candidate_sliders_from_the_lifecycle_for_a_coordinator():
+    conn = _personas_db()
+    conn.execute("INSERT INTO league_state VALUES (1, 1287775425)")
+    conn.execute("INSERT INTO persona_lifecycle_universes VALUES ('mu:abc', '1287775425', '{\"universe_id\": \"mu:abc\"}')")
+    conn.execute("INSERT INTO persona_core_profiles VALUES ('mu:abc', 'coach', 'p-coord', 'source:1')")
+    conn.execute("INSERT INTO persona_core_aliases VALUES ('mu:abc', 'coach', 'db-coordinator', '77', 'p-coord')")
+    conn.execute("INSERT INTO persona_sliders VALUES ('coach', 'p-coord', 5, 5, 9, 5, 5, 8)")
+    sliders = cc.candidate_sliders(FakeCursor(conn))
+    assert sliders[("db-coordinator", "77")] == {"drive": 8, "ego": 9}
+    assert cc._sliders_for(sliders, "db-coordinator", 77) == {"drive": 8, "ego": 9}
+
+
+def test_candidate_sliders_never_fails_without_the_tables():
+    cur = FakeCursor(sqlite3.connect(":memory:"))
+    assert cc.candidate_sliders(cur) == {}
+
+
+OWNER = {"traits": ["DEEP_POCKETS", "HEADLINE_HUNTER"]}
+
+
+def test_the_godfather_trigger_fires_beyond_its_rarity_gates():
+    gate = {"eligible": True}
+    high_drive = {"key": "coach:9", "drive": 9, "ego": 4}
+    high_ego = {"key": "coach:10", "drive": 4, "ego": 8}
+    champion = {"key": "coach:11", "super_bowl_wins": 1}
+    for candidate in (high_drive, high_ego, champion):
+        decision = cc.godfather_offer(gate=gate, owner_view=OWNER, cash_pool=cc.GODFATHER_CASH,
+                                      hc_vacant=True, gm_vacant=True, candidate=candidate)
+        assert decision["offer"] is True and decision["blockers"] == []
+        assert decision["salary"] == cc.GODFATHER_SALARY and decision["years"] == cc.GODFATHER_YEARS
+
+
+def test_each_gate_still_blocks_on_its_own():
+    thin = {"key": "coach:12", "drive": 5, "ego": 5}
+    assert "candidate stature" in cc.godfather_offer(
+        gate={"eligible": True}, owner_view=OWNER, cash_pool=cc.GODFATHER_CASH, hc_vacant=True, gm_vacant=True,
+        candidate=thin)["blockers"]
+    assert "dual vacancy" in cc.godfather_offer(
+        gate={"eligible": True}, owner_view=OWNER, cash_pool=cc.GODFATHER_CASH, hc_vacant=True, gm_vacant=False,
+        candidate={"drive": 9})["blockers"]
+    assert "owner" in cc.godfather_offer(
+        gate={"eligible": True}, owner_view={"traits": ["DEEP_POCKETS"]}, cash_pool=cc.GODFATHER_CASH,
+        hc_vacant=True, gm_vacant=True, candidate={"drive": 9})["blockers"]
+
+
+def _vacancy_db():
+    conn = sqlite3.connect(":memory:", isolation_level=None)
+    conn.executescript("""
+        CREATE TABLE gm_profiles (team_id INT, end_season INT, coach_id INT, start_season INT);
+        CREATE TABLE games (season INT, game_type TEXT, status TEXT);
+        CREATE TABLE teams (id INT, abbreviation TEXT);
+        CREATE TABLE gm_team_seasons (team_id INT, season INT, direction TEXT, fo_quality_at TEXT,
+                                      hot_seat_score REAL, hot_seat_inputs TEXT);
+        CREATE TABLE team_seasons (team_id INT, season INT, wins INT);
+        CREATE TABLE gm_team_settings (team_id INT, user_controlled INT);
+        CREATE TABLE draft_picks (draft_season INT, round INT, original_team_id INT, used INT);
+    """)
+    return conn
+
+
+def test_the_gm_seat_is_vacant_right_after_the_hot_seat_fires_it():
+    conn = _vacancy_db()
+    conn.execute("INSERT INTO gm_profiles VALUES (5, NULL, NULL, 2030)")
+    cur = FakeCursor(conn)
+    assert cc._gm_vacant(cur, 5) is False
+    conn.execute("UPDATE gm_profiles SET end_season = 2036 WHERE team_id = 5")
+    assert cc._gm_vacant(cur, 5) is True                       # the carousel then sees the dual vacancy
+
+
+def test_hot_seat_only_waits_for_the_super_bowl():
+    cur = FakeCursor(_vacancy_db())
+    rep = gr.hot_seat_only(cur, 2037, log=lambda *a: None)
+    assert rep["skipped"] == "the Super Bowl isn't complete" and rep["fired"] == []
+
+
+def test_hot_seat_only_does_not_decide_twice():
+    conn = _vacancy_db()
+    conn.execute("INSERT INTO games VALUES (2036, 'SUPER_BOWL', 'COMPLETED')")
+    conn.execute("INSERT INTO teams VALUES (5, 'CAR')")
+    conn.execute("INSERT INTO gm_profiles VALUES (5, NULL, NULL, 2030)")
+    conn.execute("INSERT INTO gm_team_seasons VALUES (5, 2036, 'RETOOL', NULL, 0.2, '{}')")
+    cur = FakeCursor(conn)
+    rep = gr.hot_seat_only(cur, 2037, log=lambda *a: None)
+    assert rep["skipped"] == "already decided"
+    # and the preseason rollover sees the same decided state (it does not re-run the hot seat)
+    state = gr.read_state(cur, 2037)
+    assert state["hot_seat_decided"] is True and gr.rollover_actions(state)["hot_seat"] is None

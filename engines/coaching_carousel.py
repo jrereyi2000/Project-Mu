@@ -403,6 +403,61 @@ def godfather_candidate_ok(candidate):
     return (drive is not None and int(drive) >= 8) or (ego is not None and int(ego) >= 8)
 
 
+def candidate_sliders(cur):
+    """{(namespace, external_id): {"drive", "ego"}} for the carousel's coaching candidates (P1-27): the person
+    lifecycle's `db-coach` / `db-coordinator` profiles when this league's universe is registered, else the legacy
+    coach `persona_sliders` rows (external_id = the coach/coordinator id). `ego` is the `confidence` slider ("brash
+    and sure of yourself"). {} on any error or without the tables; the carousel never fails on this read."""
+    out = {}
+
+    def add(ns, ext, drive, conf):
+        if drive is None and conf is None:
+            return
+        out[(ns, str(ext))] = {k: int(v) for k, v in (("drive", drive), ("ego", conf)) if v is not None}
+
+    cur.execute("SAVEPOINT candidate_sliders")
+    try:
+        cur.execute("SELECT to_regclass('persona_sliders') IS NOT NULL")
+        if cur.fetchone()[0]:
+            cur.execute("SELECT persona_id, drive, confidence FROM persona_sliders WHERE persona_type = 'coach'")
+            for pid, drive, conf in cur.fetchall():
+                add("db-coach", pid, drive, conf)
+        cur.execute("SELECT to_regclass('persona_core_aliases') IS NOT NULL")
+        if cur.fetchone()[0]:
+            cur.execute("SELECT madden_league_id FROM league_state WHERE id = 1")
+            row = cur.fetchone()
+            if row and row[0] is not None:
+                from personality import lifecycle_store as LS
+                universe = LS.universe_for_league(cur, int(row[0]))
+                if universe:
+                    cur.execute("""SELECT a.namespace, a.external_id, s.drive, s.confidence
+                                   FROM persona_core_aliases a
+                                   JOIN persona_core_profiles p ON p.persona_type = a.persona_type
+                                        AND p.persona_id = a.persona_id
+                                   JOIN persona_sliders s ON s.persona_type = p.persona_type
+                                        AND s.persona_id = p.persona_id
+                                   WHERE a.persona_type = 'coach' AND a.universe_id = %s
+                                     AND a.namespace IN ('db-coach', 'db-coordinator')""",
+                                (universe["universe_id"],))
+                    for ns, ext, drive, conf in cur.fetchall():
+                        add(ns, ext, drive, conf)
+        cur.execute("RELEASE SAVEPOINT candidate_sliders")
+    except Exception:  # noqa: BLE001 - an optional enrichment
+        cur.execute("ROLLBACK TO SAVEPOINT candidate_sliders")
+        cur.execute("RELEASE SAVEPOINT candidate_sliders")
+        return {}
+    return out
+
+
+def _sliders_for(sliders, namespace, person_id):
+    """A candidate's {drive, ego} from candidate_sliders, trying his own namespace then the other seat's."""
+    for ns in (namespace, "db-coach" if namespace == "db-coordinator" else "db-coordinator"):
+        got = sliders.get((ns, str(person_id)))
+        if got:
+            return dict(got)
+    return {}
+
+
 def godfather_offer(*, gate, owner_view, cash_pool, hc_vacant, gm_vacant, candidate):
     """Pure §2.3 gate. gate: staff_contracts_engine.godfather_gate's result (or godfather_eligible's). Returns
     {'offer': bool, 'blockers': [...], 'salary': GODFATHER_SALARY, 'years': GODFATHER_YEARS}."""
@@ -830,11 +885,13 @@ def hiring_cycle(cur, season, log=print, personality=None):
 
     # Head-coach candidates: other teams' coordinators (poach), former head coaches (retread), one invented outsider.
     cands = []
+    sliders = candidate_sliders(cur)                # drive/ego for the §2.3 Godfather stature (P1-27)
     for (tid, role), c in staff.items():
         if (tid, role) in fired_coord:              # JR's coordinators can be poached too
             continue
         ur, tr = unit_of(ranks, tid, role)
         cands.append({"key": f"coord:{c['coordinator_id']}", "kind": "POACHED", "team_id": tid, "role": role, **c,
+                      **_sliders_for(sliders, "db-coordinator", c["coordinator_id"]),
                       "champion": res.get(tid, {}).get("champion", False),
                       "score": coordinator_candidacy(ur, tr, res.get(tid, {}).get("wins", 0),
                                                      res.get(tid, {}).get("champion", False),
@@ -853,6 +910,7 @@ def hiring_cycle(cur, season, log=print, personality=None):
         cands.append({"key": f"coach:{cid}", "kind": "RETREAD", "coach_id": cid, "name": name, "slant": slant,
                       "offensive_scheme": off, "defensive_scheme": de, "pass_lean": pl, "blitz_rate": br,
                       "man_coverage": mc, "super_bowl_wins": sbw,
+                      **_sliders_for(sliders, "db-coach", cid),
                       "score": round((pct - 0.5) * 4 + (0.3 if pw else 0) - RETREAD_PENALTY, 3)})
 
     def opick(pool, seed, opening, tid):
