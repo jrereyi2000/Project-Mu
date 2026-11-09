@@ -354,6 +354,162 @@ def apply_team_control(cur, books):
     return books
 
 
+def _num(v):
+    """A stat value as a plain number (a Decimal 10.0 becomes 10, 9.5 stays 9.5; None becomes 0)."""
+    if v is None:
+        return 0
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return v
+    return int(f) if f.is_integer() else round(f, 1)
+
+
+DEF_GROUPS = {"EDGE", "DT", "LB", "CB", "S"}
+
+
+def load_season_stats(cur, season):
+    """{player_id: stats} for the season (PROJECT_SPEC §2.17 fact sheet): one row per player that has a row in a
+    season_stat_* category table, carrying only the columns a fact-sheet line needs (offense, defense, blocking,
+    kicking, punting) plus games_played from season_stat_general. A player with no category row isn't included, so
+    the sheet's performance can be null (never invented)."""
+    out = {}
+
+    def put(pid, vals):
+        if pid is None:
+            return
+        out.setdefault(pid, {}).update(vals)
+
+    cur.execute("""SELECT player_id, completions, pass_attempts, pass_yards, pass_tds, interceptions,
+                          rush_attempts, rush_yards, rush_tds, receptions, rec_yards, rec_tds
+                   FROM season_stats WHERE season = %s AND player_id IS NOT NULL""", (season,))
+    for r in cur.fetchall():
+        put(r[0], {"completions": r[1], "pass_attempts": r[2], "pass_yards": r[3], "pass_tds": r[4],
+                   "interceptions": r[5], "rush_attempts": r[6], "rush_yards": r[7], "rush_tds": r[8],
+                   "receptions": r[9], "rec_yards": r[10], "rec_tds": r[11]})
+    cur.execute("SELECT player_id, tackles, sacks, ints FROM season_stat_defense WHERE season = %s", (season,))
+    for pid, tackles, sacks, ints in cur.fetchall():
+        put(pid, {"tackles": tackles, "sacks": sacks, "ints": ints})
+    cur.execute("SELECT player_id, sacks_allowed FROM season_stat_blocking WHERE season = %s", (season,))
+    for pid, sacks_allowed in cur.fetchall():
+        put(pid, {"sacks_allowed": sacks_allowed})
+    cur.execute("SELECT player_id, fgm, fga, fg_long, xpm, xpa FROM season_stat_kicking WHERE season = %s",
+                (season,))
+    for pid, fgm, fga, fg_long, xpm, xpa in cur.fetchall():
+        put(pid, {"fgm": fgm, "fga": fga, "fg_long": fg_long, "xpm": xpm, "xpa": xpa})
+    cur.execute("SELECT player_id, punts, average, inside_20 FROM season_stat_punting WHERE season = %s",
+                (season,))
+    for pid, punts, average, inside_20 in cur.fetchall():
+        put(pid, {"punts": punts, "average": average, "inside_20": inside_20})
+    cur.execute("SELECT player_id, games_played FROM season_stat_general WHERE season = %s", (season,))
+    for pid, games in cur.fetchall():
+        if pid in out:
+            out[pid]["games"] = games
+    return out
+
+
+def load_team_form(cur, season, week):
+    """{team_id: {"last3": ["W 24-17", ...], "streak": "W3"}} from COMPLETED games strictly before `week`, last3
+    newest first and streak counted from the latest game back. Teams with no earlier game aren't included."""
+    cur.execute("""SELECT week, home_team_id, away_team_id, home_score, away_score
+                   FROM games WHERE season = %s AND status = 'COMPLETED' AND week < %s ORDER BY week, id""",
+                (season, week))
+    by_team = {}
+    for _w, home, away, home_score, away_score in cur.fetchall():
+        for tid, own, opp, in ((home, home_score, away_score), (away, away_score, home_score)):
+            if tid is None:
+                continue
+            own, opp = own or 0, opp or 0
+            result = "W" if own > opp else "L" if own < opp else "T"
+            by_team.setdefault(tid, []).append((result, own, opp))
+    out = {}
+    for tid, games in by_team.items():
+        results = [g[0] for g in games]
+        streak = 1
+        for result in reversed(results[:-1]):
+            if result != results[-1]:
+                break
+            streak += 1
+        out[tid] = {"last3": [f"{r} {o}-{p}" for r, o, p in games[-3:]][::-1],
+                    "streak": f"{results[-1]}{streak}"}
+    return out
+
+
+def _game_line(group, s):
+    """A compact one-game stat line for a position group (the season line's group map)."""
+    n = _num
+    if group == "QB":
+        return f"{n(s.get('completions'))}/{n(s.get('pass_attempts'))}, {n(s.get('pass_yards'))} yds, " \
+               f"{n(s.get('pass_tds'))} TD"
+    if group == "RB":
+        return (f"{n(s.get('rush_attempts'))} car, {n(s.get('rush_yards'))} yds, {n(s.get('rush_tds'))} TD")
+    if group in ("WR", "TE"):
+        return f"{n(s.get('receptions'))}-{n(s.get('rec_yards'))}-{n(s.get('rec_tds'))}"
+    if group in DEF_GROUPS:
+        return f"{n(s.get('tackles'))} tkl, {n(s.get('sacks'))} sacks, {n(s.get('ints'))} INT"
+    return None
+
+
+def _fill_recent(out, rows, meta, abbrs):
+    for pid, games in rows.items():
+        group, team = meta.get(pid, (None, None))
+        lines = []
+        for _key, stats, home, away in games[-3:]:
+            base = _game_line(group, stats)
+            if not base:
+                continue
+            at_home = home == team
+            opp = away if at_home else home
+            if opp is not None:
+                base += f" {'vs' if at_home else '@'} {abbrs.get(opp, opp)}"
+            lines.append(base)
+        out[pid] = lines[::-1]
+
+
+def recent_form(cur, player_ids, season, week):
+    """{player_id: [line, ...]} for at most the last three COMPLETED games strictly before `week` (newest first),
+    from player_stats for offense (QB/RB/WR/TE) and game_stat_defense for defense (EDGE/DT/LB/CB/S). OL, K and P
+    carry no per-game line here ([]). Only the players in the deal are read."""
+    from engines.gm_direction import position_group
+    ids = [pid for pid in (player_ids or []) if pid is not None]
+    out = {pid: [] for pid in ids}
+    if not ids:
+        return out
+    cur.execute("SELECT player_id, position, team_id FROM player_seasons WHERE season = %s AND player_id = ANY(%s)",
+                (season, list(ids)))
+    meta = {pid: (position_group(pos), team_id) for pid, pos, team_id in cur.fetchall()}
+    cur.execute("SELECT id, abbreviation FROM teams WHERE abbreviation IS NOT NULL")
+    abbrs = dict(cur.fetchall())
+    offense = [pid for pid in ids if meta.get(pid, (None,))[0] in ("QB", "RB", "WR", "TE")]
+    defense = [pid for pid in ids if meta.get(pid, (None,))[0] in DEF_GROUPS]
+    if offense:
+        cur.execute("""SELECT ps.player_id, ps.completions, ps.pass_attempts, ps.pass_yards, ps.pass_tds,
+                              ps.rush_attempts, ps.rush_yards, ps.rush_tds, ps.receptions, ps.rec_yards,
+                              ps.rec_tds, g.week, g.home_team_id, g.away_team_id, g.id
+                       FROM player_stats ps JOIN games g ON g.id = ps.game_id
+                       WHERE ps.player_id = ANY(%s) AND g.season = %s AND g.status = 'COMPLETED' AND g.week < %s
+                       ORDER BY g.week, g.id""", (offense, season, week))
+        rows = {}
+        for r in cur.fetchall():
+            rows.setdefault(r[0], []).append(((r[11], r[14]), {"completions": r[1], "pass_attempts": r[2],
+                                         "pass_yards": r[3], "pass_tds": r[4], "rush_attempts": r[5],
+                                         "rush_yards": r[6], "rush_tds": r[7], "receptions": r[8],
+                                         "rec_yards": r[9], "rec_tds": r[10]}, r[12], r[13]))
+        _fill_recent(out, rows, meta, abbrs)
+    if defense:
+        cur.execute("""SELECT gs.player_id, gs.tackles, gs.sacks, gs.ints, g.week, g.home_team_id,
+                              g.away_team_id, g.id
+                       FROM game_stat_defense gs JOIN games g ON g.id = gs.game_id
+                       WHERE gs.player_id = ANY(%s) AND g.season = %s AND g.status = 'COMPLETED' AND g.week < %s
+                       ORDER BY g.week, g.id""", (defense, season, week))
+        rows = {}
+        for r in cur.fetchall():
+            rows.setdefault(r[0], []).append(((r[4], r[7]), {"tackles": r[1], "sacks": r[2], "ints": r[3]},
+                                             r[5], r[6]))
+        _fill_recent(out, rows, meta, abbrs)
+    return out
+
+
 def read_books(cur, season, week, window="IN_SEASON", stage=None):
     """Everything the engine needs, read-only."""
     from engines.gm_direction import read_injuries
@@ -396,6 +552,14 @@ def read_books(cur, season, week, window="IN_SEASON", stage=None):
             "voice": r[8], "user_controlled": r[9], "suggestions_on": r[10],
             "sliders": sliders, "traits": traits
         }
+    # The GM speech card (§2.3; the columns are U1's 2027_02_13 migration). A separate read so the existing
+    # gm_profiles row shape stays as callers (and tests with scripted cursors) expect it.
+    cur.execute("SELECT team_id, voice_card, voice_card_source FROM gm_profiles WHERE end_season IS NULL")
+    cards = {r[0]: {"voice_card": r[1], "voice_card_source": r[2]} for r in cur.fetchall()}
+    for tid, gm in b["gm"].items():
+        card = cards.get(tid) or {}
+        gm["voice_card"] = card.get("voice_card")
+        gm["voice_card_source"] = card.get("voice_card_source")
     apply_team_control(cur, b)                       # D8: the registry wins over gm_team_settings when it has one
     cur.execute("""SELECT team_id, direction, needs, surplus, urgent_need, direction_inputs, direction_score
                    FROM gm_team_seasons WHERE season = %s""", (season,))
@@ -405,6 +569,11 @@ def read_books(cur, season, week, window="IN_SEASON", stage=None):
     b["cap"] = read_cap(cur, season, b["value_season"])
     # practice-squad players can't be traded and don't count toward the 53 (NFL rule): they stay out of the books
     b["players"] = {pid: p for pid, p in tv.read_players(cur, season).items() if not p.get("practice_squad")}
+    cur.execute("SELECT player_id, role FROM player_seasons WHERE season = %s AND released_week IS NULL", (season,))
+    for pid, role in cur.fetchall():
+        p = b["players"].get(pid)
+        if p is not None:
+            p["role"] = role
     # Madden heals the season's injuries over the offseason: the injury report only blocks in-season trades
     b["injuries"] = read_injuries(cur, season, week) if window == "IN_SEASON" else {}
     cur.execute("""SELECT a.player_id FROM gm_trade_assets a JOIN gm_trade_proposals p ON p.id = a.proposal_id
@@ -460,6 +629,8 @@ def read_books(cur, season, week, window="IN_SEASON", stage=None):
                    WHERE ct.start_season <= %s AND (ct.end_season IS NULL OR ct.end_season >= %s)
                    ORDER BY ct.start_season""", (season, season))
     b["coaches"] = {r[0]: r[1] for r in cur.fetchall()}
+    b["season_stats"] = load_season_stats(cur, season)
+    b["form"] = load_team_form(cur, season, week)
     return finish_books(b)
 
 
