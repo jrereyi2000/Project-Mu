@@ -30,6 +30,14 @@ def test_migrations_are_discovered_in_filename_order():
     assert "2027_02_08_nflpa_report_cards.sql" in names
 
 
+def test_checksum_ignores_line_endings(tmp_path):
+    lf = tmp_path / "lf.sql"
+    crlf = tmp_path / "crlf.sql"
+    lf.write_bytes(b"BEGIN;\nSELECT 1;\nCOMMIT;\n")
+    crlf.write_bytes(b"BEGIN;\r\nSELECT 1;\r\nCOMMIT;\r\n")
+    assert migrate.checksum(lf) == migrate.checksum(crlf)
+
+
 def test_every_migration_has_a_checksum():
     for m in migrate.migrations():
         assert len(m["checksum"]) == 64 and int(m["checksum"], 16) >= 0

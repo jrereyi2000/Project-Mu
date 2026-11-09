@@ -67,7 +67,11 @@ def version_of(path):
 
 
 def checksum(path):
-    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    """The migration's content hash, with newlines normalized first: the ledger records the file, not the
+    checkout's line-ending flavour, so a stray CRLF (core.autocrlf, an old checkout) cannot make an applied
+    migration report drift."""
+    data = Path(path).read_bytes().replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    return hashlib.sha256(data).hexdigest()
 
 
 def migrations():
