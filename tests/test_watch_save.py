@@ -1124,6 +1124,30 @@ class FindFilesTest(unittest.TestCase):
         # Passing file path directly
         self.assertEqual(ws.find_save_files(f1), [f1])
 
+    def test_a_tuning_clone_is_ignored(self):
+        """P1-24: a CAREER-TUNE-* clone carries the real LeagueID and must not be routed into the live DB."""
+        real = os.path.join(self.tmp, "CAREER-MU2026")
+        tune = os.path.join(self.tmp, "CAREER-TUNE-A")
+        for f in (real, tune):
+            with open(f, "w") as fh:
+                fh.write("x")
+        now = time.time()
+        os.utime(real, (now - 20, now - 20))
+        os.utime(tune, (now - 5, now - 5))
+
+        self.assertEqual(ws.find_save_files(self.tmp, pattern="CAREER-*"), [real])
+        self.assertEqual(ws.find_save_files(tune), [], "a tuning save named directly is ignored too")
+        self.assertEqual(ws.find_save_files(self.tmp, pattern="CAREER-*", include_tuning=True), [real, tune])
+        self.assertEqual(ws.find_save_files(tune, include_tuning=True), [tune])
+
+    def test_a_tuning_save_may_only_land_in_a_tuning_database(self):
+        ws.check_tuning_destination("CAREER-TUNE-A", "madden_tune_a")
+        ws.check_tuning_destination("CAREER-MU2026", "madden_mu2026")
+        with self.assertRaises(ws.WatcherError):
+            ws.check_tuning_destination("CAREER-TUNE-A", "madden_mu2026")
+        self.assertTrue(ws.is_tuning_save("/saves/CAREER-TUNE-x"))
+        self.assertFalse(ws.is_tuning_save("CAREER-MUBASE"))
+
 
 @pytest.mark.integration
 class WatchSaveIntegrationTest(unittest.TestCase):

@@ -54,6 +54,8 @@ Options:
   --reseed                 Drop and recreate this franchise's database, then seed it (--once only)
   --confirm-reseed DB      Required with --reseed: the database name being dropped
   --dsn DSN                Load into this database instead of routing by franchise (tests, one-off loads)
+  --allow-tune-save        Process CAREER-TUNE-* clones (default: ignored; the same is implied by a --dsn that
+                           names a madden_tune_* database)
   --lock-file PATH         Custom lock file path (default: captures/.weekly_run.lock)
   --no-freeze              Don't freeze the database + save after the ingest (pipeline/weekly_freeze.py)
 
@@ -91,6 +93,11 @@ DEFAULT_POLL_INTERVAL = 2
 # Set by JR when Madden27.exe sits at its main menu with the franchise closed (pipeline.league_office reads it too).
 FRANCHISE_CLOSED_ENV = "LEAGUE_OFFICE_FRANCHISE_CLOSED"
 LO_RESULT = "league_office_result.json"
+# Tuning clones carry the real franchise's LeagueID, so ingesting one into the routed database would mix a
+# disposable tuning season into the live league (CLOSE_OUT_CHECKLIST P1-24). The watcher ignores them; a tuning
+# DB destination (`--dsn madden_tune_*`) or --allow-tune-save opts in for P2-04's deliberate tuning ingest.
+TUNE_SAVE_PREFIX = "CAREER-TUNE-"
+TUNE_DB_PREFIX = "madden_tune_"
 
 
 class WatcherError(Exception):
@@ -101,6 +108,21 @@ class WatcherError(Exception):
 class LockError(WatcherError):
     """Raised when unable to acquire the run lock."""
     pass
+
+
+def is_tuning_save(path):
+    return os.path.basename(str(path)).upper().startswith(TUNE_SAVE_PREFIX)
+
+
+def is_tuning_db(db):
+    return str(db or "").lower().startswith(TUNE_DB_PREFIX)
+
+
+def check_tuning_destination(save_name, db):
+    """Refuse a tuning clone whose destination is not a tuning database (defence in depth)."""
+    if is_tuning_save(save_name) and not is_tuning_db(db):
+        raise WatcherError(f"{os.path.basename(save_name)} is a CAREER-TUNE-* clone; it is only ingested into "
+                           f"a {TUNE_DB_PREFIX}* database (got {db})")
 
 
 def log(msg):
@@ -127,16 +149,18 @@ def run_lock(lock_path):
         lock_file.close()
 
 
-def find_save_files(watch_path, pattern="CAREER-*"):
+def find_save_files(watch_path, pattern="CAREER-*", include_tuning=False):
     """Finds save files to watch: either a single file or matching pattern in directory.
-    Returns files oldest-modified first, so a backlog of weekly saves loads in week order."""
+    Returns files oldest-modified first, so a backlog of weekly saves loads in week order.
+    Tuning clones are skipped unless include_tuning (P1-24)."""
     if not os.path.exists(watch_path):
         return []
     if os.path.isfile(watch_path):
-        return [os.path.abspath(watch_path)]
+        return [os.path.abspath(watch_path)] if include_tuning or not is_tuning_save(watch_path) else []
     matches = glob.glob(os.path.join(watch_path, pattern))
-    # Exclude directories or lock files
-    files = [os.path.abspath(f) for f in matches if os.path.isfile(f) and not f.endswith(".lock")]
+    # Exclude directories, lock files and tuning clones
+    files = [os.path.abspath(f) for f in matches if os.path.isfile(f) and not f.endswith(".lock")
+             and (include_tuning or not is_tuning_save(f))]
     files.sort(key=lambda p: (os.path.getmtime(p), p))
     return files
 
@@ -1431,6 +1455,9 @@ def process_save(save_path, season=None, dry_run=False, no_articles=False, no_en
                     "season": save_season, "week": save_week}
         db, dsn, just_seeded = route["db"], route["dsn"], route["seeded"]
 
+    # A tuning clone in a real franchise's database would mix a disposable season into the live league.
+    check_tuning_destination(save_name, db)
+
     stored_season, stored_week = get_league_state(dsn)
     if stored_season is None and not just_seeded:
         raise WatcherError(f"Database {db} has no league_state. Run with --auto-init to seed it from the save.")
@@ -1511,7 +1538,8 @@ def process_save(save_path, season=None, dry_run=False, no_articles=False, no_en
 
 
 def watch_loop(watch_path, pattern="CAREER-*", debounce_seconds=DEFAULT_DEBOUNCE,
-               poll_interval=DEFAULT_POLL_INTERVAL, lock_path=DEFAULT_LOCK_PATH, log_fn=log, **process_kw):
+               poll_interval=DEFAULT_POLL_INTERVAL, lock_path=DEFAULT_LOCK_PATH, log_fn=log,
+               include_tuning=False, **process_kw):
     """Continuous polling daemon loop; process_kw goes to process_save for every settled save. Debounce state is
     per file, and each save routes to its own franchise, so saves from several franchises can share the folder."""
     debouncer = FileDebouncer(debounce_seconds=debounce_seconds)
@@ -1529,7 +1557,8 @@ def watch_loop(watch_path, pattern="CAREER-*", debounce_seconds=DEFAULT_DEBOUNCE
     pending = {}      # save path -> league office retry (refused while Madden27.exe ran)
 
     while running:
-        poll_once(watch_path, pattern, debouncer, pending, lock_path, log_fn=log_fn, **process_kw)
+        poll_once(watch_path, pattern, debouncer, pending, lock_path, log_fn=log_fn,
+                  include_tuning=include_tuning, **process_kw)
         time.sleep(poll_interval)
 
 
@@ -1585,10 +1614,10 @@ def retry_league_office(pending, debouncer, lock_path, madden_running=None, log_
             send_notify(msg, title="Mu: league office failed", priority="high", tags=("warning", "x"))
 
 
-def poll_once(watch_path, pattern, debouncer, pending, lock_path, log_fn=log, **process_kw):
+def poll_once(watch_path, pattern, debouncer, pending, lock_path, log_fn=log, include_tuning=False, **process_kw):
     """One pass of the daemon: league office retries, then every settled save not processed yet."""
     retry_league_office(pending, debouncer, lock_path, log_fn=log_fn)
-    save_files = find_save_files(watch_path, pattern=pattern)
+    save_files = find_save_files(watch_path, pattern=pattern, include_tuning=include_tuning)
     for save_file in save_files:
         if debouncer.is_already_processed(save_file):
             continue
@@ -1674,6 +1703,9 @@ def main():
     ap.add_argument("--reseed", action="store_true", help="Drop and recreate this franchise's database, then seed it (--once only)")
     ap.add_argument("--confirm-reseed", metavar="DB", help="Required with --reseed: the database name being dropped")
     ap.add_argument("--dsn", help="Load into this database instead of routing by franchise")
+    ap.add_argument("--allow-tune-save", action="store_true",
+                    help=f"Process {TUNE_SAVE_PREFIX}* saves (also enabled by a --dsn naming a {TUNE_DB_PREFIX}* "
+                         "database); clones carry the real LeagueID, so the default is to ignore them")
     ap.add_argument("--lock-file", default=DEFAULT_LOCK_PATH, help=f"Lock file path (default: {DEFAULT_LOCK_PATH})")
     ap.add_argument("--no-freeze", action="store_true",
                     help="Don't freeze the database + save after each ingest (pipeline/weekly_freeze.py)")
@@ -1697,6 +1729,7 @@ def main():
     watch_path = args.path or args.saves_dir or env("MADDEN_SAVES_DIR", ".")
     watch_path = os.path.abspath(watch_path)
     user_teams = [t.strip().upper() for t in args.user_team.split(",") if t.strip()]
+    include_tuning = bool(args.allow_tune_save or (args.dsn and is_tuning_db(db_name_of(args.dsn))))
 
     if not os.path.exists(watch_path):
         log(f"Error: watch path '{watch_path}' does not exist.")
@@ -1712,7 +1745,7 @@ def main():
                       league_office_dry_run=args.league_office_dry_run, no_freeze=args.no_freeze)
 
     if args.once:
-        save_files = find_save_files(watch_path, pattern=args.pattern)
+        save_files = find_save_files(watch_path, pattern=args.pattern, include_tuning=include_tuning)
         if not save_files:
             log(f"No matching save files found in '{watch_path}' (pattern: {args.pattern}).")
             sys.exit(0)
@@ -1740,7 +1773,8 @@ def main():
             sys.exit(1)
     else:
         watch_loop(watch_path, pattern=args.pattern, debounce_seconds=args.debounce,
-                   poll_interval=args.poll_interval, lock_path=args.lock_file, log_fn=log, **process_kw)
+                   poll_interval=args.poll_interval, lock_path=args.lock_file, log_fn=log,
+                   include_tuning=include_tuning, **process_kw)
 
 
 if __name__ == "__main__":

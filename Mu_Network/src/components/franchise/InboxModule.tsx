@@ -7,8 +7,9 @@
 //
 // The module has four parts: the take-control panel (no actors yet), the list (acting-as filter, open/all, kind chips,
 // unread dots), the conversation (messages, template tags, appraisal markers, options, the four forms, a text box and
-// its draft card, and a Depth Chart link in role talks), and the new-conversation picker from /inbox/kinds (with the
-// wave-4 player and team pickers fed by /inbox/targets).
+// its draft card, a Depth Chart link in role talks, and a "go to the page this notice points at" link driven by the
+// thread's link_table), and the new-conversation picker from /inbox/kinds (with the wave-4 player and team pickers
+// fed by /inbox/targets).
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { API_BASE } from "../../api";
 import "../team/frontOffice.css";
@@ -33,6 +34,12 @@ const OUTCOME_MARK: Record<string, { cls: string; sym: string }> = {
   negative: { cls: "neg", sym: "−" },
   mixed: { cls: "mix", sym: "~" },
 };
+// A notice carries link_table/link_id, not a URL (types/franchiseInbox.ts). Each kind-owned page is resolved here:
+// the PRESS notice's press_conferences row lives on the Game Center podium (P1-15).
+const NOTICE_PAGES: Record<string, { slug: string; label: string }> = {
+  press_conferences: { slug: "game-center", label: "Go to Game Center" },
+};
+const noticePage = (thread: InboxThread) => (thread.link_table ? NOTICE_PAGES[thread.link_table] ?? null : null);
 
 const kindLabel = (kind: string) => KIND_LABEL[kind] ?? kind.replace(/_/g, " ").toLowerCase();
 const roleLabel = (role: string) => ROLE_LABEL[role] ?? role;
@@ -452,6 +459,7 @@ function Conversation({ abbr, threadId, onChanged }: { abbr: string; threadId: n
     setBusy(true);
     setError(null);
     const body: InboxReplyRequest = { option_id: optionId, payload, note: noteText };
+    const page = detail.status === "ready" ? noticePage(detail.data.thread) : null;
     franchiseFetch<InboxThreadResponse>(abbr, `/inbox/${threadId}/reply`, "POST", body)
       .then(() => {
         setActive(null);
@@ -461,10 +469,12 @@ function Conversation({ abbr, threadId, onChanged }: { abbr: string; threadId: n
         setDraftFallback(false);
         reload();
         onChanged();
+        // Opening a notice is what the notice is for: record the act, then land on its page (P1-15).
+        if (optionId === "OPEN_PRESSER" && page) window.location.hash = `#franchise-${page.slug}?team=${abbr}`;
       })
       .catch((e) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setBusy(false));
-  }, [abbr, threadId, reload, onChanged]);
+  }, [abbr, threadId, detail, reload, onChanged]);
 
   const draftIt = () => {
     const t = text.trim();
@@ -495,6 +505,7 @@ function Conversation({ abbr, threadId, onChanged }: { abbr: string; threadId: n
   const needNote = !!active?.needs_note && !note.trim();
   const counterpart = thread.counterpart?.name ?? thread.counterpart_name ?? "The other side";
   const actorName = thread.actor?.name ?? roleLabel(thread.actor_role ?? "You");
+  const notice = noticePage(thread);
   return (
     <div className="fr-convo">
       <header>
@@ -503,6 +514,9 @@ function Conversation({ abbr, threadId, onChanged }: { abbr: string; threadId: n
         <div className="fr-convo-actions">
           {thread.kind === "ROLE_TALK" && (
             <a className="fr-btn" href={`#franchise-depth-chart?team=${abbr}`}>Go to Depth Chart</a>
+          )}
+          {notice && (
+            <a className="fr-btn" href={`#franchise-${notice.slug}?team=${abbr}`}>{notice.label}</a>
           )}
           {!closed && (
             <button className="fr-btn" disabled={busy} onClick={() => {

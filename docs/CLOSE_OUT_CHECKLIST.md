@@ -103,9 +103,9 @@ undone" rule made concrete.
 
 | ☐ | ID | Item | Done when | Size |
 |---|---|---|---|---|
-| ☐ | **P1-01** | **Reconcile migration state.** `madden_test` is verified **behind 7 migrations**: `2027_01_20` press, `2027_01_22` trade talks, `2027_02_02` owners/scouts/voters, `2027_02_06` comp picks, `2027_02_07` staff contracts (both), `2027_02_08` report cards. `persona_focus` and `nfl_history` *are* applied. Apply all of them. | `select to_regclass(...)` returns non-null for every table listed in the migrations; `madden_test` matches a fresh `init_db.sql` build. | M |
-| ☐ | **P1-02** | **Add migration-state tracking.** There is **no `schema_migrations` table** — applied state is guessed by `to_regclass`. Build a tiny ledger table + `db/migrate.py` wrapper so "what is applied where" is a query, not an investigation. | A new database reports its applied set; re-running is a no-op. | M |
-| ☐ | **P1-03** | **Verify every migration is mirrored in `db/init_db.sql`.** This is claimed, not proven for the newest seven. | A fresh DB from `init_db.sql` diffed against a fully-migrated DB shows no difference. | M |
+| ☑ | **P1-01** | **Reconcile migration state. ✅ Applied (2026-11-09).** `madden_test` was verified **behind six** migrations: `2027_01_20` press, `2027_02_02` owners/scouts/voters, `2027_02_06` comp picks, both `2027_02_07` staff files, `2027_02_08` report cards. (`2027_01_22` trade talks and its trigger `2027_02_05` were already applied on 2026-11-08; `persona_focus` and `nfl_history` too.) All six applied with `db/migrate.py`; every table and added column verified with `to_regclass`. | `select to_regclass(...)` returns non-null for every table listed in the migrations; `madden_test` matches a fresh `init_db.sql` build. | M |
+| ☑ | **P1-02** | **Add migration-state tracking. ✅ Built (2026-11-09).** `schema_migrations` (`version`, `filename`, `checksum`, `applied_at`, `source`) plus `db/migrate.py` (`status`, `apply`, `baseline`, `diff`, `sync-init-db`). `init_db.sql` ends with a generated ledger block, so a fresh build is at head and `apply` is a no-op. `madden_test` was baselined to 124/124 after the parity proof. | A new database reports its applied set; re-running is a no-op. | M |
+| ☑ | **P1-03** | **Verify every migration is mirrored in `db/init_db.sql`. ✅ Proven (2026-11-09).** `db/migrate.py diff` compared `madden_test` against a fresh `init_db.sql` build object by object (tables/columns/types/defaults, views, indexes, constraints, sequences, functions, triggers): identical. It found two real drifts, now closed by `2027_02_09_init_db_parity.sql` (`napper_leagues`/`napper_drafts.season` NOT NULL; `gm_profiles.start_season >= 1970`), and the seven newest migrations replay as no-ops on a fresh build (`tests/test_migrate.py`). | A fresh DB from `init_db.sql` diffed against a fully-migrated DB shows no difference. | M |
 | ☐ | **P1-04** | **Apply migrations to a franchise database** (resolves follow-ups #12, #17, #24, #29 at once, and the six-feature activation gate). Today **no live franchise database exists at all** — only `madden_2036`, `madden_test`, `madden_v3_eval_20261030`. | A franchise DB has every table; `personality.features show` runs against it. | S |
 
 ### 3.2 Held and unwired units
@@ -122,7 +122,7 @@ undone" rule made concrete.
 | ☐ | **P1-12** | **Voter article alignment** (follow-up #20). Feed ballot results into article generation (`results_facts`, `all_pro_facts`) and run `check_against_stored` with rewrite-on-miss. | An active `media_voters` run never names a winner the ballot didn't. | M |
 | ☐ | **P1-13** | **Interview summary voice** (follow-up #19). With `MU_INBOX_LLM=1` the closing scout summary renders in the prospect's voice. Add a per-intent voice. | LLM-on summary reads third-person scout. | S |
 | ☐ | **P1-14** | **SCOUT risers needs-proxy** (follow-up #18). Tighten `REPORTS_READY` from the needs-weighted `fit` proxy to positional needs — or accept the proxy in writing. | Decision recorded; behaviour matches it. | S |
-| ☐ | **P1-15** | **`OPEN_PRESSER` navigation** (follow-up #30). Add the generic "go to the page this notice points at" action, like ROLE_TALK's depth-chart link. | Clicking the notice lands on the Game Center. | S |
+| ☑ | **P1-15** | **`OPEN_PRESSER` navigation** (follow-up #30). ✅ Built (2026-11-09). `InboxModule.tsx` resolves the thread's `link_table` to a page ("Go to Game Center" for `press_conferences`) and shows that link in the conversation; `OPEN_PRESSER` records the act and then navigates to `#franchise-game-center`. The Depth Chart link stays. | Clicking the notice lands on the Game Center. | S |
 | ☐ | **P1-16** | **Carried-talk flag persistence** (follow-up #36). Persist `shape:` / `stage:` / `release:` on the talk row. | A carried blockbuster still counts against `MAX_BLOCKBUSTERS`. | M |
 | ☐ | **P1-17** | **Carried-talk team accounting** (follow-up #37). Split resume out of `run_talks` (`resume_talks` before the search). | A carrying team cannot negotiate two new deals in one week. | S |
 
@@ -144,7 +144,7 @@ league-office step (gated, warning-only, like `compensatory_picks_run.py`).
 
 | ☐ | ID | Item | Done when | Size |
 |---|---|---|---|---|
-| ☐ | **P1-24** | **`watch_save` must skip `CAREER-TUNE-*` saves.** *Verified missing:* `grep CAREER-TUNE pipeline/` finds nothing, and `db/franchises.RESERVED_DBS` doesn't cover tuning clones. A clone keeps the real franchise's `LeagueID`, so the watcher would ingest a tuning season into the real franchise database. The pilot refuses while the watcher runs, but the reverse guard does not exist. **This must land before any tuning season, and P0-6 makes it mandatory** — the canonical league shares LeagueID −1851690351 with `CAREER-WEEK1`, every tuning clone, and 80+ experimental saves in the same folder. Run the watcher with `--pattern "CAREER-MU*"` as the primary isolation (no code change needed) and add the `CAREER-TUNE-*` refusal as defence in depth. | `tests/test_watch_save` covers the refusal; the watcher ignores a tuning save. | S |
+| ☑ | **P1-24** | **`watch_save` must skip `CAREER-TUNE-*` saves. ✅ Built (2026-11-09).** A clone keeps the real franchise's `LeagueID`, so the watcher would ingest a tuning season into the real franchise database. `find_save_files` now skips `CAREER-TUNE-*` (directory scans and a directly named file), `--allow-tune-save` (or a `--dsn` naming a `madden_tune_*` database, which is P2-04's deliberate tuning path) opts in, and `process_save` refuses a tuning clone whose destination is any other database as defence in depth. `--pattern "CAREER-MU*"` remains the primary isolation. | `tests/test_watch_save` covers the refusal; the watcher ignores a tuning save. | S |
 | ☐ | **P1-25** | **Trade-talks replay + transcript review** (follow-up #34). `--replay-week --season 2036 --week 6 --dry-run --no-llm` on a copy of `madden_2036`; JR reads three transcripts. Confirms talks converge at the rate `--talk-stall` assumes. | Convergence rate matches the assumption; transcripts approved. | M |
 | ☐ | **P1-26** | **Retirement rows at the season boundary.** `SEASON_CONTINUITY_PLAN` phase 2b ("retirements load from the save") is the first-PC-offseason item and is unbuilt. Without it `player_season_transitions` cannot label `RETIRED`, and career length (checkpoint 1) has no ground truth. | A season rollover writes `player_retirements` + `players.retired_season`. | M |
 | ☐ | **P1-27** | **Godfather trigger gates** (follow-up #47), part 1: populate persona sliders on carousel candidates (the `drive`/`ego ≥ 8` branch is currently dead); reorder the GM hot-seat scan so a genuine same-cycle HC+GM sweep can be observed. | The trigger can fire beyond its rarity gates in a test. | M |
@@ -174,7 +174,7 @@ when every item's "done when" holds and the relevant tests pass.
 
 | Wave | Items | Why together | PC needed? |
 |---|---|---|---|
-| **1** | **P1-01, P1-02, P1-03** (migration state, ledger, `init_db.sql` parity) and **P1-24** (watcher `CAREER-TUNE-*` guard) and **P1-15** (`OPEN_PRESSER` navigation) | Local, self-contained, no Madden. P1-01/02/03 are one investigation of the schema machinery and should be one unit; P1-24 and P1-15 are independent single-file changes. Unblocks P1-04 and every tuning run. | No |
+| **1** | **P1-01, P1-02, P1-03** (migration state, ledger, `init_db.sql` parity) and **P1-24** (watcher `CAREER-TUNE-*` guard) and **P1-15** (`OPEN_PRESSER` navigation). **Done 2026-11-09.** | Local, self-contained, no Madden. P1-01/02/03 are one investigation of the schema machinery and should be one unit; P1-24 and P1-15 are independent single-file changes. Unblocks P1-04 and every tuning run. | No |
 | **2** | **P1-05** (agent loops U3), **P1-06** (Agent Wire U3) | The two units that actually unlock the checkpoints: without them, agent decisions and tweet quality cannot be tuned. Both are existing plans with file ownership already defined. | No |
 | **3** | P1-08, P1-11, P1-12, P1-13, P1-14, P1-16, P1-17, P1-18, P1-19, P1-20, P1-21, P1-22, P1-23, P1-26, P1-27 | The long tail of wiring and producers. Independent of each other; several are small. | No |
 | **4** | P1-07 (retirement G4), P1-09 (inbox latency), P1-10 (press cloud), P1-25 (trade replay) | Everything that needs the PC, Madden, or credentials. Batch into one PC session. | Yes |
@@ -490,15 +490,24 @@ Every open row in `docs/FOLLOW_UPS.md`, mapped. Nothing is dropped.
 
 ---
 
-## 13. Appendix B — Verified state at 2026-11-08 (what this document is based on)
+## 13. Appendix B — Verified state at 2026-11-09 (after P1 Wave 1)
 
 - **Databases:** `madden_2036` (read-only archive), `madden_test`, `madden_v3_eval_20261030`. **No live
-  franchise database exists.** The `madden-db` container has been up 31 hours.
-- **`madden_test` is behind 7 migrations** (press, trade talks, owners/scouts/voters, comp picks, both staff
-  contracts, report cards). `persona_focus`, `nfl_history`, `persona_relationships`, `agent_loop_decisions`,
-  `agent_season_calls`, `player_progression_history`, `agent_predictions` are applied.
-- **No migration-tracking table**; applied state is inferred by `to_regclass`.
-- **No `CAREER-TUNE-*` guard in `pipeline/`**; the pilot refuses while the watcher runs, not the reverse.
+  franchise database exists** (P1-04 waits for P7-00b).
+- **`madden_test` is at the head of `db/migrations/`:** all **124** SQL migrations applied and recorded in
+  `schema_migrations` (the six it was behind, `2027_01_20`/`2027_02_02`/`2027_02_06`/both `2027_02_07`/
+  `2027_02_08`, plus the parity repair `2027_02_09`; the other 117 are `baseline`, because they were applied
+  before the ledger existed and the parity diff proves the schema is at head). Trade talks (`2027_01_22`) and
+  its trigger (`2027_02_05`) were already applied on 2026-11-08. `persona_focus`, `nfl_history`,
+  `persona_relationships`, `agent_loop_decisions`, `agent_season_calls`, `player_progression_history`,
+  `agent_predictions` are applied.
+- **Applied state is a query:** `python3 -m db.migrate status --dsn <DSN>` reports applied / pending / drifted
+  per file; `init_db.sql` carries a generated ledger block so a fresh build reports 124/124 and `apply` is a
+  no-op. `python3 -m db.migrate diff` proves `madden_test` is schema-identical to a fresh `init_db.sql` build.
+- **`CAREER-TUNE-*` guard exists:** the watcher skips tuning clones (with `--allow-tune-save` / a
+  `madden_tune_*` `--dsn` as the opt-in) and refuses one routed to any other database (P1-24).
+- **`OPEN_PRESSER` navigates:** the inbox shows a generic notice link resolved from `link_table`, and the act
+  lands on the Game Center (P1-15).
 - **Switchboard:** 20 features, D2 go-live order, all migrations for them now exist. All read `off`.
 - **Pilot catalog:** 13 screens; no offseason, Super Bowl, savepoint or pre-snap screens.
 - **Tuning tooling:** `targets.py`, `compare.py`, `progression_fit.py`, `supersim_loop.py`, and (built
