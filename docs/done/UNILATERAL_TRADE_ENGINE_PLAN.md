@@ -1,6 +1,6 @@
 # Project Mu: Unilateral Trade Engine & Rivalry Contention Plan
 
-**Status:** approved by JR (2026-11-09); building, wave 2 of 2 done.
+**Status:** built and on main (2026-11-09).
 **As built (U1):** `packages` keeps the initiator's own picks in its outgoing candidate pool (ranked by neutral league value like the rest) because the neutral pick chart prices Day-2/3 picks below depth players, which emptied the ladder-rental pool; `public_seller_value` takes the receiver from `asset["to"]` (its fixed signature has no buyer); `persona_target_weight` reads the market fit from `b["fits"]` (set by `run_week`) for CAP_MIND and falls back to the stub market.
 **As built (U2):** `engines/gm_negotiation.py` needed no change — `judge`/`counter_options` already receive the rivalry tax through `surpluses` → `deltas` → `valuer.rival` and the rivalry ladder through `check_legality` → `classify_shape` → `rival_ladder_step`, so §2.5.3 is covered by a test rather than new code; `open_talk` falls back to a synthesized FIRM option when no legal option survives, so an asset that moves between the search and the talk cannot crash the opening.
 **Builds on:** `PROJECT_SPEC.md` §2.17 (Trade Value, Proposal Engine, Negotiation, Talks), [`03_GM_AGENTS_PLAN.md`](../done/team_management/03_GM_AGENTS_PLAN.md) §2.4–2.5, [`TRADE_NEGOTIATIONS_PLAN.md`](../done/TRADE_NEGOTIATIONS_PLAN.md) (V2.11), [`CLOSE_OUT_CHECKLIST.md`](../CLOSE_OUT_CHECKLIST.md) (`P1-25`, `P3-07`, `P5-07`, `P5-14`, `P8-10`).
