@@ -148,6 +148,61 @@ def can_push(move, owner_view) -> bool:
             and bool(move.get("alternative")))
 
 
+# ----------------------------------------------------------------------------------------- facility spending ---
+# §2.3e CPU owner auto-upgrades (NFLPA_REPORT_CARD_PLAN): the owner's facility temperament, a review-only estimate.
+FACILITY_STYLES = ("AGGRESSIVE", "BALANCED", "FRUGAL")
+FACILITY_MAX_PROJECTS = {"AGGRESSIVE": 2, "BALANCED": 1, "FRUGAL": 1}
+FACILITY_RESERVE_SHARE = {"AGGRESSIVE": 0.10, "BALANCED": 0.25, "FRUGAL": 0.40}
+FACILITY_FLOORS = {"AGGRESSIVE": 0.85, "BALANCED": 0.51, "FRUGAL": 0.18}   # upgrade a category below this score
+
+
+def facility_style(owner_view) -> str:
+    """AGGRESSIVE (DEEP_POCKETS), FRUGAL (BUDGET_CONSCIOUS), else BALANCED; a neutral owner is BALANCED."""
+    traits = _traits(owner_view)
+    if "DEEP_POCKETS" in traits:
+        return "AGGRESSIVE"
+    if "BUDGET_CONSCIOUS" in traits:
+        return "FRUGAL"
+    return "BALANCED"
+
+
+def facility_upgrade_orders(card, owner_view, cash_available, season, category_grades=None, max_projects=None):
+    """Pure §2.3e: the CapEx projects a CPU owner orders this season, worst category first.
+
+    card: the team's report card ({category: grade}); cash_available: dollars left after payroll, OpEx, CapEx
+    already ordered and the owner's reserve; season: the ordering season. A category is upgraded when its score is
+    below the style's floor (AGGRESSIVE 0.85, BALANCED 0.51, FRUGAL 0.18 — an F/F- only). The tier is OVERHAUL for
+    a terrible category an aggressive owner can afford, STANDARD below C, else MINOR. Returns
+    `report_card_engine.order_upgrade` dicts; [] without a card or cash."""
+    from engines import report_card_engine as rce
+    if not card:
+        return []
+    style = facility_style(owner_view)
+    floor = FACILITY_FLOORS[style]
+    budget = int(cash_available or 0)
+    projects = max_projects if max_projects is not None else FACILITY_MAX_PROJECTS[style]
+    grades = category_grades or {k: card[k] for k in rce.CAPEX_CATEGORIES if k in card}
+    ranked = sorted(((rce.grade_to_score(g), k, g) for k, g in grades.items()), key=lambda x: (x[0], x[1]))
+    out = []
+    for score, category, grade in ranked:
+        if len(out) >= projects or score >= floor:
+            break
+        if style == "FRUGAL":
+            tier = "MINOR"                       # a frugal owner does the cheapest patch that stops the rot
+        elif style == "AGGRESSIVE" and score < 0.31 and budget >= rce.upgrade_cost("OVERHAUL"):
+            tier = "OVERHAUL"
+        elif score < 0.51 and budget >= rce.upgrade_cost("STANDARD"):
+            tier = "STANDARD"
+        else:
+            tier = "MINOR"
+        if budget < rce.upgrade_cost(tier):
+            continue
+        cost = rce.upgrade_cost(tier)
+        budget -= cost
+        out.append(rce.order_upgrade(card, category, tier, season))
+    return out
+
+
 def meddle_options(move, owner_view, *, vetoes_used=0) -> list:
     """The owner's choices on a CPU team's big move, as agent-loop Options. [] when the move isn't big or is on JR's
     team (move['user_controlled']): the owner never reviews JR's moves."""

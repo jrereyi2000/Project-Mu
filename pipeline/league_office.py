@@ -2404,6 +2404,81 @@ def _load_run(cur, run_id):
 
 
 # -------------------------------------------------------------------- run ----
+def _conninfo(cur):
+    try:
+        return cur.connection.info.dsn
+    except Exception:      # noqa: BLE001 - a fake cursor in tests
+        return ls.DSN
+
+
+def _user_team_ids(cur):
+    try:
+        return Deps().user_team_ids(cur)
+    except Exception:      # noqa: BLE001
+        return set()
+
+
+def _annual_summary(name, got):
+    """The small, JSON-safe part of a producer's report (never a built article's text)."""
+    if not isinstance(got, dict):
+        return {"status": "ok"}
+    keep = ("status", "season", "draft_season", "teams", "upgraded", "orders", "qfas", "awards", "draft_picks",
+            "filed", "rolled", "fired", "payroll", "article_id", "articles_written")
+    return {k: got[k] for k in keep if k in got} | {"status": got.get("status", "ok")}
+
+
+def annual_offseason_steps(cur, stage, season, wave, out=print):
+    """The league office's once-a-season DB producers and articles, run AFTER a WRITTEN FREE_AGENCY write (wave 1).
+
+    Order: comp picks (before the draft, so lock_order sees them), staff contracts (payroll is current before the
+    ledger), report cards + owner cash ledgers + CPU facility upgrades, then the two annual articles. Every step is
+    optional and warning-only: a failure is recorded in the summary and never fails the write. Each runs in its own
+    savepoint and is committed before the next, so the articles (which open their own connection) see the rows.
+    Returns {step: summary} or None when this stage isn't the annual one."""
+    if stage != FREE_AGENCY or (wave or 1) != 1:
+        return None
+    conn = cur.connection
+    results = {}
+
+    def optional(name, fn):
+        save = f"annual_{name.replace('-', '_')}"
+        try:
+            cur.execute(f"SAVEPOINT {save}")
+            got = fn()
+            cur.execute(f"RELEASE SAVEPOINT {save}")
+            conn.commit()
+            results[name] = _annual_summary(name, got)
+            return got
+        except Exception as e:      # noqa: BLE001 - an annual step never fails the write
+            try:
+                cur.execute(f"ROLLBACK TO SAVEPOINT {save}")
+                cur.execute(f"RELEASE SAVEPOINT {save}")
+            except Exception:       # noqa: BLE001
+                pass
+            log.exception("annual step %s failed", name)
+            results[name] = {"status": "FAILED", "error": f"{type(e).__name__}: {e}"}
+            return None
+
+    from engines import compensatory_picks_run, report_card_run, staff_contracts_run
+    optional("compensatory_picks", lambda: compensatory_picks_run.award_and_persist(cur, season, season + 1))
+    optional("staff_contracts", lambda: staff_contracts_run.annual(cur, season))
+    optional("report_cards", lambda: report_card_run.annual(cur, season, user_team_ids=_user_team_ids(cur)))
+    dsn = _conninfo(cur)
+
+    def comp_article():
+        from newsroom import compensatory_picks_article
+        return compensatory_picks_article.run(season + 1, season=season, publish=True, conn_info=dsn)
+
+    def card_article():
+        from newsroom import report_card_article
+        return report_card_article.run(season, publish=True, conn_info=dsn)
+
+    optional("compensatory_picks_article", comp_article)
+    optional("report_card_article", card_article)
+    out(json.dumps({"annual_steps": results}, indent=1, default=str))
+    return results
+
+
 def run(cur, snapshot, save_path, stage="auto", dry_run=False, confirm_franchise_closed=False, seed=None,
         deps=None, wave=None, out=print):
     """Plans and writes one stage; returns the league_office_runs id. See the module docstring for the rules and
@@ -2493,6 +2568,8 @@ def run(cur, snapshot, save_path, stage="auto", dry_run=False, confirm_franchise
         _store_operation(cur, run_id, op, plan["summary"])
         _finish_run(cur, run_id, "WRITTEN")
         conn.commit()
+        if getattr(deps, "annual_steps", False):
+            report["annual_steps"] = annual_offseason_steps(cur, plan["stage"], plan["season"], plan["wave"], out)
         out(json.dumps(dict(report, run_id=run_id, status="WRITTEN", replaced=False), indent=1, default=str))
         return run_id
     with tempfile.TemporaryDirectory(prefix="mu-league-office-") as tmp:
@@ -2541,6 +2618,8 @@ def run(cur, snapshot, save_path, stage="auto", dry_run=False, confirm_franchise
         log.error(msg)
         out(json.dumps(dict(report, run_id=run_id, status="NEEDS_RECOVERY", error=msg), indent=1, default=str))
         raise RecoveryError(msg) from e
+    if getattr(deps, "annual_steps", False):
+        report["annual_steps"] = annual_offseason_steps(cur, plan["stage"], plan["season"], plan["wave"], out)
     out(json.dumps(dict(report, run_id=run_id, status="WRITTEN", replaced=True, output_sha256=output_sha,
                         acknowledged_events=acknowledged), indent=1, default=str))
     return run_id

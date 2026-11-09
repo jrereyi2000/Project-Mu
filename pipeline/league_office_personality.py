@@ -708,9 +708,12 @@ def deps_for(cur, snapshot):
 
 
 def default_deps(cur):
-    """deps_for the switchboard snapshot of league_state's league (plain Deps without a league or tables)."""
+    """deps_for the switchboard snapshot of league_state's league (plain Deps without a league or tables). The
+    instance carries `annual_steps`, so a real run also fires the league office's once-a-season producers and
+    articles after a WRITTEN FREE_AGENCY write (pipeline.league_office.annual_offseason_steps); test fakes don't
+    set it and stay inert."""
     cur.execute('SELECT madden_league_id FROM league_state WHERE id = 1')
     row = cur.fetchone()
-    if not row or row[0] is None:
-        return deps_for(cur, None)
-    return deps_for(cur, pf.snapshot(cur, int(row[0])))
+    deps = deps_for(cur, None) if not row or row[0] is None else deps_for(cur, pf.snapshot(cur, int(row[0])))
+    deps.annual_steps = True
+    return deps
