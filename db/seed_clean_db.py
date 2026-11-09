@@ -13,7 +13,8 @@ prerequisites needed to start a brand new franchise save with native PC save loa
   6. Real NFL Head Coaches & Coordinators with schemes, slants, and starting tenures
   7. 32 GM Personas & 3 Draft Classes of Draft Capital (`draft_picks` via engines.gm_personas)
   8. Newsroom writers: the 38 archetype personas (agent_personas.json) into `persona_sliders`, `persona_traits`,
-     `persona_views`, and the 199 writer/social accounts (newsroom/config/agent_accounts.json) into `agent_memories`
+     `persona_views`, the 201 writer/social accounts (newsroom/config/agent_accounts.json) into `agent_memories`
+     (with their person_key), and their seeded writer relationships into `persona_relationships`
   9. Default Napper Fantasy user profile
 
 Usage:
@@ -254,8 +255,8 @@ def seed_agent_accounts(cur, team_ids: dict[str, int], path: Path = AGENT_ACCOUN
     for a in accounts:
         cur.execute("""
             INSERT INTO agent_memories (agent_id, archetype, assigned_team_id, persistent_memory, handle,
-                                        display_name, bio, avatar_color)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                                        display_name, bio, avatar_color, person_key)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (agent_id) DO UPDATE SET
                 archetype = EXCLUDED.archetype,
                 assigned_team_id = EXCLUDED.assigned_team_id,
@@ -263,9 +264,11 @@ def seed_agent_accounts(cur, team_ids: dict[str, int], path: Path = AGENT_ACCOUN
                 handle = EXCLUDED.handle,
                 display_name = EXCLUDED.display_name,
                 bio = EXCLUDED.bio,
-                avatar_color = EXCLUDED.avatar_color;
+                avatar_color = EXCLUDED.avatar_color,
+                person_key = EXCLUDED.person_key;
         """, (a["agent_id"], a["archetype"], team_ids.get(a["team"]) if a["team"] else None,
-              a["persistent_memory"], a["handle"], a["display_name"], a["bio"], a["avatar_color"]))
+              a["persistent_memory"], a["handle"], a["display_name"], a["bio"], a["avatar_color"],
+              a.get("person_key") or a["agent_id"]))
     return len(accounts)
 
 
@@ -423,7 +426,10 @@ def run_clean_seed(
                 writers_count = seed_writers_to_db(cur)
                 report["writers_seeded"] = writers_count
                 report["agent_accounts"] = seed_agent_accounts(cur, team_ids)
-                log(f"   Seeded {writers_count} writer personas and {report['agent_accounts']} writer/social accounts.")
+                from newsroom import relationships
+                report["writer_relationships"] = relationships.seed_writer_relationships(cur, season)
+                log(f"   Seeded {writers_count} writer personas, {report['agent_accounts']} writer/social accounts "
+                    f"and {report['writer_relationships']} writer relationships.")
             else:
                 log("7. Skipping writer personas.")
 

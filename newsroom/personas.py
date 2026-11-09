@@ -886,9 +886,13 @@ def render_persona(persona, fmt: str = "ARTICLE", tags: set = frozenset(), seed:
 
 def build_persona_block(cur, persona, *, agent_id: str = None, archetype: str = None, season: int = None, week: int = None,
                         fmt: str = "ARTICLE", article_type: str = None, post_kind: str = None,
-                        position: str = None, team_id: int = None, subject_key: str = "") -> str:
+                        position: str = None, team_id: int = None, subject_key: str = "", subjects: list = None,
+                        relationships: bool = True) -> str:
     """render_persona with tags and recent work from the database. Database trouble only drops the
-    data-driven parts (signals, avoid list); the persona itself still renders."""
+    data-driven parts (signals, avoid list); the persona itself still renders. When an agent_id and a cursor are
+    given and `relationships` is true, the writer's relationship block (newsroom/relationships.relationship_block,
+    subjects first) is appended, so articles get the writer's favourites and grudges without a change in
+    swarm_dispatcher. Post prompts pass relationships=False: they add the same block through build_post_prompt."""
     if isinstance(persona, str):
         return persona
     tags = article_tags(article_type) | post_tags(post_kind, position) | phase_tags(week)
@@ -903,7 +907,19 @@ def build_persona_block(cur, persona, *, agent_id: str = None, archetype: str = 
         except Exception as e:
             print(f"⚠️  [PERSONA RECENT WORK UNAVAILABLE] {agent_id}: {e}")
     seed = f"{agent_id}:{season}:{week}:{fmt}:{article_type or post_kind}:{team_id}:{subject_key}"
-    return render_persona(persona, fmt, tags, seed, texts, headlines)
+    block = render_persona(persona, fmt, tags, seed, texts, headlines)
+    if relationships and cur is not None and agent_id:
+        try:
+            from newsroom import relationships as relationship_mod
+            bias = relationship_mod.relationship_block(
+                cur, relationship_mod.person_key(cur, agent_id), subjects or [])
+        except Exception as e:
+            print(f"⚠️  [PERSONA RELATIONSHIPS UNAVAILABLE] {agent_id}: {e}")
+            bias = ""
+        if bias:
+            block += ("\n\nYOUR BIASES (how you feel about the people in this piece; let it colour the take, "
+                      "don't announce it):\n" + bias)
+    return block
 
 
 def _guarded(cur, fn):
