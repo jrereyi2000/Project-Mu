@@ -1,4 +1,4 @@
-"""Coach and player agent loops (docs/in_progress/COACH_PLAYER_AGENT_LOOPS_PLAN.md).
+"""Coach and player agent loops (docs/done/COACH_PLAYER_AGENT_LOOPS_PLAN.md).
 
   base.py    options, the seeded personality policy, model choice with fallback, the marquee budget, recording
   coach.py   CPU coach close-call charts, promises to unhappy players and promise reviews
