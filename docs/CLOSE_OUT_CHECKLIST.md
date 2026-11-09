@@ -166,6 +166,30 @@ checkpoint 2 and is handled in P8, not here.)
 | `FRESH_SAVE_STRATEGY_NOTES.md` | nothing left; it is a correction note | `done/` or delete |
 | `V3_STUDIO_PLAN.md`, `V3_DOSSIER_EVALUATION.md`, `DYNAMIC_PRESENTATION_*` | P8 | stay `in_progress/` (checkpoint 2) |
 
+### 3.6 Execution waves for P1
+
+P1 is 27 items; they are **not** all one job. Waves exist so a session can take a coherent slice and
+leave the rest untouched. Items inside a wave touch different files and can run in parallel; a wave is done
+when every item's "done when" holds and the relevant tests pass.
+
+| Wave | Items | Why together | PC needed? |
+|---|---|---|---|
+| **1** | **P1-01, P1-02, P1-03** (migration state, ledger, `init_db.sql` parity) and **P1-24** (watcher `CAREER-TUNE-*` guard) and **P1-15** (`OPEN_PRESSER` navigation) | Local, self-contained, no Madden. P1-01/02/03 are one investigation of the schema machinery and should be one unit; P1-24 and P1-15 are independent single-file changes. Unblocks P1-04 and every tuning run. | No |
+| **2** | **P1-05** (agent loops U3), **P1-06** (Agent Wire U3) | The two units that actually unlock the checkpoints: without them, agent decisions and tweet quality cannot be tuned. Both are existing plans with file ownership already defined. | No |
+| **3** | P1-08, P1-11, P1-12, P1-13, P1-14, P1-16, P1-17, P1-18, P1-19, P1-20, P1-21, P1-22, P1-23, P1-26, P1-27 | The long tail of wiring and producers. Independent of each other; several are small. | No |
+| **4** | P1-07 (retirement G4), P1-09 (inbox latency), P1-10 (press cloud), P1-25 (trade replay) | Everything that needs the PC, Madden, or credentials. Batch into one PC session. | Yes |
+
+**P1-04** (apply migrations to a franchise DB) is not in a wave: it waits for the franchise database, which is
+created by seeding `CAREER-MUBASE` (P7-00b). Run it as soon as that database exists, after Wave 1.
+
+**Wave 1 file ownership** (no path appears twice):
+
+| Item | Owns |
+|---|---|
+| P1-01 / P1-02 / P1-03 | `db/` (migration application and ledger), `db/init_db.sql`, `tests/` for the migration tooling |
+| P1-24 | `pipeline/watch_save.py`, its tests |
+| P1-15 | `Mu_Network/src/components/franchise/InboxModule.tsx`, `Mu_Network/src/types/franchiseInbox.ts`, `engines/inbox/kinds/press.py` (the `OPEN_PRESSER` option and its act), its tests |
+
 ---
 
 ## 4. P2 — Tuning-league infrastructure
