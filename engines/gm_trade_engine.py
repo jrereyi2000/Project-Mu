@@ -52,17 +52,28 @@ PICK_SCARCITY = 0.35                     # owner's pick value x (1 + 0.35 x own 
 # Starter depth (JR, 2026-10-22, Teddy Higgins): in season a team never sends a starter without a healthy player
 # left to take his slot, and never its last healthy player at a Madden position the group's slots can't cover.
 MIN_HEALTHY_POS = {"C": 1}
-# Division rivals (JR, 2026-10-20: "very unlikely they're getting traded in division", proposal #1). An elite player
-# never moves inside his division (a hard legality block); anything else sent to a rival costs the sender a share of
-# its league value on top of what he gives up, so in-division deals stay rare and small.
+# Division rivals (JR, 2026-10-20: "very unlikely they're getting traded in division", proposal #1; the rivalry x
+# contention matrix is JR, 2026-11-09, UNILATERAL_TRADE_ENGINE_PLAN D2/D3). An elite player never moves inside his
+# division (a hard legality block); anything else sent to a rival costs the sender a share of its league value on top
+# of what he gives up, scaled by both teams' contention status, so in-division and contender-to-contender deals stay
+# rare and dear while a rebuilding team across the conference is nearly untaxed.
 ELITE_OVR = 88                           # 215 of ~1,700 rostered players (13%, ~6-7 a team): the Pro Bowl tier
-DIVISION_TAX = 0.5                       # share of V_L the sender pays to strengthen a division rival
-CONFERENCE_TAX = 0.1                     # same conference, other division: a small playoff-race tax
+DIV_CONTEND_MAX_OVR = 84                 # in-season division block when both teams are in the race (CONTEND/HUNT)
+DIVISION_TAX = 0.50                      # division baseline (at least one side is OUT)
+DIV_HUNT_TAX = 0.65                      # same division, both in the race (at least one HUNT, neither OUT)
+DIV_CONTEND_TAX = 0.75                   # same division, both CONTEND
+CONFERENCE_TAX = 0.10                    # same conference baseline (seller is OUT, receiver is CONTEND/HUNT)
+CONF_OUT_TAX = 0.05                      # same conference, receiver is OUT (not a playoff threat)
+CONF_HUNT_TAX = 0.25                     # same conference, both in the race (at least one HUNT)
+CONF_CONTEND_TAX = 0.40                  # same conference, both CONTEND
+INTERCONF_CONTEND_TAX = 0.05             # different conference, both CONTEND (0.0 otherwise)
 # Acceptance
 THETA = 1_500_000                        # theta_T = $1.5M x (1 - aggressiveness) (offseason, draft day)
 THETA_SHAPED = 300_000                   # in season, where the price ladder sets the price
 URGENT_OVERPAY = 2_000_000               # a CONTEND team with an urgent need accepts down to -$2M x risk
 SOFTMAX_TEMP = 1_000_000
+OPTION_K = 3                             # opening options the unilateral search leaves for gm_talks (FIRM + anchors)
+ANCHOR_ASSET_PENALTY = 250_000           # an anchor package's extra asset costs this much in the chooser's ranking
 # Search
 MAX_ASSETS = 3
 TOP_CANDIDATES = 8
@@ -641,8 +652,49 @@ def rivalry(b, t1, t2):
     return None
 
 
+def contender_status(b, tid):
+    """'CONTEND' | 'HUNT' | 'OUT' for a team's competitive standing (UNILATERAL_TRADE_ENGINE_PLAN §2.1): CONTEND
+    is the GM direction; HUNT is a RETOOL team still in the race (in season wins >= losses, in the offseason
+    projected wins >= 8.5); OUT is REBUILD, or a RETOOL team that is losing."""
+    ctx = (b.get("ctx") or {}).get(tid) or {}
+    ts = (b.get("ts") or {}).get(tid) or {}
+    direction = ctx.get("direction") or ts.get("direction") or "RETOOL"
+    if direction == "CONTEND":
+        return "CONTEND"
+    if direction == "REBUILD":
+        return "OUT"
+    if b.get("window", "IN_SEASON") == "IN_SEASON":
+        in_race = not losing(b, tid)
+    else:
+        in_race = (ts.get("proj_wins") or 8.5) >= 8.5
+    return "HUNT" if in_race else "OUT"
+
+
 def rival_tax(b, sender, receiver):
-    return {"division": DIVISION_TAX, "conference": CONFERENCE_TAX}.get(rivalry(b, sender, receiver), 0.0)
+    """The share of the sent asset's league value a GM pays on top of what he gives up (UNILATERAL_TRADE_ENGINE_PLAN
+    §2.1): 0% across conferences unless both are CONTEND (5%), 5% same conference to an OUT team, 10% from an OUT
+    seller to a contender, 25% same conference with both in the race, 40% both CONTEND; division: 50% with an OUT
+    team, 65% both in the race, 75% both CONTEND."""
+    rel = rivalry(b, sender, receiver)
+    s_stat = contender_status(b, sender)
+    r_stat = contender_status(b, receiver)
+    if rel == "division":
+        if s_stat == "CONTEND" and r_stat == "CONTEND":
+            return DIV_CONTEND_TAX
+        if s_stat != "OUT" and r_stat != "OUT":
+            return DIV_HUNT_TAX
+        return DIVISION_TAX
+    if rel == "conference":
+        if r_stat == "OUT":
+            return CONF_OUT_TAX
+        if s_stat == "CONTEND" and r_stat == "CONTEND":
+            return CONF_CONTEND_TAX
+        if s_stat != "OUT" and r_stat != "OUT":
+            return CONF_HUNT_TAX
+        return CONFERENCE_TAX
+    if s_stat == "CONTEND" and r_stat == "CONTEND":
+        return INTERCONF_CONTEND_TAX
+    return 0.0
 
 
 def deltas(deal, valuer):
@@ -874,22 +926,34 @@ def pick_depth_check(deal, b, ignore_booking=()):
 
 
 def division_check(deal, b):
-    """{ok, detail}: an elite player (OVR >= ELITE_OVR) never moves to a division rival; anything else between
-    rivals passes with the rival tax noted (acceptance pays it)."""
+    """{ok, detail}: an elite player (OVR >= ELITE_OVR) never moves to a division rival, and in season neither does
+    a starter (OVR >= DIV_CONTEND_MAX_OVR) between two division teams that are both in the race (CONTEND/HUNT, D3).
+    Anything else between rivals passes with the actual rivalry x contention tax noted (acceptance pays it)."""
     rel = rivalry(b, deal["a"], deal["b"])
     if rel is None:
         return {"ok": True, "detail": "different conferences"}
     div = b["teams"].get(deal["a"], {}).get(rel)
+    players = [b["players"][x["player_id"]] for x in deal["assets"]
+               if x["type"] == "PLAYER" and x["player_id"] in b["players"]]
     if rel == "division":
-        elite = [b["players"][x["player_id"]] for x in deal["assets"] if x["type"] == "PLAYER"
-                 and (b["players"].get(x["player_id"], {}).get("ovr") or 0) >= ELITE_OVR]
+        elite = [p for p in players if (p.get("ovr") or 0) >= ELITE_OVR]
         if elite:
             names = ", ".join(f"{p['name']} ({p['ovr']} OVR)" for p in elite)
             return {"ok": False, "detail": f"same division ({div}): {names} is elite (OVR {ELITE_OVR}+), and teams "
                                            f"don't trade elite players to a division rival"}
+        if b.get("window") == "IN_SEASON" and contender_status(b, deal["a"]) != "OUT" \
+                and contender_status(b, deal["b"]) != "OUT":
+            starters = [p for p in players if (p.get("ovr") or 0) >= DIV_CONTEND_MAX_OVR]
+            if starters:
+                names = ", ".join(f"{p['name']} ({p['ovr']} OVR)" for p in starters)
+                return {"ok": False, "detail": f"same division ({div}): {names} is a starter (OVR "
+                                               f"{DIV_CONTEND_MAX_OVR}+) and both teams are in the race"}
+        taxes = [rival_tax(b, x["from"], x["to"]) for x in deal["assets"]] or \
+            [rival_tax(b, deal["a"], deal["b"])]
         return {"ok": True, "detail": f"same division ({div}): allowed, the sender pays a "
-                                      f"{DIVISION_TAX:.0%} rival discount"}
-    return {"ok": True, "detail": f"same conference ({div}): a {CONFERENCE_TAX:.0%} rival discount"}
+                                      f"{max(taxes):.0%} rival tax"}
+    taxes = [rival_tax(b, x["from"], x["to"]) for x in deal["assets"]] or [rival_tax(b, deal["a"], deal["b"])]
+    return {"ok": True, "detail": f"same conference ({div}): a {max(taxes):.0%} rival tax"}
 
 
 # ------------------------------------------------------------ trade shapes ----
@@ -898,24 +962,35 @@ def years_left(p, season):
     return (c.get("end_season", season) - season + 1) if c else 0
 
 
-def ladder(p, season):
+def ladder(p, season, rival_step=0):
     """The in-season price in pick rounds for a player: (earliest, latest) round of the buyer's main pick, or None
     (88+: blockbuster only). Under 75 R6-R7, 75-79 R5-R6, 80-84 R4-R5, 85-87 R3 (R2 if 26 or younger with 2+
     years left); then at most one step: older (30+) or expiring = one round cheaper, young (26 or under) with 2+
-    years left = one round dearer (never earlier than R3, but for the 85-87 exception)."""
+    years left = one round dearer (never earlier than R3, but for the 85-87 exception). `rival_step` (0 or 1) lets a
+    taxed seller counter one round earlier (UNILATERAL_TRADE_ENGINE_PLAN §2.2): it lowers `lo` by the step, never
+    below R2 for an 80+ player or R3 otherwise, and never moves `hi`, so standard offers stay legal too."""
     ovr, age, yl = p.get("ovr") or 0, p.get("age") or 27, years_left(p, season)
     if ovr >= BLOCKBUSTER_OVR:
         return None
     young = age <= 26 and yl >= 2
     cheap = age >= 30 or yl <= 1
     if ovr >= 85:
-        return (2, 2) if young else ((3, 4) if cheap else (3, 3))
-    lo, hi = (4, 5) if ovr >= 80 else (5, 6) if ovr >= 75 else (6, 7)
-    if young:
-        lo = max(3, lo - 1)
-    elif cheap:
-        hi = min(7, hi + 1)
+        lo, hi = (2, 2) if young else ((3, 4) if cheap else (3, 3))
+    else:
+        lo, hi = (4, 5) if ovr >= 80 else (5, 6) if ovr >= 75 else (6, 7)
+        if young:
+            lo = max(3, lo - 1)
+        elif cheap:
+            hi = min(7, hi + 1)
+    if rival_step > 0:
+        lo = max(2 if ovr >= 80 else 3, lo - rival_step)
     return lo, hi
+
+
+def rival_ladder_step(b, seller, buyer):
+    """1 when a deal from `seller` to `buyer` pays at least the same-conference in-the-race tax
+    (CONF_HUNT_TAX 25%), so the seller may counter one round earlier on the ladder, else 0."""
+    return 1 if rival_tax(b, seller, buyer) >= CONF_HUNT_TAX else 0
 
 
 def _sides(deal):
@@ -991,12 +1066,12 @@ def classify_shape(deal, b):
         return "RENTAL", False, "one or two picks for a player"
     if len(back) > 1:
         return "RENTAL", False, "at most one pick sent back"
-    lad = ladder(star, season)
+    lad = ladder(star, season, rival_ladder_step(b, seller, buyer))
     main = min(rnd(x) for x in bp)
     if main < lad[0] or main > lad[1]:
         return "RENTAL", False, (f"price off the ladder: R{main} for a {star.get('ovr')} OVR "
                                  f"(R{lad[0]}{'' if lad[0] == lad[1] else f'-R{lad[1]}'})")
-    if any(rnd(x) <= 2 for x in bp) and lad != (2, 2):
+    if any(rnd(x) <= 2 for x in bp) and lad[0] > 2:
         return "RENTAL", False, "no R1/R2 pick outside a blockbuster"
     if len(bp) == 2 and max(rnd(x) for x in bp) <= main:
         return "RENTAL", False, "a second pick must be a later round"
@@ -1020,10 +1095,13 @@ def shaped_picks(b, tid, rounds):
     return [{"type": "PICK", "pick": k, "from": tid} for _, k in sorted(best.items())]
 
 
-def rental_packages(b, buyer, seller, target):
+def rental_packages(b, buyer, seller, target, include_overpay=False):
     """Every ladder-priced rental of `target`: the buyer's main pick in the ladder's rounds, optionally a second
-    later pick, optionally a later late-round pick sent back."""
-    lad = ladder(b["players"][target["player_id"]], b["value_season"])
+    later pick, optionally a later late-round pick sent back. include_overpay: the buyer is willing to pay the
+    rivalry/contender premium, so a taxed seller (rival_ladder_step) may also ask one round earlier; the stepped
+    ladder's range still covers the standard rounds, so both standard and overpay packages are generated."""
+    step = rival_ladder_step(b, seller, buyer) if include_overpay else 0
+    lad = ladder(b["players"][target["player_id"]], b["value_season"], step)
     if lad is None:
         return []
     mains = shaped_picks(b, buyer, range(lad[0], lad[1] + 1))
@@ -1092,10 +1170,85 @@ def target_weight(p, season):
     return VETERAN_WEIGHT if years_left(p, season) <= VETERAN_YEARS_LEFT else 1.0
 
 
+def public_seller_value(b, valuer, asset, seller):
+    """What an outside GM publicly estimates `asset` is worth to `seller`, using only facts both GMs can see
+    (UNILATERAL_TRADE_ENGINE_PLAN §2.3): the neutral league value V_L, the seller's public role for the player
+    (starter 1.0, rotation 0.65, deeper 0.35), a public selling discount (0.65 when the seller is shopping him in
+    season, or is REBUILD in the offseason with the player 27+ or on 1 year left), the pick direction multiplier
+    (REBUILD 1.2, CONTEND 0.8), the sender's public dead money (`cut_penalty`), and the rivalry x contention tax.
+    It never reads the seller's private `valuer.value(asset, seller)`."""
+    ctx = (b.get("ctx") or {}).get(seller) or {}
+    s_dir = ctx.get("direction") or (b.get("ts") or {}).get(seller, {}).get("direction") or "RETOOL"
+    league = valuer.league(asset)
+    if asset["type"] == "PICK":
+        v = league * (1.2 if s_dir == "REBUILD" else (0.8 if s_dir == "CONTEND" else 1.0))
+    else:
+        p = b["players"][asset["player_id"]]
+        pid = p["id"]
+        if pid in ctx.get("starter_ids", ()):
+            role = 1.0
+        elif pid in ctx.get("rotation_ids", ()):
+            role = 0.65
+        else:
+            role = 0.35
+        v = league * role
+        selling = bool(ctx.get("selling"))
+        if not selling and b.get("window", "IN_SEASON") != "IN_SEASON" and s_dir == "REBUILD":
+            season = b.get("value_season", b["season"])
+            selling = (p.get("age") or 0) >= 27 or years_left(p, season) <= 1
+        if selling:
+            v *= 0.65
+    v += valuer.dead(asset, seller)
+    buyer = asset.get("to")
+    if buyer is not None:
+        v += round(rival_tax(b, seller, buyer) * max(0, league))
+    return round(v)
+
+
+def public_buyer_value(b, valuer, asset, buyer):
+    """What an outside GM publicly estimates `asset` is worth to `buyer` (UNILATERAL_TRADE_ENGINE_PLAN §2.3): the
+    neutral league value V_L, x 1.25 when a player's group is one of the buyer's top needs (picks stay neutral)."""
+    v = valuer.league(asset)
+    if asset["type"] == "PLAYER":
+        p = b["players"][asset["player_id"]]
+        needs = [n["group"] for n in trade_needs((b.get("ctx") or {}).get(buyer) or {}, 3)]
+        if p.get("group") in needs:
+            v *= 1.25
+    return round(v)
+
+
+def persona_target_weight(b, tid, player, season, mode="BUY"):
+    """How much GM `tid`'s personality wants this player (UNILATERAL_TRADE_ENGINE_PLAN §2.3): the veteran weight,
+    the GM's position bias, and traits — OLD_SCHOOL +15% on the trench/backfield groups, ANALYTICS_BELIEVER +15% on
+    QB/WR/CB/EDGE/OT, CAP_MIND +15% on a bargain (BUY: cap hit < 85% of market worth; SELL: cap hit above it), and
+    DRAFTNIK +20% when selling for picks."""
+    gm = (b.get("gm") or {}).get(tid) or {}
+    w = target_weight(player, season)
+    w *= float((gm.get("position_bias") or {}).get(player.get("group"), 1.0) or 1.0)
+    traits = set(gm.get("traits") or ())
+    g = player.get("group")
+    if "OLD_SCHOOL" in traits and g in ("OT", "IOL", "DT", "EDGE", "RB", "LB"):
+        w *= 1.15
+    if "ANALYTICS_BELIEVER" in traits and g in ("QB", "WR", "CB", "EDGE", "OT"):
+        w *= 1.15
+    if "CAP_MIND" in traits:
+        market = ((b.get("fits") or {}).get("market")) or tv.fit_market([])
+        worth = tv.worth(player.get("ovr"), g, market)
+        hit = cap_hit_now(player, season)
+        if mode == "BUY" and hit < 0.85 * worth:
+            w *= 1.15
+        elif mode == "SELL" and hit > worth:
+            w *= 1.15
+    if "DRAFTNIK" in traits and mode == "SELL":
+        w *= 1.20
+    return w
+
+
 def shaped_buy_deals(b, valuer, buyer, groups=None, trigger="NEED"):
     """In-season deals for a buyer's top needs: targets on selling teams (losing or REBUILD) who'd start for the
-    buyer, valued higher by the buyer than by their team (veterans with 1-2 years left favoured; no starting QBs),
-    each as rentals and swaps; in the deadline weeks a CONTEND buyer also looks at blockbuster targets."""
+    buyer, valued higher by the buyer than the public estimate of what their team would want (veterans with 1-2
+    years left favoured; no starting QBs), each as rentals and swaps; in the deadline weeks a CONTEND buyer also
+    looks at blockbuster targets. Unilateral: the buyer never reads the seller's private valuation."""
     ctx = b["ctx"][buyer]
     if ctx["direction"] == "REBUILD" or is_seller(b, buyer):
         return []
@@ -1116,16 +1269,17 @@ def shaped_buy_deals(b, valuer, buyer, groups=None, trigger="NEED"):
             if not free_player(b, pid):
                 continue
             x = {"type": "PLAYER", "player_id": pid, "from": seller, "to": buyer}
-            gain = valuer.value(x, buyer) - valuer.value(x, seller)
+            gain = valuer.value(x, buyer) - public_seller_value(b, valuer, x, seller)
             if gain <= 0:
                 continue
+            weight = persona_target_weight(b, buyer, p, season, "BUY")
             if (p["ovr"] or 0) >= BLOCKBUSTER_OVR:
                 stars.append((gain, x))
             else:
-                targets.append((gain * target_weight(p, season), x))
+                targets.append((gain * weight, x))
         targets.sort(key=lambda t: -t[0])
         for _, x in targets[:TOP_TARGETS]:
-            deals += [dict(d, trigger=trigger) for d in rental_packages(b, buyer, x["from"], x)]
+            deals += [dict(d, trigger=trigger) for d in rental_packages(b, buyer, x["from"], x, True)]
             deals += [dict(d, trigger=trigger) for d in swap_packages(b, valuer, buyer, x["from"], x)]
         if b["week"] in BLOCKBUSTER_WEEKS and ctx["direction"] == "CONTEND" and b.get("blockbusters", 0) < MAX_BLOCKBUSTERS:
             stars.sort(key=lambda t: -t[0])
@@ -1136,7 +1290,8 @@ def shaped_buy_deals(b, valuer, buyer, groups=None, trigger="NEED"):
 
 def shaped_sell_deals(b, valuer, seller):
     """A selling team's veterans (27+, or 1-2 years left; no starting QB, under 88) offered as rentals to teams
-    that need the group and would start them."""
+    that need the group and would start them. Unilateral: the seller uses a public estimate of the buyer's value
+    (neutral league value x 1.25 when the group is a top need), minus his own value, dead money and the rival tax."""
     if not is_seller(b, seller):
         return []
     season = b["value_season"]
@@ -1148,6 +1303,7 @@ def shaped_sell_deals(b, valuer, seller):
             and not (b["players"][pid]["group"] == "QB" and pid in ctx["starter_ids"])]
     scored = []
     for p in vets:
+        weight = persona_target_weight(b, seller, p, season, "SELL")
         for buyer in b["teams"]:
             if buyer == seller or not eligible_team(b, buyer) or is_seller(b, buyer):
                 continue
@@ -1158,13 +1314,14 @@ def shaped_sell_deals(b, valuer, seller):
             if line is not None and (p["ovr"] or 0) <= line:
                 continue
             x = {"type": "PLAYER", "player_id": p["id"], "from": seller, "to": buyer}
-            gain = valuer.value(x, buyer) - valuer.value(x, seller)
+            gain = (public_buyer_value(b, valuer, x, buyer)
+                    - (valuer.value(x, seller) + valuer.dead(x, seller) + valuer.rival(x, seller, buyer)))
             if gain > 0:
-                scored.append((gain * target_weight(p, season), buyer, x))
+                scored.append((gain * weight, buyer, x))
     scored.sort(key=lambda t: -t[0])
     deals = []
     for _, buyer, x in scored[:TOP_TARGETS]:
-        for d in rental_packages(b, buyer, seller, x):
+        for d in rental_packages(b, buyer, seller, x, True):
             deals.append(dict(d, a=seller, b=buyer, trigger="SELL"))
     return deals
 
@@ -1247,6 +1404,21 @@ def accepts(deal, valuer, b):
     return all(res), da, db
 
 
+def initiator_accepts(deal, valuer, b):
+    """(ok, Δ_A, Δ_B, V_L(A receives), V_L(B receives)): only the initiating GM (team a) must clear his own
+    threshold for a unilateral opening offer (UNILATERAL_TRADE_ENGINE_PLAN §2.4). The receiver judges the offer in
+    the talk, so this never reads his valuation. `accepts` stays the bilateral check."""
+    da, db, la, lb = deltas(deal, valuer)
+    a = deal["a"]
+    ctx = b["ctx"][a]
+    urgent = ctx.get("urgent_need") and any(
+        x["type"] == "PLAYER" and x["to"] == a and b["players"][x["player_id"]]["group"] == ctx["urgent_need"].get("group")
+        for x in deal["assets"])
+    theta = (b["theta_round"] * (1 - ctx["aggressiveness"]) if b.get("theta_round") is not None
+             else threshold(ctx, bool(urgent), b.get("window", "IN_SEASON")))
+    return da >= theta, da, db, la, lb
+
+
 def choose(cands, rng):
     """The smallest package both GMs accept (fewest assets; JR, 2026-10-22: maximising min(Δ_A, Δ_B) padded every
     deal with picks the buyer barely values), then a seeded softmax over the joint surplus min(Δ_A, Δ_B) of the best
@@ -1263,6 +1435,106 @@ def choose(cands, rng):
         if r <= 0:
             return c
     return cands[-1]
+
+
+# ------------------------------------------------------- opening posture (§2.4) ----
+def opening_posture(persona, urgent=False):
+    """The GM's opening-anchor propensity α in [0.05, 0.90] (UNILATERAL_TRADE_ENGINE_PLAN §2.4): aggressiveness
+    and the confidence/drive sliders raise it, warmth and the MEASURED/PEACEMAKER traits lower it, CAP_MIND and
+    DRAFTNIK raise it, and an urgent need makes the GM open near fair value."""
+    persona = persona or {}
+    agg = float(persona.get("aggressiveness", 0.5) or 0.5)
+    sl = persona.get("sliders") or {}
+    conf = float(sl.get("confidence", 5) or 5)
+    drive = float(sl.get("drive", 5) or 5)
+    warmth = float(sl.get("warmth", 5) or 5)
+    traits = set(persona.get("traits") or ())
+    shift = (0.12 if "CAP_MIND" in traits else 0.0) + (0.08 if "DRAFTNIK" in traits else 0.0)
+    if "MEASURED" in traits or "PEACEMAKER" in traits:
+        shift -= 0.12
+    if urgent:
+        shift -= 0.20
+    return max(0.05, min(0.90, 0.15 + 0.45 * agg + 0.04 * (conf - 5) + 0.03 * (drive - 5)
+                         - 0.03 * (warmth - 5) + shift))
+
+
+def _firm_key(c):
+    """Firm-ranking score: closest to neutral league-value parity, with a light nudge to the initiator's surplus."""
+    return -abs(c["la"] - c["lb"]) + 0.25 * c["da"]
+
+
+def _anchor_key(c):
+    """Anchor-ranking score: the initiator's own surplus, minus a small penalty per extra asset."""
+    return c["da"] - ANCHOR_ASSET_PENALTY * len(c["assets"])
+
+
+def _firm_pool(cands):
+    fewest = min(len(c["assets"]) for c in cands)
+    return sorted((c for c in cands if len(c["assets"]) == fewest), key=_firm_key, reverse=True)
+
+
+def _anchor_pool(cands):
+    return sorted(cands, key=_anchor_key, reverse=True)
+
+
+def _softmax_pick(pool, score, rng, k=5):
+    pool = pool[:k]
+    top = score(pool[0])
+    ws = [math.exp((score(c) - top) / SOFTMAX_TEMP) for c in pool]
+    r = rng.random() * sum(ws)
+    for c, w in zip(pool, ws):
+        r -= w
+        if r <= 0:
+            return c
+    return pool[-1]
+
+
+def _opening_options(cands):
+    """Up to OPTION_K candidates for gm_talks to open with: the best FIRM one first, then up to K-1 ANCHOR
+    candidates that leave the initiator with more surplus. Each carries its `posture`."""
+    firm = _firm_pool(cands)
+    out, seen = [], set()
+    if firm:
+        out.append(dict(firm[0], posture="FIRM"))
+        seen.add(firm[0]["hash"])
+    firm_da = firm[0]["da"] if firm else None
+    for c in _anchor_pool(cands):
+        if len(out) >= OPTION_K:
+            break
+        if c["hash"] in seen or (firm_da is not None and c["da"] <= firm_da):
+            continue
+        out.append(dict(c, posture="ANCHOR"))
+        seen.add(c["hash"])
+    return out
+
+
+def _choose_opening(cands, persona, rng, urgent=False):
+    if not cands:
+        return None
+    want_anchor = rng.random() < opening_posture(persona, urgent)
+    if want_anchor:
+        pool = _anchor_pool(cands)
+        pick = _softmax_pick(pool, _anchor_key, rng)
+    else:
+        pool = _firm_pool(cands) or _anchor_pool(cands)
+        pick = _softmax_pick(pool, _firm_key, rng)
+    pick = dict(pick)
+    pick["opening_posture"] = "ANCHOR" if want_anchor else "FIRM"
+    pick["opening_options"] = _opening_options(cands)
+    return pick
+
+
+def choose_opening(cands, persona, rng, urgent=False):
+    """The initiating GM's unilateral opening offer (UNILATERAL_TRADE_ENGINE_PLAN §2.4): with probability
+    opening_posture he opens with an ANCHOR (his highest-surplus package), otherwise with a FIRM near-parity
+    package; a seeded softmax picks among the top five either way. The result carries `opening_posture` and up to
+    OPTION_K `opening_options` for gm_talks."""
+    return _choose_opening(cands, persona, rng, urgent)
+
+
+def choose_shaped_opening(cands, persona, rng, urgent=False):
+    """choose_opening over the in-season shaped candidates (each keeps its `shape`)."""
+    return _choose_opening(cands, persona, rng, urgent)
 
 
 # ------------------------------------------------------------------ search ----
@@ -1305,9 +1577,11 @@ def trade_needs(ctx, k=2):
 
 
 def buy_deals(b, valuer, buyer, groups=None, trigger="NEED"):
-    """Deals where `buyer` gets a starter for one of its top needs from a team that values him less."""
+    """Deals where `buyer` gets a starter for one of its top needs from a team the buyer thinks would sell him
+    cheaply. Unilateral: the buyer uses public_seller_value, never the seller's private valuation."""
     ctx = b["ctx"][buyer]
     groups = groups or [n["group"] for n in trade_needs(ctx)]
+    season = b["value_season"]
     deals = []
     for g in groups:
         line = ctx["lines"].get(g)
@@ -1320,9 +1594,9 @@ def buy_deals(b, valuer, buyer, groups=None, trigger="NEED"):
             if not free_player(b, pid):
                 continue
             x = {"type": "PLAYER", "player_id": pid, "from": p["team_id"], "to": buyer}
-            gain = valuer.value(x, buyer) - valuer.value(x, p["team_id"])
+            gain = valuer.value(x, buyer) - public_seller_value(b, valuer, x, p["team_id"])
             if gain > 0:
-                targets.append((gain, x))
+                targets.append((gain * persona_target_weight(b, buyer, p, season, "BUY"), x))
         targets.sort(key=lambda t: -t[0])
         for _, target in targets[:TOP_TARGETS]:
             deals += packages(b, valuer, buyer, target["from"], [target], trigger)
@@ -1330,14 +1604,17 @@ def buy_deals(b, valuer, buyer, groups=None, trigger="NEED"):
 
 
 def sell_deals(b, valuer, seller):
-    """A REBUILD team's veterans (28+, starters) offered to teams that need the group and would start them."""
+    """A REBUILD team's veterans (28+, starters) offered to teams that need the group and would start them.
+    Unilateral: the seller uses public_buyer_value minus his own value, dead money and the rival tax."""
     deals = []
     ctx = b["ctx"][seller]
+    season = b["value_season"]
     vets = [b["players"][pid] for pid in b["roster"].get(seller, []) if pid in ctx["starter_ids"]
             and (b["players"][pid]["age"] or 0) >= SELL_AGE and free_player(b, pid)
             and TRADE_POS_WEIGHT.get(b["players"][pid]["group"], 0) >= TRADE_NEED_MIN_WEIGHT]
     scored = []
     for p in vets:
+        weight = persona_target_weight(b, seller, p, season, "SELL")
         for buyer in b["teams"]:
             if buyer == seller or not eligible_team(b, buyer):
                 continue
@@ -1345,29 +1622,47 @@ def sell_deals(b, valuer, seller):
             if bctx["direction"] == "REBUILD" or p["group"] not in [n["group"] for n in trade_needs(bctx, 3)]:
                 continue
             x = {"type": "PLAYER", "player_id": p["id"], "from": seller, "to": buyer}
-            gain = valuer.value(x, buyer) - valuer.value(x, seller)
+            gain = (public_buyer_value(b, valuer, x, buyer)
+                    - (valuer.value(x, seller) + valuer.dead(x, seller) + valuer.rival(x, seller, buyer)))
             if gain > 0:
-                scored.append((gain, buyer, x))
+                scored.append((gain * weight, buyer, x))
     scored.sort(key=lambda s: -s[0])
     for _, buyer, x in scored[:TOP_TARGETS]:
-        for d in packages(b, valuer, buyer, seller, [x], "SELL"):
+        for d in packages(b, valuer, buyer, seller, [x], "SELL", initiator=seller):
             d["a"], d["b"] = seller, buyer             # the seller initiated
             deals.append(d)
     return deals
 
 
-def packages(b, valuer, buyer, seller, core, trigger, extras=True):
-    """Every package of up to MAX_ASSETS from the buyer's top candidates (valued by the seller) against the core,
-    plus up to MAX_ASSETS - len(core) extras from the seller's non-starters (valued by the buyer)."""
+def _candidate_pool(assets, key, n):
+    """The initiator's own outgoing candidates: his picks (ranked by `key`) plus the top non-picks to fill the
+    pool. Keeping the picks in stops a flat neutral pick chart from crowding every later round out of the pool,
+    while the ranking is still neutral league value (never the other GM's private value)."""
+    assets = sorted(assets, key=key)
+    picks = [x for x in assets if x["type"] == "PICK"][:n]
+    rest = [x for x in assets if x["type"] != "PICK"]
+    return picks + rest[:max(0, n - len(picks))]
+
+
+def packages(b, valuer, buyer, seller, core, trigger, extras=True, initiator=None):
+    """Every package of up to MAX_ASSETS from the buyer's top candidates against the core, plus up to
+    MAX_ASSETS - len(core) extras from the seller's non-starters. Unilateral (UNILATERAL_TRADE_ENGINE_PLAN §2.3):
+    the initiator (the buyer when buying, the seller when selling) sorts the other team's assets by his own value
+    and his own outgoing assets by neutral league value, never by the other team's private valuation."""
+    init = initiator or buyer
     give = package_assets(b, buyer)
     for x in give:
         x["to"] = seller
-    give.sort(key=lambda x: -valuer.value(x, seller))
-    give = give[:TOP_CANDIDATES]
     core_keys = {asset_key(x) for x in core}
     extra = [dict(x, to=buyer) for x in package_assets(b, seller) if asset_key(x) not in core_keys]
-    extra.sort(key=lambda x: -valuer.value(x, buyer))
-    extra = extra[:TOP_CANDIDATES - 1] if extras else []
+    if init == buyer:
+        give = _candidate_pool(give, lambda x: -valuer.league(x), TOP_CANDIDATES)      # own sends, neutral
+        extra.sort(key=lambda x: -valuer.value(x, init))                               # their assets, my value
+        extra = extra[:TOP_CANDIDATES - 1] if extras else []
+    else:
+        give.sort(key=lambda x: -valuer.value(x, init))                                # their assets, my value
+        give = give[:TOP_CANDIDATES]
+        extra = _candidate_pool(extra, lambda x: -valuer.league(x), TOP_CANDIDATES - 1) if extras else []
     deals = []
     room = MAX_ASSETS - len(core)
     for k in range(1, MAX_ASSETS + 1):
@@ -1399,6 +1694,26 @@ def evaluate(deals, b, valuer):
         if not legal(checks):
             continue
         out.append(dict(d, hash=h, da=da, db=db, joint=min(da, db), legality=checks,
+                        shape=d.get("shape") or (classify_shape(d, b)[0] if b.get("window") == "IN_SEASON" else None)))
+    return out
+
+
+def evaluate_initiator(deals, b, valuer):
+    """Candidates legal (fairness included) and acceptable to the initiating GM alone, with their numbers
+    (UNILATERAL_TRADE_ENGINE_PLAN §2.4). The receiver judges the offer in the talk, so a privately-overvalued
+    player never blocks the initiator from making a legal opening offer."""
+    out = []
+    for d in deals:
+        h = deal_hash(d["a"], d["b"], d["assets"])
+        if h in b["hashes"] or rejected_players(d, b):
+            continue
+        ok, da, db, la, lb = initiator_accepts(d, valuer, b)
+        if not ok:
+            continue
+        checks = check_legality(d, b, valuer)
+        if not legal(checks):
+            continue
+        out.append(dict(d, hash=h, da=da, db=db, la=la, lb=lb, joint=min(da, db), legality=checks,
                         shape=d.get("shape") or (classify_shape(d, b)[0] if b.get("window") == "IN_SEASON" else None)))
     return out
 
@@ -1594,21 +1909,26 @@ def request_shopping(b, request_signals):
 
 def request_deals(b, valuer, seller, requested):
     """Deals that shop the seller's requesting players (a request is a reason to listen to offers, not a discount):
-    teams that value the player more than the seller does, through the usual packages, legality and acceptance."""
+    teams whose public need makes the player worth more to them than he costs the seller, through the usual
+    packages, legality and acceptance. Unilateral: no other team's private valuation is read."""
     deals, scored = [], []
+    season = b["value_season"]
     for pid in sorted(requested):
         if not free_player(b, pid):
             continue
+        p = b["players"][pid]
+        weight = persona_target_weight(b, seller, p, season, "SELL")
         for buyer in b["teams"]:
             if buyer == seller or not eligible_team(b, buyer):
                 continue
             x = {"type": "PLAYER", "player_id": pid, "from": seller, "to": buyer}
-            gain = valuer.value(x, buyer) - valuer.value(x, seller)
+            gain = (public_buyer_value(b, valuer, x, buyer)
+                    - (valuer.value(x, seller) + valuer.dead(x, seller) + valuer.rival(x, seller, buyer)))
             if gain > 0:
-                scored.append((gain, buyer, x))
+                scored.append((gain * weight, buyer, x))
     scored.sort(key=lambda s: (-s[0], s[1], s[2]["player_id"]))
     for _, buyer, x in scored[:TOP_TARGETS]:
-        for d in packages(b, valuer, buyer, seller, [x], "SELL"):
+        for d in packages(b, valuer, buyer, seller, [x], "SELL", initiator=seller):
             d["a"], d["b"] = seller, buyer             # the seller initiated
             d["request_id"] = requested[x["player_id"]]
             deals.append(d)
@@ -1664,6 +1984,7 @@ def run_week(cur, season, week, dry_run=False, replace=False, llm=None, log=prin
     b["open"] = [p for p in b["open"] if p["id"] not in expired_ids]
     b = finish_books(b)
     fits = tv.fits_from_db(cur, season)
+    b["fits"] = fits                                 # persona_target_weight's CAP_MIND market worth
     valuer = Valuer(b, fits)
     # re-check what's still open
     rep["rechecked"] = recheck_open(cur, b, dry_run, valuer=valuer)
@@ -1726,8 +2047,10 @@ def run_week(cur, season, week, dry_run=False, replace=False, llm=None, log=prin
         if tid in requests:
             deals = deals + request_deals(b, valuer, tid, requests[tid])
         deals = [d for d in deals if d["b"] not in used and d["a"] not in used]
-        cands = evaluate(deals, b, valuer)
-        pick = choose_shaped(cands, rng) if shaped else choose(cands, rng)
+        cands = evaluate_initiator(deals, b, valuer)
+        persona = b["gm"].get(tid) or {}
+        pick = (choose_shaped_opening(cands, persona, rng, urgent=bool(u)) if shaped
+                else choose_opening(cands, persona, rng, urgent=bool(u)))
         if not pick:
             continue
         picked += 1
@@ -2042,9 +2365,10 @@ def find_packages(b, valuer, player_id, buyers=None, per_team=3):
 
 def recheck_open(cur, b, dry_run=False, log=None, valuer=None):
     """The weekly re-check of open (PROPOSED / APPROVED) proposals: any that fails a check now (the deadline aside)
-    is EXPIRED with the failed checks as its status_reason; with a valuer, an ENGINE proposal either GM would now
-    refuse (values, needs and the model move week to week) is EXPIRED as no longer accepted. Returns
-    [(proposal_id, reason)]."""
+    is EXPIRED with the failed checks as its status_reason; with a valuer, an ENGINE proposal no longer accepted is
+    EXPIRED. A PROPOSED engine offer is the initiator's unilateral opening offer, so only the initiating GM (team a)
+    must still stand behind it (UNILATERAL_TRADE_ENGINE_PLAN §2.4/D4); an APPROVED engine deal still needs both
+    sides. Returns [(proposal_id, reason)]."""
     out = []
     for p in list(b["open"]):
         deal = {"a": p["team_a_id"], "b": p["team_b_id"], "assets": p["assets"]}
@@ -2057,11 +2381,17 @@ def recheck_open(cur, b, dry_run=False, log=None, valuer=None):
         elif rejected:
             why = f"rejected this week: {', '.join(rejected)} was in a proposal JR rejected"
         elif valuer is not None and p.get("origin", "ENGINE") == "ENGINE":
-            ok, da, db = accepts(deal, valuer, b)
-            if not ok:
-                who = [f"{abbr(b, t)} surplus ${d / 1e6:+.2f}M" for t, d in ((deal["a"], da), (deal["b"], db))
-                       if d < threshold(b["ctx"][t], False, b.get("window", "IN_SEASON"))]
-                why = "no longer accepted: " + ", ".join(who) + " (below the GM's threshold)"
+            if p.get("status", "PROPOSED") == "PROPOSED":
+                ok, da, db, _, _ = initiator_accepts(deal, valuer, b)
+                if not ok:
+                    why = (f"no longer accepted: {abbr(b, deal['a'])} surplus ${da / 1e6:+.2f}M "
+                           "(below the GM's threshold)")
+            else:
+                ok, da, db = accepts(deal, valuer, b)
+                if not ok:
+                    who = [f"{abbr(b, t)} surplus ${d / 1e6:+.2f}M" for t, d in ((deal["a"], da), (deal["b"], db))
+                           if d < threshold(b["ctx"][t], False, b.get("window", "IN_SEASON"))]
+                    why = "no longer accepted: " + ", ".join(who) + " (below the GM's threshold)"
         if why:
             out.append((p["id"], why))
             if log:

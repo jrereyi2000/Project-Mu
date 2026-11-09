@@ -21,6 +21,21 @@ def test_price_ladder_by_ovr_age_and_contract():
     assert ge.ladder(p(88), SEASON) is None                           # 88+: blockbuster only
 
 
+def test_ladder_allows_one_round_overpay_for_rival_or_conference_contender():
+    assert ge.ladder(p(82), SEASON) == (4, 5)                        # default: unchanged
+    assert ge.ladder(p(82), SEASON, rival_step=1) == (3, 5)          # the step lowers lo, never hi
+    assert ge.ladder(p(72), SEASON, rival_step=1) == (5, 7)          # never below R3 below 80 OVR
+    b = books(direction_a="CONTEND", direction_b="CONTEND", extra=[p(82)])
+    b["teams"][1].update(conference="AFC", division="AFC East")
+    b["teams"][2].update(conference="AFC", division="AFC North")
+    assert ge.rival_tax(b, 2, 1) >= ge.CONF_HUNT_TAX
+    assert ge.rival_ladder_step(b, 2, 1) == 1
+    assert shaped(b, [pl(900, 2, 1), pk(3, 1, 1, 2)])[:2] == ("RENTAL", True)
+    plain = books(direction_a="CONTEND", direction_b="CONTEND", extra=[p(82)])   # untaxed: no step
+    assert ge.rival_ladder_step(plain, 2, 1) == 0
+    assert not shaped(plain, [pl(900, 2, 1), pk(3, 1, 1, 2)])[1]                  # R3 stays off the ladder
+
+
 def shaped(b, assets, a=1, bt=2):
     return ge.classify_shape(deal(assets, a, bt), b)
 

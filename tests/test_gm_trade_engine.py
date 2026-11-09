@@ -463,8 +463,11 @@ def _run_week(monkeypatch, b, dry_run=False, cand=None, resumed_teams=()):
     monkeypatch.setattr(gd, "write", lambda *a, **k: None)
     if cand is not None:                                 # a scripted pick, for the flags a CPU deal carries
         monkeypatch.setattr(ge, "evaluate", lambda deals, books, valuer: [cand])
+        monkeypatch.setattr(ge, "evaluate_initiator", lambda deals, books, valuer: [cand])
         monkeypatch.setattr(ge, "choose_shaped", lambda cands, rng: cands[0])
+        monkeypatch.setattr(ge, "choose_shaped_opening", lambda cands, persona, rng, urgent=False: cands[0])
         monkeypatch.setattr(ge, "choose", lambda cands, rng: cands[0])
+        monkeypatch.setattr(ge, "choose_opening", lambda cands, persona, rng, urgent=False: cands[0])
 
     def fake_resume(cur, books, valuer, rng, llm, log=None):
         calls["resumed"] = calls.get("resumed", 0) + 1
@@ -606,3 +609,154 @@ def test_player_jr_rejected_this_week_is_not_offered_again():
     assert out == [(24, f"rejected this week: Player {STAR} was in a proposal JR rejected")]
     b["open"] = [dict(open_[0], origin="USER")]                 # JR's own deals aren't second-guessed
     assert ge.recheck_open(Cur(), b) == []
+
+
+# --------------------------------------- rivalry x contention tax and unilateral search ----
+def tax_books():
+    """A bare book for the tax matrix: four teams across two conferences, three divisions."""
+    return {"season": SEASON, "window": "IN_SEASON", "ctx": {}, "wl": {},
+            "teams": {1: {"abbr": "AAA", "conference": "AFC", "division": "AFC East"},
+                      2: {"abbr": "BBB", "conference": "AFC", "division": "AFC East"},
+                      3: {"abbr": "CCC", "conference": "AFC", "division": "AFC North"},
+                      4: {"abbr": "DDD", "conference": "NFC", "division": "NFC East"}},
+            "ts": {}}
+
+
+def status(b, tid, direction, wins=None, losses=None, proj=None):
+    b["ts"][tid] = {"direction": direction, "proj_wins": proj}
+    if wins is not None:
+        b["wl"][tid] = (wins, losses)
+
+
+def test_rivalry_and_contention_tax_matrix():
+    b = tax_books()
+    status(b, 1, "CONTEND")
+    status(b, 4, "CONTEND")
+    assert ge.contender_status(b, 1) == "CONTEND"
+    # inter-conference: 0% unless both CONTEND (5%)
+    assert ge.rival_tax(b, 1, 4) == ge.INTERCONF_CONTEND_TAX == 0.05
+    assert ge.rival_tax(b, 4, 1) == 0.05
+    status(b, 4, "REBUILD")
+    assert ge.contender_status(b, 4) == "OUT"
+    assert ge.rival_tax(b, 1, 4) == 0.0 and ge.rival_tax(b, 4, 1) == 0.0
+    # same conference, different divisions
+    status(b, 3, "REBUILD")
+    assert ge.rival_tax(b, 1, 3) == ge.CONF_OUT_TAX == 0.05          # receiver OUT: not a playoff threat
+    assert ge.rival_tax(b, 3, 1) == ge.CONFERENCE_TAX == 0.10        # OUT seller to a contender
+    status(b, 3, "RETOOL", 2, 2)                                     # .500 RETOOL = HUNT
+    assert ge.contender_status(b, 3) == "HUNT"
+    assert ge.rival_tax(b, 3, 1) == ge.CONF_HUNT_TAX == 0.25         # both in the race, one HUNT
+    assert ge.rival_tax(b, 1, 3) == 0.25
+    status(b, 3, "CONTEND")
+    assert ge.rival_tax(b, 1, 3) == ge.CONF_CONTEND_TAX == 0.40
+    # same division
+    status(b, 2, "REBUILD")
+    assert ge.rival_tax(b, 1, 2) == ge.DIVISION_TAX == 0.50          # one OUT
+    assert ge.rival_tax(b, 2, 1) == 0.50
+    status(b, 2, "RETOOL", 3, 3)                                     # HUNT
+    assert ge.contender_status(b, 2) == "HUNT"
+    assert ge.rival_tax(b, 1, 2) == ge.DIV_HUNT_TAX == 0.65
+    assert ge.rival_tax(b, 2, 1) == 0.65
+    status(b, 2, "CONTEND")
+    assert ge.rival_tax(b, 1, 2) == ge.DIV_CONTEND_TAX == 0.75
+    # a losing RETOOL is OUT; the offseason HUNT test uses projected wins
+    status(b, 3, "RETOOL", 1, 3)
+    assert ge.contender_status(b, 3) == "OUT"
+    b["window"] = "OFFSEASON"
+    status(b, 3, "RETOOL", proj=9)
+    assert ge.contender_status(b, 3) == "HUNT"
+    status(b, 3, "RETOOL", proj=7)
+    assert ge.contender_status(b, 3) == "OUT"
+
+
+def test_division_contenders_block_starter_trades_in_season():
+    starter = make_player(9300, 2, "WR", 85, age=27, hit=3_000_000, end=2037)
+    d = deal([pl(9300, 2, 1), pk(3, 1, 1, 2)])
+    both = rivals(books=books(direction_a="CONTEND", direction_b="CONTEND", extra=[starter]))
+    chk = ge.division_check(d, both)
+    assert not chk["ok"] and "starter (OVR 84+)" in chk["detail"] and "in the race" in chk["detail"]
+    # a HUNT rival (winning RETOOL) is in the race too
+    hunt = rivals(books=books(direction_a="CONTEND", direction_b="RETOOL", extra=[starter]))
+    hunt["wl"] = {1: (4, 0), 2: (3, 2)}
+    assert hunt["ctx"][2]["direction"] == "RETOOL" and not ge.division_check(d, hunt)["ok"]
+    # an OUT seller may still move him, at the 50% division tax
+    seller_out = rivals(books=books(direction_a="CONTEND", direction_b="REBUILD", extra=[starter]))
+    ok = ge.division_check(d, seller_out)
+    assert ok["ok"] and "50%" in ok["detail"]
+    # out of season the hard 84 line is not applied (the 88+ elite block still is)
+    both["window"] = "OFFSEASON"
+    assert ge.division_check(d, both)["ok"]
+
+
+def test_unilateral_search_does_not_require_receiver_acceptance():
+    """Team 2 privately overvalues its own X-Factor receiver (a 3x position bias): Team 1 still makes a legal
+    ladder offer from its own valuation and public_seller_value, while the old bilateral pre-screen drops them."""
+    star = make_player(STAR, 2, "WR", 82, age=30, hit=5_000_000, end=2036)
+    star["dev"] = "Superstar X-Factor"
+    b = books(direction_b="REBUILD", extra=[star])
+    b["gm"][2]["position_bias"] = {"WR": 3.0}
+    b = ge.finish_books(b)
+    v = ge.Valuer(b, FITS)
+    deals = ge.shaped_buy_deals(b, v, 1, ["WR"])
+    cands = ge.evaluate_initiator(deals, b, v)
+    assert cands and all(ge.legal(c["legality"]) for c in cands)
+    assert any(x.get("player_id") == STAR for c in cands for x in c["assets"])
+    assert not any(any(x.get("player_id") == STAR for x in c["assets"]) for c in ge.evaluate(deals, b, v))
+
+
+def _opening_cands():
+    return [
+        dict(deal([pl(STAR, 2, 1), pk(4, 1, 1, 2)]), hash="firm1", da=400_000, db=200_000, la=5_000_000,
+             lb=4_900_000, joint=200_000, legality={}, shape="RENTAL"),
+        dict(deal([pl(STAR, 2, 1), pk(5, 1, 1, 2)]), hash="anchor1", da=1_500_000, db=-500_000, la=5_000_000,
+             lb=4_000_000, joint=-500_000, legality={}, shape="RENTAL"),
+        dict(deal([pl(STAR, 2, 1), pk(6, 1, 1, 2)]), hash="anchor2", da=2_400_000, db=-900_000, la=5_000_000,
+             lb=3_500_000, joint=-900_000, legality={}, shape="RENTAL"),
+        dict(deal([pl(STAR, 2, 1), pk(7, 1, 1, 2)]), hash="firm2", da=300_000, db=100_000, la=5_000_000,
+             lb=4_950_000, joint=100_000, legality={}, shape="RENTAL"),
+    ]
+
+
+def test_personality_drives_opening_posture_and_package():
+    import random
+    aggressive = {"aggressiveness": 0.95, "sliders": {"confidence": 9, "drive": 8, "warmth": 2},
+                  "traits": ["CAP_MIND"]}
+    measured = {"aggressiveness": 0.10, "sliders": {"confidence": 3, "drive": 3, "warmth": 9},
+                "traits": ["MEASURED"]}
+    assert ge.opening_posture(aggressive) >= 0.85 and ge.opening_posture(measured) <= 0.10
+    assert ge.opening_posture(aggressive, urgent=True) < ge.opening_posture(aggressive)
+    cands = _opening_cands()
+    picks = lambda persona: [ge.choose_opening(cands, persona, random.Random(s)) for s in range(300)]
+    agg, calm = picks(aggressive), picks(measured)
+    n_anchor = lambda ps: sum(p["opening_posture"] == "ANCHOR" for p in ps)
+    assert n_anchor(agg) > n_anchor(calm) + 50
+    mean_da = lambda ps: sum(p["da"] for p in ps) / len(ps)
+    assert mean_da(agg) > mean_da(calm)                       # the shark opens cheaper, for more surplus
+    assert all(1 <= len(p["opening_options"]) <= ge.OPTION_K and p["opening_options"][0]["posture"] == "FIRM"
+               for p in agg)
+
+
+def test_recheck_keeps_unilateral_proposed_offer_when_initiator_still_accepts():
+    star = make_player(STAR, 2, "WR", 82, age=27, hit=2_000_000, end=2037)
+    assets = [pl(STAR, 2, 1), pk(4, 1, 1, 2)]
+    open_ = [{"id": 41, "status": "PROPOSED", "origin": "ENGINE", "team_a_id": 1, "team_b_id": 2,
+              "trade_window": "IN_SEASON", "expires_week": 4, "assets": assets}]
+
+    class Cur:
+        def execute(self, q, a=None):
+            pass
+
+    b = books(direction_a="CONTEND", direction_b="CONTEND", extra=[star], open_=open_)
+    v = ge.Valuer(b, FITS)
+    ok, da, db, _, _ = ge.initiator_accepts(deal(assets), v, b)
+    assert ok and da >= ge.threshold(b["ctx"][1], False, b["window"])
+    assert db < ge.threshold(b["ctx"][2], False, b["window"]) and not ge.accepts(deal(assets), v, b)[0]
+    assert ge.recheck_open(Cur(), b, valuer=v) == []            # the initiator stands behind it: kept
+    # a deal the initiating GM himself would now refuse is still expired
+    stacked = [make_player(9500 + k, 1, "WR", 90, hit=2_000_000, end=2037) for k in range(3)]
+    heavy = make_player(STAR, 2, "WR", 82, age=27, hit=6_000_000, end=2037)
+    b2 = books(direction_a="CONTEND", direction_b="CONTEND", extra=[heavy] + stacked, open_=open_)
+    v2 = ge.Valuer(b2, FITS)
+    assert not ge.initiator_accepts(deal(assets), v2, b2)[0]
+    out = ge.recheck_open(Cur(), b2, valuer=v2)
+    assert out and out[0][0] == 41 and out[0][1].startswith("no longer accepted: AAA surplus")
