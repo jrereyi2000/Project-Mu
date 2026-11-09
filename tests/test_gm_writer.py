@@ -100,6 +100,40 @@ def test_prior_history_dicts_are_read_by_message():
     assert not ok
 
 
+def test_a_repeated_run_against_a_template_line_is_allowed():
+    prior = [{"team": "BUF", "source": "TEMPLATE",
+              "message": "I watched every snap he took last season and he is a problem."}]
+    ok, _ = gw.check_style("Look, I watched every snap he took. He can play.", prior)
+    assert ok
+
+
+def test_a_repeated_run_against_a_model_line_still_fails():
+    prior = [{"team": "BUF", "source": "LLM",
+              "message": "I watched every snap he took last season and he is a problem."}]
+    ok, why = gw.check_style("Look, I watched every snap he took. He can play.", prior)
+    assert not ok and "repeats" in why
+
+
+def test_a_speaker_may_repeat_his_own_tic():
+    prior = [{"team": "ATL", "source": "LLM",
+              "message": "I watched every snap he took last season and he is a problem."}]
+    ok, _ = gw.check_style("Look, I watched every snap he took. He can play.", prior, speaker="ATL")
+    assert ok
+
+
+def test_a_repeated_run_at_the_other_gm_still_fails_when_the_speaker_is_known():
+    prior = [{"team": "BUF", "source": "LLM",
+              "message": "I watched every snap he took last season and he is a problem."}]
+    ok, why = gw.check_style("Look, I watched every snap he took. He can play.", prior, speaker="ATL")
+    assert not ok and "repeats" in why
+
+
+def test_a_repeated_run_against_jr_note_is_allowed():
+    prior = [{"source": "USER", "message": "I watched every snap he took last season and he is a problem."}]
+    ok, _ = gw.check_style("Look, I watched every snap he took. He can play.", prior, speaker="ATL")
+    assert ok
+
+
 # ------------------------------------------------------------------ write ----
 def test_a_good_line_is_kept_and_the_prompt_carries_the_inputs():
     seen = []

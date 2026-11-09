@@ -347,6 +347,7 @@ def _writer_line(b, actor, option, sheet, scene, history, llm):
     options, so no model answer can change the move."""
     from engines import gm_writer
     persona = _gm(b, actor)
+    scene = dict(scene or {}, speaker=_abbr(b, actor))
     return gm_writer.write_line(llm, card_text=_card_text(persona), sheet=sheet, history=history,
                                 move=_move(b, actor, option), scene=scene,
                                 fallback=_template_line(persona, option, sheet))
@@ -520,7 +521,7 @@ def _history(turns, talk, books):
     for t in turns[-3:]:
         tid = _turn_actor_team(t, talk)
         out.append({"team": _abbr(books, tid) if tid else "?", "action": t.get("action"),
-                    "message": t.get("message")})
+                    "message": t.get("message"), "source": t.get("message_source")})
     return out
 
 

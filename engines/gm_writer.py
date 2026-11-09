@@ -37,19 +37,27 @@ def _norm(text):
 
 
 def _prior_messages(prior):
-    """Prior lines as plain strings (accepts history dicts too, using their `message`)."""
+    """Prior lines as (message, source, team) triples (history dicts carry `message`, `source`/`message_source`
+    and `team`)."""
     out = []
     for h in prior or []:
-        msg = h.get("message") if isinstance(h, dict) else h
+        if isinstance(h, dict):
+            msg, source = h.get("message"), h.get("source") or h.get("message_source")
+            team = h.get("team")
+        else:
+            msg, source, team = h, None, None
         if msg:
-            out.append(str(msg))
+            out.append((str(msg), source, team))
     return out
 
 
-def check_style(text, prior, max_words=45):
+def check_style(text, prior, max_words=45, speaker=None):
     """(ok, why). Rejects a line that is over `max_words`, uses a banned word or phrase, holds more than one
     ellipsis, repeats a 5-word run from either of the previous two lines, or restates one of those lines
-    verbatim. Pure; `prior` is the earlier lines (strings, or dicts carrying a `message`)."""
+    verbatim. Pure; `prior` is the earlier lines (strings, or dicts carrying `message`, `source` and `team`).
+    The repeated-run rule skips TEMPLATE and USER lines and the speaker's own lines: a canned fallback or JR's
+    note is not another GM's wording, and a man repeating his own tic is not the two GMs sounding alike
+    (2026-11-09, 26.5% fallbacks)."""
     t = (text or "").strip()
     if not t:
         return False, "empty line"
@@ -62,13 +70,15 @@ def check_style(text, prior, max_words=45):
         return False, "more than one ellipsis"
     prev = _prior_messages(prior)[-2:]
     w, nt = _words(t), _norm(t)
-    for p in prev:
+    for p, _src, _team in prev:
         np_ = _norm(p)
         if not np_ or not nt:
             continue
         if nt == np_ or (len(w) >= 6 and (nt in np_ or np_ in nt)):
             return False, "restates an earlier line verbatim"
-    for p in prev:
+    for p, src, team in prev:
+        if src in ("TEMPLATE", "USER") or (speaker and team and team == speaker):
+            continue
         if _runs(w, RUN) & _runs(_words(p), RUN):
             return False, "repeats a phrase from an earlier line"
     return True, None
@@ -76,7 +86,8 @@ def check_style(text, prior, max_words=45):
 
 # ----------------------------------------------------------------- prompt ----
 def _history_messages(history):
-    return _prior_messages(history)
+    """The history as display strings for the prompt (sources stay on the raw history for `check_style`)."""
+    return [msg for msg, _src, _team in _prior_messages(history)]
 
 
 def _line_prompt(card_text, sheet, history, move, scene, max_words):
@@ -165,7 +176,7 @@ def write_line(llm, *, card_text, sheet, history, move, scene, fallback, max_wor
     from engines.gm_rationale import validate_rationale
 
     prompt = _line_prompt(card_text, sheet, history, move, scene, max_words)
-    prior = _history_messages(history)[-2:]
+    prior = (history or [])[-2:]
     why = None
     for _ in range(2):
         attempt = prompt if why is None else (
@@ -180,9 +191,10 @@ def write_line(llm, *, card_text, sheet, history, move, scene, fallback, max_wor
         if not ok:
             why = f"a fact that isn't on the sheet ({fact_why})"
             continue
-        ok, style_why = check_style(text, prior, max_words)
+        ok, style_why = check_style(text, prior, max_words, speaker=(scene or {}).get("speaker"))
         if not ok:
             why = f"style ({style_why})"
             continue
         return text, "LLM"
+    print(f"[gm_writer] template fallback: {why}", flush=True)
     return fallback, "TEMPLATE"

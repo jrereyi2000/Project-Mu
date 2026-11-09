@@ -376,7 +376,7 @@ def message_scene(b, gm, sheet, mood=None):
     side = sheet["teams"]["b"]                # message_sheet builds the deal as {a: user, b: gm}
     return {"week": b.get("week"), "deadline_week": ge.TRADE_DEADLINE_WEEK, "who_called": "JR",
             "mood": _MOOD_SCENE.get(mood), "stakes": _stakes_text(side.get("stakes")),
-            "relationship": _relationship_text(side.get("rivalry"))}
+            "relationship": _relationship_text(side.get("rivalry")), "speaker": side.get("abbr")}
 
 
 def _gm_card_text(b, gm):
@@ -404,7 +404,7 @@ def gm_message(b, kind, user, gm, offer, counter_assets=None, mood=None, reasons
         return fallback, "TEMPLATE"
     from engines.gm_writer import write_line
     sheet = message_sheet(b, user, gm, offer, counter_assets, recent=recent)
-    history = [{"message": f"JR: {note[:500]}"}] if note else []
+    history = [{"message": f"JR: {note[:500]}", "source": "USER"}] if note else []
     return write_line(llm, card_text=_gm_card_text(b, gm), sheet=sheet, history=history,
                       move=message_move(b, kind, user, gm, offer, counter_assets, posture),
                       scene=message_scene(b, gm, sheet, mood), fallback=fallback, timeout=timeout)

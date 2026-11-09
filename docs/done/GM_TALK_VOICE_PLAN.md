@@ -23,6 +23,11 @@ the writer has no league-name check, and JR's `note` rides in the writer's `hist
 `--no-llm` talk path still builds the v2 sheet (three read-only `recent_form` reads per turn); harmless, noted for
 the P3 pacing work.
 
+**Follow-up as built (2026-11-09):** the writer's repeated-5-word rule now skips TEMPLATE and USER lines and the
+speaker's own lines; a GM repeating his own tic no longer forces a template. The weeks 4–8 replay's fallback share
+fell from **26.5% to 6.0%** (94 model lines / 6 template) with the same 9/9/8 talk outcomes, clearing the plan's
+10% target. The remaining 6 are a GM genuinely echoing the other man.
+
 **Builds on:** `PROJECT_SPEC.md` §2.17 (Negotiation, Talks), §2.21b (Front-Office Inbox), §3.3f (GM agents); [`TRADE_NEGOTIATIONS_PLAN.md`](../done/TRADE_NEGOTIATIONS_PLAN.md) (V2.11); [`UNILATERAL_TRADE_ENGINE_PLAN.md`](../done/UNILATERAL_TRADE_ENGINE_PLAN.md) (U1–U2); [`FRONT_OFFICE_INBOX_PLAN.md`](../done/FRONT_OFFICE_INBOX_PLAN.md); [`CLOSE_OUT_CHECKLIST.md`](../CLOSE_OUT_CHECKLIST.md) (P1-25, P5-07, P8-03, P8-10).
 
 **Goal:** Make CPU-to-CPU trade talks and JR's inbox GM negotiations read like two people who watch tape. Today the engine picks good moves but the words are corporate-analyst filler ("efficiency", "asset value", "framework") because the writer is given no performance facts and each GM's "voice" is a trait template in the same register. This plan gives the writer concrete facts, a per-GM speech card, a writer-only turn (the policy picks the move), and a style contract with a filler/repetition check.
