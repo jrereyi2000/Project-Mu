@@ -16,6 +16,7 @@ from engines.gm_direction import SLOTS
 GROUP_NAMES = {"QB": "quarterback", "RB": "running back", "WR": "receiver", "TE": "tight end", "OT": "tackle",
                "IOL": "interior line", "EDGE": "edge rusher", "DT": "defensive tackle", "LB": "linebacker",
                "CB": "cornerback", "S": "safety", "K": "kicker", "P": "punter"}
+DEF_GROUPS = {"EDGE", "DT", "LB", "CB", "S"}
 
 
 def money(v):
@@ -24,16 +25,104 @@ def money(v):
     return f"${v / 1e6:.2f}M" if abs(v) >= 1e6 else f"${v / 1e3:.0f}K"
 
 
-def build_fact_sheet(b, deal):
-    """The deal's facts as a plain dict (JSON-safe)."""
-    from engines.gm_trade_engine import abbr, cap_effects, cap_hit_now, pick_label, team_name
+def _num(v):
+    """A stat value as a JSON-safe number (a Decimal 10.0 becomes 10, 9.5 stays 9.5; None becomes 0)."""
+    if v is None:
+        return 0
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return v
+    return int(f) if f.is_integer() else round(f, 1)
+
+
+def stat_line(group, stats):
+    """The season stat line for a position group (gm_trade_engine.load_season_stats' dict), or None: QB pass,
+    RB rush+rec, WR/TE rec, OL sacks allowed, defense tackles/sacks/INTs, K kicking, P punting. No commas in the
+    numbers, so validate_rationale's number check finds the same integers a writer quotes (2026-11-09)."""
+    n = _num
+    if group == "QB":
+        return (f"{n(stats.get('completions'))}/{n(stats.get('pass_attempts'))}, {n(stats.get('pass_yards'))} yds, "
+                f"{n(stats.get('pass_tds'))} TD, {n(stats.get('interceptions'))} INT")
+    if group == "RB":
+        return (f"{n(stats.get('rush_attempts'))} car, {n(stats.get('rush_yards'))} yds, "
+                f"{n(stats.get('rush_tds'))} TD; {n(stats.get('receptions'))} rec, "
+                f"{n(stats.get('rec_yards'))} yds, {n(stats.get('rec_tds'))} TD")
+    if group in ("WR", "TE"):
+        return (f"{n(stats.get('receptions'))} rec, {n(stats.get('rec_yards'))} yds, "
+                f"{n(stats.get('rec_tds'))} TD")
+    if group in ("OT", "IOL"):
+        return f"{n(stats.get('sacks_allowed'))} sacks allowed"
+    if group in DEF_GROUPS:
+        return (f"{n(stats.get('tackles'))} tkl, {n(stats.get('sacks'))} sacks, {n(stats.get('ints'))} INT")
+    if group == "K":
+        return (f"{n(stats.get('fgm'))}/{n(stats.get('fga'))} FG, {n(stats.get('fg_long'))} long, "
+                f"{n(stats.get('xpm'))}/{n(stats.get('xpa'))} XP")
+    if group == "P":
+        return f"{n(stats.get('punts'))} punts, {n(stats.get('average'))} avg, {n(stats.get('inside_20'))} in-20"
+    return None
+
+
+def contract_facts(c, season):
+    """{apy, guaranteed, years_left, dead_money}: APY = total_value/length; guaranteed = the guaranteed bonus
+    (player_contracts.bonus); dead_money = the cut penalty. None when there is no contract."""
+    if not c:
+        return None
+    length, total = c.get("length"), c.get("total_value")
+    apy = int(round(total / length)) if total is not None and length else None
+    end = c.get("end_season") or season
+    return {"apy": apy, "guaranteed": c.get("bonus"), "years_left": end - season + 1,
+            "dead_money": c.get("cut_penalty") or 0}
+
+
+def performance_facts(group, stats, recent, pid):
+    """{season, games[, last3]}: None when the player has no stat row (never invent one); last3 only when the
+    caller supplied a recent map."""
+    if stats is None:
+        return None
+    out = {"season": stat_line(group, stats), "games": stats.get("games")}
+    if recent is not None:
+        out["last3"] = list(recent.get(pid) or [])
+    return out
+
+
+def conference_seed(b, tid):
+    """The team's conference position by wins (1 = most wins), ties broken by fewer losses then team id; None when
+    the team has no conference row."""
+    conf = (b.get("teams", {}).get(tid) or {}).get("conference")
+    if not conf:
+        return None
+    peers = [t for t, info in b.get("teams", {}).items() if info.get("conference") == conf]
+
+    def won_lost(t):
+        wl = (b.get("wl") or {}).get(t)
+        if wl:
+            return wl[0], wl[1]
+        try:
+            w, l = str((b.get("records") or {}).get(t) or "0-0").split("-")
+            return int(w), int(l)
+        except (ValueError, AttributeError):
+            return 0, 0
+    peers.sort(key=lambda t: (-won_lost(t)[0], won_lost(t)[1], str(t)))
+    return peers.index(tid) + 1 if tid in peers else None
+
+
+def build_fact_sheet(b, deal, recent=None):
+    """The deal's facts as a plain dict (JSON-safe). recent: an optional {player_id: [line, ...]} last-three-game
+    map (gm_trade_engine.recent_form); when None, no last3 is included. store() and rationale_for pass None."""
+    from engines.gm_trade_engine import (abbr, cap_effects, cap_hit_now, pick_label, rivalry, rival_tax,
+                                         team_name)
     season = b.get("value_season", b["season"])
     caps = cap_effects(deal, b)
+    form = b.get("form") or {}
+    season_stats = b.get("season_stats") or {}
     teams = {}
     for side, t in (("a", deal["a"]), ("b", deal["b"])):
         gm = b["gm"].get(t, {})
         ctx = b["ctx"].get(t, {})
         rec = b.get("records", {}).get(t)
+        other = deal["b"] if side == "a" else deal["a"]
+        f = form.get(t) or {}
         teams[side] = {"team_id": t, "abbr": abbr(b, t), "team": team_name(b, t),
                        "nickname": b["teams"].get(t, {}).get("name"), "record": rec,
                        "direction": ctx.get("direction"),
@@ -41,7 +130,11 @@ def build_fact_sheet(b, deal):
                        "cap_before": money(caps[t]["before"]), "cap_after": money(caps[t]["after"]),
                        "gm": gm.get("gm_name"), "voice": gm.get("voice"),
                        "coach": b.get("coaches", {}).get(t),
-                       "urgent": (ctx.get("urgent_need") or {}).get("group")}
+                       "urgent": (ctx.get("urgent_need") or {}).get("group"),
+                       "stakes": {"record": rec, "last3": list(f.get("last3") or []), "streak": f.get("streak"),
+                                  "seed": conference_seed(b, t)},
+                       "rivalry": {"relation": rivalry(b, t, other),
+                                   "tax": round(rival_tax(b, t, other), 2)}}
     assets = []
     for x in deal["assets"]:
         if x["type"] == "PLAYER":
@@ -51,7 +144,10 @@ def build_fact_sheet(b, deal):
                            "ovr": p.get("ovr"), "age": p.get("age"), "dev": p.get("dev") or "Normal",
                            "cap_hit": money(cap_hit_now(p, season)),
                            "years_left": (c.get("end_season", season) - season + 1),
-                           "from": abbr(b, x["from"]), "to": abbr(b, x["to"])})
+                           "from": abbr(b, x["from"]), "to": abbr(b, x["to"]),
+                           "role": p.get("role"), "contract": contract_facts(c, season),
+                           "performance": performance_facts(p.get("group"), season_stats.get(x["player_id"]),
+                                                            recent, x["player_id"])})
         else:
             assets.append({"kind": "pick", "name": pick_label(b, x["pick"]), "from": abbr(b, x["from"]),
                            "to": abbr(b, x["to"])})

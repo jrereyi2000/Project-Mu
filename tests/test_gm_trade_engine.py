@@ -1,5 +1,6 @@
 """GM trade proposal engine (docs/done/team_management/03_GM_AGENTS_PLAN.md Phase 4). Synthetic books: no database."""
 import math
+from decimal import Decimal
 
 from engines import gm_trade_engine as ge
 from engines import trade_value as tv
@@ -760,3 +761,141 @@ def test_recheck_keeps_unilateral_proposed_offer_when_initiator_still_accepts():
     assert not ge.initiator_accepts(deal(assets), v2, b2)[0]
     out = ge.recheck_open(Cur(), b2, valuer=v2)
     assert out and out[0][0] == 41 and out[0][1].startswith("no longer accepted: AAA surplus")
+
+
+# --------------------------------------------- fact sheet stats loaders (§2.3) ----
+class _TableCur:
+    """.execute records the query; .fetchall returns the rows registered for a table substring."""
+
+    def __init__(self, rows):
+        self.rows, self.last, self.args = rows, "", None
+
+    def execute(self, q, a=None):
+        self.last, self.args = " ".join(q.split()), a
+
+    def fetchall(self):
+        for key, val in self.rows.items():
+            if key in self.last:
+                return val
+        return []
+
+
+def test_load_season_stats_merges_the_season_tables_keyed_by_player():
+    cur = _TableCur({
+        "FROM season_stats ": [(10, 0, 0, 0, 0, 0, 0, 0, 0, 72, 986, 7)],
+        "FROM season_stat_defense": [(12, 88, Decimal("9.5"), 2)],
+        "FROM season_stat_blocking": [(14, 3)],
+        "FROM season_stat_kicking": [(15, 20, 22, 51, 40, 41)],
+        "FROM season_stat_punting": [(16, 60, Decimal("44.2"), 20)],
+        "FROM season_stat_general": [(10, 15), (12, 17), (17, 9)],
+    })
+    stats = ge.load_season_stats(cur, 2036)
+    assert stats[10]["receptions"] == 72 and stats[10]["rec_yards"] == 986 and stats[10]["games"] == 15
+    assert stats[12]["tackles"] == 88 and stats[12]["sacks"] == Decimal("9.5") and stats[12]["games"] == 17
+    assert stats[14]["sacks_allowed"] == 3
+    assert stats[15]["fgm"] == 20 and stats[15]["fga"] == 22 and stats[15]["fg_long"] == 51
+    assert stats[16]["punts"] == 60 and stats[16]["average"] == Decimal("44.2")
+    assert 17 not in stats                                       # only a games-played row: no stat row at all
+
+
+class _GamesCur:
+    def __init__(self, games):
+        self.games, self.last, self.args = games, "", None
+
+    def execute(self, q, a=None):
+        self.last, self.args = " ".join(q.split()), a
+
+    def fetchall(self):
+        season, week = self.args
+        return [g for g in self.games if g[0] < week]
+
+
+def test_load_team_form_reads_only_completed_games_before_the_week():
+    games = [(1, 1, 2, 24, 17), (2, 2, 1, 20, 10), (3, 1, 2, 30, 7), (4, 1, 2, 27, 20),
+             (5, 1, 2, 99, 0)]                                  # week 5 is at the query week: never read
+    cur = _GamesCur(games)
+    form = ge.load_team_form(cur, 2036, 5)
+    assert "week < %s" in cur.last and cur.args == (2036, 5)
+    assert form[1]["last3"] == ["W 27-20", "W 30-7", "L 10-20"] and form[1]["streak"] == "W2"
+    assert form[2]["last3"] == ["L 20-27", "L 7-30", "W 20-10"] and form[2]["streak"] == "L2"
+
+
+class _RecentCur:
+    def __init__(self, meta, abbrs, off, deff):
+        self.meta, self.abbrs, self.off, self.deff = meta, abbrs, off, deff
+        self.last, self.args = "", None
+
+    def execute(self, q, a=None):
+        self.last, self.args = " ".join(q.split()), a
+
+    def fetchall(self):
+        q = self.last
+        if "FROM player_seasons" in q:
+            return [m for m in self.meta if m[0] in set(self.args[1])]
+        if "FROM teams" in q:
+            return self.abbrs
+        if "FROM player_stats" in q:
+            wanted, week = set(self.args[0]), self.args[2]
+            return [g for g in self.off if g[0] in wanted and g[11] < week]
+        if "FROM game_stat_defense" in q:
+            wanted, week = set(self.args[0]), self.args[2]
+            return [g for g in self.deff if g[0] in wanted and g[4] < week]
+        return []
+
+
+def test_recent_form_returns_at_most_three_games_before_the_week():
+    meta = [(10, "WR", 1), (12, "MIKE", 1)]
+    abbrs = [(1, "AAA"), (2, "BBB")]
+    off = [(10, 0, 0, 0, 0, 0, 0, 0, 6, 88, 1, 2, 1, 2, 100),      # week 2 home: 6-88-1
+           (10, 0, 0, 0, 0, 0, 0, 0, 4, 60, 0, 3, 2, 1, 101),      # week 3 away: 4-60-0
+           (10, 0, 0, 0, 0, 0, 0, 0, 9, 120, 2, 4, 1, 2, 102),     # week 4 home: 9-120-2
+           (10, 0, 0, 0, 0, 0, 0, 0, 50, 500, 5, 5, 1, 2, 103)]    # week 5: at the query week
+    deff = [(12, 8, Decimal("1.5"), 1, 2, 1, 2, 200), (12, 6, 0, 0, 4, 1, 2, 201),
+            (12, 99, 0, 0, 5, 1, 2, 202)]
+    out = ge.recent_form(_RecentCur(meta, abbrs, off, deff), [10, 12], 2036, 5)
+    assert out[10] == ["9-120-2 vs BBB", "4-60-0 @ BBB", "6-88-1 vs BBB"]
+    assert out[12] == ["6 tkl, 0 sacks, 0 INT vs BBB", "8 tkl, 1.5 sacks, 1 INT vs BBB"]
+    # games at or after the week never make a line
+    assert not any("500" in line or "99 tkl" in line for lines in out.values() for line in lines)
+
+
+def test_read_books_carries_season_stats_form_and_each_gms_card(monkeypatch):
+    class Cur:
+        def __init__(self):
+            self.last, self.args = "", None
+
+        def execute(self, q, a=None):
+            self.last, self.args = " ".join(q.split()), a
+
+        def fetchone(self):
+            return (0, 0, None) if "count(*) FILTER" in self.last else (0,)
+
+        def fetchall(self):
+            q = self.last
+            if "FROM teams WHERE abbreviation" in q:
+                return [(1, "CAR", "Carolina", "Panthers", "NFC", "South"),
+                        (2, "NO", "New Orleans", "Saints", "NFC", "South")]
+            if "FROM gm_profiles g LEFT JOIN" in q:
+                return [(1, 11, "Ann A", 0.6, 0.5, 1.0, 0.0, {}, "", False, True),
+                        (2, 22, "Bob B", 0.6, 0.5, 1.0, 0.0, {}, "", False, True)]
+            if "SELECT team_id, voice_card, voice_card_source FROM gm_profiles" in q:
+                return [(1, {"register": "blunt"}, "AUTHORED"), (2, None, None)]
+            if "FROM team_seasons" in q:
+                return [(1, 3, 0), (2, 1, 2)]
+            return []
+
+    monkeypatch.setattr("newsroom.personas.persona_tables_exist", lambda cur: False)
+    monkeypatch.setattr(ge.tv, "read_players", lambda cur, season: {})
+    monkeypatch.setattr("engines.gm_direction.read_injuries", lambda *a, **k: {})
+    monkeypatch.setattr(ge, "read_cap", lambda *a, **k: {})
+    monkeypatch.setattr(ge, "read_proposals", lambda *a, **k: [])
+    monkeypatch.setattr(ge, "apply_team_control", lambda cur, books: books)
+    monkeypatch.setattr(ge, "load_season_stats", lambda cur, season: {10: {"receptions": 72}})
+    monkeypatch.setattr(ge, "load_team_form",
+                        lambda cur, season, week: {1: {"last3": ["W 24-17"], "streak": "W1"}})
+    b = ge.read_books(Cur(), SEASON, 5)
+    assert b["season_stats"] == {10: {"receptions": 72}}
+    assert b["form"] == {1: {"last3": ["W 24-17"], "streak": "W1"}}
+    assert b["gm"][1]["voice_card"] == {"register": "blunt"}
+    assert b["gm"][1]["voice_card_source"] == "AUTHORED"
+    assert b["gm"][2]["voice_card"] is None and b["gm"][2]["voice_card_source"] is None
