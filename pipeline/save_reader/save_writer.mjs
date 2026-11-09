@@ -19,7 +19,7 @@
 // * "release" sends rostered players to free agency (release.mjs: status, team, contract, team lists and depth charts,
 //   the free-agent list, roster counts).
 // * "sign" signs free agents and draft prospects to a Roster (reusing an unreferenced PlayerContract row, e.g. one a
-//   release in the same write leaves) or a PracticeSquad (sign.mjs).
+//   release in the same write leaves, else filling an empty one: sign.mjs) or a PracticeSquad (sign.mjs).
 // * "trade" moves players with their contracts, and draft picks, from one team to another (trade.mjs).
 // * "depthCharts" replaces depth-chart positions with up to 6 rostered players each (depth_chart.mjs).
 // A player may appear in only one of release / sign / trade, and a signed or traded player's "players" edit may not
@@ -119,7 +119,9 @@ export async function writeSave(inputPath, edits, outPath, { overwriteOut = fals
   try {
     const work = join(dir, basename(input));
     copyFileSync(input, work);
-    const franchise = await Franchise.create(work, { autoParse: true, saveOnChange: false });
+    // autoUnempty: setting a field on an empty record turns it into a live one (a Roster signing with no free
+    // PlayerContract row fills an empty one, sign.mjs / P1-08).
+    const franchise = await Franchise.create(work, { autoParse: true, saveOnChange: false, autoUnempty: true });
     const players = await playerTable(franchise);
     const { targets, errors } = planEdits(players, edits);
     const contract = await planContractEdits(franchise, players, edits);

@@ -687,7 +687,8 @@ def test_resign_moves_rewrite_contracts():
     assert p["summary"]["resign:LET_GO"] == 1
 
 
-def test_free_agency_signs_accepted_offers_within_free_contract_rows():
+def test_free_agency_signs_every_accepted_offer_without_waiting_for_releases():
+    """P1-08: the writer fills an empty PlayerContract row, so more signings than spare rows no longer defer."""
     snap = snapshot("OffSeason", "OffSeason", 3, 2)
     c = {"length": 2, "current_year": 0, "salary_by_year": [3_000_000, 3_000_000], "bonus_by_year": [0, 0]}
     offers = [{"team_id": CHI, "player_id": pid(4), "contract": c, "offer_id": 55},
@@ -699,10 +700,10 @@ def test_free_agency_signs_accepted_offers_within_free_contract_rows():
     st = dict(STATE, spare_contract_rows=1)
     p = plan("FREE_AGENCY", snap, deps, state=st)
     assert ("cpu_offers", "FREE_AGENCY", 2) in deps.calls
-    assert [s["pgid"] for s in p["edits"]["sign"]] == [4]
-    assert [d["pgid"] for d in p["deferred"]] == [5]
+    assert [s["pgid"] for s in p["edits"]["sign"]] == [4, 5]
+    assert [d["pgid"] for d in p["deferred"]] == []
     statuses = {o["id"]: (o.get("status"), o.get("skip")) for o in p["db"]["offers"]}
-    assert statuses == {55: ("ACCEPTED", None), 56: ("ACCEPTED", True)}
+    assert statuses == {55: ("ACCEPTED", None), 56: ("ACCEPTED", None)}
 
 
 def test_combine_runs_the_third_free_agency_wave():
@@ -938,13 +939,14 @@ def test_accepted_offers_become_sign_and_extension():
     assert p["summary"]["written_offer_ids"] == [10, 11]
 
 
-def test_accepted_offer_deferred_without_contract_row_is_not_marked_written():
+def test_accepted_offer_with_no_spare_contract_row_is_written():
+    """P1-08: the writer fills an empty PlayerContract row, so a signing no longer waits on a release."""
     deps = FakeDeps()
     deps.offers = [{"id": 10, "kind": "FREE_AGENT", "player_id": pid(4), "team_id": CHI, "years": 1,
                     "total_value": 1_000_000, "bonus": 0, "guaranteed": 0}]
     p = plan("REGULAR_WEEK", deps=deps)
-    assert "sign" not in p["edits"] and p["summary"]["written_offer_ids"] == []
-    assert p["deferred"][0]["move"] == "sign"
+    assert [s["pgid"] for s in p["edits"]["sign"]] == [4]
+    assert p["summary"]["written_offer_ids"] == [10] and p["deferred"] == []
 
 
 def test_second_contract_for_a_player_is_refused_not_overwritten():

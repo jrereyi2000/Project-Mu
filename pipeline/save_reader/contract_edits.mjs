@@ -5,8 +5,9 @@
 //
 // Checked on CAREER-GIANTS-AUTOSAVE: every Signed player has a contract record and no two players share one (1,695
 // references, all distinct; the only other reference into the table is one PersonaNegotiationPackage row, not a
-// player's). Practice-squad players, free agents and draft prospects have none, so a contract edit on them is refused
-// (giving one a record is a new record plus a reference change, out of scope here).
+// player's). Practice-squad players, free agents and draft prospects have none, so a contract edit on them is refused:
+// giving one a record is a reference change, done by a Roster signing (sign.mjs, which fills a free or empty
+// PlayerContract row, P1-08), not by an in-place edit.
 import { decodeRef, fieldMeta, fieldValueError } from './lib.mjs';
 
 const CONTRACT_TABLE = 'PlayerContract';

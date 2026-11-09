@@ -129,10 +129,10 @@ Madden may sit at its main menu with the franchise closed, which can't be told a
 while Madden27.exe runs the write needs --confirm-franchise-closed (or LEAGUE_OFFICE_FRANCHISE_CLOSED=1, for the
 watcher); with Madden not running it writes.
 
-Writer limits handled here: a Roster signing needs a PlayerContract row no field references (each Roster release in
-the same write frees one), so signings beyond the free rows are deferred (reported, not written); the writer has no
-practice-squad promote / demote move, so those are deferred or REFUSED; a kept retiree is un-retired as a free agent
-(ContractStatus FreeAgent, TeamIndex 32) and signed back in a later write.
+Writer limits handled here: a Roster signing takes a free PlayerContract row or, when none is free, fills an empty
+one (P1-08), so a signing no longer needs a release in the same write and `free_contract_rows_left` is informational;
+the writer has no practice-squad promote / demote move, so those are deferred or REFUSED; a kept retiree is
+un-retired as a free agent (ContractStatus FreeAgent, TeamIndex 32) and signed back in a later write.
 
 Setup (one time, before the franchise's first league office run): league_setup.mjs makes every team a real user team,
 turns fill roster off, CoachFiring OFF, the career clock off and sets every player's ConfidenceRating to 50, writing a
@@ -739,13 +739,10 @@ class Plan:
         for s in self.signs:
             g = s["pgid"]
             if s["list"] == "Roster":
-                if self.free_rows <= 0:
-                    self.claimed.pop(g, None)
-                    self.view[g] = (self.players[g].get("status"), self.players[g].get("team_index"))
-                    self.defer("sign", g, "no free PlayerContract row (the writer can't create contract rows yet; "
-                                          "each Roster release in the same write frees one)", s["tag"])
-                    continue
-                self.free_rows -= 1
+                # P1-08: the writer fills an empty PlayerContract row when no released row is free, so a signing no
+                # longer waits on a matching release; free_rows is informational (rows the writer can reuse first).
+                if self.free_rows > 0:
+                    self.free_rows -= 1
                 hit, nxt, base = cap_change(s["block"])
                 self._cap(s["team_index"], -hit, -nxt, base)
                 self.contracts_written[g] = s["block"]

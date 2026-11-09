@@ -158,10 +158,7 @@ test('a signing that can\'t be done writes nothing', { skip, timeout: 300_000 },
     const out = join(dir, 'CAREER-BAD');
     const one = { Length: 1, SalaryYear0: 75 };
     const bad = (sign, re, extra = {}) => assert.rejects(writeSave(savePath, { ...extra, sign }, out), re);
-    // The sample save has no unreferenced PlayerContract row: a roster signing needs a release in the same write.
-    await bad([{ pgid: fa[0].pgid, team_index: 0, list: 'Roster', contract: one }], /no free PlayerContract row/);
-    await bad([{ pgid: fa[0].pgid, team_index: 0, list: 'Roster', contract: one }, { pgid: fa[1].pgid, team_index: 0, list: 'Roster', contract: one }],
-      /no free PlayerContract row/, { release: [signed.pgid] });
+    // P1-08: a Roster signing without a release fills an empty PlayerContract row instead of being refused.
     await bad([{ pgid: signed.pgid, team_index: 0, list: 'PracticeSquad' }], /not a free agent or draft prospect/);
     await bad([{ pgid: fa[0].pgid, team_index: 0, list: 'PracticeSquad', contract: one }], /no contract record/);
     await bad([{ pgid: fa[0].pgid, team_index: 0, list: 'Bench' }], /Roster or PracticeSquad/);
@@ -176,3 +173,31 @@ test('a signing that can\'t be done writes nothing', { skip, timeout: 300_000 },
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('a free-agent signing with no release fills an empty PlayerContract row (P1-08)',
+  { skip, timeout: 300_000 }, async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'mu-sign-test-'));
+    try {
+      const a = await readSave(savePath);
+      const fa = a.players.find(p => p.status === 'FreeAgent' && !p.contract);
+      const contract = { Length: 2, CurrentYear: 0, SalaryYear0: 100, SalaryYear1: 110, BonusYear0: 20, BonusYear1: 20 };
+      const out = join(dir, 'CAREER-CREATED');
+      const report = await writeSave(savePath, { sign: [{ pgid: fa.pgid, team_index: 5, list: 'Roster', contract }] }, out);
+      assert.equal(report.verified, true);
+      assert.equal(report.sign.contracts_reused.length, 0, 'no release in this write');
+      assert.equal(report.sign.contracts_created.length, 1, 'the signing filled an empty row');
+      const b = await readSave(out);
+      const got = b.players.find(p => p.pgid === fa.pgid);
+      assert.deepEqual([got.status, got.team_index], ['Signed', 5]);
+      assert.deepEqual([got.contract.length, got.contract.current_year], [2, 0]);
+      assert.deepEqual(got.contract.salary_by_year.slice(0, 3), [100, 110, 0]);
+      assert.deepEqual(got.contract.bonus_by_year.slice(0, 3), [20, 20, 0]);
+      // exactly one player points at the new row
+      const x = await inspect(out);
+      const holders = [...x.player.values()].filter(p => p.contractRow === report.sign.contracts_created[0]);
+      assert.equal(holders.length, 1);
+      assert.equal(holders[0].status, 'Signed');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });

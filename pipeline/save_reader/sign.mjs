@@ -14,8 +14,12 @@
 //     row no player references (27) is held by a PersonaNegotiationPackage. Every field typed PlayerContract in the
 //     schema (Player.Contract, ContractOffer.Contract, InSeasonPlayerSigningTransaction.PlayerContract,
 //     PersonaNegotiationPackage.Contract) is scanned, and a row none of them references is free. release.mjs leaves
-//     its player's row unreferenced, so a release and a signing in one write hand the row on. With no free row a Roster
-//     signing is refused (filling one of the table's empty rows would be a new record, out of scope).
+//     its player's row unreferenced, so a release and a signing in one write hand the row on. **When no free row
+//     exists, a Roster signing fills one of the table's empty rows** (P1-08): the table is a fixed pool of records and
+//     Madden itself gives a new contract one of its empty slots; the row's terms are initialised from
+//     CONTRACT_BASELINE with every Salary/BonusYearN zeroed and the contract block over them. The writer opens the
+//     save with `autoUnempty`, so setting a field on an empty record turns it into a live one. Free agency signs more
+//     than it releases, so this is the normal path; a table with no empty row at all still refuses.
 //   * Practice-squad players (339) are listed in League.FreeAgents as well as their team's PracticeSquad, and have no
 //     contract row; all have Mindset Content. Free agents (547) are in League.FreeAgents with Mindset FindATeam.
 //   * Draft prospects (status Draft, TeamIndex 32) are not in League.FreeAgents. Each is linked from a DraftPlayer
@@ -24,7 +28,7 @@
 //     (DraftPlayer row 734, now on a practice squad) kept his DraftPlayer row but left every DraftPlayer[] list.
 //
 // A signing sets TeamIndex, ContractStatus (Signed for "Roster", PracticeSquad for "PracticeSquad"), Mindset Content
-// and WeeksWithTeam 0. A Roster signing takes a free PlayerContract row, resets its terms (salaries, bonuses, years,
+// and WeeksWithTeam 0. A Roster signing takes a free or empty PlayerContract row, resets its terms (salaries, bonuses, years,
 // restructures, void years, no-trade clause, extra-year option, guaranteed years) and sets the contract block over
 // them (money in Madden's $10,000 units, every value checked against the field's schema like contract_edits.mjs; the
 // row's Incentives link is kept), points Player.Contract at it, appends the player to Team.Roster, takes him out of
@@ -290,12 +294,14 @@ export async function planSign(franchise, items = [], { freedContracts = [] } = 
 
   const contracts = items.some(i => i?.list === 'Roster') ? await contractTable(tables, playerTable) : null;
   let free = [];
+  let empty = [];        // never-used PlayerContract rows: a Roster signing fills one when no free row exists
   if (contracts) {
     const used = await referencedContracts(franchise, tables);
     const freed = freedContracts.filter(c => c && c.table === contracts.header.tableId).map(c => c.row);
     const spare = contracts.records.map((r, row) => row).filter(row => !contracts.records[row].isEmpty
       && !used.has(`${contracts.header.tableId}:${row}`) && !freed.includes(row));
     free = [...spare, ...freed];
+    empty = contracts.records.map((r, row) => row).filter(row => contracts.records[row].isEmpty);
   }
 
   // Draft-class lists, read only when a prospect is signed.
@@ -352,8 +358,10 @@ export async function planSign(franchise, items = [], { freedContracts = [] } = 
           errs.push(`contract: CurrentYear ${terms.CurrentYear} outside Length ${terms.Length}`);
         }
         if (!errs.length) {
-          if (!free.length) errs.push(`no free ${CONTRACT_TABLE} row to reuse (a release in the same write frees one)`);
-          else contract = { table: contracts.header.tableId, row: free.shift(), set: terms };
+          if (free.length) contract = { table: contracts.header.tableId, row: free.shift(), set: terms };
+          else if (empty.length) contract = { table: contracts.header.tableId, row: empty.shift(), set: terms,
+                                              created: true };
+          else errs.push(`no free or empty ${CONTRACT_TABLE} row (a release in the same write frees one)`);
         }
       }
     } else if (item.contract && Object.keys(item.contract).length) {
@@ -444,7 +452,8 @@ export function signSummary(plan) {
     roster: plan.signs.filter(s => s.list === 'Roster').length,
     practice_squad: plan.signs.filter(s => s.list === 'PracticeSquad').length,
     prospects: plan.signs.filter(s => s.from === 'Draft').length,
-    contracts_reused: plan.signs.filter(s => s.contract).map(s => s.contract.row),
+    contracts_reused: plan.signs.filter(s => s.contract && !s.contract.created).map(s => s.contract.row),
+    contracts_created: plan.signs.filter(s => s.contract && s.contract.created).map(s => s.contract.row),
     by_team: plan.signs.reduce((acc, s) => ({ ...acc, [s.team]: (acc[s.team] ?? 0) + 1 }), {}),
   };
 }
