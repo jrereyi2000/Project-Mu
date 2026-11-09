@@ -40,3 +40,18 @@ plan's shadow season and JR's clearance. Not code gaps; kept here so they aren't
   PERSONALITY_ACTIVATION_PLAN / P5).
 - The whole personality programme is gated the same way (contracts, development, evolution, relationships, trade
   requests, retirement); the activation plan owns the schedule.
+
+### Scouting directors need a reviewed `staff:scout` receipt (P1-11)
+
+`scout_directors` is wired end to end (`scouting_engine.reviewed_scout_context` → `catch_up`/`step_scouting`,
+the Draft Room, the CLI), but it stays inert until a reviewed receipt exists in the franchise's applied
+lifecycle batch. JR's steps:
+
+1. Add a `staff:scout` entry to the lifecycle `classifications.json` receipts (`scope` `staff:scout`, `origin`
+   `generated`, with `reviewer`, `reason`, `reviewed_at`, `effective_at`, `source_ref`, `source_sha256`).
+2. `python3 -m tools.personality_inventory preview --snapshot <save snapshot> --universe <universe.json>
+   --classifications classifications.json --cutoff cutoff.json` and read the manifest it writes.
+3. `python3 -m tools.personality_inventory apply --manifest <path> --review <review.json> --expect-hash <sha256>
+   --dsn "<the franchise DSN>"` (or `load_save --personality-manifest/--personality-review`).
+4. Run the scouting step: the log line "scouting directors off" disappears, and each team gets its director,
+   board lean and private report rows once `scout_directors` is shadow or active.

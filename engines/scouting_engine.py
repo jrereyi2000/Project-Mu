@@ -476,6 +476,45 @@ def director_lifecycle(context):
     return lifecycle
 
 
+def reviewed_scout_context(cur, log=print):
+    """The reviewed `staff:scout` lifecycle context {universe_id, cutoff, receipt} for the director wiring, read from
+    the franchise's applied `personality-lifecycle-v1` batch, or None.
+
+    Nothing here is fabricated: the receipt and cutoff are the ones JR's review wrote (`tools.personality_inventory
+    apply --review`, or `load_save --personality-manifest/--personality-review`). Without them the directors stay
+    off exactly as before, and the run says so once instead of failing silently."""
+    import json as _json
+
+    from engines.relationship_producers import sources
+    try:
+        universe = sources.universe_id(cur, sources.league_id(cur))
+    except Exception as e:  # noqa: BLE001 - no registry/no league_state: the wiring simply stays off
+        log(f"  scouting directors off: no personality universe ({e!r})")
+        return None
+    if universe is None:
+        log("  scouting directors off: no lifecycle universe registered for this league")
+        return None
+    try:
+        cur.execute("SELECT manifest FROM persona_lifecycle_batches WHERE universe_id = %s AND status = 'applied' "
+                    "ORDER BY applied_at DESC NULLS LAST, batch_id DESC LIMIT 1", (universe,))
+        row = cur.fetchone()
+    except Exception as e:  # noqa: BLE001 - the lifecycle tables are optional
+        log(f"  scouting directors off: no lifecycle batches ({e!r})")
+        return None
+    manifest = row[0] if row else None
+    if isinstance(manifest, str):
+        try:
+            manifest = _json.loads(manifest)
+        except ValueError:
+            manifest = None
+    receipts = (((manifest or {}).get("classifications") or {}).get("receipts")) or []
+    receipt = next((r for r in receipts if isinstance(r, dict) and r.get("scope") == "staff:scout"), None)
+    if receipt is None or not (manifest or {}).get("cutoff"):
+        log("  scouting directors off: the applied lifecycle batch carries no staff:scout receipt")
+        return None
+    return {"universe_id": universe, "cutoff": manifest["cutoff"], "receipt": receipt}
+
+
 def run(cur, draft_season, step, dry_run=False, replace=False, log=print, extras=None, llm=None, personality=None):
     """Store one scouting step (idempotent: a stored step is skipped unless replace, which redraws it with the same
     seeds and keeps any LLM text). extras(cur, out, step, season) adds VISIT events and team boards; llm (gm_llm,
@@ -616,7 +655,8 @@ def directors_for(cur, season, lifecycle=None):
     try:
         with owner_context._savepoint(cur):
             return scout_directors.ensure_directors(cur, season, lifecycle=lifecycle), mode
-    except Exception:  # noqa: BLE001 - an optional producer never fails the scouting run
+    except Exception as e:  # noqa: BLE001 - an optional producer never fails the scouting run
+        print(f"[scouting] directors skipped ({mode}): {e!r}", flush=True)
         return [], mode
 
 
@@ -723,8 +763,9 @@ def report(out, step, log=print, top=32):
         log(f"  [{e['kind']}] {e['headline']} | {e['blurb']}")
 
 
-def catch_up(cur, draft_season, to_step, log=print, extras=None, dry_run=False, llm=None):
-    """Run every missing step from the class's first (or the last stored + 1) through to_step, in order."""
+def catch_up(cur, draft_season, to_step, log=print, extras=None, dry_run=False, llm=None, personality=None):
+    """Run every missing step from the class's first (or the last stored + 1) through to_step, in order.
+    personality: the reviewed `staff:scout` context (see `reviewed_scout_context`); None keeps the directors off."""
     steps = stored_steps(cur, draft_season)
     cls_first = None
     if not steps:
@@ -735,7 +776,7 @@ def catch_up(cur, draft_season, to_step, log=print, extras=None, dry_run=False, 
     start = (max(steps) + 1) if steps else cls_first
     done = []                         # each run() below makes the observe-mode personality check
     for s in range(start, to_step + 1):
-        run(cur, draft_season, s, dry_run=dry_run, log=log, extras=extras, llm=llm)
+        run(cur, draft_season, s, dry_run=dry_run, log=log, extras=extras, llm=llm, personality=personality)
         done.append(s)
     return done
 
@@ -833,7 +874,8 @@ def main(argv=None):
         elif a.cmd == "run":
             season, cur_step = current_step(cur)
             step = a.step or (step_for(a.week or 24, a.stage) if (a.week or a.stage) else cur_step)
-            run(cur, a.draft_season or season + 1, step, a.dry_run, a.replace, extras=default_extras)
+            run(cur, a.draft_season or season + 1, step, a.dry_run, a.replace, extras=default_extras,
+                personality=reviewed_scout_context(cur))
         if getattr(a, "dry_run", False):
             conn.rollback()
         else:

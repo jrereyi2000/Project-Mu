@@ -355,3 +355,78 @@ def test_collision_prospect_gets_no_report():
          mock.patch("engines.scouting_reports.load_ratings", return_value={}):
         se.default_extras(cur, out, 4, 2036)
     assert [r["prospect_key"] for r in out["reports"]] == ["2037:QB0000:QB"]
+
+
+# --------------------------------------------------------------- B1: the reviewed staff:scout context ---
+def _manifest(with_receipt=True):
+    receipts = ([{"scope": "staff:scout", "origin": "generated", "reviewer": "JR"}] if with_receipt else [])
+    return {"cutoff": {"season": 2036, "phase": "draft", "sequence": 0},
+            "classifications": {"receipts": receipts}}
+
+
+class _CtxCur:
+    """A cursor for the one query `reviewed_scout_context` makes."""
+    def __init__(self, manifest):
+        self.manifest, self.out = manifest, None
+
+    def execute(self, sql, params=()):
+        self.out = (self.manifest,) if self.manifest is not None else None
+
+    def fetchone(self):
+        return self.out
+
+
+def _patch_universe(monkeypatch, universe="mu:00000000-0000-4000-8000-000000000001"):
+    from engines.relationship_producers import sources
+    monkeypatch.setattr(sources, "league_id", lambda cur: 4242)
+    monkeypatch.setattr(sources, "universe_id", lambda cur, league: universe)
+
+
+def test_reviewed_scout_context_reads_the_applied_batch(monkeypatch):
+    _patch_universe(monkeypatch)
+    logs = []
+    ctx = se.reviewed_scout_context(_CtxCur(_manifest()), log=logs.append)
+    assert ctx["universe_id"].startswith("mu:")
+    assert ctx["receipt"]["scope"] == "staff:scout" and ctx["cutoff"]["season"] == 2036
+    assert logs == []
+
+
+def test_reviewed_scout_context_is_inert_and_says_so(monkeypatch):
+    _patch_universe(monkeypatch)
+    logs = []
+    assert se.reviewed_scout_context(_CtxCur(_manifest(with_receipt=False)), log=logs.append) is None
+    assert any("staff:scout" in line for line in logs)
+    logs2 = []
+    assert se.reviewed_scout_context(_CtxCur(None), log=logs2.append) is None
+    assert logs2 and "staff:scout" in logs2[-1]
+
+
+def test_reviewed_scout_context_is_inert_without_a_universe(monkeypatch):
+    _patch_universe(monkeypatch, universe=None)
+    logs = []
+    assert se.reviewed_scout_context(_CtxCur(_manifest()), log=logs.append) is None
+    assert logs and "universe" in logs[0]
+
+
+def test_catch_up_forwards_the_personality_context(monkeypatch):
+    calls = []
+    monkeypatch.setattr(se, "stored_steps", lambda cur, ds: [3])
+    monkeypatch.setattr(se, "run", lambda *a, **k: calls.append(k))
+    ctx = {"universe_id": "mu:u"}
+    assert se.catch_up(mock.MagicMock(), 2037, 5, log=lambda *a: None, extras=None, personality=ctx) == [4, 5]
+    assert calls and all(k["personality"] is ctx for k in calls)
+
+
+def test_step_scouting_forwards_the_reviewed_context(monkeypatch):
+    import pipeline.weekly_capture as wc
+    seen = []
+    conn, patches = _patch_step_scouting([21], {21: ["BOWLS"]}, lambda *a, **k: 1)
+    ctx = {"universe_id": "mu:u"}
+    patches.append(mock.patch("engines.scouting_engine.reviewed_scout_context", return_value=ctx))
+    patches.append(mock.patch("engines.scouting_engine.catch_up",
+                              side_effect=lambda *a, **k: seen.append(k) or [21]))
+    with ExitStack() as stack:
+        for p in patches:
+            stack.enter_context(p)
+        wc.step_scouting(2036)
+    assert seen and seen[0]["personality"] is ctx

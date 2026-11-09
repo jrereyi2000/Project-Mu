@@ -518,7 +518,8 @@ def lock_order(cur, draft_season=None, fixes=None, log=print):
                            WHERE draft_season = %s AND round = %s AND original_team_id = %s""",
                         [(s["pick"], draft_season, s["round"], s["original_team_id"]) for s in slots])
     if se.STEP_DRAFT not in se.stored_steps(cur, draft_season):
-        se.catch_up(cur, draft_season, se.STEP_DRAFT, log=log, extras=se.default_extras)
+        se.catch_up(cur, draft_season, se.STEP_DRAFT, log=log, extras=se.default_extras,
+                    personality=se.reviewed_scout_context(cur, log=log))
     clock_trades(cur, draft_season, 1, log=log)
     return state(cur, draft_season)
 
