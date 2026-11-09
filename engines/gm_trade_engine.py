@@ -1693,7 +1693,17 @@ def run_week(cur, season, week, dry_run=False, replace=False, llm=None, log=prin
         f"-> {n} new (open {open_count}, cap {max_new(week) if window == 'IN_SEASON' else MAX_NEW_PER_WEEK}/week, "
         f"{IN_SEASON_MAX_OPEN if window == 'IN_SEASON' else MAX_OPEN} open)")
     # 5-8. search, legality, acceptance, choice
-    used = set()
+    from engines import gm_talks
+    # 9a. resume the carried CPU talks first (P1-17): their teams are already negotiating, so they cannot open a
+    # second deal this week and the search below must not offer them one.
+    talk_rng = random.Random(f"{season}:{week}:{window}:talks")
+    resumed = gm_talks.resume_talks(cur, b, valuer, talk_rng, talk_llm, log)
+    used = set(resumed.get("teams") or ())
+    if resumed["agreed"] or resumed["stalled"]:
+        # a carried blockbuster that agreed (or stalled) is stored with its shape flag: count it against the cap
+        cur.execute("""SELECT count(*) FROM gm_trade_proposals WHERE season = %s AND 'shape:BLOCKBUSTER' = ANY(flags)
+                       AND (status IN ('PROPOSED', 'APPROVED', 'EXECUTED'))""", (season,))
+        b["blockbusters"] = cur.fetchone()[0]
     collected = []                                       # CPU-to-CPU picks: gm_talks decides them after the search
     picked = 0                                           # every pick counts against the budget, stored or not
     requests = request_shopping(b, request_signals)
@@ -1745,13 +1755,13 @@ def run_week(cur, season, week, dry_run=False, replace=False, llm=None, log=prin
         rep["proposals"].append({"id": pid, "deal": pick, "rationale": rat, "flags": flags,
                                  "steps": steps_text(b, pick), "caps": caps})
         print_proposal(b, pick, rat, caps, flags, log)
-    # 9. the CPU talks: resume carried ones, then play the collected deals. run_talks has no `used` argument, so the
-    # teams it touched are folded into this week's set here. A dry run writes into the caller's transaction, which
-    # the caller rolls back (talks run in memory, nothing is committed).
-    from engines import gm_talks
-    talks = gm_talks.run_talks(cur, b, valuer, collected, rng, talk_llm, log)
+    # 9b. the collected CPU picks become new talks (the carried ones were resumed before the search). A dry run
+    # writes into the caller's transaction, which the caller rolls back (nothing is committed).
+    talks = gm_talks.run_talks(cur, b, valuer, collected, talk_rng, talk_llm, log)
     used.update(talks.get("teams") or ())
-    rep["talks"] = talks
+    rep["talks"] = {"talks": resumed["talks"] + talks["talks"], "agreed": resumed["agreed"] + talks["agreed"],
+                    "stalled": resumed["stalled"] + talks["stalled"],
+                    "teams": set(resumed["teams"]) | set(talks["teams"])}
     if window == "OFFSEASON" and not dry_run:
         write_stage(cur, season, stage, picked)
     rep["books"] = b

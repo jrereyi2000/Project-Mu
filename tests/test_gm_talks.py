@@ -210,13 +210,13 @@ def test_an_agreement_carries_the_deals_flags_and_a_resumed_talk_with_none_still
     assert gt._agree(ScriptedCur(lambda sql, params: []), b, v, talk, OPENING, None) == 9
     assert seen["flags"][:2] == ["talks:1", "auto_approved"]
     assert "stage:3" in seen["flags"] and "shape:BLOCKBUSTER" in seen["flags"]
-    resumed = dict(TALK)                                        # what _talk returns: no "flags" key at all
+    resumed = dict(TALK, flags=[])                              # a resumed talk's stored flags
     assert gt._agree(ScriptedCur(lambda sql, params: []), b, v, resumed, OPENING, None) == 9
     assert seen["flags"] == ["talks:1", "auto_approved"]
 
 
 OPEN_TALK_ROW = (7, 2036, 24, "OFFSEASON", 3, 1, 2, "CPU", 1, None, 0, None, "OPEN", None, 4, 4, None, "INJURY",
-                 "2026-01-01", "2026-01-02")
+                 "2026-01-01", "2026-01-02", [])
 
 
 def open_talk_router(sql, params):
@@ -229,12 +229,21 @@ def open_talk_router(sql, params):
     return []
 
 
-def test_open_talk_remembers_the_deals_flags():
+def test_open_talk_stores_the_deals_flags_for_a_carried_talk():
     b, v = setup()
+    cur = ScriptedCur(open_talk_router)
     d = deal(OPENING)
     d["flags"] = ["stage:3", "shape:BLOCKBUSTER"]
-    talk = gt.open_talk(ScriptedCur(open_talk_router), b, v, d, random.Random(1))
-    assert talk["id"] == 7 and talk["flags"] == ["stage:3", "shape:BLOCKBUSTER"]
+    talk = gt.open_talk(cur, b, v, d, random.Random(1))
+    insert = next(p for s, p in zip(cur.sql, cur.params) if "INSERT INTO gm_trade_negotiations" in s)
+    assert talk["id"] == 7 and insert[-1] == ["stage:3", "shape:BLOCKBUSTER"]     # P1-16: on the row
+
+
+def test_a_resumed_talk_reads_its_stored_flags():
+    """P1-16: a talk that carried over reads shape:/stage: from its row, so its eventual proposal keeps them."""
+    row = OPEN_TALK_ROW[:-1] + (["stage:3", "shape:BLOCKBUSTER"],)
+    talk = gt._talk(ScriptedCur(lambda sql, params: [row]), 7)
+    assert talk["flags"] == ["stage:3", "shape:BLOCKBUSTER"]
 
 
 def test_open_talk_stores_the_deals_trigger_for_a_carried_talk():
@@ -244,7 +253,8 @@ def test_open_talk_stores_the_deals_trigger_for_a_carried_talk():
     d["trigger"] = "SELL"
     talk = gt.open_talk(cur, b, v, d, random.Random(1))
     insert = next(p for s, p in zip(cur.sql, cur.params) if "INSERT INTO gm_trade_negotiations" in s)
-    assert insert[-1] == "SELL" and talk["trigger_kind"] == "INJURY"    # the row is what a resumed talk reads
+    assert insert[-2] == "SELL" and insert[-1] == [] and talk["trigger_kind"] == "INJURY"
+    # the trigger and the flags are on the row, which is what a resumed talk reads (P1-16)
 
 
 def test_an_agreed_talk_uses_the_trigger_stored_on_it(monkeypatch):

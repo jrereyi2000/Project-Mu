@@ -935,6 +935,7 @@ CREATE TABLE IF NOT EXISTS gm_trade_negotiations (
     proposal_id INT REFERENCES gm_trade_proposals(id) ON DELETE SET NULL,   -- the agreed / stalled deal
     trigger_kind VARCHAR(8)                           -- the engine trigger a talk was opened from (CPU talks)
         CHECK (trigger_kind IN ('NEED', 'INJURY', 'SELL', 'DRAFT', 'USER')),
+    flags TEXT[] NOT NULL DEFAULT '{}',               -- the stored-path flags (shape:/stage:/release:), 2027_02_12
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -3900,5 +3901,6 @@ INSERT INTO schema_migrations (version, filename, checksum, source) VALUES
     ('2027_02_08_nflpa_report_cards', '2027_02_08_nflpa_report_cards.sql', 'aedd087a2367f031bb6aecb2ed883d4ee896611af2fbb4ddbf3a59a09c858166', 'init_db.sql'),
     ('2027_02_09_init_db_parity', '2027_02_09_init_db_parity.sql', 'f3d728858dd69f738514a575d055ed9d8831c22ed89927db530cce2df3be5aa0', 'init_db.sql'),
     ('2027_02_10_news_feed_post_shape', '2027_02_10_news_feed_post_shape.sql', '85f1d2db9cd238dc9e889010dcab8d0311e09d5b27ad271fddaceb56f58cc5ba', 'init_db.sql'),
-    ('2027_02_11_scout_report_team_rows', '2027_02_11_scout_report_team_rows.sql', '83cd8b36d397e35d117a1ff67c36ac2011121d37e1bd65f33035bb4f6e5bf561', 'init_db.sql')
+    ('2027_02_11_scout_report_team_rows', '2027_02_11_scout_report_team_rows.sql', '83cd8b36d397e35d117a1ff67c36ac2011121d37e1bd65f33035bb4f6e5bf561', 'init_db.sql'),
+    ('2027_02_12_trade_talk_flags', '2027_02_12_trade_talk_flags.sql', '5083e4799542b73b665b4ca68e117dd54af9de0c8ade61e7430785e843c233eb', 'init_db.sql')
 ON CONFLICT (version) DO NOTHING;

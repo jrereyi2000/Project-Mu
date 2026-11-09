@@ -4,7 +4,8 @@ import pytest
 
 from pipeline import weekly_capture as wc
 
-STEPS = ("step_engines", "step_gm", "step_inbox", "step_scouting", "step_season_archive", "step_coach_hot_seat")
+STEPS = ("step_engines", "step_gm", "step_inbox", "step_scouting", "step_season_archive", "step_gm_hot_seat",
+         "step_coach_hot_seat")
 
 
 @pytest.fixture

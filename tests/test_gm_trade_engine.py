@@ -445,7 +445,7 @@ def test_read_books_applies_the_registry_overlay(monkeypatch):
 
 
 # ------------------------------------------------------- CPU-to-CPU talks (§2.6) ----
-def _run_week(monkeypatch, b, dry_run=False, cand=None):
+def _run_week(monkeypatch, b, dry_run=False, cand=None, resumed_teams=()):
     """run_week with every database boundary replaced: the search and the routing stay real."""
     calls = {"store": [], "talks": []}
     import engines.gm_direction as gd
@@ -466,12 +466,26 @@ def _run_week(monkeypatch, b, dry_run=False, cand=None):
         monkeypatch.setattr(ge, "choose_shaped", lambda cands, rng: cands[0])
         monkeypatch.setattr(ge, "choose", lambda cands, rng: cands[0])
 
+    def fake_resume(cur, books, valuer, rng, llm, log=None):
+        calls["resumed"] = calls.get("resumed", 0) + 1
+        return {"talks": [], "agreed": [], "stalled": [], "teams": set(resumed_teams)}
+
     def fake_talks(cur, books, valuer, deals, rng, llm, log=None):
         calls["talks"].append(list(deals))
         return {"talks": [{"id": 7, "status": "AGREED"}], "agreed": [7], "stalled": [], "teams": {1, 2}}
+    monkeypatch.setattr(gt, "resume_talks", fake_resume)
     monkeypatch.setattr(gt, "run_talks", fake_talks)
     rep = ge.run_week(object(), SEASON, WEEK, dry_run=dry_run, log=lambda m: None)
     return rep, calls
+
+
+def test_a_team_carrying_a_talk_cannot_open_a_second_deal(monkeypatch):
+    """P1-17: the carried talks are resumed before the search, so their teams are already in `used` and the search
+    offers them no new deal this week."""
+    rep, calls = _run_week(monkeypatch, star_books(), resumed_teams={1, 2})
+    assert calls["resumed"] == 1
+    assert calls["talks"] == [[]] and calls["store"] == []
+    assert rep["proposals"] == []
 
 
 def test_cpu_to_cpu_picks_go_to_talks_instead_of_being_stored(monkeypatch):

@@ -338,7 +338,7 @@ def call_with_timeout(llm, prompt, seconds):
 # --------------------------------------------------------------- DB helpers ----
 _TALK_COLS = ("id", "season", "week", "trade_window", "offseason_stage", "user_team_id", "gm_team_id", "kind",
               "initiator_team_id", "source_proposal_id", "carried_weeks", "published_at", "status", "status_reason",
-              "patience", "patience_left", "proposal_id", "trigger_kind", "created_at", "updated_at")
+              "patience", "patience_left", "proposal_id", "trigger_kind", "created_at", "updated_at", "flags")
 _TURN_COLS = ("turn_no", "actor", "action", "assets", "surplus_user", "surplus_gm", "mood", "legality", "message",
               "message_source", "actor_team_id", "options", "choice", "choice_source", "posture", "created_at")
 
@@ -420,12 +420,12 @@ def open_talk(cur, b, valuer, deal, rng):
     p_a = _gn().patience_for(_gm(b, a).get("aggressiveness", 0.5))
     p_b = _gn().patience_for(_gm(b, other).get("aggressiveness", 0.5))
     cur.execute("""INSERT INTO gm_trade_negotiations (season, week, trade_window, offseason_stage, user_team_id,
-                       gm_team_id, kind, initiator_team_id, patience, patience_left, trigger_kind)
-                   VALUES (%s, %s, %s, %s, %s, %s, 'CPU', %s, %s, %s, %s) RETURNING id""",
-                (season, week, window, stage, a, other, a, p_a, p_b, deal.get("trigger") or "NEED"))
+                       gm_team_id, kind, initiator_team_id, patience, patience_left, trigger_kind, flags)
+                   VALUES (%s, %s, %s, %s, %s, %s, 'CPU', %s, %s, %s, %s, %s) RETURNING id""",
+                (season, week, window, stage, a, other, a, p_a, p_b, deal.get("trigger") or "NEED",
+                 list(deal.get("flags") or [])))
     nid = cur.fetchone()[0]
-    talk = _talk(cur, nid)
-    talk["flags"] = list(deal.get("flags") or [])    # the stored path's flags; a resumed talk has none
+    talk = _talk(cur, nid)                           # the stored-path flags live on the row (2027_02_12)
     opener = dict(talk, opening=True)
     options = options_for(b, valuer, opener, a, deal["assets"])
     key = policy_choice(options, _gm(b, a), random.Random(f"talk:{season}:{nid}:1"))
@@ -681,8 +681,9 @@ def _rejudge(b, valuer, talk, offer_assets):
     return None
 
 
-def run_talks(cur, b, valuer, deals, rng, llm, log=None):
-    """Resume every OPEN CPU talk of this season/window first, then open a talk for each new deal. Returns
+def resume_talks(cur, b, valuer, rng, llm, log=None):
+    """Resume every OPEN CPU talk of this season/window before the week's search (P1-17), so a team already carrying
+    a talk is in `rep["teams"]` and cannot open a second deal this week. Returns
     {"talks": [...], "agreed": [...], "stalled": [...], "teams": set()}."""
     log = log or (lambda *a, **k: None)
     rep = {"talks": [], "agreed": [], "stalled": [], "teams": set()}
@@ -713,6 +714,14 @@ def run_talks(cur, b, valuer, deals, rng, llm, log=None):
             rep["stalled"].append(nid)
         rep["talks"].append(entry)
         log(f"  talk #{nid}: {status}")
+    return rep
+
+
+def run_talks(cur, b, valuer, deals, rng, llm, log=None):
+    """Open a talk for each new deal (the search's collected CPU picks). Resumption is `resume_talks`, which runs
+    before the search. Returns {"talks": [...], "agreed": [...], "stalled": [...], "teams": set()}."""
+    log = log or (lambda *a, **k: None)
+    rep = {"talks": [], "agreed": [], "stalled": [], "teams": set()}
     for deal in deals or []:
         talk = open_talk(cur, b, valuer, deal, rng)
         rep["teams"].update((_initiator(talk), talk["gm_team_id"]))
@@ -959,7 +968,7 @@ def main(argv=None):
         valuer = _ge().Valuer(b, tv.fits_from_db(cur, season))
         llm = None if (a.no_llm or a.dry_run) else make_llm("gm_talks")
         rng = random.Random(f"talks:{season}:{week}:{window}:replay")
-        rep = run_talks(cur, b, valuer, [], rng, llm, log=print)
+        rep = resume_talks(cur, b, valuer, rng, llm, log=print)
         print(f"resumed {len(rep['talks'])} talks: {len(rep['agreed'])} agreed, {len(rep['stalled'])} stalled")
         if a.dry_run:
             conn.rollback()
