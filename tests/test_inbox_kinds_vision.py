@@ -119,6 +119,27 @@ def test_start_builds_a_trigger_for_a_controlled_coach(cur):
     assert trig.source_ref == "vision:jr:2026:4" and trig.actor_role == "COACH"
 
 
+def test_start_refuses_when_jr_controls_both_roles(cur):
+    """scan skips that case; a JR start must refuse it too, not open a talk with his own GM."""
+    actors.take_control(cur, "CAR", "COACH", "41")
+    actors.take_control(cur, "CAR", "GM", "10")
+    with pytest.raises(InboxError) as e:
+        vision.start(cur, team(cur, 4), {})
+    assert e.value.status == 400 and "both" in e.value.message
+
+
+def test_propose_carries_the_form_the_page_needs(cur):
+    """Without `form` the page sends payload null and the server answers 400, so the vision form never renders."""
+    thread = make_thread(cur)
+    propose = vision.options(cur, thread, None)[0]
+    assert propose["id"] == "PROPOSE" and propose["form"] == "vision" and propose["needs_note"] is False
+    assert propose["default"] == {"direction": None, "emphasis": "BALANCED", "playing_time": "MERIT"}
+    team_vision.upsert(cur, 1, SEASON, VISION)
+    assert vision.options(cur, thread, None)[0]["default"] == VISION
+    for option in vision.options(cur, thread, None)[1:]:
+        assert option["form"] is None and option["needs_note"] is False
+
+
 # ---------------------------------------------------------------------------------------------------- act ---
 
 def test_propose_agree_pins_the_vision_and_closes(cur, monkeypatch):

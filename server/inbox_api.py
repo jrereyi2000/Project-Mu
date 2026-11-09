@@ -340,6 +340,7 @@ def list_inbox(abbr: str, status: str = Query(default=None), kind: str = Query(d
                 raise HTTPException(403, f"you don't control a {wanted.lower()} on {team[1]}")
         if not controlled:                                   # no actor: an empty inbox (§2.12)
             return {"team": team[1], "actors": [], "unread": 0, "threads": []}
+        _scan_on_open(cur, team[1])                          # opening the inbox scans, not just opening a thread
         statuses = None
         if status:
             # "OPEN" is the page's Open / All toggle: every conversation JR can still act on, WAITING_JR included.
@@ -353,9 +354,11 @@ def list_inbox(abbr: str, status: str = Query(default=None), kind: str = Query(d
 
 
 # --------------------------------------------------------------------- detail ----
-def _scan_on_open(cur, abbr, thread):
-    """The fast template scan when the inbox is opened (§2.10); once per (team, season, week, stage) per process."""
+def _scan_on_open(cur, abbr, thread=None):
+    """The fast template scan when the inbox is opened (§2.10); once per (team, season, week, stage) per process.
+    The list and the detail both open the inbox, so both call this; a thread is only a fallback for the time."""
     when = scan.league_time(cur)
+    thread = thread or {}
     season, week = when if when else (thread.get("season"), thread.get("week"))
     if season is None or week is None:
         return
@@ -395,6 +398,16 @@ def draft(abbr: str, thread_id: int, body: dict = Body(default=None)):
         return {"draft": _draft_view(draft_fn(cur, thread, text or "", llm=voice.default_llm()))}
 
 
+def _now_at(cur, thread):
+    """The league time a reply happens at: it becomes the thread's last-activity stamp, and so its expiry. Without
+    it voice.exchange stamps the creation week and an active conversation expires anyway. None keeps that
+    fallback for a save with no league_state row."""
+    when = scan.league_time(cur)
+    if when is None:
+        return None
+    return {"season": int(when[0]), "week": int(when[1]), "offseason_stage": thread.get("offseason_stage")}
+
+
 @router.post("/{abbr}/inbox/{thread_id}/reply")
 def reply(abbr: str, thread_id: int, body: dict = Body(default=None)):
     body = body or {}
@@ -413,7 +426,7 @@ def reply(abbr: str, thread_id: int, body: dict = Body(default=None)):
         if kind is None:
             raise HTTPException(400, f"unknown conversation kind {thread['kind']}")
         voice.exchange(cur, kind, thread_id, option_id=option_id, payload=payload, note=note,
-                       llm=voice.default_llm())
+                       llm=voice.default_llm(), at=_now_at(cur, thread))
         return _detail(cur, thread_id)
 
 

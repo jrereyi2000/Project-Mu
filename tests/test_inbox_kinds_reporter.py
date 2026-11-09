@@ -126,6 +126,15 @@ def test_three_game_streak_trigger(db, cur):
     assert streak[0].source_ref == "reporter:streak:2026:2:losses"
 
 
+def test_a_five_game_streak_keeps_one_source_ref():
+    """The ref is the start of the whole run; keying it on the last n games re-opened the interview every week."""
+    losses = [(w, False) for w in range(1, 6)]
+    assert reporter._streak(losses[2:]) == ("losses", 3)          # only weeks 3-5 are known: the run starts at 3
+    assert len({reporter._streak(losses[:n]) for n in (3, 4, 5)}) == 1
+    assert reporter._streak([(1, True), (2, True), (3, False), (4, False), (5, False)]) == ("losses", 3)
+    assert reporter._streak([(1, False), (2, True), (3, False), (4, True)]) is None
+
+
 def test_executed_trade_trigger(db, cur):
     db.conn.execute("INSERT INTO league_office_runs (id, season, status) VALUES (1, 2026, 'WRITTEN')")
     db.conn.execute("INSERT INTO franchise_pending_moves (team_id, kind, status, written_run) "

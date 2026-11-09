@@ -174,6 +174,19 @@ def test_promise_records_promise_made_and_never_writes_a_chart(db, cur):
     assert db.rows("SELECT count(*) FROM franchise_pending_moves")[0][0] == moves_before
 
 
+def test_a_promise_made_in_a_later_week_uses_the_league_week(db, cur):
+    """The thread's creation week is not "this week": JR can answer a talk opened two weeks ago."""
+    t = make_thread(cur, source_ref="wants:101", state={"topic": "WANTS_MORE", "slot": "WR"},
+                    player="101", name="Xavier Legette")
+    db.conn.execute("UPDATE league_state SET current_week = 7")
+    with pytest.raises(InboxError):
+        role_talk.act(cur, t, "PROMISE", {"slot": "WR", "max_depth": 1, "due_week": 7}, None)
+    res = role_talk.act(cur, t, "PROMISE", {"slot": "WR", "max_depth": 1, "due_week": 8}, None)
+    assert res.state["promises"][0]["due_week"] == 8
+    ev = cur.execute("SELECT event FROM inbox_relationship_events").fetchone()[0]
+    assert ev["payload"]["due_at"] == {"season": SEASON, "tick": 8}
+
+
 def test_promise_validation(cur):
     t = make_thread(cur)
     with pytest.raises(InboxError):
@@ -234,6 +247,17 @@ def test_due_promise_broken(db, cur):
     assert ev["payload"]["resolution"] == "broken"
     assert ev["payload"]["criterion_result"]["depth_at_due"] == 2
     assert any("not kept" in m["body"] for m in store.messages(cur, t["id"]) if m["author"] == "SYSTEM")
+
+
+def test_an_overdue_promise_is_judged_on_the_chart_at_its_due_week(db, cur):
+    """A promotion made after the deadline must not turn a broken promise into a kept one."""
+    t = _promised_thread(cur)                                    # due week 7
+    put_chart(db, 7, "MU_COACH", {"WR": [100, 101]})             # still second on the chart at the deadline
+    put_chart(db, 8, "MU_COACH", {"WR": [101]})                  # promoted a week too late
+    assert role_talk.review_promises(cur, SEASON, 8, {"team_id": CAR, "abbr": "CAR"}) == 1
+    ev = cur.execute("SELECT event FROM inbox_relationship_events WHERE kind = 'promise_resolved'").fetchone()[0]
+    assert ev["payload"]["resolution"] == "broken"
+    assert ev["payload"]["criterion_result"]["chart_week"] == 7
 
 
 def test_due_promise_unknown_without_a_chart(db, cur):

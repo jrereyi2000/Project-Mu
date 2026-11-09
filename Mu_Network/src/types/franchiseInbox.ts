@@ -1,7 +1,7 @@
 /**
  * JSON contract for the #franchise Inbox module (FRONT_OFFICE_INBOX_PLAN §2.12–§2.13). These are the shapes
- * `server/inbox_api.py` (prefix `/api/franchise`) must implement; the frontend is built against them before the
- * backend exists (U5), so every fetch must fail softly (a 404 reads "unavailable", never a crash).
+ * `server/inbox_api.py` (prefix `/api/franchise`) implements (U5); every fetch must fail softly (a 404 reads
+ * "unavailable", never a crash).
  *
  *   GET    /api/franchise/{abbr}/inbox/actors                -> InboxActorsResponse
  *   POST   /api/franchise/{abbr}/inbox/actors                InboxTakeControlRequest -> Actor (201)

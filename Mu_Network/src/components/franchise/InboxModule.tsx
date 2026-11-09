@@ -2,8 +2,8 @@
 // taken control of (a GM, a head coach, later a player) and talks to the other agents of the league, one conversation
 // per pair. The engines decide every outcome; the other side answers in its own voice and may privately appraise how
 // it was treated — shown here as a + / − / ~ marker with the reason on hover, never a trust number. Shapes:
-// types/franchiseInbox.ts. Endpoints live in server/inbox_api.py (U5): they don't exist yet, so every fetch fails
-// softly through `useFranchiseData` / `StateNote` and the page never crashes.
+// types/franchiseInbox.ts. Endpoints live in server/inbox_api.py (U5); every fetch fails softly through
+// `useFranchiseData` / `StateNote`, so a missing or resting backend never crashes the page.
 //
 // The module has four parts: the take-control panel (no actors yet), the list (acting-as filter, open/all, kind chips,
 // unread dots), the conversation (messages, template tags, appraisal markers, options, the four forms, a text box and

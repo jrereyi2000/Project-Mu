@@ -177,8 +177,12 @@ def start(cur, team, body):
     player_id = body.get("player_id")
     if player_id is None:
         raise InboxError(400, "pick a player")
+    try:
+        player_id = int(player_id)
+    except (TypeError, ValueError):
+        raise InboxError(400, f"{player_id!r} isn't a player id") from None
     ctx = _call(fa._context, cur, team["abbr"])
-    p = _call(fa._player, ctx, int(player_id))
+    p = _call(fa._player, ctx, player_id)
     if not _active(p):
         raise InboxError(409, f"{p['name']} isn't on the active roster")
     ok, reason = _call(fa._eligibility, p, ctx)

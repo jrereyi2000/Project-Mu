@@ -92,10 +92,15 @@ def scan(cur, season, week, team):
 
 def options(cur, thread, last):
     state = (thread or {}).get("state") or {}
-    out = [{"id": "PROPOSE", "label": "Propose a vision"}]
+    current = team_vision.current(cur, thread["team_id"], thread["season"]) or {}
+    seed = {"direction": current.get("direction"), "emphasis": current.get("emphasis") or "BALANCED",
+            "playing_time": current.get("playing_time") or "MERIT"}
+    out = [{"id": "PROPOSE", "label": "Propose a vision", "form": "vision", "needs_note": False, "default": seed}]
     if state.get("counter"):
-        out.append({"id": "ACCEPT_COUNTER", "label": "Accept the counter"})
-    out.append({"id": "KEEP_CURRENT", "label": "Keep the current direction"})
+        out.append({"id": "ACCEPT_COUNTER", "label": "Accept the counter", "form": None, "needs_note": False,
+                    "default": None})
+    out.append({"id": "KEEP_CURRENT", "label": "Keep the current direction", "form": None, "needs_note": False,
+                "default": None})
     return out
 
 
@@ -190,6 +195,8 @@ def start(cur, team, body):
     actor = team.get("actor")
     if actor is None:
         raise InboxError(400, "start a vision talk as your coach or GM")
+    if _actor(team) is None:                 # the scan skips this case; a JR start must refuse it too
+        raise InboxError(400, "you control both the coach and the GM, so there is no vision talk to have")
     ctype, cid, cname = _counterpart(cur, team["team_id"], actor.role)
     if ctype is None:
         raise InboxError(400, "there is no separate coach and GM to agree with")

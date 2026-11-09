@@ -4,6 +4,9 @@ Offline: the inbox store runs on the shared SQLite fake (tests/test_inbox_store.
 front_office are patched, so the tests assert exactly what the kind asks the engine for and what it exposes back
 (no surplus, the engine's turn message as the reply, a judgment only when JR wrote a note).
 """
+import os
+import types
+
 import pytest
 
 from engines import gm_negotiation
@@ -98,11 +101,26 @@ def test_scan_quiet_without_the_tables_or_a_gm(cur, monkeypatch):
 
 def test_start_opens_a_talk_thread_without_running_the_engine(cur):
     t = gm_talk.start(cur, {"team_id": 1, "abbr": "CAR"}, {"gm_team": "ATL"})
-    assert t.intent == "OPEN_TALKS" and t.source_ref == "gm_talk:start:CAR:ATL"
+    assert t.intent == "OPEN_TALKS" and t.source_ref == "gm_talk:start:CAR:ATL:1"
     assert (t.counterpart_id, t.counterpart_name) == ("20", "Terry Fontenot")
     assert t.state == {"gm_team_id": 2, "phase": "TALKS"}
     with pytest.raises(InboxError):
         gm_talk.start(cur, {"team_id": 1, "abbr": "CAR"}, {})
+
+
+def test_a_closed_talk_does_not_block_the_next_one_with_that_gm(cur):
+    """(team, kind, source_ref) is unique over closed threads, so a fixed ref made every later talk a 409."""
+    first = store.create_thread(cur, dict(thread_row(), source_ref="gm_talk:start:CAR:ATL:1"))
+    store.close_thread(cur, first)
+    t = gm_talk.start(cur, {"team_id": 1, "abbr": "CAR"}, {"gm_team": "ATL"})
+    assert t.source_ref == "gm_talk:start:CAR:ATL:2"
+    assert store.create_thread(cur, dict(thread_row(), source_ref=t.source_ref)) is not None
+
+
+def test_start_refuses_jr_s_own_team(cur):
+    with pytest.raises(InboxError) as e:
+        gm_talk.start(cur, {"team_id": 1, "abbr": "CAR"}, {"gm_team": "CAR"})
+    assert e.value.status == 400 and "own team" in e.value.message
 
 
 def test_start_declares_the_team_pick_form(cur):
@@ -341,3 +359,61 @@ def test_exchange_stores_the_engine_message_and_no_judgment_without_a_note(cur, 
     assert gm["body"] == "Terry Fontenot: Here's where we'd get it done." and gm["body_source"] == "TEMPLATE"
     assert gm["appraisal"] is None                     # judge=False without a note
     assert out["status"] == "WAITING_JR"
+
+
+# ------------------------------------------------------------------- savepoints ----
+# The SQLite fake accepts a statement after a failed one; PostgreSQL does not. These run only against a scratch
+# database, because the bug they pin is a Postgres transaction abort.
+SAVEPOINT_DSN = os.environ.get("INBOX_SAVEPOINT_TEST_DSN")
+
+
+def _scratch_ok():
+    if not SAVEPOINT_DSN:
+        return False
+    name = SAVEPOINT_DSN.rsplit("dbname=", 1)[-1].split()[0] if "dbname=" in SAVEPOINT_DSN else ""
+    return name == "madden_test" or (bool(name) and not name.startswith("madden"))
+
+
+@pytest.fixture
+def pg():
+    import psycopg
+    import uuid as _uuid
+    schema = "inboxsp_" + _uuid.uuid4().hex[:12]
+    conn = psycopg.connect(SAVEPOINT_DSN)
+    try:
+        cur = conn.cursor()
+        cur.execute(f"CREATE SCHEMA {schema}")
+        cur.execute(f"SET search_path TO {schema}")
+        yield cur
+    finally:
+        conn.rollback()
+        with conn.cursor() as c:
+            c.execute(f"DROP SCHEMA IF EXISTS {schema} CASCADE")
+            conn.commit()
+        conn.close()
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not _scratch_ok(), reason="set INBOX_SAVEPOINT_TEST_DSN to madden_test or a scratch database")
+def test_a_failed_move_lookup_leaves_the_transaction_usable(pg):
+    # A real SQL error, not a Python one: only the server aborts the transaction, and that is the failure mode.
+    pg.execute("CREATE TABLE franchise_pending_moves (id SERIAL PRIMARY KEY, kind TEXT)")     # no payload column
+    assert gm_talk._move_id(pg, 7) is None
+    pg.execute("SELECT count(*) FROM franchise_pending_moves")           # InFailedSqlTransaction without a savepoint
+    assert pg.fetchone()[0] == 0
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not _scratch_ok(), reason="set INBOX_SAVEPOINT_TEST_DSN to madden_test or a scratch database")
+def test_a_failed_leak_draw_leaves_the_transaction_usable(pg, monkeypatch):
+    turns = [{"turn_no": 2, "actor": "GM", "action": "COUNTER"}]
+    thread = {"team_id": 1, "season": 2026, "week": 5}
+
+    def books(cur):
+        cur.execute("SELECT * FROM no_such_table")                      # a server error inside the draw
+        return {}, None
+
+    monkeypatch.setattr(gm_talk, "_negotiation", lambda: types.SimpleNamespace(_books=books))
+    gm_talk._leak_after(pg, {"id": 5, "turns": turns}, thread, {"gm_team_id": 2})
+    pg.execute("SELECT 1")                                               # InFailedSqlTransaction without a savepoint
+    assert pg.fetchone()[0] == 1

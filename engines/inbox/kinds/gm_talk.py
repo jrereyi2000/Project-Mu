@@ -185,10 +185,18 @@ def start(cur, team, body):
     gm_team_id = _team_id(cur, body.get("gm_team") or body.get("gm_team_id"))
     if gm_team_id is None:
         raise InboxError(400, "pick the GM's team")
+    if gm_team_id == team["team_id"]:
+        raise InboxError(400, "that's your own team's front office: pick another team's GM")
     gm_id, gm_name = _gm(cur, gm_team_id)
     if gm_id is None:
         raise InboxError(400, f"{_abbr(cur, gm_team_id)} has no GM")
-    source_ref = f"gm_talk:start:{user}:{_abbr(cur, gm_team_id)}"
+    # One open talk per GM and a fresh ref per attempt: (team, kind, source_ref) is unique over closed threads
+    # too, so a fixed ref made every later talk with that GM a permanent 409.
+    from engines.inbox import store
+    base = f"gm_talk:start:{user}:{_abbr(cur, gm_team_id)}"
+    prior = sum(1 for t in store.list_threads(cur, team["team_id"], kind=KIND)
+                if str(t.get("source_ref") or "").startswith(base + ":"))
+    source_ref = f"{base}:{prior + 1}"
     subject = str(body.get("topic") or body.get("note") or "Trade talks")[:120]
     facts = _facts(cur, {"counterpart_name": gm_name}, user, gm_team_id)
     return Trigger(KIND, team["team_id"], COUNTERPART_TYPE, str(gm_id), gm_name, subject, source_ref,
@@ -230,20 +238,22 @@ def _move_id(cur, proposal_id):
     when the table/payload isn't there (older saves)."""
     if proposal_id is None:
         return None
+    from engines.inbox import appraisal
     try:
-        cur.execute("SELECT to_regclass('franchise_pending_moves') IS NOT NULL")
-        row = cur.fetchone()
-        if not row or not row[0]:
-            return None
-        cur.execute("SELECT id, payload FROM franchise_pending_moves WHERE kind = 'TRADE' ORDER BY id DESC")
-        for move_id, payload in cur.fetchall():
-            if isinstance(payload, str):
-                try:
-                    payload = json.loads(payload)
-                except ValueError:
-                    continue
-            if str((payload or {}).get("proposal_id")) == str(proposal_id):
-                return move_id
+        with appraisal._savepoint(cur):        # a failed read must not abort the caller's transaction
+            cur.execute("SELECT to_regclass('franchise_pending_moves') IS NOT NULL")
+            row = cur.fetchone()
+            if not row or not row[0]:
+                return None
+            cur.execute("SELECT id, payload FROM franchise_pending_moves WHERE kind = 'TRADE' ORDER BY id DESC")
+            for move_id, payload in cur.fetchall():
+                if isinstance(payload, str):
+                    try:
+                        payload = json.loads(payload)
+                    except ValueError:
+                        continue
+                if str((payload or {}).get("proposal_id")) == str(proposal_id):
+                    return move_id
     except Exception:
         return None
     return None
@@ -253,6 +263,7 @@ def _leak_after(cur, res, thread, state):
     """Run the leak draw after a GM turn (V2.11 §2.7, Q4): gm_talks.record_leaks over the talk, stored in
     gm_trade_leaks by the engine's own writer, never mentioned in the thread. The transcript goes with it, so the
     first GM reply of a JR talk lands an OPENED leak. A draw that fails never breaks JR's turn."""
+    from engines.inbox import appraisal
     try:
         turns = res.get("turns") or []
         turn = next((t for t in reversed(turns) if t.get("actor") == "GM"), None)
@@ -262,9 +273,10 @@ def _leak_after(cur, res, thread, state):
         talk = {"id": res.get("id"), "season": res.get("season") or thread.get("season"),
                 "week": res.get("week") or thread.get("week"), "user_team_id": thread.get("team_id"),
                 "gm_team_id": state.get("gm_team_id"), "status": res.get("status")}
-        b, _ = _negotiation()._books(cur)
-        rng = random.Random(f"leak:{talk['season']}:{talk['id']}:{turn.get('turn_no')}")
-        gm_talks.record_leaks(cur, talk, turn, b, rng, turns)
+        with appraisal._savepoint(cur):        # a failed draw must not abort JR's reply
+            b, _ = _negotiation()._books(cur)
+            rng = random.Random(f"leak:{talk['season']}:{talk['id']}:{turn.get('turn_no')}")
+            gm_talks.record_leaks(cur, talk, turn, b, rng, turns)
     except Exception:
         return
 

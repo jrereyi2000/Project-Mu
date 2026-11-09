@@ -282,6 +282,15 @@ def test_list_open_filter_includes_waiting_jr(db, client):
     assert body["unread"] == 1                                 # the WAITING_JR thread
 
 
+def test_opening_the_list_runs_the_open_scan(db, client, monkeypatch):
+    """§2.10: opening the inbox scans. Only the detail endpoint did, so an empty inbox stayed empty."""
+    calls = []
+    monkeypatch.setattr(scan, "scan_on_open", lambda *a, **k: calls.append(a))
+    control(db)
+    client.get("/api/franchise/CAR/inbox")
+    assert calls and calls[0][1:] == ("CAR", 2026, 5)
+
+
 def test_list_kind_as_and_limit_filters(db, client):
     control(db, "GM", "10")
     control(db, "COACH", "41")
@@ -378,6 +387,20 @@ def test_reply_drives_exchange_and_closes(db, client):
     # a closed conversation is read-only
     assert client.post(f"/api/franchise/CAR/inbox/{tid}/reply",
                        json={"option_id": "ACKNOWLEDGE"}).status_code == 409
+
+
+def test_a_reply_stamps_the_league_week_not_the_creation_week(db, client):
+    """voice.exchange falls back to the thread's own week; without `at` a live conversation expired anyway."""
+    control(db)
+    tid = make_thread(db, source_ref="stamp", kind="REPORTER", counterpart_type="writer",
+                      counterpart_id="car_beat", counterpart_name="Joe Person", subject="A word?",
+                      state={"questions_asked": 0, "topic": "GENERAL"})
+    db.conn.execute("UPDATE league_state SET current_week = 7")
+    r = client.post(f"/api/franchise/CAR/inbox/{tid}/reply",
+                    json={"option_id": "ON_RECORD", "note": "We're happy with the group."})
+    assert r.status_code == 200, r.text
+    t = store.get_thread(db.cursor(), tid)
+    assert t["state"]["_touched"] == [2026, 7]
 
 
 def test_reply_errors(db, client):

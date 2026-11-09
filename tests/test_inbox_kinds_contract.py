@@ -225,6 +225,16 @@ def test_start_declares_the_player_pick_form():
     assert contract.START_FORM == "player_pick"
 
 
+def test_start_refuses_a_non_numeric_player_id(cur, monkeypatch):
+    """int("abc") used to escape as a ValueError and answer 500."""
+    built = []
+    monkeypatch.setattr(fa, "_context", lambda c, abbr: built.append(abbr) or ctx([QB]))
+    with pytest.raises(InboxError) as e:
+        contract.start(cur, {"team_id": 1, "abbr": "CAR"}, {"player_id": "abc"})
+    assert e.value.status == 400 and "isn't a player id" in e.value.message
+    assert built == []
+
+
 # --------------------------------------------------------------------------------------------- the helpers ---
 
 def test_the_franchise_api_helpers_this_kind_imports_exist():

@@ -14,8 +14,8 @@ wraps up: the template asks up to `TEMPLATE_QUESTIONS` = 3 then wraps, a model r
 `"done": true` (recorded by `on_reply`), and `INTERVIEW_MAX_QUESTIONS` = 10 is a hard cap. Answers are stored for
 later articles through `store.jr_statements`: one row per answered question, NO_COMMENT excluded.
 
-`on_reply` is the hook U1 exposes for extra JSON keys; `voice.exchange` must call it after every counterpart reply
-(see the module's BLOCKER note in the final report). Nothing here commits.
+`on_reply` is the hook U1 exposes for extra JSON keys; `voice.exchange` calls it after every counterpart reply.
+Nothing here commits.
 """
 from engines.inbox import InboxError, appraisal, store
 from engines.inbox.kinds import role_talk
@@ -75,9 +75,10 @@ def _beat_writer(cur, team_id):
     except Exception:
         pass
     try:
-        cur.execute("SELECT agent_id, handle, display_name FROM agent_memories "
-                    "WHERE assigned_team_id = %s ORDER BY id LIMIT 1", (team_id,))
-        row = cur.fetchone()
+        with appraisal._savepoint(cur):
+            cur.execute("SELECT agent_id, handle, display_name FROM agent_memories "
+                        "WHERE assigned_team_id = %s ORDER BY id LIMIT 1", (team_id,))
+            row = cur.fetchone()
     except Exception:
         return None
     return {"agent_id": row[0], "handle": row[1], "name": row[2] or row[0]} if row else None
@@ -163,15 +164,20 @@ def _results(cur, team_id, season):
 
 
 def _streak(results, n=STREAK):
-    """('wins'|'losses', week of the first game of the current run) when the last n games share a result."""
+    """('wins'|'losses', week the current run started) when the last n games share a result. The week is the
+    start of the whole run, not of the last n games: otherwise a longer streak keys a new source_ref every week
+    and re-opens the same interview."""
     if len(results) < n:
         return None
-    tail = results[-n:]
-    if all(won is True for _, won in tail):
-        return "wins", tail[0][0]
-    if all(won is False for _, won in tail):
-        return "losses", tail[0][0]
-    return None
+    won = results[-1][1]
+    run, start = 0, None
+    for week, w in reversed(results):
+        if w != won:
+            break
+        run, start = run + 1, week
+    if run < n:
+        return None
+    return ("wins" if won else "losses"), start
 
 
 def _streak_trigger(cur, team, writer, season, week):
