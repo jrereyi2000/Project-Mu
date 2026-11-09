@@ -1,6 +1,10 @@
 # Project Mu: Agent Loops Follow-ups Plan
 
-**Status:** approved by JR (2026-11-09); building, wave 1 of 1.
+**Status:** approved by JR (2026-11-09); built and on main (2026-11-09).
+
+- **As built (U1):** `engines/agent_loops/watcher.py` `promise_tick` reviews every due promise first (MADDEN chart depth, snapshot/`injuries` health), then creates promises for players with a trailing unsatisfied role-window run on CPU teams who lost a depth-1 base slot since the previous tick; role history comes from the relationships ledger's `role_window` events, PersonRefs resolve through `db-coach` and the universe's pgid namespace, and active appends `promise_made` / `promise_resolved` through `coach.append_events`. Shadow records the decisions only. `user_team_ids=None` (registry unknown) skips creation, so JR's coach never runs. `pipeline/watch_save.py` gained `step_coach_promises` right after the producers (before evolution and trade requests), gated on `coach_loop` with `MU_COACH_PROMISES`, skipped without the tables/universe, never fatal, and reported as `coach_promises` in the ingest result.
+- **As built (U2):** `PersonalityDeps._marquee_floor` caches one read per deps/season over ACTIVE `player_contracts` (`total_value / length`), takes the 50th-highest AAV via `player.marquee_floor`, and passes it in the CPU contract chooser's `ctx`; missing table, failed read or no rows is `None` and keeps cases policy-only. A top-50 ask can now spend the week's `MARQUEE_PER_WEEK` model budget.
+- **Known edge:** a promise decided while `coach_loop` is shadow is stored without an envelope; if the feature goes active before its review, the active review can produce a `promise_resolved` without a `promise_made` in the ledger, which the relationships store drops (the decision rows still record it). The normal path (a full shadow season, then activation) leaves no open promises across the switch.
 
 **Goal:** finish the two pieces `COACH_PLAYER_AGENT_LOOPS_PLAN` left unwired: the CPU coach's promises (create and review them in the watcher), and the CPU contract marquee model budget.
 
@@ -117,3 +121,5 @@ None open. Defaults: reviews run before creation each tick; shadow records decis
 
 | Unit | Wave | Branch | Worktree | Result | Merge |
 |---|---|---|---|---|---|
+| U1 | 1 | worktree-agent-a9db5c4b0462cd70c | .claude/worktrees/agent-a9db5c4b0462cd70c | merged | 0da634c |
+| U2 | 1 | worktree-agent-a943273b3b25a0768 | .claude/worktrees/agent-a943273b3b25a0768 | merged | f35c709 |
