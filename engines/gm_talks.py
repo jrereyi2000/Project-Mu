@@ -99,40 +99,95 @@ def _counter_counts(talk):
     return dict(talk.get("counter_counts") or {})
 
 
-def _options_for_opening(b, valuer, talk, actor, offer):
-    """The initiating GM's opening: FIRM = the deal both GMs accept; ANCHOR = up to K-1 one-edit variants that
-    raise his surplus (drop one of his non-core sends, or add one of the other side's free assets)."""
-    initiator, other = _initiator(talk), talk["gm_team_id"]
-    deal = {"a": initiator, "b": other, "assets": list(offer)}
-    firm_su, firm_sg = _gn().surpluses(deal, valuer, initiator)
-    options = [Option("FIRM", "OFFER", "FIRM", list(offer), firm_su, firm_sg)]
-    core = _gn().core_asset(deal, valuer, initiator)              # what the other GM values most from him
-    ck = _ge().asset_key(core) if core else None
-    variants = []
-    for x in offer:                                               # drop one of his non-core sends
-        if x["from"] == initiator and _ge().asset_key(x) != ck:
-            variants.append([y for y in offer if y is not x])
-    for p in _gn().user_pool(b, valuer, deal, other, initiator):  # ask for one more of the other side's assets
-        variants.append(list(offer) + [p])
-    seen = {_ge().deal_hash(initiator, other, offer)}
-    anchors = []
-    for assets in variants:
-        if not assets:
+def _pick_downgrades(b, offer, initiator):
+    """Outgoing picks swapped for a later-round pick the initiator owns in the same draft (R4 -> R5), each variant
+    keeping every other leg. A pick already sent in the offer is never reused."""
+    sent = {_ge().asset_key(x) for x in offer}
+    out = []
+    for x in offer:
+        if x["type"] != "PICK" or x["from"] != initiator:
             continue
+        draft, rnd, _ = x["pick"]
+        for (ds, rd, orig), owner in sorted(b.get("picks", {}).items()):
+            if owner != initiator or ds != draft or rd <= rnd:
+                continue
+            later = {"type": "PICK", "pick": (ds, rd, orig), "from": initiator, "to": x["to"]}
+            if _ge().asset_key(later) in sent:
+                continue
+            out.append([later if y is x else y for y in offer])
+    return out
+
+
+def _options_for_opening(b, valuer, talk, actor, offer):
+    """The initiating GM's opening: FIRM = the deal as offered; ANCHOR = up to K-1 legal variants that raise his
+    surplus (a pre-validated option from the unilateral search, dropping one of his non-core sends, adding one of
+    the other side's free assets, or downgrading one of his outgoing picks to a later pick he owns in the same
+    draft). Every candidate is checked with check_legality(d, b, valuer), so an ANCHOR is always a legal offer."""
+    initiator, other = _initiator(talk), talk["gm_team_id"]
+    offer = list(offer)
+    posture = talk.get("opening_posture")
+    seeds = [o for o in (talk.get("opening_options") or []) if isinstance(o, dict) and o.get("assets")]
+    options, seen = [], set()
+
+    def make(pose, assets):
+        assets = list(assets or [])
+        if not assets:
+            return None
         h = _ge().deal_hash(initiator, other, assets)
         if h in seen:
-            continue
-        seen.add(h)
+            return None
         d = {"a": initiator, "b": other, "assets": assets}
-        if not _ge().legal(_ge().check_legality(d, b, None)):
-            continue
+        if not _ge().legal(_ge().check_legality(d, b, valuer)):
+            return None
+        seen.add(h)
         su, sg = _gn().surpluses(d, valuer, initiator)
-        if su <= firm_su:
-            continue
-        anchors.append((su, sg, assets))
-    anchors.sort(key=lambda a: a[0])                              # the mildest ask first
-    for i, (su, sg, assets) in enumerate(anchors[:OPTION_K - 1], 1):
-        options.append(Option(f"ANCHOR{i}", "OFFER", "ANCHOR", assets, su, sg))
+        return Option(None, "OFFER", pose, assets, su, sg)
+
+    # FIRM first: the unilateral search's pre-validated firm candidate, else the deal's own opening. An ANCHOR
+    # opening is the offer itself, not the firm base, so it is added to the anchors below.
+    firm_seed = next((o for o in seeds if (o.get("posture") or "FIRM") != "ANCHOR"), None)
+    firm_assets = firm_seed["assets"] if firm_seed is not None else (None if posture == "ANCHOR" else offer)
+    firm = make("FIRM", firm_assets) if firm_assets else None
+    if firm is None:
+        firm = make("FIRM", offer)
+    if firm is None:                                                       # nothing legal to open on
+        return []
+    firm.key = "FIRM"
+    options.append(firm)
+    firm_su = firm.su
+
+    anchors = []
+    for o in seeds:                                                        # the search's anchors, pre-validated
+        if (o.get("posture") or "FIRM") == "ANCHOR":
+            row = make("ANCHOR", o["assets"])
+            if row is not None:
+                anchors.append(row)
+    if posture == "ANCHOR":                                                # the personality's chosen opening
+        row = make("ANCHOR", offer)
+        if row is not None and row.su >= firm_su:
+            anchors.insert(0, row)
+    deal = {"a": initiator, "b": other, "assets": offer}
+    core = _gn().core_asset(deal, valuer, initiator)                       # what the other GM values most from him
+    ck = _ge().asset_key(core) if core else None
+    variants = []
+    for x in offer:                                                        # drop one of his non-core sends
+        if x["from"] == initiator and _ge().asset_key(x) != ck:
+            variants.append([y for y in offer if y is not x])
+    for p in _gn().user_pool(b, valuer, deal, other, initiator):           # ask for one more of the other side's assets
+        variants.append(list(offer) + [p])
+    variants += _pick_downgrades(b, offer, initiator)                      # send a later-round pick instead
+    for assets in variants:
+        row = make("ANCHOR", assets)
+        if row is not None and row.su > firm_su:
+            anchors.append(row)
+    anchors.sort(key=lambda o: o.su)                                       # the mildest ask first
+    offer_h = _ge().deal_hash(initiator, other, offer)
+    chosen = next((o for o in anchors if _ge().deal_hash(initiator, other, o.assets) == offer_h), None) \
+        if posture == "ANCHOR" else None
+    ordered = ([chosen] if chosen is not None else []) + [o for o in anchors if o is not chosen]
+    for i, row in enumerate(ordered[:OPTION_K - 1], 1):
+        row.key = f"ANCHOR{i}"
+        options.append(row)
     return options
 
 
@@ -410,9 +465,28 @@ def _engine_assets(books, stored):
 
 
 # --------------------------------------------------------------- talks ----
+def _opening_choice(options, deal, persona, rng):
+    """The initiating GM's Turn 1 move. A deal from the unilateral search carries `opening_posture` (FIRM or
+    ANCHOR) and `opening_options`: open with that personality-selected option (the deal's own assets when it is in
+    the list), so a lowball opens as an ANCHOR instead of being relabelled FIRM. A deal without the new keys keeps
+    the old policy choice."""
+    if not options:
+        return None
+    posture = deal.get("opening_posture")
+    if posture in ("FIRM", "ANCHOR"):
+        h = _ge().deal_hash(deal["a"], deal["b"], deal["assets"])
+        same = [o for o in options if _ge().deal_hash(deal["a"], deal["b"], o.assets) == h]
+        pool = same or [o for o in options if o.posture == posture]
+        if pool:
+            return pool[0]
+    key = policy_choice(options, persona, rng)
+    return next((o for o in options if o.key == key), options[0])
+
+
 def open_talk(cur, b, valuer, deal, rng):
-    """Insert a CPU negotiation for a deal both GMs accept and play the initiator's opening turn (FIRM or ANCHOR,
-    chosen by the policy; the opening has no model call). Returns the talk dict."""
+    """Insert a CPU negotiation for a deal both GMs accept and play the initiator's opening turn. A deal from the
+    unilateral search opens with its personality-selected offer (`opening_posture`, seeded with the search's
+    `opening_options`); a legacy deal without those keys keeps the policy's FIRM/ANCHOR choice. Returns the talk."""
     season, week = b["season"], b["week"]
     window = b["window"] if b.get("window") in ("IN_SEASON", "OFFSEASON") else "IN_SEASON"
     stage = _ge().read_stage(cur, season) if window == "OFFSEASON" else None
@@ -426,10 +500,13 @@ def open_talk(cur, b, valuer, deal, rng):
                  list(deal.get("flags") or [])))
     nid = cur.fetchone()[0]
     talk = _talk(cur, nid)                           # the stored-path flags live on the row (2027_02_12)
-    opener = dict(talk, opening=True)
+    opener = dict(talk, opening=True, opening_posture=deal.get("opening_posture"),
+                  opening_options=deal.get("opening_options"))
     options = options_for(b, valuer, opener, a, deal["assets"])
-    key = policy_choice(options, _gm(b, a), random.Random(f"talk:{season}:{nid}:1"))
-    opt = next((o for o in options if o.key == key), options[0])
+    if not options:                                  # an asset that moved between the search and the talk
+        su, sg = _gn().surpluses({"a": a, "b": other, "assets": deal["assets"]}, valuer, a)
+        options = [Option("FIRM", "OFFER", deal.get("opening_posture") or "FIRM", list(deal["assets"]), su, sg)]
+    opt = _opening_choice(options, deal, _gm(b, a), random.Random(f"talk:{season}:{nid}:1"))
     _add_turn(cur, nid, "GM_A", "OFFER", a, assets=opt.assets, su=opt.su, sg=opt.sg,
               message=_template_line(_gm(b, a), opt), source="TEMPLATE",
               options=[{"key": o.key, "action": o.action, "assets": o.assets, "su": o.su, "sg": o.sg}

@@ -111,6 +111,42 @@ def test_an_anchor_can_sit_below_the_other_floor():
     assert ge.legal(j["checks"])
 
 
+def test_opening_options_include_pick_downgrade_anchor_for_single_pick_rental():
+    """A 1-for-1 rental can only anchor by sending a later pick: R4 -> R5 (the ladder's later round), and every
+    anchor is a legal offer checked with the valuer (shape included)."""
+    b, v = setup()
+    offer = [pl(STAR, 2, 1), pk(4, 1, 1, 2)]                     # one pick: the top of the 82 OVR ladder
+    options = gt.options_for(b, v, dict(TALK, opening=True), 1, offer)
+    assert options[0].key == "FIRM" and keys(options[0].assets) == keys(offer)
+    anchors = [o for o in options if o.posture == "ANCHOR"]
+    assert anchors                                               # the drop/add edits alone are illegal here
+    for o in anchors:
+        assert ge.legal(ge.check_legality({"a": 1, "b": 2, "assets": o.assets}, b, v))
+        assert ("P", STAR) in keys(o.assets)                     # the core never comes off
+    downgraded = [o for o in anchors
+                  if ("K", 2037, 5, 1) in keys(o.assets) and ("K", 2037, 4, 1) not in keys(o.assets)]
+    assert downgraded                                           # R5 instead of R4, same draft
+
+
+def test_unilateral_lowball_triggers_counter_or_stall_instead_of_auto_accept():
+    """Team 1 opens on an ANCHOR the receiver does not value enough: Turn 2 is a counter (MEET/HOLD) plus REJECT,
+    never ACCEPT; the talk either compromises onto a raised package or stalls/walks away."""
+    b, v = setup()
+    opening = gt.options_for(b, v, dict(TALK, opening=True), 1, OPENING)
+    lowball = next(o for o in opening if o.posture == "ANCHOR")
+    j = gn.judge(b, v, {"a": 1, "b": 2, "assets": lowball.assets}, 1, 2, 0)
+    assert not j["ok"] and j["mood"] in ("CLOSE", "APART", "INSULTED")
+    resp = gt.options_for(b, v, TALK, 2, lowball.assets)
+    assert not any(o.action == "ACCEPT" for o in resp)
+    assert any(o.action == "COUNTER" for o in resp)
+    assert any(o.action == "REJECT" for o in resp)
+    status, final = simulate(b, v, opening=lowball.assets)
+    assert status in ("AGREED", "STALLED", "WALKED_AWAY")
+    if status == "AGREED":                                       # only ever on a raised package, not the lowball
+        assert keys(final) != keys(lowball.assets)
+        assert ge.accepts(deal(final), v, b)[0]
+
+
 def test_policy_is_seeded_and_follows_sliders():
     b, v = setup()
     opening = gt.options_for(b, v, dict(TALK, opening=True), 1, OPENING)
@@ -244,6 +280,24 @@ def test_a_resumed_talk_reads_its_stored_flags():
     row = OPEN_TALK_ROW[:-1] + (["stage:3", "shape:BLOCKBUSTER"],)
     talk = gt._talk(ScriptedCur(lambda sql, params: [row]), 7)
     assert talk["flags"] == ["stage:3", "shape:BLOCKBUSTER"]
+
+
+def test_open_talk_opens_with_the_personality_selected_anchor():
+    """A unilateral deal carries opening_posture/opening_options: Turn 1 records the choice's ANCHOR posture and
+    its assets, rather than relabelling the deal's opening as FIRM."""
+    b, v = setup()
+    opts = gt.options_for(b, v, dict(TALK, opening=True), 1, OPENING)
+    anchor = next(o for o in opts if o.posture == "ANCHOR")
+    d = deal(anchor.assets)
+    d["opening_posture"] = "ANCHOR"
+    d["opening_options"] = [{"key": o.key, "posture": o.posture, "assets": o.assets} for o in opts]
+    cur = ScriptedCur(open_talk_router)
+    gt.open_talk(cur, b, v, d, random.Random(1))
+    i = next(i for i, s in enumerate(cur.sql) if "INSERT INTO gm_trade_negotiation_turns" in s)
+    params = cur.params[i]
+    assert params[2] == "GM_A" and params[3] == "OFFER"
+    assert params[9] == "ANCHOR" and params[7].startswith("ANCHOR")
+    assert len(json.loads(params[5])) == len(anchor.assets)
 
 
 def test_open_talk_stores_the_deals_trigger_for_a_carried_talk():
