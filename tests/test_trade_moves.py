@@ -114,3 +114,27 @@ def test_execute_runs_every_op_in_order():
     assert len(cap) == 2 and all(a[4] == out["transactions"][0] for a in cap)  # derived_transaction_id
     assert any(q.startswith("INSERT INTO draft_picks") for q in text)
     assert "SET status = 'EXECUTED'" in text[-1]
+
+
+@pytest.mark.integration
+def test_pick_owner_upsert_matches_the_widened_primary_key(scratch_pg):
+    """2027_02_06 added pick_suffix to draft_picks' primary key. The old three-column ON CONFLICT target matched no
+    unique index, so on PostgreSQL every executed trade that moved a pick failed outright; the SQLite fake could
+    not show it."""
+    cur = scratch_pg
+    cur.execute("""CREATE TABLE draft_picks (draft_season INT, round SMALLINT, original_team_id INT,
+                       owner_team_id INT, source TEXT, acquired_proposal_id INT, used BOOLEAN DEFAULT false,
+                       pick_suffix TEXT NOT NULL DEFAULT '',
+                       PRIMARY KEY (draft_season, round, original_team_id, pick_suffix))""")
+    cur.execute("CREATE TABLE gm_trade_proposals (id INT PRIMARY KEY, status TEXT, executed_at TIMESTAMP, "
+                "executed_as TEXT)")
+    cur.execute("INSERT INTO draft_picks (draft_season, round, original_team_id, owner_team_id, source) "
+                "VALUES (2037, 2, 29, 29, 'SEED')")
+    ops = [{"op": "pick_owner", "pick": (2037, 2, 29), "owner": 11},
+           {"op": "proposal_status", "id": 42, "executed_as": "PROPOSED"}]
+    tm.execute_trade(cur, ops, SEASON)
+    cur.execute("SELECT owner_team_id, source, acquired_proposal_id FROM draft_picks "
+                "WHERE draft_season = 2037 AND round = 2 AND original_team_id = 29")
+    assert cur.fetchone() == (11, "TRADE", 42)
+    cur.execute("SELECT count(*) FROM draft_picks")
+    assert cur.fetchone()[0] == 1                      # one row per pick: the suffix row, not a duplicate

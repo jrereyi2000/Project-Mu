@@ -200,10 +200,13 @@ def execute_trade(cur, ops, season):
                         (op["salaries"], op["cap_penalty"], d, d, first_txn, op["team_id"], op.get("season", season)))
         elif kind == "pick_owner":
             ds, rd, orig = op["pick"]
+            # The conflict target must match draft_picks' unique index exactly: 2027_02_06 added pick_suffix to
+            # the PK, so the old three-column target made every traded pick fail on Postgres. A traded seed pick
+            # is the '' suffix row.
             cur.execute("""INSERT INTO draft_picks (draft_season, round, original_team_id, owner_team_id, source,
-                                                    acquired_proposal_id)
-                           VALUES (%s, %s, %s, %s, 'TRADE', %s)
-                           ON CONFLICT (draft_season, round, original_team_id) DO UPDATE SET
+                                                    acquired_proposal_id, pick_suffix)
+                           VALUES (%s, %s, %s, %s, 'TRADE', %s, '')
+                           ON CONFLICT (draft_season, round, original_team_id, pick_suffix) DO UPDATE SET
                                owner_team_id = EXCLUDED.owner_team_id, source = 'TRADE',
                                acquired_proposal_id = EXCLUDED.acquired_proposal_id""",
                         (ds, rd, orig, op["owner"], pid))
