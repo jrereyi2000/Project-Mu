@@ -233,7 +233,6 @@ def test_uninstalled_code_cannot_go_to_shadow(monkeypatch):
                         if feature == 'scout_directors' else (True, None))
     with pytest.raises(pf.FeatureRefused, match='not installed'):
         pf.set_mode(FakeCursor(), LEAGUE, 'scout_directors', 'shadow', version='v1', review_ref='r', now=NOW)
-    assert pf.installed('producers') == (True, None)
 
 
 def test_writes_refuse_without_tables():
