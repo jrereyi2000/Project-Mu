@@ -44,6 +44,7 @@ from newsroom.award_winners import (
     sb_mvp_fix_prompt,
     store_award_winners,
     store_sb_mvp,
+    stored_winners_fix_prompt,
 )
 from engines.gotw_engine import display_excitement
 from engines.game_script_engine import get_scripts, script_summary
@@ -1460,6 +1461,48 @@ If you need specific stats, use your database tools before producing your final 
             "task_instruction": task_instruction,
         }
 
+    def _ballot_brief(self, season: int, week: int, at_id: str):
+        """The stored media-voter results for an awards/All-Pro article, as a prompt block plus the stored truth.
+
+        When `media_voters` is active the panel's ballots decide the six awards (Week 22 AWARDS_TRACKER) and the
+        All-Pro teams (OFFICIAL_AP_ALL_PRO_ROSTER) *before* the writer runs, and the writer is handed the results
+        so it reports them instead of inventing its own. Returns None (today's path) for any other article, an
+        off/shadow feature, or any error; the ballots are stored here once, not again at save time."""
+        if at_id not in ("AWARDS_TRACKER", "OFFICIAL_AP_ALL_PRO_ROSTER"):
+            return None
+        if at_id == "AWARDS_TRACKER" and week != 22:
+            return None
+        try:
+            with psycopg.connect(self.db.db_conn_info) as conn, conn.cursor() as cur:
+                mode = award_ballots.feature_mode(cur)
+                if mode != "active":
+                    return None
+                if at_id == "OFFICIAL_AP_ALL_PRO_ROSTER":
+                    res = award_ballots.decide_all_pro(cur, season, mode)
+                    if res is None:
+                        return None
+                    facts = award_ballots.all_pro_facts(res["teams"], res["candidates"])
+                    stored = load_stored_all_pro(cur, season)
+                    kind = "all_pro"
+                    header = ("STORED BALLOT RESULTS — the media panel has already voted and these All-Pro teams are "
+                              "final. Every selection you list in a slot MUST be the stored selection; do not "
+                              "substitute any player. Vote counts are given for colour.")
+                else:
+                    res = award_ballots.decide_awards(cur, season, mode)
+                    if res is None:
+                        return None
+                    facts = award_ballots.results_facts(res["tallies"], res["candidates"])
+                    stored = load_stored_winners(cur, season)
+                    kind = "awards"
+                    header = ("STORED BALLOT RESULTS — the media panel has already voted and these award winners are "
+                              "final. Your article MUST report exactly these winners; do not name any other player "
+                              "or coach as a winner. Point totals and first-place votes are given for colour.")
+                conn.commit()
+            return {"kind": kind, "stored": stored, "text": header + "\n" + json.dumps(facts, indent=2)}
+        except Exception as e:  # noqa: BLE001 - the article path never fails on the ballot feed
+            print(f"⚠️  [BALLOT BRIEF] Could not load the stored ballot results for {at_id}: {e}")
+            return None
+
     def _execute_agent(
         self,
         compiled_prompt: dict,
@@ -1500,6 +1543,8 @@ If you need specific stats, use your database tools before producing your final 
 
         # Set when a live call produced nothing publishable; such output is never saved to news_feed.
         failure_reason = None
+        # media_voters active: the stored ballot results handed to the writer (awards / All-Pro articles).
+        ballot = None
 
         # Writer tools (newsroom/db_tools.py) read this article's season and hide results from its publication
         # week onward. Gemini runs the tools on this thread, so the context covers every tool call below.
@@ -1522,6 +1567,13 @@ If you need specific stats, use your database tools before producing your final 
 
                     client = genai.Client(api_key=self.api_key)
                     usage = UsageMeter(client)          # every call, the tool loop's included -> llm_usage
+
+                    # media_voters active: the panel's ballots decide the results now, and the writer is handed
+                    # them so the article reports the stored winners/teams (check + one rewrite below).
+                    ballot = self._ballot_brief(season, week, at_id) or None
+                    if ballot:
+                        compiled_prompt = dict(compiled_prompt, task_instruction=(
+                            compiled_prompt["task_instruction"] + "\n\n" + ballot["text"]))
 
                     # Prepare raw functions with logging wrappers for Gemini AFC (preserving parameter signatures)
                     tool_call_counts = collections.defaultdict(int)
@@ -1612,6 +1664,29 @@ If you need specific stats, use your database tools before producing your final 
                         if aw_errors:
                             print("\n⚠️ [AWARDS WINNERS FAILED VALIDATION] Requesting one rewrite:\n   " + "\n   ".join(aw_errors[:8]))
                             retry = chat.send_message(award_winners_fix_prompt(aw_errors))
+                            retry_text = retry.text
+                            if not retry_text and hasattr(retry, "candidates") and retry.candidates:
+                                parts = retry.candidates[0].content.parts
+                                retry_text = "\n".join(p.text for p in parts if hasattr(p, "text") and p.text)
+                            if retry_text:
+                                generated_text = retry_text
+
+                    # media_voters active: the article must name the stored ballot results, not its own picks.
+                    # One rewrite against the stored truth (P1-12).
+                    if ballot and generated_text:
+                        if ballot["kind"] == "all_pro":
+                            stored_errors = check_all_pro_against_stored(
+                                generated_text, ballot["stored"], self._all_pro_roster_index(season))
+                            stored_fix = all_pro_fix_prompt
+                        else:
+                            stored_errors = check_awards_against_stored(
+                                generated_text, ballot["stored"], self._all_pro_roster_index(season),
+                                self._coach_index(season))
+                            stored_fix = lambda errs: stored_winners_fix_prompt(errs, ballot["stored"])  # noqa: E731
+                        if stored_errors:
+                            print("\n⚠️  [STORED BALLOT MISMATCH] Requesting one rewrite:\n   "
+                                  + "\n   ".join(stored_errors[:8]))
+                            retry = chat.send_message(stored_fix(stored_errors))
                             retry_text = retry.text
                             if not retry_text and hasattr(retry, "candidates") and retry.candidates:
                                 parts = retry.candidates[0].content.parts
@@ -1767,7 +1842,7 @@ If you need specific stats, use your database tools before producing your final 
                                 print(f"📊 [POWER RANKINGS STORED] Season {season} Week {week}: {n} teams from article #{article_id}.")
 
                         if article_id and ctype == "ARTICLE" and at_id == "OFFICIAL_AP_ALL_PRO_ROSTER" and \
-                                award_ballots.decide_all_pro(cur, season, award_ballots.feature_mode(cur)) is not None:
+                                award_ballots.feature_mode(cur) == "active":
                             # media_voters active: the panel's ballots decided and stored the teams; check the article
                             ap_errors = check_all_pro_against_stored(generated_text, load_stored_all_pro(cur, season),
                                                                      load_roster_index(cur, season))
@@ -1782,7 +1857,7 @@ If you need specific stats, use your database tools before producing your final 
                                 print(f"🏆 [ALL-PRO STORED] Season {season} Week {week}: {n} selections saved to awards from article #{article_id}.")
 
                         if article_id and ctype == "ARTICLE" and at_id == "AWARDS_TRACKER" and week == 22 and \
-                                award_ballots.decide_awards(cur, season, award_ballots.feature_mode(cur)) is not None:
+                                award_ballots.feature_mode(cur) == "active":
                             # media_voters active: the panel's ballots decided and stored the winners; check the article
                             aw_errors = check_awards_against_stored(generated_text, load_stored_winners(cur, season),
                                                                     load_roster_index(cur, season), load_coach_index(cur, season))
