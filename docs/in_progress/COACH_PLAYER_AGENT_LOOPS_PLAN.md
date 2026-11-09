@@ -201,7 +201,7 @@ The migration is transactional and refuses an incompatible table.
   - the social desk posts public leaks within the cap;
   - the switchboard order includes the two new features.
 
-Run with `pytest -m "not integration" tests/test_agent_loops_base.py tests/test_agent_loops_coach.py tests/test_agent_loops_player.py tests/test_free_agency_engine.py tests/test_agent_loops_wiring.py`.
+Run with `pytest -m "not integration" tests/test_agent_loops_base.py tests/test_agent_loops_coach.py tests/test_agent_loops_player.py tests/test_free_agency_engine.py tests/test_agent_loops_wiring.py tests/test_agent_loops_statements.py`.
 
 ## 5. Work breakdown
 
@@ -225,11 +225,23 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 
 ### U3: Wiring
 
-- **Owns:** `pipeline/league_office_personality.py`, `personality/features.py`, `engines/inbox/kinds/contract.py`, `engines/inbox/kinds/role_talk.py`, `newsroom/social_desk.py`, `tests/test_agent_loops_wiring.py` (new)
-- **Reads:** U1, U2; this plan §2.5; those files as merged by their plans
+**Split at build time (2026-11-09).** The plan named only the switchboard, the two inbox kinds and the social desk. Wiring also needs the engine seam that lets a chosen clearing counter be the one put to the team (`engines/free_agency_engine.py`, `engines/personality_contract_context.py`), the inbox voice hook that lets a kind supply the player's reply (`engines/inbox/voice.py`), and the writer/publish kind tables (`newsroom/social_writer.py`, `newsroom/social_publish.py`). U3 is therefore built as two parallel units, U3a and U3b; no file is owned twice.
+
+### U3a: League office, contract and inbox wiring
+
+- **Owns:** `pipeline/league_office_personality.py`, `personality/features.py`, `engines/free_agency_engine.py`, `engines/personality_contract_context.py`, `engines/inbox/kinds/contract.py`, `engines/inbox/kinds/role_talk.py`, `engines/inbox/voice.py`, `tests/test_agent_loops_wiring.py` (new)
+- **Reads:** U1, U2; this plan §2.5; those files as merged by their plans; `pipeline/league_office.py:1495–1527` (`step_coach_charts`), `engines/transactions_engine.py:406–491` (the consent path), `engines/depth_chart_engine.py:324–...` (`score_adjustments`)
 - **Depends on:** U2. Cross-plan: the activation, inbox and trade talks plans are merged.
-- **Done when:** §2.5 works in shadow and active, and the existing tests of those files pass.
-- **Verify:** `pytest -m "not integration" tests/test_agent_loops_wiring.py tests/test_league_office_personality.py tests/test_personality_features.py -q` passes.
+- **Done when:** §2.5 works in shadow and active for charts, CPU contract counters and inbox replies; engine behavior is unchanged when `coach_loop` / `player_loop` are off; the existing tests of those files pass.
+- **Verify:** `pytest -m "not integration" tests/test_agent_loops_wiring.py tests/test_league_office_personality.py tests/test_personality_features.py tests/test_free_agency_engine.py tests/test_inbox_voice.py tests/test_inbox_kinds_contract.py tests/test_inbox_kinds_role_talk.py -q` passes.
+
+### U3b: Social desk player statements
+
+- **Owns:** `newsroom/social_desk.py`, `newsroom/social_writer.py`, `newsroom/social_publish.py`, `tests/test_agent_loops_statements.py` (new)
+- **Reads:** U2's `LEAK` decision rows (`engines/agent_loops/player.py`); this plan §2.5; `newsroom/social_desk.py` (Agent Wire planner), `newsroom/social_writer.py` (`KIND_INSTRUCTIONS`, `KIND_SHAPES`), `newsroom/social_publish.py` (`_post_time`)
+- **Depends on:** U2 (`LEAK` rows). Cross-plan: the Agent Wire work is merged.
+- **Done when:** a public `LEAK` decision for the week becomes at most `LEAK_MAX_PER_WEEK` `PLAYER_STATEMENT` assignments grounded only in the recorded statement, with the "a statement, not a signing" rule in the prompt and no new figures; nothing changes when there are no leaks.
+- **Verify:** `pytest -m "not integration" tests/test_agent_loops_statements.py tests/test_social_desk.py tests/test_social_writer.py tests/test_social_publish.py -q` passes.
 
 ## 6. Waves
 
@@ -237,7 +249,7 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 |---|---|---|---|
 | 1 | U1 | — | The base every loop uses. |
 | 2 | U2 | U1, contract U3 | The player loop imports the base. |
-| 3 | U3 | U2 and the cross-plan files (R5) | Touches files other plans own first. |
+| 3 | U3a, U3b | U2 and the cross-plan files (R5) | Touches files other plans own first. U3a (league office, engines, inbox) and U3b (social desk) have disjoint files and run in parallel. |
 
 Building waits until every personality sub-plan is approved (JR, 2026-11-03). `coach_loop` and `player_loop` then go through the activation plan's tuning-franchise shadow season and clearance like any feature.
 
@@ -250,16 +262,21 @@ Building waits until every personality sub-plan is approved (JR, 2026-11-03). `c
 | `engines/agent_loops/base.py` | U1 |
 | `engines/agent_loops/coach.py` | U1 |
 | `engines/agent_loops/player.py` | U2 |
-| `engines/free_agency_engine.py` | U2 |
-| `engines/inbox/kinds/contract.py` | U3 |
-| `engines/inbox/kinds/role_talk.py` | U3 |
-| `newsroom/social_desk.py` | U3 |
-| `personality/features.py` | U3 |
-| `pipeline/league_office_personality.py` | U3 |
+| `engines/free_agency_engine.py` | U3a (U2's additions merged; the counter-chooser seam is U3a's) |
+| `engines/inbox/kinds/contract.py` | U3a |
+| `engines/inbox/kinds/role_talk.py` | U3a |
+| `engines/inbox/voice.py` | U3a |
+| `engines/personality_contract_context.py` | U3a |
+| `newsroom/social_desk.py` | U3b |
+| `newsroom/social_publish.py` | U3b |
+| `newsroom/social_writer.py` | U3b |
+| `personality/features.py` | U3a |
+| `pipeline/league_office_personality.py` | U3a |
 | `tests/test_agent_loops_base.py` | U1 |
 | `tests/test_agent_loops_coach.py` | U1 |
 | `tests/test_agent_loops_player.py` | U2 |
-| `tests/test_agent_loops_wiring.py` | U3 |
+| `tests/test_agent_loops_wiring.py` | U3a |
+| `tests/test_agent_loops_statements.py` | U3b |
 | `tests/test_free_agency_engine.py` | U2 |
 
 No path appears twice.
@@ -293,4 +310,5 @@ JR approved all three recommendations on 2026-11-03.
 |---|---|---|---|---|---|
 | U1 | 1 | build/loops-u1 | .claude/worktrees/loops-u1 | merged | cee83a5 |
 | U2 | 2 | build/loops-u2 | .claude/worktrees/loops-u2 | merged | 5c65923 |
-| U3 | 3 | — | — | held (PERSONALITY_PLAN §5.3) | — |
+| U3a | 3 | — | — | building (split from U3 2026-11-09) | — |
+| U3b | 3 | — | — | building (split from U3 2026-11-09) | — |
