@@ -75,6 +75,27 @@ def fantasy_slate_exists(cur, season: int, week: int) -> bool:
     return _slate_exists(cur, season, week, FANTASY_SLOT_FILTER)
 
 
+def update_writer_relationships(conn_info: str, season: int, week: int) -> dict:
+    """Weekly writer-bias upkeep (AGENT_WIRE_VOICE_PLAN §2.5): grade every season call the stored data can now
+    decide, then apply last week's graded picks and calls to the writers' relationships; a season's first run
+    (Week 1) grades the previous season's calls and decays rows no event touched instead. Never raises: returns
+    {"graded": n, "changed": n}, or {"error": message}."""
+    from newsroom import agent_memory, relationships
+    import psycopg
+    try:
+        with psycopg.connect(conn_info) as conn, conn.cursor() as cur:
+            if week == 1:
+                graded = agent_memory.grade_season_calls(cur, season - 1)
+                changed = relationships.decay(cur, season)
+            else:
+                graded = agent_memory.grade_season_calls(cur, season)
+                changed = relationships.apply_graded(cur, season, week - 1)
+            conn.commit()
+        return {"graded": graded, "changed": changed}
+    except Exception as e:                       # relationship upkeep never blocks the slate
+        return {"error": str(e)}
+
+
 def run_weekly_swarm(
     season: int = None,
     week: int = None,
@@ -154,21 +175,18 @@ def run_weekly_swarm(
                     from newsroom.agent_memory import refresh_season_summaries
                     n = refresh_season_summaries(conn_info, dispatcher.api_key, model or DEFAULT_MODEL, season, week)
                     print(f"[Newsroom] Refreshed {n} agent season summaries through Week {week - 1}.")
-                    # Writer relationships: grade last week's picks and season calls once per run; a season's
-                    # first run (Week 1) decays the rows no event touched last season instead (AGENT_WIRE §2.5).
-                    try:
-                        from newsroom import relationships
-                        with psycopg.connect(conn_info) as rel_conn, rel_conn.cursor() as rel_cur:
-                            if week == 1:
-                                changed = relationships.decay(rel_cur, season)
-                            else:
-                                changed = relationships.apply_graded(rel_cur, season, week - 1)
-                            rel_conn.commit()
-                        if changed:
-                            print(f"[Newsroom] Updated {changed} writer relationships "
+                    # Writer relationships: grade what the season's stored data can decide, then apply last week's
+                    # graded picks and calls; a season's first run (Week 1) grades last season's calls and decays
+                    # the rows no event touched instead (AGENT_WIRE §2.5).
+                    rel = update_writer_relationships(conn_info, season, week)
+                    if rel.get("error"):
+                        print(f"[Newsroom] Writer relationships not updated: {rel['error']}")
+                    else:
+                        if rel["graded"]:
+                            print(f"[Newsroom] Graded {rel['graded']} season calls.")
+                        if rel["changed"]:
+                            print(f"[Newsroom] Updated {rel['changed']} writer relationships "
                                   f"({'season rollover' if week == 1 else f'from Week {week - 1}'}).")
-                    except Exception as e:                       # never block the slate on relationship upkeep
-                        print(f"[Newsroom] Writer relationships not updated: {e}")
 
                 if todo["national"] is None:
                     print(f"[Newsroom] Publishing Season {season} Week {week} national slate"

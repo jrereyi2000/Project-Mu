@@ -4,12 +4,72 @@ Run: python3 -m unittest tests.test_weekly_run
 """
 import unittest
 
-from newsroom.weekly_run import FINAL_WEEK, publication_week
+from unittest import mock
+
+from newsroom.weekly_run import FINAL_WEEK, publication_week, update_writer_relationships
 
 
 def weeks(*rows):
     """rows: (week, non_bye_games, completed_games)"""
     return list(rows)
+
+
+class _Cursor:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+class _Conn:
+    def __init__(self):
+        self.committed = False
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def cursor(self):
+        return _Cursor()
+
+    def commit(self):
+        self.committed = True
+
+
+class WriterRelationshipUpkeepTests(unittest.TestCase):
+    """The weekly run grades season calls before applying last week's graded picks/calls."""
+
+    def _run(self, week, season, graded=1, changed=2):
+        conn = _Conn()
+        order = []
+        with mock.patch("psycopg.connect", return_value=conn), \
+                mock.patch("newsroom.agent_memory.grade_season_calls",
+                           side_effect=lambda cur, s: order.append(("grade", s)) or graded), \
+                mock.patch("newsroom.relationships.apply_graded",
+                           side_effect=lambda cur, s, w: order.append(("apply", s, w)) or changed), \
+                mock.patch("newsroom.relationships.decay",
+                           side_effect=lambda cur, s: order.append(("decay", s)) or changed):
+            result = update_writer_relationships("dsn", season, week)
+        return result, order, conn
+
+    def test_regular_week_grades_then_applies_last_week(self):
+        result, order, conn = self._run(week=3, season=2026)
+        self.assertEqual(result, {"graded": 1, "changed": 2})
+        self.assertEqual(order, [("grade", 2026), ("apply", 2026, 2)])
+        self.assertTrue(conn.committed)
+
+    def test_week_one_grades_last_season_and_decays(self):
+        result, order, conn = self._run(week=1, season=2026)
+        self.assertEqual(order, [("grade", 2025), ("decay", 2026)])
+        self.assertTrue(conn.committed)
+
+    def test_a_failure_is_reported_and_never_raised(self):
+        with mock.patch("psycopg.connect", side_effect=RuntimeError("no database")):
+            result = update_writer_relationships("dsn", 2026, 3)
+        self.assertIn("no database", result["error"])
 
 
 class PublicationWeekTests(unittest.TestCase):
