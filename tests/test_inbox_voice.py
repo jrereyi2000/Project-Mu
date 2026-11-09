@@ -118,6 +118,24 @@ def test_kind_validate_hook(cur):
     assert voice.write(cur, kind, gm_thread(cur), "COUNTER", FACTS, [], llm=FakeLLM(GOOD))[1] == "TEMPLATE"
 
 
+def test_per_intent_voice_replaces_the_counterpart_for_that_intent(cur):
+    class Kind(FakeKind):
+        def intent_voice(self, intent):
+            return {"name": "the area scout", "voice": "a third-person scouting memo"} \
+                if intent == "SUMMARY" else None
+
+    llm = FakeLLM(dict(GOOD, message="He was prepared and answered every question directly."))
+    text, source, _ = voice.write(cur, Kind(), player_thread(cur), "SUMMARY", FACTS, [], llm=llm)
+    assert source == "LLM" and text.startswith("He was prepared")
+    assert "You are the area scout" in llm.prompts[0]
+    assert "Your voice: a third-person scouting memo." in llm.prompts[0]
+
+    second = store.get_thread(cur, store.create_thread(cur, thread_row(source_ref="ext:101:2026")))
+    answer_llm = FakeLLM(dict(GOOD, message="I was prepared and answered every question directly."))
+    voice.write(cur, Kind(), second, "COUNTER", FACTS, [], llm=answer_llm)
+    assert "You are the area scout" not in answer_llm.prompts[0]
+
+
 def test_slow_model_falls_back_within_budget(cur):
     started = time.monotonic()
     text, source, ap = voice.write(cur, FakeKind(), gm_thread(cur), "COUNTER", FACTS, [],

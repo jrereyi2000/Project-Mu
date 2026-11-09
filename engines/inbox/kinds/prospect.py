@@ -157,6 +157,17 @@ def act(cur, thread, option_id, payload, note):
     raise InboxError(400, "pick a question, end the interview, or type a question")
 
 
+SUMMARY_VOICE = {"name": "the Mu Scouting Department's area scout",
+                 "voice": "a veteran college scout writing a short third-person memo about the prospect, not "
+                          "speaking as him"}
+
+
+def intent_voice(intent):
+    """The closing summary is the department scout's, not the prospect's (P1-13): the model writes it in the
+    scout's third-person voice, matching the template path. Every answer stays in the prospect's voice."""
+    return dict(SUMMARY_VOICE) if intent == "SUMMARY" else None
+
+
 def template(intent, facts):
     if intent == "GREETING":
         return _greeting(facts)

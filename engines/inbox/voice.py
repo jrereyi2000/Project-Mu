@@ -262,11 +262,12 @@ def _history_lines(history):
     return out
 
 
-def prompt(thread, intent, facts, history, note, view, ask_appraisal, kind=None, rel_lines=()):
-    who = thread.get("counterpart_name") or "the counterpart"
+def prompt(thread, intent, facts, history, note, view, ask_appraisal, kind=None, rel_lines=(), who=None, voice=None):
+    who = who or thread.get("counterpart_name") or "the counterpart"
     lines = [f"You are {who}, writing to the {str(thread.get('actor_role') or '').lower()} you deal with, in a "
              f"private front-office message ({thread.get('kind')}: {thread.get('subject')})."]
-    lines += voice_lines(view, kind)
+    # A per-intent voice (the kind's `intent_voice`) replaces the counterpart's persona lines for that intent.
+    lines += [f"Your voice: {voice}."] if voice else voice_lines(view, kind)
     lines += list(rel_lines)
     lines.append(f"What has been decided, which you must convey and never change: {intent}.")
     hist = _history_lines(history)
@@ -345,7 +346,13 @@ def compose(cur, kind, thread, intent, facts, history=(), note=None, llm=None, b
     if view is None:
         view = persona_view(cur, thread.get("counterpart_type"), thread.get("counterpart_id"))
     ask = bool(judge) and thread.get("counterpart_type") in appraisal_mod.ROLE_ALIAS and appraisal_mod.allowed(view)
-    text_prompt = prompt(thread, intent, facts, history, note, view, ask, kind, relationship_lines(cur, thread))
+    # A per-intent voice: the kind may name a different speaker for one intent (PROSPECT's closing summary is the
+    # department scout's, not the prospect's). {"name", "voice"}; None keeps the counterpart's own voice.
+    intent_voice = getattr(kind, "intent_voice", None)
+    over = intent_voice(intent) if callable(intent_voice) else None
+    over = over if isinstance(over, dict) else None
+    text_prompt = prompt(thread, intent, facts, history, note, view, ask, kind, relationship_lines(cur, thread),
+                         who=(over or {}).get("name"), voice=(over or {}).get("voice"))
     data = parse_json(call_with_budget(llm, text_prompt, budget_s))
     text = str((data or {}).get("message") or "").strip()
     ok, why = check(text, facts, intent, kind, league) if text else (False, "no message")

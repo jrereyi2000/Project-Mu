@@ -133,6 +133,12 @@ def pure_prospect():
 
 
 # --------------------------------------------------------------------------------- registry ---
+def test_closing_summary_is_spoken_by_the_scout_not_the_prospect():
+    assert prospect.intent_voice("SUMMARY")["name"].startswith("the Mu Scouting Department")
+    assert prospect.intent_voice("SUMMARY")["voice"] != prospect.VOICE
+    assert prospect.intent_voice("ANSWER_SOLID") is None and prospect.intent_voice("GREETING") is None
+
+
 def test_both_kinds_are_discovered():
     kinds = registry.kinds(refresh=True)
     assert kinds.get("PROSPECT") is prospect
