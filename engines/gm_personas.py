@@ -4,12 +4,14 @@ GM personas (docs/done/team_management/03_GM_AGENTS_PLAN.md §2.1, Phase 1; PROJ
 One invented GM per team, stable across seasons: traits are deterministic (random.Random(sha256("gm:" + abbr)))
 and stratified across the league, so there are always 6-10 aggressive GMs (>= 0.65) and 6-10 passive ones
 (<= 0.35). Name, bio and voice come from one Gemini call per GM through the engines.gm_llm seam, with a seeded
-name-pool template as the fallback (and whenever the model's answer fails validation). Seeding also creates the
-season's gm_team_seasons rows (fo_quality 1.00, step 4 owns it) and every team's own draft picks for the next
-three drafts (sub-plan §1.1 C5: 2037-2039 from 2036).
+name-pool template as the fallback (and whenever the model's answer fails validation). Every GM also carries a
+speech card (`gm_profiles.voice_card`, engines/gm_voices.py): the authored 2026 card, else the model's card, else
+the deterministic trait template, so a hire is never voiceless. Seeding also creates the season's gm_team_seasons
+rows (fo_quality 1.00, step 4 owns it) and every team's own draft picks for the next three drafts (sub-plan §1.1
+C5: 2037-2039 from 2036).
 
   python3 -m engines.gm_personas seed [--season S] [--replace TEAM] [--no-llm] [--dry-run]
-  python3 -m engines.gm_personas backfill-bios [--dry-run]     # LLM bios for GMs still on the template
+  python3 -m engines.gm_personas backfill-bios [--dry-run]     # LLM bios and voice cards for legacy GMs
 """
 import argparse
 import hashlib
@@ -130,9 +132,19 @@ def _style(t):
     return a, y, p, "; ".join(voice)
 
 
+def _card_for(abbr, traits, season, role="GM"):
+    """The authored card when the file covers this season and team, else the deterministic trait template."""
+    from engines import gm_voices
+    authored = gm_voices.authored_card(abbr, season)
+    if authored:
+        return authored, "AUTHORED"
+    return gm_voices.template_card(traits, role=role), "TEMPLATE"
+
+
 def template_persona(abbr, ctx, traits, season, seed_key=None, start=None):
     """Seeded name pool + trait-driven bio and voice. ctx: {city, name (nickname)}. start: the tenure's first
-    season (default: seeded, 2030 .. season)."""
+    season (default: seeded, 2030 .. season). Carries the authored card for the season when there is one, else the
+    trait template."""
     rng = _rng(seed_key or "gm:" + abbr)
     name = f"{rng.choice(FIRST_NAMES)} {rng.choice(LAST_NAMES)}"
     drawn = rng.randint(FIRST_TENURE, max(FIRST_TENURE, season))
@@ -140,7 +152,9 @@ def template_persona(abbr, ctx, traits, season, seed_key=None, start=None):
     a, y, p, voice = _style(traits)
     bio = (f"{name} has run the {ctx['city']} {ctx['name']} front office since {start}. "
            f"{name.split()[0]} {a}, {y}, and {p}.")
-    return {"gm_name": name, "bio": bio, "voice": voice, "start_season": start, "bio_source": "TEMPLATE"}
+    card, card_source = _card_for(abbr, traits, season)
+    return {"gm_name": name, "bio": bio, "voice": voice, "start_season": start, "bio_source": "TEMPLATE",
+            "voice_card": card, "voice_card_source": card_source}
 
 
 def persona_prompt(ctx, traits, start_season, taken_names=()):
@@ -157,16 +171,22 @@ def persona_prompt(ctx, traits, start_season, taken_names=()):
         "The bio is 2-3 sentences of colour about how he runs the front office. Don't mention any player, any "
         "specific draft pick or trade, any record, or any number except the year he started.\n"
         "The voice is one line of style notes for how he talks in trade rationale.\n"
-        'Answer with JSON only: {"gm_name": "...", "bio": "...", "voice": "..."}')
+        "Also write his voice_card: how he talks, not what he is like. register is one sentence in speech terms "
+        "(10-200 chars); samples are 2-3 lines he would actually say (8-160 chars each); tics are 1-3 verbal "
+        "habits; avoids are 1-3 words he never says; wants is what he wants out of a call (5-120 chars).\n"
+        'Answer with JSON only: {"gm_name": "...", "bio": "...", "voice": "...", '
+        '"voice_card": {"register": "...", "samples": ["...", "..."], "tics": ["..."], "avoids": ["..."], '
+        '"wants": "..."}}')
 
 
 FORBIDDEN_BIO = re.compile(r"\b(drafted|selected|picked|traded for|acquired)\b", re.I)
 
 
-def parse_persona(text, start_season, taken_names=(), coach=None):
-    """The model's JSON answer -> {gm_name, bio, voice}, or None when it doesn't validate: a 2-3 word alphabetic
-    name not already used (nor the coach's), a bio without numbers other than the start year and without claims
-    about specific picks or trades."""
+def parse_persona(text, start_season, taken_names=(), coach=None, traits=None, role="GM"):
+    """The model's JSON answer -> {gm_name, bio, voice, voice_card, voice_card_source}, or None when the name,
+    bio or voice doesn't validate: a 2-3 word alphabetic name not already used (nor the coach's), a bio without
+    numbers other than the start year and without claims about specific picks or trades. A bad card falls back
+    alone: it never rejects an otherwise good answer (the card becomes the template when `traits` is given)."""
     if not text:
         return None
     m = re.search(r"\{.*\}", text, re.S)
@@ -183,7 +203,15 @@ def parse_persona(text, start_season, taken_names=(), coach=None):
         return None
     if any(n != str(start_season) for n in re.findall(r"\d+", bio)) or FORBIDDEN_BIO.search(bio):
         return None
-    return {"gm_name": name, "bio": bio, "voice": voice}
+    from engines import gm_voices
+    card = gm_voices.parse_card(d.get("voice_card"))
+    if card is not None:
+        card_source = "LLM"
+    elif traits is not None:
+        card, card_source = gm_voices.template_card(traits, role=role), "TEMPLATE"
+    else:
+        card_source = None
+    return {"gm_name": name, "bio": bio, "voice": voice, "voice_card": card, "voice_card_source": card_source}
 
 
 def make_persona(abbr, ctx, traits, season, llm=None, taken_names=(), seed_key=None, start=None):
@@ -198,9 +226,15 @@ def make_persona(abbr, ctx, traits, season, llm=None, taken_names=(), seed_key=N
         base = dict(alt, start_season=base["start_season"])
         k += 1
     text = call(llm, persona_prompt(ctx, traits, base["start_season"], taken_names))
-    got = parse_persona(text, base["start_season"], taken_names, ctx.get("coach"))
+    got = parse_persona(text, base["start_season"], taken_names, ctx.get("coach"), traits)
     if got:
-        base.update(got, bio_source="LLM")
+        base.update({k: v for k, v in got.items() if k not in ("voice_card", "voice_card_source")},
+                    bio_source="LLM")
+        # An authored card belongs to the man, not the model: keep it. Otherwise prefer the model's card, then
+        # the template the base already carries.
+        if base["voice_card_source"] != "AUTHORED" and got.get("voice_card"):
+            base["voice_card"] = got["voice_card"]
+            base["voice_card_source"] = got["voice_card_source"] or "TEMPLATE"
     return base
 
 
@@ -261,13 +295,14 @@ def get_gm_persona(cur, gm_id):
 
 
 def insert_gm(cur, team_id, p, traits, seed):
-    cur.execute("""INSERT INTO gm_profiles (team_id, gm_name, bio, voice, bio_source, start_season,
-                                            first_draft_season, risk_appetite, aggressiveness, pick_affinity,
-                                            youth_bias, position_bias, seed)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    cur.execute("""INSERT INTO gm_profiles (team_id, gm_name, bio, voice, voice_card, voice_card_source,
+                                            bio_source, start_season, first_draft_season, risk_appetite,
+                                            aggressiveness, pick_affinity, youth_bias, position_bias, seed)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                    ON CONFLICT (team_id) WHERE end_season IS NULL DO NOTHING RETURNING id""",
-                (team_id, p["gm_name"], p["bio"], p["voice"], p["bio_source"], p["start_season"],
-                 p.get("first_draft_season") or p["start_season"],
+                (team_id, p["gm_name"], p["bio"], p["voice"],
+                 json.dumps(p["voice_card"]) if p.get("voice_card") else None, p.get("voice_card_source"),
+                 p["bio_source"], p["start_season"], p.get("first_draft_season") or p["start_season"],
                  traits["risk_appetite"], traits["aggressiveness"], traits["pick_affinity"], traits["youth_bias"],
                  json.dumps(traits["position_bias"]), seed))
     row = cur.fetchone()
@@ -345,27 +380,41 @@ def seed(cur, season, llm=None, replace=None, log=print):
 
 
 def backfill_bios(cur, season, llm, log=print):
-    """Rewrite name-pool bios with the LLM for GMs still on the template (name kept: the GM already exists).
-    Returns the number rewritten."""
-    if llm is None:
-        return 0
-    from engines.gm_llm import call
+    """Rewrite name-pool bios with the LLM for GMs still on the template (name kept: the GM already exists), and
+    fill any missing voice_card with the authored card, the model's new card or the trait template. Works without
+    a model too, so a legacy row never stays voiceless. Returns the number of rows changed."""
+    from engines import gm_voices
     teams = read_teams(cur, season)
     cur.execute("""SELECT g.id, t.abbreviation, g.gm_name, g.start_season, g.aggressiveness, g.risk_appetite,
-                          g.pick_affinity, g.youth_bias, g.position_bias
+                          g.pick_affinity, g.youth_bias, g.position_bias, g.bio_source, g.voice_card
                    FROM gm_profiles g JOIN teams t ON t.id = g.team_id
-                   WHERE g.end_season IS NULL AND g.bio_source = 'TEMPLATE'""")
+                   WHERE g.end_season IS NULL AND (g.bio_source = 'TEMPLATE' OR g.voice_card IS NULL)""")
     n = 0
-    for gid, abbr, name, start, agg, risk, picks, youth, pb in cur.fetchall():
+    for gid, abbr, name, start, agg, risk, picks, youth, pb, bio_source, card in cur.fetchall():
         tr = {"aggressiveness": float(agg), "risk_appetite": float(risk), "pick_affinity": float(picks),
               "youth_bias": float(youth), "position_bias": pb or {}}
-        prompt = persona_prompt(teams[abbr], tr, start) + f"\nThe GM's name is {name}; keep it exactly."
-        got = parse_persona(call(llm, prompt), start, (), teams[abbr].get("coach"))
-        if got:
-            cur.execute("UPDATE gm_profiles SET bio = %s, voice = %s, bio_source = 'LLM' WHERE id = %s",
-                        (got["bio"], got["voice"], gid))
+        got = None
+        if bio_source == "TEMPLATE" and llm is not None:
+            from engines.gm_llm import call
+            prompt = persona_prompt(teams[abbr], tr, start) + f"\nThe GM's name is {name}; keep it exactly."
+            got = parse_persona(call(llm, prompt), start, (), teams[abbr].get("coach"), tr)
+            if got:
+                cur.execute("UPDATE gm_profiles SET bio = %s, voice = %s, bio_source = 'LLM' WHERE id = %s",
+                            (got["bio"], got["voice"], gid))
+                n += 1
+                log(f"  {abbr}: LLM bio")
+        if card is None:
+            if got and got.get("voice_card"):
+                card, source = got["voice_card"], got["voice_card_source"] or "TEMPLATE"
+            else:
+                authored = gm_voices.authored_card(abbr, season)
+                card, source = (authored, "AUTHORED") if authored else \
+                    (gm_voices.template_card(tr), "TEMPLATE")
+            cur.execute("UPDATE gm_profiles SET voice_card = %s, voice_card_source = %s, "
+                        "voice = COALESCE(voice, %s) WHERE id = %s",
+                        (json.dumps(card), source, gm_voices.one_line(card), gid))
             n += 1
-            log(f"  {abbr}: LLM bio")
+            log(f"  {abbr}: {source.lower()} card")
     return n
 
 
@@ -388,7 +437,7 @@ def main(argv=None):
             print(f"season {season}: {len(rep['seeded'])} GMs seeded, replaced {rep['replaced']}, "
                   f"{rep['team_seasons']} gm_team_seasons rows, {rep['picks']} draft picks")
         else:
-            print(f"{backfill_bios(cur, season, llm)} bios rewritten")
+            print(f"{backfill_bios(cur, season, llm)} rows updated (bio and/or voice card)")
         if a.dry_run:
             conn.rollback()
             print("dry run: rolled back")

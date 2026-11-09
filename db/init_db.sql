@@ -718,6 +718,8 @@ CREATE TABLE IF NOT EXISTS gm_profiles (
     gm_name TEXT NOT NULL,
     bio TEXT,                                         -- short, invented (untracked narrative)
     voice TEXT,                                       -- style notes for the rationale writer
+    voice_card JSONB,                                 -- the GM's speech card (2027_02_13_gm_voice_cards.sql)
+    voice_card_source TEXT CHECK (voice_card_source IN ('AUTHORED', 'LLM', 'TEMPLATE')),  -- how the card was made
     bio_source VARCHAR(8) NOT NULL DEFAULT 'TEMPLATE' CHECK (bio_source IN ('LLM', 'TEMPLATE')),
     start_season INT NOT NULL CHECK (start_season >= 1970),   -- tenure start
     first_draft_season INT,                           -- first class he picks (a hot-seat hire: start + 1)
@@ -3902,5 +3904,6 @@ INSERT INTO schema_migrations (version, filename, checksum, source) VALUES
     ('2027_02_09_init_db_parity', '2027_02_09_init_db_parity.sql', 'f3d728858dd69f738514a575d055ed9d8831c22ed89927db530cce2df3be5aa0', 'init_db.sql'),
     ('2027_02_10_news_feed_post_shape', '2027_02_10_news_feed_post_shape.sql', '85f1d2db9cd238dc9e889010dcab8d0311e09d5b27ad271fddaceb56f58cc5ba', 'init_db.sql'),
     ('2027_02_11_scout_report_team_rows', '2027_02_11_scout_report_team_rows.sql', '83cd8b36d397e35d117a1ff67c36ac2011121d37e1bd65f33035bb4f6e5bf561', 'init_db.sql'),
-    ('2027_02_12_trade_talk_flags', '2027_02_12_trade_talk_flags.sql', '5083e4799542b73b665b4ca68e117dd54af9de0c8ade61e7430785e843c233eb', 'init_db.sql')
+    ('2027_02_12_trade_talk_flags', '2027_02_12_trade_talk_flags.sql', '5083e4799542b73b665b4ca68e117dd54af9de0c8ade61e7430785e843c233eb', 'init_db.sql'),
+    ('2027_02_13_gm_voice_cards', '2027_02_13_gm_voice_cards.sql', '73ece2378bf0f178bc693dde1d3f19ba2396bcf80cb56353804658f9db7134d7', 'init_db.sql')
 ON CONFLICT (version) DO NOTHING;

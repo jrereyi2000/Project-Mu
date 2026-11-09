@@ -1,10 +1,13 @@
 """GM personas (docs/done/team_management/03_GM_AGENTS_PLAN.md Phase 1). Pure: no database, no Gemini."""
 import json
+import sqlite3
 
-from engines import gm_llm
+from engines import gm_llm, gm_voices
 from engines.gm_personas import (AGGRESSIVE, BAND_MAX, BAND_MIN, PASSIVE, POSITION_BIAS_MAX_GROUPS,
-                                 POSITION_BIAS_SPREAD, band_counts, league_traits, make_persona, parse_persona,
-                                 pick_seed_rows, replacement_traits, template_persona)
+                                 POSITION_BIAS_SPREAD, backfill_bios, band_counts, insert_gm, league_traits,
+                                 make_persona, parse_persona, pick_seed_rows, replacement_traits,
+                                 template_persona)
+from tests.test_inbox_store import FakeCursor
 
 ABBRS = ["ARI", "ATL", "BAL", "BUF", "CAR", "CHI", "CIN", "CLE", "DAL", "DEN", "DET", "GB", "HOU", "IND", "JAX", "KC",
          "LAC", "LAR", "LV", "MIA", "MIN", "NE", "NO", "NYG", "NYJ", "PHI", "PIT", "SEA", "SF", "TB", "TEN", "WAS"]
@@ -93,3 +96,98 @@ def test_pick_seed_rows():
     assert {r[0] for r in rows} == {2037, 2038, 2039}
     assert all(r[2] == r[3] for r in rows)
     assert len(set(r[:3] for r in rows)) == len(rows)
+
+
+# ---------------------------------------------------------- voice cards (U1) --
+MODEL_CARD = {
+    "register": "Speaks in a low voice and answers questions with questions.",
+    "samples": ["What are you really asking me for here?", "I can live with that number."],
+    "tics": ["says 'fair enough' before a hard no"],
+    "avoids": ["leverage"],
+    "wants": "a number he can sit with overnight",
+}
+
+
+def _answer(start, card):
+    return json.dumps({"gm_name": "Rowan Achterberg",
+                       "bio": f"Took the job in {start} and never looked back.",
+                       "voice": "dry, precise", "voice_card": card})
+
+
+def test_make_persona_prefers_the_authored_card():
+    t = league_traits(ABBRS)["ATL"]
+    start = template_persona("ATL", CTX, t, 2026)["start_season"]
+    p = make_persona("ATL", CTX, t, 2026, llm=lambda prompt: _answer(start, MODEL_CARD))
+    assert p["bio_source"] == "LLM"
+    assert p["voice_card_source"] == "AUTHORED"
+    assert p["voice_card"] == gm_voices.authored_card("ATL", 2026)
+
+
+def test_make_persona_prefers_the_model_card_without_an_authored_one():
+    t = league_traits(ABBRS)["ATL"]
+    start = template_persona("ATL", CTX, t, 2036)["start_season"]
+    p = make_persona("ATL", CTX, t, 2036, llm=lambda prompt: _answer(start, MODEL_CARD))
+    assert p["voice_card_source"] == "LLM"
+    assert p["voice_card"] == gm_voices.parse_card(MODEL_CARD)
+
+
+def test_make_persona_falls_back_to_the_template_card_alone():
+    t = league_traits(ABBRS)["ATL"]
+    start = template_persona("ATL", CTX, t, 2036)["start_season"]
+    p = make_persona("ATL", CTX, t, 2036,
+                     llm=lambda prompt: _answer(start, dict(MODEL_CARD, register="short")))
+    assert p["bio_source"] == "LLM"                                       # the good answer still lands
+    assert p["voice_card_source"] == "TEMPLATE"
+    assert p["voice_card"] == gm_voices.template_card(t)
+
+
+def test_parse_persona_keeps_a_good_card_and_falls_back_alone():
+    t = league_traits(ABBRS)["ATL"]
+    good = json.dumps({"gm_name": "Ada Brightwater", "bio": "Since 2033 she has run a quiet shop.",
+                       "voice": "calm", "voice_card": MODEL_CARD})
+    got = parse_persona(good, 2033, traits=t)
+    assert got["voice_card"] == gm_voices.parse_card(MODEL_CARD) and got["voice_card_source"] == "LLM"
+    bad = json.dumps({"gm_name": "Ada Brightwater", "bio": "Since 2033 she has run a quiet shop.",
+                      "voice": "calm", "voice_card": dict(MODEL_CARD, register="short")})
+    got = parse_persona(bad, 2033, traits=t)
+    assert got is not None and got["gm_name"] == "Ada Brightwater"
+    assert got["voice_card_source"] == "TEMPLATE" and got["voice_card"] == gm_voices.template_card(t)
+
+
+def test_insert_gm_writes_the_card_and_its_source():
+    class Cursor:
+        sql = params = None
+
+        def execute(self, sql, params=()):
+            self.sql, self.params = sql, params
+
+        def fetchone(self):
+            return None
+
+    card = gm_voices.template_card({})
+    p = {"gm_name": "Ada Brightwater", "bio": "A bio.", "voice": "calm", "bio_source": "TEMPLATE",
+         "start_season": 2030, "voice_card": card, "voice_card_source": "TEMPLATE"}
+    cur = Cursor()
+    insert_gm(cur, 1, p, league_traits(ABBRS)["ATL"], "gm:ATL")
+    assert "voice_card" in cur.sql and "voice_card_source" in cur.sql
+    assert json.loads(cur.params[4]) == card and cur.params[5] == "TEMPLATE"
+
+
+def test_backfill_fills_a_missing_card_without_a_model(monkeypatch):
+    from engines import gm_personas
+    conn = sqlite3.connect(":memory:", isolation_level=None)
+    conn.execute("CREATE TABLE teams (id INT, abbreviation TEXT)")
+    conn.execute("INSERT INTO teams VALUES (1, 'ATL')")
+    conn.execute("""CREATE TABLE gm_profiles (id INT, team_id INT, gm_name TEXT, start_season INT,
+                                               end_season INT, aggressiveness REAL, risk_appetite REAL,
+                                               pick_affinity REAL, youth_bias REAL, position_bias TEXT,
+                                               bio_source TEXT, voice TEXT, voice_card TEXT,
+                                               voice_card_source TEXT)""")
+    conn.execute("""INSERT INTO gm_profiles VALUES
+                    (1, 1, 'Old Hand', 2030, NULL, 0.5, 0.5, 1.0, 0.0, '{}', 'LLM', 'quiet', NULL, NULL)""")
+    cur = FakeCursor(conn)
+    monkeypatch.setattr(gm_personas, "read_teams",
+                        lambda c, s: {"ATL": {"city": "Atlanta", "name": "Falcons", "coach": "X"}})
+    assert backfill_bios(cur, 2036, None, log=lambda *a: None) == 1
+    card, source = conn.execute("SELECT voice_card, voice_card_source FROM gm_profiles WHERE id = 1").fetchone()
+    assert source == "TEMPLATE" and gm_voices.parse_card(json.loads(card)) is not None
