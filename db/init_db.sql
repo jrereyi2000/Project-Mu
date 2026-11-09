@@ -3876,7 +3876,7 @@ INSERT INTO schema_migrations (version, filename, checksum, source) VALUES
     ('2027_01_13_franchise_identity', '2027_01_13_franchise_identity.sql', '3fa54731476824683f9621b7de1c7c8c16b46769913b8cfde669d796dc605e85', 'init_db.sql'),
     ('2027_01_14_v2_franchise_os', '2027_01_14_v2_franchise_os.sql', '103284bee12f2c80ec47578c618f4da77f84017a96b138f159d0d8ca9b50031b', 'init_db.sql'),
     ('2027_01_15_progression_state', '2027_01_15_progression_state.sql', 'fb1a595f1d6ad2ee49f490579089ea870cfb658e7a7fce590b3ee19bdec60f80', 'init_db.sql'),
-    ('2027_01_16_personality_core', '2027_01_16_personality_core.sql', '5221e258ae6154e8033302c14bfcd9f42f1b6b4eec6ffa51256d2a343d0abfac', 'init_db.sql'),
+    ('2027_01_16_personality_core', '2027_01_16_personality_core.sql', 'c31c1c94703b29d5c14fbf790504db7f2b73d95edd1d1a57d4e8acaea50dadf5', 'init_db.sql'),
     ('2027_01_17_persona_slider_band', '2027_01_17_persona_slider_band.sql', 'f02d03cf8cb07e8950f881c6cbdd300fb8347ac2fc0549f9646210a51f5ab321', 'init_db.sql'),
     ('2027_01_18_writer_voice', '2027_01_18_writer_voice.sql', '5e045bc7a8e97109ea6a6586c4c411bc7804bae974e1afa67b2ceab393b42d20', 'init_db.sql'),
     ('2027_01_19_front_office_inbox', '2027_01_19_front_office_inbox.sql', '0200651fb1aa40a76d4a26ad94877d5591db8a185f9303722e057e504095ecf3', 'init_db.sql'),
