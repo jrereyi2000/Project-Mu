@@ -260,6 +260,19 @@ def load_week_context(cur, season: int, week: int) -> dict:
     ctx["accounts"] = [dict(zip(("agent_id", "archetype", "team_id", "handle", "display_name", "persistent_memory"), r))
                        for r in cur.fetchall()]
 
+    # Head coaches in their seat this season (season calls may name one; missing tables mean none).
+    cur.execute("SAVEPOINT agent_wire_coaches")
+    try:
+        cur.execute("""SELECT c.id, c.coach_name, t.team_id FROM coaches c
+                       JOIN coach_tenures t ON t.coach_id = c.id
+                       WHERE t.start_season <= %s AND (t.end_season IS NULL OR t.end_season >= %s)
+                       ORDER BY c.id""", (season, season))
+        ctx["coaches"] = [{"id": r[0], "name": r[1], "team_id": r[2]} for r in cur.fetchall()]
+        cur.execute("RELEASE SAVEPOINT agent_wire_coaches")
+    except Exception:
+        cur.execute("ROLLBACK TO SAVEPOINT agent_wire_coaches")
+        ctx["coaches"] = []
+
     game_cols = ("id", "week", "home_team_id", "away_team_id", "home_score", "away_score", "status",
                  "game_time", "game_type", "excitement_index", "projected_excitement")
     cur.execute(f"""
@@ -2297,6 +2310,21 @@ def plan_season_calls(ctx: dict, acc, n: int, W=None, topics=None) -> list:
                                            (strength.get(t, 0), W.teams[t]["popularity"])), reverse=True)[:8]
     leaders = [f for t in topics if t["kind_hint"] == "AWARD_RACE" for f in t["focus"]][:6]
     pressure = [f for t in topics if t["topic_id"].startswith(("hot_seat", "coaches_fired")) for f in t["focus"]][:3]
+    # Named entities a call may resolve to (social_writer.parse_post_json resolves the call's subject against these):
+    # every team, so a playoff or Super Bowl call can name any of them; the award-race leaders the topics show; and
+    # every head coach in his seat this season.
+    players = {t["player_id"]: tidy_name(t["name"]) for t in (W.season_totals or {}).values() if t.get("player_id")}
+    candidates = [{"type": "team", "id": t, "name": W.team_label(t)} for t in W.teams]
+    seen = {(c["type"], c["id"]) for c in candidates}
+    for topic in topics:
+        for s in topic.get("subjects") or []:
+            if s["type"] == "player" and s["id"] in players and ("player", s["id"]) not in seen:
+                seen.add(("player", s["id"]))
+                candidates.append({"type": "player", "id": s["id"], "name": players[s["id"]]})
+    for c in ctx.get("coaches") or []:
+        if ("coach", c["id"]) not in seen:
+            seen.add(("coach", c["id"]))
+            candidates.append({"type": "coach", "id": c["id"], "name": c["name"]})
     rot = ("pundit", "stats", "former", "pundit", "bandwagon", "pundit")
     out = []
     tries = 0
@@ -2311,6 +2339,7 @@ def plan_season_calls(ctx: dict, acc, n: int, W=None, topics=None) -> list:
         calls = [SEASON_CALL_TYPES[(2 * i) % len(SEASON_CALL_TYPES)], SEASON_CALL_TYPES[(2 * i + 1) % len(SEASON_CALL_TYPES)]]
         facts = {"call_phase": phase, "season": W.season,
                  "contenders": [W.team_with_record(t) if played else W.team_label(t) for t in field],
+                 "candidates": candidates,
                  "grounding": "A prediction graded at season's end: name the player, team or coach plainly."}
         if leaders:
             facts["leaders_so_far"] = leaders

@@ -709,6 +709,29 @@ class PicksAndCallsTests(unittest.TestCase):
         ctx = league(week=12)
         self.assertEqual(plan_season_calls(ctx, Accounts(ctx["accounts"], seed="c"), 8), [])
 
+    def test_season_call_candidates_resolve(self):
+        """A model-named subject on a SEASON_CALL post resolves and stores (candidates in the assignment's facts)."""
+        from newsroom.social_writer import parse_post_json
+        ctx = league(week=9)
+        ctx["coaches"] = [{"id": 77, "name": "Coach Seven", "team_id": 7}]
+        a = by_kind(plan_social_week(ctx))["SEASON_CALL"][0]
+        cand = a["facts"]["candidates"]
+        self.assertIn({"type": "team", "id": 5, "name": "City5 Team5"}, cand)
+        self.assertTrue(any(c["type"] == "player" for c in cand))
+        player = next(c for c in cand if c["type"] == "player")
+
+        def resolve(call_type, subject):
+            raw = json.dumps({"text": f"{call_type}: {subject}", "about": [], "picks": [],
+                              "calls": [{"call_type": call_type, "subject": subject, "detail": "x"}]})
+            return parse_post_json(raw, a)["calls"][0]
+
+        self.assertEqual((resolve("MVP", player["name"])["subject_type"], resolve("MVP", player["name"])["subject_id"]),
+                         ("player", player["id"]))
+        self.assertEqual((resolve("SUPER_BOWL", "Team5")["subject_type"], resolve("SUPER_BOWL", "Team5")["subject_id"]),
+                         ("team", 5))
+        self.assertEqual((resolve("COACH_FIRED", "Coach Seven")["subject_type"],
+                          resolve("COACH_FIRED", "Coach Seven")["subject_id"]), ("coach", 77))
+
 
 class LiveAndFanKindsTests(unittest.TestCase):
     def test_live_moments_know_only_the_score_at_the_time(self):
