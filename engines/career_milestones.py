@@ -1,5 +1,5 @@
 """
-Career milestones since 2026 (docs/in_progress/SEASON_CONTINUITY_PLAN.md phase 4; PROJECT_SPEC §3.3m).
+Career milestones since 2026 (docs/done/SEASON_CONTINUITY_PLAN.md phase 4; PROJECT_SPEC §3.3m).
 
 A player's career is his real NFL career through 2025 (engines.nfl_history, regular season, linked players only;
 REAL_NFL_HISTORY_PLAN Q3) plus every season_stat_lines row he has in this league since 2026: the league continues the

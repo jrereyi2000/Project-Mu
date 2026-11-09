@@ -1,5 +1,5 @@
 """
-Season-end archive and head-coach records (docs/in_progress/SEASON_CONTINUITY_PLAN.md phase 1; PROJECT_SPEC §3.3h).
+Season-end archive and head-coach records (docs/done/SEASON_CONTINUITY_PLAN.md phase 1; PROJECT_SPEC §3.3h).
 
 Once a season's Super Bowl is COMPLETED this freezes the season: league_seasons (champion, runner-up), one
 team_season_results row per team, one coach_season_lines row per head coach, and the coach's career snapshot in

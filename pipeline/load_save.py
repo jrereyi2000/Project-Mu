@@ -430,8 +430,9 @@ def load_players(cur, snapshot, season, teams, report):
             pid = cur.fetchone()[0]
             created += 1
         else:
-            cur.execute("UPDATE players SET height = %s, weight = %s, player_number = %s WHERE id = %s",
-                        (height_text(p["height_in"]), p["weight_lbs"], p["jersey"], pid))
+            # A roster row clears a captured retirement (SEASON_CONTINUITY_PLAN D8): he is playing again.
+            cur.execute("UPDATE players SET height = %s, weight = %s, player_number = %s, retired_season = NULL "
+                        "WHERE id = %s", (height_text(p["height_in"]), p["weight_lbs"], p["jersey"], pid))
         team = teams.get(p["team_index"]) if p["status"] != "FreeAgent" else None
         cur.execute("INSERT INTO player_seasons (player_id, team_id, season, position, age, overall_rating, "
                     "years_of_experience, dev_trait, archetype) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
@@ -445,6 +446,49 @@ def load_players(cur, snapshot, season, teams, report):
     report["players"] = len(ids)
     report["players_created"] = created
     return ids
+
+
+def retirement_season(snapshot, season):
+    """The season a `Retired` player retired after. Madden marks retirement at the offseason start while the save
+    still reports the season just finished, so that snapshot's own season is the retiring season; a player still
+    `Retired` once the new preseason has started retired after the previous one."""
+    wt = (snapshot.get("season") or {}).get("week_type") or (snapshot.get("season_info") or {}).get("week_type")
+    return season - 1 if wt == "PreSeason" else season
+
+
+def load_retirements(cur, snapshot, season, teams, report, capture_id=None):
+    """Madden's native retirements from the save (SEASON_CONTINUITY_PLAN phase 2b): every Player row whose
+    `ContractStatus` is `Retired` gets a `player_retirements` row for the season he retired after and
+    `players.retired_season` set, so `engines/season_ledger.py` can label the boundary RETIRED. Idempotent: one row
+    per (season, player); a later roster scan or signing clears `players.retired_season` (D8). Returns the count."""
+    rows = [p for p in snapshot.get("players") or [] if p.get("status") == "Retired"]
+    if not rows:
+        report["retirements"] = 0
+        return 0
+    cur.execute("SELECT madden_pgid, id FROM players WHERE madden_pgid IS NOT NULL")
+    by_pgid = dict(cur.fetchall())
+    retired_after = retirement_season(snapshot, season)
+    count = 0
+    for p in rows:
+        pid = by_pgid.get(p["pgid"])
+        full = f"{p['first_name']} {p['last_name']}".strip()
+        if pid is None:
+            cur.execute("INSERT INTO players (player_name, full_name, height, weight, player_number, origin, "
+                        "madden_pgid) VALUES (%s, %s, %s, %s, %s, 'SAVE', %s) RETURNING id",
+                        (db_player_name(p["first_name"], p["last_name"]), full, height_text(p["height_in"]),
+                         p["weight_lbs"], p["jersey"], p["pgid"]))
+            pid = cur.fetchone()[0]
+            by_pgid[p["pgid"]] = pid
+        cur.execute("INSERT INTO player_retirements (season, player_id, player_name, position, team_id, capture_id) "
+                    "VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT DO NOTHING",
+                    (retired_after, pid, db_player_name(p["first_name"], p["last_name"]), position(p["position"]),
+                     teams.get(p.get("team_index")), capture_id))
+        cur.execute("UPDATE players SET retired_season = %s "
+                    "WHERE id = %s AND (retired_season IS NULL OR retired_season = %s)",
+                    (retired_after, pid, retired_after))
+        count += 1
+    report["retirements"] = count
+    return count
 
 
 def load_player_attributes(cur, snapshot, season, players, report, capture_folder=None):
@@ -1148,6 +1192,7 @@ def load_snapshot(cur, snapshot, season=None, capture_id=None, capture_folder=No
     teams = team_ids(cur, snapshot)
     load_team_ratings(cur, snapshot, season, teams, report)
     players = load_players(cur, snapshot, season, teams, report)
+    load_retirements(cur, snapshot, season, teams, report, capture_id)
     load_player_attributes(cur, snapshot, season, players, report, capture_folder=capture_folder)
     games = load_games(cur, snapshot, season, teams, report)
     load_game_lines(cur, snapshot, games, players, report)
@@ -1169,7 +1214,7 @@ def load_snapshot(cur, snapshot, season=None, capture_id=None, capture_folder=No
     return report
 
 
-REPORT_COUNTS = ("players", "players_created", "player_attributes", "player_attributes_unchanged",
+REPORT_COUNTS = ("players", "players_created", "retirements", "player_attributes", "player_attributes_unchanged",
                  "player_attributes_in_season_changes", "games", "games_completed", "game_line_rows", "team_stat_rows",
                  "season_line_rows", "contracts", "injuries", "games_with_scoring_plays", "depth_charts",
                  "depth_chart_rows", "team_ratings", "draft_prospects", "team_caps", "prospect_ratings")
