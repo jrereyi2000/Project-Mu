@@ -14,7 +14,7 @@ from unittest import mock
 from engines import scouting_engine as se
 from engines import scouting_events as ev
 from engines import scouting_interviews as si
-from tests.test_inbox_store import FakeCursor, sqlite_ddl
+from tests.test_inbox_store import FakeCursor, scout_reports_v2, sqlite_ddl
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 MIGRATION = ROOT / "db" / "migrations" / "2027_01_21_scouting_reports.sql"
@@ -56,6 +56,7 @@ class WriteCursor(FakeCursor):
 def _write_db():
     conn = sqlite3.connect(":memory:", isolation_level=None)
     conn.executescript(sqlite_ddl(MIGRATION.read_text()))
+    scout_reports_v2(conn)
     conn.executescript("""
         CREATE TABLE scout_runs (draft_season INT, step INT, season INT, week INT, stage INT, params TEXT,
                                  n_events INT);

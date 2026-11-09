@@ -447,16 +447,41 @@ def _write_step(cur, draft_season, step, season, out, keep_llm=None, keep_report
                     r["body"], r["text_source"] = old[2], "LLM"
         cur.executemany(
             """INSERT INTO scout_reports (draft_season, step, prospect_uid, prospect_key, edition, grade, rank,
-                   round_label, role, traits, strengths, concerns, flags, body, text_source)
-               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                   round_label, role, traits, strengths, concerns, flags, body, text_source,
+                   team_id, scout_id, voice)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
             scouting_reports.report_rows(rows))
     return n_events
 
 
-def run(cur, draft_season, step, dry_run=False, replace=False, log=print, extras=None, llm=None):
+def director_lifecycle(context):
+    """The `ensure_directors` creator hook for a personality context {universe_id, cutoff, receipt} (a reviewed
+    generated `staff:scout` receipt). Each team's director is one durable role-'scout' person
+    (source_person_id = uuid5(universe|scout-director|team_id)); replaying returns the same person and traits."""
+    import uuid
+
+    from personality import lifecycle as L, lifecycle_store as LS, store
+    uid, cutoff = context["universe_id"], L.validate_cutoff(context["cutoff"])
+    receipt = L.validate_receipt(context["receipt"])
+    if receipt["scope"] != "staff:scout" or receipt["origin"] != "generated":
+        raise ValueError("scouting directors need a reviewed generated staff:scout receipt")
+
+    def lifecycle(cur, *, team_id, season, name):
+        spid = str(uuid.uuid5(L.LIFECYCLE_NS, f"{uid}|scout-director|{team_id}"))
+        got = LS.initialize_person(cur, uid, "scout", spid, "generated", cutoff["season"], cutoff=cutoff,
+                                   receipt=dict(receipt, team_id=team_id, name=name),
+                                   aliases=[{"namespace": "scout-director", "external_id": str(team_id)}])
+        profile = store.read(cur, L.identity(uid, "scout", spid))
+        return {"persona_id": got["persona_id"], "traits": list(profile["traits"])}
+    return lifecycle
+
+
+def run(cur, draft_season, step, dry_run=False, replace=False, log=print, extras=None, llm=None, personality=None):
     """Store one scouting step (idempotent: a stored step is skipped unless replace, which redraws it with the same
     seeds and keeps any LLM text). extras(cur, out, step, season) adds VISIT events and team boards; llm (gm_llm,
-    label scouting_notes) rewrites up to 8 movers' notes (scouting_narrative; never in a dry run).
+    label scouting_notes) rewrites up to 8 movers' notes (scouting_narrative; never in a dry run). personality:
+    the reviewed `staff:scout` lifecycle context; when the `scout_directors` feature is active it creates each
+    team's director, leans its board and writes its private report rows (never in a dry run).
     Returns the computed step."""
     season = current_step(cur)[0]
     _observe(cur, draft_season, log)
@@ -470,12 +495,16 @@ def run(cur, draft_season, step, dry_run=False, replace=False, log=print, extras
                        WHERE draft_season = %s AND step = %s AND text_source = 'LLM'""", (draft_season, step))
         keep = {(k, kind, seq): (h, b, src) for k, kind, seq, h, b, src in cur.fetchall()}
         cur.execute("""SELECT prospect_uid, edition, grade, rank, body FROM scout_reports
-                       WHERE draft_season = %s AND step = %s AND text_source = 'LLM'""", (draft_season, step))
+                       WHERE draft_season = %s AND step = %s AND text_source = 'LLM' AND team_id IS NULL""",
+                    (draft_season, step))
         keep_reports = {(str(uid), ed): (float(g), r, json.loads(b) if isinstance(b, str) else b)
                         for uid, ed, g, r, b in cur.fetchall()}
         cur.execute("DELETE FROM scout_runs WHERE draft_season = %s AND step = %s", (draft_season, step))
     out = compute(cur, draft_season, step, dry_run)
     out["params"] = params()
+    if not dry_run:
+        hook = director_lifecycle(personality) if personality else None
+        out["directors"], out["directors_mode"] = directors_for(cur, season, hook)
     if extras:
         extras(cur, out, step, season)
     if llm is not None and not dry_run:
@@ -573,8 +602,26 @@ def _user_teams():
     return [t.upper() for t in ((entry or {}).get("user_teams") or [])]
 
 
+def directors_for(cur, season, lifecycle=None):
+    """(director views, switchboard mode) for the step. The `scout_directors` feature must be shadow or active and a
+    lifecycle creator hook must be supplied (the reviewed `staff:scout` context); otherwise ([], mode) and the run
+    behaves exactly as before. An error creating directors never fails the scouting run (warning-only, like the
+    league office's optional steps)."""
+    from engines import owner_context, scout_directors
+    mode = owner_context.feature_mode(cur, "scout_directors")
+    if mode == "off" or lifecycle is None:
+        return [], mode
+    try:
+        with owner_context._savepoint(cur):
+            return scout_directors.ensure_directors(cur, season, lifecycle=lifecycle), mode
+    except Exception:  # noqa: BLE001 - an optional producer never fails the scouting run
+        return [], mode
+
+
 def default_extras(cur, out, step, season):
-    """Top-30 VISITs (steps 25-26) and the 32 team boards for the step (scouting_boards)."""
+    """Top-30 VISITs (steps 25-26) and the 32 team boards for the step (scouting_boards). A team's scouting
+    director (out["directors"], owner feature `scout_directors` active) leans its board and, when the step stores a
+    report edition, writes that team's private report rows (grade = consensus + his bounded bias, scout_id/voice)."""
     from engines import scouting_boards as sb
     from engines import scouting_events as ev
     cls, cons = out["cls"], out["cons"]
@@ -613,10 +660,25 @@ def default_extras(cur, out, step, season):
     vols = volatility(cur, draft_season, step, cons)
     knots = sv.grade_map([p["V"] for p in cls if p.get("status") != "WITHDRAWN"])
     first = out["first_step"]
-    rows = []
+    # report editions (§2.5): FALL at the class's first step, BOWLS at 21, FINAL at 26
+    from engines import prospect_ids, scouting_reports
+    ed = scouting_reports.edition_for(step, out["first_step"])
+    directors = out.get("directors") or []
+    by_team = {d["team_id"]: d for d in directors}
+    active = out.get("directors_mode") == "active"
+    signals = scouting_reports.director_signals(cur, cls, step, draft_season, vols, ed) if directors else {}
+    if directors:
+        from engines import scout_directors as sd
+        out["params"] = dict(out.get("params") or params(),
+                             scout_directors={"mode": out.get("directors_mode"), "directors": len(directors),
+                                              "board_bias": active})
+    rows, team_keys = [], {}
     for tid, ctx in ctxs.items():
+        director = by_team.get(tid) if active else None
+        extra = (lambda key, d=director: sd.board_bias(d, signals.get(key) or {})) if director else None
         b = sb.board(cls, cons, ctx, step, draft_season, first, visited.get(tid, ()), vols, limit=BOARD_POOL,
-                     draft_day=(step == STEP_DRAFT))
+                     draft_day=(step == STEP_DRAFT), extra_bias=extra)
+        team_keys[tid] = [key for key, *_ in b[:sb.STORED]]
         for rank, (key, total, err, fit, bias) in enumerate(b[:sb.STORED], start=1):
             rows.append((draft_season, step, tid, key, sv.grade(total, knots), rank, round(fit, 2), round(bias, 2),
                          round(err, 3)))
@@ -624,15 +686,14 @@ def default_extras(cur, out, step, season):
     out["params"] = dict(out.get("params") or params(), boards={"sigma_base": sb.SIGMA_BASE, "rho": sb.RHO,
                                                                 "sigma_res": sb.SIGMA_RES, "phi": sb.PHI,
                                                                 "reach_limit": sb.REACH_LIMIT})
-    # report editions (§2.5): FALL at the class's first step, BOWLS at 21, FINAL at 26
-    from engines import prospect_ids, scouting_reports
-    ed = scouting_reports.edition_for(step, out["first_step"])
     if ed:
         uids = {key: uid for uid, key, status in prospect_ids.class_ids(cur, draft_season).values()
                 if status == prospect_ids.OK}
-        out["reports"] = scouting_reports.build_edition(cls, cons, out["events"],
-                                                        scouting_reports.load_ratings(cur, draft_season),
-                                                        uids, step, out["first_step"], draft_season, vols)
+        out["reports"] = scouting_reports.build_edition(
+            cls, cons, out["events"], scouting_reports.load_ratings(cur, draft_season), uids, step,
+            out["first_step"], draft_season, vols,
+            directors=[by_team[t] for t in team_keys if t in by_team] if active else None,
+            team_keys=team_keys if active else None, signals=signals if active else None)
     return out
 
 

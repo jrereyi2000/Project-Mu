@@ -253,7 +253,7 @@ def test_report_endpoint_public_shape_and_no_hidden_keys():
     assert body["prospect_uid"] == uid
     assert body["edition"] == "FALL"
     assert body["step_label"] == "College Week 4 (NFL Wk 4)"
-    assert body["scout"] == {"name": "Mu Scouting Department", "scout_id": None}
+    assert body["scout"] == {"name": "Mu Scouting Department", "scout_id": None, "lens": None}
     assert body["editions"] == ["FALL", "FINAL"]
     assert body["role_words"] == "a Day 1 starter"
     assert body["traits"][0]["score"] == 7.5

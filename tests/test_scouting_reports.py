@@ -12,7 +12,7 @@ import pytest
 from engines import scouting_read as sr_read
 from engines import scouting_reports as sr
 from engines import scout_voice as sv
-from tests.test_inbox_store import FakeCursor, sqlite_ddl
+from tests.test_inbox_store import FakeCursor, scout_reports_v2, sqlite_ddl
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 MIGRATION = ROOT / "db" / "migrations" / "2027_01_21_scouting_reports.sql"
@@ -167,6 +167,7 @@ def test_traits_free_mode():
 def _db():
     conn = sqlite3.connect(":memory:", isolation_level=None)
     conn.executescript(sqlite_ddl(MIGRATION.read_text()))
+    scout_reports_v2(conn)
     conn.executescript("""
         CREATE TABLE scout_prospects (id INTEGER PRIMARY KEY AUTOINCREMENT, draft_season INT, prospect_key TEXT,
                                       prospect_id INT, class_year TEXT, conference TEXT);

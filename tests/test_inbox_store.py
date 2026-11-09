@@ -49,6 +49,22 @@ def sqlite_ddl(sql):
     return sql.replace("now()", "CURRENT_TIMESTAMP")
 
 
+def scout_reports_v2(conn):
+    """The SQLite shape of db/migrations/2027_02_11_scout_report_team_rows.sql: the department row (team_id NULL)
+    plus one private row per team. The migration's ALTER ... DROP CONSTRAINT is PostgreSQL-only, so tests replace
+    the table built from 2027_01_21_scouting_reports.sql with this one."""
+    conn.executescript("""
+        DROP TABLE IF EXISTS scout_reports;
+        CREATE TABLE scout_reports (draft_season INT, step INT, prospect_uid TEXT, prospect_key TEXT, edition TEXT,
+                                    grade REAL, rank INT, round_label TEXT, role TEXT, traits TEXT, strengths TEXT,
+                                    concerns TEXT, flags TEXT, body TEXT, text_source TEXT, scout_id INT,
+                                    voice TEXT, team_id INT);
+        CREATE UNIQUE INDEX scout_reports_dept_once ON scout_reports (prospect_uid, edition) WHERE team_id IS NULL;
+        CREATE UNIQUE INDEX scout_reports_team_once
+            ON scout_reports (prospect_uid, edition, team_id) WHERE team_id IS NOT NULL;
+    """)
+
+
 def _translate(sql):
     sql = re.sub(r"to_regclass\(([^)]*)\)\s+IS NOT NULL",
                  r"((SELECT count(*) FROM sqlite_master WHERE name = \1) > 0)", sql)

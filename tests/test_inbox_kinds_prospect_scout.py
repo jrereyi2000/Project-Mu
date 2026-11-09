@@ -45,8 +45,8 @@ CREATE TABLE scout_team_boards (draft_season INT, step INT, team_id INT, prospec
                                 PRIMARY KEY (draft_season, step, team_id, prospect_key));
 CREATE TABLE scout_reports (draft_season INT, step INT, prospect_uid TEXT, prospect_key TEXT, edition TEXT,
                             grade REAL, rank INT, round_label TEXT, role TEXT, traits TEXT, strengths TEXT,
-                            concerns TEXT, flags TEXT, body TEXT, text_source TEXT,
-                            PRIMARY KEY (prospect_uid, edition));
+                            concerns TEXT, flags TEXT, body TEXT, text_source TEXT, scout_id INT, voice TEXT,
+                            team_id INT);
 CREATE TABLE scout_interviews (id INTEGER PRIMARY KEY AUTOINCREMENT, draft_season INT, team_id INT,
                                prospect_uid TEXT, prospect_key TEXT, kind TEXT, thread_id INT, window_step INT,
                                logged_step INT, status TEXT, questions_max INT, tone TEXT, disposition_src TEXT,

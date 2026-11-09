@@ -46,6 +46,10 @@ def test_migration_has_four_idempotent_tables_mirrored_in_init_db():
     init = " ".join(INIT_DB.read_text().split())
     for table in TABLES:
         block = re.search(rf"CREATE TABLE IF NOT EXISTS {table} \((.*?)\);", mig).group(1)
+        if table == "scout_reports":                       # 2027_02_11 adds the team-private rows
+            assert "team_id INT REFERENCES teams(id)" in init
+            assert "scout_reports_dept_once" in init and "scout_reports_team_once" in init
+            continue
         assert block in init, table
     assert "CREATE INDEX IF NOT EXISTS scout_prospect_ids_key" in init
     # scout_interviews references inbox_threads, so init_db must define the inbox first

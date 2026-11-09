@@ -325,8 +325,15 @@ def build_report(p, cons_row, events, obs, dossier_bits, edition, step):
     }
 
 
-def build_edition(cls, cons, events_by_key, ratings, uids, step, first_step, draft_season, vols):
-    """One report row per non-WITHDRAWN prospect that has a prospect_uid in uids (OK status only), pure."""
+def build_edition(cls, cons, events_by_key, ratings, uids, step, first_step, draft_season, vols,
+                  directors=None, team_keys=None, signals=None):
+    """One report row per non-WITHDRAWN prospect that has a prospect_uid in uids (OK status only), pure.
+
+    `directors` (a list of scout_directors director views) adds each team's private row: the consensus row is
+    copied, its grade shifts by the director's bounded `regional_bias` and it carries his `scout_id`/`voice`.
+    `team_keys` ({team_id: keys}) limits a team's rows to the prospects on its board (default: every report).
+    `signals` ({key: {athleticism, production, flags, volatility}}) feeds the bias; without it a director's
+    bias is 0. The department row (team_id/scout_id/voice None) never changes."""
     edition = edition_for(step, first_step)
     if edition is None:
         return []
@@ -347,16 +354,33 @@ def build_edition(cls, cons, events_by_key, ratings, uids, step, first_step, dra
                               {"production": production, "combine": combine, "volatile": key in volatile},
                               edition, step)
         report.update({"draft_season": draft_season, "step": step, "prospect_uid": uids[key],
-                       "prospect_key": key, "edition": edition, "text_source": "TEMPLATE"})
+                       "prospect_key": key, "edition": edition, "text_source": "TEMPLATE",
+                       "team_id": None, "scout_id": None, "voice": None})
         out.append(report)
+    if directors:
+        from engines import scout_directors as sd
+        base = {r["prospect_key"]: r for r in out}
+        for director in directors:
+            tid = director.get("team_id")
+            keys = team_keys.get(tid) if team_keys else None
+            pool = [base[k] for k in keys if k in base] if keys is not None else list(base.values())
+            view = sd.voice(director)
+            for row in pool:
+                sig = (signals or {}).get(row["prospect_key"]) or {}
+                bias = sd.board_bias(director, sig)
+                team_row = dict(row, team_id=tid, scout_id=view.get("scout_id"), voice=view,
+                                grade=round(max(0.0, row["grade"] + bias), 1))
+                out.append(team_row)
     return out
 
 
 def report_rows(reports):
-    """[(...)] in scout_reports column order (for _write_step): the 15 stored columns, JSONB fields serialized."""
+    """[(...)] in scout_reports column order (for _write_step): the stored columns, JSONB fields serialized."""
     return [(r["draft_season"], r["step"], r["prospect_uid"], r["prospect_key"], r["edition"], r["grade"],
              r["rank"], r["round_label"], r["role"], json.dumps(r["traits"]), json.dumps(r["strengths"]),
-             json.dumps(r["concerns"]), json.dumps(r["flags"]), json.dumps(r["body"]), r["text_source"])
+             json.dumps(r["concerns"]), json.dumps(r["flags"]), json.dumps(r["body"]), r["text_source"],
+             r.get("team_id"), r.get("scout_id"),
+             json.dumps(r["voice"]) if r.get("voice") is not None else None)
             for r in reports]
 
 
@@ -426,6 +450,7 @@ def _edition_rows(cur, draft_season, edition):
                    JOIN scout_prospects sp ON sp.draft_season = r.draft_season AND sp.prospect_key = r.prospect_key
                    LEFT JOIN draft_prospects d ON d.id = sp.prospect_id
                    WHERE r.draft_season = %s AND r.edition = %s AND r.text_source = 'TEMPLATE'
+                     AND r.team_id IS NULL
                    ORDER BY r.rank""", (draft_season, edition))
     cols = ("prospect_uid", "prospect_key", "rank", "grade", "round_label", "role", "traits", "strengths",
             "concerns", "flags", "body", "text_source", "full_name", "position", "college", "age", "height_in",
@@ -437,6 +462,70 @@ def _edition_rows(cur, draft_season, edition):
         for k in ("traits", "strengths", "concerns", "flags", "body"):
             r[k] = _json(r[k])
     return rows
+
+
+# The primary college stat whose total is a prospect's "production" for a director's lean (review-only proxy).
+PRIMARY_STAT = {"QB": "pass_yds", "RB": "rush_yds", "WR": "rec_yds", "TE": "rec_yds", "OT": "snaps",
+                "IOL": "snaps", "EDGE": "sacks", "DT": "sacks", "LB": "tackles", "CB": "pbu", "S": "tackles",
+                "K": "fgm", "P": "punts", "LS": "snaps"}
+
+
+def _percentile(value, values):
+    """0-100 mid-rank percentile of value among values (50.0 when there is only itself)."""
+    n = len(values)
+    if n <= 1:
+        return 50.0
+    below = sum(v < value for v in values) + 0.5 * (sum(v == value for v in values) - 1)
+    return round(100.0 * below / (n - 1), 1)
+
+
+def director_signals(cur, cls, step, draft_season, vols, edition=None):
+    """{key: {athleticism, production, flags, volatility}} for scout_directors.board_bias, from stored events
+    through `step`. Review-only proxies: athleticism is the combine composite (0-100, absent when he didn't work
+    out); production is the prospect's percentile of his group's primary college stat (PRIMARY_STAT, 0-100);
+    flags are the public report flags; volatility is the step's consensus-move sd."""
+    keys = [p["key"] for p in cls]
+    if not keys:
+        return {}
+    marks = ", ".join(["%s"] * len(keys))
+    cur.execute(f"""SELECT prospect_key, kind, payload, headline, blurb FROM scout_events
+                    WHERE draft_season = %s AND step <= %s AND prospect_key IN ({marks})
+                      AND kind IN ('GAME', 'COMBINE') ORDER BY step""", (draft_season, step, *keys))
+    by_key = {}
+    for key, kind, payload, headline, blurb in cur.fetchall():
+        payload = _json(payload) or {}
+        by_key.setdefault(key, []).append({"kind": kind, "payload": payload, "headline": headline, "blurb": blurb})
+    group_of = {p["key"]: sev.stat_group(p.get("position")) for p in cls}
+    totals = {}
+    for p in cls:
+        group = group_of[p["key"]]
+        stat = PRIMARY_STAT.get(group)
+        by_key_evs = by_key.get(p["key"], [])
+        production = 0.0
+        for e in by_key_evs:
+            if e["kind"] != "GAME":
+                continue
+            stats = (e["payload"] or {}).get("stats") or {}
+            v = stats.get(stat) if stat else None
+            if isinstance(v, (int, float)):
+                production += float(v)
+        totals.setdefault(group, {})[p["key"]] = production
+    out = {}
+    for p in cls:
+        key, group = p["key"], group_of[p["key"]]
+        evs = by_key.get(key, [])
+        combine = next((e for e in evs if e["kind"] == "COMBINE"), None)
+        profile = college_stats.combine_profile([combine] if combine else [], p.get("position"),
+                                                p.get("height_in"), p.get("weight")) if combine else {}
+        athletic = profile.get("athletic_score")
+        flags = flags_for(p, evs, edition, bool((vols or {}).get(key)))
+        out[key] = {
+            "athleticism": None if athletic is None else float(athletic) * 10.0,
+            "production": _percentile(totals.get(group, {}).get(key, 0.0), list(totals.get(group, {}).values())),
+            "flags": flags,
+            "volatility": (vols or {}).get(key) or 0.0,
+        }
+    return out
 
 
 def rewrite(cur, draft_season, edition, llm, limit=LLM_TOP, keys=None):
@@ -476,33 +565,42 @@ def rewrite(cur, draft_season, edition, llm, limit=LLM_TOP, keys=None):
                 changed = True
         if changed:
             cur.execute("UPDATE scout_reports SET body = %s, text_source = 'LLM' "
-                        "WHERE prospect_uid = %s AND edition = %s", (json.dumps(new_body), row["prospect_uid"], edition))
+                        "WHERE prospect_uid = %s AND edition = %s AND team_id IS NULL",
+                        (json.dumps(new_body), row["prospect_uid"], edition))
             n += 1
     return n
 
 
-def report_for(cur, prospect_uid, edition=None):
-    """The latest (or named) edition for a prospect_uid: public fields only. None when there is none."""
+def report_for(cur, prospect_uid, edition=None, team_id=None):
+    """The latest (or named) edition for a prospect_uid: public fields only. None when there is none.
+
+    team_id None reads the department (public consensus) row; a team_id reads that team's private row when its
+    director has written one, falling back to the department row."""
     if not _table(cur, "scout_reports"):
         return None
-    sql = """SELECT draft_season, step, prospect_key, edition, grade, rank, round_label, role, traits,
-                    strengths, concerns, flags, body, text_source
-             FROM scout_reports WHERE prospect_uid = %s"""
-    args = [str(prospect_uid)]
-    if edition:
-        sql += " AND edition = %s"
-        args.append(edition)
-    sql += " ORDER BY step DESC LIMIT 1"
-    cur.execute(sql, args)
-    row = cur.fetchone()
+    cols = ("draft_season", "step", "prospect_key", "edition", "grade", "rank", "round_label", "role", "traits",
+            "strengths", "concerns", "flags", "body", "text_source", "scout_id", "voice", "team_id")
+
+    def _read(tid):
+        sql = f"""SELECT {', '.join(cols)}
+                  FROM scout_reports WHERE prospect_uid = %s AND team_id {'IS NULL' if tid is None else '= %s'}"""
+        args = [str(prospect_uid)] + ([] if tid is None else [tid])
+        if edition:
+            sql += " AND edition = %s"
+            args.append(edition)
+        sql += " ORDER BY step DESC LIMIT 1"
+        cur.execute(sql, args)
+        return cur.fetchone()
+
+    row = _read(team_id)
+    if not row and team_id is not None:
+        row = _read(None)
     if not row:
         return None
-    cols = ("draft_season", "step", "prospect_key", "edition", "grade", "rank", "round_label", "role", "traits",
-            "strengths", "concerns", "flags", "body", "text_source")
     d = dict(zip(cols, row))
     d["prospect_uid"] = str(prospect_uid)
     d["grade"] = float(d["grade"])
-    for k in ("traits", "strengths", "concerns", "flags", "body"):
+    for k in ("traits", "strengths", "concerns", "flags", "body", "voice"):
         d[k] = _json(d[k])
     d["role_words"] = ROLE_WORDS.get(d["role"])
     return d
@@ -512,7 +610,8 @@ def editions_for(cur, prospect_uid):
     """The editions actually stored for a prospect, in chronological (step) order. [] without the table."""
     if not _table(cur, "scout_reports"):
         return []
-    cur.execute("SELECT edition FROM scout_reports WHERE prospect_uid = %s ORDER BY step", (str(prospect_uid),))
+    cur.execute("SELECT edition FROM scout_reports WHERE prospect_uid = %s AND team_id IS NULL ORDER BY step",
+                (str(prospect_uid),))
     return [r[0] for r in cur.fetchall()]
 
 
@@ -524,7 +623,7 @@ def _connect():
 
 
 def _print_counts(cur, draft_season, edition=None):
-    where, args = "WHERE draft_season = %s", [draft_season]
+    where, args = "WHERE draft_season = %s AND team_id IS NULL", [draft_season]
     if edition:
         where += " AND edition = %s"
         args.append(edition)
@@ -543,7 +642,8 @@ def _template_keys(cur, draft_season, edition, limit):
     out = []
     for ed in editions:
         cur.execute("""SELECT prospect_key FROM scout_reports WHERE draft_season = %s AND edition = %s
-                       AND text_source = 'TEMPLATE' ORDER BY rank LIMIT %s""", (draft_season, ed, limit))
+                       AND text_source = 'TEMPLATE' AND team_id IS NULL ORDER BY rank LIMIT %s""",
+                    (draft_season, ed, limit))
         out += [r[0] for r in cur.fetchall()]
     return out
 

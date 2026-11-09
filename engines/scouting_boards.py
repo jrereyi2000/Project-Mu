@@ -121,9 +121,11 @@ def residual(draft_season, team_id, key, salt=""):
     return random.Random(f"resid:{draft_season}:{team_id}:{key}:{salt}").gauss(0, 1)
 
 
-def board(cls, cons, ctx, step, draft_season, first_step, visited=(), vols=None, limit=None, draft_day=False):
+def board(cls, cons, ctx, step, draft_season, first_step, visited=(), vols=None, limit=None, draft_day=False,
+          extra_bias=None):
     """One team's board at `step`: [(key, total, err, fit, bias)] best first, over the consensus top `limit`
-    (default all). cons: the step's consensus {key: {err, rank}}."""
+    (default all). cons: the step's consensus {key: {err, rank}}. extra_bias(key) is an outside lean added to a
+    prospect's total and bias before the sort (a scouting director's bounded board bias, PROJECT_SPEC §2.18)."""
     errs = [r["err"] for r in cons.values()]
     m = sum(errs) / len(errs)
     sd = math.sqrt(sum((e - m) ** 2 for e in errs) / max(len(errs) - 1, 1)) or 1.0
@@ -139,7 +141,8 @@ def board(cls, cons, ctx, step, draft_season, first_step, visited=(), vols=None,
         e = team_error(ctx["q"], (r["err"] - m) / sd, z, res, p["key"] in visited)
         T = p["V"] + e
         fit, bias = fit_bias(p, T, ctx, vols.get(p["key"], vref), vref)
-        out.append((p["key"], T + fit + bias, e, fit, bias))
+        xb = extra_bias(p["key"]) if extra_bias else 0.0
+        out.append((p["key"], T + fit + bias + xb, e, fit, bias + xb))
     out.sort(key=lambda x: (-x[1], x[0]))
     return out
 

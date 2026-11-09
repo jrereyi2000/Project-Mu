@@ -7,8 +7,11 @@ the `lifecycle` creator hook and stores the durable row in `scout_directors`. Hi
 voice its reports through the scouting plan's `scout_voice` hooks (`regional_bias` delegates here). The bias is a
 grade shift inside the scouting plan's noise model; it never changes a prospect's true ratings.
 
-Hooks only: nothing here is wired into engines/scouting_reports.py or engines/scouting_boards.py (the scouting
-plan left the per-scout report row and the draft-board lean as a later step).
+This module is the pure hook layer; engines/scouting_engine.py and engines/scouting_boards.py consume it when the
+`scout_directors` switchboard feature is active (P1-11): `ensure_directors` is called from the scouting run with the
+reviewed `staff:scout` lifecycle context (`scouting_engine.director_lifecycle`), the director's `board_bias` leans
+his team's board (`scouting_boards.board(extra_bias=)`), and his `voice` and bias fill that team's private report
+rows (`scouting_reports.build_edition`).
 
     ensure_directors(cur, season, *, lifecycle) -> [director_view]
     board_bias(director_view, prospect) -> float          |x| <= MAX_BIAS (0.5) grade points

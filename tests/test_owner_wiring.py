@@ -58,7 +58,7 @@ def test_feature_mode_reads_off_on_any_error_and_rejects_other_features():
     assert oc.feature_mode(Cur(fail=True), "owner_patience") == "off"
     assert oc.feature_mode(Cur({"to_regclass": [(False,)]}), "owner_hiring") == "off"
     with pytest.raises(ValueError):
-        oc.feature_mode(Cur(), "media_voters")
+        oc.feature_mode(Cur(), "not_a_feature")
 
 
 def test_team_owner_views_by_abbreviation_without_excluded_teams():

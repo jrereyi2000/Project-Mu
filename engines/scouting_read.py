@@ -177,8 +177,8 @@ def scout_report(cur, prospect_key, through_step=None):
         return None
     uid = str(row[0])
     sql = """SELECT draft_season, step, prospect_key, edition, grade, rank, round_label, role, traits,
-                    strengths, concerns, flags, body, text_source
-             FROM scout_reports WHERE prospect_uid = %s"""
+                    strengths, concerns, flags, body, text_source, scout_id, voice
+             FROM scout_reports WHERE prospect_uid = %s AND team_id IS NULL"""
     args = [uid]
     if through_step is not None:
         sql += " AND step <= %s"
@@ -189,11 +189,11 @@ def scout_report(cur, prospect_key, through_step=None):
     if not row:
         return None
     cols = ("draft_season", "step", "prospect_key", "edition", "grade", "rank", "round_label", "role", "traits",
-            "strengths", "concerns", "flags", "body", "text_source")
+            "strengths", "concerns", "flags", "body", "text_source", "scout_id", "voice")
     d = dict(zip(cols, row))
     d["prospect_uid"] = uid
     d["grade"] = float(d["grade"])
-    for k in ("traits", "strengths", "concerns", "flags", "body"):
+    for k in ("traits", "strengths", "concerns", "flags", "body", "voice"):
         d[k] = json.loads(d[k]) if isinstance(d[k], str) else d[k]
     return d
 

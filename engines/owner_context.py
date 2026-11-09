@@ -24,7 +24,8 @@ from contextlib import contextmanager
 import json
 import uuid
 
-FEATURES = ('owner_patience', 'owner_hiring', 'owner_spending', 'owner_meddling')
+FEATURES = ('owner_patience', 'owner_hiring', 'owner_spending', 'owner_meddling', 'scout_directors',
+            'media_voters')
 MODES = ('off', 'shadow', 'active')
 
 

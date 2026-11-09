@@ -415,9 +415,11 @@ def get_draft_board(
 
 
 @router.get("/prospect/{prospect_key:path}/report")
-def get_prospect_report(prospect_key: str, draft_season: Optional[int] = None, edition: Optional[str] = None):
+def get_prospect_report(prospect_key: str, draft_season: Optional[int] = None, edition: Optional[str] = None,
+                        team_id: Optional[int] = None):
     """One prospect's latest (or named) scouting report edition (SCOUTING_REVAMP_PLAN.md §2.7). Public fields only:
-    no rating, err, impact or OVR leaves this endpoint. 404 when the prospect has no report."""
+    no rating, err, impact or OVR leaves this endpoint. team_id reads that team's director-voiced row when it
+    exists (grade = consensus + his bounded bias), falling back to the department row. 404 when there is none."""
     from engines import prospect_ids
     from engines import scouting_reports
     with _connect() as conn:
@@ -427,11 +429,13 @@ def get_prospect_report(prospect_key: str, draft_season: Optional[int] = None, e
         uid = prospect_ids.uid_for(cur, ds, prospect_key)
         if uid is None:
             raise HTTPException(404, f"No scouting report for prospect '{prospect_key}'")
-        report = scouting_reports.report_for(cur, uid, edition=edition)
+        report = scouting_reports.report_for(cur, uid, edition=edition, team_id=team_id)
         if not report:
             raise HTTPException(404, f"No scouting report for prospect '{prospect_key}'")
         report["step_label"] = cs.step_label(report["step"])
-        report["scout"] = {"name": "Mu Scouting Department", "scout_id": None}
+        voice = report.get("voice") or {}
+        report["scout"] = {"name": voice.get("name") or "Mu Scouting Department",
+                           "scout_id": report.get("scout_id"), "lens": voice.get("lens")}
         report["editions"] = scouting_reports.editions_for(cur, uid)
         report["flags"] = [{"flag": f, "words": scouting_reports.FLAG_WORDS.get(f, f)}
                            for f in report.get("flags", [])]
