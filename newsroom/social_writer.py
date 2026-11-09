@@ -90,6 +90,10 @@ KIND_INSTRUCTIONS = {
     "TRADE_RUMOR": "Two front offices have talked (FACTS). It is NOT a done deal: post it as talks, discussions, 'sources say'. "
                    "Never say a trade was made, agreed or completed, never name a player (only the position or 'a pick' FACTS "
                    "gives), and no dollar figures. If FACTS says talks stalled, say they went nowhere.",
+    "PLAYER_STATEMENT": "A player went public about his contract (FACTS). Report it as a statement, not a signing: he says "
+                        "he wants a deal; no deal has been agreed and none has been signed. Use only the words in "
+                        "FACTS.statement and the figures it contains; add no new figures, never claim a trade or a deal, "
+                        "and don't put words in his mouth beyond what FACTS.statement says.",
     "SHARE": "You just published the article in FACTS. Write one line that makes people want to read it, in your voice; "
              "don't summarize the piece and don't include a link (the card is attached).",
     "REPLY": "Someone posted the post below and you have something to say back. Start with the author's handle. "
@@ -144,6 +148,7 @@ KIND_SHAPES = {
     "MOVE_NEWS": ("plain_statement", "one_liner", "observation", "fragmented_live"),
     "TRADE_NEWS": ("plain_statement", "one_liner", "observation", "fragmented_live"),
     "TRADE_RUMOR": ("plain_statement", "one_liner", "observation", "question"),
+    "PLAYER_STATEMENT": ("plain_statement", "one_liner", "observation", "question", "contrast"),
     "BEAT_INJURY": ("plain_statement", "one_liner", "observation", "fragmented_live"),
     "BEAT_MOVE": ("plain_statement", "observation", "one_liner", "contrast"),
     "SHARE": ("one_liner", "question", "plain_statement", "observation", "contrast"),
