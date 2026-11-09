@@ -488,6 +488,8 @@ Every open row in `docs/FOLLOW_UPS.md`, mapped. Nothing is dropped.
 | 29 | Staff-contracts migration not applied | P1-01 / P1-04 |
 | 30 | Staff-contract producer not wired | P1-22 |
 | 31 | Godfather trigger gates not fully live | P1-27 / P5-13 |
+| 32 | Post-unilateral trade flow re-measure | P1-25 / P3-06 / P3-07 |
+| 33 | Trade Finder misses the rival-overpay package | — (debug tooling, no close-out gate) |
 | — | Activation gates (owners/scouts/voters; whole programme) | P5 → P6 |
 
 ---
