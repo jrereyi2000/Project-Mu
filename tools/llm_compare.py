@@ -13,6 +13,8 @@ Supported tasks:
   - gm_persona: Front office GM persona & bio generation (JSON)
   - gm_rationale: Trade rationale explanation in GM voices (JSON)
   - gm_negotiation: Trade negotiation responses (JSON)
+  - inbox_reply: Inbox CONTRACT reply in the counterpart's voice (front-office inbox)
+  - inbox_appraisal: The same reply plus its private appraisal of the GM's manner (JSON)
 
 Inputs are read from the frozen 2036 archive (`madden_2036`) by default; pass --db for another
 database (a DSN or a bare database name). Every connection the process opens is read-only
@@ -54,10 +56,14 @@ TASKS = [
     "gm_persona",
     "gm_rationale",
     "gm_negotiation",
+    "inbox_reply",
+    "inbox_appraisal",
 ]
 
 # Tasks whose answer is one JSON object; --json-mode asks the model for JSON output on these
 # (Ollama format=json, Gemini response_mime_type). The production GM calls don't use it yet.
+# inbox_reply/inbox_appraisal stay out: their production call (engines.inbox.voice.compose) does not
+# set response_mime_type, so the gate mirrors it and relies on the prompt's "JSON only" instruction.
 JSON_TASKS = {"gm_persona", "gm_rationale", "gm_negotiation"}
 
 DEFAULT_DB = "madden_2036"
@@ -325,6 +331,51 @@ def validate_gm_negotiation(text: str, inp: TaskInput) -> Tuple[bool, List[str],
     return passed, failures, {"parsed": bool(m)}
 
 
+def _inbox_parts(text: str) -> Tuple[str, Any]:
+    """(message, appraisal) from the answer's JSON object; both None when it doesn't parse."""
+    from engines.inbox.voice import parse_json
+
+    data = parse_json(text)
+    if not isinstance(data, dict):
+        return None, None
+    return str(data.get("message") or "").strip(), data.get("appraisal")
+
+
+def _inbox_reply_failures(message: str, inp: TaskInput) -> List[str]:
+    """The inbox's own reply test: voice.check (no invented numbers, no contradiction of the decision)."""
+    from engines.inbox import voice
+    from engines.inbox.kinds import contract as contract_kind
+
+    ok, why = voice.check(message, inp.facts or {}, inp.metadata.get("intent") or "",
+                          kind=contract_kind, league=inp.metadata.get("league"))
+    return [] if ok else [f"Reply failed the inbox check: {why}"]
+
+
+def validate_inbox_reply(text: str, inp: TaskInput) -> Tuple[bool, List[str], Dict[str, Any]]:
+    message, _ = _inbox_parts(text)
+    if not message:
+        return False, ["No {\"message\": \"...\"} in the answer"], {"parsed": bool(message)}
+    failures = _inbox_reply_failures(message, inp)
+    metrics = {"parsed": True, "words": len(re.findall(r"[A-Za-z0-9'’-]+", message))}
+    return len(failures) == 0, failures, metrics
+
+
+def validate_inbox_appraisal(text: str, inp: TaskInput) -> Tuple[bool, List[str], Dict[str, Any]]:
+    from engines.inbox import appraisal as appraisal_mod
+
+    message, raw = _inbox_parts(text)
+    if not message:
+        return False, ["No {\"message\": \"...\"} in the answer"], {"parsed": False}
+    failures = _inbox_reply_failures(message, inp)
+    ap = appraisal_mod.normalize(raw)
+    if ap is None:
+        failures.append("No usable appraisal (outcome in positive|negative|mixed, significance in "
+                        "routine|meaningful, a non-empty reason)")
+    metrics = {"parsed": True, "words": len(re.findall(r"[A-Za-z0-9'’-]+", message)),
+               "outcome": (ap or {}).get("outcome"), "significance": (ap or {}).get("significance")}
+    return len(failures) == 0, failures, metrics
+
+
 VALIDATORS = {
     "agent_wire": validate_agent_wire,
     "memory_takes": validate_memory_takes,
@@ -333,6 +384,8 @@ VALIDATORS = {
     "gm_persona": validate_gm_persona,
     "gm_rationale": validate_gm_rationale,
     "gm_negotiation": validate_gm_negotiation,
+    "inbox_reply": validate_inbox_reply,
+    "inbox_appraisal": validate_inbox_appraisal,
 }
 
 
@@ -822,6 +875,68 @@ def build_gm_negotiation_inputs(season: int, week: int, limit: int = 5, cur=None
     return inputs[:limit]
 
 
+def _inbox_contract_inputs(task: str, ask_appraisal: bool, limit: int) -> List[TaskInput]:
+    """Filled CONTRACT prompts through the inbox's own voice.prompt(), so the gate sees exactly what
+    engines.inbox.voice.compose sends (thread lines, persona lines, fact sheet, JSON-only instruction)."""
+    from engines.inbox import voice
+    from engines.inbox.kinds import contract as contract_kind
+
+    view = {"status": "legacy", "role": "player", "origin": "generated",
+            "sliders": {"temperament": 5, "sociability": 6, "confidence": 8, "openness": 5,
+                        "warmth": 6, "drive": 9},
+            "traits": ["proud", "direct"]}
+    cases = [
+        {
+            "id": "inbox_contract_counter_1",
+            "title": "Inbox CONTRACT: WR Marcus Hale counters a 3-year extension (CAR)",
+            "intent": "COUNTER",
+            "facts": {"player": "Marcus Hale", "team": "CAR", "position": "WR", "age": 26, "overall": 84,
+                      "years_left": 1, "eligible_reason": "Final contract year", "contract_kind": "EXTENSION",
+                      "decision": "COUNTER", "offer_id": 91,
+                      "years": 3, "total_value": 63000000, "bonus": 12000000, "guaranteed": 28000000,
+                      "counter": {"years": 4, "total_value": 88000000, "guaranteed": 42000000}},
+            "history": [
+                {"author": "COUNTERPART",
+                 "body": "I've been the guy on third down all year. I want to be paid like a starter."},
+                {"author": "JR", "body": "We value you. Three years, $63M total, $28M guaranteed."},
+            ],
+        },
+        {
+            "id": "inbox_contract_rejected_1",
+            "title": "Inbox CONTRACT: LB Dre Okonkwo rejects a 2-year offer (CAR)",
+            "intent": "REJECTED",
+            "facts": {"player": "Dre Okonkwo", "team": "CAR", "position": "LB", "age": 30, "overall": 78,
+                      "years_left": 1, "eligible_reason": "Final contract year", "contract_kind": "EXTENSION",
+                      "decision": "REJECT", "offer_id": 92,
+                      "years": 2, "total_value": 14000000, "bonus": 4000000, "guaranteed": 3000000},
+            "history": [
+                {"author": "COUNTERPART", "body": "I still start on this defense. Let's talk about my deal."},
+                {"author": "JR", "body": "Two years, $14M total, $3M guaranteed."},
+            ],
+        },
+    ]
+    out = []
+    for case in cases[:limit]:
+        thread = {"kind": "CONTRACT", "counterpart_type": "player", "counterpart_id": 4812,
+                  "counterpart_name": case["facts"]["player"], "actor_role": "GM", "team_id": 1,
+                  "subject": f"{case['facts']['player']}'s contract", "season": 2026, "week": 8}
+        prompt = voice.prompt(thread, case["intent"], case["facts"], case["history"], None, view,
+                              ask_appraisal, kind=contract_kind)
+        out.append(TaskInput(
+            id=case["id"], title=case["title"], task=task, prompt=prompt, facts=case["facts"],
+            metadata={"intent": case["intent"], "kind": "CONTRACT", "counterpart": "player",
+                      "appraisal_asked": ask_appraisal}))
+    return out
+
+
+def build_inbox_reply_inputs(season: int, week: int, limit: int = 5, cur=None) -> List[TaskInput]:
+    return _inbox_contract_inputs("inbox_reply", False, limit)
+
+
+def build_inbox_appraisal_inputs(season: int, week: int, limit: int = 5, cur=None) -> List[TaskInput]:
+    return _inbox_contract_inputs("inbox_appraisal", True, limit)
+
+
 INPUT_BUILDERS = {
     "agent_wire": build_agent_wire_inputs,
     "memory_takes": build_memory_takes_inputs,
@@ -830,6 +945,8 @@ INPUT_BUILDERS = {
     "gm_persona": build_gm_persona_inputs,
     "gm_rationale": build_gm_rationale_inputs,
     "gm_negotiation": build_gm_negotiation_inputs,
+    "inbox_reply": build_inbox_reply_inputs,
+    "inbox_appraisal": build_inbox_appraisal_inputs,
 }
 
 

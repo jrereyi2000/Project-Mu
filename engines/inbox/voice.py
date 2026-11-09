@@ -30,7 +30,8 @@ import time
 
 from engines.inbox import InboxError, appraisal as appraisal_mod, store
 
-INBOX_LLM_BUDGET_S = 8.0          # an estimate; the plan's spike (p50/p95 of make_llm("inbox")) sets it
+INBOX_LLM_BUDGET_S = 4.0          # P1-09 spike 2026-11-09: p50 1.99 s, p95 2.46 s, max 2.50 s
+                                  # (gemini-3.8-flash, filled CONTRACT prompt, Madden open)
 HISTORY_MESSAGES = 6
 NOTE_MAX_CHARS = 600
 NEUTRAL_VOICE = "plain and professional"

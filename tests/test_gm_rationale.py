@@ -38,6 +38,14 @@ def test_validator_rejects_invented_number_player_team():
     assert validate_rationale("", SHEET, LEAGUE) == (False, "empty")
 
 
+def test_dollar_amount_may_ground_against_a_plain_sheet_number():
+    # The inbox contract facts carry dollars as integers (88000000), not "$88.0M" strings
+    sheet = dict(SHEET, assets=[dict(SHEET["assets"][0], total_value=88000000, guaranteed=42000000)])
+    assert validate_rationale("Four years, $88M total, $42M guaranteed.", sheet, LEAGUE)[0]
+    assert validate_rationale("Four years, $95M total, $42M guaranteed.", sheet, LEAGUE) == \
+        (False, "amount $95M not on the sheet")
+
+
 def test_team_abbreviation_only_in_capitals():
     # "was" is not Washington, "no" is not New Orleans: an abbreviation counts only written in capitals
     league = {"players": set(), "teams": {"CAR", "PANTHERS", "CAROLINA", "WAS", "COMMANDERS", "WASHINGTON", "IND"}}

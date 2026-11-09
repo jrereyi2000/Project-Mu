@@ -4,7 +4,7 @@
 Uses mock providers to ensure ZERO real paid API calls.
 Tests:
 - CLI argument parsing
-- Input building across all 7 tasks (database read-only & synthetic fallback)
+- Input building across all 9 tasks (database read-only & synthetic fallback)
 - Model evaluation loop and metrics aggregation
 - Automatic validation checks (length, schema, hallucination numbers, domain guards)
 - HTML and JSON report generation
@@ -21,6 +21,8 @@ from tools.llm_compare import (
     TaskInput,
     build_agent_wire_inputs,
     build_gm_negotiation_inputs,
+    build_inbox_appraisal_inputs,
+    build_inbox_reply_inputs,
     build_gm_persona_inputs,
     build_gm_rationale_inputs,
     build_memory_summary_inputs,
@@ -41,6 +43,8 @@ from tools.llm_compare import (
     validate_gm_negotiation,
     validate_gm_persona,
     validate_gm_rationale,
+    validate_inbox_appraisal,
+    validate_inbox_reply,
     validate_memory_summary,
     validate_memory_takes,
     validate_output,
@@ -189,6 +193,17 @@ class TestInputBuilding:
         assert len(inputs) == 2
         assert inputs[0].task == "gm_negotiation"
         assert "teams" in inputs[0].facts
+
+    def test_synthetic_fallback_inbox(self):
+        reply = build_inbox_reply_inputs(season=2026, week=8, cur=None)
+        appraisal = build_inbox_appraisal_inputs(season=2026, week=8, cur=None)
+        assert [i.task for i in reply] == ["inbox_reply", "inbox_reply"]
+        assert [i.task for i in appraisal] == ["inbox_appraisal", "inbox_appraisal"]
+        assert "FACT SHEET" in reply[0].prompt and "Marcus Hale" in reply[0].prompt
+        assert '"appraisal"' not in reply[0].prompt
+        assert '"appraisal"' in appraisal[0].prompt
+        assert reply[0].metadata["intent"] == "COUNTER" and reply[1].metadata["intent"] == "REJECTED"
+        assert reply[0].facts["counter"]["total_value"] == 88000000
 
     def test_db_cursor_input_extraction(self):
         # Mock cursor for memory_takes
@@ -438,6 +453,35 @@ class TestValidationGuards:
         })
         passed, fails, _ = validate_gm_negotiation(bad_json, inp)
         assert passed is False
+
+    def test_inbox_reply(self):
+        inp = build_inbox_reply_inputs(season=2026, week=8, limit=1)[0]
+        good = json.dumps({"message": "I want to stay, but it takes four years, $88M total and $42M guaranteed."})
+        passed, fails, metrics = validate_inbox_reply(good, inp)
+        assert passed is True and metrics["words"] == 14
+
+        passed, fails, _ = validate_inbox_reply(json.dumps({"message": "Give me $95M and we are done."}), inp)
+        assert passed is False and any("inbox check" in f for f in fails)
+
+        passed, fails, _ = validate_inbox_reply("not json", inp)
+        assert passed is False
+
+    def test_inbox_appraisal(self):
+        inp = build_inbox_appraisal_inputs(season=2026, week=8, limit=1)[0]
+        good = json.dumps({
+            "message": "I want to stay, but the offer needs to be better.",
+            "appraisal": {"outcome": "mixed", "significance": "meaningful", "mistreated": False,
+                          "reason": "Firm but professional."},
+        })
+        passed, fails, metrics = validate_inbox_appraisal(good, inp)
+        assert passed is True and metrics["outcome"] == "mixed"
+
+        missing = json.dumps({"message": "I want to stay, but the offer needs to be better."})
+        passed, fails, _ = validate_inbox_appraisal(missing, inp)
+        assert passed is False and any("appraisal" in f for f in fails)
+
+    def test_inbox_tasks_are_registered(self):
+        assert "inbox_reply" in TASKS and "inbox_appraisal" in TASKS
 
 
 class TestModelEvaluationLoop:

@@ -286,7 +286,10 @@ def validate_rationale(text, sheet, league=None):
     nums, money_vals = _sheet_numbers(sheet)
     for m in MONEY_RE.finditer(text):
         d = _dollars(m)
-        if not any(abs(d - x) <= 0.051e6 for x in money_vals):
+        # A sheet may hold a dollar amount as a plain number (the inbox's contract facts do: 88000000),
+        # not only as a "$88.0M" string; either form grounds the amount.
+        if not any(abs(d - x) <= 0.051e6 for x in money_vals) \
+                and not any(abs(d - x) <= 0.051e6 for x in nums):
             return False, f"amount {m.group(0)} not on the sheet"
     m = EXPIRING_RE.search(text)
     if m and not any(a["kind"] == "player" and (a.get("years_left") or 99) <= 1 for a in sheet["assets"]):
