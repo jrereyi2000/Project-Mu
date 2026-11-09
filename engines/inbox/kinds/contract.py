@@ -247,6 +247,32 @@ def act(cur, thread, option_id, payload, note):
     return _result(intent, facts, engine_ref, decision == "ACCEPT", new_state, judge=True)
 
 
+# -------------------------------------------------------------------------------------------- the loop ---
+
+def loop_reply(cur, thread, intent, facts, llm, history=(), note=None):
+    """The player's own words in this contract talk (COACH_PLAYER_AGENT_LOOPS_PLAN §2.5), or None when the
+    player_loop feature is off or no engine decision was made yet (an opening message). The engine's decision is
+    the fact sheet's `decision`; its counter (the first clearing counter) stands under COUNTER_MIN, because the
+    kind keeps no full clearing set of its own."""
+    from engines.inbox import voice
+    from personality import features as pf
+    league_id = voice.loop_league_id(cur, thread)
+    if league_id is None or pf.mode(cur, league_id, 'player_loop') == 'off':
+        return None
+    decision = (facts or {}).get("decision")
+    if decision is None:
+        return None
+    from engines.agent_loops import player
+    loop_facts = dict(facts)
+    loop_facts["engine_status"] = decision
+    counter = loop_facts.get("counter")
+    if counter and not loop_facts.get("counters"):
+        loop_facts["counters"] = {"COUNTER_MIN": counter}
+    view = voice.persona_view(cur, "player", thread.get("counterpart_id"))
+    res = player.respond_inbox(cur, voice.loop_thread(thread), view, loop_facts, llm=llm)
+    return (res or {}).get("text") or None
+
+
 # ---------------------------------------------------------------------------------------------- template ---
 
 def _money(value):

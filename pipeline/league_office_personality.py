@@ -8,7 +8,13 @@ according to that feature's mode in the switchboard (`personality/features.py`),
   progression_weekly                          development_config / development_context, when development_learning
                                               is not off (PERSONALITY_DEVELOPMENT_COACHING_PLAN U3)
   chart_adjustments                           opportunity score adjustments for CPU staff charts, used only when
-                                              development_opportunity is active (shadow: computed and recorded)
+                                              development_opportunity is active (shadow: computed and recorded);
+                                              when coach_loop is shadow/active the coach loop chooses the chart first
+                                              (shadow records and returns the development baseline; active returns
+                                              the score adjustments that reproduce the chosen chart)
+  contract_inputs                             per-player contract inputs; when player_loop is not off each entry
+                                              carries a `counter_chooser` (the player loop picks the clearing counter:
+                                              shadow records and keeps the engine's, active uses the loop's)
   retirement_decision                         the retirement policy's keep / retire for players Madden retired
                                               (PERSONALITY_RETIREMENT_PLAN); never retires an active player
   cpu_offers                                  each CPU team's owner spending knobs (owner_spending;
@@ -43,16 +49,77 @@ from pipeline import league_office as lo
 
 CONTRACT_FEATURES = ('contracts_ambition', 'contracts_relationships')
 OWNER_FEATURES = ('owner_spending', 'owner_meddling')
+LOOP_FEATURES = ('coach_loop', 'player_loop')
 LEAGUE_OFFICE_FEATURES = CONTRACT_FEATURES + ('development_learning', 'development_opportunity', 'retirement') + \
-    OWNER_FEATURES
+    LOOP_FEATURES + OWNER_FEATURES
 ORDER = {m: i for i, m in enumerate(pf.MODES)}
 YOUTH_MAX_AGE, VETERAN_MIN_AGE = 24, 30        # cohort labels for opportunity candidates (the coaching plan's cohorts)
 OFFSEASON_TICK = 24                             # a free-agency stage without a week: the first offseason tick
+COACH_CLOSE_WINDOW = 1.0        # close_window when development_opportunity has no positive close_score_window
+# The loop's attachment weight (0..1) from the contract context's earned tier: a loop-only weighting.
+ATTACHMENT_SHARE = {'none': 0.0, 'weak': 1.0 / 3.0, 'established': 2.0 / 3.0, 'strong': 1.0, 'unknown': 0.0}
 
 
 def _fields(cls, data, drop=('mode', 'version')):
     names = set(getattr(cls, '__dataclass_fields__', {}))
     return {k: v for k, v in (data or {}).items() if k in names and k not in drop}
+
+
+def chart_candidates(roster, scheme, injuries):
+    """Opportunity candidates for one CPU chart, exactly as LiveFeatures.chart_adjustments builds them."""
+    from engines import depth_chart_engine as dce
+    out = []
+    for p in roster:
+        age = p.get('age') or 0
+        cohort = 'youth' if age and age <= YOUTH_MAX_AGE else 'veteran' if age >= VETERAN_MIN_AGE else 'other'
+        for slot in dce.POSITION_SLOTS:
+            score = dce.slot_score(p, slot, scheme)
+            if score is None:
+                continue
+            out.append({'player_id': p['player_id'], 'slot': slot, 'neutral_score': score,
+                        'eligible': True, 'out': dce.is_out(p['player_id'], injuries), 'cohort': cohort,
+                        'cohort_weight': 1.0})
+    return out
+
+
+def swap_adjustments(option):
+    """Score adjustments that reproduce a chosen SWAP chart option: +gap on the promoted man, -gap on the demoted
+    one at the slot (gap = the option's neutral-score gap, +0.01 to break the tie; each clamped to the engine's
+    MAX_SCORE_ADJUSTMENT)."""
+    from engines import depth_chart_engine as dce
+    d = (option or {}).get('detail') or {}
+    if not d:
+        return None
+    delta = min(abs(float(d.get('gap') or 0.0)) + 0.01, dce.MAX_SCORE_ADJUSTMENT)
+    return {d['slot']: {d['promote']: delta, d['demote']: -delta}}
+
+
+def _player_id(player):
+    return ((player or {}).get('id') if (player or {}).get('id') is not None
+            else (player or {}).get('player_id'))
+
+
+def attachment_share(context, team_id):
+    """0..1 earned attachment to the offering team from context v1's tier, or None when it isn't known."""
+    rec = (((context or {}).get('teams') or {}).get(team_id))
+    if not isinstance(rec, dict):
+        return None
+    return ATTACHMENT_SHARE.get(rec.get('attachment'))
+
+
+class _LoopLLM:
+    """The loop model, built on first use (never when the loops are off)."""
+
+    def __init__(self):
+        self._built = False
+        self._llm = None
+
+    def get(self):
+        if not self._built:
+            from engines.agent_loops import base
+            self._llm = base.make_loop_llm()
+            self._built = True
+        return self._llm
 
 
 def contract_policy(snapshot, *, counterfactual=False):
@@ -174,29 +241,23 @@ class LiveFeatures:
     def chart_adjustments(self, cur, league_id, row, *, team_id, season, week, roster, scheme, injuries):
         """The coaching policy's result {adjustments, shadow_adjustments?, reasons} for one CPU chart, computed as
         enabled (the caller decides whether it is used)."""
-        from engines import depth_chart_engine as dce
         from engines import personality_coaching as pc
-        from personality import core, store
         universe = self._universe_or_fail(cur, league_id)
         config = pc.CoachingConfig.from_dict(dict(_fields(pc.CoachingConfig, row.get('config')),
                                                   version=row.get('version') or '', mode='enabled'))
-        hc = self.head_coach(cur, team_id, season)
-        view = None
-        if hc is not None:
-            ident = store.resolve_alias(cur, universe['universe_id'], 'coach', 'db-coach', str(hc))
-            view = core.feature_view(None if ident is None else store.read(cur, ident), 'coaching')
-        candidates = []
-        for p in roster:
-            age = p.get('age') or 0
-            cohort = 'youth' if age and age <= YOUTH_MAX_AGE else 'veteran' if age >= VETERAN_MIN_AGE else 'other'
-            for slot in dce.POSITION_SLOTS:
-                score = dce.slot_score(p, slot, scheme)
-                if score is None:
-                    continue
-                candidates.append({'player_id': p['player_id'], 'slot': slot, 'neutral_score': score,
-                                   'eligible': True, 'out': dce.is_out(p['player_id'], injuries), 'cohort': cohort,
-                                   'cohort_weight': 1.0})
+        view = self.coach_view(cur, league_id, team_id, season)
+        candidates = chart_candidates(roster, scheme, injuries)
         return pc.opportunity_adjustments(candidates=candidates, coach_view=view, config=config)
+
+    def coach_view(self, cur, league_id, team_id, season):
+        """The head coach's coaching feature view (the same resolution chart_adjustments uses), or None."""
+        from personality import core, store
+        universe = self._universe_or_fail(cur, league_id)
+        hc = self.head_coach(cur, team_id, season)
+        if hc is None:
+            return None
+        ident = store.resolve_alias(cur, universe['universe_id'], 'coach', 'db-coach', str(hc))
+        return core.feature_view(None if ident is None else store.read(cur, ident), 'coaching')
 
     # -- owners
     def owner_views(self, cur, exclude=()):
@@ -325,32 +386,84 @@ class PersonalityDeps(lo.Deps):
         return adj
 
     # -- contracts
+    def _contract_hook(self):
+        """(receipt feature, combined mode): the contract policy's mode or the player loop's, whichever is higher."""
+        contract, loop = self.contract_mode(), self.mode('player_loop')
+        return ('contracts' if contract != 'off' else 'player_loop'), max(contract, loop, key=ORDER.get)
+
     def _contract_inputs(self, cur, players, stage):
         policy = contract_policy(self.modes_snapshot, counterfactual=self.contract_mode() == 'shadow')
         s = self.stage
-        return self.features.contract_inputs(cur, self.league_id, policy, stage=stage, season=s['season'],
-                                             week=s['week'], players=players, batch_id=self.batch_id())
+        inputs = self.features.contract_inputs(cur, self.league_id, policy, stage=stage, season=s['season'],
+                                               week=s['week'], players=players, batch_id=self.batch_id())
+        loop_mode = self.mode('player_loop')
+        if loop_mode == 'off' or not inputs:
+            return inputs
+        llm = _LoopLLM()
+        out = {}
+        for pid, entry in inputs.items():
+            row = dict(entry or {})
+            row['counter_chooser'] = self._counter_chooser(cur, row, loop_mode, llm)
+            out[pid] = row
+        return out
+
+    def _counter_chooser(self, cur, entry, mode, llm):
+        """The player loop's chooser for one player's CPU contract counters (COACH_PLAYER_AGENT_LOOPS_PLAN §2.5)."""
+        from engines.agent_loops import base
+        from engines.agent_loops import player as player_loop
+        view, context = entry.get('view'), entry.get('context') or {}
+        stage = self.stage
+        week = stage.get('week')
+        tick = week if isinstance(week, int) and not isinstance(week, bool) and 1 <= week <= 32 else OFFSEASON_TICK
+        season = stage.get('season')
+
+        def chooser(offer, player, team, market, bar, accepts):
+            team = team or {}
+            team_id = team.get('team_id') or (offer or {}).get('team_id')
+            ctx = {'league_id': self.league_id, 'season': season, 'tick': tick, 'player': player, 'team': team,
+                   'market': market, 'bar': bar, 'accepts': False, 'store': base.SqlStore(cur),
+                   'attachment': attachment_share(context, team_id), 'marquee_floor': None}
+            name = team.get('name') or team.get('abbr')
+            if name:
+                ctx['team_name'] = name
+            try:
+                res = player_loop.respond_contract(cur, view, offer, ctx, llm=llm.get(), seen=False)
+            except Exception as e:      # noqa: BLE001 - shadow never fails the write
+                if mode == 'active':
+                    raise
+                self.record('player_loop', mode, 'error', what=f'contract:{_player_id(player)}',
+                            error=f'{type(e).__name__}: {e}')
+                return None
+            self.record('player_loop', mode, 'recorded' if mode == 'shadow' else 'applied',
+                        what=f'contract:{_player_id(player)}', outcome=res.get('status'),
+                        counter=res.get('counter'))
+            return res.get('counter') if mode == 'active' and res.get('status') == 'COUNTER' else None
+
+        return chooser
 
     def resign_decisions(self, cur, season, seed):
         from engines import transactions_engine as te
         base = lambda: super(PersonalityDeps, self).resign_decisions(cur, season, seed)     # noqa: E731
         adj = lambda: te.resign_decisions(cur, season, seed,                                 # noqa: E731
                                           contract_inputs=self._contract_inputs(cur, None, lo.RESIGN))
-        return self._dual('contracts', self.contract_mode(), 'resign', base, adj)
+        feature, mode = self._contract_hook()
+        return self._dual(feature, mode, 'resign', base, adj)
 
     def run_wave(self, players, offers, wave, seed):
         from engines import free_agency_engine as fae
         base = lambda: super(PersonalityDeps, self).run_wave(players, offers, wave, seed)    # noqa: E731
         adj = lambda: fae.run_wave(players, offers, wave, seed,                              # noqa: E731
                                    contract_inputs=self._contract_inputs(self.cur, players, lo.FREE_AGENCY))
-        return self._dual('contracts', self.contract_mode(), f'free_agency:{wave}', base, adj)
+        feature, mode = self._contract_hook()
+        return self._dual(feature, mode, f'free_agency:{wave}', base, adj)
 
     def udfa_market(self, prospects, needs, seed):
         from engines import free_agency_engine as fae
         base = lambda: super(PersonalityDeps, self).udfa_market(prospects, needs, seed)      # noqa: E731
         adj = lambda: fae.udfa_market(prospects, needs, seed,                                # noqa: E731
                                       contract_inputs=self._contract_inputs(self.cur, prospects, lo.UDFA))
-        return self._dual('contracts', self.contract_mode(), 'udfa', base, adj)
+        feature, mode = self._contract_hook()
+        return self._dual(feature, mode, 'udfa', base, adj)
 
     # -- development learning (not run twice: the development policy's own shadow mode records the comparison)
     def progression_weekly(self, cur, season, week, snapshot, source_fingerprint):
@@ -377,8 +490,9 @@ class PersonalityDeps(lo.Deps):
                     players=len(inputs), config_version=config.version)
         return prepared
 
-    # -- depth-chart opportunities
-    def chart_adjustments(self, cur, team_id, season, week, roster=None, scheme=None, injuries=None):
+    # -- depth-chart opportunities and the coach loop
+    def _dev_chart_adjustments(self, cur, team_id, season, week, roster, scheme, injuries):
+        """Today's development_opportunity result (the coach loop off path, byte for byte)."""
         mode = self.mode('development_opportunity')
         if mode == 'off' or not roster:
             return None
@@ -391,6 +505,56 @@ class PersonalityDeps(lo.Deps):
 
         adj = self._dual('development_opportunity', mode, f'chart:{team_id}', lambda: None, compute)
         return adj or None
+
+    def _coach_chart(self, cur, team_id, season, week, roster, scheme, injuries):
+        """Run the coach loop for one chart: build the neutral chart and candidates, choose, return
+        {chart, decision} (choose_chart records the decision)."""
+        from engines import depth_chart_engine as dce
+        from engines.agent_loops import base, coach
+        candidates = chart_candidates(roster, scheme, injuries)
+        neutral = dce.staff_depth_chart(roster, scheme, injuries)
+        close_window = COACH_CLOSE_WINDOW
+        cfg = (self.row('development_opportunity').get('config') or {})
+        value = cfg.get('close_score_window')
+        if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0:
+            close_window = float(value)
+        options = coach.chart_options(neutral, candidates, close_window, scheme=scheme)
+        store = base.SqlStore(cur)
+        promises = coach.open_promises(store, self.league_id, season, team_id=team_id)
+        view = self.features.coach_view(cur, self.league_id, team_id, season)
+        tick = week if isinstance(week, int) and not isinstance(week, bool) and 1 <= week <= 32 else OFFSEASON_TICK
+        return coach.choose_chart(cur, team_id, season, tick, view, options, llm=base.make_loop_llm(),
+                                  league_id=self.league_id, neutral_chart=neutral, candidates=candidates,
+                                  close_window=close_window, open_promises=promises, store=store)
+
+    def chart_adjustments(self, cur, team_id, season, week, roster=None, scheme=None, injuries=None):
+        dev_mode, loop_mode = self.mode('development_opportunity'), self.mode('coach_loop')
+        if not roster or (dev_mode == 'off' and loop_mode == 'off'):
+            return None
+        scheme, injuries = scheme or {}, injuries or {}
+
+        def dev_baseline():
+            return self._dev_chart_adjustments(cur, team_id, season, week, roster, scheme, injuries)
+
+        if loop_mode == 'off':
+            return dev_baseline()
+        if loop_mode == 'shadow':
+            baseline = dev_baseline()
+            try:
+                res = self._coach_chart(cur, team_id, season, week, roster, scheme, injuries)
+            except Exception as e:      # noqa: BLE001 - shadow never fails the write
+                self.record('coach_loop', loop_mode, 'error', what=f'chart:{team_id}',
+                            error=f'{type(e).__name__}: {e}')
+                return baseline
+            self.record('coach_loop', loop_mode, 'recorded', what=f'chart:{team_id}', baseline=baseline,
+                        chosen=res['decision']['chosen_key'], subject=res['decision']['subject_key'])
+            return baseline
+        res = self._coach_chart(cur, team_id, season, week, roster, scheme, injuries)
+        decision = res['decision']
+        out = dev_baseline() if decision['chosen_key'] == 'NEUTRAL' else swap_adjustments(decision['option'])
+        self.record('coach_loop', loop_mode, 'applied', what=f'chart:{team_id}', chosen=decision['chosen_key'],
+                    subject=decision['subject_key'], adjustments=out)
+        return out
 
     # -- owners (OWNERS_SCOUTS_VOTERS_PLAN §2.3, U5)
     def _owner_views(self, cur):

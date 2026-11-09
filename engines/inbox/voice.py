@@ -11,6 +11,8 @@ used, and a template reply carries no appraisal (no model, no appraisal).
   persona_view(cur, counterpart_type, counterpart_id) -> view     feature_view(profile, 'inbox'); missing -> neutral;
                                                                    GMs and writers fall back to persona_sliders/traits
   compose(cur, kind, thread, intent, facts, history, ...) -> Reply(text, source, appraisal, data)
+        The kind's optional loop_reply(cur, thread, intent, facts, llm, history, note) is asked first when an llm
+        is present; non-empty words are the reply (source LLM, no appraisal), else the voice below speaks.
   write(...) -> (text, 'LLM' | 'TEMPLATE', appraisal | None)       compose without the extra JSON keys
   exchange(cur, kind, thread_id, option_id, payload, note, ...) -> thread    one JR turn, in §2.4's order:
         act -> JR's line -> the counterpart's reply -> the relationship event (outbox)
@@ -112,6 +114,38 @@ def _universe_id():
         return (entry or {}).get("universe_id")
     except Exception:
         return None
+
+
+def loop_league_id(cur, thread=None):
+    """The league the agent loops key their switchboard on: a thread's own league_id, else
+    league_state.madden_league_id, else the active franchise registry's key, else None."""
+    lid = (thread or {}).get("league_id")
+    if isinstance(lid, int) and not isinstance(lid, bool):
+        return lid
+    if isinstance(lid, str) and lid.strip().lstrip("-").isdigit():
+        return int(lid)
+    try:
+        with appraisal_mod._savepoint(cur):
+            cur.execute("SELECT madden_league_id FROM league_state WHERE id = 1")
+            row = cur.fetchone()
+            if row and row[0] is not None:
+                return int(row[0])
+    except Exception:          # no league_state, or a database without the column
+        pass
+    try:
+        from db.franchises import active_entry
+        key, _entry = active_entry()
+        return int(key) if key is not None else None
+    except Exception:
+        return None
+
+
+def loop_thread(thread):
+    """A copy of the thread with a tick the loop can record at when the thread has no week (offseason)."""
+    out = dict(thread or {})
+    if out.get("week") is None and out.get("tick") is None:
+        out["tick"] = 24
+    return out
 
 
 def _regclass(cur, table):
@@ -299,6 +333,15 @@ def compose(cur, kind, thread, intent, facts, history=(), note=None, llm=None, b
     started = time.monotonic()
     if llm is None:
         return Reply(_template(kind, intent, facts), "TEMPLATE")
+    hook = getattr(kind, "loop_reply", None)
+    if callable(hook):
+        try:
+            words = hook(cur, thread, intent, facts, llm, history, note)
+        except Exception as e:      # noqa: BLE001 - the inbox always answers; the voice is the fallback
+            print(f"[inbox] {thread.get('kind')} player loop failed, using the voice: {e}", flush=True)
+            words = None
+        if words and str(words).strip():
+            return Reply(str(words).strip(), "LLM")
     if view is None:
         view = persona_view(cur, thread.get("counterpart_type"), thread.get("counterpart_id"))
     ask = bool(judge) and thread.get("counterpart_type") in appraisal_mod.ROLE_ALIAS and appraisal_mod.allowed(view)
