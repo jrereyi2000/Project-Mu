@@ -129,7 +129,7 @@ def _post_time(ctx: dict, a: dict, parent_time: dt.datetime = None) -> dt.dateti
     if kind == "COMPARISON":
         return _between(rng, tue + dt.timedelta(hours=9), this_thu + dt.timedelta(hours=20))
     if kind in ("TEAM_STORY", "MOVE_NEWS", "BEAT_MOVE", "MOVE_REACTION", "CAP_TAKE", "TRADE_NEWS", "TRADE_REACTION",
-                "TRADE_RUMOR"):                       # Monday morning – Wednesday evening
+                "TRADE_RUMOR", "PLAYER_STATEMENT"):   # Monday morning – Wednesday evening
         return _between(rng, tue - dt.timedelta(hours=15), tue + dt.timedelta(days=1, hours=20))
     if kind == "STANDINGS":
         return _between(rng, tue + dt.timedelta(hours=10), tue + dt.timedelta(hours=22))

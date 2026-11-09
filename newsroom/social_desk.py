@@ -23,6 +23,7 @@ import random
 import re
 import zlib
 
+from engines.agent_loops.player import LEAK_MAX_PER_WEEK, statement_text
 from engines.game_script_engine import script_summary
 from newsroom.fantasy_desk import fantasy_phase
 from newsroom.roster_moves import TRADE_DEADLINE_WEEK
@@ -38,7 +39,7 @@ MIX_KINDS = ("PERFORMANCE", "BAD_GAME", "COMPARISON", "TEAM_STORY", "STANDINGS",
              "PICKS", "HOT_TAKE", "AWARD_RACE", "POWER_TAKE", "QUESTION", "SEASON_CALL", "LIVE_MOMENT",
              "QUARTER_UPDATE", "TRADE_IDEA", "DRAFT_POSITION")
 EVENT_KINDS = ("SHARE", "REACTION", "BEAT", "TRADE_NEWS", "TRADE_RUMOR", "MOVE_NEWS", "CAP_TAKE", "TRADE_REACTION",
-               "MOVE_REACTION", "INJURY_SHOCK", "DRAFT_BOARD")
+               "MOVE_REACTION", "INJURY_SHOCK", "DRAFT_BOARD", "PLAYER_STATEMENT")
 # Season calls (graded at season's end): the preseason (Week 1 publication), midseason and trade-deadline weeks.
 SEASON_CALL_WEEKS = {1: "preseason", 9: "midseason", TRADE_DEADLINE_WEEK: "trade deadline"}
 SEASON_CALL_TYPES = ("MVP", "SUPER_BOWL", "OPOY", "DPOY", "ROY", "PLAYOFF_TEAM", "COACH_FIRED")
@@ -226,6 +227,7 @@ WINDOWS = {
     "TRADE_NEWS": "Mon – Wed",
     "TRADE_REACTION": "Mon – Wed",
     "TRADE_RUMOR": "Mon – Wed",
+    "PLAYER_STATEMENT": "Mon – Wed",
     "DRAFT_BOARD": "Tue – Thu",
     "PICKS": "Wed – Sat, before kickoff",
     "HOT_TAKE": "Mon – Thu",
@@ -401,6 +403,7 @@ def load_week_context(cur, season: int, week: int) -> dict:
     ctx["injuries_by_team"] = injs_by_team
     ctx["moves"], ctx["team_caps"] = load_moves(cur, season, week)
     ctx["trades"], ctx["rumors"] = load_trades(cur, season, week)
+    ctx["player_statements"] = load_player_statements(cur, season, week)
     ctx["draft_movers"] = load_draft_movers(cur, season, week)
     # Each recap game's canonical story (engines/game_script_engine.py, §2.14), read or built here
     from engines.game_script_engine import ensure_script
@@ -645,6 +648,44 @@ def load_trades(cur, season: int, week: int) -> tuple:
                         "fresh": bool(r.get("insider_key")) and r["week"] == week - 1})
         out_r.append(row)
     return out_t, out_r
+
+
+def load_player_statements(cur, season: int, week: int) -> list:
+    """The week's public player statements (COACH_PLAYER_AGENT_LOOPS_PLAN §2.5): public `LEAK` decisions from
+    `engines.agent_loops.player` for the publication week's news window — the recap week (`week - 1`) and the
+    publication week itself, plus the offseason tick 24 when the recap week is before Week 1. At most
+    `LEAK_MAX_PER_WEEK`, ordered by (tick, subject_key). Each item carries only what the recorded row holds: the
+    player's name, position, team, statement text, player_id and the row's season/tick (plus `offered`/`asked`
+    when the row has them). A row with no model text uses the player loop's figure-free template, never invented
+    words. `[]` when the table is missing."""
+    cur.execute("SELECT to_regclass('agent_loop_decisions') IS NOT NULL")
+    found = cur.fetchone()
+    if not found or not found[0]:
+        return []
+    ticks = sorted({t for t in (week - 1, week) if t >= 1})
+    if week - 1 < 1:
+        ticks.append(24)                    # the offseason edition's tick
+    cur.execute("""/* desk:player_statements */
+        SELECT season, tick, subject_key, text, facts FROM agent_loop_decisions
+        WHERE kind = 'LEAK' AND visibility = 'public' AND season = %s AND tick = ANY(%s)
+        ORDER BY tick, subject_key
+        LIMIT %s""", (season, ticks, LEAK_MAX_PER_WEEK))
+    out = []
+    for s, tick, _subject_key, text, facts in cur.fetchall()[:LEAK_MAX_PER_WEEK]:
+        if isinstance(facts, str):
+            facts = json.loads(facts)
+        facts = facts or {}
+        pid, name = facts.get("player_id"), facts.get("player")
+        if pid is None or not name:
+            continue                        # malformed row: no player to post about
+        statement = (text or "").strip() or statement_text(facts)
+        item = {"player_id": pid, "name": name, "position": facts.get("position"), "team": facts.get("team"),
+                "statement": statement, "season": int(s), "tick": int(tick)}
+        for k in ("offered", "asked"):
+            if facts.get(k):
+                item[k] = facts[k]
+        out.append(item)
+    return out[:LEAK_MAX_PER_WEEK]
 
 
 def load_record_book(cur, season: int):
@@ -1962,6 +2003,19 @@ def _assignment(kind, account, subject, facts, filed_team=None, angle=None, focu
     }
 
 
+def _team_id_by_label(teams, label):
+    """A recorded team name/abbreviation -> its team id against ctx["teams"] (None when unknown)."""
+    if label is None:
+        return None
+    wanted = " ".join(str(label).lower().split())
+    for tid, team in teams.items():
+        names = {str(team.get(k) or "").lower() for k in ("name", "abbr")}
+        names.add(" ".join(f"{team.get('city') or ''} {team.get('name') or ''}".lower().split()))
+        if wanted in names:
+            return tid
+    return None
+
+
 def _fill_subjects_and_focus(assignments, ctx):
     """Game subjects get both teams; an assignment without a focus takes its packet's lead fact; a writer with a
     strong relationship (|trust| >= STRONG_TRUST) to one of the post's subjects gets that bias as its angle."""
@@ -2083,6 +2137,7 @@ def event_counts(ctx, W=None) -> dict:
         "INJURY_SHOCK": min(2, sum(1 for i in ctx.get("injuries") or [] if i.get("is_key_injury"))),
         "DRAFT_BOARD": len(draft_board_subjects(ctx.get("draft_movers") or {},
                                                 DRAFT_BOARD_POSTS["late" if postseason else "regular"])),
+        "PLAYER_STATEMENT": min(len(ctx.get("player_statements") or []), LEAK_MAX_PER_WEEK),
     }
     return {k: v for k, v in out.items() if v}
 
@@ -2648,7 +2703,8 @@ def expected_articles(week: int) -> list:
     return out
 
 
-PLAN_BUCKETS = ("SHARE", "MOVES", "REACTION", "PERFORMANCE", "BAD_GAME", "COMPARISON", "TEAM_STORY", "LIVE", "PLAYER",
+PLAN_BUCKETS = ("SHARE", "MOVES", "PLAYER_STATEMENT", "REACTION", "PERFORMANCE", "BAD_GAME", "COMPARISON", "TEAM_STORY",
+                "LIVE", "PLAYER",
                 "BEAT", "STANDINGS", "TOPICS", "PICKS", "SEASON_CALL", "TRADE_IDEA", "DRAFT_POSITION", "PREVIEW", "MEME",
                 "REPLY")
 REPLY_MAX = 20                # sum of REPLY_SPREAD: replies plan_replies can place
@@ -2724,6 +2780,27 @@ def plan_social_week(ctx: dict, use_expected_articles: bool = False, seed=None) 
         plan["MOVES"].append(_assignment("TRADE_RUMOR", account, {"type": "rumor", "id": r["id"], "team_id": a,
                                                                    "label": f"{W.teams[a]['abbr']}-{W.teams[b]['abbr']} trade talks"},
                                          W.rumor_facts(r), filed_team=a, subjects=[{"type": "team", "id": x} for x in r["teams"]]))
+    # 3c. Player statements (COACH_PLAYER_AGENT_LOOPS_PLAN §2.5): the week's public contract leaks, one post each,
+    # capped at LEAK_MAX_PER_WEEK. An insider reports it; a pundit when no insider is left under the cap. The facts
+    # are the recorded statement only ("a statement, not a signing"; no new figures, no trade or deal claim).
+    for stmt in (ctx.get("player_statements") or [])[:LEAK_MAX_PER_WEEK]:
+        account = acc.insider() or acc.pundit()
+        if not account:
+            continue
+        tid = _team_id_by_label(W.teams, stmt.get("team"))
+        pos, team_label = stmt.get("position") or "", stmt.get("team") or ""
+        label = f"{stmt['name']} ({pos}, {team_label})" if pos else f"{stmt['name']} ({team_label})"
+        facts = {"player": stmt["name"], "position": pos or None, "team": stmt.get("team"),
+                 "statement": stmt["statement"],
+                 "grounding": "A STATEMENT, not a signing: he said he wants a deal. Never say a deal was made, "
+                              "agreed or signed, and use only the figures the statement itself contains."}
+        for k in ("offered", "asked"):
+            if stmt.get(k):
+                facts[k] = stmt[k]
+        plan["PLAYER_STATEMENT"].append(_assignment(
+            "PLAYER_STATEMENT", account, {"type": "player", "id": stmt.get("player_id"), "team_id": tid,
+                                          "label": label},
+            facts, filed_team=tid, focus=[stmt["statement"]]))
     for m in W.notable_moves()[:MOVE_NEWS_MAX]:
         account = acc.insider()
         if not account:
