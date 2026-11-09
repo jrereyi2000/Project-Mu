@@ -236,6 +236,10 @@ def test_last_question_is_answered_then_closes(cur):
     assert all(r.intent.startswith("ANSWER_") for r in results), [r.intent for r in results]
     last = results[-1]
     assert last.close and last.engine_ref["summary_grade"] is not None
+    # the scout's closing memo is still written, appended to the final answer
+    assert last.facts["summary"] and "fold this into the next report" in last.facts["summary"]
+    assert prospect.template(last.intent, last.facts).endswith(last.facts["summary"])
+    assert {"summary_grade", "best", "worst"} <= set(last.facts)
     cur.execute("SELECT turns, summary_grade, status FROM scout_interviews WHERE id = %s", (interview["id"],))
     turns, summary_grade, status = cur.fetchone()
     assert len(turns) == 4 and summary_grade is not None and status == "CLOSED"

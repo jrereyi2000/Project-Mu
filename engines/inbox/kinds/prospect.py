@@ -135,10 +135,12 @@ def _ask(cur, thread, interview, topic=None, text=None):
     turn = result["turn"]
     engine_ref = {"interview_id": interview["id"], "topic": turn["topic"], "grade": turn["grade"],
                   "classified_by": turn["classified_by"]}
-    if result["questions_left"] <= 0:               # the last question still gets its answer, then the thread closes
+    if result["questions_left"] <= 0:               # the last question gets its answer, then the scout's memo
         summary = si.close(cur, interview["id"])
+        facts = dict(result["facts"], summary=si.summary_template(summary),
+                     **{k: summary.get(k) for k in ("summary_grade", "best", "worst")})
         engine_ref["summary_grade"] = summary.get("summary_grade")
-        return ActResult(facts=result["facts"], intent=f"ANSWER_{turn['grade']}", engine_ref=engine_ref,
+        return ActResult(facts=facts, intent=f"ANSWER_{turn['grade']}", engine_ref=engine_ref,
                          close=True, judge=False)
     return ActResult(facts=result["facts"], intent=f"ANSWER_{turn['grade']}", engine_ref=engine_ref)
 
@@ -174,7 +176,10 @@ def template(intent, facts):
         return _greeting(facts)
     if intent == "SUMMARY":
         return si.summary_template(facts)
-    return si.answer_template(facts)
+    text = si.answer_template(facts)
+    if facts.get("summary"):                     # the last answer carries the scout's closing memo as well
+        text = f"{text} {facts['summary']}"
+    return text
 
 
 def _greeting(facts):
