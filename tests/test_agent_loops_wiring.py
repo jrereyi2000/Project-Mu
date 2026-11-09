@@ -80,8 +80,8 @@ class ContractFeatures:
 
     def contract_inputs(self, cur, league_id, policy, *, stage, season, week, players, batch_id):
         self.calls.append(('inputs', stage, policy))
-        return {p['id']: {'view': view_for(p['id'], self.traits), 'context': {}, 'policy': policy}
-                for p in (players or [])}
+        ids = [1] if players is None else [p.get('id', p.get('player_id')) for p in players]
+        return {pid: {'view': view_for(pid, self.traits), 'context': {}, 'policy': policy} for pid in ids}
 
     def chart_adjustments(self, *a, **k):
         return {'adjustments': {}, 'reasons': []}
@@ -90,9 +90,29 @@ class ContractFeatures:
         return None
 
 
-def deps(**modes):
+class ContractCursor:
+    """player_contracts for the marquee-floor read (the to_regclass check, then the ACTIVE season query)."""
+
+    def __init__(self, rows=None, has_table=True, fail=False):
+        self.rows, self.has_table, self.fail = list(rows or []), has_table, fail
+        self.queries, self._row = [], None
+
+    def execute(self, sql, params=()):
+        self.queries.append((sql, params))
+        if self.fail:
+            raise RuntimeError('contracts unreadable')
+        self._row = (self.has_table,) if 'to_regclass' in sql else None
+
+    def fetchone(self):
+        return self._row
+
+    def fetchall(self):
+        return self.rows
+
+
+def deps(cur=None, **modes):
     features = modes.pop('features', None)
-    return lop.PersonalityDeps(None, LEAGUE, snap_modes(**modes), features)
+    return lop.PersonalityDeps(cur, LEAGUE, snap_modes(**modes), features)
 
 
 def counter_case():
@@ -269,6 +289,124 @@ def test_failed_player_loop_never_fails_a_shadow_write(monkeypatch, memory):
     out = d.run_wave([p], [offer], 1, 's')[0]
     assert (out['status'], out['counter']) == (baseline['status'], baseline['counter'])
     assert any(r['feature'] == 'player_loop' and r['status'] == 'error' for r in d.receipts)
+
+
+# --------------------------------------------------------------------- CPU contract marquee floor ---
+def test_marquee_floor_is_the_50th_highest_active_contract_aav():
+    cur = ContractCursor([(i * 2, 2) for i in range(1, 61)])     # AAV = total_value / length = 1..60
+    d = deps(features=ContractFeatures())
+    assert d._marquee_floor(cur, SEASON) == 11                   # the 50th-highest
+    assert d._marquee_floor(cur, SEASON) == 11                   # cached per deps/season
+    sql = [q for q, _ in cur.queries]
+    assert any('to_regclass' in q for q in sql) and any("status = 'ACTIVE'" in q for q in sql)
+    assert cur.queries[-1][1] == (SEASON,)
+    assert len(cur.queries) == 2                                 # one table check + one read, then the cache
+
+
+@pytest.mark.parametrize('cur', [ContractCursor(has_table=False), ContractCursor([]), ContractCursor(fail=True)])
+def test_marquee_floor_is_none_without_usable_contracts(cur):
+    d = deps(features=ContractFeatures())
+    assert d._marquee_floor(cur, SEASON) is None
+
+
+def test_a_top_50_ask_is_marquee_and_uses_the_model_within_the_budget(memory, monkeypatch):
+    cur = ContractCursor([(2_000_000, 2)] * 60)                  # floor $1M; the ask's AAV is far above it
+    llm = FakeLLM('{"choice": "COUNTER_HARD", "message": "I want more."}')
+    monkeypatch.setattr(base, 'make_loop_llm', lambda **kw: llm)
+    contexts, real = [], player_loop.respond_contract
+
+    def spy(c, view, offer, ctx, *, llm, seen=False):
+        contexts.append(dict(ctx))
+        return real(c, view, offer, ctx, llm=llm, seen=seen)
+
+    monkeypatch.setattr(player_loop, 'respond_contract', spy)
+    p, offer = counter_case()
+    d = deps(cur=cur, player_loop='active', features=ContractFeatures())
+    d.begin_stage('FREE_AGENCY', SEASON, 25, 1, 'seed')
+    out = d.run_wave([p], [offer], 1, 's')[0]
+    assert contexts[0]['marquee_floor'] == 1_000_000
+    assert len(llm.calls) == 1 and out['status'] == 'COUNTER'
+    row = memory.find(LEAGUE, SEASON, 'CONTRACT')[0]
+    hard = next(o for o in row['options'] if o['key'] == 'COUNTER_HARD')['detail']['counter']
+    assert row['choice_source'] == 'MODEL' and row['chosen_key'] == 'COUNTER_HARD'
+    assert out['counter'] == hard                                # the model's marquee choice is the one applied
+    assert memory.count_model(LEAGUE, SEASON, row['tick']) == 1 < base.MARQUEE_PER_WEEK
+
+
+def test_an_ask_below_the_floor_stays_policy_only(memory, monkeypatch):
+    cur = ContractCursor([(10_000_000_000, 1)] * 60)             # a $10B floor: no ask reaches it
+    llm = FakeLLM('{"choice": "REJECT", "message": "No."}')
+    monkeypatch.setattr(base, 'make_loop_llm', lambda **kw: llm)
+    p, offer = counter_case()
+    d = deps(cur=cur, player_loop='active', features=ContractFeatures())
+    d.begin_stage('FREE_AGENCY', SEASON, 25, 1, 'seed')
+    d.run_wave([p], [offer], 1, 's')
+    assert llm.calls == []
+    row = memory.find(LEAGUE, SEASON, 'CONTRACT')[0]
+    assert row['choice_source'] == 'POLICY'
+
+
+def test_missing_or_empty_contracts_keep_todays_contract_results(memory, monkeypatch):
+    p, offer = counter_case()
+    baseline = fae.run_wave([p], [offer], 1, 's')[0]
+    llm = FakeLLM('{"choice": "REJECT", "message": "No."}')
+    monkeypatch.setattr(base, 'make_loop_llm', lambda **kw: llm)
+    for cur in (ContractCursor(has_table=False), ContractCursor([])):
+        memory.rows.clear()
+        d = deps(cur=cur, player_loop='shadow', features=ContractFeatures())
+        d.begin_stage('FREE_AGENCY', SEASON, 25, 1, 'seed')
+        out = d.run_wave([p], [offer], 1, 's')[0]
+        assert (out['status'], out['team_id'], out['counter']) == (
+            baseline['status'], baseline['team_id'], baseline['counter'])
+        assert llm.calls == []
+        row = memory.find(LEAGUE, SEASON, 'CONTRACT')[0]
+        assert row['choice_source'] == 'POLICY'
+        assert any(r['feature'] == 'player_loop' and r['status'] == 'recorded' for r in d.receipts)
+
+
+def test_re_sign_still_uses_the_marquee_floor_chooser(monkeypatch, memory):
+    cur = ContractCursor([(2_000_000, 2)] * 60)
+    p, offer = counter_case()
+    bar = fae.accept_bar(p, False)
+    picked = {}
+
+    def resign(c, season, seed, *, contract_inputs=None, decisions=None):
+        picked['counter'] = contract_inputs[1]['counter_chooser'](offer, p, tfa.REBUILDER, tfa.MARKET, bar, False)
+        return [{'kind': 'resign'}]
+
+    monkeypatch.setattr(te, 'resign_decisions', resign)
+    monkeypatch.setattr(base, 'policy_choice',
+                        lambda options, persona, weights, rng:
+                        ([o['key'] for o in options if str(o['key']).startswith('COUNTER_')] or ['REJECT'])[-1])
+    d = deps(cur=cur, player_loop='active', features=ContractFeatures())
+    d.begin_stage('RESIGN', SEASON, 25, None, 'seed')
+    assert d.resign_decisions(cur, SEASON, 'seed') == [{'kind': 'resign'}]
+    row = memory.find(LEAGUE, SEASON, 'CONTRACT')[0]
+    chosen = next(o for o in row['options'] if o['key'] == row['chosen_key'])['detail']['counter']
+    assert picked['counter'] == chosen
+    assert any(r['feature'] == 'player_loop' and r['status'] == 'applied' for r in d.receipts)
+
+
+def test_udfa_market_still_runs_with_the_marquee_chooser(monkeypatch, memory):
+    cur = ContractCursor([(2_000_000, 2)] * 60)
+    captured, real = {}, fae.udfa_market
+
+    def udfa(prospects, needs, seed, *, contract_inputs=None):
+        captured['inputs'] = contract_inputs
+        return real(prospects, needs, seed, contract_inputs=contract_inputs)
+
+    monkeypatch.setattr(fae, 'udfa_market', udfa)
+    prospects = [tfa.player(pid=200 + i, group=g, ovr=o, age=22, accrued=0)
+                 for i, (g, o) in enumerate([('CB', 68), ('WR', 71), ('WR', 58), ('CB', 55), ('CB', 54),
+                                             ('CB', 53), ('TE', 60)])]
+    d = deps(cur=cur, player_loop='active', features=ContractFeatures())
+    d.begin_stage('UDFA', SEASON, 25, None, 'seed')
+    out = d.udfa_market(prospects, tfa.NEEDS, 'udfa:2037')
+    baseline = real(prospects, tfa.NEEDS, 'udfa:2037')
+    assert [(x['player_id'], x['team_id'], x['status']) for x in out] == [
+        (x['player_id'], x['team_id'], x['status']) for x in baseline]
+    assert captured['inputs'] and all('counter_chooser' in v for v in captured['inputs'].values())
+    assert d._marquee_floor(cur, SEASON) == 1_000_000
 
 
 # -------------------------------------------------------------------------------------------- inbox ---

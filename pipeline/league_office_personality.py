@@ -14,7 +14,9 @@ according to that feature's mode in the switchboard (`personality/features.py`),
                                               the score adjustments that reproduce the chosen chart)
   contract_inputs                             per-player contract inputs; when player_loop is not off each entry
                                               carries a `counter_chooser` (the player loop picks the clearing counter:
-                                              shadow records and keeps the engine's, active uses the loop's)
+                                              shadow records and keeps the engine's, active uses the loop's); its
+                                              ctx gets the season's 50th-highest AAV as the marquee floor, so a
+                                              top-50 ask may spend the week's MARQUEE_PER_WEEK model budget
   retirement_decision                         the retirement policy's keep / retire for players Madden retired
                                               (PERSONALITY_RETIREMENT_PLAN); never retires an active player
   cpu_offers                                  each CPU team's owner spending knobs (owner_spending;
@@ -334,6 +336,7 @@ class PersonalityDeps(lo.Deps):
         self.stage = {'stage': None, 'season': None, 'week': None, 'wave': None, 'seed': None}
         self._fa_rank = {}
         self._owner_vetoes = {}
+        self._marquee_floors = {}
 
     # -- hooks the league office calls
     def bind_run(self, run_id):
@@ -407,6 +410,28 @@ class PersonalityDeps(lo.Deps):
             out[pid] = row
         return out
 
+    def _marquee_floor(self, cur, season):
+        """The season's 50th-highest average salary from ACTIVE player contracts (the contract loop's marquee
+        floor), or None. One read per deps/season; a missing table, a failed query or no rows is None: the floor
+        is an optimization, never a rule, so it must never fail a shadow or an active write."""
+        if season in self._marquee_floors:
+            return self._marquee_floors[season]
+        floor = None
+        try:
+            from engines.agent_loops import player as player_loop
+            cur.execute("SELECT to_regclass('player_contracts') IS NOT NULL")
+            found = cur.fetchone()
+            if found and found[0]:
+                cur.execute("SELECT total_value, length FROM player_contracts WHERE season = %s "
+                            "AND status = 'ACTIVE' AND length > 0", (season,))
+                aavs = [tv / ln for tv, ln in cur.fetchall() if tv is not None and ln]
+                if aavs:
+                    floor = player_loop.marquee_floor(aavs)
+        except Exception:      # noqa: BLE001 - the floor is an optimization, never a rule
+            floor = None
+        self._marquee_floors[season] = floor
+        return floor
+
     def _counter_chooser(self, cur, entry, mode, llm):
         """The player loop's chooser for one player's CPU contract counters (COACH_PLAYER_AGENT_LOOPS_PLAN §2.5)."""
         from engines.agent_loops import base
@@ -416,13 +441,14 @@ class PersonalityDeps(lo.Deps):
         week = stage.get('week')
         tick = week if isinstance(week, int) and not isinstance(week, bool) and 1 <= week <= 32 else OFFSEASON_TICK
         season = stage.get('season')
+        floor = self._marquee_floor(cur, season)
 
         def chooser(offer, player, team, market, bar, accepts):
             team = team or {}
             team_id = team.get('team_id') or (offer or {}).get('team_id')
             ctx = {'league_id': self.league_id, 'season': season, 'tick': tick, 'player': player, 'team': team,
                    'market': market, 'bar': bar, 'accepts': False, 'store': base.SqlStore(cur),
-                   'attachment': attachment_share(context, team_id), 'marquee_floor': None}
+                   'attachment': attachment_share(context, team_id), 'marquee_floor': floor}
             name = team.get('name') or team.get('abbr')
             if name:
                 ctx['team_name'] = name
