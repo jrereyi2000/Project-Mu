@@ -1,7 +1,7 @@
 """Trade negotiations with the GM agents (engines/gm_negotiation.py). Synthetic books: no database."""
 from engines import gm_negotiation as gn
 from engines import gm_trade_engine as ge
-from tests.test_gm_trade_engine import FITS, STAR, deal, pk, pl, star_books
+from tests.test_gm_trade_engine import FITS, STAR, books, deal, make_player, pk, pl, star_books
 
 JR, GM = 1, 2                     # team 1 (CONTEND) is JR's, team 2 (REBUILD) has the GM; STAR is a WR 82 on team 2
 
@@ -209,3 +209,42 @@ def test_expire_stale_leaves_cpu_talks_alone(monkeypatch):
     older = Cur(rowcount=0)
     gn.expire_stale(older)
     assert "kind" not in older.sql[-1]                       # an un-migrated database still expires as before
+
+
+# --------------------------------------- rivalry x contention tax in talks (U2) ----
+RENTAL = 900                     # an 82 OVR WR on team 2, expiring: the ladder's R4-R5 rental
+
+
+def rival_books(conf_b="AFC", div_b="AFC East", direction_b="REBUILD"):
+    """Team 1 (CONTEND) buying a cheap expiring rental from team 2. The default puts the two in one division
+    (a 50% tax and a ladder step); passing an NFC division makes team 2 an out-of-conference rebuilder (untaxed)."""
+    p = make_player(RENTAL, 2, "WR", 82, age=27, hit=6_500_000, end=2036)
+    b = books(direction_a="CONTEND", direction_b=direction_b, extra=[p])
+    b["teams"][1].update(conference="AFC", division="AFC East")
+    b["teams"][2].update(conference=conf_b, division=div_b)
+    return b
+
+
+def test_rival_contender_counter_demands_higher_package():
+    """The same offer is taxed 50% from a division rival and 0% from an out-of-conference rebuilder: the taxed
+    responder's surplus drops, and only the rival's counter can legally demand a pick one round earlier (R3
+    instead of the untaxed ladder's R4 floor)."""
+    rival = rival_books()                                                    # same division: 50% tax, step 1
+    plain = rival_books(conf_b="NFC", div_b="NFC East")                      # out of conference: untaxed
+    vr, vo = ge.Valuer(rival, FITS), ge.Valuer(plain, FITS)
+    d = deal([pl(RENTAL, 2, 1), pk(4, 1, 1, 2)], JR, GM)
+    reserve = 150_000
+    assert ge.rival_tax(rival, GM, JR) >= ge.CONF_HUNT_TAX
+    assert ge.rival_ladder_step(rival, GM, JR) == 1
+    assert ge.rival_ladder_step(plain, GM, JR) == 0
+    jr, jo = gn.judge(rival, vr, d, JR, GM, reserve), gn.judge(plain, vo, d, JR, GM, reserve)
+    assert not jr["ok"] and not jo["ok"]                     # both sit below the floor: each needs a counter
+    assert jr["sg"] < jo["sg"]                               # the rival tax costs the responder real value
+    cr = gn.counter_options(rival, vr, d, JR, GM, reserve, 0)
+    co = gn.counter_options(plain, vo, d, JR, GM, reserve, 0)
+    assert cr and co
+    one_round_earlier = lambda c: any(x["type"] == "PICK" and x["pick"][1] <= 3 for x in c["assets"])
+    assert any(one_round_earlier(c) for c in cr)             # the rival ladder step legalises an R3
+    assert not any(one_round_earlier(c) for c in co)         # off the untaxed ladder
+    package = lambda c: sum(vr.league(x) for x in c["assets"])
+    assert package(cr[0]) >= package(co[0])                  # the rival's ask is the bigger package
