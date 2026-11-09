@@ -483,10 +483,11 @@ def _opening_choice(options, deal, persona, rng):
     return next((o for o in options if o.key == key), options[0])
 
 
-def open_talk(cur, b, valuer, deal, rng):
-    """Insert a CPU negotiation for a deal both GMs accept and play the initiator's opening turn. A deal from the
-    unilateral search opens with its personality-selected offer (`opening_posture`, seeded with the search's
-    `opening_options`); a legacy deal without those keys keeps the policy's FIRM/ANCHOR choice. Returns the talk."""
+def open_talk(cur, b, valuer, deal, rng, llm=None):
+    """Insert a CPU negotiation for the initiator's offer and play the opening turn. A deal from the unilateral
+    search opens with its personality-selected offer (`opening_posture`, seeded with the search's
+    `opening_options`); a legacy deal without those keys keeps the policy's FIRM/ANCHOR choice. The search picks
+    the package; `llm` writes the initiator's line (None: the template). Returns the talk."""
     season, week = b["season"], b["week"]
     window = b["window"] if b.get("window") in ("IN_SEASON", "OFFSEASON") else "IN_SEASON"
     stage = _ge().read_stage(cur, season) if window == "OFFSEASON" else None
@@ -507,11 +508,13 @@ def open_talk(cur, b, valuer, deal, rng):
         su, sg = _gn().surpluses({"a": a, "b": other, "assets": deal["assets"]}, valuer, a)
         options = [Option("FIRM", "OFFER", deal.get("opening_posture") or "FIRM", list(deal["assets"]), su, sg)]
     opt = _opening_choice(options, deal, _gm(b, a), random.Random(f"talk:{season}:{nid}:1"))
+    template = _template_line(_gm(b, a), opt)
+    text, source = opening_line(_gm(b, a), opt, llm, _sheet(b, a, other, opt.assets) if llm is not None else None)
     _add_turn(cur, nid, "GM_A", "OFFER", a, assets=opt.assets, su=opt.su, sg=opt.sg,
-              message=_template_line(_gm(b, a), opt), source="TEMPLATE",
+              message=text, source="LLM" if text != template else "TEMPLATE",
               options=[{"key": o.key, "action": o.action, "assets": o.assets, "su": o.su, "sg": o.sg}
                        for o in options],
-              choice=opt.key, choice_source="POLICY", posture=opt.posture, books=b)
+              choice=opt.key, choice_source=source, posture=opt.posture, books=b)
     return talk
 
 
@@ -534,6 +537,16 @@ def _turn_actor_team(t, talk):
     if t.get("actor") in ("JR", "GM_A"):
         return _initiator(talk)
     return talk["gm_team_id"]
+
+
+def opening_line(persona, opt, llm=None, sheet=None):
+    """(text, source) for the initiator's opening turn: the model's line when there is one (the search still picks
+    the package), else the template. One option only, so a model reply outside it falls back to the policy text."""
+    if llm is not None:
+        key, said, source = llm_choose(llm, sheet, persona, [opt], [])
+        if said:
+            return said, source
+    return _template_line(persona, opt), "POLICY"
 
 
 def _choose(b, talk, actor, offerer, offer_assets, options, turns, rng, llm):
@@ -800,7 +813,7 @@ def run_talks(cur, b, valuer, deals, rng, llm, log=None):
     log = log or (lambda *a, **k: None)
     rep = {"talks": [], "agreed": [], "stalled": [], "teams": set()}
     for deal in deals or []:
-        talk = open_talk(cur, b, valuer, deal, rng)
+        talk = open_talk(cur, b, valuer, deal, rng, llm)
         rep["teams"].update((_initiator(talk), talk["gm_team_id"]))
         status = advance_talk(cur, b, valuer, talk, rng, llm)
         rep["talks"].append({"id": talk["id"], "status": status, "resumed": False})

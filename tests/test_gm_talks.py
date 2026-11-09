@@ -196,6 +196,17 @@ def test_the_same_talk_agrees_with_a_fake_model():
     assert status == "AGREED" and ge.accepts(deal(final), v, b)[0]
 
 
+def test_the_opening_line_uses_the_model_but_the_search_keeps_the_package():
+    b, v = setup()
+    opt = gt.options_for(b, v, dict(TALK, opening=True), 1, OPENING)[0]
+    sheet = gn.message_sheet(b, 1, 2, opt.assets)
+    assets = list(opt.assets)
+    text, source = gt.opening_line(dict(b["gm"][1]), opt, fake_model, sheet)
+    assert source == "LLM" and opt.assets == assets          # the model writes the words, never the package
+    tpl, tpl_source = gt.opening_line(dict(b["gm"][1]), opt)
+    assert tpl_source == "POLICY" and "offer on the table" in tpl
+
+
 def test_an_anchor_met_with_no_patience_stalls():
     b, v = setup()
     b["gm"][1].update(aggressiveness=0.9, sliders=persona(agg=0.9, confidence=10, warmth=1)["sliders"])

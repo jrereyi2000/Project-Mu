@@ -2432,7 +2432,7 @@ def main(argv=None):
     ap.add_argument("--week", type=int)
     ap.add_argument("--dry-run", action="store_true", help="read-only: print the proposals, write nothing")
     ap.add_argument("--replace", action="store_true", help="remove this week's PROPOSED proposals first")
-    ap.add_argument("--no-llm", action="store_true", help="template rationale only")
+    ap.add_argument("--no-llm", action="store_true", help="policy and templates only (no model calls)")
     ap.add_argument("--stage", type=int, choices=range(1, len(OFFSEASON_STAGES) + 1),
                     help="offseason stage 1-5 (with --week 24): " + ", ".join(OFFSEASON_STAGES))
     ap.add_argument("--next-stage", action="store_true",
@@ -2461,6 +2461,7 @@ def main(argv=None):
     import psycopg
     from engines.gm_llm import flush, make_llm
     llm = None if (a.dry_run or a.no_llm or a.rewrite_rationale or a.recheck_only) else make_llm("gm_rationale")
+    talk_llm = None                     # the CPU talks' words, made only for a week run (as weekly_capture does)
     dsn = os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")
     if a.recheck_only:
         with psycopg.connect(dsn) as conn:
@@ -2512,7 +2513,10 @@ def main(argv=None):
                                               "overall_pick": a.draft_pick}, dry_run=a.dry_run, llm=llm)
             print(f"\npick {a.draft_pick}: p {rep['p']}, {len(rep['proposals'])} proposals, {len(rep['expired'])} expired")
         else:
-            rep = run_week(cur, season, week, dry_run=a.dry_run, replace=a.replace, llm=llm, stage=stage)
+            if not a.dry_run and not a.no_llm:
+                talk_llm = make_llm("gm_talks")
+            rep = run_week(cur, season, week, dry_run=a.dry_run, replace=a.replace, llm=llm, stage=stage,
+                           talk_llm=talk_llm)
             print(f"\nweek {week}: {len(rep['proposals'])} proposals, {len(rep['expired'])} expired, "
                   f"{len(rep['rechecked'])} no longer legal")
         if a.dry_run:
@@ -2521,6 +2525,7 @@ def main(argv=None):
         else:
             conn.commit()
     flush(llm)
+    flush(talk_llm)
 
 
 if __name__ == "__main__":
