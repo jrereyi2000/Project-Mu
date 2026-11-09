@@ -15,7 +15,8 @@ used, and a template reply carries no appraisal (no model, no appraisal).
         is present; non-empty words are the reply (source LLM, no appraisal), else the voice below speaks.
   write(...) -> (text, 'LLM' | 'TEMPLATE', appraisal | None)       compose without the extra JSON keys
   exchange(cur, kind, thread_id, option_id, payload, note, ...) -> thread    one JR turn, in §2.4's order:
-        act -> JR's line -> the counterpart's reply -> the relationship event (outbox)
+        act -> JR's line -> the counterpart's reply -> the relationship event (outbox). A null option with a
+        note is talk (no engine act, no state/outcome change) unless the kind is in TYPED_TEXT_KINDS.
   default_llm()                                                    make_llm("inbox") unless MU_INBOX_LLM == '0'
 
 The relationship to JR's persona enters the prompt only through the relationships plan's relationship_context
@@ -36,6 +37,10 @@ HISTORY_MESSAGES = 6
 NOTE_MAX_CHARS = 600
 NEUTRAL_VOICE = "plain and professional"
 RELATIONSHIP_MODULE = "personality.relationships"      # relationship_context(state, *, target) once it exists
+
+# Kinds whose act() reads typed text when no option is picked (FRONT_OFFICE_INBOX_PLAN §2.7: "a kind may read it
+# otherwise"). Every other kind answers a null option as talk — no engine act.
+TYPED_TEXT_KINDS = ("PROSPECT",)
 
 # intent words -> phrases that contradict that decision (the intent check)
 _CONTRADICTS = {
@@ -270,7 +275,11 @@ def prompt(thread, intent, facts, history, note, view, ask_appraisal, kind=None,
     # A per-intent voice (the kind's `intent_voice`) replaces the counterpart's persona lines for that intent.
     lines += [f"Your voice: {voice}."] if voice else voice_lines(view, kind)
     lines += list(rel_lines)
-    lines.append(f"What has been decided, which you must convey and never change: {intent}.")
+    if str(intent or "").upper() == "TALK":
+        lines.append("No decision is being made here: they are talking to you, so answer them naturally and "
+                     "do not accept, reject or settle anything.")
+    else:
+        lines.append(f"What has been decided, which you must convey and never change: {intent}.")
     hist = _history_lines(history)
     if hist:
         lines.append("The conversation so far:")
@@ -389,11 +398,28 @@ def _jr_body(kind, thread, option_id, payload, note, last_options):
     return label or option_id or "(no message)"
 
 
+def _talk_result(history):
+    """A null option with a note is talk (FRONT_OFFICE_INBOX_PLAN §2.7): no engine act, no state, no outcome.
+    The counterpart answers with the last turn's facts, minus the decision keys a kind's act would have set, so
+    no agent loop re-conveys a decision that is already on the table."""
+    facts = {}
+    for m in reversed(history or ()):
+        if m.get("author") != "JR" and m.get("facts"):
+            facts = dict(m["facts"])
+            break
+    for key in ("decision", "engine_status", "reply", "offer_id", "pending_move_id"):
+        facts.pop(key, None)
+    from engines.inbox.registry import ActResult
+    return ActResult(facts=facts, intent="TALK", engine_ref=None, close=False, judge=True)
+
+
 def exchange(cur, kind, thread_id, option_id=None, payload=None, note=None, *, llm=None, at=None,
              budget_s=INBOX_LLM_BUDGET_S, league=None):
     """One JR turn: kind.act decides and its decision is stored with JR's line first; then the counterpart's reply
-    (model or template) with its appraisal; then the relationship event in the outbox. Raises InboxError for a
-    read-only thread (409), a missing one (404) or a note over NOTE_MAX_CHARS (400). Returns the updated thread."""
+    (model or template) with its appraisal; then the relationship event in the outbox. A null option is talk
+    (no engine act) unless the kind declares it reads typed text. Raises InboxError for a read-only thread (409),
+    a missing one (404), a note over NOTE_MAX_CHARS (400) or a null option with no words (400). Returns the
+    updated thread."""
     thread = store.get_thread(cur, thread_id)
     if thread is None:
         from engines.inbox import NotFound
@@ -405,7 +431,13 @@ def exchange(cur, kind, thread_id, option_id=None, payload=None, note=None, *, l
                                       "offseason_stage": thread.get("offseason_stage")}
     before = store.messages(cur, thread_id)
     last_options = next((m["options"] for m in reversed(before) if m["author"] != "JR"), [])
-    result = kind.act(cur, thread, option_id, payload or {}, note)          # 1. the engine decides
+    typed_text = str(getattr(kind, "KIND", "")).upper() in TYPED_TEXT_KINDS
+    if option_id is None and not typed_text:                                 # 1. talk: no engine decision
+        if not (note and note.strip()):
+            raise InboxError(400, "a message needs words")
+        result = _talk_result(before)
+    else:
+        result = kind.act(cur, thread, option_id, payload or {}, note)       # 1. the engine decides
     store.add_message(cur, thread_id, "JR", _jr_body(kind, thread, option_id, payload, note, last_options), "JR",
                       option_id=option_id, engine_ref=result.engine_ref, at=when)
     if result.state is not None:
@@ -416,7 +448,8 @@ def exchange(cur, kind, thread_id, option_id=None, payload=None, note=None, *, l
     history = store.messages(cur, thread_id)
     reply = compose(cur, kind, thread, result.intent, result.facts, history, note, llm, budget_s,  # 2. the words
                     judge=result.judge, league=league)
-    options = [] if result.close else list(kind.options(cur, thread, result) or [])
+    options = [] if result.close else (list(last_options) if option_id is None and not typed_text
+                                       else list(kind.options(cur, thread, result) or []))
     msg = store.add_message(cur, thread_id, _author(thread), reply.text, reply.source, options=options,  # 3. stored
                             facts=result.facts, engine_ref=result.engine_ref, appraisal=reply.appraisal, at=when)
     if reply.data and reply.source == "LLM":            # the kind's extra JSON (e.g. REPORTER's "done"), as in scan

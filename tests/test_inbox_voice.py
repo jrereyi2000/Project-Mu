@@ -215,6 +215,47 @@ def test_exchange_template_records_no_event_and_close(db, cur):
     assert db.rows("SELECT count(*) FROM inbox_relationship_events") == [(0,)]
 
 
+def test_null_option_is_talk_with_no_engine_act(db, cur):
+    actors.take_control(cur, "CAR", "GM", "10")
+    t = gm_thread(cur)
+    opening = [{"id": "MAKE_OFFER", "label": "Make an offer", "form": "contract_terms"}]
+    store.add_message(cur, t["id"], "COUNTERPART", "We are apart on the guaranteed money.", "TEMPLATE",
+                      options=opening, facts=dict(FACTS))
+    kind, llm = FakeKind(), FakeLLM(GOOD)
+    voice.exchange(cur, kind, t["id"], option_id=None, note="What would it take to close this?", llm=llm)
+    assert kind.acted == []                                    # talk runs no engine act
+    msgs = store.messages(cur, t["id"])
+    assert [(m["author"], m["body_source"]) for m in msgs] == [
+        ("COUNTERPART", "TEMPLATE"), ("JR", "JR"), ("COUNTERPART", "LLM")]
+    assert msgs[1]["body"] == "What would it take to close this?" and msgs[1]["option_id"] is None
+    assert msgs[2]["options"] == opening                       # JR keeps the buttons he had
+    assert msgs[2]["engine_ref"] is None
+    assert "decision" not in msgs[2]["facts"]                  # an old decision is not re-conveyed
+    assert "No decision is being made" in llm.prompts[0]
+    assert set(store.get_thread(cur, t["id"])["state"]) <= {"_touched"}   # nothing decided or changed
+
+
+def test_null_option_without_words_is_400(cur):
+    actors.take_control(cur, "CAR", "GM", "10")
+    t = gm_thread(cur)
+    with pytest.raises(InboxError) as e:
+        voice.exchange(cur, FakeKind(), t["id"], None, None, "   ")
+    assert e.value.status == 400
+    assert store.messages(cur, t["id"]) == []
+
+
+def test_a_typed_text_kind_still_reads_the_note(cur):
+    actors.take_control(cur, "CAR", "GM", "10")
+    t = gm_thread(cur)
+
+    class TypedKind(FakeKind):
+        KIND = "PROSPECT"
+
+    kind = TypedKind()
+    voice.exchange(cur, kind, t["id"], option_id=None, note="Why should we draft you?", llm=FakeLLM(GOOD))
+    assert kind.acted == [(None, {}, "Why should we draft you?")]
+
+
 def test_exchange_refuses_read_only_and_long_notes(cur):
     t = gm_thread(cur)
     with pytest.raises(InboxError) as e:                  # JR doesn't control the GM persona
