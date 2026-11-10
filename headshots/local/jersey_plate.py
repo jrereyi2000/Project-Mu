@@ -1,10 +1,19 @@
-"""Two-stage jersey plate compositing pipeline for Project Mu headshots.
+"""Two-stage plate compositing pipeline for Project Mu headshots.
 
-Standardizes high-resolution official NFL jersey overlays with clean alpha neck sockets,
-ensuring:
+Standardizes high-resolution official NFL photo overlays with clean alpha neck
+sockets, ensuring:
 1. Zero donor neck skin artifacts (the collar socket is cleanly hollowed out).
-2. Zero player shoulder poke-out (player body outside the collar is strictly bounded to the jersey silhouette).
-3. Matched photographic quality, lighting, and resolution between player face and uniform plate.
+2. Zero subject shoulder poke-out (the subject outside the collar is strictly
+   bounded to the garment silhouette).
+3. Matched photographic quality, lighting, and resolution between the generated
+   face and the real garment plate.
+
+The same two calls serve player **jersey** plates and coach **coaching-top**
+(polo / quarter-zip / jacket) plates. ``garment="jersey"`` (the default) keeps
+the original player geometry byte-for-byte; ``garment="coach"`` uses a socket
+shaped for a coaching top's higher, narrower collar and samples its fabric
+across the torso so a contrasting placket or shoulder panel is not mistaken for
+donor skin.
 """
 
 from __future__ import annotations
@@ -20,6 +29,46 @@ from PIL import Image
 # Pixel defaults below were tuned on a 896x1200 reference plate; when a parameter is left as
 # None it is scaled from that reference to the plate's actual size.
 REF_W, REF_H = 896, 1200
+
+
+# Socket geometry per garment, in the 896x1200 reference space.
+# "jersey" is the original player geometry and must not change; "coach" raises
+# and narrows the opening for a polo/quarter-zip stand collar (no shoulder pads,
+# no metallic NFL shield) and lifts the chin slightly.
+_PLATE_GEOMETRY = {
+    "jersey": {
+        "collar_y_min": 680,
+        "collar_y_max": 1050,
+        "collar_x_min": 250,
+        "collar_x_max": 650,
+        "rim_band": 36,
+        "chin_y": 590,
+        "center_x": 440,
+        "collar_left": 305,
+        "collar_right": 595,
+    },
+    "coach": {
+        "collar_y_min": 655,
+        "collar_y_max": 1025,
+        "collar_x_min": 290,
+        "collar_x_max": 610,
+        "rim_band": 30,
+        "chin_y": 578,
+        "center_x": 440,
+        "collar_left": 330,
+        "collar_right": 570,
+    },
+}
+
+
+def _garment_key(garment: Optional[str]) -> str:
+    """Map a garment name onto a geometry key ('jersey' or 'coach')."""
+    key = str(garment or "jersey").strip().lower().replace("-", "_").replace(" ", "_")
+    if key in ("jersey", "player", "uniform"):
+        return "jersey"
+    if key in ("coach", "coaching", "coaching_top", "polo", "quarter_zip", "zip", "jacket"):
+        return "coach"
+    raise ValueError(f"Unknown garment {garment!r}; use 'jersey' or 'coach'.")
 
 
 def _scaled(value: Optional[int], ref_value: int, size: int, ref_size: int) -> int:
@@ -51,6 +100,43 @@ def _sample_fabric_color(arr: np.ndarray, y0: int, y1: int, x0: int, x1: int) ->
     return tuple(int(c) for c in np.median(opaque, axis=0))
 
 
+def _sample_fabric_colors(
+    arr: np.ndarray,
+    y0: int,
+    y1: int,
+    x0: int,
+    x1: int,
+    garment_key: str,
+) -> list:
+    """Sample the plate's garment colours just below the collar.
+
+    A jersey is one fabric, sampled from the whole torso box exactly as before.
+    A coaching top can have a contrasting placket, zip or shoulder panel, so it
+    is sampled in left / centre / right bands and every distinct colour is kept;
+    otherwise a white placket that reads as skin would be hollowed out.
+    """
+    if garment_key == "jersey":
+        sampled = _sample_fabric_color(arr, y0, y1, x0, x1)
+        return [sampled] if sampled is not None else []
+
+    width = max(1, x1 - x0)
+    bands = (
+        (x0, x0 + width // 3),
+        (x0 + width // 3, x1 - width // 3),
+        (x1 - width // 3, x1),
+    )
+    colors: list = []
+    for bx0, bx1 in bands:
+        if bx1 <= bx0:
+            continue
+        sampled = _sample_fabric_color(arr, y0, y1, bx0, bx1)
+        if sampled is None:
+            continue
+        if all(max(abs(a - b) for a, b in zip(sampled, seen)) > 12 for seen in colors):
+            colors.append(sampled)
+    return colors
+
+
 def extract_clean_jersey_plate(
     ref_image: Union[str, Image.Image],
     collar_y_min: Optional[int] = None,
@@ -60,36 +146,42 @@ def extract_clean_jersey_plate(
     fabric_colors: Optional[Sequence[Tuple[int, int, int]]] = None,
     fabric_tolerance: float = 40.0,
     rim_band: Optional[int] = None,
+    garment: str = "jersey",
 ) -> Image.Image:
-    """Extract a clean, transparent jersey plate from an authentic NFL reference photo.
+    """Extract a clean, transparent garment plate from an authentic NFL reference photo.
 
     Hollows out the neck socket right to the inner rim of the collar, erasing donor skin.
 
     Args:
-        ref_image: Jersey reference photo (path or image), background already transparent or plain.
+        ref_image: Reference photo (path or image), background already transparent or plain.
         collar_y_min / collar_y_max / collar_x_min / collar_x_max: box searched for the collar rim;
-            default scaled from (680, 1050, 250, 650) on a 896x1200 plate.
-        fabric_colors: Jersey colours never treated as skin. Default: the torso colour sampled just
-            below the collar box. Add trim colours (e.g. a gold collar stripe) if they read as skin.
+            default scaled from the garment geometry (jersey: 680, 1050, 250, 650 on a 896x1200 plate).
+        fabric_colors: Garment colours never treated as skin. Default: the fabric colour(s) sampled
+            just below the collar box. Add trim colours (e.g. a gold collar stripe) if they read as skin.
         fabric_tolerance: RGB distance within which a pixel counts as one of fabric_colors.
         rim_band: Rows below the collar rim cleaned of leftover donor skin; default 3% of the height.
+        garment: ``"jersey"`` (player, the default and byte-identical to before) or ``"coach"``
+            (a polo/quarter-zip/jacket: higher, narrower socket and multi-band fabric sampling).
     """
     if isinstance(ref_image, str):
         img = Image.open(ref_image).convert("RGBA")
     else:
         img = ref_image.convert("RGBA")
 
+    garment_key = _garment_key(garment)
+    geom = _PLATE_GEOMETRY[garment_key]
+
     arr = np.array(img)
     h, w = arr.shape[:2]
-    y_min = _scaled(collar_y_min, 680, h, REF_H)
-    y_max = max(y_min, _scaled(collar_y_max, 1050, h, REF_H))
-    x_min = _scaled(collar_x_min, 250, w, REF_W)
-    x_max = max(x_min, _scaled(collar_x_max, 650, w, REF_W))
-    band = _scaled(rim_band, 36, h, REF_H)
+    y_min = _scaled(collar_y_min, geom["collar_y_min"], h, REF_H)
+    y_max = max(y_min, _scaled(collar_y_max, geom["collar_y_max"], h, REF_H))
+    x_min = _scaled(collar_x_min, geom["collar_x_min"], w, REF_W)
+    x_max = max(x_min, _scaled(collar_x_max, geom["collar_x_max"], w, REF_W))
+    band = _scaled(rim_band, geom["rim_band"], h, REF_H)
 
     if fabric_colors is None:
-        sampled = _sample_fabric_color(arr, y_max, min(h, y_max + max(1, h // 10)), x_min, x_max)
-        fabric_colors = [sampled] if sampled is not None else []
+        fabric_colors = _sample_fabric_colors(
+            arr, y_max, min(h, y_max + max(1, h // 10)), x_min, x_max, garment_key)
     skin = _skin_mask(arr[..., :3], fabric_colors, fabric_tolerance)
     opaque = arr[..., 3] > 100
 
@@ -140,19 +232,23 @@ def composite_headshot_to_jersey(
     collar_x_bounds: Optional[Tuple[int, int]] = None,
     out_format: str = "broadcast",
     output_path: Optional[str] = None,
+    garment: str = "jersey",
 ) -> Image.Image:
-    """Composite a segmented player portrait into an official team jersey plate.
+    """Composite a segmented portrait into an official team garment plate.
 
     Args:
-        player_cutout: Segmented (RGBA) player portrait with head, full neck, and bare chest.
-        jersey_plate: High-resolution clean jersey overlay with transparent neck socket.
-        scale: Resize factor for the player face/neck to match collar proportions.
-        target_chin_y: Vertical canvas pixel where the player chin rests (default 590 on a 896x1200 plate,
-            scaled to the plate's size).
+        player_cutout: Segmented (RGBA) portrait with head, full neck, and bare chest.
+        jersey_plate: High-resolution clean plate with a transparent neck socket.
+        scale: Resize factor for the face/neck to match collar proportions.
+        target_chin_y: Vertical canvas pixel where the chin rests (jersey default 590, coach 578,
+            on a 896x1200 plate, scaled to the plate's size).
         target_center_x: Horizontal canvas pixel for centering the neck in the collar (default 440, scaled).
-        collar_x_bounds: (left, right) columns defining the collar socket opening (default (305, 595), scaled).
-        out_format: 'broadcast' (800x1000 4:5 portrait) or 'site' (700x508 transparent WebP).
+        collar_x_bounds: (left, right) columns defining the collar socket opening (jersey default
+            (305, 595), coach (330, 570), scaled).
+        out_format: 'broadcast' (800x1000 4:5 portrait), 'site' (700x508 transparent WebP) or 'none'.
         output_path: Optional file path to save the final composite.
+        garment: ``"jersey"`` (player, the default and byte-identical to before) or ``"coach"``
+            (a coaching top: higher/narrower collar, no shoulder pads).
 
     Returns:
         PIL.Image.Image of the composited media-day headshot.
@@ -167,17 +263,23 @@ def composite_headshot_to_jersey(
     else:
         plate_img = jersey_plate.convert("RGBA")
 
+    garment_key = _garment_key(garment)
+    geom = _PLATE_GEOMETRY[garment_key]
+
     pw, ph = plate_img.size
     plate_arr = np.array(plate_img)
 
-    target_chin_y = min(_scaled(target_chin_y, 590, ph, REF_H), ph - 1)
-    target_center_x = _scaled(target_center_x, 440, pw, REF_W)
+    target_chin_y = min(_scaled(target_chin_y, geom["chin_y"], ph, REF_H), ph - 1)
+    target_center_x = _scaled(target_center_x, geom["center_x"], pw, REF_W)
     if collar_x_bounds is None:
-        collar_x_bounds = (_scaled(None, 305, pw, REF_W), _scaled(None, 595, pw, REF_W))
+        collar_x_bounds = (
+            _scaled(None, geom["collar_left"], pw, REF_W),
+            _scaled(None, geom["collar_right"], pw, REF_W),
+        )
     else:
         collar_x_bounds = (_scaled(collar_x_bounds[0], 0, pw, REF_W), _scaled(collar_x_bounds[1], 0, pw, REF_W))
 
-    # 1. Compute exact top contour of the jersey plate
+    # 1. Compute exact top contour of the garment plate
     jersey_top = np.full(pw, ph, dtype=int)
     for x in range(pw):
         ys = np.where(plate_arr[:, x, 3] > 50)[0]
@@ -312,3 +414,8 @@ def composite_headshot_to_jersey(
             final_img.save(output_path, format="PNG")
 
     return final_img
+
+
+# Garment-neutral names for callers that are not working with a jersey (coach plates).
+extract_clean_plate = extract_clean_jersey_plate
+composite_headshot_to_plate = composite_headshot_to_jersey
