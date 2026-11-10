@@ -498,6 +498,19 @@ def _move_highlight(pilot, label, options, presses=4):
     return _settled_highlight(pilot, options) == label
 
 
+def _clear_practice(pilot, screen, timeout, poll):
+    """Madden may ask for a practice type as part of advancing the week (PRACTICE TYPE, NORMAL
+    selected). Project Mu has no opinion on practice, so NORMAL goes through and the wait
+    continues. Returns the screen after the prompt."""
+    for _ in range(3):
+        if screen != "PRACTICE_TYPE":
+            return screen
+        pilot.confirm_on("PRACTICE_TYPE", "NORMAL", wait=1.0)
+        others = [n for n in pilot.screens if n != "ADVANCE_MENU"]
+        _, screen = wait_known(pilot, others, timeout, poll, what="the end of the practice prompt")
+    return screen
+
+
 def _sim_one_week(pilot, poll=3.0, timeout=SIM_TIMEOUT):
     """GAMEDAY > ADVANCE WEEK > FORCE ADVANCE (READY TO ADVANCE can't run an all-user league),
     then wait out the sim."""
@@ -515,12 +528,14 @@ def _sim_one_week(pilot, poll=3.0, timeout=SIM_TIMEOUT):
     pilot.confirm_on("ADVANCE_MENU", label)
     others = [n for n in pilot.screens if n != "ADVANCE_MENU"]
     _, screen = wait_known(pilot, others + ["FORCE_ADVANCE_CONFIRM"], timeout, poll, what=f"the end of {label}")
+    screen = _clear_practice(pilot, screen, timeout, poll)
     if screen == "FORCE_ADVANCE_CONFIRM":
         if not _move_highlight(pilot, "SIM AHEAD", ["SIM AHEAD", "CANCEL"]):
             pilot.stop("couldn't settle the highlight on SIM AHEAD", Stuck)
         pilot.confirm_on("FORCE_ADVANCE_CONFIRM", "SIM AHEAD")
         rest = [n for n in pilot.screens if n != "FORCE_ADVANCE_CONFIRM"]
         _, screen = wait_known(pilot, rest, timeout, poll, what="the end of SIM AHEAD")
+        screen = _clear_practice(pilot, screen, timeout, poll)
     return screen
 
 
