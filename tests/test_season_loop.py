@@ -156,7 +156,9 @@ def test_resume_skips_the_clone_and_the_regular_season(tmp_path):
     assert not any("clone-save" in c for c in calls)
     assert not any("regular-season-end" in c for c in calls)
     assert any("playoffs-end" in c for c in calls)
-    assert not any("--franchise" in c for c in calls)                        # nothing is loaded: it loads the clone
+    sims = [c for c in calls if "sim-season" in c]
+    assert sims and not any("--franchise" in c for c in sims)                # nothing is loaded: it loads the clone
+    assert calls[0].count("quit") == 1                                       # the franchise is released first
 
 
 def test_the_ingest_runs_with_the_franchise_closed(tmp_path):
