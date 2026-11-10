@@ -648,6 +648,9 @@ class Plan:
                                          self.bonus_slots)
             if dropped:
                 self.warn(f"{self.name(pgid)}: {dropped} contract years past the save's {self.slots} slots dropped")
+            if int(contract.get("length") or 0) > self.bonus_slots:
+                self.warn(f"{self.name(pgid)}: {contract['length'] - self.bonus_slots} bonus years past the save's "
+                          f"{self.bonus_slots} BonusYear fields are left unset")
         if not self._claim(pgid, "sign", team_index, priority, tag):
             return False
         self.signs.append({"pgid": pgid, "team_index": team_index, "list": lst,
@@ -713,6 +716,9 @@ class Plan:
                                          self.bonus_slots)
             if dropped:
                 self.warn(f"{self.name(pgid)}: {dropped} contract years past the save's {self.slots} slots dropped")
+            if int(contract.get("length") or 0) > self.bonus_slots:
+                self.warn(f"{self.name(pgid)}: {contract['length'] - self.bonus_slots} bonus years past the save's "
+                          f"{self.bonus_slots} BonusYear fields are left unset")
         if block == snapshot_block(old):
             return self.note(tag, True, "contract already as planned")
         h0, n0, b0 = cap_change(snapshot_block(old))

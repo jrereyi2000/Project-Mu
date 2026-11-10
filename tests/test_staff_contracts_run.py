@@ -468,3 +468,29 @@ def test_a_hire_for_the_coming_season_gets_his_contract_now():
     cur.execute("SELECT sum(annual_salary) FROM staff_contracts WHERE signed_season <= 2036 AND remaining_years > 0")
     assert first["payroll"] == cur.fetchone()[0]               # the 2037 deal is not in 2036's payroll
     assert scr.annual(cur, 2037)["filed"] == 0                 # and he is not filed twice
+
+
+def test_a_hire_is_filed_when_he_is_hired():
+    """M-0200: the hiring cycle calls file_hires, so the save's Contract* fields are non-zero from the first write
+    rather than the coach sitting at 0/0/0 until the next annual run."""
+    conn = _db_with_gms()
+    conn.execute("INSERT INTO coordinators VALUES (23, 'New OC')")
+    conn.execute("INSERT INTO coordinator_tenures (coordinator_id, team_id, role, start_season, end_season) "
+                 "VALUES (23, 3, 'OC', 2037, NULL)")
+    cur = FakeCursor(conn)
+    filed = scr.file_hires(cur, 2037)
+    assert [(f["person_kind"], f["signed_season"], f["remaining_years"]) for f in filed] == [("OC", 2037, 3)]
+    assert scr.file_hires(cur, 2037) == []                     # never filed twice
+
+
+def test_a_rehire_keeps_his_pay_floor_and_his_full_control():
+    conn = _db_with_gms()
+    conn.execute("INSERT INTO coaches VALUES (12, 'Boomerang')")
+    conn.execute("INSERT INTO coach_records VALUES (12, 0)")
+    conn.execute("INSERT INTO coach_tenures (coach_id, team_id, start_season, end_season) "
+                 "VALUES (12, 3, 2037, NULL)")
+    conn.execute("INSERT INTO staff_contracts (team_id, person_id, person_kind, annual_salary, total_years, "
+                 "remaining_years, signed_season, full_control, buyout_owed) "
+                 "VALUES (3, 12, 'HC', 20000000, 5, 0, 2032, 1, 60000000)")
+    filed = scr.file_hires(FakeCursor(conn), 2037)
+    assert filed[0]["annual_salary"] == 20_000_000 and filed[0]["full_control"] in (1, True)

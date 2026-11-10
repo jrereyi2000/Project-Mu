@@ -109,6 +109,39 @@ def current_staff(cur, season):
     return out
 
 
+def file_hires(cur, season, dry_run=False):
+    """Files a market deal for everyone whose tenure starts exactly in `season` and has no live contract row. The
+    hiring cycle calls this as it hires (M-0200), so the save carries the new deal from the first write instead of
+    the coach sitting at 0/0/0 until the next annual run; `annual` calls it for `season + 1` as a backstop. A
+    re-hire keeps his own pay as a floor and his full-control flag, as any refile does. Returns the rows filed."""
+    if not (_table(cur, "staff_contracts") and _table(cur, "coach_tenures")):
+        return []
+    by_key = {(r["team_id"], r["person_kind"], r["person_id"]): r for r in contracts(cur)
+              if r["person_kind"] in ("HC", "OC", "DC", "GM")}
+    filed = []
+    for s in current_staff(cur, season):
+        if int(s["start_season"] or 0) != int(season):
+            continue
+        row = by_key.get((s["team_id"], s["person_kind"], s["person_id"]))
+        if row is not None and row["remaining_years"] > 0:
+            continue
+        years, salary = _years(s["person_kind"]), _salary(s["person_kind"], s["experience"], s["championships"])
+        full_control = False
+        if row is not None:
+            salary = max(int(row["annual_salary"]), salary)
+            full_control = bool(row["full_control"])
+        filed.append({"team_id": s["team_id"], "person_kind": s["person_kind"], "person_id": s["person_id"],
+                      "annual_salary": salary, "total_years": years, "remaining_years": years,
+                      "signed_season": int(season), "full_control": full_control})
+        if not dry_run:
+            cur.execute("""INSERT INTO staff_contracts (team_id, person_id, person_kind, annual_salary,
+                               total_years, remaining_years, signed_season, full_control, buyout_owed)
+                           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 0)""",
+                        (s["team_id"], s["person_id"], s["person_kind"], salary, years, years, int(season),
+                         full_control))
+    return filed
+
+
 def _years(kind):
     if kind == "HC":
         return HC_YEARS
@@ -191,27 +224,11 @@ def annual(cur, season, dry_run=False):
                 cur.execute("UPDATE staff_contracts SET remaining_years = %s WHERE id = %s", (target, row["id"]))
     # A hire for the coming league year is not current staff (he must not displace the man still in the job), but
     # his contract is filed now: the save writer needs a live staff_contracts row at the stage the carousel makes
-    # the hire, or he plays a season with no contract fields (M-0196 B1). A deal signed for `season + 1` is left out
-    # of season `season`'s payroll (the filter is `signed_season <= season`) and is never read as a departure (the
+    # the hire, or he plays a season with no contract fields (M-0196 B1). The carousel calls `file_hires` itself at
+    # the hire; this is the backstop for a hire made before it ran. A deal signed for `season + 1` is left out of
+    # season `season`'s payroll (the filter is `signed_season <= season`) and is never read as a departure (the
     # firing loop skips a later-signed row), so filing it early changes nothing about this season's money.
-    for s in current_staff(cur, season + 1):
-        key = (s["team_id"], s["person_kind"], s["person_id"])
-        if key in current:
-            continue
-        row = by_key.get(key)
-        if row is not None and row["remaining_years"] > 0:
-            continue
-        years, salary = _years(s["person_kind"]), _salary(s["person_kind"], s["experience"], s["championships"])
-        if s["person_kind"] == "GM" and row is not None:
-            salary = max(int(row["annual_salary"]), salary)
-        filed.append({"team_id": s["team_id"], "person_kind": s["person_kind"], "person_id": s["person_id"],
-                      "annual_salary": salary, "total_years": years, "remaining_years": years,
-                      "signed_season": season + 1, "full_control": False})
-        if not dry_run:
-            cur.execute("""INSERT INTO staff_contracts (team_id, person_id, person_kind, annual_salary,
-                               total_years, remaining_years, signed_season, full_control, buyout_owed)
-                           VALUES (%s, %s, %s, %s, %s, %s, %s, false, 0)""",
-                        (s["team_id"], s["person_id"], s["person_kind"], salary, years, years, season + 1))
+    filed.extend(file_hires(cur, season + 1, dry_run=dry_run))
     # Everyone still in a staff post anywhere in the league: a coordinator poached or promoted to another team is a
     # departure, not a firing, so his old team owes no buyout (JR, 2026-11-09). Keyed BY ROLE TABLE: coaches.id,
     # coordinators.id and gm_profiles.id all run 1..32+, so a bare id set matched almost every fired person against
