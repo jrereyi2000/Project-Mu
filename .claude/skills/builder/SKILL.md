@@ -40,7 +40,7 @@ Label override: $ARGUMENTS
 4. **Fix** in the smallest way that closes the finding, matching the surrounding code. A design question (a rule the plan doesn't define, a tuning number, behaviour JR hasn't decided) is not yours to settle. Post it on the board for `audit` to put to JR, and leave the item open.
 5. **Tests:** add a test that fails on the pre-fix code. Run `pytest -p no:cacheprovider -m "not integration" <the touched areas' tests>`, and the full offline suite before you post. Run them in a clean worktree when the main checkout has other sessions' uncommitted edits (`git status --porcelain`), because those edits leak into the results. Never run napper or integration tests wholesale.
 6. **Databases:**
-   - Tests and repros use only a scratch DB named `mu_scratch_<label>_test` in container `madden-db` (postgres/postgres). Drop it when you're done with it.
+   - Tests and repros use only a scratch DB named `mu_scratch_<label with - turned into _>_test` (e.g. `mu_scratch_builder_3_test`; a hyphen needs quoting in every `CREATE`/`DROP DATABASE` and DSN) in container `madden-db` (postgres/postgres). Drop it when you're done with it.
    - A new migration is a new file (never edit an applied one), mirrored in `db/init_db.sql` with its ledger row (`python3 -m db.migrate sync-init-db`; see the docstring in `db/migrate.py`). Take the next free date name in `db/migrations/` and CLAIM it on the board.
    - Once its tests pass, apply it to `madden_test` and `madden_mu2026` with `python3 -m db.migrate apply` (JR approved this standing rule on 2026-11-10), then check `status` shows 0 pending and 0 drifted. Say so in your NOTICE.
    - Never touch `madden_2036`.
