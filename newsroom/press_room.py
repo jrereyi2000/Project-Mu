@@ -1899,7 +1899,9 @@ def get_press_conference(team_identifier, season=0, week=0):
                          f"{conf.get('opponent')}, {conf.get('result') or '-'} {conf.get('score') or ''} "
                          f"({status}{', ' + str(conf.get('end_reason')) if conf.get('end_reason') else ''})".strip()]
                 if str(status).upper() == "DECLINED":
-                    note = declined_note(cur, team_id, season, conf.get("week"))
+                    # declined_note reads `week < publication week`, so ask for the week AFTER the presser's own
+                    # (the presser covers game week W and is briefed in W + 1); passing W missed it entirely.
+                    note = declined_note(cur, team_id, season, int(conf.get("week") or 0) + 1)
                     if note:
                         lines.append(note)
                 turns = conf.get("turns") or []

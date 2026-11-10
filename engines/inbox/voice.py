@@ -339,7 +339,14 @@ def check(text, facts, intent, kind=None, league=None):
 # ------------------------------------------------------------------------------------------------- writing ---
 
 def _template(kind, intent, facts):
-    return kind.template(intent, facts)
+    return _decorate(kind, kind.template(intent, facts), facts)
+
+
+def _decorate(kind, text, facts):
+    """A kind may append something fixed to its reply whoever wrote it (PROSPECT's closing scout memo). It runs
+    after the model's text is accepted, so the model's own words are still what `check` validated."""
+    hook = getattr(kind, "decorate", None)
+    return hook(text, facts) if callable(hook) else text
 
 
 def compose(cur, kind, thread, intent, facts, history=(), note=None, llm=None, budget_s=INBOX_LLM_BUDGET_S, *,
@@ -377,7 +384,7 @@ def compose(cur, kind, thread, intent, facts, history=(), note=None, llm=None, b
     ap = appraisal_mod.normalize(data.get("appraisal")) if ask else None
     extra = {k: v for k, v in data.items() if k not in ("message", "appraisal")}
     print(f"[inbox] {thread.get('kind')} reply: model ({elapsed:.1f}s)", flush=True)
-    return Reply(text, "LLM", ap, extra)
+    return Reply(_decorate(kind, text, facts), "LLM", ap, extra)
 
 
 def write(cur, kind, thread, intent, facts, history=(), note=None, llm=None, budget_s=INBOX_LLM_BUDGET_S, **kw):

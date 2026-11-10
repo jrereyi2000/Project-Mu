@@ -279,7 +279,8 @@ def contexts(league, ros=None, expiring=None):
                   "rotation_lines": rlines, "starter_ovr": starter_ovr, "position_bias": {}, "youth_bias": 0.0,
                   "selling": False, "roster_count": len(r["roster"]), "ps_count": len(r["ps"]),
                   "cap": cap_of(league, t), "cap_room": cap_of(league, t) - payroll(league, t, r["roster"]),
-                  "win_pct": win_pct(team), "popularity_index": team.get("popularity_index")}
+                  "win_pct": win_pct(team), "popularity_index": team.get("popularity_index"),
+                  "facility_score": team.get("facility_score")}
     return out
 
 

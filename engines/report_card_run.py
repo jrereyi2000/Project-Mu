@@ -122,11 +122,12 @@ def _results(cur, season):
 
 
 def _payroll(cur, season, team_id):
-    """One team's active HC/OC/DC payroll for the season, from `staff_contracts` (0 without the table)."""
+    """One team's active HC/OC/DC/GM payroll for the season, from `staff_contracts` (0 without the table). The GM's
+    salary counts too: plan §2.2 puts it in the owner's payroll, and leaving it out understated every team."""
     if not _table(cur, "staff_contracts"):
         return 0
     cur.execute("""SELECT person_kind, annual_salary FROM staff_contracts
-                   WHERE team_id = %s AND person_kind IN ('HC', 'OC', 'DC') AND signed_season <= %s
+                   WHERE team_id = %s AND person_kind IN ('HC', 'OC', 'DC', 'GM') AND signed_season <= %s
                      AND total_years - (%s - signed_season) > 0""", (team_id, season, season))
     return int(sce.staff_payroll([{"person_kind": k, "annual_salary": s} for k, s in cur.fetchall()]))
 

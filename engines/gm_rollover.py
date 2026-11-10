@@ -211,8 +211,12 @@ def _hire_gm(cur, season, prior, abbr, team_id, llm, *, why, log=print, vacate_o
     draft class the new GM runs; default the one after `season`."""
     from engines import coaching_carousel as cc
     from engines import gm_personas
+    cur.execute("SELECT id FROM gm_profiles WHERE team_id = %s AND end_season IS NULL", (team_id,))
+    outgoing = cur.fetchone()
     cur.execute("UPDATE gm_profiles SET end_season = %s, end_reason = %s "
                 "WHERE team_id = %s AND end_season IS NULL", (prior, why, team_id))
+    if outgoing:
+        _settle_gm_contract(cur, outgoing[0], log=log)      # a fired GM gets a coach's buyout (B3)
     if vacate_only:
         log(f"  hot seat: {abbr} vacates the GM seat (the carousel fills it)")
         return {"vacated": True}
@@ -253,6 +257,31 @@ def _hire_gm(cur, season, prior, abbr, team_id, llm, *, why, log=print, vacate_o
         f"${winner['salary']:,})")
     return {"gm": p["gm_name"], "tier": winner["tier"], "salary": winner["salary"],
             "appeal": round(appeal, 3), "budget": budget}
+
+
+def _settle_gm_contract(cur, person_id, log=print):
+    """Fire the outgoing GM's `staff_contracts` row exactly as a coach's is fired: zero the years left and record the
+    buyout (`staff_contracts_engine.fire_contract`). Without this the row stayed "active" for ever, so the Front
+    Office showed two live GM contracts with duplicate React keys. A database without the table, or a GM with no
+    filed contract, is fine."""
+    try:
+        cur.execute("SAVEPOINT gm_fire")
+        cur.execute("""SELECT id, annual_salary, remaining_years, buyout_owed FROM staff_contracts
+                       WHERE person_kind = 'GM' AND person_id = %s AND remaining_years > 0
+                       ORDER BY id DESC LIMIT 1""", (person_id,))
+        row = cur.fetchone()
+        if row:
+            from engines import staff_contracts_engine as sce
+            after = sce.fire_contract({"annual_salary": row[1], "remaining_years": row[2], "buyout_owed": row[3]})
+            cur.execute("UPDATE staff_contracts SET remaining_years = %s, buyout_owed = %s WHERE id = %s",
+                        (after["remaining_years"], after["buyout_owed"], row[0]))
+            log(f"  gm contract settled: buyout ${int(after['buyout_owed'] or 0):,}")
+        cur.execute("RELEASE SAVEPOINT gm_fire")
+    except Exception:
+        try:
+            cur.execute("ROLLBACK TO SAVEPOINT gm_fire")
+        except Exception:
+            pass
 
 
 def fill_vacant_gms(cur, season, llm=None, log=print):

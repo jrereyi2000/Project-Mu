@@ -171,7 +171,7 @@ def test_options_inbound_and_in_talks(cur):
 def test_open_talks_calls_open_negotiation_and_uses_the_engine_message(cur, monkeypatch):
     calls = []
 
-    def fake_open(c, user, gm, assets, note=None, llm=None, timeout=None, posture=None):
+    def fake_open(c, user, gm, assets, note=None, llm=None, timeout=None, posture=None, history=None):
         calls.append((user, gm, assets, note, llm, timeout))
         return negotiation("COUNTER")
 
@@ -193,7 +193,7 @@ def test_open_talks_calls_open_negotiation_and_uses_the_engine_message(cur, monk
 
 def test_open_talks_with_a_note_asks_for_a_judgment(cur, monkeypatch):
     monkeypatch.setattr(gm_negotiation, "open_negotiation",
-                        lambda c, user, gm, assets, note=None, llm=None, timeout=None, posture=None:
+                        lambda c, user, gm, assets, note=None, llm=None, timeout=None, posture=None, history=None:
                         negotiation("REJECT"))
     t = make_thread(cur)
     r = gm_talk.act(cur, t, "OPEN_TALKS", {"players": [101]}, "We're not moving Legette cheap.")
@@ -202,12 +202,12 @@ def test_open_talks_with_a_note_asks_for_a_judgment(cur, monkeypatch):
 
 def test_a_walk_away_closes_but_a_reject_stays_open(cur, monkeypatch):
     monkeypatch.setattr(gm_negotiation, "open_negotiation",
-                        lambda c, user, gm, assets, note=None, llm=None, timeout=None, posture=None:
+                        lambda c, user, gm, assets, note=None, llm=None, timeout=None, posture=None, history=None:
                         negotiation("WALK_AWAY", status="WALKED_AWAY"))
     r = gm_talk.act(cur, make_thread(cur), "OPEN_TALKS", {"players": [101]}, None)
     assert r.close is True and r.intent == "WALK_AWAY"
     monkeypatch.setattr(gm_negotiation, "open_negotiation",
-                        lambda c, user, gm, assets, note=None, llm=None, timeout=None, posture=None:
+                        lambda c, user, gm, assets, note=None, llm=None, timeout=None, posture=None, history=None:
                         negotiation("REJECT"))
     r = gm_talk.act(cur, make_thread(cur, source_ref="gm_talk:proposal:78"), "OPEN_TALKS", {"players": [101]}, None)
     assert r.close is False and r.intent == "REJECT"
@@ -268,7 +268,7 @@ def test_not_interested_rejects_the_proposal(cur, monkeypatch):
 
 
 def test_mismatch_text_comes_through(cur, monkeypatch):
-    def refuse(c, user, gm, assets, note=None, llm=None, timeout=None, posture=None):
+    def refuse(c, user, gm, assets, note=None, llm=None, timeout=None, posture=None, history=None):
         raise front_office.FrontOfficeError(400, "you don't control CAR (tick JR controls on the Front Office card)")
     monkeypatch.setattr(gm_negotiation, "open_negotiation", refuse)
     t = make_thread(cur)
@@ -366,7 +366,7 @@ def test_agreed_reply_names_the_queued_pending_move(cur, monkeypatch):
 def test_exchange_stores_the_engine_message_and_no_judgment_without_a_note(cur, monkeypatch):
     actors.take_control(cur, "CAR", "GM", "10")
     monkeypatch.setattr(gm_negotiation, "open_negotiation",
-                        lambda c, user, gm, assets, note=None, llm=None, timeout=None, posture=None:
+                        lambda c, user, gm, assets, note=None, llm=None, timeout=None, posture=None, history=None:
                         negotiation("COUNTER"))
     t = make_thread(cur)
     out = voice.exchange(cur, gm_talk, t["id"], "OPEN_TALKS", {"players": [101]}, note=None, llm=None)

@@ -147,7 +147,13 @@ def _options_for_opening(b, valuer, talk, actor, offer):
     # FIRM first: the unilateral search's pre-validated firm candidate, else the deal's own opening. An ANCHOR
     # opening is the offer itself, not the firm base, so it is added to the anchors below.
     firm_seed = next((o for o in seeds if (o.get("posture") or "FIRM") != "ANCHOR"), None)
-    firm_assets = firm_seed["assets"] if firm_seed is not None else (None if posture == "ANCHOR" else offer)
+    # A FIRM deal must open on the package the unilateral search chose, not on the firm pool's first entry: seed the
+    # firm option with the deal's own assets (the softmax pick was otherwise thrown away and the talk opened on a
+    # package whose hash the search never accepted).
+    if posture == "FIRM":
+        firm_assets = offer
+    else:
+        firm_assets = firm_seed["assets"] if firm_seed is not None else (None if posture == "ANCHOR" else offer)
     firm = make("FIRM", firm_assets) if firm_assets else None
     if firm is None:
         firm = make("FIRM", offer)
@@ -495,13 +501,6 @@ def open_talk(cur, b, valuer, deal, rng, llm=None):
     if not options:                                  # an asset that moved between the search and the talk
         su, sg = _gn().surpluses({"a": a, "b": other, "assets": deal["assets"]}, valuer, a)
         options = [Option("FIRM", "OFFER", deal.get("opening_posture") or "FIRM", list(deal["assets"]), su, sg)]
-    elif deal.get("opening_posture") == "FIRM":
-        # A FIRM deal must open on the package the search chose, not on the firm pool's first entry (the softmax
-        # pick was being thrown away, and the talk opened on a package whose hash the search never accepted).
-        h = _ge().deal_hash(a, other, deal["assets"])
-        if not any(_ge().deal_hash(a, other, o.assets) == h for o in options):
-            su, sg = _gn().surpluses({"a": a, "b": other, "assets": deal["assets"]}, valuer, a)
-            options.append(Option("FIRM", "OFFER", "FIRM", list(deal["assets"]), su, sg))
     opt = _opening_choice(options, deal, _gm(b, a), random.Random(f"talk:{season}:{nid}:1"))
     sheet = _sheet(cur, b, a, other, opt.assets)
     scene = _scene(b, talk, sheet, side="a")

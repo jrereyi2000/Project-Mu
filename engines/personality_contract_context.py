@@ -138,8 +138,12 @@ def evaluate_voluntary_contract(league, ctx, player, contract, *, contract_input
     fplayer = {'id': player['id'], 'group': player.get('group'), 'ovr': player.get('ovr'),
                'age': (player.get('age') or 27) + years_ahead, 'accrued_seasons': te.accrued(player, league)}
     depth = te.projected_depth(player, ctx)
+    # facility_score rides along: free_agency_engine.offer_utility reads it for S_org, and dropping the key here
+    # (the context from transactions_engine.contexts carries it) made the NFLPA facility modifier inert on this
+    # path.
     team = {'team_id': ctx['team_id'], 'win_pct': ctx.get('win_pct'), 'popularity_index': ctx.get('popularity_index'),
-            'direction': ctx.get('direction'), 'projected_depth': {player['id']: depth}}
+            'direction': ctx.get('direction'), 'facility_score': ctx.get('facility_score'),
+            'projected_depth': {player['id']: depth}}
     offer = {'team_id': ctx['team_id'], 'player_id': player['id'], 'years': int(contract['years']),
              'total_value': int(contract['total_value']), 'bonus': int(contract.get('bonus') or 0),
              'guaranteed': int(contract.get('guaranteed') or 0), 'projected_depth': depth}

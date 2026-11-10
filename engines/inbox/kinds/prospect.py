@@ -139,7 +139,7 @@ def _ask(cur, thread, interview, topic=None, text=None):
         summary = si.close(cur, interview["id"])
         facts = dict(result["facts"], summary=si.summary_template(summary),
                      **{k: summary.get(k) for k in ("summary_grade", "best", "worst")})
-        engine_ref["summary_grade"] = summary.get("summary_grade")
+        engine_ref.update({k: summary.get(k) for k in ("summary_grade", "best", "worst")})
         return ActResult(facts=facts, intent=f"ANSWER_{turn['grade']}", engine_ref=engine_ref,
                          close=True, judge=False)
     return ActResult(facts=result["facts"], intent=f"ANSWER_{turn['grade']}", engine_ref=engine_ref)
@@ -176,10 +176,14 @@ def template(intent, facts):
         return _greeting(facts)
     if intent == "SUMMARY":
         return si.summary_template(facts)
-    text = si.answer_template(facts)
-    if facts.get("summary"):                     # the last answer carries the scout's closing memo as well
-        text = f"{text} {facts['summary']}"
-    return text
+    return si.answer_template(facts)
+
+
+def decorate(text, facts):
+    """The scout's closing memo rides with the final answer whoever wrote it: the memo is appended to the model's
+    answer too, so the LLM path ends the same way the template path does."""
+    memo = facts.get("summary")
+    return f"{text} {memo}" if memo and str(memo) not in str(text) else text
 
 
 def _greeting(facts):

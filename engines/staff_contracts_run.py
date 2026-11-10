@@ -28,7 +28,7 @@ import psycopg
 from engines import staff_contracts_engine as sce
 
 CONN_INFO = os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")
-HC_YEARS, COORD_YEARS = 4, 3
+HC_YEARS, COORD_YEARS, GM_YEARS = 4, 3, 4
 
 
 def _table(cur, name):
@@ -63,9 +63,18 @@ def current_staff(cur, season):
                        ORDER BY t.team_id, t.role, t.start_season DESC, t.id DESC""", (season, season))
         for r in cur.fetchall():
             add(r[0], r[1], r[2], r[3], r[4], 0)
+    # The GM is staff too (plan §2.2 puts his salary in the owner's payroll); his open tenure is the contract the
+    # producer files, rolls and settles.
+    if _table(cur, "gm_profiles"):
+        cur.execute("""SELECT team_id, id, gm_name, start_season FROM gm_profiles
+                       WHERE end_season IS NULL ORDER BY team_id""")
+        for r in cur.fetchall():
+            add(r[0], "GM", r[1], r[2], r[3], 0)
     for s in out:
         if s["person_kind"] == "HC":
             cur.execute("SELECT count(*) FROM coach_tenures WHERE coach_id = %s", (s["person_id"],))
+        elif s["person_kind"] == "GM":
+            cur.execute("SELECT count(*) FROM gm_profiles WHERE id = %s", (s["person_id"],))
         else:
             cur.execute("SELECT count(*) FROM coordinator_tenures WHERE coordinator_id = %s", (s["person_id"],))
         s["experience"] = int(cur.fetchone()[0] or 0)
@@ -73,7 +82,9 @@ def current_staff(cur, season):
 
 
 def _years(kind):
-    return HC_YEARS if kind == "HC" else COORD_YEARS
+    if kind == "HC":
+        return HC_YEARS
+    return GM_YEARS if kind == "GM" else COORD_YEARS
 
 
 def _salary(kind, experience, championships):
@@ -99,8 +110,8 @@ def annual(cur, season, dry_run=False):
     staff = current_staff(cur, season)
     current = {(s["team_id"], s["person_kind"], s["person_id"]) for s in staff}
     rows = contracts(cur)
-    by_key = {(r["team_id"], r["person_kind"], r["person_id"]): r for r in rows if r["person_kind"] in ("HC", "OC",
-                                                                                                     "DC")}
+    by_key = {(r["team_id"], r["person_kind"], r["person_id"]): r for r in rows
+              if r["person_kind"] in ("HC", "OC", "DC", "GM")}
     filed, rolled, fired = [], [], []
     for s in staff:
         key = (s["team_id"], s["person_kind"], s["person_id"])
@@ -126,10 +137,15 @@ def annual(cur, season, dry_run=False):
             rolled.append({"id": row["id"], "from": row["remaining_years"], "to": target})
             if not dry_run:
                 cur.execute("UPDATE staff_contracts SET remaining_years = %s WHERE id = %s", (target, row["id"]))
+    # Everyone still in a staff post anywhere in the league: a coordinator poached or promoted to another team is
+    # a departure, not a firing, so his old team owes no buyout (JR, 2026-11-09).
+    employed_anywhere = {s["person_id"] for s in staff}
     for r in rows:
-        if r["person_kind"] not in ("HC", "OC", "DC") or r["remaining_years"] <= 0:
+        if r["person_kind"] not in ("HC", "OC", "DC", "GM") or r["remaining_years"] <= 0:
             continue
         if (r["team_id"], r["person_kind"], r["person_id"]) in current:
+            continue
+        if r["person_id"] in employed_anywhere:
             continue
         after = sce.fire_contract({"annual_salary": r["annual_salary"], "remaining_years": r["remaining_years"],
                                    "buyout_owed": r["buyout_owed"]})
@@ -139,7 +155,7 @@ def annual(cur, season, dry_run=False):
             cur.execute("UPDATE staff_contracts SET remaining_years = %s, buyout_owed = %s WHERE id = %s",
                         (after["remaining_years"], after["buyout_owed"], r["id"]))
     active = [] if dry_run else [r for r in contracts(cur) if r["remaining_years"] > 0
-                                 and r["person_kind"] in ("HC", "OC", "DC")]
+                                 and r["person_kind"] in ("HC", "OC", "DC", "GM")]
     payroll = sce.staff_payroll(active)
     return {"season": season, "status": "dry_run" if dry_run else "built", "filed": len(filed),
             "rolled": len(rolled), "fired": len(fired), "payroll": int(payroll),

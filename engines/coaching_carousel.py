@@ -1228,7 +1228,10 @@ def hiring_cycle(cur, season, log=print, personality=None):
     # P1-27 runs the GM hot seat BEFORE this cycle, so the seats it vacated are still empty; a Godfather coach-GM
     # fills his own, every other one is filled here, after the head-coach hires.
     from engines import gm_rollover
-    report["gm_fills"] = gm_rollover.fill_vacant_gms(cur, season, log=log)
+    # `season` here is the season just finished; the seat is being filled for `nxt`, the season about to start
+    # (that is what hot_seat_only(cur, season + 1) works with), so the hire's start, first draft and signed
+    # season are all `nxt`.
+    report["gm_fills"] = gm_rollover.fill_vacant_gms(cur, nxt, log=log)
     report["personality"] = staff_lifecycle(cur, events, personality)
     return report
 

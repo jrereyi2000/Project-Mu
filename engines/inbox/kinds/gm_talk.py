@@ -52,7 +52,10 @@ def _thread_history(cur, thread, limit=3):
     out = []
     for m in store.messages(cur, thread["id"])[-limit:]:
         who = "JR" if m.get("author") == "JR" else (thread.get("counterpart_name") or "the GM")
-        out.append({"message": f"{who}: {m.get('body') or ''}", "source": m.get("body_source")})
+        # JR's stored messages carry body_source "JR"; the writer's repetition rules only exempt "TEMPLATE" and
+        # "USER", so his own words were treated as the GM's and could trip a false repetition.
+        source = "USER" if m.get("author") == "JR" else (m.get("body_source") or "TEMPLATE")
+        out.append({"message": f"{who}: {m.get('body') or ''}", "source": source})
     return out
 
 
@@ -374,7 +377,7 @@ def act(cur, thread, option_id, payload, note):
         nid = state.get("negotiation_id")
         if nid is None:
             res = _engine_call(_negotiation().open_negotiation, cur, user, _abbr(cur, gm_team_id), legs, note,
-                               timeout=_llm_budget())
+                               timeout=_llm_budget(), history=_thread_history(cur, thread))
         else:
             res = _engine_call(_negotiation().offer, cur, nid, legs, note, timeout=_llm_budget(),
                                history=_thread_history(cur, thread))

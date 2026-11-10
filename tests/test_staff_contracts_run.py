@@ -92,3 +92,19 @@ def test_dry_run_writes_nothing():
 def test_without_the_tables_it_reports_not_installed():
     cur = FakeCursor(sqlite3.connect(":memory:"))
     assert scr.annual(cur, 2036)["status"] == "not_installed"
+
+
+def test_a_poached_coordinator_is_not_fired_and_owes_no_buyout():
+    """JR, 2026-11-09: a coordinator who left for a promotion or another team is a departure, not a firing."""
+    conn = _db()
+    cur = FakeCursor(conn)
+    # OC One (20) leaves team 1 and takes team 2's OC job in the same season.
+    conn.execute("UPDATE coordinator_tenures SET end_season = 2035 WHERE coordinator_id = 20")
+    conn.execute("INSERT INTO coordinator_tenures (coordinator_id, team_id, role, start_season, end_season) "
+                 "VALUES (20, 2, 'OC', 2036, NULL)")
+    conn.execute("INSERT INTO staff_contracts (team_id, person_id, person_kind, annual_salary, total_years, "
+                 "remaining_years, signed_season) VALUES (1, 20, 'OC', 3000000, 3, 2, 2035)")
+    rep = scr.annual(cur, 2036)
+    assert rep["fired"] == 0 and rep["status"] == "built"
+    cur.execute("SELECT remaining_years, buyout_owed FROM staff_contracts WHERE team_id = 1 AND person_id = 20")
+    assert cur.fetchone() == (2, 0)                   # untouched: he was not fired

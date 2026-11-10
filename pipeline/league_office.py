@@ -2455,9 +2455,16 @@ def annual_offseason_steps(cur, stage, season, wave, out=print):
     ledger), report cards + owner cash ledgers + CPU facility upgrades, then the two annual articles. Every step is
     optional and warning-only: a failure is recorded in the summary and never fails the write. Each runs in its own
     savepoint and is committed before the next, so the articles (which open their own connection) see the rows.
-    Returns {step: summary} or None when this stage isn't the annual one."""
-    if stage != FREE_AGENCY or (wave or 1) != 1:
+    Returns {step: summary} or None when this stage isn't an annual one.
+
+    Comp picks re-run on EVERY free-agency wave (JR, 2026-11-09): `award_and_persist` deletes and re-inserts the
+    season's QFA / award / comp-pick rows, so the last wave's signings are the ones the ledger counts — gating it on
+    wave 1 missed wave 2 and the combine wave. Staff contracts, report cards and their articles still run once,
+    after free agency's first wave."""
+    annual_stage = stage in FA_STAGES
+    if not annual_stage:
         return None
+    first_wave = stage == FREE_AGENCY and (wave or 1) == 1
     conn = cur.connection
     results = {}
 
@@ -2482,8 +2489,9 @@ def annual_offseason_steps(cur, stage, season, wave, out=print):
 
     from engines import compensatory_picks_run, report_card_run, staff_contracts_run
     optional("compensatory_picks", lambda: compensatory_picks_run.award_and_persist(cur, season, season + 1))
-    optional("staff_contracts", lambda: staff_contracts_run.annual(cur, season))
-    optional("report_cards", lambda: report_card_run.annual(cur, season, user_team_ids=_user_team_ids(cur)))
+    if first_wave:
+        optional("staff_contracts", lambda: staff_contracts_run.annual(cur, season))
+        optional("report_cards", lambda: report_card_run.annual(cur, season, user_team_ids=_user_team_ids(cur)))
     dsn = _conninfo(cur)
 
     def comp_article():
@@ -2495,7 +2503,8 @@ def annual_offseason_steps(cur, stage, season, wave, out=print):
         return report_card_article.run(season, publish=True, conn_info=dsn)
 
     optional("compensatory_picks_article", comp_article)
-    optional("report_card_article", card_article)
+    if first_wave:
+        optional("report_card_article", card_article)
     out(json.dumps({"annual_steps": results}, indent=1, default=str))
     return results
 

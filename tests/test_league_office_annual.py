@@ -58,12 +58,21 @@ def _patch(monkeypatch, calls, fail=()):
     monkeypatch.setattr(lo, "_user_team_ids", lambda cur: {1})
 
 
-def test_only_the_first_free_agency_wave_runs_the_annual_steps(monkeypatch):
+def test_comp_picks_run_on_every_free_agency_wave_but_the_rest_run_once(monkeypatch):
+    """JR, 2026-11-09: comp picks are computed after the FINAL free-agency wave, so they re-run each wave (the
+    producer deletes and re-inserts, so the last wave wins); the rest stay on wave 1."""
     calls = []
     _patch(monkeypatch, calls)
     assert lo.annual_offseason_steps(Cur(), "RESIGN", 2036, None, out=lambda *_: None) is None
-    assert lo.annual_offseason_steps(Cur(), lo.FREE_AGENCY, 2036, 2, out=lambda *_: None) is None
     assert calls == []
+    rep = lo.annual_offseason_steps(Cur(), lo.FREE_AGENCY, 2036, 2, out=lambda *_: None)
+    assert calls == ["comp", "comp_article"] and rep is not None
+    calls.clear()
+    rep = lo.annual_offseason_steps(Cur(), lo.COMBINE, 2036, 3, out=lambda *_: None)
+    assert calls == ["comp", "comp_article"]
+    calls.clear()
+    assert lo.annual_offseason_steps(Cur(), lo.FREE_AGENCY, 2036, 1, out=lambda *_: None) is not None
+    assert calls == ["comp", "staff", "cards", "comp_article", "card_article"]
 
 
 def test_the_steps_run_in_order_and_commit(monkeypatch):
