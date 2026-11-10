@@ -168,6 +168,11 @@ So a tuning season is a loop, not one long sim:
 stage's own advance), the stop header read before and after, the autosave copied over the named save, then a
 quit to the franchise list. It refuses anything but `CAREER-TUNE-*` and refuses while the watcher runs.
 
+**The draft order is locked by the watcher.** The live franchise's Draft Room locks it by hand; with a
+`madden_tune_*` destination the ingest calls `engines.draft_room.lock_order(cur, season + 1)` before the DRAFT
+stage runs, so the league office has picks to write. Without it the run logs "no draft order … no picks
+planned" and files nothing.
+
 The whole season is one command (`engines/tuning/season_loop.py`, P2-05): clone, regular season, postseason,
 ingest, the stage loop above one stop at a time through the eight offseason stops **and the preseason weeks and
 cut day**, then a season report scored against the real-NFL targets. The loop ends when an advance lands on the
