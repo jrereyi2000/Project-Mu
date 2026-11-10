@@ -300,6 +300,10 @@ DEALS = [
          expect=["S S S S"]),
     dict(name="hc-kept-past-his-deal", kind="HC", salary=6_000_000, years=4, signed=2026, last=2032, path="annual",
          kept=True, expect=["S S S S", "S S S S"]),
+    dict(name="hc-kept-then-leaves", kind="HC", salary=6_000_000, years=4, signed=2026, last=2030, path="annual",
+         expect=["S S S S", "S"]),                 # the season he worked past the deal is paid, nothing after
+    dict(name="gm-kept-then-fired", kind="GM", salary=3_000_000, years=4, signed=2033, last=2037, path="gm_settle",
+         expect=["S S S S", "S"]),                 # the hot seat settles him with nothing owed; that season is paid
     dict(name="oc-lateral", kind="OC", salary=2_000_000, years=3, signed=2033, last=2034, path="annual",
          moved_to=2, voided=True, expect=["S S -"]),
     dict(name="oc-poached-to-a-head-coach-job", kind="OC", salary=2_000_000, years=3, signed=2033, last=2034,
@@ -320,6 +324,8 @@ DEALS = [
          path="fc_settle", full_control=True, expect=["B B B B B"]),
     dict(name="full-control-last-year", kind="HC", salary=4_000_000, years=5, signed=2031, last=2035,
          path="fc_settle", full_control=True, expect=["S S S S B"]),
+    dict(name="full-control-kept-past-his-deal", kind="HC", salary=20_000_000, years=3, signed=2033, last=2036,
+         path="annual", full_control=True, kept=True, through=2039, expect=["S S S", "S S S S"]),
     dict(name="coach-gm", kind="HC", salary=20_000_000, years=5, signed=2030, last=2032, path="fc_settle",
          full_control=True, coach_gm=True, expect=["S S B B B"]),
 ]
@@ -376,7 +382,7 @@ def test_every_contract_year_is_paid_exactly_once(case):
     from engines import coach_hot_seat as chs, gm_rollover as gr, staff_contracts_engine as sce
 
     conn, cur, person_id = _scenario(case)
-    through = max(case["last"] + 1, case["signed"] + case["years"])
+    through = case.get("through") or max(case["last"] + 1, case["signed"] + case["years"])
     active = {}
     for season in range(case["signed"], through + 1):
         if season == case["last"] and case["path"] != "annual":
@@ -415,3 +421,9 @@ def test_every_contract_year_is_paid_exactly_once(case):
     if case.get("coach_gm"):
         cur.execute("SELECT count(*) FROM staff_contracts WHERE person_kind = 'GM'")
         assert cur.fetchone()[0] == 0                        # one man, one deal
+    if case.get("full_control") and case.get("kept"):
+        # JR: a full-control HC's re-sign keeps full control and its market, so he still counts toward the ceiling
+        cur.execute("SELECT full_control, annual_salary FROM staff_contracts WHERE person_id = %s "
+                    "ORDER BY id DESC LIMIT 1", (person_id,))
+        flagged, pay = cur.fetchone()
+        assert flagged in (1, True) and int(pay) >= case["salary"]

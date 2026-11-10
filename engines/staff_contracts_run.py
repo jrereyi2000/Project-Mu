@@ -76,21 +76,14 @@ def current_staff(cur, season):
     if _table(cur, "gm_profiles"):
         cur.execute("""SELECT team_id, id, gm_name, start_season, end_season FROM gm_profiles
                        WHERE (end_season IS NULL OR end_season >= %s) AND coach_id IS NULL AND start_season <= %s
-                       ORDER BY team_id""", (season, season))
+                       ORDER BY team_id, start_season DESC, id DESC""", (season, season))
         for r in cur.fetchall():
             add(r[0], "GM", r[1], r[2], r[3], 0, r[4])
+    # Experience is the seasons in the job (plan §2.1), for coaches and coordinators as for a GM: counting tenure
+    # rows meant a man with a single long tenure was priced as a first-timer for ever, so a re-sign never gave him
+    # the raise his service earns (M-0179; the GM rule is `max(1, season - start_season + 1)`).
     for s in out:
-        if s["person_kind"] == "GM":
-            # A GM's experience is his seasons on the job (plan §2.1): the old `count(*) FROM gm_profiles WHERE
-            # id = %s` counted the primary-key row, so it always returned 1 and a veteran GM would have been
-            # mispriced as a first-time PROMOTION.
-            s["experience"] = max(1, int(season) - int(s["start_season"] or season) + 1)
-            continue
-        if s["person_kind"] == "HC":
-            cur.execute("SELECT count(*) FROM coach_tenures WHERE coach_id = %s", (s["person_id"],))
-        else:
-            cur.execute("SELECT count(*) FROM coordinator_tenures WHERE coordinator_id = %s", (s["person_id"],))
-        s["experience"] = int(cur.fetchone()[0] or 0)
+        s["experience"] = max(1, int(season) - int(s["start_season"] or season) + 1)
     # A person whose contract this producer already fired (a hot-seat firing settles it at once) is not filed
     # again: with the tenure comparison left at ">= season" so that a poached coordinator is never charged, his
     # row would otherwise be re-filed for the next league year and then fired a second time. The skip is bounded by
@@ -142,39 +135,44 @@ def annual(cur, season, dry_run=False):
     for s in staff:
         key = (s["team_id"], s["person_kind"], s["person_id"])
         row = by_key.get(key)
-        # R4 (JR, 2026-11-10, via the audit): a man the team keeps gets a new deal at market price for the season
-        # his old one runs out, so every season he holds the job is paid. A tenure that ended in that season is a
-        # firing, a poach or a retirement: his deal is simply left to expire, and the firing loop settles it.
-        resign = (row is not None and row["remaining_years"] > 0
-                  and max(0, int(row["total_years"]) - (season - int(row["signed_season"]))) <= 0
-                  and s["end_season"] is None)
-        if row is None or row["remaining_years"] <= 0 or resign:
+        # R4 (JR, 2026-11-10, via the audit): when his deal has run out under a man still in the job, the team
+        # decides now. Kept: a new deal at market from this season, so every season he holds the job is paid.
+        # Leaving (fired, poached or retired: his tenure ends this season, or a hot-seat settle already closed his
+        # row): only the season he actually worked is filed, so it is paid and nothing is owed beyond it (M-0179).
+        expired = row is not None and max(0, int(row["total_years"]) - (season - int(row["signed_season"]))) <= 0
+        if row is None or row["remaining_years"] <= 0 or expired:
             years, salary = _years(s["person_kind"]), _salary(s["person_kind"], s["experience"],
                                                              s["championships"])
-            if s["person_kind"] == "GM" and row is not None:
+            full_control = False
+            if row is not None:
                 # His own deal's pay is a floor, never a freeze: an ELITE GM is not repriced down to STANDARD (his
-                # championships are not in the tables), but a PROMOTION GM who has served the years does move up to
-                # what his experience now prices at.
+                # championships are not in the tables), a PROMOTION GM who has served the years does move up, and a
+                # man leaving is paid the season he worked at his own salary.
                 salary = max(int(row["annual_salary"]), salary)
+                full_control = bool(row["full_control"])
+                if s["end_season"] is not None:
+                    years = 1              # he leaves: only the season he worked, nothing beyond it
             signed = max(int(row["signed_season"]), int(s["start_season"] or row["signed_season"])) if row \
                 else int(s["start_season"] or season)
             target = min(years, max(0, years - (season - signed)))
-            if target <= 0:                       # an old tenure with no live contract: file a fresh deal
+            if expired or target <= 0:            # his last deal is done: the new one starts this season, in full
                 signed, target = season, years
-            if resign:
+            if row is not None and row["remaining_years"] > 0:
                 # Close the finished deal first, so the new one is the only active contract for the person
                 # (staff_contracts_active_once).
-                rolled.append({"id": row["id"], "from": row["remaining_years"], "to": 0, "resigned": True})
+                rolled.append({"id": row["id"], "from": row["remaining_years"], "to": 0,
+                               "resigned": s["end_season"] is None})
                 if not dry_run:
                     cur.execute("UPDATE staff_contracts SET remaining_years = 0 WHERE id = %s", (row["id"],))
             filed.append({"team_id": s["team_id"], "person_kind": s["person_kind"], "person_id": s["person_id"],
                           "annual_salary": salary, "total_years": years, "remaining_years": target,
-                          "signed_season": signed})
+                          "signed_season": signed, "full_control": full_control})
             if not dry_run:
                 cur.execute("""INSERT INTO staff_contracts (team_id, person_id, person_kind, annual_salary,
                                    total_years, remaining_years, signed_season, full_control, buyout_owed)
-                               VALUES (%s, %s, %s, %s, %s, %s, %s, false, 0)""",
-                            (s["team_id"], s["person_id"], s["person_kind"], salary, years, target, signed))
+                               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 0)""",
+                            (s["team_id"], s["person_id"], s["person_kind"], salary, years, target, signed,
+                             full_control))
             continue
         target = max(0, int(row["total_years"]) - (season - int(row["signed_season"])))
         if target < row["remaining_years"]:
