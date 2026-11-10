@@ -453,26 +453,34 @@
       }
     },
     "DRAFT_HUB": {
-      "note": "Seen 2026-11-10 (P2-02): draft week replaces the GAMEDAY and WEEKLY HUB tabs with a DRAFT tab next to MANAGE ROSTER (JR). It holds the NFL DRAFT logo and one START THE NFL DRAFT button. Project Mu writes the picks into the save first; the pilot opens the draft and then simulates it (JR: 'click Draft and then click Simulate Draft').",
+      "note": "Seen 2026-11-10 (P2-02): draft week replaces the GAMEDAY and WEEKLY HUB tabs with a DRAFT tab next to MANAGE ROSTER (JR). It holds the NFL DRAFT logo and one START THE NFL DRAFT button. Project Mu writes the picks into the save first; the pilot opens the draft and then simulates it (JR: 'click Draft and then click Simulate Draft'). Anchored on the draft-week tab row plus the word START: the button's white-on-grey text OCRs as just START (2026-11-10, p2g), and the tab row is the only place DRAFT appears without GAMEDAY or WEEKLY HUB.",
       "all": [
-        "START THE NFL DRAFT"
+        "MANAGE ROSTER"
       ],
-      "any": [],
-      "none": [],
+      "any": [
+        "START"
+      ],
+      "none": [
+        "GAMEDAY",
+        "WEEKLY HUB",
+        "ADVANCE WEEK",
+        "ADJUST LINEUP",
+        "CONTRACTS"
+      ],
       "options": [
-        "START THE NFL DRAFT"
+        "START"
       ],
-      "default": "START THE NFL DRAFT",
+      "default": "START",
       "nav": "vertical",
       "highlight": "border",
       "confirm_ok": [
-        "START THE NFL DRAFT"
+        "START"
       ],
       "exits": {
         "DRAFT_LAUNCH": [
           [
             "confirm",
-            "START THE NFL DRAFT"
+            "START"
           ]
         ],
         "QUIT_CONFIRM": [

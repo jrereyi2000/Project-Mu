@@ -868,6 +868,15 @@ def advance(pilot, save=None, franchise=None, quit=True, watcher=None, folder=No
     else:
         _load_franchise(pilot, tile_name(save), save=save, folder=folder)
     frame, screen0 = pilot.look()
+    if screen0 not in DRAFT_SCREENS and pilot.frame.has("DRAFT") and not pilot.frame.has("GAMEDAY"):
+        # Draft week replaces the GAMEDAY tab with a DRAFT tab, and the hub loads on whichever
+        # tab was last open: walk back to it, because simming the draft is this stop's advance
+        # (2026-11-10, p2g: the hub loaded on MANAGE ROSTER and the advance had no route).
+        for _ in range(3):
+            pilot.press("z")
+            frame, screen0 = pilot.look()
+            if screen0 in DRAFT_SCREENS:
+                break
     before_save = _save_header(_latest_save(save_path, auto_path))
     # in the offseason the hub usually carries no phase word and its cards say things like "STAFF
     # SHAKE", so the save's own stage is the stop; the hub header is only used in season.
