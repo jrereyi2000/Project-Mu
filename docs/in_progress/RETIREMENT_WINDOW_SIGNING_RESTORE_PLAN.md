@@ -1,6 +1,10 @@
 # Project Mu: Retirement Window Signing Restore Plan
 
-**Status:** approved by JR (2026-11-09); building, wave 1 of 1.
+**Status:** approved by JR (2026-11-09); building, wave 1 of 1 done.
+
+**As built (2026-11-09):**
+- U2: `_apply_restores` became `_apply_free_agent_flip`, shared by the window and the proven decision-stage keep (both `FreeAgent`/32, view Retired, image `FreeAgent`/32, summary `restore: free_agent`); `restored_retirees` counts the sign-back, with `no_restorable_contract` and `restore_at_last_stop` warnings (the last only on a CUTDOWN restore, in the window). The sign-back test pins the existing stage-offset writer block (a `Length`-2 block with an empty offset year at `RESIGN`). Edge note: if the decision stage itself ever falls at CUTDOWN (a missed Staff save), the proven keep has the same next-run signing risk and does not warn.
+- U1: `free_agents` is the raw `League.FreeAgents` list, which also holds every practice-squad player (Madden's list semantics; `sign.mjs` header); the real free agents in it are status `FreeAgent` on team 32. The roster-length check uses `cap.SalCapRosterSize` (the snapshot has no `ActiveRosterSize`). The two existing node tests (`sign.test.mjs`, `release.test.mjs`) exclude the new team keys from their whole-object comparison.
 **Builds on:** PROJECT_SPEC §2.17f and §2.21a, [`RETIREMENT_WINDOW_PLAN.md`](../done/RETIREMENT_WINDOW_PLAN.md), and [`RETIREMENT_G4_RUNBOOK.md`](../reference/RETIREMENT_G4_RUNBOOK.md) session 3.
 
 **Goal:** The retirement window restores a native retiree by editing two fields. The G4 proof showed that
@@ -171,7 +175,7 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 
 ### U1: Reader v7 lists
 
-- **Owns:** `pipeline/save_reader/pc_save_reader.mjs`, `pipeline/save_reader/test/read_save.test.mjs`
+- **Owns:** `pipeline/save_reader/pc_save_reader.mjs`, `pipeline/save_reader/test/read_save.test.mjs`, `pipeline/save_reader/test/sign.test.mjs` (the two-line `teamsApartFromCap` update only), `pipeline/save_reader/test/release.test.mjs` (same)
 - **Reads:** `pipeline/save_reader/lib.mjs` (`arrayRefs`, `arraySlots`), `pipeline/save_reader/sign.mjs`
   (the `League.FreeAgents` pattern), `pipeline/load_save.py` (version gating)
 - **Depends on:** none
@@ -203,6 +207,8 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 |---|---|
 | `pipeline/save_reader/pc_save_reader.mjs` | U1 |
 | `pipeline/save_reader/test/read_save.test.mjs` | U1 |
+| `pipeline/save_reader/test/sign.test.mjs` | U1 (two-line helper update) |
+| `pipeline/save_reader/test/release.test.mjs` | U1 (two-line helper update) |
 | `pipeline/league_office.py` | U2 |
 | `tests/test_league_office.py` | U2 |
 
@@ -231,3 +237,5 @@ and changes no code.
 
 | Unit | Wave | Branch | Worktree | Result | Merge |
 |---|---|---|---|---|---|
+| U1 Reader v7 lists | 1 | `retire-reader-v7` | `.claude/worktrees/retire-reader-v7` | merged | `6e1120a` |
+| U2 Free-agent flip restore | 1 | `retire-window-flip` | `.claude/worktrees/retire-window-flip` | merged | `802e4cd` |
