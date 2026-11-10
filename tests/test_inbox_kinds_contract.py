@@ -82,10 +82,12 @@ def patch_fa(monkeypatch):
 
     from server import franchise_api as real_api
 
+    # Captured BEFORE the patch: binding inside fake_insert read the patched fake's own (*args, **kwargs)
+    # signature, so the bind always succeeded (M-0148). No leading None either: args already carries the cursor.
+    real_insert_sig = inspect.signature(real_api.insert_offer)
+
     def fake_insert(*args, **kwargs):
-        # Bind the real signature on every call, so a parameter added at the seam fails here rather than in
-        # production (M-0125: a hand-written argument list also passed on the parent code).
-        inspect.signature(real_api.insert_offer).bind(None, *args, **kwargs)
+        real_insert_sig.bind(*args, **kwargs)
         state["inserts"].append((args, kwargs))
         return 500
 

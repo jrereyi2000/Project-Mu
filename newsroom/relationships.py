@@ -606,10 +606,15 @@ def decay(cur, season: int) -> int:
             if _touched_since(evidence, season):
                 continue
             new = decayed_trust(float(trust), tags)
-            real = [e for e in evidence if not (isinstance(e, dict) and e.get("kind") == "DECAY")][-EVIDENCE_KEEP:]
+            real = [e for e in evidence
+                    if isinstance(e, dict) and e.get("kind") not in ("DECAY", "APPLIED_REFS")][-EVIDENCE_KEEP:]
+            # The applied-refs entry rides through untouched: dropping it let a forced rerun of an old season apply
+            # the same graded picks again (M-0150 B12).
+            sticky = next((e for e in reversed(evidence)
+                           if isinstance(e, dict) and e.get("kind") == "APPLIED_REFS"), None)
             marker = {"season": season, "week": 0, "kind": "DECAY", "delta": round(new - float(trust), 2), "text": ""}
             cur.execute("UPDATE persona_relationships SET trust = %s, evidence = %s::jsonb, updated_at = NOW() WHERE id = %s;",
-                        (new, json.dumps(real + [marker]), rid))
+                        (new, json.dumps(([sticky] if sticky else []) + real + [marker]), rid))
             n += 1
         return n
     return _guarded(cur, work, 0) or 0

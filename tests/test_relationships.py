@@ -249,6 +249,21 @@ class DecayTests(unittest.TestCase):
         self.assertEqual(db.rows[("p", "team", "3")]["trust"], -0.48)
         self.assertEqual(db.rows[("p", "player", "2")]["trust"], 0.5)
 
+    def test_decay_keeps_the_applied_refs_so_a_rerun_never_reapplies(self):
+        """M-0150 B12: decay rebuilt evidence from the last five moves only, dropping the sticky applied-refs entry,
+        so a forced rerun of an old season applied the same graded picks a second time."""
+        db = FakeDB()
+        db.rows[("p", "team", "1")] = {"id": 1, "trust": 0.4, "tags": [], "evidence": [
+            {"kind": "APPLIED_REFS", "refs": ["pick:7", "pick:9"]}] + [
+            {"season": 2030, "week": w, "kind": "PICK_RIGHT", "delta": 0.03, "text": "x", "ref": f"pick:{w}"}
+            for w in range(1, 7)]}
+        self.assertEqual(rel.decay(db, 2036), 1)
+        ev = db.rows[("p", "team", "1")]["evidence"]
+        self.assertEqual(next(e for e in ev if e.get("kind") == "APPLIED_REFS")["refs"], ["pick:7", "pick:9"])
+        self.assertEqual(ev[-1]["kind"], "DECAY")
+        self.assertTrue(rel._already_applied(db, "p", "team", "1", "pick:9"))
+        self.assertFalse(rel._already_applied(db, "p", "team", "1", "pick:11"))
+
 
 class BlockTests(unittest.TestCase):
     ROWS = [

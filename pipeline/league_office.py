@@ -2392,6 +2392,7 @@ def replace_save(src, dest):
 def plan_record(plan):
     """What record_written needs, as JSON (stored with the operation so --recover can finish the run)."""
     return {"db": plan["db"], "season": plan["season"], "week": plan["week"], "calendar_year": plan["calendar_year"],
+            "wave": plan.get("wave"),
             "team_ids": {str(k): v for k, v in plan["team_ids"].items()},
             "pid_by_pgid": {str(k): v for k, v in plan["pid_by_pgid"].items()},
             "cap": {str(k): v for k, v in (plan.get("cap") or {}).items()},
@@ -2718,6 +2719,9 @@ def recover(cur, run_id, save_path=None, deps=None, out=print):
     if deps is None:
         from pipeline import league_office_personality as lop
         deps = lop.deps_for(cur, (op or {}).get("personality_modes"))
+        # deps_for builds a plain Deps or a PersonalityDeps and neither carries the flag the writers set, so the
+        # annual producers below never ran on a real --recover (M-0148 B5).
+        deps.annual_steps = True
     if row["status"] == "WRITTEN":
         out(json.dumps({"run_id": run_id, "status": "WRITTEN", "note": "already acknowledged; nothing to do"}))
         return "ALREADY_WRITTEN"
@@ -2742,7 +2746,10 @@ def recover(cur, run_id, save_path=None, deps=None, out=print):
         if getattr(deps, "annual_steps", False):
             season = _run_season(cur, run_id)
             if season is not None:
-                annual_offseason_steps(cur, row["stage"], season, 1, out)
+                # The run's own free-agency wave, not a hard-coded wave 1: recovering a wave-2 run must re-run its
+                # comp picks and must not repeat wave-1's once-a-season steps (M-0148 B5).
+                wave = (op.get("record") or {}).get("wave") or 1
+                annual_offseason_steps(cur, row["stage"], season, wave, out)
         out(json.dumps({"run_id": run_id, "status": "WRITTEN", "recovered": True, "output_sha256": current,
                         "acknowledged_events": acknowledged}))
         return "ACKNOWLEDGED"

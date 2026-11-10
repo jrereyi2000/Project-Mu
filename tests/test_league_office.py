@@ -330,6 +330,8 @@ class FakeCursor:
             r = runs.get(args[0])
             self._ret = (args[0], r["status"], r["stage"], r["save_name"], json.dumps(r["edits"]),
                          json.dumps(r["summary"])) if r else None
+        elif norm.startswith("SELECT season FROM league_office_runs"):
+            self._ret = (SEASON,) if args[0] in runs else None
 
     def executemany(self, sql, rows):
         self.sql.append((" ".join(sql.split()), list(rows)))
@@ -1230,6 +1232,25 @@ def test_recovery_acknowledges_the_original_events(save, monkeypatch):
     assert any(s.startswith("UPDATE franchise_pending_moves") for s, _ in cur.sql)
     # a second recovery does nothing
     assert lo.recover(cur, run_id, deps=deps, out=out.append) == "ALREADY_WRITTEN" and len(deps.acks) == 1
+
+
+def test_a_recovered_write_runs_the_annual_steps_with_the_runs_own_wave(save, monkeypatch):
+    """M-0148 B5: --recover passed deps=None, whose deps_for() never sets annual_steps, and hard-coded wave 1, so a
+    recovered write never ran the season's producers, and a wave-2 recovery would have re-run the wave-1 steps."""
+    from pipeline import league_office_personality as lop
+    cur, run_id, _ = _crashed_after_replacement(save, monkeypatch)
+    row = cur.db["runs"][run_id]                 # what _load_run reads
+    row["stage"] = "FREE_AGENCY"
+    row["summary"]["operation"]["record"]["wave"] = 2
+    rdeps = FakeDeps(snapshot())
+    rdeps.cur, rdeps.seen["save"] = cur, save
+    rdeps.written_edits = row["edits"]
+    monkeypatch.setattr(lop, "deps_for", lambda *a, **k: rdeps)
+    calls = []
+    monkeypatch.setattr(lo, "annual_offseason_steps",
+                        lambda c, stage, season, wave, out: calls.append((stage, season, wave)))
+    assert lo.recover(cur, run_id, out=lambda s: None) == "ACKNOWLEDGED"    # no deps= : the CLI's path
+    assert calls == [("FREE_AGENCY", SEASON, 2)]
 
 
 def test_recovery_refuses_when_the_save_hash_does_not_match(save, monkeypatch):

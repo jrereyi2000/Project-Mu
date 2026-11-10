@@ -176,20 +176,24 @@ def test_no_order_without_cash():
 
 
 def test_a_completed_renovation_is_not_re_applied_in_later_seasons():
-    """B2 (chunk 9): the COMPLETED-included fix re-applied a renovation every season, undoing each later notch of
-    wear and keeping `upgraded` above zero for ever. It applies in its completion season only."""
-    import sqlite3
-    from engines import report_card_run
-
-    # The pure check, exercised through the loop's condition, over a three-season span.
-    def applies(status, completion_season, season):
-        return (status == "IN_PROGRESS" and season >= completion_season) or \
-               (status == "COMPLETED" and season == completion_season)
-
-    assert applies("IN_PROGRESS", 2028, 2028) and applies("IN_PROGRESS", 2028, 2029)   # a missed run still lands it
-    assert applies("COMPLETED", 2028, 2028)                                          # the re-run case
-    assert not applies("COMPLETED", 2028, 2029)                                      # later seasons let it wear
-    assert not applies("COMPLETED", 2028, 2032)
+    """B2 (chunk 9): the producer re-applied a COMPLETED renovation every season, undoing each later notch of wear
+    and keeping the grade at its target for ever. The old test re-implemented the loop's condition, so it guarded
+    nothing (M-0148 N6); this one runs the producer over three later seasons and watches the grade wear."""
+    cur = FakeCursor(_db())
+    cur.execute("INSERT INTO facility_upgrades (team_id, season_ordered, category, cost_dollars, target_grade, "
+                "completion_season, status) VALUES (1, 2035, 'weight_room', 1, 'A', 2036, 'COMPLETED')")
+    rcr.annual(cur, 2036)                                        # the completion season applies it
+    assert dict((tid, grade) for tid, grade, _, _ in _cards(cur, 2036))[1] == "A"
+    rcr.annual(cur, 2036)                                        # a same-season rerun keeps it
+    assert dict((tid, grade) for tid, grade, _, _ in _cards(cur, 2036))[1] == "A"
+    rcr.annual(cur, 2037)
+    assert dict((tid, grade) for tid, grade, _, _ in _cards(cur, 2037))[1] == "A"     # one unmaintained season
+    rcr.annual(cur, 2038)
+    rcr.annual(cur, 2039)                                        # three unmaintained seasons: one notch of wear
+    assert dict((tid, grade) for tid, grade, _, _ in _cards(cur, 2039))[1] != "A"
+    for s in (2040, 2041, 2042):                                 # six: a second notch, which re-applying would undo
+        rcr.annual(cur, s)
+    assert dict((tid, grade) for tid, grade, _, _ in _cards(cur, 2042))[1] not in ("A", "A-")
 
 
 def test_a_dead_buyout_is_paid_over_the_years_the_deal_had_left():
@@ -206,3 +210,35 @@ def test_a_dead_buyout_is_paid_over_the_years_the_deal_had_left():
     paid = [sce.buyout_instalment(odd, s) for s in (2026, 2027, 2028)]
     assert sum(paid) == odd["buyout_total"] and paid[-1] >= paid[0]   # the last takes the remainder
     assert sce.buyout_instalment({"buyout_total": None, "buyout_fired_season": None, "buyout_years": None}, 2026) == 0
+
+
+def test_a_missing_buyout_schedule_does_not_abort_the_transaction():
+    """M-0148 N5: the try/except had no savepoint, so on Postgres a database without 2027_02_20 aborted the whole
+    transaction and the report-cards step died instead of skipping the buyout."""
+    class PgLike:
+        """Postgres semantics: a failed statement aborts the transaction until a savepoint restores it."""
+
+        def __init__(self):
+            self.aborted, self._row = False, None
+
+        def execute(self, q, a=None):
+            s = " ".join(str(q).split())
+            if s.startswith("ROLLBACK TO SAVEPOINT"):
+                self.aborted = False
+            elif self.aborted:
+                raise RuntimeError("InFailedSqlTransaction")
+            elif "SELECT buyout_total" in s:
+                self.aborted = True
+                raise RuntimeError('column "buyout_total" does not exist')
+            elif "to_regclass" in s:
+                self._row = (True,)
+
+        def fetchone(self):
+            return self._row
+
+        def fetchall(self):
+            return []
+
+    cur = PgLike()
+    assert rcr._dead_buyouts(cur, 2036, 1) == 0
+    assert rcr._dead_buyouts(cur, 2036, 1) == 0          # the transaction is still usable

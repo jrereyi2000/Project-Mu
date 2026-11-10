@@ -139,12 +139,22 @@ def _dead_buyouts(cur, season, team_id):
     if not _table(cur, "staff_contracts"):
         return 0
     try:
+        # A savepoint: on a database without 2027_02_20 the failed SELECT aborts the whole transaction, so the
+        # report-cards step died instead of skipping the buyout (M-0148 N5).
+        cur.execute("SAVEPOINT dead_buyouts")
         cur.execute("""SELECT buyout_total, buyout_fired_season, buyout_years FROM staff_contracts
                        WHERE team_id = %s AND buyout_total > 0""", (team_id,))
+        rows = cur.fetchall()
+        cur.execute("RELEASE SAVEPOINT dead_buyouts")
     except Exception:      # noqa: BLE001 - a database without 2027_02_20 has no schedule to read
+        try:
+            cur.execute("ROLLBACK TO SAVEPOINT dead_buyouts")
+            cur.execute("RELEASE SAVEPOINT dead_buyouts")
+        except Exception:  # noqa: BLE001
+            pass
         return 0
     return sum(sce.buyout_instalment({"buyout_total": t, "buyout_fired_season": f, "buyout_years": y}, season)
-               for t, f, y in cur.fetchall())
+               for t, f, y in rows)
 
 
 def _previous_bands(cur, season):
