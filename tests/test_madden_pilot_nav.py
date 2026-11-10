@@ -183,6 +183,20 @@ def test_classify_spike_screens(name):
     assert classify(frame_of(SCREEN_LINES[name]), CAT) == name
 
 
+def test_the_draft_class_card_survives_garbled_ocr():
+    # 2026-11-10 (p2g): Windows OCR read the headline as "ICHR OKIES / ILL WE SEE IN", so a
+    # ROOKIES anchor missed the card, the advance was refused and the season sat on the hub.
+    frame = frame_of(["GAMEDAY", "2026. WEEK I", "MANAGE ROSTER", "ICHR OKIES", "ILL WE SEE IN",
+                      "APRIL'S DRAFT?", "Choose the type of draft class", "Delegate"])
+    assert classify(frame, CAT) == "HUB_WEEKLY_DRAFT_CARD"
+
+
+def test_the_incomplete_tasks_banner_wins_over_the_hub_behind_it():
+    frame = frame_of(["WEEKLY HUB", "MANAGE ROSTER", "COACH CENTRAL", "INCOMPLETE WEEKLY TASKS",
+                      "Choose this year's draft class before advancing.", "CLOSE"])
+    assert classify(frame, CAT) == "INCOMPLETE_TASKS"
+
+
 def test_classify_unknown_and_word_boundaries():
     assert classify(frame_of([]), CAT) == UNKNOWN
     assert classify(frame_of(["EA SPORTS", "LOADING"]), CAT) == UNKNOWN

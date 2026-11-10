@@ -62,6 +62,48 @@
         ]
       }
     },
+    "INCOMPLETE_TASKS": {
+      "note": "The banner Madden puts over the hub when ADVANCE WEEK is taken before the Week 1 draft class is chosen (2026-11-10, p2g): 'INCOMPLETE WEEKLY TASKS / Choose this year's draft class before advancing. / CLOSE'. Listed before the hub screens, whose tab row stays readable behind it and would otherwise classify this frame as HUB_WEEKLY/HUB_GAMEDAY. CLOSE returns to the hub; the card is then delegated on HUB_WEEKLY_DRAFT_CARD.",
+      "all": [
+        "INCOMPLETE WEEKLY TASKS"
+      ],
+      "any": [],
+      "none": [
+        "CURRENT FRANCHISES",
+        "PROGRESSION WARNING"
+      ],
+      "options": [
+        "CLOSE"
+      ],
+      "default": "CLOSE",
+      "nav": "horizontal",
+      "highlight": "border",
+      "confirm_ok": [
+        "CLOSE"
+      ],
+      "exits": {
+        "HUB_WEEKLY": [
+          [
+            "highlight",
+            "CLOSE"
+          ],
+          [
+            "confirm",
+            "CLOSE"
+          ]
+        ],
+        "HUB_GAMEDAY": [
+          [
+            "highlight",
+            "CLOSE"
+          ],
+          [
+            "confirm",
+            "CLOSE"
+          ]
+        ]
+      }
+    },
     "QUIT_CONFIRM": {
       "note": "Spike b3: Back on the hub. NO is highlighted on arrival; Up then Space chooses YES, which writes <save>-AUTOSAVE and returns to CURRENT FRANCHISES. 2026-11-10: Windows OCR does not read the NO label at all, so the cancel route is Backspace (the dialog closes exactly as NO does); YES is still found and bordered.",
       "all": [
@@ -632,13 +674,15 @@
       }
     },
     "HUB_WEEKLY_DRAFT_CARD": {
-      "note": "Weekly Hub with the Week 1 draft-class card selected (2026-11-10, P2-01): 'WHICH ROOKIES WILL WE SEE IN APRIL'S DRAFT?'. Madden refuses to advance the week until it is delegated: hold Q (footer reads HOLD TO DELEGATE) \u2014 JR. Space is never pressed here; Q is allowed on this screen only, and the season loop holds it before reading the week.",
+      "note": "Weekly Hub with the Week 1 draft-class card selected (2026-11-10, P2-01): 'WHICH ROOKIES WILL WE SEE IN APRIL'S DRAFT?'. Madden refuses to advance the week until it is delegated: hold Q (footer reads HOLD TO DELEGATE) \u2014 JR. Space is never pressed here; Q is allowed on this screen only, and the season loop holds it before reading the week. Anchored on the card's own 'CHOOSE THE TYPE OF DRAFT CLASS' line (2026-11-10, p2g): the headline is not stable \u2014 Windows OCR read 'ICH ROOKIES / ILL WE SEE IN', so a ROOKIES match missed the card and the advance was blocked by INCOMPLETE WEEKLY TASKS.",
       "all": [
-        "ROOKIES"
+        "DRAFT CLASS"
       ],
       "any": [
-        "DRAFT",
-        "DELEGATE"
+        "ROOKIES",
+        "OKIES",
+        "DELEGATE",
+        "APRIL S DRAFT"
       ],
       "none": [
         "CURRENT FRANCHISES",
@@ -811,7 +855,7 @@
       }
     },
     "FRANCHISE_LANDING": {
-      "note": "Seen 2026-11-10 (P2-01, full-screen capture after the driver was made DPI-aware): the Franchise mode page with three cards. CONTINUE is selected on arrival and resumes the last-played save; Right then Space on CREATE / LOAD opens CURRENT FRANCHISES (JR: 'it needs to go right ... hit Create and Load, not Continue'). The border reader picks CONTINUE correctly on arrival.",
+      "note": "Seen 2026-11-10 (P2-01, full-screen capture after the driver was made DPI-aware): the Franchise mode page with three cards. CONTINUE is selected on arrival and resumes the last-played save; Right then Space on CREATE / LOAD opens CURRENT FRANCHISES (JR: 'it needs to go right ... hit Create and Load, not Continue'). The border reader picks CONTINUE correctly on arrival. The main menu draws the same three cards behind its mode rail, so it reads as this page too; jobs._leave_to_main_menu tells them apart by the rail's own words (AUTHENTIC, PERSONA ENGINE, ONLINE LEAGUES, TEAM PASS) and stops there rather than pressing Back into EXIT MADDEN (2026-11-10, p2g).",
       "all": [
         "FRANCHISE"
       ],

@@ -678,6 +678,7 @@ def _walk_to_tile(pilot, tile, folder):
 
 
 MAIN_MENU_SCREENS = ("MAIN_MENU", "MAIN_MENU_RAIL", "TITLE_SCREEN")
+MAIN_MENU_WORDS = ("AUTHENTIC", "PERSONA ENGINE", "ONLINE LEAGUES", "TEAM PASS")   # the mode rail
 LIST_WORDS = frozenset({"CURRENT", "FRANCHISES", "CREATE", "NEW", "LEAGUE", "LEAGUES", "ACCEPT", "DELETE",
                         "NEXT", "SELECT", "TIMES", "AM", "PM"})    # CURRENT FRANCHISES' own words
 
@@ -693,7 +694,9 @@ def _leave_to_main_menu(pilot, max_backs=3):
     confirmed."""
     for _ in range(max_backs):
         _, screen = pilot.look()
-        if screen in MAIN_MENU_SCREENS:
+        # the main menu draws the Franchise cards behind its rail, so it reads as the landing
+        # page; the rail's own words are the only thing that tells them apart
+        if screen in MAIN_MENU_SCREENS or any(pilot.frame.has(w) for w in MAIN_MENU_WORDS):
             return screen
         if screen == "EXIT_MADDEN":
             pilot.press(pilot.key_name("select"), _confirm=True)
