@@ -126,9 +126,14 @@ def test_gm_search_picks_the_best_affordable_candidate():
     assert {c["tier"] for c in pool} == {"ELITE", "STANDARD", "PROMOTION"}
     assert [c["tier"] for c in sorted(pool, key=lambda c: -c["stature"])] == ["ELITE", "STANDARD", "PROMOTION"]
 
-    rich = gm_search(pool, appeal=0.6, budget=50_000_000)     # can afford anyone: the elite architect wins
+    rich = gm_search(pool, appeal=0.6, budget=50_000_000)     # can afford anyone and the job appeals: ELITE wins
     assert rich["tier"] == "ELITE"
 
-    poor = gm_search(pool, appeal=0.3, budget=1_000_000)      # can afford no one: the cheapest candidate wins
-    assert poor["tier"] == "STANDARD"
+    middling = gm_search(pool, appeal=0.4, budget=50_000_000)  # ELITE refuses the opening; STANDARD and PROMOTION accept
+    assert middling["tier"] == "STANDARD"
+    assert any(d["tier"] == "ELITE" and d["reason"] == "appeal" for d in middling["declined"])
+
+    poor = gm_search(pool, appeal=0.3, budget=1_000_000)      # nobody affordable: the cheapest willing candidate wins
+    assert poor["tier"] == "PROMOTION"
+    assert poor["salary"] == 2_750_000
     assert poor["salary"] == min(c["salary"] for c in pool)

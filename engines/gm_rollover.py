@@ -18,6 +18,11 @@ its minimum tenure MIN_TENURE + the delta (at least 1); rows without it are deci
 the terms to CPU teams with a reviewed owner when the feature is active; in shadow the hot seat is today's and the
 report's owner_shadow lists the GMs the owner terms would have decided differently. MAX_FIRES and JR's safety
 (his GMs are never fired) never change.
+
+Owner hiring (switchboard `owner_hiring`, GM_HIRING_SEARCH_PLAN §2.4): `_hire_gm` applies `owner_policy.appeal_term`
+and `gm_hiring_key` to the search for a CPU team with a reviewed owner when the feature is active; in shadow it hires
+as off and the report's owner_shadow records where the owner's terms would have changed the tier or effective appeal.
+JR's teams never get an owner term.
 """
 import argparse
 import json
@@ -86,11 +91,17 @@ def rollover_actions(state):
 
 
 # -------------------------------------------------------------------- competitive GM hiring search ----
+# GM_HIRING_SEARCH_PLAN §2.3: an opening's effective appeal gates candidate willingness by tier, and surplus appeal
+# above the tier's floor is weighted by tier rather than added as a constant offset.
+GM_MIN_APPEAL = {"ELITE": 0.55, "STANDARD": 0.35, "PROMOTION": 0.0}
+GM_APPEAL_WEIGHT = {"ELITE": 0.40, "STANDARD": 0.20, "PROMOTION": 0.05}
+
+
 def gm_candidate_pool(abbr, season):
     """Pure. The personnel-director candidates for one GM opening (STAFF_CONTRACTS_AND_FULL_CONTROL_PLAN §1): an
     ELITE architect, an established STANDARD director and a first-time PROMOTION, each at U1's market salary with a
-    seeded stature. ELITE always outranks STANDARD always outranks PROMOTION on stature; the owner's budget decides
-    which tier the team can afford."""
+    seeded stature and his tier's `min_appeal` acceptance floor. ELITE always outranks STANDARD always outranks
+    PROMOTION on stature; the opening's effective appeal and the owner's budget decide which tiers accept."""
     from engines import staff_contracts_engine as sce
     rng = random.Random(f"gmsearch:{abbr}:{season}")
     pool = []
@@ -99,20 +110,56 @@ def gm_candidate_pool(abbr, season):
         pool.append({"key": f"{abbr}:{tier}", "tier": tier, "experience": experience,
                      "championships": championships,
                      "salary": sce.market_salary("GM", experience=experience, championships=championships),
-                     "stature": round(base + rng.uniform(-0.08, 0.08), 3)})
+                     "stature": round(base + rng.uniform(-0.08, 0.08), 3),
+                     "min_appeal": GM_MIN_APPEAL[tier]})
     return pool
 
 
-def gm_search(candidates, *, appeal, budget):
-    """Pure. The best candidate the owner can afford: the highest (stature + appeal) whose market salary fits the
-    budget; if none fit, the cheapest candidate (a team must have a GM)."""
-    affordable = [c for c in candidates if (c.get("salary") or 0) <= budget]
-    if affordable:
-        return max(affordable, key=lambda c: (round((c.get("stature") or 0) + appeal, 3),
+def gm_candidate_score(candidate, appeal, owner_view=None) -> float:
+    """Pure. Candidate stature plus tier-weighted surplus appeal above the tier floor and the owner's GM hiring
+    preference term."""
+    from engines import owner_policy as op
+    tier = candidate.get("tier") or "STANDARD"
+    stature = float(candidate.get("stature") or 0.0)
+    floor = float(candidate.get("min_appeal", GM_MIN_APPEAL.get(tier, 0.0)))
+    weight = GM_APPEAL_WEIGHT.get(tier, 0.20)
+    surplus_appeal = max(0.0, float(appeal) - floor)
+    return round(stature + weight * surplus_appeal + op.gm_hiring_key(owner_view, candidate), 4)
+
+
+def gm_search(candidates, *, appeal, budget, owner_view=None):
+    """Pure. Evaluates candidate willingness (effective_appeal >= min_appeal) and affordability (salary <= budget),
+    recording refusals in `declined`. Returns a copy of the winning candidate dict enriched with
+    {score, effective_appeal, declined}, or None if `candidates` is empty."""
+    from engines import owner_policy as op
+    if not candidates:
+        return None
+    eff_appeal = round(max(0.0, min(1.0, float(appeal) + op.appeal_term(owner_view))), 3)
+    declined, eligible, willing = [], [], []
+    for c in candidates:
+        floor = float(c.get("min_appeal", GM_MIN_APPEAL.get(c.get("tier"), 0.0)))
+        sal = int(c.get("salary") or 0)
+        if eff_appeal < floor:
+            declined.append({"key": c["key"], "tier": c.get("tier"), "reason": "appeal",
+                             "min_appeal": floor, "appeal": eff_appeal})
+            continue
+        willing.append(c)
+        if sal > budget:
+            declined.append({"key": c["key"], "tier": c.get("tier"), "reason": "budget",
+                             "salary": sal, "budget": budget})
+        else:
+            eligible.append(c)
+    if eligible:
+        winner = max(eligible, key=lambda c: (gm_candidate_score(c, eff_appeal, owner_view),
                                               -(c.get("salary") or 0), c["key"]))
-    if candidates:
-        return min(candidates, key=lambda c: ((c.get("salary") or 0), -round(c.get("stature") or 0, 3), c["key"]))
-    return None
+    elif willing:
+        winner = min(willing, key=lambda c: ((c.get("salary") or 0),
+                                             -gm_candidate_score(c, eff_appeal, owner_view), c["key"]))
+    else:
+        winner = min(candidates, key=lambda c: ((c.get("salary") or 0),
+                                                -round(c.get("stature") or 0, 3), c["key"]))
+    return dict(winner, score=gm_candidate_score(winner, eff_appeal, owner_view),
+                effective_appeal=eff_appeal, declined=declined)
 
 
 def read_state(cur, season):
@@ -208,7 +255,8 @@ def _hire_gm(cur, season, prior, abbr, team_id, llm, *, why, log=print, vacate_o
     report. `vacate_only`: close the outgoing tenure and stop — P1-27 runs the GM hot seat before the coaching
     carousel, and the seat it empties is filled by `fill_vacant_gms` once the head coaches are hired (a hire here
     always left the seat occupied, so the carousel's dual-vacancy gate could never pass). `first_draft`: the first
-    draft class the new GM runs; default the one after `season`."""
+    draft class the new GM runs; default the one after `season`. The `owner_hiring` switchboard applies the owner's
+    terms to CPU teams only (active; shadow records owner_shadow and hires as off)."""
     from engines import coaching_carousel as cc
     from engines import gm_personas
     cur.execute("SELECT id FROM gm_profiles WHERE team_id = %s AND end_season IS NULL", (team_id,))
@@ -227,8 +275,27 @@ def _hire_gm(cur, season, prior, abbr, team_id, llm, *, why, log=print, vacate_o
     except Exception:
         pass
     budget = _gm_budget(cur, season, team_id, abbr)
-    winner = gm_search(gm_candidate_pool(abbr, season), appeal=appeal, budget=budget) or \
-        {"tier": "STANDARD", "salary": 0, "stature": 0.5}
+    pool = gm_candidate_pool(abbr, season)
+    from engines import owner_context as octx
+    hmode = octx.feature_mode(cur, "owner_hiring")
+    view = None
+    if hmode != "off" and team_id not in octx.user_team_ids(cur):
+        try:
+            view = octx.team_owner_views(cur).get(team_id)
+        except Exception:  # noqa: BLE001 - the owner wiring never fails a hire
+            view = None
+    if hmode == "active" and view is not None:
+        winner = gm_search(pool, appeal=appeal, budget=budget, owner_view=view)
+    else:
+        winner = gm_search(pool, appeal=appeal, budget=budget)
+    winner = winner or {"tier": "STANDARD", "salary": 0, "stature": 0.5}
+    owner_shadow = None
+    if hmode == "shadow" and view is not None:
+        alt = gm_search(pool, appeal=appeal, budget=budget, owner_view=view)
+        if alt is not None and (alt.get("key") != winner.get("key")
+                                or alt.get("effective_appeal") != winner.get("effective_appeal")):
+            owner_shadow = {"picked": winner["tier"], "owner_pick": alt["tier"],
+                            "appeal": round(appeal, 3), "owner_appeal": alt.get("effective_appeal")}
     teams = gm_personas.read_teams(cur, season)
     open_ = gm_personas.read_open(cur)
     others = {a: t for a, t in open_.items() if a != abbr}
@@ -255,8 +322,13 @@ def _hire_gm(cur, season, prior, abbr, team_id, llm, *, why, log=print, vacate_o
             pass
     log(f"  gm search: {abbr} hires a {winner['tier']} GM (appeal {appeal:.3f}, budget ${budget:,}, "
         f"${winner['salary']:,})")
-    return {"gm": p["gm_name"], "tier": winner["tier"], "salary": winner["salary"],
-            "appeal": round(appeal, 3), "budget": budget}
+    rep = {"gm": p["gm_name"], "tier": winner["tier"], "salary": winner["salary"],
+           "appeal": round(appeal, 3),
+           "effective_appeal": winner.get("effective_appeal", round(appeal, 3)),
+           "budget": budget, "declined": list(winner.get("declined") or ())}
+    if owner_shadow is not None:
+        rep["owner_shadow"] = owner_shadow
+    return rep
 
 
 def _settle_gm_contract(cur, person_id, log=print):
