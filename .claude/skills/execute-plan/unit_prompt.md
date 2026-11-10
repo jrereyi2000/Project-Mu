@@ -22,6 +22,7 @@ Rules (these override CLAUDE.md where they conflict):
 - Tests run offline: `pytest -m "not integration" ...`. Never connect to the live `madden` database or any `madden_*` database. Don't run the napper tests wholesale.
 - Commit your work on your current branch (conventional message, e.g. `feat(tools): ...`, ending with the Co-Authored-By attribution line your session uses). Don't merge, rebase, check out main, or push.
 - Keep to the plan. If the plan is wrong, do the smallest sensible thing inside your files and say so under NOTES.
+- If your files touch staff contracts, the carousel, `coach_save_sync` / `coach_link`, the save writer (`pipeline/save_reader/`) or `league_office`, run these before reporting: `python3 -m tools.offseason_check e2e --save "/mnt/c/Users/jrere/Documents/Madden NFL 27/saves/CAREER-MUBASE"` (it works on a copy; in a worktree, first symlink the main checkout's `pipeline/save_reader/node_modules`), plus `python3 -m tools.offseason_check timelines` for contract changes. Put both result tables under VERIFY. A failing row is either fixed or named under NOTES as a known open item with its board message number. Fakes alone don't prove these areas (docs/reference/ACCEPTANCE_CHECKS.md).
 
 Final report (your last message; use SubagentHandback if you have it), in this shape:
 STATUS: done | failed | blocked

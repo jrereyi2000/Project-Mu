@@ -38,6 +38,7 @@ You are the orchestrator. Subagents write the code; you review, merge, keep the 
 2. `git log --oneline main..<branch>` and `git diff --stat main...<branch>`. Every changed file must be in the unit's Owns list. Anything else is a failure.
 3. Read the diff. Check it does what §2 says, matches the interfaces other units rely on, and touches no live database, secrets or unrelated code.
 4. Run the unit's Verify command in its worktree. It must pass.
+5. If the unit touched staff contracts, the carousel, `coach_save_sync` / `coach_link`, the save writer (`pipeline/save_reader/`) or `league_office`, its report must include `python3 -m tools.offseason_check` result tables: `e2e` on CAREER-MUBASE, plus `timelines` for contract changes. Every row must pass, or be named as a known open item with its board message. Missing tables count as a failure. See `docs/reference/ACCEPTANCE_CHECKS.md`.
 
 **Merge.** On main: `git merge --no-ff --no-edit <branch>`. Then run the Verify command again on main.
 - **Conflict:** run `python3 .claude/skills/execute-plan/combine_conflicts.py`.
@@ -65,7 +66,8 @@ You are the orchestrator. Subagents write the code; you review, merge, keep the 
    - the list of the plan's own commits in that range, from `git log --format='%h %s'`, filtered to this plan's units, merges, orchestrator fixes and spec commits, because other sessions commit to `main` in between;
    - per unit, one line: what it built, its merge sha, and its Verify result;
    - deviations from the plan, and anything left open;
-   - which databases each migration was applied to.
+   - which databases each migration was applied to;
+   - if the plan touched staff contracts, the carousel, `coach_save_sync` / `coach_link`, the save writer or `league_office`: the `tools.offseason_check` result tables (`e2e` on CAREER-MUBASE, and `timelines` for contract changes) run on main after the last merge, so the auditor reruns the same tool against the same save.
 
    Ask for a review of those commits against the plan. Don't wait for the verdict to finish this step. When it arrives, take any PARTIAL or OPEN findings back as fixes on this plan, or tell JR to hand them to the builder if this session has ended.
 5. Tell JR: what was built (per unit, one line), merge commits, combined conflicts, deviations from the plan, retries, anything left (failed or dropped units, worktrees that wouldn't remove, §8 questions still open), and the board message number of the audit request.

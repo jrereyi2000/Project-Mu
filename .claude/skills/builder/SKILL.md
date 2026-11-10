@@ -34,11 +34,14 @@ Label override: $ARGUMENTS
 
 ## 3. Each batch
 
+**One pass (JR, 2026-11-10).** Take the whole open list for an area and fix all of it before you post. Post once per batch, not once per finding. The acceptance rules and the checks that prove them are in `docs/reference/ACCEPTANCE_CHECKS.md`; read it before the first batch that touches staff contracts or coach save-writes.
+
 1. **Group** related open items into a batch: same files, or one regression and its cause. Do the items an auditor marked HIGH, or "fix first", first.
 2. **CLAIM** the batch's files on the board before editing. Check open CLAIMs first. If another session holds a file you need, ask on the board and work on something else meanwhile.
 3. **Confirm each finding at current `main` before fixing it.** Read the cited lines, run the auditor's repro if one exists (`test_chunkN_confirm.py`-style repros assert the bug, so they FAIL once it's fixed), or write a failing test. If a finding is wrong, don't fix it: say why on the board, with `file:line`, and let the auditor or JR rule.
 4. **Fix** in the smallest way that closes the finding, matching the surrounding code. A design question (a rule the plan doesn't define, a tuning number, behaviour JR hasn't decided) is not yours to settle. Post it on the board for `audit` to put to JR, and leave the item open.
-5. **Tests:** add a test that fails on the pre-fix code. Run `pytest -p no:cacheprovider -m "not integration" <the touched areas' tests>`, and the full offline suite before you post. Run them in a clean worktree when the main checkout has other sessions' uncommitted edits (`git status --porcelain`), because those edits leak into the results. Never run napper or integration tests wholesale.
+5. **Tests:** add a test that fails on the pre-fix code. Per round, run only the targeted tests: `pytest -p no:cacheprovider -m "not integration" <the touched areas' tests>`. Run the full offline suite **once**, at the end of the batch, before you post, not every round. Run them in a clean worktree when the main checkout has other sessions' uncommitted edits (`git status --porcelain`), because those edits leak into the results. Never run napper or integration tests wholesale.
+   - **Staff contracts, the carousel, `coach_save_sync` / `coach_link`, the save writer (`pipeline/save_reader/`) or `league_office`:** before posting, run `python3 -m tools.offseason_check e2e --save "/mnt/c/Users/jrere/Documents/Madden NFL 27/saves/CAREER-MUBASE" --json <scratch>/offseason_check.json`. It copies the save, so the original is never written. For a contract change (the producer, buyouts, hot-seat settles), also run `python3 -m tools.offseason_check timelines`. Paste both PASS/FAIL tables into the NOTICE. A failing row is either fixed or named as a known open item with its message number (`--known-open <check>`). Fakes and synthetic fixtures alone don't prove these areas (ACCEPTANCE_CHECKS.md, "Known traps").
 6. **Databases:**
    - Tests and repros use only a scratch DB named `mu_scratch_<label with - turned into _>_test` (e.g. `mu_scratch_builder_3_test`; a hyphen needs quoting in every `CREATE`/`DROP DATABASE` and DSN) in container `madden-db` (postgres/postgres). Drop it when you're done with it.
    - A new migration is a new file (never edit an applied one), mirrored in `db/init_db.sql` with its ledger row (`python3 -m db.migrate sync-init-db`; see the docstring in `db/migrate.py`). Take the next free date name in `db/migrations/` and CLAIM it on the board.
@@ -53,6 +56,7 @@ Label override: $ARGUMENTS
    - the sha;
    - each finding with closed / not done and why;
    - what the tests show (the counts, and which new tests fail on the parent);
+   - the `tools.offseason_check` result tables when the batch touched those areas;
    - migrations applied.
 
    Then RELEASE the claim. The auditor verifies and replies with CLOSED / PARTIAL / OPEN. Any PARTIAL or OPEN item goes back on your list.
