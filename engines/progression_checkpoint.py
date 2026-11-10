@@ -184,7 +184,10 @@ def prepare_player(cur, *, player_id, pgid, earned_season, application_season,
     doc = doc or ow.load_weights()
     from pipeline.madden_player_edit import TO_MADDEN_POSITION
     save_position = TO_MADDEN_POSITION.get(position, position)
-    underlying_ovr = ow.predict_ovr(doc, save_position, base)[0]
+    # The fitted grades can overshoot the game's 99 ceiling at the very top (Jerry Rice 102,
+    # Elway 101 on the 2026 roster), and the policy rejects an out-of-range OVR — which failed a
+    # whole PLAYOFF_WEEK plan (2026-11-10, madden_tune_p2g). Clamp as progression_report does.
+    underlying_ovr = min(99, max(0, ow.predict_ovr(doc, save_position, base)[0]))
     checkpoints = evidence.due_checkpoints(
         team_games, season=earned_season, as_of_week=as_of_week,
         accounted_game_ids={kind: _used(applied, kind) for kind in ("MENTAL", "TECHNICAL")},
