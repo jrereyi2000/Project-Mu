@@ -592,8 +592,9 @@ def _extend_full_control(cur, acc):
 def _maybe_godfather(cur, season, tid, abbr, coach_id, coach_name, slant, candidate, owner_view, log=print):
     """§2.3: extend a Full Control (Godfather) offer for a head-coach opening when every gate passes — the rarity
     gate (staff_contracts_engine.godfather_gate), the owner archetype + cash, the dual HC+GM vacancy and the
-    candidate stature. Returns the acceptance dict (already written) or None. The owner features stay off until the
-    owners plan's U6 migration, so this normally no-ops."""
+    candidate stature. Returns the acceptance dict (already written) or None. The tables exist since 2027_02_02, but
+    the owner features stay off until the activation plan clears them (the `owner_hiring` switchboard), so this
+    normally no-ops."""
     from engines import staff_contracts_engine as sce
     try:
         cur.execute("SAVEPOINT godfather_gate")

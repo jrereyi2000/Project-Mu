@@ -956,7 +956,7 @@ CREATE TABLE IF NOT EXISTS gm_trade_negotiation_turns (
     assets JSONB,                                     -- Front Office JSON assets of the package on the table
     options JSONB,                                    -- [{key, action, assets, su, sg}] the chooser saw (never public)
     choice TEXT,                                      -- the chosen option key
-    choice_source VARCHAR(6) CHECK (choice_source IN ('LLM', 'POLICY', 'JR')),
+    choice_source VARCHAR(6) CHECK (choice_source IN ('POLICY', 'JR')),   -- never a model (2027_02_16)
     posture VARCHAR(8) CHECK (posture IN ('FIRM', 'ANCHOR', 'SQUEEZE', 'MEET', 'HOLD')),
     surplus_user BIGINT,                              -- JR's team's surplus by the model
     surplus_gm BIGINT,                                -- the GM's surplus (never shown to JR)
@@ -3915,5 +3915,6 @@ INSERT INTO schema_migrations (version, filename, checksum, source) VALUES
     ('2027_02_12_trade_talk_flags', '2027_02_12_trade_talk_flags.sql', '5083e4799542b73b665b4ca68e117dd54af9de0c8ade61e7430785e843c233eb', 'init_db.sql'),
     ('2027_02_13_gm_voice_cards', '2027_02_13_gm_voice_cards.sql', '73ece2378bf0f178bc693dde1d3f19ba2396bcf80cb56353804658f9db7134d7', 'init_db.sql'),
     ('2027_02_14_trade_turn_stop', '2027_02_14_trade_turn_stop.sql', '8e0cd2c0e60e310a1bcc930b43388edb40aa6218f83913a0df343bc509304912', 'init_db.sql'),
-    ('2027_02_15_jc2a_source_ids', '2027_02_15_jc2a_source_ids.sql', '9134260f512316714b66f917ea06bf76b1459cda967c04c18e94dda09a848d0a', 'init_db.sql')
+    ('2027_02_15_jc2a_source_ids', '2027_02_15_jc2a_source_ids.sql', '9134260f512316714b66f917ea06bf76b1459cda967c04c18e94dda09a848d0a', 'init_db.sql'),
+    ('2027_02_16_choice_source_no_llm', '2027_02_16_choice_source_no_llm.sql', '462bd5af1d778d100be44e3a419969957a5a9bcdd1493c50214cd0ea632774ca', 'init_db.sql')
 ON CONFLICT (version) DO NOTHING;
