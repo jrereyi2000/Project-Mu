@@ -15,13 +15,15 @@ Salary scales (§2.2, fixed by the plan). Four markets, each a band the plan nam
             PROMOTION    $ 4.5- 7.5M   rising coordinator first-timer
     GM      ELITE        $ 8.0-12.0M   proven championship architect
             STANDARD     $ 4.0- 7.5M   established personnel director
+            PROMOTION    $ 2.0- 3.5M   first-time assistant GM / scouting director
     COORD   TOP_TIER     $ 2.5- 4.0M   highly sought playcaller
             STANDARD     $ 1.5- 2.4M   position coach promotion
 
 Tiering (salary_tier) is from experience and championships: a Super Bowl champion HC is LEGENDARY, a 3+-season HC
-ESTABLISHED, everyone else PROMOTION; a champion GM ELITE, else STANDARD; a coordinator with a championship or
-5+ seasons TOP_TIER, else STANDARD. market_salary returns the band midpoint as a concrete whole-dollar market value
-(U2 may still name an exact offer). These tier thresholds are not in the plan and are review-only estimates.
+ESTABLISHED, everyone else PROMOTION; a champion GM ELITE, a 3+-season GM STANDARD, else PROMOTION; a coordinator
+with a championship or 5+ seasons TOP_TIER, else STANDARD. market_salary returns the band midpoint as a concrete
+whole-dollar market value (U2 may still name an exact offer). These tier thresholds are not in the plan and are
+review-only estimates.
 
 Owner cash (§2.2). The pool itself lives in engines/report_card_engine (annual_cash_pool / base_budget /
 success_dividend over the four wealth bands), which this module reuses rather than reimplementing. The active staff
@@ -49,6 +51,7 @@ STAFF_SALARY_SCALES = {
     "GM": {
         "ELITE": (8_000_000, 12_000_000),       # Proven championship architect
         "STANDARD": (4_000_000, 7_500_000),     # Established personnel director
+        "PROMOTION": (2_000_000, 3_500_000),    # First-time assistant GM / scouting director
     },
     "COORD": {
         "TOP_TIER": (2_500_000, 4_000_000),     # Highly sought playcaller
@@ -62,6 +65,7 @@ STAFF_KINDS = ("HC", "GM", "OC", "DC")
 HC_LEGENDARY_CHAMPIONSHIPS = 1
 HC_ESTABLISHED_EXPERIENCE = 3
 GM_ELITE_CHAMPIONSHIPS = 1
+GM_STANDARD_EXPERIENCE = 3
 COORD_TOP_CHAMPIONSHIPS = 1
 COORD_TOP_EXPERIENCE = 5
 
@@ -84,7 +88,9 @@ def salary_tier(person_kind, experience=0, championships=0):
             return "LEGENDARY"
         return "ESTABLISHED" if experience >= HC_ESTABLISHED_EXPERIENCE else "PROMOTION"
     if kind == "GM":
-        return "ELITE" if championships >= GM_ELITE_CHAMPIONSHIPS else "STANDARD"
+        if championships >= GM_ELITE_CHAMPIONSHIPS:
+            return "ELITE"
+        return "STANDARD" if experience >= GM_STANDARD_EXPERIENCE else "PROMOTION"
     if kind in ("OC", "DC"):
         if championships >= COORD_TOP_CHAMPIONSHIPS or experience >= COORD_TOP_EXPERIENCE:
             return "TOP_TIER"

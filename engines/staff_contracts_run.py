@@ -71,10 +71,14 @@ def current_staff(cur, season):
         for r in cur.fetchall():
             add(r[0], "GM", r[1], r[2], r[3], 0)
     for s in out:
+        if s["person_kind"] == "GM":
+            # A GM's experience is his seasons on the job (plan §2.1): the old `count(*) FROM gm_profiles WHERE
+            # id = %s` counted the primary-key row, so it always returned 1 and a veteran GM would have been
+            # mispriced as a first-time PROMOTION.
+            s["experience"] = max(1, int(season) - int(s["start_season"] or season) + 1)
+            continue
         if s["person_kind"] == "HC":
             cur.execute("SELECT count(*) FROM coach_tenures WHERE coach_id = %s", (s["person_id"],))
-        elif s["person_kind"] == "GM":
-            cur.execute("SELECT count(*) FROM gm_profiles WHERE id = %s", (s["person_id"],))
         else:
             cur.execute("SELECT count(*) FROM coordinator_tenures WHERE coordinator_id = %s", (s["person_id"],))
         s["experience"] = int(cur.fetchone()[0] or 0)

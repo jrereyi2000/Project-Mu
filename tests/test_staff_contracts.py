@@ -30,6 +30,7 @@ def test_salary_scales_have_the_plan_bands():
     assert STAFF_SALARY_SCALES["HC"]["PROMOTION"] == (4_500_000, 7_500_000)
     assert STAFF_SALARY_SCALES["GM"]["ELITE"] == (8_000_000, 12_000_000)
     assert STAFF_SALARY_SCALES["GM"]["STANDARD"] == (4_000_000, 7_500_000)
+    assert STAFF_SALARY_SCALES["GM"]["PROMOTION"] == (2_000_000, 3_500_000)
     assert STAFF_SALARY_SCALES["COORD"]["TOP_TIER"] == (2_500_000, 4_000_000)
     assert STAFF_SALARY_SCALES["COORD"]["STANDARD"] == (1_500_000, 2_400_000)
 
@@ -42,10 +43,16 @@ def test_salary_tier_places_head_coaches_by_experience_and_championships():
     assert salary_tier("HC", experience=5, championships=2) == "LEGENDARY"
 
 
-def test_salary_tier_places_gms_and_coordinators():
-    assert salary_tier("GM", experience=0, championships=0) == "STANDARD"
-    assert salary_tier("GM", experience=10, championships=0) == "STANDARD"
+def test_salary_tier_places_gms_by_championships_then_experience():
+    for experience in (0, 1, 2):
+        assert salary_tier("GM", experience=experience, championships=0) == "PROMOTION"
+    for experience in (3, 4, 10):
+        assert salary_tier("GM", experience=experience, championships=0) == "STANDARD"
+    assert salary_tier("GM", experience=0, championships=1) == "ELITE"
     assert salary_tier("GM", experience=4, championships=1) == "ELITE"
+
+
+def test_salary_tier_places_coordinators():
     assert salary_tier("OC", experience=0, championships=0) == "STANDARD"
     assert salary_tier("DC", experience=5, championships=0) == "TOP_TIER"
     assert salary_tier("OC", experience=0, championships=1) == "TOP_TIER"
@@ -58,13 +65,19 @@ def test_salary_tier_rejects_an_unknown_kind():
 
 def test_market_salary_is_the_band_midpoint_and_sits_inside_it():
     cases = [("HC", 0, 0, "PROMOTION"), ("HC", 3, 0, "ESTABLISHED"), ("HC", 0, 1, "LEGENDARY"),
-             ("GM", 0, 0, "STANDARD"), ("GM", 0, 1, "ELITE"),
+             ("GM", 1, 0, "PROMOTION"), ("GM", 4, 0, "STANDARD"), ("GM", 6, 1, "ELITE"),
              ("OC", 0, 0, "STANDARD"), ("DC", 5, 0, "TOP_TIER")]
     for kind, exp, champs, band in cases:
         lo, hi = STAFF_SALARY_SCALES["COORD" if kind in ("OC", "DC") else kind][band]
         salary = market_salary(kind, exp, champs)
         assert salary == (lo + hi) // 2, (kind, band)
         assert lo <= salary <= hi, (kind, band)
+
+
+def test_gm_market_salaries_are_the_three_tier_midpoints():
+    assert market_salary("GM", experience=1, championships=0) == 2_750_000
+    assert market_salary("GM", experience=4, championships=0) == 5_750_000
+    assert market_salary("GM", experience=6, championships=1) == 10_000_000
 
 
 # ------------------------------------------------------------------------------------ payroll & cash ----
