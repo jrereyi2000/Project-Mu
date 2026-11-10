@@ -168,6 +168,12 @@ So a tuning season is a loop, not one long sim:
 stage's own advance), the stop header read before and after, the autosave copied over the named save, then a
 quit to the franchise list. It refuses anything but `CAREER-TUNE-*` and refuses while the watcher runs.
 
+**The progression state is bootstrapped when the database is seeded.** A tuning database never runs
+`league_office setup`, so the first ingest that creates one also applies the same neutral bootstrap setup
+gives a live franchise (`bootstrap_pass(..., form_neutral=True)`, gated on every ConfidenceRating being 50).
+Without it the league office refuses at the first progression stage — OFFSEASON_START and the next season's
+first regular week both stop with "explicit neutral bootstrap required".
+
 **The draft order is locked by the watcher.** The live franchise's Draft Room locks it by hand; with a
 `madden_tune_*` destination the ingest calls `engines.draft_room.lock_order(cur, season + 1)` before the DRAFT
 stage runs, so the league office has picks to write. Without it the run logs "no draft order … no picks
