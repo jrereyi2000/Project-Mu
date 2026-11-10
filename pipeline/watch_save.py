@@ -495,8 +495,13 @@ def franchise_id(snapshot, save_path):
 
 
 def db_name_of(dsn):
+    """The database name in a libpq DSN; a bare/placeholder string is its own name."""
+    from psycopg import ProgrammingError
     from psycopg.conninfo import conninfo_to_dict
-    return conninfo_to_dict(dsn).get("dbname") or dsn
+    try:
+        return conninfo_to_dict(dsn).get("dbname") or dsn
+    except ProgrammingError:
+        return dsn
 
 
 def route_franchise(fid, save_name, save_season, save_week, auto_init=False, reseed=False, confirm_reseed=None,
