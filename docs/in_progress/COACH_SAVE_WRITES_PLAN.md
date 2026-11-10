@@ -4,6 +4,8 @@
 
 **As built:**
 - Spike D (`df76bec`) found the source and the licence shape in `docs/reference/COACH_DONOR_PHOTOS.md`. Club coach photos on `static.clubs.nfl.com` are the only good plates (every club has them; ESPN's coach headshots are 404, Pro-Football-Reference is Cloudflare-403), but their terms are personal, non-commercial, no redistribution: **the donor library stays local and git-ignored**, and Wikimedia Commons is the clean-licence fallback. `static/coaches/` is served by the existing `/static` mount with nothing new (`server/api.py:188-190`).
+- **"Painted into a plate" is compositing, not diffusion.** Spike D read only `headshots/local/backends.py` (no backend takes a base image or a mask) and concluded the plate path was missing; that was wrong (JR, 2026-11-10: the player pipeline works). The painting is `headshots/local/jersey_plate.py` — `extract_clean_jersey_plate` cuts a transparent neck socket out of a real photo and `composite_headshot_to_jersey` segments the generated portrait and pastes it into that socket (skin-mask chin detection, scale, collar bounds; `test_local_headshot.py:611-631`). Coach mode is therefore a *coach-plate* variant of the same two calls, not a new backend. U4 owns `headshots/local/jersey_plate.py` so it can generalise the socket geometry and fabric colours from a jersey collar to a coaching polo or quarter-zip.
+- The migration is `db/migrations/2027_02_21_coach_madden_profiles.sql`, not the plan's original `2027_02_19`: builder-2 took `2027_02_19` for `2027_02_19_owner_cash_buyouts.sql` (`6e9fbcf`) and then `2027_02_20` for `2027_02_20_buyout_schedule.sql` (M-0128) before U1 started.
 - The migration is `db/migrations/2027_02_21_coach_madden_profiles.sql`, not the plan's original `2027_02_19`: builder-2 took `2027_02_19` for `2027_02_19_owner_cash_buyouts.sql` (`6e9fbcf`) and then `2027_02_20` for `2027_02_20_buyout_schedule.sql` (M-0128) before U1 started.
 
 **Builds on:** PROJECT_SPEC §2.19 (coaching carousel), §2.20 (headshots), §2.21a (league office), [`LEAGUE_OFFICE_PLAN.md`](../done/LEAGUE_OFFICE_PLAN.md) §4.3, [`V2_CORE_BUILD_PLAN.md`](../done/V2_CORE_BUILD_PLAN.md) (the "coach-creation spike" row), [`REAL_COACH_PROFILES_PLAN.md`](../done/REAL_COACH_PROFILES_PLAN.md), [`STAFF_CONTRACTS_AND_FULL_CONTROL_PLAN.md`](../done/STAFF_CONTRACTS_AND_FULL_CONTROL_PLAN.md).
@@ -336,8 +338,8 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 
 ### U4: Coach headshots
 
-- **Owns:** `headshots/coach_headshots.py` (new), `headshots/headshot_appearance_generator.py`, `tools/build_coach_donor_library.py` (new), `data/headshots/coach_donors/registry.json` (new), `tests/test_coach_headshots.py` (new)
-- **Reads:** `headshots/local/donors.py`, `headshots/local/adapter.py`, `headshots/rookie_headshots.py`, `headshots/portrait_converter/converter.py`, Spike D
+- **Owns:** `headshots/coach_headshots.py` (new), `headshots/headshot_appearance_generator.py`, `headshots/local/jersey_plate.py`, `tools/build_coach_donor_library.py` (new), `data/headshots/coach_donors/registry.json` (new), `tests/test_coach_headshots.py` (new)
+- **Reads:** `headshots/local/donors.py`, `headshots/local/adapter.py`, `headshots/local/jersey_plate.py` (the player plate compositor to generalise for coach tops), `headshots/local/build_donor_library.py` (the player donor tool to mirror), `headshots/rookie_headshots.py`, `headshots/portrait_converter/converter.py`, Spike D
 - **Depends on:** Spike D
 - **Done when:** MockBackend generates a coach WebP and DDS with no jersey in the prompt, the player appearance output is byte-identical to before, and the donor tool registers plates with masks.
 - **Verify:** `pytest -p no:cacheprovider -m "not integration" tests/test_coach_headshots.py tests/test_local_headshot.py` passes.
@@ -388,6 +390,7 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 | `engines/coaching_carousel.py` | U5 |
 | `headshots/coach_headshots.py` | U4 |
 | `headshots/headshot_appearance_generator.py` | U4 |
+| `headshots/local/jersey_plate.py` | U4 |
 | `pipeline/coach_link.py` | U5 |
 | `pipeline/league_office.py` | U6 |
 | `pipeline/load_save.py` | U5 |
