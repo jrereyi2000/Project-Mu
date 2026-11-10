@@ -1,6 +1,6 @@
 # Project Mu: Retirement Window Signing Restore Plan
 
-**Status:** approved by JR (2026-11-09); building, wave 1 of 1 done.
+**Status:** built and on main (2026-11-09); approved by JR (2026-11-09), one wave.
 
 **As built (2026-11-09):**
 - U2: `_apply_restores` became `_apply_free_agent_flip`, shared by the window and the proven decision-stage keep (both `FreeAgent`/32, view Retired, image `FreeAgent`/32, summary `restore: free_agent`); `restored_retirees` counts the sign-back, with `no_restorable_contract` and `restore_at_last_stop` warnings (the last only on a CUTDOWN restore, in the window). The sign-back test pins the existing stage-offset writer block (a `Length`-2 block with an empty offset year at `RESIGN`). Edge note: if the decision stage itself ever falls at CUTDOWN (a missed Staff save), the proven keep has the same next-run signing risk and does not warn.
