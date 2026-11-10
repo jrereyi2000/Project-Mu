@@ -55,6 +55,19 @@ def db_for(run):
     return DB_PREFIX + re.sub(r"[^a-z0-9_]+", "_", run.lower())
 
 
+def db_exists(db):
+    """True/False when the server can be asked, None when it can't (the ingest then reports)."""
+    try:
+        import psycopg
+    except ImportError:                     # pragma: no cover - the ingest would fail first
+        return None
+    try:
+        with psycopg.connect(DEFAULT_DSN.format(db="postgres")) as conn:
+            return conn.execute("SELECT 1 FROM pg_database WHERE datname = %s", (db,)).fetchone() is not None
+    except Exception:                       # noqa: BLE001 - a resume check is best effort
+        return None
+
+
 def dsn_for(run):
     return DEFAULT_DSN.format(db=db_for(run))
 
@@ -232,6 +245,10 @@ def run(name, *, base_save=BASE_SAVE, resume=False, offseason=True, max_stops=14
     if do_report and not os.path.exists(targets_path or _default_targets()):
         raise Refused(f"no real-NFL targets at {targets_path or _default_targets()}: build them with "
                       "python3 -m engines.tuning.targets (refused up front rather than after a whole season)")
+    if resume and db_exists(db_for(name)) is False:
+        raise Refused(f"there is no {db_for(name)} to resume: a resumed season continues the database its "
+                      "clone seeded at week 1 (that is where the neutral progression bootstrap is taken); "
+                      "start a fresh run instead")
     t0 = time.time()
     run_dir = os.path.join(seasons_dir or SEASONS_DIR, name)
     os.makedirs(run_dir, exist_ok=True)
@@ -241,6 +258,12 @@ def run(name, *, base_save=BASE_SAVE, resume=False, offseason=True, max_stops=14
     if not resume:
         clone(name, base_save, runner=runner, python=python)
         steps.append("clone")
+        # Seed the database from the week-1 clone, while every ConfidenceRating is still 50. The
+        # neutral progression bootstrap is refused on a played season's save (confidence drifts
+        # with results), and without state the league office stops OFFSEASON_START with
+        # "explicit neutral bootstrap is required" (2026-11-10, madden_tune_p2f and p2g).
+        ingest(name, runner=runner, python=python, saves_dir=saves_dir, environ=environ)
+        steps.append("ingest-clone")
         sim(name, "regular-season-end", quit=False, runner=runner, python=python,
             run_dir=os.path.join(run_dir, "pilot_regular"))
         steps.append("regular-season")
@@ -254,16 +277,8 @@ def run(name, *, base_save=BASE_SAVE, resume=False, offseason=True, max_stops=14
         # so an offseason snapshot has the next season's unplayed schedule and no 2026 games
         snapshot(name, snap, runner=runner, saves_dir=saves_dir)
         steps.append("snapshot")
-    proc = ingest(name, runner=runner, python=python, saves_dir=saves_dir, environ=environ)
+    ingest(name, runner=runner, python=python, saves_dir=saves_dir, environ=environ)
     steps.append("ingest-playoffs")
-    if "Clean seed" in (proc.stdout or ""):
-        # The load that creates and seeds a tuning database deliberately skips the league office,
-        # so without a second pass the season's first stage is never planned: OFFSEASON_START is
-        # what prepares the next season's progression state, and without it the first regular week
-        # of that season fails with "ProgressionStateError: player 1: explicit neutral bootstrap
-        # required" (2026-11-10). The second pass is a no-op when the first already ran it.
-        ingest(name, runner=runner, python=python, saves_dir=saves_dir, environ=environ)
-        steps.append("ingest-playoffs-seeded")
     stops = []
     if offseason:
         stops = walk_offseason(name, runner=runner, python=python, max_stops=max_stops, work_dir=run_dir,

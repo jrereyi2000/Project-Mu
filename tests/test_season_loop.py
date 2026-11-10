@@ -9,6 +9,12 @@ import pytest
 from engines.tuning import season_loop as L
 
 
+@pytest.fixture(autouse=True)
+def _db_present(monkeypatch):
+    """The resume check asks the server; the unit tests run without a tuning database."""
+    monkeypatch.setattr(L, "db_exists", lambda db: True)
+
+
 def _snapshot():
     box = {"OFFPASSYARDS": 240, "OFFRUSHYARDS": 110, "SACKS": 2, "GIVEAWAYS": 1}
     games = [{"franchise_year": 0, "week_type": "RegularSeason", "status": "HomeWon", "home_team_index": h,
@@ -93,19 +99,21 @@ def test_one_season_clones_sims_ingests_and_reports(tmp_path, capsys):
     tpath.write_text(json.dumps(TARGETS))
     out = L.run("unit", runner=_runner(calls, stops), python="py", seasons_dir=str(tmp_path / "seasons"),
                 saves_dir="/saves", targets_path=str(tpath), report_fn=lambda s: None)
-    # the harness leaves the franchise first, then clone, sim, sim, snapshot, ingest
+    # the harness leaves the franchise first, then clone, the seeding ingest, sim, sim, snapshot, ingest
     assert "quit" in calls[0] and "--franchise" in calls[0]
     assert "clone-save" in calls[1]
     assert ["--from", "CAREER-MU2026", "--to", "CAREER-TUNE-UNIT"] == calls[1][-4:]
-    assert "regular-season-end" in calls[2] and "--no-quit" in calls[2]      # the postseason continues in place
-    assert "--franchise" in calls[3] and "playoffs-end" in calls[3]
-    assert calls[4][0] == "node"                                             # the report snapshot
-    assert "pipeline.watch_save" in calls[5]
-    assert "/saves/CAREER-TUNE-UNIT" in calls[5] and "madden_tune_unit" in " ".join(calls[5])
-    assert calls[5].count("--no-articles") == 1 and "--no-freeze" in calls[5] and "--auto-init" in calls[5]
+    # the week-1 clone seeds the database, where the neutral progression bootstrap can still be taken
+    assert "pipeline.watch_save" in calls[2] and "--auto-init" in calls[2]
+    assert "regular-season-end" in calls[3] and "--no-quit" in calls[3]      # the postseason continues in place
+    assert "--franchise" in calls[4] and "playoffs-end" in calls[4]
+    assert calls[5][0] == "node"                                             # the report snapshot
+    assert "pipeline.watch_save" in calls[6]
+    assert "/saves/CAREER-TUNE-UNIT" in calls[6] and "madden_tune_unit" in " ".join(calls[6])
+    assert calls[6].count("--no-articles") == 1 and "--no-freeze" in calls[6] and "--auto-init" in calls[6]
     assert out["db"] == "madden_tune_unit" and out["save"] == "CAREER-TUNE-UNIT"
-    assert len(out["stops"]) == 4 and out["steps"] == ["clone", "regular-season", "playoffs", "snapshot",
-                                                       "ingest-playoffs", "offseason"]
+    assert len(out["stops"]) == 4 and out["steps"] == ["clone", "ingest-clone", "regular-season", "playoffs",
+                                                       "snapshot", "ingest-playoffs", "offseason"]
     assert out["report"]["season"] == 2026 and os.path.exists(out["report"]["report"])
     md = open(out["report"]["report"]).read()
     assert "Tuning comparison: season 2026" in md
@@ -124,7 +132,7 @@ def test_the_offseason_loop_ingests_after_every_stop_and_stops_at_preseason(tmp_
                 saves_dir="/saves", do_report=False, offseason=True)
     advances = [c for c in calls if "advance" in c]
     ingests = [c for c in calls if "pipeline.watch_save" in c]
-    assert len(advances) == 12 and len(ingests) == 13        # the playoffs ingest plus one per stop
+    assert len(advances) == 12 and len(ingests) == 14        # the clone seed, the playoffs ingest, one per stop
     assert out["stops"][-1]["to"]["phase"] == "WEEK" and out["stops"][-1]["to"]["week"] == 1
     assert out["stops"][-2]["to"]["stop"] == "PRESEASON_3"   # the cut day is ingested before week 1
     # every advance quits the franchise: the league office writes with it closed
@@ -138,7 +146,7 @@ def test_a_stopped_advance_ends_the_loop_without_raising(tmp_path):
                 seasons_dir=str(tmp_path / "s"), saves_dir="/saves", do_report=False)
     assert len(out["stops"]) == 1 and out["stops"][0]["status"] == "stopped"
     assert out["stops"][0]["screenshot"].endswith("UNKNOWN.png")      # the screenshot to catalogue from
-    assert sum(1 for c in calls if "pipeline.watch_save" in c) == 1      # the playoffs ingest only
+    assert sum(1 for c in calls if "pipeline.watch_save" in c) == 2      # the clone seed and the playoffs
 
 
 def test_no_offseason_stops_after_the_postseason(tmp_path):
@@ -161,6 +169,16 @@ def test_resume_skips_the_clone_and_the_regular_season(tmp_path):
     assert calls[0].count("quit") == 1                                       # the franchise is released first
 
 
+def test_a_resume_without_its_database_is_refused(tmp_path, monkeypatch):
+    # a resumed season has no week-1 clone to seed from, so without the database the bootstrap
+    # would be taken from a played season's save and silently skipped
+    monkeypatch.setattr(L, "db_exists", lambda db: False)
+    calls = []
+    with pytest.raises(L.Refused, match="no madden_tune_unit to resume"):
+        L.run("unit", runner=_runner(calls), python="py", seasons_dir=str(tmp_path), resume=True)
+    assert calls == []
+
+
 def test_the_ingest_runs_with_the_franchise_closed(tmp_path):
     calls = []
     envs = []
@@ -175,26 +193,20 @@ def test_the_ingest_runs_with_the_franchise_closed(tmp_path):
     assert envs and envs[0]["LEAGUE_OFFICE_FRANCHISE_CLOSED"] == "1" and envs[0]["PATH"] == "/bin"
 
 
-def test_a_seeding_ingest_is_followed_by_one_that_runs_the_league_office(tmp_path):
-    # the load that seeds a tuning database skips the league office, so OFFSEASON_START (which
-    # prepares the next season's progression state) would never run without a second pass
+def test_the_week_one_clone_seeds_the_database_before_the_season(tmp_path):
+    # The neutral progression bootstrap is only taken from a neutral save, and a played season's
+    # save has drifted ConfidenceRatings: seeding at the season's end left madden_tune_p2f and p2g
+    # with no progression state, and the league office stopped OFFSEASON_START with "explicit
+    # neutral bootstrap is required" (2026-11-10). The clone's week-1 save is still neutral.
     calls = []
-
-    def runner(cmd, **kw):
-        calls.append([str(c) for c in cmd])
-        if "advance" in cmd:
-            return types.SimpleNamespace(returncode=0, stdout=json.dumps({"status": "ok", "to": {"phase": "WEEK", "week": 1}}), stderr="")
-        if "pipeline.watch_save" in cmd:
-            n = sum(1 for c in calls if "pipeline.watch_save" in c)
-            out = "SUCCESS: Clean seed committed to database." if n == 1 else "ok"
-            return types.SimpleNamespace(returncode=0, stdout=out, stderr="")
-        return types.SimpleNamespace(returncode=0, stdout=json.dumps({"status": "ok"}), stderr="")
-
-    L.run("unit", runner=runner, python="py", seasons_dir=str(tmp_path / "s"), saves_dir="/saves", do_report=False)
-    ingests = [c for c in calls if "pipeline.watch_save" in c]
-    assert len(ingests) == 3                 # the seeding load, its second pass, then the one stop
-    assert ingests[0] == ingests[1]           # same save, same database: the second pass is a no-op
-                                             # when the first already ran the league office
+    out = L.run("unit", runner=_runner(calls), python="py", seasons_dir=str(tmp_path / "s"),
+                saves_dir="/saves", do_report=False, offseason=False)
+    ingests = [i for i, c in enumerate(calls) if "pipeline.watch_save" in c]
+    clone = next(i for i, c in enumerate(calls) if "clone-save" in c)
+    sims = [i for i, c in enumerate(calls) if "sim-season" in c]
+    assert clone < ingests[0] < sims[0]                    # seeded before the season is simmed
+    assert "--auto-init" in calls[ingests[0]]
+    assert out["steps"][:3] == ["clone", "ingest-clone", "regular-season"]
 
 
 def test_a_failed_clone_stops_the_season(tmp_path):

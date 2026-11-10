@@ -168,11 +168,18 @@ So a tuning season is a loop, not one long sim:
 stage's own advance), the stop header read before and after, the autosave copied over the named save, then a
 quit to the franchise list. It refuses anything but `CAREER-TUNE-*` and refuses while the watcher runs.
 
-**The progression state is bootstrapped when the database is seeded.** A tuning database never runs
-`league_office setup`, so the first ingest that creates one also applies the same neutral bootstrap setup
-gives a live franchise (`bootstrap_pass(..., form_neutral=True)`, gated on every ConfidenceRating being 50).
-Without it the league office refuses at the first progression stage — OFFSEASON_START and the next season's
-first regular week both stop with "explicit neutral bootstrap required".
+**The progression state is bootstrapped when the database is seeded — from the week-1 clone.** A tuning
+database never runs `league_office setup`, so the ingest that creates one also applies the same neutral
+bootstrap setup gives a live franchise (`bootstrap_pass(..., form_neutral=True)`, gated on every
+ConfidenceRating being 50). Without it the league office refuses at the first progression stage —
+OFFSEASON_START and the next season's first regular week both stop with "explicit neutral bootstrap
+required".
+
+That gate is why `season_loop` seeds the database **right after the clone, before the season is simmed**:
+a played season's save has drifted ConfidenceRatings (2026's playoffs save held 50, 52, 49, 51, 48, 53 …), so
+the bootstrap refuses it silently and the whole offseason stops at OFFSEASON_START (2026-11-10,
+`madden_tune_p2f` and `p2g`). The clone's week-1 state is still neutral. A `--resume` has no week-1 clone to
+seed from, so it refuses when its database is missing rather than bootstrapping from a played save.
 
 **The draft order is locked by the watcher.** The live franchise's Draft Room locks it by hand; with a
 `madden_tune_*` destination the ingest calls `engines.draft_room.lock_order(cur, season + 1)` before the DRAFT
