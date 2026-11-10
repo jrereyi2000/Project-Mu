@@ -480,7 +480,7 @@ def free_agent(cur, season: int, player_id: int) -> Optional[dict]:
 
 
 def insert_offer(cur, season, stage, kind, player_id, team_id, years, total, bonus, guaranteed, utility, status,
-                 counter, seed, week=None) -> int:
+                 counter, seed, week) -> int:
     """One offer from JR. `week` is the league week it was made in, which the REPORTER's move window reads (P5)."""
     cur.execute("""INSERT INTO contract_offers (season, stage, wave, kind, player_id, team_id, from_user, years,
                                                 total_value, bonus, guaranteed, utility, status, counter, seed, week)

@@ -191,3 +191,20 @@ def test_backfill_fills_a_missing_card_without_a_model(monkeypatch):
     assert backfill_bios(cur, 2036, None, log=lambda *a: None) == 1
     card, source = conn.execute("SELECT voice_card, voice_card_source FROM gm_profiles WHERE id = 1").fetchone()
     assert source == "TEMPLATE" and gm_voices.parse_card(json.loads(card)) is not None
+
+
+def test_a_pre_2030_league_seeds_its_gm_tenures_in_the_past():
+    """M-0105 B4: a 2026 league drew every seeded GM's start from 2030 on, so each was a future hire — priced as a
+    first-time PROMOTION and kept out of the hot seat until 2031. A pre-2030 seed reaches back instead, and never
+    starts after the seeding season."""
+    from engines import gm_personas as _gp
+    ctx = {"city": "Atlanta", "name": "Falcons"}
+    t = league_traits(ABBRS)["ATL"]
+    starts = [template_persona("ATL", ctx, t, 2026, seed_key=f"gm:ATL:{i}")["start_season"]
+              for i in range(40)]
+    assert max(starts) <= 2026                                     # never in the future
+    assert min(starts) <= 2023                                     # veterans exist: experience >= 3 is STANDARD
+    # A 2030+ league keeps its lore: the same draw as before this change.
+    later = [template_persona("ATL", ctx, t, 2036, seed_key=f"gm:ATL:{i}")["start_season"]
+             for i in range(40)]
+    assert min(later) >= _gp.FIRST_TENURE and max(later) <= 2036

@@ -158,6 +158,9 @@ def gm_search(candidates, *, appeal, budget, owner_view=None):
     else:
         winner = min(candidates, key=lambda c: ((c.get("salary") or 0),
                                                 -round(c.get("stature") or 0, 3), c["key"]))
+    # A fallback hire (nobody willing, or nobody affordable) is still the hire: listing him among the refusals
+    # reads as "he declined and we hired him anyway".
+    declined = [d for d in declined if d["key"] != winner["key"]]
     return dict(winner, score=gm_candidate_score(winner, eff_appeal, owner_view),
                 effective_appeal=eff_appeal, declined=declined)
 
@@ -200,15 +203,25 @@ def read_state(cur, season):
             "unused_past": unused}
 
 
-def scored_season(cur, season):
+RATED_CARD_MIN = 500          # a real roster card rates every rostered player; a stub or half-loaded scan does not
+
+
+def scored_season(cur, season, log=None):
     """The newest season whose ratings card exists, at or before `season`. The post-Super Bowl hot seat runs before
     the coming season is scanned, and `fo_quality` reads `player_seasons` for the season it scores — so scoring the
-    coming season found no rated rows and every GM's drafting dropped to None (counted as 0)."""
+    coming season found no rated rows and every GM's drafting dropped to None (counted as 0).
+
+    A season only counts when its card is actually populated (at least RATED_CARD_MIN rated rows and half the
+    season's rows), so a stub or half-loaded scan cannot pass for a card. With none, `season` is returned and the
+    caller's log says the hot seat scored nobody."""
     for s in (season, season - 1, season - 2):
-        cur.execute("SELECT count(*) FROM player_seasons WHERE season = %s AND overall_rating IS NOT NULL", (s,))
-        row = cur.fetchone()
-        if row and row[0]:
+        cur.execute("SELECT count(*), count(overall_rating) FROM player_seasons WHERE season = %s", (s,))
+        row = cur.fetchone() or (0, 0)
+        total, rated = int(row[0] or 0), int(row[1] or 0)
+        if rated >= RATED_CARD_MIN and rated * 2 >= total:
             return s
+    if log:
+        log(f"  [WARN] no rated player card in {season - 2}..{season}: the hot seat scores no front office")
     return season
 
 
@@ -219,7 +232,7 @@ def front_office_scores(cur, season, team_ids):
     try:
         cur.execute("SAVEPOINT fo_standing")
         from engines import fo_standing
-        by = {r["team_id"]: r for r in fo_standing.live(cur, scored_season(cur, season))}
+        by = {r["team_id"]: r for r in fo_standing.live(cur, scored_season(cur, season, log=print))}
         cur.execute("RELEASE SAVEPOINT fo_standing")
     except Exception as e:
         cur.execute("ROLLBACK TO SAVEPOINT fo_standing")
@@ -283,10 +296,12 @@ def _hire_gm(cur, season, prior, abbr, team_id, llm, *, why, log=print, vacate_o
         return {"vacated": True}
     appeal = 0.5
     try:
+        cur.execute("SAVEPOINT gm_appeal")
         parts = cc.opening_parts(cur, prior, [team_id])
         appeal = cc.opening_appeal(parts.get(team_id, {}))
-    except Exception:
-        pass
+        cur.execute("RELEASE SAVEPOINT gm_appeal")
+    except Exception:  # noqa: BLE001 - the opening's appeal never fails a hire
+        cur.execute("ROLLBACK TO SAVEPOINT gm_appeal")
     budget = _gm_budget(cur, season, team_id, abbr)
     pool = gm_candidate_pool(abbr, season)
     from engines import owner_context as octx
@@ -294,8 +309,11 @@ def _hire_gm(cur, season, prior, abbr, team_id, llm, *, why, log=print, vacate_o
     view = None
     if hmode != "off" and team_id not in octx.user_team_ids(cur):
         try:
+            cur.execute("SAVEPOINT gm_owner_view")
             view = octx.team_owner_views(cur).get(team_id)
+            cur.execute("RELEASE SAVEPOINT gm_owner_view")
         except Exception:  # noqa: BLE001 - the owner wiring never fails a hire
+            cur.execute("ROLLBACK TO SAVEPOINT gm_owner_view")
             view = None
     if hmode == "active" and view is not None:
         winner = gm_search(pool, appeal=appeal, budget=budget, owner_view=view)

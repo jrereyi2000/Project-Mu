@@ -358,7 +358,9 @@ def test_the_post_super_bowl_hot_seat_scores_the_season_just_played(monkeypatch)
 
     class Cur:
         def execute(self, sql, params=None):
-            self._row = (5 if params and params[0] == 2036 else 0,) if "FROM player_seasons" in sql else None
+            # a populated card for 2036 only: 3,000 rows, every one rated
+            self._row = (3000, 3000) if params and params[0] == 2036 and "FROM player_seasons" in sql else (
+                (0, 0) if "FROM player_seasons" in sql else None)
 
         def fetchone(self):
             return self._row
@@ -370,9 +372,70 @@ def test_the_post_super_bowl_hot_seat_scores_the_season_just_played(monkeypatch)
 def test_a_season_whose_card_exists_is_scored_as_itself():
     class Cur:
         def execute(self, sql, params=None):
-            self._row = (5,) if params and params[0] == 2037 else (0,)
+            self._row = (3000, 2990) if params and params[0] == 2037 else (0, 0)
 
         def fetchone(self):
             return self._row
 
     assert gr.scored_season(Cur(), 2037) == 2037
+
+
+def test_a_stub_card_does_not_count_and_the_fallback_says_so():
+    """M-0107: a handful of rated rows is not a card — a half-loaded scan must not pass for one."""
+    class Cur:
+        def execute(self, sql, params=None):
+            self._row = (3000, 5) if params and params[0] == 2036 else (0, 0)   # 2036: five rated rows
+
+        def fetchone(self):
+            return self._row
+
+    logs = []
+    assert gr.scored_season(Cur(), 2037, log=logs.append) == 2037       # nothing qualifies: the asked season
+    assert any("no rated player card" in m for m in logs)               # and it says so
+
+
+def test_the_fallback_hire_is_not_listed_among_the_refusals():
+    """M-0105 B1: with nobody affordable the search hires the cheapest willing candidate and also recorded him as a
+    budget refusal — 'he declined and we hired him anyway'."""
+    pool = gr.gm_candidate_pool("CAR", 2036)
+    res = gr.gm_search(pool, appeal=0.9, budget=0)
+    assert res["tier"] == "PROMOTION"
+    assert res["key"] not in {d["key"] for d in res["declined"]}
+    assert res["declined"]                                             # the others are still named
+
+
+def test_a_failing_owner_read_does_not_abort_the_hire(monkeypatch):
+    """M-0105 B2: `team_owner_views` ran without a savepoint, so a SQL error left the caller's transaction aborted
+    and took the hire — and everything after it — with it."""
+    from engines import coaching_carousel as cc
+    from engines import owner_context as oc
+    monkeypatch.setattr(cc, "opening_parts", lambda cur, prior, ids: {})
+    monkeypatch.setattr(cc, "opening_appeal", lambda parts: 0.56)
+    monkeypatch.setattr(gr, "_gm_budget", lambda *a, **k: 30_000_000)
+    monkeypatch.setattr(gr, "gm_candidate_pool", lambda abbr, season: [dict(c) for c in OWNER_HIRE_POOL])
+    monkeypatch.setattr(oc, "feature_mode", lambda cur, f: "active")
+    monkeypatch.setattr(oc, "user_team_ids", lambda cur: set())
+
+    def boom(cur, **k):
+        raise RuntimeError("no such column: owner_traits")
+
+    monkeypatch.setattr(oc, "team_owner_views", boom)
+    monkeypatch.setattr(gm_personas, "read_teams",
+                        lambda cur, season: {"ATL": {"id": 1, "city": "Atlanta", "name": "Falcons", "coach": "X"}})
+    monkeypatch.setattr(gm_personas, "read_open", lambda cur: {})
+    monkeypatch.setattr(gm_personas, "insert_gm", lambda *a, **k: 99)
+
+    class Cur:
+        def __init__(self):
+            self.statements = []
+
+        def execute(self, q, a=None):
+            self.statements.append(" ".join(str(q).split()).upper())
+
+        def fetchone(self):
+            return None
+
+    cur = Cur()
+    rep = gr._hire_gm(cur, 2037, 2036, "ATL", 1, None, why="hot seat", log=lambda *a: None)
+    assert rep["tier"] == "ELITE"                                      # the neutral search still hires
+    assert "ROLLBACK TO SAVEPOINT GM_OWNER_VIEW" in cur.statements      # and the failed read was contained

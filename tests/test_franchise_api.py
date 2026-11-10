@@ -524,6 +524,8 @@ class MarketTest(ApiTest):
         self.assertEqual(params[3:8], (50, CAR, 2, 6_000_000, 1_000_000))
         self.assertEqual(params[9], body["utility"])
         self.assertEqual(params[10], {"ACCEPT": "ACCEPTED", "REJECT": "REJECTED", "COUNTER": "COUNTERED"}[body["status"]])
+        # P5: the offer carries the league week it was made in, which the REPORTER's move window reads.
+        self.assertEqual(params[-1], WEEK)
         self.assertEqual(body["offer_id"], 501)
         self.assertEqual(self.cur.writes("franchise_pending_moves"), [])   # not a signing
 

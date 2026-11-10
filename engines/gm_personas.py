@@ -141,13 +141,20 @@ def _card_for(abbr, traits, season, role="GM", gm_name=None):
     return gm_voices.template_card(traits, role=role), "TEMPLATE"
 
 
+SEED_VETERAN_YEARS = 8          # how far back a pre-2030 league's seeded GM tenure can start
+
+
 def template_persona(abbr, ctx, traits, season, seed_key=None, start=None):
     """Seeded name pool + trait-driven bio and voice. ctx: {city, name (nickname)}. start: the tenure's first
     season (default: seeded, 2030 .. season). Carries the authored card for the season when there is one, else the
     trait template."""
     rng = _rng(seed_key or "gm:" + abbr)
     name = f"{rng.choice(FIRST_NAMES)} {rng.choice(LAST_NAMES)}"
-    drawn = rng.randint(FIRST_TENURE, max(FIRST_TENURE, season))
+    # A seeded incumbent must already have been in the job when the league starts: for a pre-FIRST_TENURE start (the
+    # 2026 franchise) the draw reaches back, or every incumbent began in the future, priced as a first-time PROMOTION
+    # and kept out of the hot seat until the league caught up.
+    lo = FIRST_TENURE if season >= FIRST_TENURE else season - SEED_VETERAN_YEARS
+    drawn = rng.randint(lo, max(lo, season))
     start = start or drawn
     a, y, p, voice = _style(traits)
     bio = (f"{name} has run the {ctx['city']} {ctx['name']} front office since {start}. "

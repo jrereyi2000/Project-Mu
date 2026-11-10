@@ -56,10 +56,12 @@ OWNER = {"traits": ["DEEP_POCKETS", "HEADLINE_HUNTER"]}
 
 
 def test_the_godfather_trigger_fires_beyond_its_rarity_gates():
+    """JR, 2026-11-10: the candidate needs a Super Bowl win AND a drive or ego above 8, and the rule applies to any
+    head-coach hire (poached coordinator, former head coach, outside hire)."""
     gate = {"eligible": True}
-    high_drive = {"key": "coach:9", "drive": 9, "ego": 4}
-    high_ego = {"key": "coach:10", "drive": 4, "ego": 8}
-    champion = {"key": "coach:11", "super_bowl_wins": 1}
+    high_drive = {"key": "coach:9", "drive": 9, "ego": 4, "super_bowl_wins": 1}
+    high_ego = {"key": "coach:10", "drive": 4, "ego": 9, "super_bowl_wins": 1}
+    champion = {"key": "coach:11", "super_bowl_wins": 1, "champion": True, "drive": 9}
     for candidate in (high_drive, high_ego, champion):
         decision = cc.godfather_offer(gate=gate, owner_view=OWNER, cash_pool=cc.GODFATHER_CASH,
                                       hc_vacant=True, gm_vacant=True, candidate=candidate)
@@ -74,7 +76,7 @@ def test_each_gate_still_blocks_on_its_own():
         candidate=thin)["blockers"]
     assert "dual vacancy" in cc.godfather_offer(
         gate={"eligible": True}, owner_view=OWNER, cash_pool=cc.GODFATHER_CASH, hc_vacant=True, gm_vacant=False,
-        candidate={"drive": 9})["blockers"]
+        candidate={"drive": 9, "super_bowl_wins": 1})["blockers"]
     assert "owner" in cc.godfather_offer(
         gate={"eligible": True}, owner_view={"traits": ["DEEP_POCKETS"]}, cash_pool=cc.GODFATHER_CASH,
         hc_vacant=True, gm_vacant=True, candidate={"drive": 9})["blockers"]

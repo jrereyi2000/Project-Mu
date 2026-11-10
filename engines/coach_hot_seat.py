@@ -285,6 +285,27 @@ def decided(cur, season, phase="BLACK_MONDAY"):
     return cur.fetchone()[0] > 0
 
 
+def _vacate_gm_seat(cur, season, team_id, coach_id, rep, log):
+    """D4 (§2.3): a head coach who also holds his team's GM seat — a Full Control / Godfather hire — takes the seat
+    with him when he is fired. Without this the GM row stayed open, the carousel's dual-vacancy gate never saw an
+    opening, and the seat could never be re-filled by a Godfather offer. His contract is settled like a coach's."""
+    cur.execute("SELECT to_regclass('gm_profiles') IS NOT NULL")
+    row = cur.fetchone()
+    if not (row and row[0]):
+        return
+    cur.execute("SELECT id FROM gm_profiles WHERE team_id = %s AND coach_id = %s AND end_season IS NULL",
+                (team_id, coach_id))
+    row = cur.fetchone()
+    if not row:
+        return
+    cur.execute("UPDATE gm_profiles SET end_season = %s, end_reason = %s WHERE id = %s",
+                (season, "fired with his head coach", row[0]))
+    from engines import gm_rollover
+    gm_rollover._settle_gm_contract(cur, row[0], log=log)
+    rep.setdefault("gm_seats_vacated", []).append(team_id)
+    log(f"  {team_id}: the fired head coach also held the GM seat; the GM seat is open")
+
+
 def _store(cur, season, phase, rows, decisions, rep, log):
     by_team = {r["team_id"]: r for r in rows}
     for tid, h in sorted(decisions.items(), key=lambda kv: -kv[1]["score"]):
@@ -297,6 +318,7 @@ def _store(cur, season, phase, rows, decisions, rep, log):
         cur.execute("""UPDATE coach_tenures SET end_season = %s
                        WHERE coach_id = %s AND team_id = %s AND (end_season IS NULL OR end_season > %s)""",
                     (season, h["coach_id"], tid, season))
+        _vacate_gm_seat(cur, season, tid, h["coach_id"], rep, log)
         r = by_team[tid]
         rep["fired"].append({"team": r["abbr"], "coach": r["coach_name"], "score": h["score"], "phase": phase})
         log(f"  coach hot seat ({phase}): {r['abbr']} fires {r['coach_name']} (score {h['score']})")

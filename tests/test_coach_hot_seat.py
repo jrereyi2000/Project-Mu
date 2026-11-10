@@ -230,3 +230,64 @@ class OwnsTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GmSeatVacateTests(unittest.TestCase):
+    """D4 (§2.3): a coach who also holds the GM seat takes the seat with him when he is fired."""
+
+    def test_firing_a_coach_gm_vacates_the_gm_seat_and_settles_the_contract(self):
+        from engines import coach_hot_seat as chs
+
+        class Cur:
+            def __init__(self):
+                self.sql, self._row = [], None
+
+            def execute(self, q, a=None):
+                s = " ".join(str(q).split())
+                self.sql.append(s)
+                if "to_regclass('gm_profiles')" in s:
+                    self._row = (True,)
+                elif s.startswith("SELECT id FROM gm_profiles"):
+                    self._row = (77,)
+                else:
+                    self._row = None
+
+            def fetchone(self):
+                return self._row
+
+            def fetchall(self):
+                return []
+
+        cur = Cur()
+        rep = {"fired": [], "decided": []}
+        row = {"team_id": 5, "abbr": "T5", "coach_id": 41, "coach_name": "Coach 5"}
+        chs._store(cur, SEASON, "BLACK_MONDAY", [row],
+                   {5: {"coach_id": 41, "score": 2.5, "fire": True, "inputs": {}}}, rep, lambda *a: None)
+        self.assertIn("UPDATE gm_profiles SET end_season = %s, end_reason = %s WHERE id = %s", cur.sql)
+        self.assertEqual(rep["gm_seats_vacated"], [5])
+
+    def test_a_fired_coach_without_the_gm_seat_leaves_gm_profiles_alone(self):
+        from engines import coach_hot_seat as chs
+
+        class Cur:
+            def __init__(self):
+                self.sql, self._row = [], None
+
+            def execute(self, q, a=None):
+                s = " ".join(str(q).split())
+                self.sql.append(s)
+                self._row = (True,) if "to_regclass('gm_profiles')" in s else None
+
+            def fetchone(self):
+                return self._row
+
+            def fetchall(self):
+                return []
+
+        cur = Cur()
+        rep = {"fired": [], "decided": []}
+        row = {"team_id": 5, "abbr": "T5", "coach_id": 41, "coach_name": "Coach 5"}
+        chs._store(cur, SEASON, "BLACK_MONDAY", [row],
+                   {5: {"coach_id": 41, "score": 2.5, "fire": True, "inputs": {}}}, rep, lambda *a: None)
+        self.assertFalse(any(s.startswith("UPDATE gm_profiles") for s in cur.sql))
+        self.assertNotIn("gm_seats_vacated", rep)

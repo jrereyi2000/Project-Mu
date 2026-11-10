@@ -73,7 +73,7 @@ def test_godfather_rarity_gate_rejects_active_cap_and_cooldown():
 
 def test_godfather_offer_requires_every_condition():
     owner = {"traits": ["DEEP_POCKETS", "HEADLINE_HUNTER"]}
-    candidate = {"super_bowl_wins": 1}
+    candidate = {"super_bowl_wins": 1, "drive": 9}      # JR 2026-11-10: a ring AND drive/ego > 8
     gate = {"eligible": True}
     kwargs = dict(gate=gate, owner_view=owner, cash_pool=45_000_000, hc_vacant=True, gm_vacant=True,
                   candidate=candidate)
@@ -84,6 +84,7 @@ def test_godfather_offer_requires_every_condition():
     assert not godfather_offer(**dict(kwargs, cash_pool=30_000_000))["offer"]              # under $35M
     assert not godfather_offer(**dict(kwargs, gm_vacant=False))["offer"]                   # not a dual vacancy
     assert not godfather_offer(**dict(kwargs, candidate={"super_bowl_wins": 0}))["offer"]  # no stature
+    assert not godfather_offer(**dict(kwargs, candidate={"super_bowl_wins": 1}))["offer"]  # a ring alone is not it
 
 
 def test_godfather_owner_and_candidate_checks():
@@ -92,10 +93,13 @@ def test_godfather_owner_and_candidate_checks():
     assert not godfather_owner_ok({"traits": ["DEEP_POCKETS", "HEADLINE_HUNTER"]}, 34_000_000)
     assert not godfather_owner_ok(None, 50_000_000)
 
-    assert godfather_candidate_ok({"super_bowl_wins": 1})
-    assert godfather_candidate_ok({"champion": True})
-    assert godfather_candidate_ok({"drive": 8})
-    assert godfather_candidate_ok({"ego": 9})
+    # JR, 2026-11-10: a Super Bowl win AND (drive > 8 or ego > 8). The plan's other reading (either alone) is out.
+    assert godfather_candidate_ok({"super_bowl_wins": 1, "drive": 9})
+    assert godfather_candidate_ok({"champion": True, "ego": 9})
+    assert not godfather_candidate_ok({"super_bowl_wins": 1})              # a ring alone
+    assert not godfather_candidate_ok({"drive": 9})                        # drive alone
+    assert not godfather_candidate_ok({"ego": 9})
+    assert not godfather_candidate_ok({"super_bowl_wins": 1, "drive": 8})  # 8 is not above 8
     assert not godfather_candidate_ok({"super_bowl_wins": 0, "drive": 7, "ego": 7})
     assert not godfather_candidate_ok(None)
 

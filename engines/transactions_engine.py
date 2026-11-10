@@ -991,11 +991,18 @@ def fetch_league(cur, season, target=None):
 def league_state_week(cur):
     """league_state's current week (the engine week: 24+ in the offseason), or None without it. A written offer and a
     trade's `league_office_runs.week` are read on the same clock, so the reporter's move window compares like with
-    like."""
+    like. A failure rolls back to its own savepoint: on PostgreSQL a caught SQL error leaves the transaction aborted,
+    and the offer insert right after it would fail."""
     try:
+        cur.execute("SAVEPOINT offer_week")
         cur.execute("SELECT current_week FROM league_state WHERE id = 1")
         row = cur.fetchone()
+        cur.execute("RELEASE SAVEPOINT offer_week")
     except Exception:  # noqa: BLE001 - a database without league_state stores the offer undated
+        try:
+            cur.execute("ROLLBACK TO SAVEPOINT offer_week")
+        except Exception:  # noqa: BLE001 - no transaction (a fake cursor): nothing to roll back
+            pass
         return None
     return int(row[0]) if row and row[0] is not None else None
 

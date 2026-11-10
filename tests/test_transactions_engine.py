@@ -560,6 +560,8 @@ def test_store_offers_dates_each_offer_with_the_league_week():
             self.inserts, self._row = [], None
 
         def execute(self, sql, params=None):
+            if sql.startswith(("SAVEPOINT", "RELEASE", "ROLLBACK")):
+                return
             if "FROM league_state" in sql:
                 self._row = (17,)
             else:

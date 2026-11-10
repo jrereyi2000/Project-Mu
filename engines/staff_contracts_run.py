@@ -64,10 +64,11 @@ def current_staff(cur, season):
         for r in cur.fetchall():
             add(r[0], r[1], r[2], r[3], r[4], 0)
     # The GM is staff too (plan §2.2 puts his salary in the owner's payroll); his open tenure is the contract the
-    # producer files, rolls and settles.
+    # producer files, rolls and settles. A coach-GM (a Full Control / Godfather hire, `gm_profiles.coach_id` set) is
+    # skipped: his HC contract already pays him, and filing a GM deal on top counted the same man twice.
     if _table(cur, "gm_profiles"):
         cur.execute("""SELECT team_id, id, gm_name, start_season FROM gm_profiles
-                       WHERE end_season IS NULL ORDER BY team_id""")
+                       WHERE end_season IS NULL AND coach_id IS NULL ORDER BY team_id""")
         for r in cur.fetchall():
             add(r[0], "GM", r[1], r[2], r[3], 0)
     for s in out:
@@ -123,6 +124,10 @@ def annual(cur, season, dry_run=False):
         if row is None or row["remaining_years"] <= 0:
             years, salary = _years(s["person_kind"]), _salary(s["person_kind"], s["experience"],
                                                              s["championships"])
+            if s["person_kind"] == "GM" and row is not None:
+                # Carry his own deal's pay: a GM's tier is not recomputable from the tables (championships are stored
+                # for coaches, not GMs), so a re-file would quietly price an ELITE GM as STANDARD.
+                salary = int(row["annual_salary"])
             signed = int(row["signed_season"]) if row else s["start_season"]
             target = max(0, years - (season - signed))
             if target <= 0:                       # an old tenure with no live contract: file a fresh deal

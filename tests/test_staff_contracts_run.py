@@ -36,9 +36,9 @@ def _db_with_gms():
     """The same league plus one veteran GM (team 1, hired 2030) and one first-year GM (team 2, hired 2036)."""
     conn = _db()
     conn.execute("CREATE TABLE gm_profiles (id INTEGER PRIMARY KEY, team_id INT, gm_name TEXT, "
-                 "start_season INT, end_season INT)")
-    conn.execute("INSERT INTO gm_profiles VALUES (101, 1, 'Veteran GM', 2030, NULL), "
-                 "(102, 2, 'Rookie GM', 2036, NULL)")
+                 "start_season INT, end_season INT, coach_id INT)")
+    conn.execute("INSERT INTO gm_profiles VALUES (101, 1, 'Veteran GM', 2030, NULL, NULL), "
+                 "(102, 2, 'Rookie GM', 2036, NULL, NULL)")
     return conn
 
 
@@ -132,3 +132,27 @@ def test_a_poached_coordinator_is_not_fired_and_owes_no_buyout():
     assert rep["fired"] == 0 and rep["status"] == "built"
     cur.execute("SELECT remaining_years, buyout_owed FROM staff_contracts WHERE team_id = 1 AND person_id = 20")
     assert cur.fetchone() == (0, 0)                   # closed, but no buyout: he moved, he wasn't fired
+
+
+def test_a_coach_gm_does_not_get_a_second_gm_contract():
+    """M-0105 B3: a Godfather coach-GM holds a full-control HC contract; filing a GM deal on top paid the same man
+    twice (and counted both in staff_payroll)."""
+    conn = _db_with_gms()
+    conn.execute("INSERT INTO gm_profiles VALUES (103, 3, 'Coach-GM', 2030, NULL, 41)")
+    cur = FakeCursor(conn)
+    staff = scr.current_staff(cur, 2036)
+    assert 3 not in {s["team_id"] for s in staff if s["person_kind"] == "GM"}
+    scr.annual(cur, 2036)
+    assert not [r for r in _rows(cur) if r[0] == 3 and r[1] == "GM"]
+
+
+def test_a_refiled_gm_contract_keeps_his_own_pay():
+    """M-0105 B5: championships are stored for coaches, not GMs, so a re-file priced an ELITE GM as STANDARD
+    ($5.75M). His own deal's salary is carried forward instead."""
+    conn = _db_with_gms()
+    conn.execute("INSERT INTO staff_contracts (team_id, person_id, person_kind, annual_salary, total_years, "
+                 "remaining_years, signed_season) VALUES (1, 101, 'GM', 10000000, 4, 0, 2032)")
+    cur = FakeCursor(conn)
+    scr.annual(cur, 2036)
+    filed = [r for r in _rows(cur) if r[0] == 1 and r[1] == "GM"]
+    assert filed and filed[-1][3] == 10_000_000

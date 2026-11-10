@@ -43,6 +43,7 @@ QUESTION_OPTIONS = [
 END_OPTION = {"id": "END_INTERVIEW", "label": "End the interview", "form": None, "needs_note": False,
               "default": None}
 MOVE_INTERVIEW_WEEKS = 2          # a move interview is offered for the scan week and the one before
+MOVE_INTERVIEW_MAX_GAP = 4        # ...or back to the last league-office run, at most this many weeks
 FOLLOW_UPS = [
     "What does that mean for the locker room?",
     "How do you see his role changing from here?",
@@ -124,6 +125,14 @@ def _executed_moves(cur, team, writer, season, week):
     league-office run's week, a signing by `contract_offers.week` (`2027_02_18`); a NULL week is out of window."""
     out = []
     lo = week - (MOVE_INTERVIEW_WEEKS - 1)
+    # The offseason jumps (week 26 -> 29 between stages), and a move written at 26 would fall out of a 28..29 window.
+    # Reach back to the last week a league-office run wrote, within MOVE_INTERVIEW_MAX_GAP weeks.
+    if _regclass(cur, "league_office_runs"):
+        cur.execute("SELECT max(week) FROM league_office_runs WHERE season = %s AND week < %s", (season, week))
+        row = cur.fetchone()
+        prev = int(row[0]) if row and row[0] is not None else None
+        if prev is not None and week - MOVE_INTERVIEW_MAX_GAP <= prev < lo:
+            lo = prev
     if _regclass(cur, "franchise_pending_moves") and _regclass(cur, "league_office_runs"):
         cur.execute("""SELECT m.id FROM franchise_pending_moves m JOIN league_office_runs r ON r.id = m.written_run
                        WHERE m.team_id = %s AND m.kind = 'TRADE' AND m.status = 'WRITTEN' AND r.season = %s
