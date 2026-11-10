@@ -293,7 +293,11 @@ test('create fills an empty Coach row and clones the template visuals and talent
   assert.deepEqual([record.ContractLength, record.ContractSalary, record.ContractYearsRemaining], [3, 450, 3]);
   assert.deepEqual([record.Level, record.YearsCoaching, record.COACH_SPECIALTY, record.Personality, record.COACH_DEMEANOR],
     [3, 5, 'Quarterbacks', 'TeamPlayer', 'Classic']);
-  assert.deepEqual([record.Portrait, record.Portrait_Force_Silhouette], [0, true], 'no portrait yet: silhouette');
+  // Spike C in game: Portrait 0 with the silhouette flag renders nothing, so a coach with no face carries the
+  // game's own placeholder (the value both placeholder coach rows use).
+  assert.deepEqual([record.Portrait, record.Portrait_Force_Silhouette], [7999, false], 'no portrait: placeholder');
+  assert.equal(record.IsCreated, true, 'a created coach is marked created');
+  assert.equal(record.AssetName, '', 'a coordinator has no model asset key (94 of 127 real ones)');
   assert.equal(record.IsUserControlled, false, 'a coordinator is not the user');
   assert.equal(f.team.records[1].OffensiveCoordinator, encodeRef(COACH, 6));
 

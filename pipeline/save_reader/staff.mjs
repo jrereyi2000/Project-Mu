@@ -38,9 +38,11 @@
 //   * Team head coaches store OffensiveScheme/DefensiveScheme as references into the team-specific static table 16485;
 //     coordinators use the 16384 SCHEME_ROWS. Playbook and scheme refs come from Spike A §7.3.
 //
-// Left to Madden (PC / Spike C checks): a cloned talent list on a created coach, a created coach's 3D model and
-// wardrobe, Portrait = 0 with Portrait_Force_Silhouette = true (no coach in the measured save exercises it), and
-// whether a ContractStatus = Retired coach stays out of the pool.
+// Spike C (2026-11-10, in game with JR): the created record is accepted and selectable with no crash, and a
+// created head coach shows on the staff screen. Portrait 0 with Portrait_Force_Silhouette = true renders no
+// portrait at all, so a coach without a face now carries the game's own placeholder (7999) instead. Still to see:
+// whether IsCreated = true opens the in-game editor, whether a created head coach's AssetName yields a 3D model,
+// and whether a ContractStatus = Retired coach stays out of the pool.
 import { arraySlots, cloneInto, decodeRef, encodeRef, fieldMeta, NO_REF } from './lib.mjs';
 import { fieldErrors, fieldMismatches, moveTables } from './sign.mjs';
 
@@ -51,6 +53,11 @@ const SIDES = ['Gameday', 'Playsheet'];
 const SIDE_FIELD = { Gameday: 'GamedayTalents', Playsheet: 'PlaysheetTalents' };
 const CONTRACT_KEYS = ['ContractLength', 'ContractSalary', 'ContractYearsRemaining'];
 const COACH_WEIGHT = 10;
+// The game's own "no portrait" value: both placeholder coach rows carry it, and a coach with no face of his own is
+// drawn as the default silhouette from it.
+const COACH_NO_PORTRAIT = 7999;
+// A head coach's 3D model asset key, in the form all 32 real head coaches use ("BowlesTodd_C_PRO").
+const assetKey = profile => `${profile.first_name}${profile.last_name}_C_PRO`.replace(/[^A-Za-z0-9_]/g, '');
 
 // Uniform values every live coach record carries (Spike A §7.5). The writer sets them explicitly rather than trusting
 // an empty row's defaults.
@@ -538,13 +545,19 @@ export async function planStaff(franchise, staff = [], { freed = [] } = {}) {
       }
     }
     const presentationId = nextPid++;
-    const portrait = isInt(profile.portrait_id) && profile.portrait_id > 0 ? profile.portrait_id : 0;
+    // A coach with no portrait of their own gets the game's own "no portrait" placeholder (7999, the value both
+    // placeholder coach rows carry) rather than Portrait 0 with the silhouette flag: Spike C showed that combination
+    // renders nothing at all, where the placeholder is the state the game already draws for a coach with no face.
+    const portrait = isInt(profile.portrait_id) && profile.portrait_id > 0 ? profile.portrait_id : COACH_NO_PORTRAIT;
     const set = {
       FirstName: profile.first_name, LastName: profile.last_name, Name: nameOf(profile), Age: profile.age,
       Position: position, OriginalPosition: position, Archetype: profile.archetype, Level: profile.level,
       TeamIndex: team.teamIndex, ContractStatus: 'Signed', PresentationId: presentationId,
-      Portrait: portrait, Portrait_Force_Silhouette: portrait === 0, ...COACH_DEFAULTS,
-      Weight: isInt(profile.weight) ? profile.weight : COACH_WEIGHT, AssetName: '',
+      Portrait: portrait, Portrait_Force_Silhouette: false, ...COACH_DEFAULTS,
+      Weight: isInt(profile.weight) ? profile.weight : COACH_WEIGHT,
+      // Every real head coach carries a <First><Last>_C_PRO asset key (all 32); the 94 without one are coordinators,
+      // whose model comes from GenericHeadAssetName. Marking the record created is what the in-game editor keys on.
+      AssetName: position === 'HeadCoach' ? assetKey(profile) : '', IsCreated: true,
       IsUserControlled: position === 'HeadCoach', ...contract,
     };
     // Optional look fields: write them when the profile has them rather than writing null over a row default.
@@ -856,7 +869,10 @@ async function verifyCreate(tables, plan, create, label) {
     const spec = create.cloneSpecs.find(s => s.field === 'CharacterVisuals');
     const got = (await tables.byId(visuals.table)).records[visuals.row];
     const want = (await tables.byId(spec.table)).records[spec.row];
-    if (got.RawData !== want.RawData) bad.push(`${label}: cloned CharacterVisuals RawData differs from the template`);
+    // Asset names are case-insensitive and the library lowercases them on write ("CoachWardrobe_Black_Pants" comes
+    // back as "coachwardrobe_black_pants"), so compare without case rather than reporting a difference that isn't one.
+    const sameBlob = String(got.RawData).toLowerCase() === String(want.RawData).toLowerCase();
+    if (!sameBlob) bad.push(`${label}: cloned CharacterVisuals RawData differs from the template`);
   } else if (create.cloneSpecs.some(s => s.field === 'CharacterVisuals')) {
     bad.push(`${label}: CharacterVisuals was not cloned`);
   }
