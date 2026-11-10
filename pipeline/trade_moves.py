@@ -141,8 +141,8 @@ def read_state(cur, season, proposal, cap_season=None):
     picks = {}
     keys = [tuple(x["pick"]) for x in proposal["assets"] if x["type"] == "PICK"]
     for ds, rd, orig in keys:
-        cur.execute("SELECT owner_team_id FROM draft_picks WHERE draft_season = %s AND round = %s AND original_team_id = %s",
-                    (ds, rd, orig))
+        cur.execute("SELECT owner_team_id FROM draft_picks WHERE draft_season = %s AND round = %s "
+                    "AND original_team_id = %s AND COALESCE(pick_suffix, '') = ''", (ds, rd, orig))
         row = cur.fetchone()
         if row:
             picks[(ds, rd, orig)] = row[0]

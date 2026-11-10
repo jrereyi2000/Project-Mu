@@ -29,7 +29,7 @@ def _db():
             category TEXT, cost_dollars INT, target_grade TEXT, completion_season INT, status TEXT);
         CREATE TABLE team_operating_policies (team_id INTEGER PRIMARY KEY, luxury_travel_enabled INT,
             no_roommate_policy INT, family_daycare_enabled INT, private_chef_program INT, annual_opex_cost INT);
-        CREATE TABLE team_seasons (team_id INT, season INT, wins INT);
+        CREATE TABLE team_seasons (team_id INT, season INT, wins INT, popularity_index REAL);
         CREATE TABLE games (season INT, game_type TEXT, status TEXT, home_team_id INT, away_team_id INT,
             home_score INT, away_score INT);
         CREATE TABLE staff_contracts (id INTEGER PRIMARY KEY AUTOINCREMENT, team_id INT, person_id INT,
@@ -72,7 +72,7 @@ def test_files_a_card_and_a_ledger_per_team():
 
 def test_staff_payroll_and_the_success_dividend_reach_the_ledger():
     conn = _db()
-    conn.execute("INSERT INTO team_seasons VALUES (1, 2027, 13)")
+    conn.execute("INSERT INTO team_seasons (team_id, season, wins) VALUES (1, 2027, 13)")
     conn.execute("INSERT INTO staff_contracts (team_id, person_id, person_kind, annual_salary, total_years, "
                  "remaining_years, signed_season) VALUES (1, 10, 'HC', 12000000, 4, 4, 2026)")
     cur = FakeCursor(conn)

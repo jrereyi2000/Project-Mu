@@ -101,8 +101,11 @@ def team_directions(cur, season):
 
 
 def draft_pick_owner(cur, draft_season, round, original_team_id):
+    # COALESCE(pick_suffix, '') = '' keeps a compensatory pick in the same round from answering for the standard
+    # one (2027_02_06 widened the key; older databases may lack the column).
     cur.execute("""SELECT owner_team_id FROM draft_picks WHERE draft_season = %s AND round = %s
-                   AND original_team_id = %s""", (draft_season, round, original_team_id))
+                   AND original_team_id = %s AND COALESCE(pick_suffix, '') = ''""",
+                (draft_season, round, original_team_id))
     r = cur.fetchone()
     return r[0] if r else None
 

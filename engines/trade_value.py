@@ -342,7 +342,10 @@ def comp_slot_of(pick):
     for key in ("comp_slot", "slot_in_round"):
         v = pick.get(key)
         if v:
-            return max(1, int(v))
+            # an overall slot in the round runs 33..64 for a 32-team league; a comp slot is 1..N after the 32
+            # standard picks, so `V(r, 32) * exp(-0.015 * s)` is indexed from 1, not from the raw overall slot.
+            n = int(v)
+            return max(1, n - 32 if n > 32 else n)
     suffix = pick.get("pick_suffix")
     if suffix:
         digits = "".join(c for c in str(suffix) if c.isdigit())

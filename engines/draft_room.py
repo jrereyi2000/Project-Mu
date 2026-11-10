@@ -449,8 +449,16 @@ def start_round(cur, draft_season, n, llm=None, log=print):
         if c["seller"] not in prem:
             prem[c["seller"]] = premiums(room["boards"], room["cons"], pool_set, c["seller"])
         c["premium"] = prem[c["seller"]].get(c["buyer"])
+    # A team can hold its standard pick and a compensatory one in the same round; keying by original_team_id alone
+    # let the comp pick (listed later) overwrite the standard slot. The standard pick wins, else the first comp.
+    starts = {}
+    for s in slots:
+        key = s["original_team_id"]
+        comp = bool(s.get("pick_suffix"))
+        if key not in starts or (starts[key][0] and not comp):
+            starts[key] = (comp, s["round_pick"])
     rep = ge.run_draft_round(cur, _season(cur), draft_season, n, cands,
-                             {s["original_team_id"]: s["round_pick"] for s in slots}, llm=llm, log=log,
+                             {k: v[1] for k, v in starts.items()}, llm=llm, log=log,
                              class_names=[i["full_name"] for i in room["info"].values()])
     stored = sum(1 for p in rep["proposals"] if p["id"] is not None)
     cur.execute("""INSERT INTO draft_round_starts (draft_season, round, proposals) VALUES (%s, %s, %s)""",

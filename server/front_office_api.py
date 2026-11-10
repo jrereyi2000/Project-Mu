@@ -355,9 +355,10 @@ def rank_percentile(scores: list, value: float) -> tuple:
 
 
 def validate_upgrade_body(category: str, tier: str):
-    """400 for a category outside the eight report-card categories or a tier outside MINOR/STANDARD/OVERHAUL."""
-    if category not in rce.CATEGORIES:
-        raise HTTPException(400, f"category must be one of: {', '.join(rce.CATEGORIES)}")
+    """400 for a category outside the four physical (CapEx) categories or a tier outside MINOR/STANDARD/OVERHAUL.
+    A OpEx category is a policy toggle, not a renovation: the engine only upgrades the physical four."""
+    if category not in rce.CAPEX_CATEGORIES:
+        raise HTTPException(400, f"category must be one of: {', '.join(rce.CAPEX_CATEGORIES)}")
     if tier not in rce.CAPEX_TIERS:
         raise HTTPException(400, f"tier must be one of: {', '.join(rce.CAPEX_TIERS)}")
 
@@ -479,18 +480,27 @@ def facilities_upgrade(abbr: str, body: UpgradeIn):
                 raise HTTPException(409, f"{team_abbr} has no report card for season {season}")
             card = dict(zip(REPORT_CARD_COLS, row))
             order = plan_upgrade(card, body.category, body.tier, season)
-            cur.execute("""SELECT total_cash_budget, capex_spent FROM owner_cash_ledgers
-                           WHERE season = %s AND team_id = %s;""", (season, team_id))
+            cur.execute("""SELECT total_cash_budget, capex_spent, staff_payroll, opex_committed
+                           FROM owner_cash_ledgers WHERE season = %s AND team_id = %s;""", (season, team_id))
             ledger = cur.fetchone()
             if not ledger:
                 raise HTTPException(409, f"{team_abbr} has no owner cash ledger for season {season}")
-            check_cash(ledger[0] - ledger[1], order["cost_dollars"])
+            # The cash check has to see the whole ledger (staff payroll and OpEx are commitments too), not only
+            # what CapEx already spent.
+            check_cash(ledger[0] - ledger[1] - ledger[2] - ledger[3], order["cost_dollars"])
+            cur.execute("""SELECT id FROM facility_upgrades WHERE team_id = %s AND category = %s
+                           AND status = 'IN_PROGRESS' LIMIT 1;""", (team_id, body.category))
+            if cur.fetchone():
+                raise HTTPException(409, f"{team_abbr} already has a {body.category} renovation in progress")
             cur.execute("""INSERT INTO facility_upgrades (team_id, season_ordered, category, cost_dollars,
                                                           target_grade, completion_season, status)
                            VALUES (%s, %s, %s, %s, %s, %s, 'IN_PROGRESS') RETURNING id;""",
                         (team_id, season, body.category, order["cost_dollars"], order["target_grade"],
                          order["completion_season"]))
             order["id"] = cur.fetchone()[0]
+            # The order spends the owner's cash now, so the ledger records it now (the producer re-reads it).
+            cur.execute("""UPDATE owner_cash_ledgers SET capex_spent = capex_spent + %s
+                           WHERE season = %s AND team_id = %s;""", (order["cost_dollars"], season, team_id))
             order["season_ordered"] = season
             conn.commit()
             return {"team": team_abbr, "season": season, "order": order}
@@ -531,6 +541,17 @@ def facilities_policy(abbr: str, body: PolicyIn):
                              updated_at = NOW();""",
                         (team_id, next_toggles["luxury_travel"], next_toggles["family_daycare"],
                          next_toggles["private_chef"], cost))
+            # An OpEx toggle is a cash commitment too: the ledger tracks the enabled policies' annual cost, and a
+            # switch JR could not fund is refused before the card changes.
+            cur.execute("""SELECT total_cash_budget, capex_spent, staff_payroll, opex_committed
+                           FROM owner_cash_ledgers WHERE season = %s AND team_id = %s;""", (season, team_id))
+            ledger = cur.fetchone()
+            if ledger:
+                delta = int(cost or 0) - int(ledger[3] or 0)
+                if delta > 0:
+                    check_cash(ledger[0] - ledger[1] - ledger[2] - ledger[3], delta)
+                cur.execute("""UPDATE owner_cash_ledgers SET opex_committed = %s
+                               WHERE season = %s AND team_id = %s;""", (cost, season, team_id))
             spec = rce.OPEX_POLICIES[body.policy]
             score = round(rce.facility_score(updated), 3)
             grade = rce.score_to_grade(score)

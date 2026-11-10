@@ -67,11 +67,26 @@ DEFAULT_DSN = os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=
 ALL_PRO_FIRST_TYPES = frozenset({"First Team All-Pro"})
 PRO_BOWL_TYPES = frozenset({"Pro Bowl"})
 
+# A signing's old team cannot come from player_seasons(season).team_id alone: at FREE_AGENCY the save loader nulls
+# it for every expiring-contract free agent (and the FA engines require that null to offer him at all), so the
+# ledger was always empty. Fall back to his last recorded team that season, then to his contract row.
 QFA_SIGNINGS_SQL = """
     SELECT o.id, o.player_id, o.team_id, o.total_value, o.years, o.created_at,
-           ps.team_id, ps.released_week
+           COALESCE(
+               (SELECT ps.team_id FROM player_seasons ps
+                WHERE ps.player_id = o.player_id AND ps.season = o.season AND ps.team_id IS NOT NULL
+                ORDER BY ps.id DESC LIMIT 1),
+               (SELECT g.team_id FROM season_stat_general g
+                WHERE g.player_id = o.player_id AND g.season = o.season AND g.team_id IS NOT NULL
+                ORDER BY g.team_id LIMIT 1),
+               (SELECT c.team_id FROM player_contracts c
+                WHERE c.player_id = o.player_id AND c.season = o.season AND c.team_id IS NOT NULL
+                ORDER BY c.id DESC LIMIT 1)
+           ) AS old_team,
+           (SELECT ps2.released_week FROM player_seasons ps2
+            WHERE ps2.player_id = o.player_id AND ps2.season = o.season
+            ORDER BY ps2.id DESC LIMIT 1) AS released_week
     FROM contract_offers o
-    JOIN player_seasons ps ON ps.player_id = o.player_id AND ps.season = %s
     WHERE o.season = %s AND o.status = 'ACCEPTED' AND o.kind = 'FREE_AGENT'
     ORDER BY o.player_id, o.created_at, o.id
 """
@@ -193,7 +208,7 @@ def build_qfas(cur, season, deadline=None):
     released = {r[0] for r in cur.fetchall() if r[0] is not None}
     all_pro, pro_bowl = _honors(cur, season)
     shares = snap_shares(cur, season)
-    cur.execute(QFA_SIGNINGS_SQL, (season, season))
+    cur.execute(QFA_SIGNINGS_SQL, (season,))
     by_player = {}
     for _oid, player_id, new_team, total_value, years, created_at, old_team, released_week in cur.fetchall():
         if player_id is None or new_team is None or old_team is None:

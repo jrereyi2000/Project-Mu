@@ -368,6 +368,8 @@ class FakeCursor:
                                    c["drafted_round"]))
         elif "FROM player_contract_years" in sql:
             self._rows = [(cid, y, h) for cid, (_, years) in self.contracts.items() for y, h in years.items()]
+        elif "to_regclass('team_report_cards')" in sql:
+            self._rows = [(0,)]                  # no report-card table here: facility_score stays None
         elif "FROM draft_prospects" in sql:
             self._rows = [(d["player_id"], d["team_id"], d["overall_pick"]) for d in self.prospects]
         else:

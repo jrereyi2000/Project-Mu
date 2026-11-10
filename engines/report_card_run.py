@@ -65,6 +65,19 @@ def _previous_cards(cur, season):
     return out
 
 
+def _top5_popularity(cur, season):
+    """The season's five most popular teams (`team_seasons.popularity_index`), for the cash pool's +$2M term. Empty
+    when the table is absent (a fresh franchise before the engines have run) or nothing is stored yet."""
+    cur.execute("SELECT to_regclass('team_seasons') IS NOT NULL")
+    row = cur.fetchone()
+    if not row or not row[0]:
+        return set()
+    # Only teams with a computed popularity can be a top-5 franchise; a season with none stored yet pays nobody.
+    cur.execute("SELECT team_id FROM team_seasons WHERE season = %s AND popularity_index IS NOT NULL "
+                "ORDER BY popularity_index DESC LIMIT 5", (season,))
+    return {r[0] for r in cur.fetchall()}
+
+
 def _upgrades(cur, season):
     cur.execute("""SELECT id, team_id, season_ordered, category, cost_dollars, target_grade, completion_season,
                           status FROM facility_upgrades ORDER BY id""")
@@ -153,6 +166,7 @@ def annual(cur, season, dry_run=False, cpu_upgrades=True, user_team_ids=()):
     user = set(user_team_ids or ())
     cards, ledgers, orders = {}, {}, []
     completed = []
+    top5 = _top5_popularity(cur, season)
     for tid, abbr in teams:
         base = baseline.get((abbr or "").upper()) or {}
         old = prev.get(tid)
@@ -160,14 +174,22 @@ def annual(cur, season, dry_run=False, cpu_upgrades=True, user_team_ids=()):
         last_renovated = (old or {}).get("last_renovated_season")
         # 2. this season's completed renovations
         for u in upgrades:
-            if u["team_id"] == tid and u["status"] == "IN_PROGRESS" and season >= u["completion_season"]:
+            # COMPLETED included: a re-run of the same season used to skip the upgrade it had already completed,
+            # falling back to season-1's card, reverting the renovation and letting a CPU owner order it again.
+            if u["team_id"] == tid and u["status"] in ("IN_PROGRESS", "COMPLETED") \
+                    and season >= u["completion_season"]:
                 card[u["category"]] = u["target_grade"]
                 last_renovated = max(last_renovated or 0, u["completion_season"]) or None
                 completed.append(u["id"])
         # 3. degradation for unmaintained physical categories
         unmaintained = season - (last_renovated or BACKFILL_START)
-        if unmaintained >= 3:
-            card = rce.degrade(card, 3 if old else unmaintained)     # one notch a run, or the full backfill
+        # One sub-tier per 3 unmaintained seasons (rce.degrade's own rule): a backfill applies every missed notch at
+        # once, and each later season applies one only on the season that completes another three. Passing a flat 3
+        # dropped a sub-tier EVERY season from year 3 on, three times too fast.
+        if not old:
+            card = rce.degrade(card, unmaintained)
+        elif unmaintained >= 3 and unmaintained % 3 == 0:
+            card = rce.degrade(card, 3)
         # 4. OpEx policies
         pol = policies.get(tid) or {"enabled": [], "opex": 0}
         for p in pol["enabled"]:
@@ -182,7 +204,8 @@ def annual(cur, season, dry_run=False, cpu_upgrades=True, user_team_ids=()):
         res = results.get(tid) or {}
         budget = rce.annual_cash_pool(band, wins=res.get("wins", 0), home_playoff_games=res.get("home_playoff_games", 0),
                                       sb_appearance=res.get("sb_appearance", False),
-                                      sb_championship=res.get("sb_championship", False))
+                                      sb_championship=res.get("sb_championship", False),
+                                      top5_popularity=tid in top5)      # the engine's own +$2M term
         payroll = _payroll(cur, season, tid)
         ordered = [u for u in upgrades if u["team_id"] == tid and u["season_ordered"] == season]
         capex = sum(int(u["cost_dollars"] or 0) for u in ordered)

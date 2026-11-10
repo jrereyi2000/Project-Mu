@@ -593,8 +593,9 @@ def read_books(cur, season, week, window="IN_SEASON", stage=None):
                    UNION SELECT player_id FROM transactions WHERE season = %s AND type = 'TRADED'
                      AND player_id IS NOT NULL""", (season, season))
     b["acquired"] = {r[0] for r in cur.fetchall()}
+    # Standard picks only: a 3-tuple key would let a comp pick in the same round stand in for the team's own.
     cur.execute("""SELECT draft_season, round, original_team_id, owner_team_id FROM draft_picks
-                   WHERE NOT used AND draft_season > %s""", (season,))
+                   WHERE NOT used AND draft_season > %s AND COALESCE(pick_suffix, '') = ''""", (season,))
     b["picks"] = {(r[0], r[1], r[2]): r[3] for r in cur.fetchall()}
     cur.execute("""SELECT a.from_team_id, a.pick_draft_season, a.pick_round, a.pick_original_team_id
                    FROM gm_trade_assets a JOIN gm_trade_proposals p ON p.id = a.proposal_id

@@ -866,15 +866,33 @@ def plan_rookies(league, prospects):
 
 
 # --------------------------------------------------------------------- DB ----
+def facility_scores(cur, season):
+    """{team_id: S_facility in [0, 1]} from each team's latest report card, or {} without the table. Without it
+    `free_agency_engine.offer_utility` fell back to S_org = S_contention for every team, making the NFLPA facility
+    modifier inert in production."""
+    cur.execute("SELECT to_regclass('team_report_cards') IS NOT NULL")
+    row = cur.fetchone()
+    if not row or not row[0]:
+        return {}
+    cur.execute("""SELECT DISTINCT ON (team_id) team_id, overall_score FROM team_report_cards
+                   WHERE season <= %s ORDER BY team_id, season DESC""", (season,))
+    return {r[0]: (float(r[1]) / 100.0 if r[1] is not None else None) for r in cur.fetchall()}
+
+
 def fetch_teams(cur, season):
-    """{team_id: {team_id, abbr, wins, losses, popularity_index, direction}} for every team with an abbreviation."""
+    """{team_id: {team_id, abbr, wins, losses, popularity_index, direction, facility_score}} for every team with an
+    abbreviation."""
     cur.execute("""SELECT t.id, t.abbreviation, s.wins, s.losses, s.popularity_index, g.direction
                    FROM teams t
                    LEFT JOIN team_seasons s ON s.team_id = t.id AND s.season = %s
                    LEFT JOIN gm_team_seasons g ON g.team_id = t.id AND g.season = %s
                    WHERE t.abbreviation IS NOT NULL ORDER BY t.id""", (season, season))
-    return {r[0]: {"team_id": r[0], "abbr": r[1], "wins": r[2] or 0, "losses": r[3] or 0,
-                   "popularity_index": r[4], "direction": r[5]} for r in cur.fetchall()}
+    out = {r[0]: {"team_id": r[0], "abbr": r[1], "wins": r[2] or 0, "losses": r[3] or 0,
+                  "popularity_index": r[4], "direction": r[5]} for r in cur.fetchall()}
+    scores = facility_scores(cur, season)
+    for tid, team in out.items():
+        team["facility_score"] = scores.get(tid)
+    return out
 
 
 def fetch_caps(cur, season, target):
