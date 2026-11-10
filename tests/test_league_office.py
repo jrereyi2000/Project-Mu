@@ -465,6 +465,11 @@ def test_contract_block_emits_only_the_bonus_slots_the_schema_has():
     seven = {"length": 7, "salary_by_year": [1_000_000] * 7, "bonus_by_year": [500_000] * 7}
     b, dropped, bonus_dropped = lo.contract_block(seven, old, 1, slots=10, bonus_slots=7)
     assert dropped == 0 and bonus_dropped == 1 and "BonusYear7" not in b
+    # a zero-bonus tail loses no money, so it is not reported
+    zeros = {"length": 10, "salary_by_year": [1_000_000] * 10, "bonus_by_year": [0] * 10}
+    assert lo.contract_block(zeros, None, 0, slots=10, bonus_slots=7)[2] == 0
+    paid_tail = {"length": 10, "salary_by_year": [1_000_000] * 10, "bonus_by_year": [0] * 8 + [500_000] * 2}
+    assert lo.contract_block(paid_tail, None, 0, slots=10, bonus_slots=7)[2] == 2
 
 
 def test_release_cap_accelerates_bonus():

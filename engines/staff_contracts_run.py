@@ -109,13 +109,17 @@ def current_staff(cur, season):
     return out
 
 
-def file_hires(cur, season, dry_run=False, starting_only=True):
+def file_hires(cur, season, dry_run=False, starting_only=True, years_from=None):
     """Files a market deal for everyone with no live contract row: by default only those whose tenure starts exactly
     in `season` (a hire), else every current staffer of that season. The hiring cycle calls this as it hires
     (M-0200), so the save carries the new deal from the first write instead of the coach sitting at 0/0/0 until the
     next annual run; `annual` calls it for `season + 1` as a backstop, and `coach_link` files the starting staff it
     seats at league start. A re-hire keeps his own pay as a floor and his full-control flag, as any refile does.
-    Returns the rows filed."""
+
+    `years_from` ({(team_id, person_kind, person_id): (length, years_remaining)}) is how a starting coach's Mu deal
+    takes its term from Madden's own contract (JR, 2026-11-10 via M-0225): Mu prices the salary, the save decides
+    the length and the years left. A zero or missing value falls back to the role's term from this season; a GM has
+    no Madden record, so he always does. Returns the rows filed."""
     if not (_table(cur, "staff_contracts") and _table(cur, "coach_tenures")):
         return []
     by_key = {(r["team_id"], r["person_kind"], r["person_id"]): r for r in contracts(cur)
@@ -128,18 +132,24 @@ def file_hires(cur, season, dry_run=False, starting_only=True):
         if row is not None and row["remaining_years"] > 0:
             continue
         years, salary = _years(s["person_kind"]), _salary(s["person_kind"], s["experience"], s["championships"])
+        signed, remaining = int(season), years
+        save = (years_from or {}).get((s["team_id"], s["person_kind"], s["person_id"]))
+        if save and s["person_kind"] != "GM" and int(save[1] or 0) > 0:
+            length = int(save[0] or 0) or years
+            years, remaining = max(1, length), int(save[1])
+            signed = int(season) - max(0, length - remaining)
         full_control = False
         if row is not None:
             salary = max(int(row["annual_salary"]), salary)
             full_control = bool(row["full_control"])
         filed.append({"team_id": s["team_id"], "person_kind": s["person_kind"], "person_id": s["person_id"],
-                      "annual_salary": salary, "total_years": years, "remaining_years": years,
-                      "signed_season": int(season), "full_control": full_control})
+                      "annual_salary": salary, "total_years": years, "remaining_years": remaining,
+                      "signed_season": signed, "full_control": full_control})
         if not dry_run:
             cur.execute("""INSERT INTO staff_contracts (team_id, person_id, person_kind, annual_salary,
                                total_years, remaining_years, signed_season, full_control, buyout_owed)
                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 0)""",
-                        (s["team_id"], s["person_id"], s["person_kind"], salary, years, years, int(season),
+                        (s["team_id"], s["person_id"], s["person_kind"], salary, years, remaining, signed,
                          full_control))
     return filed
 

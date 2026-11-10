@@ -501,3 +501,16 @@ def test_file_hires_can_file_every_current_staffer_not_only_a_hire():
     cur = FakeCursor(_db())
     assert len(scr.file_hires(cur, 2036, starting_only=False)) == 5
     assert scr.file_hires(cur, 2036, starting_only=False) == []
+
+
+def test_a_starting_coach_takes_his_term_from_the_save():
+    """JR via M-0225: Mu prices the salary, Madden's contract decides the length and the years left; a zero or
+    missing value falls back to the role's term from this season, and a GM never uses the save."""
+    conn = _db_with_gms()
+    filed = scr.file_hires(FakeCursor(conn), 2036, starting_only=False, years_from={
+        (1, "HC", 10): (5, 2), (2, "HC", 11): (4, 0), (1, "GM", 101): (5, 2)})
+    by = {(f["person_kind"], f["person_id"]): f for f in filed}
+    hc = by[("HC", 10)]
+    assert (hc["total_years"], hc["remaining_years"], hc["signed_season"]) == (5, 2, 2033)
+    assert by[("HC", 11)]["signed_season"] == 2036 and by[("HC", 11)]["remaining_years"] == 4
+    assert by[("GM", 101)]["signed_season"] == 2036 and by[("GM", 101)]["remaining_years"] == 4
