@@ -257,8 +257,7 @@ def plan_staff_edits(cur, snapshot, target_season):
                 # seat and status only), and `annual` runs for the season just played, so the hire's deal is filed a
                 # year later. Until the save carries it, emit a contract-only assign so the next write fills it
                 # (audit B1 partial, 2026-11-10).
-                contract = (_contract(cur, team_id, staff_kind, person["person_id"], has_contracts)
-                            if profile.get("source") == "CREATED" else None)
+                contract = _contract(cur, team_id, staff_kind, person["person_id"], has_contracts)
                 saved = save_coaches.get(actual) or {}
                 already = contract is not None and all(
                     saved.get(k) == contract[v] for k, v in

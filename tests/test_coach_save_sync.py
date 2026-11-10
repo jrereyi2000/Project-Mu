@@ -320,3 +320,27 @@ def test_a_seated_created_coach_gets_his_contract_written():
     _save_coach(snap, 100, "Dave", "Canales", 0, contract=(3, 300, 2))
     snap["coaches"] = [c for c in snap["coaches"] if not (c["pgid"] == 100 and c["contract_length"] == 0)]
     assert cs.plan_staff_edits(FakeCursor(conn), snap, FINISHED)["staff"] == []
+
+
+def test_a_resigned_save_coach_has_his_new_deal_pushed():
+    """A kept coach's auto re-sign changes his salary and years in staff_contracts; the save still holds the old deal,
+    so the planner pushes it whatever the profile's source (audit, 2026-11-10)."""
+    teams = [(1, "CAR", 0)]
+    conn, snap = _db(teams), _snapshot(teams)
+    _hc(conn, 41, "Dave Canales", 1, FINISHED - 2)
+    _coord(conn, 300, "Brad Idzik", 1, "OC", FINISHED - 2)
+    _coord(conn, 301, "Ejiro Evero", 1, "DC", FINISHED - 2)
+    _profile(conn, "COACH", 41, 100, source="SAVE")
+    _profile(conn, "COORD", 300, 101, "OffensiveCoordinator", source="SAVE")
+    _profile(conn, "COORD", 301, 102, "DefensiveCoordinator", source="SAVE")
+    _contract(conn, 1, "HC", 41, 5_000_000, 4, 4)          # the re-signed deal
+    _seat(snap, 0, "hc", 100)
+    _seat(snap, 0, "oc", 101)
+    _seat(snap, 0, "dc", 102)
+    _save_coach(snap, 100, "Dave", "Canales", 0, contract=(3, 300, 2))   # the save still has the old one
+    _save_coach(snap, 101, "Brad", "Idzik", 0)
+    _save_coach(snap, 102, "Ejiro", "Evero", 0)
+    plan = cs.plan_staff_edits(FakeCursor(conn), snap, FINISHED)
+    assign = [a for a in plan["staff"] if a.get("pgid") == 100]
+    assert len(assign) == 1 and assign[0]["action"] == "assign", plan["staff"]
+    assert assign[0]["contract"] == {"ContractLength": 4, "ContractSalary": 500, "ContractYearsRemaining": 4}
