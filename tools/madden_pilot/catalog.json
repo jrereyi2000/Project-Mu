@@ -370,7 +370,18 @@
       "confirm_ok": [
         "SIMULATE DRAFT"
       ],
-      "exits": {}
+      "exits": {
+        "HUB_WEEKLY": [
+          [
+            "down",
+            1
+          ],
+          [
+            "confirm",
+            "SIMULATE DRAFT"
+          ]
+        ]
+      }
     },
     "DRAFT_HUB": {
       "note": "Seen 2026-11-10 (P2-02): draft week replaces the GAMEDAY and WEEKLY HUB tabs with a DRAFT tab next to MANAGE ROSTER (JR). It holds the NFL DRAFT logo and one START THE NFL DRAFT button. Project Mu writes the picks into the save first; the pilot opens the draft and then simulates it (JR: 'click Draft and then click Simulate Draft').",

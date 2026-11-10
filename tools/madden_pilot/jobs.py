@@ -537,11 +537,11 @@ def _simulate_draft(pilot, timeout=DRAFT_SIM_TIMEOUT, poll=4.0):
         pilot.confirm_on("DRAFT_HUB", "START THE NFL DRAFT", wait=2.5)
         frame, screen = pilot.look()
     if screen == "DRAFT_LAUNCH":
-        # Windows OCR reads the button as SIMULATEDRAFT / SIMULATEDUFT, so it can't be highlighted
-        # by name: one Down from the selected START DRAFTING, then prove the border has moved off.
+        # Windows OCR reads the button as SIMULATEDRAFT / SIMULATEDUFT, so it cannot be found by
+        # name; it is one Down from the selected START DRAFTING. The border sits between the two
+        # stacked options and cannot prove which one owns it, so the label check is skipped and
+        # the press is one verified Down (DRAFT_LAUNCH has highlight null for that reason).
         pilot.press("down")
-        pilot.look()
-        pilot._run_steps("DRAFT_LAUNCH", [["border_off", "START DRAFTING"]])
         pilot.confirm_on("DRAFT_LAUNCH", "SIMULATE DRAFT", wait=5.0)
     # the draft runs a minute or two behind a Simulating frame; then the recap hub appears
     others = [n for n in pilot.screens if n not in DRAFT_SCREENS]
