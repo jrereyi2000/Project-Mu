@@ -405,8 +405,17 @@ export async function planStaff(franchise, staff = [], { freed = [] } = {}) {
   // The user wiring a head-coach seat needs (league_setup.mjs's four links; the fourth is IsUserControlled).
   const wiringFor = (where, team, seat, position) => {
     if (position !== 'HeadCoach') return { user: null, userSet: null, teamSet: null };
+    // Madden's own firing nulls Team.HeadCoach AND FranchiseUser.Team, so on an empty seat nothing in the save links
+    // the orphaned user row to this team — but the fired coach's PrevTeamIndex still does. Hand that man to teamUser
+    // as the outgoing occupant so it can find the row that still follows him.
+    let outgoing = seat?.holderRef ?? null;
+    if (!outgoing) {
+      const fired = coachTable.records.findIndex(c => !c.isEmpty && c.PrevTeamIndex === team.teamIndex &&
+        (c.Position === 'HeadCoach' || c.OriginalPosition === 'HeadCoach'));
+      if (fired >= 0) outgoing = { table: CID, row: fired };
+    }
     // teamUser compares decoded refs, so the new coach's encoded seat ref is decoded first.
-    const user = teamUser(fuTable, TID, team.row, seat?.ref ? decodeRef(seat.ref) : null, seat?.holderRef);
+    const user = teamUser(fuTable, TID, team.row, seat?.ref ? decodeRef(seat.ref) : null, outgoing);
     if (user.error) { errors.push(`${where}: ${user.error}, so the team's user cannot be re-pointed`); return null; }
     return { user, userSet: { UserEntity: seat.ref, Team: encodeRef(TID, team.row) },
       teamSet: { UserCharacter: seat.ref } };
