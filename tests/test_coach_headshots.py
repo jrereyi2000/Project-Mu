@@ -124,6 +124,16 @@ class TestCoachAppearance(unittest.TestCase):
         self.assertIn("lean build", thin["build"])
         self.assertIn("very large build", heavy["build"])
 
+    def test_coach_build_comes_from_height_and_weight(self):
+        _small_line, small = appearance(
+            "Bill Doe", "Panthers", "Head Coach", 70, 160.0, 45,
+            role="coach", body_type="Standard")
+        _large_line, large = appearance(
+            "Bill Doe", "Panthers", "Head Coach", 78, 330.0, 45,
+            role="coach", body_type="Standard")
+        self.assertIn("lean build", small["build"])
+        self.assertIn("very large build", large["build"])
+
     def test_coach_age_cue_runs_to_72(self):
         young = coach_age_cue(33)
         old = coach_age_cue(70)
