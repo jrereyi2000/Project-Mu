@@ -65,7 +65,7 @@ The spike folder also holds frames that aren't separate catalog screens: `b2`, `
 
 Arrows are the catalog's exits. `goto(target)` takes the shortest route and plans again after every hop, so an interrupt (Coach Progress) or a recap is handled on the way.
 
-- **Load a tuning franchise:** FRANCHISE_LIST → highlight `TUNE-<x>` → Space → PROGRESSION_WARNING → Proceed → (loading, about 25 s) → HUB_WEEKLY.
+- **Load a tuning franchise:** FRANCHISE_LIST → the `TUNE-<x>` tile → Space → PROGRESSION_WARNING → Proceed → (loading, about 25 s) → HUB_WEEKLY. The list is ordered by save recency, newest first, and autosaves are tiles of their own; the wanted tile's 0-based position is computed from the saves folder (`jobs.save_tiles` / `jobs.tile_index`) and the pilot presses Right that many times from the opening highlight, falling back to the OCR border walk.
 - **Sim one week:** HUB_WEEKLY → Z → HUB_GAMEDAY → highlight ADVANCE WEEK (border checked) → Space → ADVANCE_MENU → NEXT WEEK → Space → (sim, under 20 s) → COACH_PROGRESS ×3 (Space each) → HUB_WEEKLY (read `2026. WEEK N`).
 - **Savepoint:** HUB_WEEKLY → Tab → (back to the hub).
 - **Quit a franchise:** hub → Backspace → QUIT_CONFIRM → Up → Space on YES → FRANCHISE_LIST. This writes `<save>-AUTOSAVE`, so it is `TUNE-*` only unless JR allows it.
