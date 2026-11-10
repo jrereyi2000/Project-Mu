@@ -207,3 +207,31 @@ def test_a_created_profile_is_not_overwritten_by_the_link():
     writes_after = sum(1 for s in cur.statements if s.lstrip().upper().startswith(("INSERT", "UPDATE"))
                        and "coach_madden_profiles" in s)
     assert writes_after == writes_before
+
+
+# ---- name matching (measured pairs, CAREER-MUBASE against a fresh 2026 seed, 2026-11-10) ----
+def test_normalize_drops_punctuation_and_suffixes():
+    assert cl.normalize_name("Pete Carmichael Jr.") == "pete carmichael"
+    assert cl.normalize_name("Pete Carmichael Jr") == "pete carmichael"
+    assert cl.normalize_name("Chris O'Leary") == "chris oleary"
+    assert cl.normalize_name("A.J.  Smith") == "aj smith"
+
+
+def test_names_match_across_the_spellings_the_save_and_mu_use():
+    pairs = [
+        ("Pete Carmichael Jr", "Pete Carmichael Jr."),      # suffix period
+        ("Bradley Idzik", "Brad Idzik"),                    # nickname
+        ("Jonthan Gannon", "Jonathan Gannon"),              # one misspelt first name
+        ("Brian Angelicho", "Brian Angelichio"),            # one misspelt surname, same first name
+        ("Nate Scheelhaase", "Nathan Scheelhaase"),         # nickname
+        ("mike vrabel", "Mike Vrabel"),                     # case and spacing
+    ]
+    for save_name, mu_name in pairs:
+        assert cl.names_match(save_name, mu_name), (save_name, mu_name)
+
+
+def test_names_do_not_match_different_people():
+    # The genuine 2026 mismatches: Madden ships a fictional coach where Mu has the real man.
+    for save_name, mu_name in [("Orson Grizzly", "Press Taylor"), ("Bill Summers", "Vic Fangio"),
+                               ("Sean Mannion", "Kevin Patullo"), ("Andy Reid", "Ron Leonard")]:
+        assert not cl.names_match(save_name, mu_name), (save_name, mu_name)

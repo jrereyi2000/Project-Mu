@@ -37,15 +37,100 @@ SEATS = (
 )
 
 
+_SUFFIXES = {"jr", "sr", "ii", "iii", "iv", "v"}
+
+
 def normalize_name(name):
-    """The name comparison key: accent-folded, lower-cased and whitespace-collapsed.
+    """The name comparison key: accent-folded, punctuation-free, suffix-free, lower-cased, single-spaced.
 
     `engines/staff_names.py` has no normaliser of its own (it seeds names, already plain ASCII and single-spaced),
-    so this is the equivalent used for matching a Mu name against the save's FirstName/LastName.
+    so this is the equivalent used for matching a Mu name against the save's FirstName/LastName. Madden and Mu write
+    the same man differently often enough to matter: "Pete Carmichael Jr" against "Pete Carmichael Jr." (measured on
+    CAREER-MUBASE, 2026-11-10).
     """
     text = unicodedata.normalize("NFKD", str(name or ""))
     text = text.encode("ascii", "ignore").decode("ascii")
-    return " ".join(text.split()).lower()
+    text = text.replace("'", "").replace(".", "").replace("-", " ")
+    parts = [p for p in " ".join(text.split()).lower().split(" ") if p]
+    while len(parts) > 1 and parts[-1] in _SUFFIXES:
+        parts.pop()
+    return " ".join(parts)
+
+
+# First names the save and Mu spell differently for the same person. Measured pairs only; a name that is not here
+# stays a mismatch rather than being guessed at.
+_NICKNAMES = {
+    "brad": "bradley", "bradley": "bradley",
+    "mike": "michael", "michael": "michael",
+    "dave": "david", "david": "david",
+    "bob": "robert", "rob": "robert", "robert": "robert",
+    "bill": "william", "will": "william", "william": "william",
+    "jim": "james", "james": "james",
+    "tom": "thomas", "thomas": "thomas",
+    "joe": "joseph", "joseph": "joseph",
+    "dan": "daniel", "daniel": "daniel",
+    "matt": "matthew", "matthew": "matthew",
+    "nick": "nicholas", "nicholas": "nicholas",
+    "chris": "christopher", "christopher": "christopher",
+    "pat": "patrick", "patrick": "patrick",
+    "ben": "benjamin", "benjamin": "benjamin",
+    "josh": "joshua", "joshua": "joshua",
+    "jeff": "jeffrey", "jeffrey": "jeffrey",
+    "andrew": "andrew", "andy": "andrew",
+    "ken": "kenneth", "kenneth": "kenneth",
+    "ron": "ronald", "ronald": "ronald",
+    "doug": "douglas", "douglas": "douglas",
+    "zach": "zachary", "zack": "zachary", "zachary": "zachary",
+    "alex": "alexander", "alexander": "alexander",
+    "ed": "edward", "edward": "edward",
+    "sean": "shawn", "shawn": "shawn",
+    "nate": "nathan", "nathan": "nathan",
+    "steve": "steven", "steven": "steven",
+    "tony": "anthony", "anthony": "anthony",
+    "rick": "richard", "rich": "richard", "richard": "richard",
+}
+
+
+def _one_edit_apart(a, b):
+    """True when two short strings differ by at most one insertion, deletion or substitution."""
+    if a == b:
+        return True
+    if abs(len(a) - len(b)) > 1:
+        return False
+    if len(a) > len(b):
+        a, b = b, a
+    i = j = 0
+    seen = False
+    while i < len(a) and j < len(b):
+        if a[i] == b[j]:
+            i += 1; j += 1; continue
+        if seen:
+            return False
+        seen = True
+        if len(a) == len(b):
+            i += 1; j += 1
+        else:
+            j += 1
+    return True
+
+
+def names_match(save_name, mu_name):
+    """Whether two names are the same man: equal after normalisation, the same first name with one of them misspelt
+    ("Jonthan Gannon" in the save, "Jonathan Gannon" in Mu), or the same surname with a known nickname form."""
+    a, b = normalize_name(save_name), normalize_name(mu_name)
+    if not a or not b:
+        return False
+    if a == b:
+        return True
+    a_first, _, a_last = a.rpartition(" ")
+    b_first, _, b_last = b.rpartition(" ")
+    if not a_last or not b_last:
+        return False
+    same_first = _one_edit_apart(a_first, b_first) or (
+        _NICKNAMES.get(a_first) == _NICKNAMES.get(b_first) and a_first in _NICKNAMES)
+    # One misspelt surname, with the same first name, is still one man ("Brian Angelicho" in the save against
+    # "Brian Angelichio" in Mu). Two different men would have to share a team, a role and a near-identical surname.
+    return a_last == b_last and same_first or same_first and _one_edit_apart(a_last, b_last)
 
 
 def _seed(person_kind, person_id):
@@ -201,7 +286,7 @@ def link_staff(cur, snapshot, season):
                                   "save_pgid": pgid, "reason": "seat coach missing from coaches[]"})
                 continue
             save_name = f"{save.get('first_name') or ''} {save.get('last_name') or ''}"
-            if normalize_name(save_name) != normalize_name(mu_name):
+            if not names_match(save_name, mu_name):
                 unmatched.append({"team_index": idx, "team_id": team_id, "role": role, "mu_name": mu_name,
                                   "save_name": save_name, "save_pgid": pgid, "reason": "name mismatch"})
                 continue
