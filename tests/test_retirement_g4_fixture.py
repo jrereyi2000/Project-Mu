@@ -112,3 +112,17 @@ def test_signed_branch_needs_a_free_agent_baseline(tmp_path):
     branch['contract_from'] = str(_write(tmp_path, 'prior.json', prior))
     with pytest.raises(ValueError, match='must restore to FreeAgent/32'):
         fx.plan_branch(branch, fixture_id='g4-test', schema_version=6)
+
+
+def test_contract_skip_years_starts_the_block_at_the_next_league_year(tmp_path):
+    snap = _snapshot([{'pgid': 7, 'status': 'Retired', 'team_index': 32}])
+    prior = _snapshot([{'pgid': 7, 'status': 'Signed', 'team_index': 4,
+                        'contract': {'length': 4, 'current_year': 1, 'void_years': 0,
+                                     'salary_by_year': [10, 20, 30, 40], 'bonus_by_year': [1, 2, 3, 4]}}])
+    branch = _branch(tmp_path, snap, [{'pgid': 7, 'baseline_status': 'FreeAgent', 'baseline_team_index': 32}])
+    branch['contract_from'] = str(_write(tmp_path, 'prior.json', prior))
+    branch['contract_skip_years'] = 1
+    out = fx.plan_branch(branch, fixture_id='g4-test', schema_version=7)
+    block = out['sign']['sign'][0]['contract']
+    assert block['Length'] == 2 and block['SalaryYear0'] == 30 and block['SalaryYear1'] == 40
+    assert block['BonusYear0'] == 3

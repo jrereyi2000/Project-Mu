@@ -277,6 +277,33 @@ rostered player, no re-retirement, and no new retirees. Madden also put each on 
 the next advance — the field-only restores never appeared there. The A/B is decisive: the contract is what
 makes the restore durable.
 
+
+### Session 3 rerun — the production sequence (2026-11-09)
+
+The proof was rerun on the built code with the reader v7 and the production sequence: write `FreeAgent`/32,
+advance the clone once, sign the player back to his old team with his stored remaining contract, advance
+again. Config `verify_output/retirement_g4/restore/fixtures_v2.json`.
+
+| branch (restore stop) | players | after the free-agent advance | after the sign-back advance |
+|---|---|---|---|
+| `OFFSEASON_START` | Lane Johnson (2 yrs), Cam Heyward (1), Chris Brooks (1) | still free agents at `RESIGN` | `Signed` on PHI/PIT/GB with contracts through the FA-W1 rollover |
+| `FREE_AGENCY` wave 1 | Jonathan Allen, David Montgomery, E.J. Speed | still free agents at FA wave 2 | `Signed` on CIN/HOU/HOU with contracts through `COMBINE` |
+| `UDFA` | DeMarcus Lawrence, Jourdan Lewis, Xavier Woods | still free agents after the 2027 preseason purge | Lawrence/Lewis signed at preseason W1; Woods refused there (Miami 76/75) and signed at cut-down; all three `Signed`/contract/roster/depth at 2027 week 1 |
+
+- The census reports no rostered player vanished in any lineage and no restore re-retired; the `UDFA`
+  purge removed the remaining `Retired` rows as usual and left the three flips alone.
+- **None of the flipped players is in `League.FreeAgents`** (a field flip does not touch the list), and every
+  one of them survived the 2027 week-1 free-agent purge — the purge works off that list. The last-stop
+  controls (Kelce and Rodgers flipped to free agents at `CUTDOWN`) survived the same purge.
+- The `UDFA` sign needed two writes by roster count: Miami was at 76 against the writer's 75 cap at the
+  preseason, then at the limit again at cut-down after its own trim. The production league office signs at
+  the next run, which is the same retry.
+- **Stages that passed: `OFFSEASON_START`, `FREE_AGENCY`, `UDFA`.** `CUTDOWN` is not claimed: the two
+  survivors there have no restorable contract, so only the free-agent flip was tested, not the sign.
+- The proof file (`verify_output/retirement_g4/proof_draft.json`) now carries `schema_version` 7, the three
+  stages, `KEEP_NATIVE_RETIREE` proven with `ContractStatus`/`TeamIndex`, and the A3 save's sha256. It still
+  lacks `approved_by`/`approved_on`; `load_proof` refuses it until JR fills those.
+
 **Conclusion:** the window restore must be a signing, not a field edit. `step_restore_retirees`
 (`plan.sign_player` → `sign.mjs`) is the proven shape. Two ways to wire it: sign the player back inside the
 window's own write (extend `sign.mjs` to accept a `Retired` player, so `Retired → Signed` with a contract

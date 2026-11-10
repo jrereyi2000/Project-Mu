@@ -20,7 +20,9 @@ Config (JSON):
 A branch with `"contract_from": "<snapshot before the retirement>"` also restores by signing: its players'
 baseline must be `FreeAgent`/32, and the tool writes `<branch>.sign.edits.json` (the save_writer `sign`
 moves) with each player's remaining contract on the team he retired from. Apply it as two writes to one
-copy: `<branch>.edits.json` first (Retired → FreeAgent), then `<branch>.sign.edits.json`.
+copy: `<branch>.edits.json` first (Retired → FreeAgent), then `<branch>.sign.edits.json`. A contract source
+taken during the season (its `current_year` is that season) needs `"contract_skip_years": 1` so the block
+starts at the following league year.
 
 Each player's baseline is the pre-retirement status/team the restore returns to; it must be explicit because
 the saved stops after a native retirement no longer carry it (session-2 census: Madden clears TeamIndex and
@@ -82,8 +84,10 @@ def _signed_restores(branch: dict) -> list[dict]:
             raise ValueError(f"{branch['name']}: pgid {pgid} has no contract in {branch['contract_from']}")
         if not 0 <= int(before['team_index']) < 32:
             raise ValueError(f"{branch['name']}: pgid {pgid} has no old team in {branch['contract_from']}")
+        skip = int(branch.get('contract_skip_years') or 0)
         signs.append({'pgid': pgid, 'team_index': int(before['team_index']), 'list': 'Roster',
-                      'contract': sign_block(before['contract'], int(before['contract'].get('current_year') or 0))})
+                      'contract': sign_block(before['contract'],
+                                             int(before['contract'].get('current_year') or 0) + skip)})
     return signs
 
 
