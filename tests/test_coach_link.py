@@ -135,8 +135,14 @@ def test_a_name_mismatch_is_reported_not_guessed():
     assert mismatches[0]["role"] == "OC" and mismatches[0]["save_pgid"] == 201
     assert mismatches[0]["mu_name"] == "Tommy Rees" and mismatches[0]["save_name"] == "Someone Else"
     # The mismatched seat got no profile row; the other five did.
-    assert conn.execute("SELECT count(*) FROM coach_madden_profiles").fetchone()[0] == 5
-    assert conn.execute("SELECT count(*) FROM coach_madden_profiles WHERE person_id = 302").fetchone()[0] == 0
+    # 5 linked SAVE rows plus the CREATED row the mismatched seat needs so Mu's man can be written (JR's B4 rule).
+    assert conn.execute("SELECT count(*) FROM coach_madden_profiles").fetchone()[0] == 6
+    assert conn.execute("SELECT count(*) FROM coach_madden_profiles WHERE source = 'CREATED' "
+                        "AND presentation_id IS NULL").fetchone()[0] == 1
+    # Mu's man still gets a CREATED profile so the staff write can put him in the seat (JR's B4 rule); the
+    # mismatch is reported, and the release of the man already there is the planner's job.
+    assert conn.execute("SELECT source, presentation_id FROM coach_madden_profiles"
+                        " WHERE person_id = 302").fetchone() == ("CREATED", None)
 
 
 def test_a_rerun_changes_nothing():

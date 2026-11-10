@@ -210,6 +210,14 @@ def _desired_row(person_kind, person_id, save, seat_position):
 _COMPARE = ("presentation_id", "source", "first_name", "last_name", "age", "position", "archetype", "level",
             "portrait_id", "seed")
 
+# Every column `_ensure_created_profile` may take from a built profile (the table's own list, minus the identity and
+# the write-back columns, which it sets itself).
+_PROFILE_COLUMNS = ("person_kind", "person_id", "source", "presentation_id", "first_name", "last_name", "age",
+                    "position", "archetype", "specialty", "level", "years_coaching", "offensive_playbook",
+                    "defensive_playbook", "offensive_scheme", "defensive_scheme", "team_philosophy", "personality",
+                    "demeanor", "body_type", "height", "weight", "face_shape", "generic_head", "talents", "ratings",
+                    "tendencies", "visuals_template", "portrait_id", "portrait_status", "headshot_path", "seed")
+
 
 def _upsert_profile(cur, person_kind, person_id, desired):
     """Insert or update the linked row; returns True only when it wrote (a rerun with identical values writes none).
@@ -258,7 +266,7 @@ def link_staff(cur, snapshot, season):
     team_map = _team_map(cur, snapshot)
     save_coaches = {c.get("pgid"): c for c in snapshot.get("coaches") or [] if c.get("pgid") is not None}
     head, coords = _mu_seats(cur, season)
-    linked, unmatched = 0, []
+    linked, created, unmatched = 0, 0, []
     for seat in staff:
         idx = seat.get("team_index")
         team_id = team_map.get(idx)
@@ -277,6 +285,10 @@ def link_staff(cur, snapshot, season):
                 continue
             person_id, mu_name = person
             if pgid is None:
+                # Mu's man holds the seat and the save's is empty: give Mu's man a profile so the staff write creates
+                # him (JR, 2026-11-10). He is still reported as unmatched — that is the link's report, not a skip.
+                if _ensure_created_profile(cur, person_kind, person_id, mu_name, seat_position):
+                    created += 1
                 unmatched.append({"team_index": idx, "team_id": team_id, "role": role, "mu_name": mu_name,
                                   "reason": "no save coach in the seat"})
                 continue
@@ -287,10 +299,40 @@ def link_staff(cur, snapshot, season):
                 continue
             save_name = f"{save.get('first_name') or ''} {save.get('last_name') or ''}"
             if not names_match(save_name, mu_name):
+                # A different man in the seat. Mu's real coach wins it: the profile lets the staff write create him,
+                # and `plan_staff_edits` releases the man already there (JR, 2026-11-10).
+                if _ensure_created_profile(cur, person_kind, person_id, mu_name, seat_position):
+                    created += 1
                 unmatched.append({"team_index": idx, "team_id": team_id, "role": role, "mu_name": mu_name,
                                   "save_name": save_name, "save_pgid": pgid, "reason": "name mismatch"})
                 continue
             _upsert_profile(cur, person_kind, person_id,
                             _desired_row(person_kind, person_id, save, seat_position))
             linked += 1
-    return {"linked": linked, "unmatched": unmatched}
+    return {"linked": linked, "created": created, "unmatched": unmatched}
+
+
+def _ensure_created_profile(cur, person_kind, person_id, mu_name, seat_position):
+    """Give a Mu coach who holds a starting seat a `CREATED` profile when he has none.
+
+    JR's decision on the starting staff (2026-11-10): Mu's real coach wins a seat, so Madden's own fictional coach is
+    released and Mu's man is created in the save. `plan_staff_edits` can only create a man it has a profile for, so the
+    link builds the profile here rather than leaving the seat `skipped` and never written. Returns True when it
+    inserted one.
+    """
+    from engines.coach_madden_profile import build_profile                      # local: the link is a loader module
+    cur.execute("SELECT id FROM coach_madden_profiles WHERE person_kind = %s AND person_id = %s",
+                (person_kind, person_id))
+    if cur.fetchone():
+        return False
+    coach_key = f"{'coach' if person_kind == 'COACH' else 'coord'}-{person_id}"
+    row = build_profile({"name": mu_name, "id": person_id}, "HC" if person_kind == "COACH" else seat_position,
+                        slant=None, scheme=None, playbook=None, tendencies={}, sliders={}, background=None,
+                        contract=None, seed=_seed(person_kind, person_id))
+    row = dict(row, person_kind=person_kind, person_id=person_id, position=seat_position)
+    from psycopg.types.json import Jsonb                                   # local: loaders import without psycopg
+    columns = [c for c in row if c in _PROFILE_COLUMNS]
+    values = tuple(Jsonb(row[c]) if c in ("talents", "ratings", "tendencies") else row[c] for c in columns)
+    cur.execute(f"INSERT INTO coach_madden_profiles ({', '.join(columns)}) "
+                f"VALUES ({', '.join(['%s'] * len(columns))})", values)
+    return True
