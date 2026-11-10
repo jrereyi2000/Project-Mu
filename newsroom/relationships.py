@@ -480,15 +480,17 @@ def _record_applied(cur, pk, target_type, target_id, ref, season):
 
 
 def _already_applied(cur, pk, target_type, target_id, ref) -> bool:
-    """True when this graded ref was already applied: the per-event table is the record. Without that table (an
-    older database) the ref's own evidence entry and the sticky APPLIED_REFS list still count; nothing is inferred
-    from the order of the evidence."""
+    """True when this graded ref was already applied. The records are a UNION: the per-event table (when
+    2027_02_22 exists), the ref's own evidence entry, and the sticky APPLIED_REFS list. The union is what makes the
+    table an optimisation rather than a step someone can forget: on a fresh build or a restored database the table
+    is empty, and the evidence still guards (M-0174 M-a). Nothing is inferred from the order of the evidence."""
     if _refs_ready(cur):
         cur.execute("""SELECT 1 FROM persona_relationship_event_refs
                        WHERE persona_type = 'writer' AND persona_id = %s AND target_type = %s
                          AND target_id = %s AND ref = %s LIMIT 1;""",
                     (pk, target_type, str(target_id), ref))
-        return cur.fetchone() is not None
+        if cur.fetchone() is not None:
+            return True
     cur.execute("""SELECT evidence FROM persona_relationships
                    WHERE persona_type = 'writer' AND persona_id = %s AND target_type = %s AND target_id = %s;""",
                 (pk, target_type, str(target_id)))

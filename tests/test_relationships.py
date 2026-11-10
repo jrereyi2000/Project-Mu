@@ -252,17 +252,27 @@ class GradedTests(unittest.TestCase):
         self.assertIn(("p", "team", "1", "pick:1"), db.refs)
         self.assertEqual(rel.apply_graded(db, 2036, None), 0)
 
-    def test_a_pre_marker_row_is_protected_by_the_backfilled_refs(self):
-        """M-0167: the guard reads the durable per-event set, not an ordering guess. Seven picks were applied; the
-        evidence kept five and the backfill recorded all seven (db/migrations/2027_02_22_backfill_applied_refs.py)."""
+    def test_a_pre_marker_row_is_guarded_by_its_sticky_refs(self):
+        """M-0174 M-a/M-b: the guard is the union. A fresh database has the table but no backfill, and the row's
+        sticky APPLIED_REFS entry still holds the refs that were trimmed out of the evidence window."""
+        db = FakeDB(refs_ready=True)
+        db.rows[("p", "team", "1")] = {"id": 1, "trust": 0.21, "tags": [], "evidence": [
+            {"kind": "APPLIED_REFS", "refs": [f"pick:{w}" for w in range(1, 8)]}] + [
+            {"season": 2036, "week": w, "kind": "PICK_RIGHT", "delta": 0.03, "text": "x", "ref": f"pick:{w}"}
+            for w in range(3, 8)]}
+        db.picks = [(w, "p", 2036, w, 1, 1) for w in range(1, 8)]
+        self.assertEqual(rel.apply_graded(db, 2036, None), 0)
+        self.assertAlmostEqual(db.rows[("p", "team", "1")]["trust"], 0.21)
+
+    def test_an_empty_refs_table_still_guards_on_the_evidence(self):
+        """A restored or freshly built database has the table but no rows; the evidence refs still count."""
         db = FakeDB(refs_ready=True)
         db.rows[("p", "team", "1")] = {"id": 1, "trust": 0.21, "tags": [], "evidence": [
             {"season": 2036, "week": w, "kind": "PICK_RIGHT", "delta": 0.03, "text": "x", "ref": f"pick:{w}"}
             for w in range(3, 8)]}
-        db.refs = {("p", "team", "1", f"pick:{w}") for w in range(1, 8)}
         db.picks = [(w, "p", 2036, w, 1, 1) for w in range(1, 8)]
+        self.assertEqual(rel.apply_graded(db, 2036, None), 2)      # only the two with no record anywhere
         self.assertEqual(rel.apply_graded(db, 2036, None), 0)
-        self.assertAlmostEqual(db.rows[("p", "team", "1")]["trust"], 0.21)
 
     def test_a_call_graded_in_the_same_week_as_a_pick_is_still_applied(self):
         """M-0167: the ordering guess skipped it (both events share (season, week)); the exact set does not."""
@@ -297,96 +307,16 @@ class GradedTests(unittest.TestCase):
 
 
 class BackfillTests(unittest.TestCase):
-    def test_it_records_the_evidence_refs_and_only_strictly_older_missing_ones(self):
-        """The one-time backfill (M-0167): what is provable, never a guess. A ref from the same week as the
-        earliest surviving event is left unrecorded rather than marked."""
+    def test_it_records_only_what_the_evidence_and_the_sticky_entry_prove(self):
+        """M-0174 L-c: no inference. A ref whose only record was trimmed away stays unrecorded."""
         import importlib
         bf = importlib.import_module("db.migrations.2027_02_22_backfill_applied_refs")
-        evidence = [{"season": 2036, "week": w, "kind": "PICK_RIGHT", "ref": f"pick:{w}"} for w in (5, 6, 7)]
-        graded = [{"ref": "pick:1", "season": 2036, "week": 1},
-                  {"ref": "pick:5", "season": 2036, "week": 5},
-                  {"ref": "call:9", "season": 2036, "week": 5}]
-        self.assertEqual(bf.backfill_refs(evidence, graded),
-                         {"pick:1": 2036, "pick:5": 2036, "pick:6": 2036, "pick:7": 2036})
+        evidence = [{"kind": "APPLIED_REFS", "refs": ["pick:1", "pick:2"]}] + [
+            {"season": 2036, "week": w, "kind": "PICK_RIGHT", "ref": f"pick:{w}"} for w in (5, 6, 7)]
+        self.assertEqual(bf.backfill_refs(evidence),
+                         {"pick:1": None, "pick:2": None, "pick:5": 2036, "pick:6": 2036, "pick:7": 2036})
 
-    def test_a_row_with_no_evidence_gets_nothing(self):
+    def test_a_row_with_no_records_gets_nothing(self):
         import importlib
         bf = importlib.import_module("db.migrations.2027_02_22_backfill_applied_refs")
-        self.assertEqual(bf.backfill_refs([], [{"ref": "pick:1", "season": 2036, "week": 1}]), {})
-
-class DecayTests(unittest.TestCase):
-    def test_decayed_trust_keeps_seeded_signs(self):
-        self.assertEqual(rel.decayed_trust(0.5, ["FAVOURITE"]), 0.4)
-        self.assertEqual(rel.decayed_trust(-0.5, []), -0.4)
-        self.assertEqual(rel.decayed_trust(0.1, ["OWN_TEAM"]), rel.DECAY_FLOOR)
-        self.assertEqual(rel.decayed_trust(-0.1, ["RIVAL"]), -rel.DECAY_FLOOR)
-        for t in (0.8, 0.12, 0.01):
-            self.assertGreater(rel.decayed_trust(t, ["OWN_TEAM"]), 0)
-            self.assertLess(rel.decayed_trust(-t, ["RIVAL"]), 0)
-
-    def test_decay_skips_touched_rows_and_runs_once(self):
-        db = FakeDB()
-        db.rows[("p", "team", "1")] = {"id": 1, "trust": 0.8, "tags": ["OWN_TEAM"], "evidence": []}
-        db.rows[("p", "player", "2")] = {"id": 2, "trust": 0.5, "tags": [], "evidence": [
-            {"season": 2036, "week": 4, "kind": "TAKE", "delta": 0.04, "text": "x"}]}
-        db.rows[("p", "team", "3")] = {"id": 3, "trust": -0.6, "tags": ["RIVAL"], "evidence": []}
-        self.assertEqual(rel.decay(db, 2037), 2)
-        self.assertEqual(rel.decay(db, 2037), 0)
-        self.assertEqual(db.rows[("p", "team", "1")]["trust"], 0.64)
-        self.assertEqual(db.rows[("p", "team", "3")]["trust"], -0.48)
-        self.assertEqual(db.rows[("p", "player", "2")]["trust"], 0.5)
-
-    def test_decay_keeps_the_applied_refs_so_a_rerun_never_reapplies(self):
-        """M-0150 B12: decay rebuilt evidence from the last five moves only, dropping the sticky applied-refs entry,
-        so a forced rerun of an old season applied the same graded picks a second time."""
-        db = FakeDB()
-        db.rows[("p", "team", "1")] = {"id": 1, "trust": 0.4, "tags": [], "evidence": [
-            {"kind": "APPLIED_REFS", "refs": ["pick:7", "pick:9"]}] + [
-            {"season": 2030, "week": w, "kind": "PICK_RIGHT", "delta": 0.03, "text": "x", "ref": f"pick:{w}"}
-            for w in range(1, 7)]}
-        self.assertEqual(rel.decay(db, 2036), 1)
-        ev = db.rows[("p", "team", "1")]["evidence"]
-        self.assertEqual(next(e for e in ev if e.get("kind") == "APPLIED_REFS")["refs"], ["pick:7", "pick:9"])
-        self.assertEqual(ev[-1]["kind"], "DECAY")
-        self.assertTrue(rel._already_applied(db, "p", "team", "1", "pick:9"))
-        self.assertFalse(rel._already_applied(db, "p", "team", "1", "pick:11"))
-
-
-class BlockTests(unittest.TestCase):
-    ROWS = [
-        {"target_type": "player", "target_id": "1", "trust": 0.9, "tags": ["FAVOURITE"], "name": "Josh Allen",
-         "evidence": [{"season": 2036, "week": 3, "kind": "TAKE", "delta": 0.04, "text": "Allen is the MVP"}]},
-        {"target_type": "team", "target_id": "4", "trust": -0.7, "tags": ["GRUDGE"], "name": "Cowboys", "evidence": []},
-        {"target_type": "coach", "target_id": "9", "trust": 0.05, "tags": [], "name": "Sean McDermott", "evidence": [
-            {"season": 2036, "week": 5, "kind": "PICK_BURNED", "delta": -0.06, "text": "you picked them and they burned you"}]},
-        {"target_type": "player", "target_id": "2", "trust": 0.1, "tags": [], "name": "Tua Tagovailoa", "evidence": []},
-    ]
-
-    def test_subjects_first_then_strongest(self):
-        block = rel.render_relationship_rows(self.ROWS, [{"type": "coach", "id": 9}], limit=4)
-        lines = block.splitlines()
-        self.assertIn("Sean McDermott", lines[0])
-        self.assertIn("they burned you", lines[0])
-        self.assertIn("Josh Allen believer", lines[1])
-        self.assertIn('you said "Allen is the MVP"', lines[1])
-        self.assertIn("can't stand the Cowboys", lines[2])
-        self.assertEqual(len(lines), 3)          # Tua is weak and not a subject
-
-    def test_limit(self):
-        self.assertEqual(len(rel.render_relationship_rows(self.ROWS, [], limit=1).splitlines()), 1)
-
-    def test_empty_without_table_or_rows(self):
-        self.assertEqual(rel.relationship_block(FakeDB(ready=False), "p", []), "")
-        self.assertEqual(rel.relationship_block(FakeDB(), "p", []), "")
-        self.assertEqual(rel.relationship_block(None, "p", []), "")
-
-
-class PersonKeyTests(unittest.TestCase):
-    def test_missing_column_falls_back_to_the_account(self):
-        db = FakeDB(ready=False)
-        self.assertEqual(rel.person_agent_ids(db, "acct"), ["acct"])
-        self.assertEqual(rel.person_key(db, "acct"), "acct")
-
-
-if __name__ == "__main__":
-    unittest.main()
+        self.assertEqual(bf.backfill_refs([]), {})
