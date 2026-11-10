@@ -340,7 +340,16 @@ def link_staff(cur, snapshot, season):
         if _upsert_profile(cur, person_kind, person_id,
                            _desired_row(person_kind, person_id, save, save.get("position"))):
             linked_free += 1
-    return {"linked": linked, "created": created, "linked_free_agents": linked_free, "unmatched": unmatched}
+    # The coaches Mu creates over Madden's made-up ones are starting staff, so their deals must exist from league
+    # start: without one they cross Madden's league-year rollover at 0/0/0, which the hiring cycle's own early filing
+    # avoids for its hires (audit M-0203). The producer prices them; this only decides when.
+    if created:
+        from engines import staff_contracts_run                                # local: the link is a loader module
+        fired = staff_contracts_run.file_hires(cur, season)
+    else:
+        fired = []
+    return {"linked": linked, "created": created, "linked_free_agents": linked_free,
+            "contracts_filed": len(fired), "unmatched": unmatched}
 
 
 def _ensure_created_profile(cur, person_kind, person_id, mu_name, seat_position):
