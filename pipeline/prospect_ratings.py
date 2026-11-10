@@ -1,4 +1,4 @@
-"""Hidden prospect ratings from the save (docs/in_progress/SCOUTING_REVAMP_PLAN.md §2.2; PROJECT_SPEC §3.3c, §3.3g).
+"""Hidden prospect ratings from the save (docs/done/SCOUTING_REVAMP_PLAN.md §2.2; PROJECT_SPEC §3.3c, §3.3g).
 
 pipeline/load_save.py calls store_prospect_ratings on every load: it gives the coming class permanent prospect IDs
 (engines/prospect_ids.ensure_prospect_ids) and upserts each Draft-status player's native ratings (the same

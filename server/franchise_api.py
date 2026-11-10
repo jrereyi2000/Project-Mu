@@ -451,7 +451,14 @@ def team_context(cur, team_id: int, season: int) -> dict:
                 (team_id, season))
     r = cur.fetchone()
     out = {"wins": (r[0] if r else 0) or 0, "losses": (r[1] if r else 0) or 0,
-           "popularity_index": r[2] if r else None, "direction": None}
+           "popularity_index": r[2] if r else None, "direction": None,
+           # the NFLPA facility modifier (§2.2): read from the latest report card, None without one
+           "facility_score": None}
+    if _regclass(cur, "team_report_cards"):
+        cur.execute("""SELECT overall_score FROM team_report_cards WHERE team_id = %s AND season <= %s
+                       ORDER BY season DESC LIMIT 1""", (team_id, season))
+        f = cur.fetchone()
+        out["facility_score"] = (float(f[0]) / 100.0 if f and f[0] is not None else None)
     if _regclass(cur, "gm_team_seasons"):
         cur.execute("SELECT direction FROM gm_team_seasons WHERE team_id = %s AND season = %s", (team_id, season))
         d = cur.fetchone()
