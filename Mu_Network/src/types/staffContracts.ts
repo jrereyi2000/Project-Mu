@@ -15,6 +15,7 @@ export type StaffContractKind = "HC" | "GM" | "OC" | "DC";
 export type StaffContract = {
   person_id: number;        // polymorphic: HC -> coaches.id, GM -> gm_profiles.id, OC/DC -> coordinators.id
   person_kind: StaffContractKind;
+  name: string | null;      // from the role's own table; null when the person row is gone (the card shows the role)
   annual_salary: number;    // whole dollars
   total_years: number;
   remaining_years: number;

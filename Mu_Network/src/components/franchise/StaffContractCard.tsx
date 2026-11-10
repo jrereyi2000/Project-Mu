@@ -20,6 +20,7 @@ const SC_CSS = `
 .sc-card { padding: 16px 18px; display: flex; flex-direction: column; gap: 6px; background: var(--white); border-top: 3px solid var(--gray-100); }
 .sc-card.sc-full { border-top-color: #b8860b; }
 .sc-card > span { color: var(--gray-500); font: 700 8px var(--font-mono); letter-spacing: .07em; text-transform: uppercase; }
+.sc-card .sc-name { font: 700 13px var(--font-sans); }
 .sc-card .sc-salary { font: 700 26px var(--font-mono); letter-spacing: -.05em; }
 .sc-card .sc-years { color: #55575d; font: 600 10px var(--font-mono); }
 .sc-badge { align-self: flex-start; padding: 3px 8px; border-radius: 3px; color: var(--white); background: #b8860b; font: 700 8px var(--font-mono); letter-spacing: .05em; text-transform: uppercase; }
@@ -32,6 +33,7 @@ function years(n: number): string {
 function ContractCard({ c }: { c: StaffContract }) {
   return (
     <article className={`sc-card${c.full_control ? " sc-full" : ""}`}>
+      {c.name && <strong className="sc-name">{c.name}</strong>}
       <span>{ROLE_LABEL[c.person_kind] ?? c.person_kind}</span>
       <strong className="sc-salary">{money(c.annual_salary)}</strong>
       <small className="sc-years">

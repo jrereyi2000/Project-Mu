@@ -17,34 +17,62 @@ def contract(**kw):
 
 # ------------------------------------------------------------------ shape ----
 def test_shape_staff_contract():
-    shaped = fo.shape_staff_contract(contract())
-    assert set(shaped) == {"person_id", "person_kind", "annual_salary", "total_years", "remaining_years",
+    shaped = fo.shape_staff_contract(contract(), "Mike Macdonald")
+    assert set(shaped) == {"person_id", "person_kind", "name", "annual_salary", "total_years", "remaining_years",
                            "signed_season", "full_control"}
-    assert shaped == {"person_id": 42, "person_kind": "HC", "annual_salary": 19_000_000, "total_years": 5,
-                      "remaining_years": 3, "signed_season": 2037, "full_control": True}
+    assert shaped == {"person_id": 42, "person_kind": "HC", "name": "Mike Macdonald",
+                      "annual_salary": 19_000_000, "total_years": 5, "remaining_years": 3,
+                      "signed_season": 2037, "full_control": True}
     assert isinstance(shaped["annual_salary"], int)
     assert shaped["full_control"] is True
 
 
-class _FetchCursor:
-    """A tiny cursor for fetch_staff_contracts: records the SQL and returns the rows given."""
+def test_shape_staff_contract_without_a_name_keeps_the_field():
+    """A person row deleted behind the contract still renders: the card falls back to the role."""
+    assert fo.shape_staff_contract(contract())["name"] is None
 
-    def __init__(self, rows):
-        self._rows = rows
-        self.sql = ""
+
+class _FetchCursor:
+    """A tiny cursor for fetch_staff_contracts: the contract rows for the ledger query, then the names from the role
+    table each name query asks for (person_id is polymorphic)."""
+
+    def __init__(self, rows, names=None):
+        self._rows, self._names = rows, names or {}       # names: {(table, id): name}
+        self.sql, self._result = "", []
+        self.queries = []
 
     def execute(self, sql, *args):
-        self.sql = sql
+        self.sql, self._queries = sql, None
+        self.queries = getattr(self, "queries", [])
+        self.queries.append(sql)
+        if " FROM staff_contracts" in sql:
+            self._result = list(self._rows)
+        else:
+            table = sql.split(" FROM ")[1].split()[0]
+            ids = list(args[0][0]) if args and args[0] and args[0][0] is not None else []
+            self._result = [(pid, self._names[(table, pid)]) for pid in ids if (table, pid) in self._names]
 
     def fetchall(self):
-        return self._rows
+        return list(self._result)
 
 
 def test_fetch_staff_contracts_shapes_each_row():
-    cur = _FetchCursor([(9, "GM", 8_000_000, 4, 2, 2037, False)])
+    cur = _FetchCursor([(9, "GM", 8_000_000, 4, 2, 2037, False)], names={("gm_profiles", 9): "Ann A"})
     assert fo.fetch_staff_contracts(cur, 1) == [
-        {"person_id": 9, "person_kind": "GM", "annual_salary": 8_000_000, "total_years": 4,
+        {"person_id": 9, "person_kind": "GM", "name": "Ann A", "annual_salary": 8_000_000, "total_years": 4,
          "remaining_years": 2, "signed_season": 2037, "full_control": False}]
+
+
+def test_fetch_staff_contracts_names_each_role_from_its_own_table():
+    """HC -> coaches, OC/DC -> coordinators (read once for both), GM -> gm_profiles."""
+    rows = [(42, "HC", 19_000_000, 5, 3, 2037, True), (9, "GM", 8_000_000, 4, 2, 2037, False),
+            (7, "OC", 3_000_000, 3, 2, 2037, False), (8, "DC", 3_000_000, 3, 2, 2037, False)]
+    cur = _FetchCursor(rows, names={("coaches", 42): "Mike Macdonald", ("gm_profiles", 9): "Ann A",
+                                    ("coordinators", 7): "Bo Coach", ("coordinators", 8): "Dee Coach"})
+    out = {r["person_id"]: r["name"] for r in fo.fetch_staff_contracts(cur, 1)}
+    assert out == {42: "Mike Macdonald", 9: "Ann A", 7: "Bo Coach", 8: "Dee Coach"}
+    coord_reads = [s for s in cur.queries if " FROM coordinators" in s]
+    assert len(coord_reads) == 1                                   # OC and DC share one read
 
 
 def test_fetch_staff_contracts_orders_hc_gm_oc_dc_and_is_none_when_empty():
@@ -136,6 +164,11 @@ class _FakeCursor:
             return (a[1], a[2], a[3], a[4], a[5], a[6], a[7])
         raise AssertionError(f"unexpected SQL: {s}")
 
+    def fetchall(self):
+        if " FROM coaches" in self.sql:
+            return [(77, "Mike Macdonald")]          # the offer response names the person it just signed
+        raise AssertionError(f"unexpected SQL: {self.sql}")
+
 
 class _FakeConnection:
     def __init__(self, cur):
@@ -182,8 +215,9 @@ def test_staff_offer_inserts_an_active_contract(monkeypatch):
     data = r.json()
     assert data["team"] == "CAR"
     assert data["season"] == 2037
-    assert data["contract"] == {"person_id": 77, "person_kind": "HC", "annual_salary": 9_000_000,
-                                "total_years": 5, "remaining_years": 5, "signed_season": 2037, "full_control": False}
+    assert data["contract"] == {"person_id": 77, "person_kind": "HC", "name": "Mike Macdonald",
+                                "annual_salary": 9_000_000, "total_years": 5, "remaining_years": 5,
+                                "signed_season": 2037, "full_control": False}
 
 
 def test_staff_offer_refuses_full_control_even_when_the_gate_would_pass(monkeypatch):

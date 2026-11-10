@@ -582,12 +582,13 @@ STAFF_OFFER_KINDS = ("HC", "GM", "OC", "DC")
 FULL_CONTROL_KIND = "HC"
 
 
-def shape_staff_contract(row: dict) -> dict:
-    """One staff_contracts row as the page's contract: the role, the annual salary, the total and remaining years,
-    and whether it carries full control (a head coach with the final 53-man roster say)."""
+def shape_staff_contract(row: dict, name: str | None = None) -> dict:
+    """One staff_contracts row as the page's contract: who it is, the role, the annual salary, the total and
+    remaining years, and whether it carries full control (a head coach with the final 53-man roster say)."""
     return {
         "person_id": row["person_id"],
         "person_kind": row["person_kind"],
+        "name": name,
         "annual_salary": int(row["annual_salary"]),
         "total_years": row["total_years"],
         "remaining_years": row["remaining_years"],
@@ -596,15 +597,35 @@ def shape_staff_contract(row: dict) -> dict:
     }
 
 
+def staff_names(cur, rows) -> dict:
+    """{(person_kind, person_id): name}. person_id is polymorphic, so each role's own table is asked; an OC and a
+    DC share the coordinators table, which is read once for both."""
+    tables = {"HC": ("coaches", "coach_name"), "OC": ("coordinators", "coordinator_name"),
+              "DC": ("coordinators", "coordinator_name"), "GM": ("gm_profiles", "gm_name")}
+    needed = {}
+    for r in rows:
+        spec = tables.get(r["person_kind"])
+        if spec:
+            needed.setdefault(spec, set()).add(r["person_id"])
+    found = {}
+    for (table, column), ids in needed.items():
+        cur.execute(f"SELECT id, {column} FROM {table} WHERE id = ANY(%s)", (sorted(ids),))
+        found.update({(table, pid): name for pid, name in cur.fetchall()})
+    return {(r["person_kind"], r["person_id"]): found.get((tables[r["person_kind"]][0], r["person_id"]))
+            for r in rows if r["person_kind"] in tables}
+
+
 def fetch_staff_contracts(cur, team_id: int) -> list | None:
-    """Every active staff contract (remaining_years > 0) in HC, GM, OC, DC order; None without rows. The person's
-    name is the StaffCard's job (person_id is polymorphic), so only the contract terms are served here."""
+    """Every active staff contract (remaining_years > 0) in HC, GM, OC, DC order, each with the person's name;
+    None without rows."""
     cur.execute(f"""SELECT {', '.join(STAFF_CONTRACT_COLS)} FROM staff_contracts
                     WHERE team_id = %s AND remaining_years > 0
                     ORDER BY CASE person_kind WHEN 'HC' THEN 1 WHEN 'GM' THEN 2 WHEN 'OC' THEN 3 ELSE 4 END;""",
                 (team_id,))
-    rows = [shape_staff_contract(dict(zip(STAFF_CONTRACT_COLS, r))) for r in cur.fetchall()]
-    return rows or None
+    rows = [dict(zip(STAFF_CONTRACT_COLS, r)) for r in cur.fetchall()]
+    names = staff_names(cur, rows)
+    shaped = [shape_staff_contract(r, names.get((r["person_kind"], r["person_id"]))) for r in rows]
+    return shaped or None
 
 
 class StaffOfferIn(BaseModel):
@@ -664,7 +685,7 @@ def staff_offer(abbr: str, body: StaffOfferIn):
                                      signed_season, full_control;""",
                         (team_id, body.person_id, body.person_kind, body.annual_salary, body.total_years,
                          body.total_years, signed, body.full_control))
-            row = cur.fetchone()
+            signed_row = dict(zip(STAFF_CONTRACT_COLS, cur.fetchone()))
+            name = staff_names(cur, [signed_row]).get((signed_row["person_kind"], signed_row["person_id"]))
             conn.commit()
-            return {"team": team_abbr, "season": season,
-                    "contract": shape_staff_contract(dict(zip(STAFF_CONTRACT_COLS, row)))}
+            return {"team": team_abbr, "season": season, "contract": shape_staff_contract(signed_row, name)}
