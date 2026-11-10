@@ -49,14 +49,14 @@ Options:
   --season N               Override season year (default: save's calendar year)
   --force                  Proceed even if week is same as or older than league_state
   --auto-init              Create and seed the database of a franchise seen for the first time; with --dsn, create
-                           and seed a madden_tune_* database from a CAREER-TUNE-* clone (no registry entry)
+                           and seed a madden_tune_* database from a CAREER-TUNE* clone (no registry entry)
   --franchise-name NAME    Name for a new franchise (its database becomes madden_<name>)
   --user-team TEAMS        Comma-separated user-controlled team abbreviations for a new franchise (e.g. IND)
   --reseed                 Drop and recreate this franchise's database, then seed it (--once only); with a
                            madden_tune_* --dsn it is the tuning reset path
   --confirm-reseed DB      Required with --reseed: the database name being dropped
   --dsn DSN                Load into this database instead of routing by franchise (tests, one-off loads)
-  --allow-tune-save        Process CAREER-TUNE-* clones (default: ignored; the same is implied by a --dsn that
+  --allow-tune-save        Process CAREER-TUNE* clones (default: ignored; the same is implied by a --dsn that
                            names a madden_tune_* database)
   --lock-file PATH         Custom lock file path (default: captures/.weekly_run.lock)
   --no-freeze              Don't freeze the database + save after the ingest (pipeline/weekly_freeze.py)
@@ -98,7 +98,7 @@ LO_RESULT = "league_office_result.json"
 # Tuning clones carry the real franchise's LeagueID, so ingesting one into the routed database would mix a
 # disposable tuning season into the live league (CLOSE_OUT_CHECKLIST P1-24). The watcher ignores them; a tuning
 # DB destination (`--dsn madden_tune_*`) or --allow-tune-save opts in for P2-04's deliberate tuning ingest.
-TUNE_SAVE_PREFIX = "CAREER-TUNE-"
+TUNE_SAVE_PREFIX = "CAREER-TUNE"   # no trailing hyphen: Madden's Save As cannot type one (M-0140)
 TUNE_DB_PREFIX = "madden_tune_"
 
 
@@ -123,7 +123,7 @@ def is_tuning_db(db):
 def check_tuning_destination(save_name, db):
     """Refuse a tuning clone whose destination is not a tuning database (defence in depth)."""
     if is_tuning_save(save_name) and not is_tuning_db(db):
-        raise WatcherError(f"{os.path.basename(save_name)} is a CAREER-TUNE-* clone; it is only ingested into "
+        raise WatcherError(f"{os.path.basename(save_name)} is a CAREER-TUNE* clone; it is only ingested into "
                            f"a {TUNE_DB_PREFIX}* database (got {db})")
 
 
@@ -144,7 +144,7 @@ def setup_tuning_dsn(db, dsn, save_name, save_season, save_week, auto_init=False
     if not (auto_init or reseed):
         return False
     if not is_tuning_db(db) or not is_tuning_save(save_name):
-        raise WatcherError(f"--auto-init/--reseed with --dsn is only for a CAREER-TUNE-* clone into a "
+        raise WatcherError(f"--auto-init/--reseed with --dsn is only for a CAREER-TUNE* clone into a "
                            f"{TUNE_DB_PREFIX}* database (got {os.path.basename(save_name)} -> {db})")
     if reseed:
         if confirm_reseed != db:
@@ -1600,10 +1600,10 @@ def process_save(save_path, season=None, dry_run=False, no_articles=False, no_en
                     "season": save_season, "week": save_week}
         just_seeded = setup == "seeded"
     else:
-        # The guard runs before routing: a CAREER-TUNE-* clone carries the live LeagueID, so routing would write it
+        # The guard runs before routing: a CAREER-TUNE* clone carries the live LeagueID, so routing would write it
         # into the live franchise's registry (and --reseed would drop the live database) before the refusal.
         if is_tuning_save(save_name):
-            raise WatcherError(f"{os.path.basename(save_name)} is a CAREER-TUNE-* clone; it is only ingested into a "
+            raise WatcherError(f"{os.path.basename(save_name)} is a CAREER-TUNE* clone; it is only ingested into a "
                                f"{TUNE_DB_PREFIX}* database (pass --dsn naming one)")
         route = route_franchise(fid, save_name, save_season, save_week, auto_init=auto_init, reseed=reseed,
                                 confirm_reseed=confirm_reseed, user_teams=user_teams,

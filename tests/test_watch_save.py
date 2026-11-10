@@ -1173,6 +1173,10 @@ class FindFilesTest(unittest.TestCase):
             ws.check_tuning_destination("CAREER-TUNE-A", "madden_mu2026")
         self.assertTrue(ws.is_tuning_save("/saves/CAREER-TUNE-x"))
         self.assertFalse(ws.is_tuning_save("CAREER-MUBASE"))
+        # Madden's Save As cannot type a hyphen, so an in-game clone has no hyphen after TUNE (M-0140).
+        self.assertTrue(ws.is_tuning_save("/saves/CAREER-TUNECOACHBEFORE"))
+        with self.assertRaises(ws.WatcherError):
+            ws.check_tuning_destination("CAREER-TUNECOACHBEFORE", "madden_mu2026")
 
 
 class TuningDsnSetupTest(unittest.TestCase):
