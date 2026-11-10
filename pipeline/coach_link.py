@@ -343,13 +343,13 @@ def link_staff(cur, snapshot, season):
     # The coaches Mu creates over Madden's made-up ones are starting staff, so their deals must exist from league
     # start: without one they cross Madden's league-year rollover at 0/0/0, which the hiring cycle's own early filing
     # avoids for its hires (audit M-0203). The producer prices them; this only decides when.
-    if created:
-        from engines import staff_contracts_run                                # local: the link is a loader module
-        # `starting_only=False` files every current staffer with no live row, not only this season's hires: the
-        # coaches Mu creates are starting staff whose tenure may predate the season (audit M-0203).
-        fired = staff_contracts_run.file_hires(cur, season, starting_only=False)
-    else:
-        fired = []
+    from engines import staff_contracts_run                                    # local: the link is a loader module
+    # Every load, not only one that created a profile: a save whose seats all link still starts with staff who have no
+    # live row, and they must be filed before Madden's league-year rollover (audit F2, 2026-11-10). The producer
+    # writes nothing when everyone already has a row, so this is free on a rerun.
+    # `starting_only=False` files every current staffer with no live row, not only this season's hires: the coaches Mu
+    # creates are starting staff whose tenure may predate the season (audit M-0203).
+    fired = staff_contracts_run.file_hires(cur, season, starting_only=False)
     return {"linked": linked, "created": created, "linked_free_agents": linked_free,
             "contracts_filed": len(fired), "unmatched": unmatched}
 

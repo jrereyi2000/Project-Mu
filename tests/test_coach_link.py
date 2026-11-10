@@ -277,3 +277,17 @@ def test_a_duplicate_free_agent_does_not_take_over_a_seated_link():
     row = conn.execute("SELECT presentation_id FROM coach_madden_profiles"
                        " WHERE person_kind = 'COORD' AND person_id = 302").fetchone()
     assert row == (201,), row
+
+
+def test_the_link_files_contracts_even_when_it_created_nothing(monkeypatch):
+    """F2: a save whose seats all link still starts with staff who have no live contract row, so filing must not
+    depend on the load having created a profile (audit, 2026-11-10)."""
+    calls = []
+    from engines import staff_contracts_run
+    monkeypatch.setattr(staff_contracts_run, "file_hires",
+                        lambda cur, season, **kw: calls.append((season, kw)) or [])
+    conn = _league()
+    snap = _snapshot()                                   # every seat matches: nothing is created
+    result = cl.link_staff(FakeCursor(conn), snap, SEASON)
+    assert result["created"] == 0
+    assert calls == [(SEASON, {"starting_only": False})], calls
