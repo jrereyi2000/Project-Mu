@@ -191,6 +191,16 @@ def test_open_talks_calls_open_negotiation_and_uses_the_engine_message(cur, monk
     assert "surplus" not in repr((r.facts, r.engine_ref, r.state))
 
 
+def test_the_kind_calls_the_real_engine_signatures():
+    """Every test above patches gm_negotiation, so a signature drift at the seam is invisible: 9cc0674 passed
+    history= from this kind while open_negotiation still refused it (a live TypeError on MAKE_OFFER)."""
+    import inspect
+
+    inspect.signature(gm_negotiation.open_negotiation).bind(
+        None, "CAR", "ATL", [], None, timeout=1.0, history=[])
+    inspect.signature(gm_negotiation.offer).bind(None, 5, [], None, timeout=1.0, history=[])
+
+
 def test_open_talks_with_a_note_asks_for_a_judgment(cur, monkeypatch):
     monkeypatch.setattr(gm_negotiation, "open_negotiation",
                         lambda c, user, gm, assets, note=None, llm=None, timeout=None, posture=None, history=None:

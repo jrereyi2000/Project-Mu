@@ -528,7 +528,8 @@ def _abbr(b):
     return {t: i["abbr"] for t, i in b["teams"].items()}
 
 
-def open_negotiation(cur, user_team, gm_team, assets, note=None, llm=None, timeout=None, posture=None):
+def open_negotiation(cur, user_team, gm_team, assets, note=None, llm=None, timeout=None, posture=None,
+                     history=None):
     """JR opens talks with a GM: his first offer and the GM's answer. user_team must be user-controlled, the GM's
     team must not be; one OPEN negotiation per pair; a GM who walked away won't reopen until the window moves.
     timeout: the reply-time budget; posture: force the GM's counter stance (MEET or HOLD) instead of the policy's."""
