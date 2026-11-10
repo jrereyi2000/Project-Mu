@@ -682,6 +682,21 @@ class LoadTinySnapshotTest(unittest.TestCase):
         self.assertEqual(r["player_attributes_in_season_changes"], 0)
         self.assertEqual(self.attribute_rows(900001)[-1][:3], (TEST_SEASON + 1, "next_season", "native_save"))
 
+    def test_two_players_can_share_a_name_and_position_in_one_game(self):
+        # Javonte Williams and Josh Williams are both "J. Williams" at HB, and Madden has them in
+        # the same game when their teams meet; the unique key used to ignore the team and the
+        # second line was refused, failing a whole tuning season's ingest (2026-11-10).
+        ls.load_snapshot(self.cur, tiny_snapshot(), season=TEST_SEASON)
+        game = self.one("SELECT g.id FROM games g JOIN teams h ON h.id = g.home_team_id "
+                        "JOIN teams a ON a.id = g.away_team_id WHERE g.season = %s LIMIT 1", TEST_SEASON)[0]
+        teams = [self.one("SELECT home_team_id FROM games WHERE id = %s", game)[0],
+                 self.one("SELECT away_team_id FROM games WHERE id = %s", game)[0]]
+        for team in teams:
+            self.cur.execute("INSERT INTO player_stats (game_id, player_name, team_id, position, rush_attempts) "
+                             "VALUES (%s, 'J. Williams', %s, 'HB', 5)", (game, team))
+        self.assertEqual(self.one("SELECT count(*) FROM player_stats WHERE game_id = %s AND player_name = 'J. Williams'",
+                                  game), (2,))
+
 
 @pytest.mark.integration
 @unittest.skipUnless(os.path.exists(SAMPLE_SAVE) and shutil.which("node")

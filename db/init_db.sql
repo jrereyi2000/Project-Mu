@@ -215,7 +215,9 @@ CREATE TABLE IF NOT EXISTS player_stats (
             - COALESCE(fumb, 0)          * 2.0
         , 2)
     ) STORED,
-    UNIQUE (game_id, player_name, position)
+    -- The team is in the key: two players can share an abbreviated name and position (J. Williams,
+    -- HB, on two teams) and Madden has them in the same game (2027_02_23_player_stats_team_key.sql).
+    UNIQUE (game_id, player_name, position, team_id)
 );
 
 CREATE TABLE IF NOT EXISTS season_stats (
@@ -3980,5 +3982,6 @@ INSERT INTO schema_migrations (version, filename, checksum, source) VALUES
     ('2027_02_19_owner_cash_buyouts', '2027_02_19_owner_cash_buyouts.sql', 'b7395abe8796d1772bfba9d9bc0322f4fc8b3638d1688ebf6dcf5e9b9c2674d8', 'init_db.sql'),
     ('2027_02_20_buyout_schedule', '2027_02_20_buyout_schedule.sql', 'ce290330016361b6a851d0919cd4596d58e24e51feb3703cd36ed590ca84be1d', 'init_db.sql'),
     ('2027_02_21_coach_madden_profiles', '2027_02_21_coach_madden_profiles.sql', '57c19dbbd71734bbf240a9831018a4447e6985c037f5b55240c5bd21c3f5b8f7', 'init_db.sql'),
-    ('2027_02_22_relationship_applied_refs', '2027_02_22_relationship_applied_refs.sql', '6d24a303ad4affdca5645e264d82220864fd357916c874e97849d3bfc08d9e39', 'init_db.sql')
+    ('2027_02_22_relationship_applied_refs', '2027_02_22_relationship_applied_refs.sql', '6d24a303ad4affdca5645e264d82220864fd357916c874e97849d3bfc08d9e39', 'init_db.sql'),
+    ('2027_02_23_player_stats_team_key', '2027_02_23_player_stats_team_key.sql', '7f5e8241f0e83d35385a272e5c8d7f34ddd3f0f7a68d99f0d51ad635a84fdeab', 'init_db.sql')
 ON CONFLICT (version) DO NOTHING;

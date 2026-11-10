@@ -309,7 +309,7 @@ class DatabaseHandler:
                             receptions, rec_yards, rec_tds, fumb, line_source
                         )
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'CAPTURED')
-                        ON CONFLICT (game_id, player_name, position) 
+                        ON CONFLICT (game_id, player_name, position, team_id)
                         DO UPDATE SET 
                             line_source = 'CAPTURED',
                             team_id = COALESCE(EXCLUDED.team_id, player_stats.team_id),
