@@ -85,6 +85,12 @@ players-edit field already planned with a different value is a CompositionError,
      CUTDOWN  transactions_engine.cutdown to ROSTER_LIMIT and practice_squad; PRESEASON: cutdown to ROSTER_LIMIT.
      PRESEASON / CUTDOWN also set coach depth charts. Every offseason stage after OFFSEASON_START signs a kept
      retiree back to his old team when his stored contract runs into the league year.
+     The coaching staff write (COACH_SAVE_WRITES_PLAN §2.6) runs at OFFSEASON_START and at every later offseason stop
+     while the save still differs (catch-up; plan_staff_edits returns nothing once it matches): Mu's HC/OC/DC for the
+     coming league year become the `"staff"` block, and an assign carries the portrait pack's queued Portrait /
+     Portrait_Force_Silhouette fields. A seat whose hiring cycle is unfinished, or whose coach has no profile row, is
+     skipped and reported as a warning. After a successful write the report's new PresentationIds are stored on
+     coach_madden_profiles.presentation_id (with written_at) and a notice lists what was applied.
   5. Cap fields (spike R6: Madden doesn't recompute them): each signed or re-contracted player's PLYR_CAPSALARY (the
      written contract's current-year SalaryYear + BonusYear, $10,000 units) and, on each affected team's Team row,
      TEAM_SALARY (the sum of current-year base salaries) and SalCapCapRoom / SalCapSpendingMoney /
@@ -197,6 +203,14 @@ OFFSEASON_STOPS = (
 UDFA_FROM_STAGE, UDFA_FROM_WEEK = 10, 15
 FA_STAGES = (FREE_AGENCY, COMBINE)             # stages that run a free-agency wave
 PROGRESSION_STAGES = IN_SEASON + (OFFSEASON_START,)
+# The coaching staff write (COACH_SAVE_WRITES_PLAN §2.6): the save's "staff" block is planned at the first offseason
+# stop and again at every later offseason stop until the save matches Mu (catch-up: plan_staff_edits returns an empty
+# list once it does). Madden's preseason stops (CUTDOWN, PRESEASON) are the new league year and are not catch-up
+# stages; the hiring cycle has finished long before them.
+STAFF_STAGES = (OFFSEASON_START, RESIGN, FREE_AGENCY, COMBINE, PRO_DAY, DRAFT, UDFA)
+STAFF_POSITION = {"hc": "HeadCoach", "oc": "OffensiveCoordinator", "dc": "DefensiveCoordinator"}
+STAFF_KIND = {"HeadCoach": "HC", "OffensiveCoordinator": "OC", "DefensiveCoordinator": "DC"}
+MADDEN_MONEY_UNIT = 10_000                     # Coach.ContractSalary is in $10,000 units (Spike A)
 PRESEASON_CUTDOWN_WEEK = 3                     # estimate: the last preseason week
 STAGE_WEEKS = dict(ce.OFFSEASON_STAGE_WEEKS, COMBINE=ce.OFFSEASON_STAGE_WEEKS["FREE_AGENCY"] + 1,
                    PRO_DAY=ce.OFFSEASON_STAGE_WEEKS["FREE_AGENCY"] + 2)
@@ -521,6 +535,9 @@ class Plan:
         self.trade_cap_db = defaultdict(lambda: [0, 0, 0])
         self.db = {"pending": [], "engine_trades": [], "charts": [], "injuries": [], "retirements": [], "offers": [],
                    "written_offer_ids": [], "salary_cap": None}
+        # the save's "staff" block (COACH_SAVE_WRITES_PLAN §2.6) and what planning it reported
+        self.staff = []
+        self.staff_info = {"report": [], "skipped": [], "portraits": []}
         # what a retirement edit writes for a player whose view stays ("Retired", None) this write (the roster image
         # stores what the save holds after the write; RETIREMENT_WINDOW_PLAN §2.2)
         self.image_overrides = {}
@@ -794,7 +811,20 @@ class Plan:
         charts = self._charts()
         if charts:
             doc["depthCharts"] = charts
+        if self.staff:
+            doc["staff"] = list(self.staff)
         summary = dict(self.counts)
+        info = self.staff_info or {}
+        if self.staff or info.get("skipped") or info.get("portraits"):
+            summary["staff"] = {
+                "planned": len(self.staff),
+                "released": sum(1 for a in self.staff if a.get("action") == "release"),
+                "assigned": sum(1 for a in self.staff if a.get("action") == "assign"),
+                "created": sum(1 for a in self.staff if a.get("action") == "create"),
+                "portraits": len(info.get("portraits") or []),
+                "skipped": len(info.get("skipped") or []),
+                "skipped_detail": info.get("skipped") or [],
+            }
         summary.update({"stage": self.stage, "wave": self.wave, "season": self.season, "week": self.week,
                         "target_season": self.target, "players_edited": len(players), "records": len(records),
                         "depth_charts": len(charts), "deferred": len(self.deferred), "warnings": len(self.warnings),
@@ -1808,6 +1838,118 @@ def step_salary_cap(plan, deps, cur):
     }
 
 
+def _staff_table(cur, name):
+    """True when a coach-write table is in the database (the migrations may not be applied)."""
+    cur.execute(f"SELECT to_regclass('{name}') IS NOT NULL")
+    row = cur.fetchone()
+    return bool(row and row[0])
+
+
+def _staff_contract_block(cur, team_id, staff_kind, person_id):
+    """The active staff_contracts row in the writer's field names, or None when there is no live deal to copy.
+    The same rule engines.coach_save_sync applies to its own assign edits."""
+    if team_id is None or person_id is None or not _staff_table(cur, "staff_contracts"):
+        return None
+    cur.execute("""SELECT total_years, annual_salary, remaining_years FROM staff_contracts
+                   WHERE team_id = %s AND person_kind = %s AND person_id = %s AND remaining_years > 0
+                   ORDER BY signed_season DESC, id DESC""", (team_id, staff_kind, person_id))
+    row = cur.fetchone()
+    if not row:
+        return None
+    total, salary, remaining = row
+    if not remaining:
+        return None
+    return {"ContractLength": int(total or 0),
+            "ContractSalary": max(0, int(round((salary or 0) / MADDEN_MONEY_UNIT))),
+            "ContractYearsRemaining": int(remaining or 0)}
+
+
+def _portrait_updates(cur, plan, snapshot, staff):
+    """Assigns that push the portrait pack's queued field updates onto the save (COACH_SAVE_WRITES_PLAN §2.8).
+
+    tools/coach_portrait_pack.py leaves `portrait_id` and `portrait_status = 'PACKED'` (later 'INSTALLED') on the
+    profiles it packed; the next league office write puts that id on the save record as `Portrait = <id>` with
+    `Portrait_Force_Silhouette = false`. An assign already planned for the same coach gets the set merged into it;
+    a coach whose seat is already right gets an assign of his own (an assign is a write of the Coach record, and the
+    writer needs the seat and contract it already holds). Returns (assign actions added, what was reported)."""
+    if not _staff_table(cur, "coach_madden_profiles"):
+        return [], [], []
+    cur.execute("""SELECT person_kind, person_id,
+                          NULLIF(TRIM(COALESCE(first_name, '') || ' ' || COALESCE(last_name, '')), ''),
+                          presentation_id, portrait_id
+                     FROM coach_madden_profiles
+                    WHERE portrait_id IS NOT NULL AND portrait_id > 0
+                      AND portrait_status IN ('PACKED', 'INSTALLED')
+                    ORDER BY presentation_id""")
+    profiles = [dict(zip(("person_kind", "person_id", "person", "presentation_id", "portrait_id"), row))
+                for row in cur.fetchall()]
+    if not profiles:
+        return [], [], []
+    save_coaches = {c.get("pgid"): c for c in snapshot.get("coaches") or []}
+    seats = {}
+    for seat in snapshot.get("staff") or []:
+        for key, position in STAFF_POSITION.items():
+            if seat.get(key) is not None:
+                seats[seat[key]] = (seat.get("team_index"), position)
+    by_pgid = {a["pgid"]: a for a in staff if a.get("action") == "assign"}
+    added, portrait_report, skipped = [], [], []
+    for p in profiles:
+        pgid, portrait_id = p["presentation_id"], int(p["portrait_id"])
+        coach = save_coaches.get(pgid)
+        if coach is None:
+            continue                     # not in this save yet: a create carries the profile's portrait
+        if coach.get("portrait") == portrait_id:
+            continue                     # the record already carries the packed portrait
+        extra = {"Portrait": portrait_id, "Portrait_Force_Silhouette": False}
+        have = by_pgid.get(pgid)
+        if have is not None:             # a seat change is planned for him: ride the set on that assign
+            have["set"] = {**(have.get("set") or {}), **extra}
+            portrait_report.append(dict(p, action="assign"))
+            continue
+        seat = seats.get(pgid)
+        if seat is None:
+            skipped.append({"person": p.get("person") or f"pgid {pgid}",
+                            "reason": "packed portrait but not in a seat, so no assign to carry it"})
+            continue
+        team_index, position = seat
+        contract = _staff_contract_block(cur, plan.teams.get(team_index), STAFF_KIND[position], p["person_id"])
+        if not contract or contract["ContractLength"] < 1:
+            skipped.append({"person": p.get("person") or f"pgid {pgid}",
+                            "reason": "packed portrait but no live staff contract to assign"})
+            continue
+        action = {"action": "assign", "pgid": pgid, "team_index": team_index, "position": position,
+                  "contract": contract, "set": extra}
+        added.append(action)
+        portrait_report.append(dict(p, action="assign"))
+    return added, portrait_report, skipped
+
+
+def step_staff(plan, cur, snapshot):
+    """Plan the save's "staff" block for the league year (COACH_SAVE_WRITES_PLAN §2.6): engines.coach_save_sync's
+    release / assign / create actions, plus the portrait pack's queued Portrait field updates (§2.8). Skipped seats
+    (an unfinished hiring cycle, a wanted coach with no profile row) are reported as warnings, never swallowed."""
+    if not snapshot.get("staff"):
+        return                        # a snapshot without staff seats (older reader) plans nothing
+    from engines import coach_save_sync
+    result = coach_save_sync.plan_staff_edits(cur, snapshot, plan.target)
+    staff = list(result.get("staff") or [])
+    portraits, portrait_report, portrait_skipped = _portrait_updates(cur, plan, snapshot, staff)
+    staff.extend(portraits)
+    plan.staff = staff
+    plan.staff_info = {"report": list(result.get("report") or []) + portrait_report,
+                       "skipped": list(result.get("skipped") or []) + portrait_skipped,
+                       "portraits": portrait_report}
+    plan.db["staff"] = {**plan.staff_info, "target_season": plan.target}
+    for skip in result.get("skipped") or []:
+        who = skip.get("team") or skip.get("team_index")
+        role = skip.get("role") or "/".join(skip.get("roles") or []) or ""
+        person = skip.get("person")
+        plan.warn(f"staff write skipped {who}{f' {role}' if role else ''}"
+                  f"{f' {person}' if person else ''}: {skip.get('reason')}")
+    for skip in portrait_skipped:
+        plan.warn(f"staff portrait skipped {skip['person']}: {skip['reason']}")
+
+
 def step_draft(plan, slots, boards, jr, seed, comp_schedule=None):
     """Every pick from the team boards (JR's from the war room) signed with a rookie deal. `comp_schedule` is the
     class's per-round comp-pick counts (index 0 = round 1; contracts_engine.round_for_overall_pick's shape), so a
@@ -2080,6 +2222,10 @@ def plan_stage(cur, snapshot, stage, seed, deps=None, wave=None, state=None, sou
     elif stage == PRESEASON:
         plan.step("roster limit", lambda: step_moves(plan, deps.cutdown(cur, season, seed, ROSTER_LIMIT),
                                                      PRIORITY_STAGE, "cutdown"))
+    # The coaching staff write: the first offseason stop and every later one while the save still differs
+    # (COACH_SAVE_WRITES_PLAN §2.6; plan_staff_edits returns an empty list once the save matches Mu).
+    if stage in STAFF_STAGES:
+        plan.step("staff", step_staff, plan, cur, snapshot)
 
     # 5. rosters and depth charts
     if stage in IN_SEASON or stage in NEW_YEAR_STAGES:
@@ -2248,6 +2394,72 @@ def _finish_run(cur, run_id, status, edits=None, summary=None, drift=None, error
                  json.dumps(drift, default=str) if drift is not None else None, error, run_id))
 
 
+def writer_staff_report(text):
+    """The staff summary save_writer.mjs prints (`staff: N released, ... {json}`), parsed; None when the write carried
+    no staff block. Its `presentation_ids` are the new Coach.PresentationIds Mu stores (COACH_SAVE_WRITES_PLAN §2.6)."""
+    for line in (text or "").splitlines():
+        line = line.strip()
+        if not line.startswith("staff: "):
+            continue
+        found = re.search(r"(\{.*\})\s*$", line)
+        if not found:
+            continue
+        try:
+            return json.loads(found.group(1))
+        except ValueError:
+            continue
+    return None
+
+
+def record_staff_presentation_ids(cur, staff):
+    """Store the ids staff.mjs gave the created coaches back on coach_madden_profiles: presentation_id and
+    written_at for each profile the writer names. Returns how many profiles it updated."""
+    ids = (staff or {}).get("presentation_ids") or []
+    if not ids or not _staff_table(cur, "coach_madden_profiles"):
+        return 0
+    written = 0
+    for entry in ids:
+        key, pid = entry.get("key"), entry.get("presentation_id")
+        if not isinstance(key, str) or not isinstance(pid, int):
+            continue
+        kind, _, ident = key.partition("-")
+        if not ident.isdigit():
+            continue
+        person_kind = "COORD" if kind == "coord" else "COACH"
+        cur.execute("""UPDATE coach_madden_profiles SET presentation_id = %s, written_at = now()
+                       WHERE person_kind = %s AND person_id = %s""", (pid, person_kind, int(ident)))
+        written += 1
+    return written
+
+
+def notify_staff_written(plan):
+    """Phone notices after a staff write: what the write applied to the save (COACH_SAVE_WRITES_PLAN §2.6). A notice
+    that fails never fails a save already written."""
+    staff = (plan.get("db") or {}).get("staff") or {}
+    report = staff.get("report") or []
+    if not report:
+        return
+
+    def line(r):
+        who = r.get("person") or f"pgid {r.get('pgid')}"
+        label = " ".join(x for x in (r.get("team"), r.get("role")) if x)
+        return f"{label}: {who}" if label else who
+
+    try:
+        from pipeline.notify import notify
+        fired = [r for r in report if r.get("action") == "release"]
+        hired = [r for r in report if r.get("action") in ("assign", "create")]
+        if fired:
+            notify(f"Mu's {staff.get('target_season')} staff write released these coaches in Madden: "
+                   f"{'; '.join(line(r) for r in fired)}.", title="Mu: coaches fired", tags=("door",))
+        if hired:
+            who = "; ".join(f"{line(r)} ({r.get('action')})" for r in hired)
+            notify(f"Mu's {staff.get('target_season')} staff write applied these coaches in Madden: {who}.",
+                   title="Mu: coaches hired", tags=("handshake",))
+    except Exception as e:      # noqa: BLE001 - a notice never fails a save already written
+        log.warning("staff notice skipped: %s", e)
+
+
 def record_written(cur, plan, run_id, deps=None):
     """What a successful write makes true in the database: pending moves' statuses, the trades this write made
     (players in the save, picks in Mu's books, proposals EXECUTED, CPU transcripts published), depth charts stored
@@ -2282,6 +2494,7 @@ def record_written(cur, plan, run_id, deps=None):
             continue
         cur.execute("UPDATE contract_offers SET status = %s WHERE id = %s", (o["status"], o["id"]))
     _record_trades(cur, plan, run_id)
+    record_staff_presentation_ids(cur, (db.get("staff") or {}).get("written"))
     _apply_db(cur, plan, deps)
 
 
@@ -2639,6 +2852,7 @@ def run(cur, snapshot, save_path, stage="auto", dry_run=False, confirm_franchise
         _store_operation(cur, run_id, op, plan["summary"])
         _finish_run(cur, run_id, "WRITTEN")
         conn.commit()
+        notify_staff_written(plan)
         if getattr(deps, "annual_steps", False):
             report["annual_steps"] = annual_offseason_steps(cur, plan["stage"], plan["season"], plan["wave"], out)
         out(json.dumps(dict(report, run_id=run_id, status="WRITTEN", replaced=False), indent=1, default=str))
@@ -2652,6 +2866,11 @@ def run(cur, snapshot, save_path, stage="auto", dry_run=False, confirm_franchise
         ok, text = deps.write_save(save_path, edits_path, copy_path)
         if not ok:
             return fail(f"save_writer refused or read-back failed: {text[-2000:]}")
+        # The writer's staff report carries the new Coach.PresentationIds; the operation record (and so --recover)
+        # keeps them, and record_written stores them on coach_madden_profiles.
+        staff_report = writer_staff_report(text)
+        if staff_report is not None:
+            plan["db"].setdefault("staff", {})["written"] = staff_report
         try:
             bad = verify_read_back(plan["edits"], deps.read_snapshot(copy_path))
         except Exception as e:      # noqa: BLE001
@@ -2682,6 +2901,7 @@ def run(cur, snapshot, save_path, stage="auto", dry_run=False, confirm_franchise
         _store_operation(cur, run_id, op, plan["summary"])
         _finish_run(cur, run_id, "WRITTEN")
         conn.commit()
+        notify_staff_written(plan)
     except Exception as e:
         conn.rollback()
         msg = (f"the save was replaced but acknowledging / recording failed ({type(e).__name__}: {e}); run "
@@ -2735,11 +2955,13 @@ def recover(cur, run_id, save_path=None, deps=None, out=print):
     replaced_sha = op.get("output_sha256") or op.get("candidate_sha256")
     if replaced_sha and current == replaced_sha:
         acknowledged = _acknowledge(cur, deps, op, path, current)
-        record_written(cur, plan_from_record(op["record"], row["edits"]), run_id, deps)
+        record_plan = plan_from_record(op["record"], row["edits"])
+        record_written(cur, record_plan, run_id, deps)
         op.update(phase="ACKNOWLEDGED", output_sha256=current, acknowledged_events=acknowledged, recovered=True)
         _store_operation(cur, run_id, op, summary)
         _finish_run(cur, run_id, "WRITTEN")
         conn.commit()
+        notify_staff_written(record_plan)
         # A recovered write still owes the season's annual producers (B5, chunk 9): a wave-1 run that ended
         # NEEDS_RECOVERY skipped staff contracts, report cards and both articles, and nothing retried them. Every
         # step is idempotent, so re-running them fills in what the crashed run never reached.

@@ -358,6 +358,27 @@ test('assign moves a record and its Team ref, and writes Position/OriginalPositi
   assert.equal(f.users.records[1].UserEntity, encodeRef(COACH, 5));
 });
 
+test('assign takes an optional set of further Coach fields, validated like a players edit', async () => {
+  const f = fixture();
+  const result = await planStaff(f.franchise, [
+    { action: 'assign', pgid: 201, team_index: 1, position: 'OffensiveCoordinator', contract: CONTRACT,
+      set: { Portrait: 5324, Portrait_Force_Silhouette: false } },
+  ]);
+  assert.deepEqual(result.errors, []);
+  await applyStaff(result.plan);
+  assert.deepEqual(await verifyStaff(f.franchise, result.plan), []);
+  const oc = f.coach.records[4];
+  assert.deepEqual([oc.Portrait, oc.Portrait_Force_Silhouette], [5324, false],
+    'the optional set wrote the portrait fields');
+
+  const refuse = async set => (await planStaff(f.franchise, [
+    { action: 'assign', pgid: 201, team_index: 1, position: 'OffensiveCoordinator', contract: CONTRACT, set },
+  ])).errors.join('\n');
+  assert.match(await refuse({ NotAField: 1 }), /no such Coach field/);
+  assert.match(await refuse({ Portrait: 'seven' }), /set Portrait = "seven": must be an integer/);
+  assert.match(await refuse({ TeamIndex: 0 }), /may not set TeamIndex/);
+});
+
 test('release clears the seat ref and leaves the record as a free agent (or Retired)', async () => {
   const f = fixture();
   const result = await planStaff(f.franchise, [{ action: 'release', pgid: 101 }]);

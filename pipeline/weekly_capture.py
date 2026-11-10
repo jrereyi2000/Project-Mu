@@ -629,9 +629,10 @@ def step_coach_hot_seat(season):
     head-coach firings (the Week 18 run, before the Week 19 articles), a playoff team's coach once it is out, the
     coordinator review of every team whose coach kept his job, and the hiring cycle once the Super Bowl is complete.
     Runs for league_state's season and the one before it (the league may already have rolled over), only seasons
-    coaching_carousel.owns (from FIRST_SEASON 2026 on, never madden_2036's manifest-staffed 2035). JR mirrors
-    head-coach changes in Madden: one notice lists the coaches to fire, another the openings to fill (hire any coach;
-    Mu's hire stands for him). Skipped without the migrations; a failure only logs a warning."""
+    coaching_carousel.owns (from FIRST_SEASON 2026 on, never madden_2036's manifest-staffed 2035). Mu writes the
+    staff itself (COACH_SAVE_WRITES_PLAN §2.6): one notice lists the coaches the next staff write will release,
+    another the hires it will apply — nothing to do in Madden. Skipped without the migrations; a failure only logs a
+    warning."""
     try:
         import psycopg
         from pipeline.load_capture import DSN
@@ -654,13 +655,13 @@ def step_coach_hot_seat(season):
                 + (f", {len(hires['head_coaches'])} head coach(es) hired" if hires else ""))
             if hs["fired"]:
                 who = "; ".join(f"{f['team']}: {f['coach']}" for f in hs["fired"])
-                notify(f"Fire these head coaches in Madden: {who}. Mu names their replacements after the Super Bowl.",
-                       title="Mu: coaches fired", tags=("door",))
+                notify(f"Mu's next staff write will release these head coaches in Madden: {who}. Nothing for you "
+                       "to do in Madden.", title="Mu: coaches fired", tags=("door",))
             if hires and hires["head_coaches"]:
                 who = "; ".join(f"{h['team']}: {h['coach']} ({h['slant'].lower()}, {h['from']})"
                                 for h in hires["head_coaches"])
-                notify(f"Hire a head coach in Madden for each opening (any coach; Mu's hire stands for him): {who}.",
-                       title="Mu: coaches hired", tags=("handshake",))
+                notify(f"Mu's next staff write will apply these head coaches in Madden: {who}. Nothing for you to "
+                       "do in Madden.", title="Mu: coaches hired", tags=("handshake",))
             if hires and hires.get("jr_losses"):
                 who = "; ".join(f"{x['team']} {x['role']} {x['lost']} left to coach {x['to']}, {x['promoted']} promoted"
                                 for x in hires["jr_losses"])
