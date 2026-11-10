@@ -347,7 +347,6 @@ def main(argv=None):
 
     gen = sub.add_parser("generate", help="build a card for a team's open GM")
     gen.add_argument("--team", required=True)
-    gen.add_argument("--season", type=int)
     gen.add_argument("--no-llm", action="store_true")
     gen.add_argument("--dsn", default=_dsn())
 

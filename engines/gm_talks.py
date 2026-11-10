@@ -249,7 +249,8 @@ def policy_choice(options, persona, rng):
         return opts[0]["key"]
     sl = _sliders(persona)
     traits = set(persona.get("traits") or [])
-    agg = float(persona.get("aggressiveness", 0.5) or 0.5)
+    agg = persona.get("aggressiveness")
+    agg = 0.5 if agg is None else float(agg)          # 0.0 is a real aggressiveness, not "missing"
     offers = [o for o in opts if o["action"] == "OFFER"]
     if offers:
         firm = next((o for o in offers if o["posture"] != "ANCHOR"), offers[0])
@@ -283,7 +284,7 @@ def policy_choice(options, persona, rng):
 
 
 # --------------------------------------------------------------- voice ----
-def _template_line(persona, option, sheet=None):
+def _template_line(persona, option):
     name = persona.get("gm_name") or "The GM"
     action = _as_dict(option)["action"] if option else "COUNTER"
     if action == "ACCEPT":
@@ -362,17 +363,16 @@ def _writer_line(b, actor, option, sheet, scene, history, llm):
     scene = dict(scene or {}, speaker=_abbr(b, actor))
     return gm_writer.write_line(llm, card_text=_card_text(persona), sheet=sheet, history=history,
                                 move=_move(b, actor, option), scene=scene,
-                                fallback=_template_line(persona, option, sheet))
+                                fallback=_template_line(persona, option))
 
 
 def call_with_timeout(llm, prompt, seconds):
     """gm_llm.call in a worker thread; None after `seconds` (the caller uses its template)."""
     if llm is None:
         return None
-    if not seconds:
-        from engines.gm_llm import call
-        return call(llm, prompt)
     from engines.gm_llm import call
+    if not seconds:
+        return call(llm, prompt)
     result = {}
 
     def run():
@@ -518,7 +518,7 @@ def open_talk(cur, b, valuer, deal, rng, llm=None):
     # a CPU talk's first leak only ever came from turn 2.
     turns = _turns(cur, nid)
     if turns:
-        _maybe_leak(cur, talk, dict(turns[-1], assets=opt.assets), b, rng, turns)
+        record_leaks(cur, talk, dict(turns[-1], assets=opt.assets), b, rng, turns)
     return talk
 
 
@@ -670,10 +670,6 @@ def record_leaks(cur, talk, turn, b, rng, turns=None, user_team_id=None):
                for leak in leak_events(talk, turn, b, rng, turns, user_team_id=user_team_id))
 
 
-def _maybe_leak(cur, talk, turn, b, rng, turns=None):
-    record_leaks(cur, talk, turn, b, rng, turns)
-
-
 def advance_talk(cur, b, valuer, talk, rng, llm):
     """Play the talk on from its stored turns until AGREED, WALKED_AWAY, a run's `TURNS_PER_RUN` turns, or
     `TALK_MAX_TURNS` in all; at a run limit a CLOSE talk may carry over once, else it stalls. Returns the status."""
@@ -717,7 +713,7 @@ def advance_talk(cur, b, valuer, talk, rng, llm):
             _set_status(cur, nid, "WALKED_AWAY", "the GM ran out of patience")
             talk["status"] = "WALKED_AWAY"
             turns = _turns(cur, nid)
-            _maybe_leak(cur, talk, dict(turns[-1], assets=offer_assets), b, rng, turns)
+            record_leaks(cur, talk, dict(turns[-1], assets=offer_assets), b, rng, turns)
             _stall(cur, b, valuer, talk, offer_assets, "the GM ran out of patience", status="WALKED_AWAY")
             played += 1
             break
@@ -741,7 +737,7 @@ def advance_talk(cur, b, valuer, talk, rng, llm):
         played += 1
         # Stored turn assets carry abbreviations; leak_events compares team ids, so convert them first or the
         # "aggressive leaker names players" rule never fires.
-        _maybe_leak(cur, talk, dict(turns[-1], assets=_engine_assets(b, turns[-1].get("assets"))), b, rng, turns)
+        record_leaks(cur, talk, dict(turns[-1], assets=_engine_assets(b, turns[-1].get("assets"))), b, rng, turns)
         if left <= 0:
             _set_status(cur, nid, "WALKED_AWAY", "the GM ran out of patience")
             talk["status"] = "WALKED_AWAY"
@@ -763,7 +759,7 @@ def advance_talk(cur, b, valuer, talk, rng, llm):
         leak_turn = dict(turns[-1])
         if offer_turn is not None:
             leak_turn["assets"] = last_offer
-        _maybe_leak(cur, talk, leak_turn, b, rng, turns)
+        record_leaks(cur, talk, leak_turn, b, rng, turns)
     return "STALLED"
 
 
