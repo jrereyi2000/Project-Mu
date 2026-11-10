@@ -439,3 +439,28 @@ def test_a_failing_owner_read_does_not_abort_the_hire(monkeypatch):
     rep = gr._hire_gm(cur, 2037, 2036, "ATL", 1, None, why="hot seat", log=lambda *a: None)
     assert rep["tier"] == "ELITE"                                      # the neutral search still hires
     assert "ROLLBACK TO SAVEPOINT GM_OWNER_VIEW" in cur.statements      # and the failed read was contained
+
+
+def test_a_fired_gm_is_bought_out_for_the_seasons_after_the_one_he_was_fired_in():
+    """M-0150 M1: the settle used the stored remaining_years (last rolled for the previous league year) and started
+    the schedule in the firing season, so a 4-year deal paid 5 seasons."""
+    class Cur:
+        def __init__(self):
+            self.sql = []
+
+        def execute(self, q, a=None):
+            self.sql.append((" ".join(str(q).split()), a))
+
+        def fetchone(self):
+            if self.sql[-1][0].startswith("SELECT id, annual_salary"):
+                return (9, 3_000_000, 3, 0, 4, 2033)       # stored remaining 3, but the deal ends after 2036
+            return None
+
+    cur = Cur()
+    gr._settle_gm_contract(cur, 101, log=lambda *a: None, person_season=2035)
+    updates = [a for s, a in cur.sql if s.startswith("UPDATE staff_contracts")]
+    assert len(updates) == 1
+    remaining, buyout, total, fired, years, row_id = updates[0]
+    assert (remaining, row_id) == (0, 9)
+    assert (buyout, total) == (3_000_000, 3_000_000)       # one season left (2036), not three
+    assert (fired, years) == (2036, 1)                     # charged from the year after the firing season

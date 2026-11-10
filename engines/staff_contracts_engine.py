@@ -158,6 +158,15 @@ def fire_contract(contract):
     return out
 
 
+def owed_years(total_years, signed_season, season):
+    """The years a deal still owes as of the league year `season`: its remaining seasons by the roll's own rule
+    (`total_years - (season - signed_season)`), clamped to the deal's own length. A deal signed for a later league
+    year owes its full length, never more (M-0150 N1: an unclamped count paid a 5-year deal over 6 seasons)."""
+    total = int(total_years or 0)
+    signed = int(signed_season if signed_season is not None else season)
+    return max(0, min(total, total - (int(season) - signed)))
+
+
 def firing_columns(contract, season, years):
     """The `staff_contracts` columns a firing records: the row fired, the buyout as a whole, and the schedule it is
     paid on — one even instalment in each of the `years` the deal had left, the last taking the remainder (so the

@@ -367,14 +367,20 @@ def _settle_gm_contract(cur, person_id, log=print, person_season=None):
     person_season = int(person_season) if person_season is not None else None
     try:
         cur.execute("SAVEPOINT gm_fire")
-        cur.execute("""SELECT id, annual_salary, remaining_years, buyout_owed FROM staff_contracts
+        cur.execute("""SELECT id, annual_salary, remaining_years, buyout_owed, total_years, signed_season
+                       FROM staff_contracts
                        WHERE person_kind = 'GM' AND person_id = %s AND remaining_years > 0
                        ORDER BY id DESC LIMIT 1""", (person_id,))
         row = cur.fetchone()
         if row:
             from engines import staff_contracts_engine as sce
-            cols = sce.firing_columns({"annual_salary": row[1], "remaining_years": row[2], "buyout_owed": row[3]},
-                                      person_season, row[2])
+            # A hot-seat firing happens after the league year `person_season`, so the buyout covers the seasons from
+            # the next one on. The stored remaining_years was last rolled for person_season - 1, and using it charged
+            # an extra season past the end of the deal (M-0150 M1).
+            charge = None if person_season is None else person_season + 1
+            owed = sce.owed_years(row[4], row[5], charge) if charge is not None else row[2]
+            cols = sce.firing_columns({"annual_salary": row[1], "remaining_years": owed, "buyout_owed": row[3]},
+                                      charge, owed)
             cur.execute("""UPDATE staff_contracts SET remaining_years = %s, buyout_owed = %s, buyout_total = %s,
                                buyout_fired_season = %s, buyout_years = %s WHERE id = %s""",
                         (cols["remaining_years"], cols["buyout_owed"], cols["buyout_total"],

@@ -39,8 +39,11 @@ def _table(cur, name):
 
 def current_staff(cur, season):
     """[{team_id, person_kind, person_id, name, start_season, experience, championships}] for each team's current
-    HC/OC/DC (the tenure covering `season`; a later-starting tenure wins)."""
+    HC/OC/DC (the tenure covering `season`; a later-starting tenure wins). A tenure or GM hired for the coming league
+    year (`season + 1`) counts as current: the carousel hires before FREE_AGENCY's producer runs, and reading a
+    next-season hire as gone filed and fired him the day he was hired (M-0150 N1)."""
     out, seen = [], set()
+    horizon = int(season) + 1
 
     def add(team_id, kind, person_id, name, start_season, championships):
         if (team_id, kind) in seen:
@@ -53,14 +56,14 @@ def current_staff(cur, season):
                    FROM coach_tenures t JOIN coaches c ON c.id = t.coach_id
                    LEFT JOIN coach_records r ON r.coach_id = t.coach_id
                    WHERE t.start_season <= %s AND (t.end_season IS NULL OR t.end_season >= %s)
-                   ORDER BY t.team_id, t.start_season DESC, t.id DESC""", (season, season))
+                   ORDER BY t.team_id, t.start_season DESC, t.id DESC""", (horizon, season))
     for r in cur.fetchall():
         add(r[0], "HC", r[1], r[2], r[3], int(r[4] or 0))
     if _table(cur, "coordinator_tenures"):
         cur.execute("""SELECT t.team_id, t.role, t.coordinator_id, c.coordinator_name, t.start_season
                        FROM coordinator_tenures t JOIN coordinators c ON c.id = t.coordinator_id
                        WHERE t.start_season <= %s AND (t.end_season IS NULL OR t.end_season >= %s)
-                       ORDER BY t.team_id, t.role, t.start_season DESC, t.id DESC""", (season, season))
+                       ORDER BY t.team_id, t.role, t.start_season DESC, t.id DESC""", (horizon, season))
         for r in cur.fetchall():
             add(r[0], r[1], r[2], r[3], r[4], 0)
     # The GM is staff too (plan §2.2 puts his salary in the owner's payroll); his open tenure is the contract the
@@ -69,7 +72,7 @@ def current_staff(cur, season):
     if _table(cur, "gm_profiles"):
         cur.execute("""SELECT team_id, id, gm_name, start_season FROM gm_profiles
                        WHERE end_season IS NULL AND coach_id IS NULL AND start_season <= %s ORDER BY team_id""",
-                    (season,))
+                    (horizon,))
         for r in cur.fetchall():
             add(r[0], "GM", r[1], r[2], r[3], 0)
     for s in out:
@@ -86,12 +89,17 @@ def current_staff(cur, season):
         s["experience"] = int(cur.fetchone()[0] or 0)
     # A person whose contract this producer already fired (a hot-seat firing settles it at once) is not filed
     # again: with the tenure comparison left at ">= season" so that a poached coordinator is never charged, his
-    # row would otherwise be re-filed for the next league year and then fired a second time.
+    # row would otherwise be re-filed for the next league year and then fired a second time. The skip is bounded by
+    # his tenure's start: a person fired and later re-hired into the same seat gets a new deal (M-0150 L1).
     if _table(cur, "staff_contracts"):
-        cur.execute("""SELECT team_id, person_kind, person_id FROM staff_contracts
-                       WHERE remaining_years <= 0 AND buyout_owed > 0 AND signed_season <= %s""", (season,))
-        settled = {(r[0], r[1], r[2]) for r in cur.fetchall()}
-        out = [s for s in out if (s["team_id"], s["person_kind"], s["person_id"]) not in settled]
+        cur.execute("""SELECT team_id, person_kind, person_id, max(signed_season) FROM staff_contracts
+                       WHERE remaining_years <= 0 AND buyout_owed > 0 AND signed_season <= %s
+                       GROUP BY team_id, person_kind, person_id""", (season,))
+        settled = {(r[0], r[1], r[2]): int(r[3] or 0) for r in cur.fetchall()}
+        out = [s for s in out
+               if not ((s["team_id"], s["person_kind"], s["person_id"]) in settled
+                       and int(s["start_season"] or season)
+                       <= settled[(s["team_id"], s["person_kind"], s["person_id"])])]
     return out
 
 
@@ -138,7 +146,8 @@ def annual(cur, season, dry_run=False):
                 # championships are not in the tables), but a PROMOTION GM who has served the years does move up to
                 # what his experience now prices at.
                 salary = max(int(row["annual_salary"]), salary)
-            signed = int(row["signed_season"]) if row else s["start_season"]
+            signed = max(int(row["signed_season"]), int(s["start_season"] or row["signed_season"])) if row \
+                else int(s["start_season"] or season)
             target = min(years, max(0, years - (season - signed)))
             if target <= 0:                       # an old tenure with no live contract: file a fresh deal
                 signed, target = season, years
@@ -189,8 +198,9 @@ def annual(cur, season, dry_run=False):
                 cur.execute("UPDATE staff_contracts SET remaining_years = 0 WHERE id = %s", (r["id"],))
             continue
         # The years still owed, recomputed with the same rule the roll uses: the stored remaining_years was last
-        # rolled for the previous league year, so buying it out as stored overpaid by one season.
-        owed_years = max(0, int(r["total_years"]) - (season - int(r["signed_season"])))
+        # rolled for the previous league year, so buying it out as stored overpaid by one season. Clamped to the
+        # deal's own length (M-0150 N1).
+        owed_years = sce.owed_years(r["total_years"], r["signed_season"], season)
         cols = sce.firing_columns({"annual_salary": r["annual_salary"], "remaining_years": owed_years,
                                    "buyout_owed": r["buyout_owed"]}, season, owed_years)
         fired.append({"id": r["id"], "team_id": r["team_id"], "person_kind": r["person_kind"],

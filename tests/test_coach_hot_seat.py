@@ -313,7 +313,7 @@ class SettleFullControlTests(unittest.TestCase):
             def fetchone(self):
                 if "to_regclass" in self.sql[-1][0]:
                     return (True,)
-                return (5, 10_000_000, 3, 0)
+                return (5, 10_000_000, 3, 0, 5, 2033)          # stored remaining is stale: last rolled for 2035
 
         cur = Cur()
         chs._settle_full_control(cur, 41, SEASON)
@@ -321,6 +321,7 @@ class SettleFullControlTests(unittest.TestCase):
         self.assertEqual(len(updates), 1)
         remaining, buyout, total, fired, years, row_id = updates[0]
         self.assertEqual((remaining, row_id), (0, 5))
-        self.assertGreater(buyout, 0)
-        # the buyout is spread over the years the deal had left, starting this league year
-        self.assertEqual((total, fired, years), (buyout, SEASON, 3))
+        # M-0150 M1: a 5-year deal signed 2033 is done after 2036, so it owes one more season, charged from the
+        # league year after the firing season - not the stored three over 2036-2038.
+        self.assertEqual(buyout, 10_000_000)
+        self.assertEqual((total, fired, years), (buyout, SEASON + 1, 1))

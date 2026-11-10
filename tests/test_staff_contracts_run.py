@@ -199,6 +199,59 @@ def test_a_poached_coordinator_is_not_fired_when_the_annual_run_sees_his_closed_
     assert after[7] == 0                                   # no buyout for a mover
 
 
+def test_a_hire_for_the_coming_league_year_is_not_fired():
+    """M-0150 N1 HIGH: the carousel hires for season+1 before FREE_AGENCY's annual run, so reading a next-season hire
+    as gone filed and fired him (on an unclamped 5-season buyout, out of owner cash) the day he was hired."""
+    conn = _db_with_gms()
+    conn.execute("INSERT INTO gm_profiles VALUES (103, 3, 'Next GM', 2037, NULL, NULL)")
+    conn.execute("INSERT INTO staff_contracts (team_id, person_id, person_kind, annual_salary, total_years, "
+                 "remaining_years, signed_season) VALUES (3, 103, 'GM', 3000000, 5, 5, 2037)")
+    conn.execute("INSERT INTO coaches VALUES (12, 'Godfather')")
+    conn.execute("INSERT INTO coach_records VALUES (12, 0)")
+    conn.execute("INSERT INTO coach_tenures (coach_id, team_id, start_season, end_season) "
+                 "VALUES (12, 3, 2037, NULL)")
+    conn.execute("INSERT INTO staff_contracts (team_id, person_id, person_kind, annual_salary, total_years, "
+                 "remaining_years, signed_season, full_control) VALUES (3, 12, 'HC', 20000000, 5, 5, 2037, 1)")
+    cur = FakeCursor(conn)
+    rep = scr.annual(cur, 2036)
+    assert rep["fired"] == 0
+    for kind, person_id in (("GM", 103), ("HC", 12)):
+        row = next(r for r in _rows(cur) if r[0] == 3 and r[1] == kind and r[2] == person_id)
+        assert (row[5], row[7]) == (5, 0)              # untouched: full deal, nothing owed
+
+
+def test_a_hot_seat_settled_coach_is_not_filed_again():
+    """The settled-row skip stays in force: a coach the hot seat already fired is not re-filed by the annual run."""
+    conn = _db()
+    cur = FakeCursor(conn)
+    scr.annual(cur, 2036)
+    conn.execute("UPDATE coach_tenures SET end_season = 2036 WHERE coach_id = 11")
+    conn.execute("UPDATE staff_contracts SET remaining_years = 0, buyout_owed = 12000000 "
+                 "WHERE team_id = 2 AND person_kind = 'HC'")
+    rep = scr.annual(cur, 2036)
+    assert rep["filed"] == 0 and rep["fired"] == 0
+
+
+def test_a_coach_rehired_into_the_same_seat_is_filed_again():
+    """M-0150 L1: the settled-row skip had no season bound, so a fired coach later re-hired by the same team was
+    never filed a contract again."""
+    conn = _db()
+    cur = FakeCursor(conn)
+    scr.annual(cur, 2035)
+    conn.execute("UPDATE staff_contracts SET remaining_years = 0, buyout_owed = 12000000 "
+                 "WHERE team_id = 2 AND person_kind = 'HC'")
+    conn.execute("UPDATE coach_tenures SET end_season = 2036 WHERE coach_id = 11")
+    conn.execute("INSERT INTO coach_tenures (coach_id, team_id, start_season, end_season) "
+                 "VALUES (11, 2, 2038, NULL)")
+    rep = scr.annual(cur, 2038)
+    assert rep["filed"] == 1
+    cur.execute("SELECT remaining_years, signed_season, buyout_owed FROM staff_contracts "
+                "WHERE team_id = 2 AND person_kind = 'HC' AND person_id = 11 ORDER BY id")
+    rows = cur.fetchall()
+    assert rows[0] == (0, 2035, 12000000)                      # the old deal stays settled
+    assert rows[-1][:2] == (4, 2038)                           # a fresh 4-year deal from the rehire season
+
+
 def test_a_fired_coach_is_bought_out_for_the_years_he_had_left():
     """M-0125 Medium: the buyout is the deal's remaining seasons as of the season he stopped, not one more."""
     conn = _db()

@@ -295,14 +295,19 @@ def _settle_full_control(cur, coach_id, season):
         return
     try:
         cur.execute("SAVEPOINT coach_fc_fire")
-        cur.execute("""SELECT id, annual_salary, remaining_years, buyout_owed FROM staff_contracts
+        cur.execute("""SELECT id, annual_salary, remaining_years, buyout_owed, total_years, signed_season
+                       FROM staff_contracts
                        WHERE person_kind = 'HC' AND person_id = %s AND full_control AND remaining_years > 0
                        ORDER BY id DESC LIMIT 1""", (coach_id,))
         got = cur.fetchone()
         if got:
             from engines import staff_contracts_engine as sce
-            cols = sce.firing_columns({"annual_salary": got[1], "remaining_years": got[2], "buyout_owed": got[3]},
-                                      season, got[2])
+            # Fired at Black Monday of `season`, so the buyout covers the seasons from the next league year on, not
+            # the stale stored remaining_years and not the season just played (M-0150 M1).
+            charge = int(season) + 1
+            owed = sce.owed_years(got[4], got[5], charge)
+            cols = sce.firing_columns({"annual_salary": got[1], "remaining_years": owed, "buyout_owed": got[3]},
+                                      charge, owed)
             cur.execute("""UPDATE staff_contracts SET remaining_years = %s, buyout_owed = %s, buyout_total = %s,
                                buyout_fired_season = %s, buyout_years = %s WHERE id = %s""",
                         (cols["remaining_years"], cols["buyout_owed"], cols["buyout_total"],

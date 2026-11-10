@@ -16,6 +16,7 @@ from engines.staff_contracts_engine import (
     is_expired,
     market_salary,
     offset_buyout,
+    owed_years,
     remaining_guaranteed,
     rollover,
     salary_tier,
@@ -147,6 +148,13 @@ def test_fire_contract_moves_remaining_guaranteed_into_buyout_owed():
 def test_fire_contract_adds_to_any_existing_buyout():
     contract = {"annual_salary": 5_000_000, "remaining_years": 3, "buyout_owed": 1_000_000}
     assert fire_contract(contract)["buyout_owed"] == 16_000_000
+
+
+def test_owed_years_is_the_deals_remaining_seasons_and_never_more():
+    """M-0150 N1: the buyout used to count past the end of a deal for a hire signed for a later league year."""
+    assert owed_years(5, 2033, 2036) == 2
+    assert owed_years(5, 2033, 2038) == 0                    # the deal has run out
+    assert owed_years(5, 2037, 2036) == 5                    # signed for a later year: its full length, not 6
 
 
 def test_offset_clause_reduces_the_owed_buyout_by_the_new_salary():
