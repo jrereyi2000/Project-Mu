@@ -3,6 +3,7 @@
 **Status:** approved by JR (2026-11-10); building, wave 1 of 5 (wave 0 complete: Spikes A, B and D).
 
 **As built:**
+- **U2 exports the playbook and scheme fields as the save's stored 32-bit references**, not enum names: schema 620 types them as references into static tables 16384/16485, which are not in the save. That suits the writer (which sets references anyway) but means `coach_madden_profiles.offensive_playbook`'s VARCHAR names get no reverse map from the snapshot; U5 compares seats, not playbooks, so nothing needs one yet.
 - **Spike A is in `docs/reference/MADDEN_COACH_RECORDS.md`** (`081670e`), measured on `CAREER-MUBASE`. It supplies every constant U1/U3 need: the 122-field Coach layout, the enum members actually in use, `PLAYBOOK_MAP`/`SCHEME_MAP` plus the enum→static-row tables, `TALENT_TEMPLATES` with the level scaling, the face/head/body lists, and `COACH_PORTRAIT_RANGE`. Three findings changed things: (1) **D11 is answered — `pipeline/character_visuals.py` is not reusable and leaves HOLD**, because `CharacterVisuals.RawData` is plain JSON (`bodyType` + `loadouts[]`) for coaches *and* players in schema 620, so the coach writer does JSON, not zstd/ISON; (2) **coach portraits share one numeric space and one texture bank with `PLYR_PORTRAIT`** (29 IDs are used by both), so `COACH_PORTRAIT_RANGE` is the free block 5324-5484 (161 IDs); (3) **team head coaches' scheme fields reference the static 16485 table, while coordinators and free agents use 16384** — whether a team HC accepts a 16384 ref is unconfirmed and joins Spike C's list.
 - **Spike B changed two design assumptions** (`docs/reference/MADDEN_COACH_FIRING_DIFF.md`). JR turned Madden's firings on and advanced Week 18 → Wild Card on a clone; Madden fired three head coaches (NYJ, WAS, TEN) and their coordinators. Measured: (1) **there is no `CoachesRoot` free-agent array** — a released coach is just `TeamIndex = 32` + `ContractStatus = FreeAgent` + `ContractYearsRemaining = 0` + `PrevTeamIndex = old team`, so `release` has no array handling at all (S2 and §2.5 amended); (2) **a firing on a user team nulls the user wiring** — `Team.UserCharacter` → null and `FranchiseUser.Team` → null, while `FranchiseUser.UserEntity` still points at the fired man and `IsUserControlled` stays true. Mu wants a live user on every team, so a head-coach change is a release plus an assign in one write and `FranchiseUser.Team` must be restored. Also measured: firing an HC clears all three of his seats; `Position` is not changed by a release; Madden has a second status, `Expiring`; table 4168 has 470 rows with 127 live, so 343 empty rows are available for `create`; `COACH_RATING` is a season-scoped recomputation, not a release field; and Madden creates no coach record at the firing, which matches the OFFSEASON_START timing. A second pair, `CAREER-TUNECOACHBEFOREOC` → `CAREER-TUNECOACHAFTEROC` (JR firing CAR's OC Bradley Idzik in a fixed offseason frame), isolates the coordinator case: one seat ref nulled, one Coach record released, **`COACH_RATING` → 50** on release, `Position` untouched, and **nothing else at all** — no head-coach change, no user change, and 0 of 32 `FranchiseUser` rows touched. So the user-wiring repair is needed only when the seat being filled is a head-coach seat.
 - Spike D (`df76bec`) found the source and the licence shape in `docs/reference/COACH_DONOR_PHOTOS.md`. Club coach photos on `static.clubs.nfl.com` are the only good plates (every club has them; ESPN's coach headshots are 404, Pro-Football-Reference is Cloudflare-403), but their terms are personal, non-commercial, no redistribution: **the donor library stays local and git-ignored**, and Wikimedia Commons is the clean-licence fallback. `static/coaches/` is served by the existing `/static` mount with nothing new (`server/api.py:188-190`).
@@ -309,7 +310,7 @@ JR runs `/build-mod` with the manifest and installs the pack. Once the pack is c
   - written PresentationIds are recorded back;
   - a later offseason stage writes only what's still missing.
 
-Run with `pytest -p no:cacheprovider -m "not integration" <files>` and `node --test pipeline/save_reader/test/`. Nothing touches `madden_test`, `madden_mu2026` or `madden_2036`.
+Run with `pytest -p no:cacheprovider -m "not integration" <files>` and `node --test "pipeline/save_reader/test/*.test.mjs"` (the directory form fails on Node 22: it treats the path as an entry module). Nothing touches `madden_test`, `madden_mu2026` or `madden_2036`.
 
 ## 5. Work breakdown
 
@@ -337,7 +338,7 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 - **Reads:** `sign.mjs`, `trade.mjs`, `release.mjs` (the plan/apply/verify pattern), Spike A and B
 - **Depends on:** Spike A, Spike B
 - **Done when:** the three actions plan, apply and read back on the fixture; the HC re-point passes the `league_setup` user check; and `league_setup.mjs` still passes its own tests after the helper move.
-- **Verify:** `node --test pipeline/save_reader/test/` all pass.
+- **Verify:** `node --test "pipeline/save_reader/test/*.test.mjs"` all pass (quotable glob form; the bare directory form fails on Node 22).
 
 ### U4: Coach headshots
 
@@ -443,3 +444,4 @@ All five questions were answered by JR on 2026-11-10; see D7–D11 at the top. N
 | Spike D | 0 | `worktree-agent-a1465b19dc48a9bc0` | `.claude/worktrees/agent-a1465b19dc48a9bc0` | merged — `docs/reference/COACH_DONOR_PHOTOS.md` | `df76bec` |
 | Spike B | 0 | — (orchestrator, two live saves) | — | merged — `docs/reference/MADDEN_COACH_FIRING_DIFF.md` | `b5a0f55`, `a4975b5` |
 | Spike A | 0 | `worktree-agent-af6501f426eed3a8c` | `.claude/worktrees/agent-af6501f426eed3a8c` | merged — `docs/reference/MADDEN_COACH_RECORDS.md` | `081670e` |
+| U2 | 1 | `worktree-agent-a02f2a7f775862c72` | `.claude/worktrees/agent-a02f2a7f775862c72` | merged — READER_VERSION 8, `coaches` + `staff` | `b936bdb` |
