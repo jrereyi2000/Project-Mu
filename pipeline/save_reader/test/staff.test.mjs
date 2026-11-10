@@ -599,3 +599,12 @@ test('an action with no contract block is accepted and leaves the contract field
   assert.deepEqual(decodeRef(f.team.records[2].HeadCoach), { table: COACH, row: 3 });
   assert.equal(f.coach.records[3].ContractLength, before, 'the contract fields are left for a later write');
 });
+
+
+test('a lone head-coach release is refused (audit, B8 class)', async () => {
+  // Releasing the head coach with nothing to replace him leaves that team with no user, and the read-back would still
+  // pass — the same class of bug as a head coach assigned away with no replacement.
+  const f = fixture();
+  const result = await planStaff(f.franchise, [{ action: 'release', pgid: 100 }]);
+  assert.ok(result.errors.some(e => /without a head coach/.test(e)), JSON.stringify(result.errors));
+});

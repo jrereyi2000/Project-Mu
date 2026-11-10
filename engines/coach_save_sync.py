@@ -252,7 +252,20 @@ def plan_staff_edits(cur, snapshot, target_season):
                 continue
             wanted_pid = profile.get("presentation_id")
             if wanted_pid is not None and actual == wanted_pid:
-                continue                          # the seat already holds Mu's man: nothing to write
+                # The seat already holds Mu's man. That is not nothing to write: a coach Mu invented was created
+                # without contract fields (no staff_contracts row existed at OFFSEASON_START, so the writer wrote the
+                # seat and status only), and `annual` runs for the season just played, so the hire's deal is filed a
+                # year later. Until the save carries it, emit a contract-only assign so the next write fills it
+                # (audit B1 partial, 2026-11-10).
+                contract = _contract(cur, team_id, staff_kind, person["person_id"], has_contracts)
+                if contract:
+                    contract.setdefault("ContractLength", 0)
+                    action = {"action": "assign", "pgid": wanted_pid, "team_index": idx, "position": position,
+                              "contract": contract}
+                    assigns.append(action)
+                    report.append({"team": abbr, "role": role, "action": "assign", "person": person["name"],
+                                   "pgid": wanted_pid, "reason": "contract"})
+                continue
             if actual is not None and actual not in wanted_pids:
                 releases.append({"action": "release", "pgid": actual})
                 freed.add(actual)

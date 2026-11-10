@@ -739,6 +739,15 @@ export async function planStaff(franchise, staff = [], { freed = [] } = {}) {
   // B8 (audit, 2026-11-10): a head coach moved to another team leaves his old team with no coach, and with no
   // replacement in the same write that team loses its user — which is the state Madden's own firing leaves and the
   // one Mu exists to avoid. Refuse it rather than write it.
+  for (const r of plan.releases) {
+    for (const stale of r.seats ?? []) {
+      if (stale.key !== 'HeadCoach') continue;
+      if (!filledSeats.has(`${stale.team.teamIndex}:HeadCoach`)) {
+        errors.push(`${r.retire ? 'staff retire' : 'staff release'} pgid ${r.pgid}: leaves `
+          + `${teamLabel(stale.team, stale.team.teamIndex)} without a head coach; fill that seat in the same write`);
+      }
+    }
+  }
   for (const a of [...plan.assignments, ...plan.creates]) {
     for (const stale of a.clearSeats ?? []) {
       if (stale.key !== 'HeadCoach') continue;

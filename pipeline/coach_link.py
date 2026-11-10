@@ -126,11 +126,13 @@ def names_match(save_name, mu_name):
     b_first, _, b_last = b.rpartition(" ")
     if not a_last or not b_last:
         return False
-    same_first = _one_edit_apart(a_first, b_first) or (
-        _NICKNAMES.get(a_first) == _NICKNAMES.get(b_first) and a_first in _NICKNAMES)
-    # One misspelt surname, with the same first name, is still one man ("Brian Angelicho" in the save against
-    # "Brian Angelichio" in Mu). Two different men would have to share a team, a role and a near-identical surname.
-    return a_last == b_last and same_first or same_first and _one_edit_apart(a_last, b_last)
+    alias = _NICKNAMES.get(a_first) is not None and _NICKNAMES.get(a_first) == _NICKNAMES.get(b_first)
+    # At most one edit across the two names, and the other half must be exact: never "one typo in each".
+    if a_last == b_last:
+        return a_first == b_first or alias or _one_edit_apart(a_first, b_first)
+    if a_first == b_first:
+        return _one_edit_apart(a_last, b_last)
+    return False
 
 
 def _seed(person_kind, person_id):
