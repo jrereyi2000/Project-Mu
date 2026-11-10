@@ -46,8 +46,9 @@ MANAGER_EXE = "MMCModManager.exe"
 DEFAULT_MANAGER_DIR = "/mnt/c/Madden27Modding/MMC_Modding_Tools_v1.1.0.7/MMC_ModManager_v1.1.0.7"
 WATCHER_CHECK = 'ps -eo args | grep "[p]ipeline[.]watch_save"'
 
-HUBS = ("HUB_WEEKLY", "HUB_GAMEDAY", "HUB_OTHER")
+HUBS = ("HUB_WEEKLY", "HUB_GAMEDAY", "HUB_OTHER", "HUB_WEEKLY_DRAFT_CARD")
 MAX_SIM_WEEKS = 30                 # safety cap on NEXT WEEK presses in one run
+ADVANCE_STOP_TIMEOUT = 90          # seconds an `advance` waits for a catalogued landing screen
 SIM_TIMEOUT = 240                  # seconds for one NEXT WEEK (spike: under 20 s)
 LOAD_TIMEOUT = 120                 # seconds for a franchise to load (spike: about 25 s)
 LAUNCH_TIMEOUT = 300               # seconds for Madden's window and first menu
@@ -59,7 +60,7 @@ OFFSEASON_WORDS = ("OFFSEASON", "STAFF", "RE-SIGN", "RESIGN", "FREE AGENCY", "CO
 # happens to say "SUPER BOWL THRILLER" (P2-02, 2026-11-10).
 PHASE_WORDS = ("STAFF WEEK", "STAFF", "RE-SIGN", "RESIGN", "FREE AGENCY", "COMBINE", "PRO DAY", "DRAFT",
                "UDFA", "CUTDOWN", "PRESEASON", "OFFSEASON", "PRO BOWL", "SUPER BOWL",
-               "CONFERENCE CHAMPIONSHIP", "DIVISIONAL", "WILDCARD")
+               "CONFERENCE CHAMPIONSHIP", "CHAMPIONSHIP SUNDAY", "DIVISIONAL", "WILDCARD")
 
 # "2026. WEEK 1" (OCR reads 1 as I or l, and may drop the space: "WEEKI")
 _WEEK_RE = re.compile(r"\b(20\d\d)\s*[.:,]?\s*WEEK\s*([0-9IL|!O]{1,2})\b")
@@ -472,7 +473,7 @@ def _move_highlight(pilot, label, options, presses=4):
     return _settled_highlight(pilot, options) == label
 
 
-def _sim_one_week(pilot, poll=3.0):
+def _sim_one_week(pilot, poll=3.0, timeout=SIM_TIMEOUT):
     """GAMEDAY > ADVANCE WEEK > FORCE ADVANCE (READY TO ADVANCE can't run an all-user league),
     then wait out the sim."""
     pilot.goto("ADVANCE_MENU")
@@ -488,13 +489,13 @@ def _sim_one_week(pilot, poll=3.0):
         pilot.highlight(label)
     pilot.confirm_on("ADVANCE_MENU", label)
     others = [n for n in pilot.screens if n != "ADVANCE_MENU"]
-    _, screen = wait_known(pilot, others + ["FORCE_ADVANCE_CONFIRM"], SIM_TIMEOUT, poll, what=f"the end of {label}")
+    _, screen = wait_known(pilot, others + ["FORCE_ADVANCE_CONFIRM"], timeout, poll, what=f"the end of {label}")
     if screen == "FORCE_ADVANCE_CONFIRM":
         if not _move_highlight(pilot, "SIM AHEAD", ["SIM AHEAD", "CANCEL"]):
             pilot.stop("couldn't settle the highlight on SIM AHEAD", Stuck)
         pilot.confirm_on("FORCE_ADVANCE_CONFIRM", "SIM AHEAD")
         rest = [n for n in pilot.screens if n != "FORCE_ADVANCE_CONFIRM"]
-        _, screen = wait_known(pilot, rest, SIM_TIMEOUT, poll, what="the end of SIM AHEAD")
+        _, screen = wait_known(pilot, rest, timeout, poll, what="the end of SIM AHEAD")
     return screen
 
 
@@ -526,6 +527,33 @@ def tile_index(save, folder=None):
         return None
 
 
+def _verify_loaded(pilot, save, folder):
+    """Stop unless the franchise now on screen is the save we meant to load.
+
+    A lost arrow press, a stale border read or a hand on the keyboard can confirm the wrong
+    tile: on 2026-11-10 a list walk loaded the previous save (2028 week 1) while the pilot
+    believed it had opened CAREER-TUNE-P2C (2026 week 1) and would have simmed that season.
+    The hub header carries the year and, in season, the week; the save file carries both, so
+    they must agree. Screens without a header (a postseason phase, a loading frame) are left to
+    the caller's own header read.
+    """
+    if getattr(pilot, "dry_run", False):
+        return None                     # the fake Madden has no save file behind it
+    head = read_header(pilot.frame)
+    disk = _save_header(_latest_save(Path(folder) / save, Path(folder) / f"{save}-AUTOSAVE")) if folder else None
+    if not head or not disk:
+        return None
+    same_week = head.get("phase") == disk.get("phase") == "WEEK" and head.get("week") == disk.get("week")
+    same_year = head.get("year") is None or disk.get("year") is None or head["year"] == disk["year"]
+    if same_year and (same_week or head.get("phase") != "WEEK" or disk.get("phase") != "WEEK"):
+        return None
+    pilot.stop(f"the loaded franchise is {head.get('year')} {head.get('phase')} "
+               f"{head.get('week') if head.get('phase') == 'WEEK' else ''}, but {save} holds "
+               f"{disk.get('year')} {disk.get('phase')} "
+               f"{disk.get('week') if disk.get('phase') == 'WEEK' else ''}: refusing to sim the wrong save",
+               Stuck)
+
+
 def _load_franchise(pilot, tile, save=None, folder=None):
     # Title -> main menu and the franchise load are long UNKNOWN splashes offline; goto's default
     # 20-look UNKNOWN limit (about 40 s) is too short for them.
@@ -537,20 +565,38 @@ def _load_franchise(pilot, tile, save=None, folder=None):
         frame, screen = pilot.look()
     with patience(pilot, 180, 1.0):
         pilot.goto("FRANCHISE_LIST")
-    # The list opens wherever it was last left (and wraps). Walk one tile at a time: one lap left,
-    # then right if the target was on the other side (the dry-run's fake list does not wrap).
-    lap = len(save_tiles(folder)) + 1
-    found = False
-    for direction, steps in (("left", lap), ("right", 2 * lap)):
-        for _ in range(steps):
-            if pilot.highlighted(labels=[tile]) == tile:
-                found = True
+    # The list opens wherever it was last left. Madden orders the tiles by the save's OWN date —
+    # not the file's mtime, which a copy changes — so the folder order is only a bound, and the
+    # border is the truth: press one arrow, look, and stop the moment the target is bordered.
+    # The first direction comes from the two labels' x positions when both are on screen; a
+    # press that doesn't move the border means the list's edge, and then it goes the other way
+    # (2026-11-10: a wrong-way jump swept 60 saves twice and looked like a hung run).
+    order = save_tiles(folder)
+    bound = len(order) + 3
+
+    def on_target():
+        return pilot.highlighted(labels=[tile]) == tile
+
+    def current():
+        return pilot.highlighted(labels=order)
+
+    if not on_target():
+        a, b = pilot.frame.find(current()) if current() else None, pilot.frame.find(tile)
+        directions = ("left", "right") if a and b and b[0] < a[0] else ("right", "left")
+        for key in directions:
+            still = current()
+            for _ in range(bound):
+                pilot.press(key)
+                pilot.look()
+                if on_target():
+                    break
+                now = current()
+                if now == still:            # the border can't move this way: an edge of the list
+                    break
+                still = now
+            if on_target():
                 break
-            pilot.press(direction)
-            pilot.look()
-        if found:
-            break
-    if not found:
+    if not on_target():
         pilot.stop(f"couldn't find the {tile} tile in CURRENT FRANCHISES", Stuck)
     pilot.confirm_on("FRANCHISE_LIST", tile)
     # the dialog may take a moment; CURRENT FRANCHISES stays behind it and behind the loading frames
@@ -559,6 +605,8 @@ def _load_franchise(pilot, tile, save=None, folder=None):
         pilot.highlight("PROCEED WITHOUT PROGRESSION")
         pilot.confirm_on("PROGRESSION_WARNING", "PROCEED WITHOUT PROGRESSION")
         wait_known(pilot, list(HUBS), LOAD_TIMEOUT)
+    if save:
+        _verify_loaded(pilot, save, folder or saves_dir())
 
 
 def _savepoint(pilot, name=None):
@@ -649,6 +697,54 @@ def sim_season(pilot, save=None, to="regular-season-end", watcher=None, folder=N
             "start_week": progress.get("start_week"), "end_week": head.get("week"), "end_phase": head["phase"],
             "weeks_simmed": weeks, "saved": saved, "quit": quit,
             "written": {k: (after[k] is not None and after[k] != before[k]) for k in after}}
+
+
+# ------------------------------------------------------------------------------- advance
+@job("advance")
+def advance(pilot, save=None, franchise=None, quit=True, watcher=None, folder=None, progress=None):
+    """Advance a CAREER-TUNE-* franchise exactly ONE stop: a regular-season week, a playoff round or
+    one offseason stage (P2-03). It reads the stop before and after, copies Madden's autosave over
+    the named save, and quits to the franchise list so the league office can write the file.
+
+    One advance is one press of the advance action: the stage loop never sims through the
+    offseason (TUNING_LEAGUE.md §6). `franchise` says the TUNE-* franchise is already loaded."""
+    if not save or not str(save).upper().startswith(TUNE_SAVE_PREFIX) or not _valid_save_name(save):
+        return _refuse(f"only {TUNE_SAVE_PREFIX}* saves are advanced, not {save!r}", save=save)
+    if franchise and not norm(tile_name(franchise)).startswith("TUNE"):
+        return _refuse(f"only a TUNE-* franchise may be advanced in place, not {franchise!r}", save=save)
+    if (watcher or watcher_running)():
+        return _refuse("pipeline.watch_save is running: stop it first (a clone keeps the real "
+                       "franchise's LeagueID, so the watcher would ingest it)", save=save)
+    folder = Path(folder) if folder else saves_dir()
+    save_path, auto_path = folder / save, folder / f"{save}-AUTOSAVE"
+    if folder.is_dir() and not save_path.is_file() and not getattr(pilot, "dry_run", False):
+        return _refuse(f"no save {save} in {folder} (clone-save first)", save=save)
+    if franchise:
+        pilot.loaded_franchise = norm(tile_name(franchise))
+    else:
+        _load_franchise(pilot, tile_name(save), save=save, folder=folder)
+    frame, screen0 = pilot.look()
+    before = read_header(frame) or _save_header(_latest_save(save_path, auto_path))
+    if screen0 not in HUBS:
+        pilot.stop(f"advance: {screen0} is not a hub; no advance route is catalogued for it", Unknown)
+    progress.update(save=save, from_screen=screen0, from_stop=before)
+    # a new offseason screen is the point of P2-02, so stop after a minute rather than four
+    _sim_one_week(pilot, timeout=ADVANCE_STOP_TIMEOUT)
+    # the sim lands on the coach-progress tabs first; read the header off the hub behind them
+    after = _week_now(pilot, allow_unreadable=True) or _save_header(save_path)
+    landing = pilot.screen
+    if before is not None and after == before and landing == screen0:
+        pilot.stop(f"the advance left the header on {before}", Stuck)
+    written = {}
+    if not save.upper().endswith("-AUTOSAVE") and auto_path.is_file() and \
+            (_mtime(auto_path) or 0) > (_mtime(save_path) or 0):
+        shutil.copy2(auto_path, save_path)          # Madden's autosave is the save (never Tab)
+        written = {"save": True}
+    if quit:
+        pilot.goto("FRANCHISE_LIST")
+    return {"status": "ok", "save": save, "franchise": pilot.loaded_franchise, "from": before,
+            "to": after, "from_screen": screen0, "to_screen": landing, "quit": quit,
+            "written": written, "saved": "autosave"}
 
 
 # ------------------------------------------------------------------------------- set_setting
@@ -754,5 +850,5 @@ def quit_franchise(pilot, franchise=None, allow_quit=False, progress=None):
     return {"status": "ok", "screen": "FRANCHISE_LIST", "quit": True, "franchise": pilot.loaded_franchise}
 
 
-JOBS = {"launch": launch, "clone-save": clone_save, "sim-season": sim_season, "set-setting": set_setting,
-        "verify-mods": verify_mods, "quit": quit_franchise}
+JOBS = {"launch": launch, "clone-save": clone_save, "sim-season": sim_season, "advance": advance,
+        "set-setting": set_setting, "verify-mods": verify_mods, "quit": quit_franchise}

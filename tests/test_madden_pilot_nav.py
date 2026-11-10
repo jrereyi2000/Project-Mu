@@ -192,6 +192,30 @@ def test_classify_unknown_and_word_boundaries():
     assert not frame_of(["NEXT", "WEEK"]).has("NEXT WEEK")
 
 
+@pytest.mark.parametrize("phase", ["WILDCARD WEEK", "DIVISIONAL WEEK", "CONFERENCE CHAMPIONSHIP", "PRO BOWL",
+                                    "SUPER BOWL", "STAFF WEEK"])
+def test_classify_the_empty_postseason_hub_by_its_phase_word(phase):
+    # 2026-11-10: the Divisional hub (no cards, the highlighted WEEKLY HUB tab unreadable by OCR)
+    # stopped the season run as UNKNOWN because only WILDCARD/PRO BOWL/SUPER BOWL were listed.
+    lines = ["GAMEDAY", "MANAGE ROSTER", "COACHCENTUL", "LEAGUE", "OPTIONS", phase]
+    assert classify(frame_of(lines), CAT) == "HUB_WEEKLY"
+
+
+def test_classify_the_news_ticker_never_makes_a_weekly_hub_the_gameday_tab():
+    # 2026-11-10: a blank Weekly Hub (cards not drawn) whose News Center ticker said "matchup"
+    # classified as HUB_GAMEDAY; the pilot then pressed C to reach the Weekly Hub and landed on
+    # MANAGE ROSTER, where it oscillated until it stopped.
+    lines = TABS + ["2026. WEEK 10", "@ SAINTS (4-4-0)", "News Center",
+                    "the matchup against J. Taylor and the Colts went south", "CREATE SAVEPOINT", "BACK"]
+    assert classify(frame_of(lines), CAT) == "HUB_WEEKLY"
+
+
+def test_classify_a_manage_roster_page_even_when_coach_central_is_garbled():
+    lines = ["GAMEDAY", "WEEKLY HUB", "MANAGE ROSTER", "COACHCENTUL", "LEAGUE", "OPTIONS",
+             "ADJUST LINEUP", "ROSTER", "CONTRACTS", "DEPTH CHART", "TEAM SALARY", "BACK"]
+    assert classify(frame_of(lines), CAT) == "HUB_OTHER"
+
+
 def test_classify_order_all_any_none():
     # GAMEDAY after a played week shows a WEEKLY RECAP tile: still the hub (none words)
     gameday = TABS + ["MATCHUP", "WEEKLY RECAP", "PLAY SEASON GAME", "ADVANCE WEEK"]

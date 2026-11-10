@@ -202,6 +202,9 @@ ROUTES = {
                    "(read 2026. WEEK N) > [Z > HUB_GAMEDAY > highlight ADVANCE WEEK > Space > ADVANCE_MENU > "
                    "FORCE ADVANCE > sim > COACH_PROGRESS x3 > HUB_WEEKLY (read week)] until {to} > Tab (savepoint) > "
                    "Backspace > QUIT_CONFIRM (YES) > FRANCHISE_LIST"),
+    "advance": "FRANCHISE_LIST > highlight {tile} > Space > PROGRESSION_WARNING (Proceed) > hub > GAMEDAY > "
+               "ADVANCE WEEK > FORCE ADVANCE > SIM AHEAD > (read the stop) > Backspace > QUIT_CONFIRM (YES) > "
+               "FRANCHISE_LIST",
     "launch": "MMCModManager.exe -launch {pack} > wait for the Madden window > MAIN_MENU or FRANCHISE_LIST",
     "quit": "hub > Backspace > QUIT_CONFIRM (YES, TUNE-* or --allow-quit only) > FRANCHISE_LIST",
     "set-setting": "walk {path} by OCR labels on catalogued screens > Right until the row reads {value} > back",
@@ -228,6 +231,10 @@ def build_parser():
     s.add_argument("--no-quit", action="store_true", help="stay in the franchise after the savepoint")
     s.add_argument("--franchise", help="the franchise already loaded, e.g. TUNE-P2A: sim it in place "
                    "instead of going back to CURRENT FRANCHISES (the hub doesn't show the save name)")
+    s = sub.add_parser("advance", parents=[common], help="advance a CAREER-TUNE-* franchise exactly one stop")
+    s.add_argument("--save", required=True)
+    s.add_argument("--no-quit", action="store_true", help="stay in the franchise after the advance")
+    s.add_argument("--franchise", help="the TUNE-* franchise already loaded: advance it in place")
     s = sub.add_parser("set-setting", parents=[common], help="walk a menu path and set a value")
     s.add_argument("--path", required=True)
     s.add_argument("--value", required=True)
@@ -248,11 +255,12 @@ def run_dir_for(job, given=None, dry_run=False):
 
 def dry_pilot(catalog, run_dir, args, out=print):
     start, intro = {"launch": ("MAIN_MENU", 2), "sim-season": ("FRANCHISE_LIST", 0), "quit": ("HUB_WEEKLY", 0),
-                    "set-setting": ("HUB_WEEKLY", 0), "verify-mods": ("MAIN_MENU", 0)}.get(args.job, ("MAIN_MENU", 0))
-    if args.job == "sim-season" and getattr(args, "franchise", None):
+                    "advance": ("FRANCHISE_LIST", 0), "set-setting": ("HUB_WEEKLY", 0),
+                    "verify-mods": ("MAIN_MENU", 0)}.get(args.job, ("MAIN_MENU", 0))
+    if args.job in ("sim-season", "advance") and getattr(args, "franchise", None):
         start = "HUB_WEEKLY"
     tiles = ["TUNE-SPIKE"]
-    if args.job == "sim-season":
+    if args.job in ("sim-season", "advance"):
         tile = jobs.tile_name(args.save).upper()
         tiles = ["ALLUSER-AUTOSAVE", tile] + (["TUNE-SPIKE"] if tile != "TUNE-SPIKE" else [])
     fake = ScriptedMadden(catalog, start=start, tiles=tiles, intro=intro, out=out)
@@ -268,7 +276,7 @@ def main(argv=None, out=print):
     run_dir = run_dir_for(args.job, args.run_dir, args.dry_run)
     catalog = load_catalog()
     fmt = {k: v for k, v in vars(args).items() if v is not None}
-    if args.job == "sim-season":
+    if args.job in ("sim-season", "advance"):
         fmt["tile"] = jobs.tile_name(args.save)
     real_notice = navigate.send_notice
     try:
@@ -303,6 +311,12 @@ def _run(args, run_dir, catalog, fmt, out):
             watcher = lambda: False  # noqa: E731
         result = jobs.sim_season(pilot, save=args.save, to=args.to, watcher=watcher, quit=not args.no_quit,
                                  franchise=args.franchise)
+    elif args.job == "advance":
+        watcher = jobs.watcher_running
+        if args.dry_run:
+            watcher = lambda: False  # noqa: E731
+        result = jobs.advance(pilot, save=args.save, watcher=watcher, quit=not args.no_quit,
+                              franchise=args.franchise)
     elif args.job == "set-setting":
         result = jobs.set_setting(pilot, path=args.path, value=args.value)
     elif args.job == "verify-mods":

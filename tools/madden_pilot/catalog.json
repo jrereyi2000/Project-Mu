@@ -355,14 +355,14 @@
       "exits": {}
     },
     "HUB_OTHER": {
-      "note": "The MANAGE ROSTER, COACH CENTRAL, LEAGUE and OPTIONS hub tabs. Words come from madden_capture's PS5 mapping, not this spike. Z steps back toward GAMEDAY.",
+      "note": "The MANAGE ROSTER, COACH CENTRAL, LEAGUE and OPTIONS hub tabs. Anchored on GAMEDAY plus the tab PAGE's own words (2026-11-10): requiring COACH CENTRAL failed when OCR garbled it ('COACHCENTUL'), and the page then matched HUB_GAMEDAY instead and the pilot walked itself onto another tab. Z steps back one tab toward GAMEDAY.",
       "all": [
-        "GAMEDAY",
-        "COACH CENTRAL"
+        "GAMEDAY"
       ],
       "any": [
         "ADJUST LINEUP",
         "DEPTH CHART",
+        "TEAM SALARY",
         "STATS & AWARDS",
         "LEAGUE SETTINGS",
         "USER SETTINGS"
@@ -382,14 +382,13 @@
       }
     },
     "HUB_GAMEDAY": {
-      "note": "Spike b8, e1: the GAMEDAY tab (MATCHUP). Buttons left to right: [WEEKLY RECAP after a played week], ADVANCE WEEK, PLAY SEASON GAME (order changes between weeks; the highlight is a white border). Space only on ADVANCE WEEK.",
+      "note": "Spike b8, e1: the GAMEDAY tab (MATCHUP). Buttons left to right: [WEEKLY RECAP after a played week], ADVANCE WEEK, PLAY SEASON GAME (order changes between weeks; the highlight is a white border). Space only on ADVANCE WEEK. MATCHUP is NOT a matching word any more (2026-11-10): the News Center ticker says 'matchup' on every hub tab, so a blank Weekly Hub frame matched here, the pilot pressed C to reach HUB_WEEKLY and landed on MANAGE ROSTER instead.",
       "all": [
         "MANAGE ROSTER"
       ],
       "any": [
         "ADVANCE WEEK",
-        "PLAY SEASON GAME",
-        "MATCHUP"
+        "PLAY SEASON GAME"
       ],
       "none": [
         "READY TO ADVANCE",
@@ -481,6 +480,9 @@
         "2026 WEEK",
         "VIEW PLAYOFF",
         "WILDCARD",
+        "DIVISIONAL",
+        "CONFERENCE",
+        "CHAMPIONSHIP",
         "PRO BOWL",
         "SUPER BOWL",
         "STAFF WEEK",

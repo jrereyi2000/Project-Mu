@@ -205,6 +205,15 @@ def test_read_header_other_phase_and_none():
     assert jobs.read_header(Frame(None, lines=["GAMEDAY", "VS BEARS (0-0-0)"])) is None
 
 
+@pytest.mark.parametrize("word,phase", [("WILDCARD WEEK", "WILDCARD"), ("DIVISIONAL WEEK", "DIVISIONAL"),
+                                         ("CHAMPIONSHIP SUNDAY", "CHAMPIONSHIP SUNDAY"), ("PRO BOWL WEEK", "PRO BOWL"),
+                                         ("SUPER BOWL", "SUPER BOWL"), ("STAFF WEEK", "STAFF"),
+                                         ("FREE AGENCY", "FREE AGENCY"), ("PRO DAY", "PRO DAY")])
+def test_read_header_postseason_and_offseason_phases(word, phase):
+    head = jobs.read_header(Frame(None, lines=["GAMEDAY", "MANAGE ROSTER", "COACHCENTRAL", word]))
+    assert head == {"year": None, "phase": phase, "week": None}
+
+
 def test_parse_target():
     assert jobs.parse_target("week 4") == ("week", 4)
     assert jobs.parse_target("Week4") == ("week", 4)
@@ -532,3 +541,80 @@ def test_save_tiles_follow_save_recency_and_find_the_index(tmp_path):
     assert order[-1] == "OLD" and order[0] == "MID"          # newest first
     assert jobs.tile_index("CAREER-NEW", tmp_path) == order.index("NEW")
     assert jobs.tile_index("CAREER-MISSING", tmp_path) is None
+
+
+# ---------------------------------------------------------------- advance (P2-03, one stop)
+def _advance(tmp_path, fake, **kw):
+    p = make_pilot(tmp_path, fake)
+    return p, jobs.advance(p, save="CAREER-TUNE-X", watcher=lambda: False,
+                           folder=tmp_path / "none", **kw)
+
+
+def test_advance_moves_exactly_one_stop_and_quits(tmp_path, notices):
+    fake, log = fake_madden(week=1)
+    _, out = _advance(tmp_path, fake)
+    assert out["status"] == "ok", out
+    assert (out["from"]["week"], out["to"]["week"]) == (1, 2)
+    assert out["quit"] and fake.screen == "FRANCHISE_LIST"
+    assert log.count("  key   space     ADVANCE_MENU on FORCE ADVANCE -> COACH_PROGRESS") == 1
+    assert "tab" not in fake.keys                                   # the autosave is the save
+
+
+def test_advance_in_place_from_a_loaded_hub_stays_in_the_franchise(tmp_path, notices):
+    fake, log = fake_madden(start="HUB_WEEKLY", week=3)
+    p = make_pilot(tmp_path, fake)
+    out = jobs.advance(p, save="CAREER-TUNE-X", franchise="TUNE-X", watcher=lambda: False,
+                       folder=tmp_path / "none", quit=False)
+    assert out["status"] == "ok" and out["to"]["week"] == 4
+    assert fake.screen == "HUB_WEEKLY" and out["quit"] is False
+    assert log.count("  key   space     ADVANCE_MENU on FORCE ADVANCE -> COACH_PROGRESS") == 1
+
+
+def test_advance_refuses_non_tune_in_place_or_while_the_watcher_runs(tmp_path, notices):
+    fake, log = fake_madden()
+    p = make_pilot(tmp_path, fake)
+    assert jobs.advance(p, save="CAREER-MU2026", watcher=lambda: False, folder=tmp_path)["status"] == "refused"
+    assert jobs.advance(p, save="CAREER-TUNE-X", franchise="MU2026", watcher=lambda: False,
+                        folder=tmp_path)["status"] == "refused"
+    assert jobs.advance(p, save="CAREER-TUNE-X", watcher=lambda: True, folder=tmp_path)["status"] == "refused"
+    assert fake.keys == [] and fake.looks == 0
+
+
+def test_advance_stops_unknown_off_a_hub(tmp_path, notices):
+    fake, _ = fake_madden(start="MAIN_MENU")
+    p = make_pilot(tmp_path, fake)
+    out = jobs.advance(p, save="CAREER-TUNE-X", franchise="TUNE-X", watcher=lambda: False,
+                       folder=tmp_path / "none")
+    assert out["status"] == "stopped" and out["kind"] == "Unknown"
+    assert "space" not in fake.keys
+
+
+# ---------------------------------------------------------------- loading the wrong save
+def test_the_tile_walk_steps_to_the_target_one_verified_press_at_a_time(tmp_path, notices):
+    # Madden orders tiles by the save's own date, so the pilot must not jump by the folder's
+    # order; it presses one arrow at a time and stops when the border is on the target.
+    fake, log = fake_madden(tiles=("TUNE-A", "TUNE-B", "TUNE-X"))
+    _, out = _sim(tmp_path, fake, to="week 2")
+    assert out["status"] == "ok", out
+    rights = [ln for ln in log if ln.startswith("  key   right") and "FRANCHISE_LIST" in ln]
+    assert len(rights) == 2 and fake.screen == "FRANCHISE_LIST"
+
+
+def test_load_refuses_when_the_hub_is_not_the_save_we_asked_for(tmp_path, notices, monkeypatch):
+    # the hub says 2026 WEEK 1 (the fake's header) but the file on disk is the 2028 season:
+    # exactly what a lost arrow press on CURRENT FRANCHISES produced on 2026-11-10.
+    monkeypatch.setattr(jobs, "_save_header", lambda path: {"year": 2028, "phase": "WEEK", "week": 1})
+    fake, log = fake_madden(week=1)
+    p = make_pilot(tmp_path, fake)
+    out = jobs.sim_season(p, save="CAREER-TUNE-X", to="week 2", watcher=lambda: False, folder=tmp_path / "none")
+    assert out["status"] == "stopped" and out["kind"] == "Stuck"
+    assert "refusing to sim the wrong save" in out["reason"]
+    assert log.count("  key   space     ADVANCE_MENU on FORCE ADVANCE -> COACH_PROGRESS") == 0
+
+
+def test_load_accepts_the_same_season_and_week(tmp_path, notices, monkeypatch):
+    monkeypatch.setattr(jobs, "_save_header", lambda path: {"year": 2026, "phase": "WEEK", "week": 1})
+    fake, _ = fake_madden(week=1)
+    p = make_pilot(tmp_path, fake)
+    out = jobs.sim_season(p, save="CAREER-TUNE-X", to="week 2", watcher=lambda: False, folder=tmp_path / "none")
+    assert out["status"] == "ok" and out["end_week"] == 2

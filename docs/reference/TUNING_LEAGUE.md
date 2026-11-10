@@ -155,12 +155,29 @@ The reasons:
 
 So a tuning season is a loop, not one long sim:
 
-1. Pilot: load the clone, advance to the next stop, savepoint, quit.
+1. Pilot: load the clone, **advance exactly one stop** (`python3 -m tools.madden_pilot advance --save
+   CAREER-TUNE-<run>`), let the autosave stand, quit.
 2. Mu: `watch_save --once --dsn madden_tune_<run> --no-articles` (watcher stopped, Madden closed). The league
-   office writes the stage's decisions into the save.
+   office writes the stage's decisions into the save. While Madden27.exe is open, run it with
+   `LEAGUE_OFFICE_FRANCHISE_CLOSED=1`.
 3. Pilot: reload the written save and advance one more stop.
 4. Repeat through the offseason; the regular season and playoffs can be simmed in one go up to the stop the
    pilot needs.
+
+`advance` is the loop's step: one advance press from the hub (FORCE ADVANCE + SIM AHEAD, or the offseason
+stage's own advance), the stop header read before and after, the autosave copied over the named save, then a
+quit to the franchise list. It refuses anything but `CAREER-TUNE-*` and refuses while the watcher runs.
+
+The whole season is one command (`engines/tuning/season_loop.py`, P2-05): clone, regular season, postseason,
+ingest, the stage loop above one stop at a time, then a season report scored against the real-NFL targets.
+
+```
+.venv/bin/python3 -m engines.tuning.season_loop --run p2c
+```
+
+It writes `data/tuning/seasons/p2c/` (pilot run dirs, `stop_NN/` per offseason stop, `snapshot.json`,
+`season_<year>.md|.json`, `run.json`). Use `--no-offseason` to stop after the postseason while the offseason
+screens are still being catalogued.
 
 Two places still belong to Madden inside that loop: the free-agency-week and UDFA live events must be skipped, and
 the draft screen only advances by simming the draft. The pilot sims the draft **after** Mu has written the picks,
