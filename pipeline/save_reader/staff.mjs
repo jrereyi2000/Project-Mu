@@ -57,6 +57,9 @@ const COACH_WEIGHT = 10;
 // The game's own "no portrait" value: both placeholder coach rows carry it, and a coach with no face of his own is
 // drawn as the default silhouette from it.
 const COACH_NO_PORTRAIT = 7999;
+// Team.DisplayName as the save spells it -> the key the static playbook maps use (the static maps follow Mu's
+// CITY_TO_TEAM names, which say FortyNiners). Every other team's DisplayName is already a key.
+const TEAM_BOOK_ALIASES = { '49ers': 'FortyNiners' };
 // A head coach's 3D model asset key, in the form all 32 real head coaches use ("BowlesTodd_C_PRO").
 const assetKey = profile => `${profile.first_name}${profile.last_name}_C_PRO`.replace(/[^A-Za-z0-9_]/g, '');
 
@@ -272,9 +275,20 @@ function teamUser(fuTable, teamTableId, teamRow, subject, outgoing) {
   return { error: 'no FranchiseUser row points at the team or is free to re-point' };
 }
 
+// The contract fields to write, or an empty object when the caller has none yet.
+//
+// A hire has no `staff_contracts` row at the moment the staff write runs: `staff_contracts_run.annual` files them,
+// and the league office only calls it after a written FREE_AGENCY write. Requiring a contract here refused every
+// OFFSEASON_START / RESIGN / FREE_AGENCY write — player moves included — and the annual step that would file the
+// contracts never ran, so it deadlocked (audit B1, 2026-11-10). An action without a contract still moves the seat and
+// sets TeamIndex / ContractStatus / Position, and the next catch-up write fills the Contract* fields once annual has
+// filed the deal.
 function contractSet(item, where, errors) {
   const contract = item?.contract;
-  if (!contract || typeof contract !== 'object') { errors.push(`${where}: needs a contract block`); return null; }
+  if (contract === undefined || contract === null) return {};
+  if (typeof contract !== 'object' || Array.isArray(contract)) {
+    errors.push(`${where}: contract must be an object`); return {};
+  }
   const out = { ContractLength: contract.ContractLength, ContractSalary: contract.ContractSalary ?? 0,
     ContractYearsRemaining: contract.ContractYearsRemaining ?? 0 };
   for (const k of Object.keys(contract)) {
@@ -592,8 +606,11 @@ export async function planStaff(franchise, staff = [], { freed = [] } = {}) {
     // Playbooks and schemes: static references. A team head coach uses its 16485 pair; coordinators use 16384.
     const staticRefs = {};
     // A profile with no playbook keeps the team's own, keyed by nickname ("Panthers"), which is what the static maps
-    // hold; ShortName is the abbreviation ("CAR") and is not a key.
-    const teamBook = team.record.NickName ?? team.record.DisplayName ?? null;
+    // hold; ShortName is the abbreviation ("CAR") and is not a key. DisplayName, not NickName: NickName is slang for
+    // nine teams ("G-Men", "Niners", "Pats", "Bolts", "Phins", "Jags", "Pack", "Vikes", "Bucs") and is not a map key
+    // (audit B2, 2026-11-10). San Francisco is the one DisplayName the map spells differently.
+    const displayName = team.record.DisplayName ?? null;
+    const teamBook = displayName == null ? null : (TEAM_BOOK_ALIASES[displayName] ?? displayName);
     const offName = profile.offensive_playbook ?? teamBook;
     const defName = profile.defensive_playbook ?? teamBook;
     if (offName != null) {
@@ -699,6 +716,18 @@ export async function planStaff(franchise, staff = [], { freed = [] } = {}) {
   }
 
   if (plan.creates.length) plan.nextPresentationId = nextPid;
+  // B8 (audit, 2026-11-10): a head coach moved to another team leaves his old team with no coach, and with no
+  // replacement in the same write that team loses its user — which is the state Madden's own firing leaves and the
+  // one Mu exists to avoid. Refuse it rather than write it.
+  for (const a of [...plan.assignments, ...plan.creates]) {
+    for (const stale of a.clearSeats ?? []) {
+      if (stale.key !== 'HeadCoach') continue;
+      if (!filledSeats.has(`${stale.team.teamIndex}:HeadCoach`)) {
+        errors.push(`${a.kind === 'create' ? `staff create ${a.key}` : `staff assign pgid ${a.pgid}`}: leaves `
+          + `${teamLabel(stale.team, stale.team.teamIndex)} without a head coach; fill that seat in the same write`);
+      }
+    }
+  }
   return { plan, errors };
 }
 

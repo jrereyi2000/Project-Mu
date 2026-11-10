@@ -154,6 +154,10 @@ MASTER_MOTIVATOR_TEMPLATE = "DevelopmentWizard"
 
 # Level from years coaching (plan D9: modest starting level; §5.2's medians rise with level). A coach gets
 # the level of the highest threshold at or below his years. Spans the observed 1-41.
+# D9: a created coach starts at a modest Madden level and grows later through coach progression (out of scope).
+# The table's long-career tail reaches 41; start level is capped so an invented hire never begins near a
+# veteran's level (audit B6, 2026-11-10).
+COACH_START_LEVEL_MAX = 12
 LEVEL_BY_YEARS = (
     (0, 1), (2, 2), (5, 3), (8, 4), (11, 5), (14, 6), (18, 8), (22, 10),
     (26, 12), (30, 15), (35, 19), (40, 24), (45, 30), (50, 36), (55, 41),
@@ -397,7 +401,7 @@ def _level(years):
     for threshold, value in LEVEL_BY_YEARS:
         if years >= threshold:
             level = value
-    return _clamp(level, 1, 41)
+    return _clamp(level, 1, COACH_START_LEVEL_MAX)
 
 
 def _talents(archetype, level):

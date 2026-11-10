@@ -147,12 +147,17 @@ def mark_installed(cur, season, dry_run=False, dds_root=DDS_COACHES_DIR, log_fn=
     return {"season": season, "installed": installed, "manifest": str(manifest), "dry_run": False}
 
 
+# The `mark_installed` parameter of run_pack shadows the function of the same name (audit B5, 2026-11-10); the
+# function keeps its public name because tests and callers use it, and run_pack reaches it through this alias.
+_MARK_INSTALLED = mark_installed
+
+
 def run_pack(cur, season, dry_run=False, mark_installed=False, dds_root=DDS_COACHES_DIR, log_fn=print):
     """Assign free portrait IDs to the GENERATED coaches, write the pack's manifest and DDS copies, and move the
     profiles to PACKED. `dry_run` reads and prints only. `mark_installed` runs the INSTALLED step instead."""
     dds_root = Path(dds_root)
     if mark_installed:
-        return mark_installed(cur, season, dry_run=dry_run, dds_root=dds_root, log_fn=log_fn)
+        return _MARK_INSTALLED(cur, season, dry_run=dry_run, dds_root=dds_root, log_fn=log_fn)
 
     cur.execute(_GENERATED_QUERY)
     rows = [dict(zip(("person_kind", "person_id", "portrait_id"), row)) for row in cur.fetchall()]

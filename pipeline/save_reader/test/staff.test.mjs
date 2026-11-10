@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { decodeRef, encodeRef, NO_REF } from '../lib.mjs';
-import { applyStaff, planStaff, staffSummary, verifyStaff } from '../staff.mjs';
+import { applyStaff, OFF_PLAYBOOK_ROWS, planStaff, staffSummary, verifyStaff } from '../staff.mjs';
 
 const COACH = 4168, TEAM = 5934, FRANCHISE_USER = 5000;
 const VISUALS = 4215, COACHING_TALENTS = 4304, TALENT_ARRAY = 5713;
@@ -468,8 +468,11 @@ test('a poached move clears the old team seat with no release edit', async () =>
 
 test('a retread head coach moves teams and the target user follows him', async () => {
   const f = fixture();
-  const result = await planStaff(f.franchise, [{ action: 'assign', pgid: 100, team_index: 2,
-    position: 'HeadCoach', contract: CONTRACT }]);
+  // B8: a head coach moved away must have his old seat filled in the same write, or that team loses its user.
+  const result = await planStaff(f.franchise, [
+    { action: 'assign', pgid: 100, team_index: 2, position: 'HeadCoach', contract: CONTRACT },
+    { action: 'assign', pgid: 200, team_index: 0, position: 'HeadCoach', contract: CONTRACT },
+  ]);
   assert.deepEqual(result.errors, []);
   await applyStaff(result.plan);
   assert.deepEqual(await verifyStaff(f.franchise, result.plan), []);
@@ -481,7 +484,8 @@ test('a retread head coach moves teams and the target user follows him', async (
   assert.deepEqual(decodeRef(f.users.records[2].UserEntity), seat, 'the target team user points at him');
   assert.deepEqual(decodeRef(f.users.records[2].Team), { table: TEAM, row: 2 });
   assert.equal(f.coach.records[0].IsUserControlled, true);
-  assert.equal(f.team.records[0].HeadCoach, NO_REF, 'the old team seat is cleared');
+  assert.deepEqual(decodeRef(f.team.records[0].HeadCoach), { table: COACH, row: 3 },
+    'the old team seat is refilled by the replacement in this write');
 });
 
 test('two head coaches swapping teams are both treated as vacating, and stale clears do not undo fills', async () => {
@@ -510,8 +514,10 @@ test('a head-coach assign re-points an orphaned user row when the team has none'
   // Madden's own firing state: team 2's user row lost its Team, and the man it followed is a free agent.
   f.users.records[2].Team = NO_REF;
   f.users.records[2].UserEntity = encodeRef(COACH, 4);
-  const result = await planStaff(f.franchise, [{ action: 'assign', pgid: 100, team_index: 2,
-    position: 'HeadCoach', contract: CONTRACT }]);
+  const result = await planStaff(f.franchise, [
+    { action: 'assign', pgid: 100, team_index: 2, position: 'HeadCoach', contract: CONTRACT },
+    { action: 'assign', pgid: 200, team_index: 0, position: 'HeadCoach', contract: CONTRACT },
+  ]);
   assert.deepEqual(result.errors, []);
   await applyStaff(result.plan);
   assert.deepEqual(await verifyStaff(f.franchise, result.plan), []);
@@ -560,4 +566,36 @@ test('the read-back catches a mismatch', async () => {
   await applyStaff(hc.plan);
   f.team.records[1].UserCharacter = NO_REF;
   assert.match((await verifyStaff(f.franchise, hc.plan)).join('\n'), /Team\.UserCharacter is not the head coach/);
+});
+
+
+test('every team resolves to a static playbook row (audit B2)', async () => {
+  // Team.DisplayName is the nickname for all 32 teams, except San Francisco, whose DisplayName is "49ers" and whose
+  // static map key is "FortyNiners". NickName is slang for nine teams ("G-Men", "Niners", "Pats") and is not a key;
+  // using it refused the whole write for those teams.
+  const displayNames = ['Bears', 'Bengals', 'Bills', 'Broncos', 'Browns', 'Buccaneers', 'Cardinals', 'Chargers',
+    'Chiefs', 'Colts', 'Cowboys', 'Dolphins', 'Eagles', 'Falcons', '49ers', 'Giants', 'Jaguars', 'Jets', 'Lions',
+    'Packers', 'Panthers', 'Patriots', 'Raiders', 'Rams', 'Ravens', 'Commanders', 'Saints', 'Seahawks', 'Steelers',
+    'Titans', 'Vikings', 'Texans'];
+  const aliases = { '49ers': 'FortyNiners' };
+  for (const name of displayNames) {
+    const key = aliases[name] ?? name;
+    assert.ok(key in OFF_PLAYBOOK_ROWS, `${name} -> ${key} is not a static playbook row`);
+  }
+  assert.equal(new Set(Object.keys(OFF_PLAYBOOK_ROWS).filter(k => !/^Balanced|^Pistol/.test(k))).size >= 32, true);
+});
+
+
+test('an action with no contract block is accepted and leaves the contract fields alone (audit B1)', async () => {
+  // At OFFSEASON_START a hire has no staff_contracts row yet: staff_contracts_run.annual files it only after a
+  // written FREE_AGENCY write. Requiring a contract here refused every early-offseason write, player moves included.
+  const f = fixture();
+  const before = f.coach.records[3].ContractLength;
+  const result = await planStaff(f.franchise, [{ action: 'assign', pgid: 200, team_index: 2,
+    position: 'HeadCoach' }]);
+  assert.deepEqual(result.errors, []);
+  await applyStaff(result.plan);
+  assert.deepEqual(await verifyStaff(f.franchise, result.plan), []);
+  assert.deepEqual(decodeRef(f.team.records[2].HeadCoach), { table: COACH, row: 3 });
+  assert.equal(f.coach.records[3].ContractLength, before, 'the contract fields are left for a later write');
 });

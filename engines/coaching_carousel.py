@@ -714,7 +714,7 @@ def _mapped_playbook(value):
 
 
 def _store_created_profile(cur, person_id, name, role, *, slant=None, scheme=None, playbook=None, tendencies=None,
-                           sliders=None, background=None):
+                           sliders=None, background=None, promote_from=None):
     """Store the CREATED `coach_madden_profiles` row for one invented coach/coordinator (§2.4, U5).
 
     One call and one insert per invented person, inside the caller's transaction. The seed is
@@ -724,6 +724,16 @@ def _store_created_profile(cur, person_id, name, role, *, slant=None, scheme=Non
     """
     if not _table_exists(cur, "coach_madden_profiles"):
         return None
+    # D2: a poached coordinator promoted to head coach is the same person, and must keep his own record. Move his
+    # existing profile onto the coach identity instead of inventing a second person — otherwise the staff write creates
+    # a new Madden coach, releases his real record, and D8 later retires it (audit B3, 2026-11-10).
+    if promote_from is not None:
+        cur.execute("""UPDATE coach_madden_profiles
+                          SET person_kind = 'COACH', person_id = %s, position = %s
+                        WHERE person_kind = 'COORD' AND person_id = %s
+                    RETURNING id""", (person_id, "HeadCoach", promote_from))
+        if cur.fetchone():
+            return None
     coach_key = f"{'coach' if role == 'HC' else 'coord'}-{person_id}"
     row = cmp.build_profile({"name": name, "id": person_id}, role, slant=slant, scheme=scheme, playbook=playbook,
                             tendencies=tendencies or {}, sliders=sliders or {}, background=background,
@@ -1104,7 +1114,8 @@ def hiring_cycle(cur, season, log=print, personality=None):
                                    scheme={"offensive": off, "defensive": de},
                                    playbook={"offensive": _mapped_playbook(oc.get("playbook")),
                                              "defensive": _mapped_playbook(dc.get("playbook"))},
-                                   tendencies=tend)
+                                   tendencies=tend,
+                                   promote_from=c.get("coordinator_id") if c.get("kind") == "POACHED" else None)
         cur.execute("INSERT INTO coach_tenures (coach_id, team_id, start_season) VALUES (%s, %s, %s)",
                     (coach_id, tid, nxt))
         src = c["kind"]
