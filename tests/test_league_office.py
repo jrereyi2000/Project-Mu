@@ -1586,12 +1586,13 @@ def test_window_reports_a_late_native_without_a_proof():
     assert w["restored"] == [] and [b["pgid"] for b in w["blocked"]] == [2]
     assert w["blocked"][0]["reasons"] == ["authority_missing"] and w["decided_retired"] == [9]
     assert "players" not in p["edits"] or all(e["pgid"] != 2 for e in p["edits"]["players"])
+    assert "sign" not in p["edits"] and "release" not in p["edits"]
     assert {r["player_id"]: (r["mu_keep"], r["reason"]) for r in p["db"]["retirements"]} == {
         pid(2): (False, "window:blocked:RESIGN:authority_missing")}
     assert any("not restored" in x for x in p["warnings"])
 
 
-def test_window_restores_a_late_native_with_a_proof_and_keeps_him_out_of_free_agency():
+def test_window_restores_a_late_native_with_a_proof_as_a_free_agent():
     snap = snapshot("OffSeason", "OffSeason", 3, 2, players=[
         player(1, 0), player(4, 32, status="Retired", ovr=78), player(5, 32, status="FreeAgent", ovr=60)])
     c = {"length": 2, "current_year": 0, "salary_by_year": [3_000_000, 3_000_000], "bonus_by_year": [0, 0]}
@@ -1607,17 +1608,55 @@ def test_window_restores_a_late_native_with_a_proof_and_keeps_him_out_of_free_ag
     assert {e["pgid"]: e["set"] for e in p["edits"]["players"]}[4] == {"ContractStatus": "FreeAgent", "TeamIndex": 32}
     assert not p["edits"].get("sign")                          # not signed in the same write
     assert w["roster_image"]["4"] == ["FreeAgent", 32]
-    assert p["summary"]["window_restored"] == 1
+    assert w["restored"][0]["restore"] == "free_agent"
+    assert p["summary"]["window_restored"] == 1 and p["summary"]["window_free_agent"] == 1
     assert {r["player_id"]: r["reason"] for r in p["db"]["retirements"]} == {pid(4): "window:restored:FREE_AGENCY"}
 
 
-def test_window_restores_baseline_team_and_flags_user_team():
+def test_window_restore_uses_the_free_agent_flip_and_flags_user_team():
     snap = resign_snap([player(1, 0), player(2, 0, status="Retired"), player(3, 1)])
     p = plan("RESIGN", snap, window_deps(snap, decision=DECISION, prior=PRIOR, proof=PROOF, users={CHI}))
     w = p["summary"]["retirement_window"]
     assert w["restored"][0]["baseline"] == {"status": "Signed", "team_index": 0} and w["restored"][0]["user_team"]
-    assert {e["pgid"]: e["set"] for e in p["edits"]["players"]}[2] == {"ContractStatus": "Signed", "TeamIndex": 0}
-    assert w["roster_image"]["2"] == ["Signed", 0]
+    assert w["restored"][0]["restore"] == "free_agent"
+    # the baseline team is the authorization input, not the written target: the restore flips him to FreeAgent/32
+    assert {e["pgid"]: e["set"] for e in p["edits"]["players"]}[2] == {"ContractStatus": "FreeAgent", "TeamIndex": 32}
+    assert w["roster_image"]["2"] == ["FreeAgent", 32]
+    assert p["summary"]["window_restored"] == 1 and p["summary"]["window_free_agent"] == 1
+
+
+def test_the_next_run_signs_a_restored_free_agent_with_his_stored_contract():
+    snap = resign_snap([player(1, 0), player(8, 32, status="FreeAgent")])
+    c = contract(length=2, cur=0, sal=(3_000_000, 4_000_000), bon=(0, 0))
+    deps = window_deps(snap, decision=DECISION, prior=PRIOR, kept={pid(8)}, stored={pid(8): (c, SEASON, CHI)})
+    p = plan("RESIGN", snap, deps)
+    sign = p["edits"]["sign"]
+    assert len(sign) == 1 and sign[0]["pgid"] == 8 and sign[0]["team_index"] == 0 and sign[0]["list"] == "Roster"
+    # y = target (SEASON + 1) - start (SEASON) = 1, so the last year of the two-year deal comes back; the sign
+    # is queued at the stage's offset (the coming league year), hence an empty year 0 ahead of it
+    block = sign[0]["contract"]
+    assert block["Length"] == 2 and block["SalaryYear0"] == 0 and block["SalaryYear1"] == 400
+    assert block["SalaryYear2"] == 0
+    assert p["summary"]["restored_retirees"] == 1
+    assert not any("no_restorable_contract" in w for w in p["warnings"])
+
+
+def test_a_kept_retiree_without_a_stored_contract_stays_a_free_agent_and_warns():
+    snap = resign_snap([player(1, 0), player(8, 32, status="FreeAgent")])
+    p = plan("RESIGN", snap, window_deps(snap, decision=DECISION, prior=PRIOR, kept={pid(8)}))
+    assert not p["edits"].get("sign")
+    assert any("no_restorable_contract" in w for w in p["warnings"])
+    assert p["summary"].get("restored_retirees", 0) == 0
+
+
+def test_a_cutdown_restore_signs_but_warns_it_lands_after_the_purge():
+    snap = snapshot("PreSeason", "PreSeason", 3, players=[player(1, 0), player(8, 32, status="FreeAgent")])
+    c = contract(length=2, cur=0, sal=(3_000_000, 4_000_000), bon=(0, 0))
+    p = plan("CUTDOWN", snap, window_deps(snap, decision=DECISION, prior=PRIOR, kept={pid(8)},
+                                          stored={pid(8): (c, SEASON, CHI)}))
+    assert [s["pgid"] for s in p["edits"]["sign"]] == [8]
+    assert p["summary"]["restored_retirees"] == 1
+    assert any("restore_at_last_stop" in w for w in p["warnings"])
 
 
 def test_window_conflicts_vanished_and_reason_prefixes():
@@ -1649,8 +1688,10 @@ def test_decision_stage_keep_uses_the_baseline_team_with_a_proof():
     p = plan("OFFSEASON_START", snap, window_deps(snap, prior={"1": ["Signed", 0], "8": ["Signed", 1]},
                                                   prior_stop="PLAYOFF_WEEK", proof=PROOF))
     w = p["summary"]["retirement_window"]
-    assert {e["pgid"]: e["set"] for e in p["edits"]["players"]}[8] == {"ContractStatus": "Signed", "TeamIndex": 1}
-    assert [r["pgid"] for r in w["restored"]] == [8] and w["roster_image"]["8"] == ["Signed", 1]
+    # the proven keep restores by the same free-agent flip as the legacy writer: no baseline-team edit
+    assert {e["pgid"]: e["set"] for e in p["edits"]["players"]}[8] == {"ContractStatus": "FreeAgent", "TeamIndex": 32}
+    assert [r["pgid"] for r in w["restored"]] == [8] and w["roster_image"]["8"] == ["FreeAgent", 32]
+    assert w["restored"][0]["restore"] == "free_agent"
     # a proof that does not cover the decision stage falls back to the legacy free-agent writer
     uncovered = dict(PROOF, stages=["RESIGN"])
     p = plan("OFFSEASON_START", snap, window_deps(snap, prior={"8": ["Signed", 1]}, proof=uncovered))
