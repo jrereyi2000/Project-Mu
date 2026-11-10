@@ -76,6 +76,14 @@ def test_teacher_trait_makes_a_development_wizard():
 
 # ------------------------------------------------------------------------------------ mappings raise ---
 
+def test_every_team_nickname_playbook_maps():
+    """`<Nickname> Offense/Defense` is the form the coaching carousel's staff rows use, so every team's nickname must
+    map too — a NULL playbook would leave a created coach's record incomplete."""
+    for nickname in cmp.CITY_TO_TEAM.values():
+        for side in ("Offense", "Defense"):
+            assert cmp.PLAYBOOK_MAP[f"{nickname} {side}"] == nickname
+
+
 def test_an_unmapped_playbook_raises_and_names_the_value():
     with pytest.raises(ValueError, match="London Offense"):
         build(playbook={"offensive": "London Offense"})

@@ -86,8 +86,8 @@ GENERIC_HEAD_ASSETS = (
     "coachhead_M_0188_HS",
 )
 
-# Mu's playbook vocabulary is `<City> Offense` / `<City> Defense` for these 32 cities (§7.1); the clean
-# database and `engines/coordinator_seeder.py` also use six unambiguous nickname forms, mapped below.
+# Mu's playbook vocabulary is `<City> Offense` / `<City> Defense` for these 32 cities (§7.1), and the coaching
+# carousel's own staff rows use the `<Nickname> Offense` / `<Nickname> Defense` form, so both are accepted below.
 CITY_TO_TEAM = {
     "Arizona": "Cardinals", "Atlanta": "Falcons", "Baltimore": "Ravens", "Buffalo": "Bills",
     "Carolina": "Panthers", "Chicago": "Bears", "Cincinnati": "Bengals", "Cleveland": "Browns",
@@ -98,17 +98,9 @@ CITY_TO_TEAM = {
     "New Orleans": "Saints", "Philadelphia": "Eagles", "Pittsburgh": "Steelers", "San Francisco": "FortyNiners",
     "Seattle": "Seahawks", "Tampa Bay": "Buccaneers", "Tennessee": "Titans", "Washington": "Commanders",
 }
-PLAYBOOK_MAP = {f"{city} {side}": team
-                for city, team in CITY_TO_TEAM.items()
+PLAYBOOK_MAP = {f"{place} {side}": team
+                for place, team in (*CITY_TO_TEAM.items(), *((t, t) for t in CITY_TO_TEAM.values()))
                 for side in ("Offense", "Defense")}
-PLAYBOOK_MAP.update({
-    "Colts Offense": "Colts",
-    "Dolphins Offense": "Dolphins",
-    "Jets Offense": "Jets",
-    "Packers Offense": "Packers",
-    "Titans Offense": "Titans",
-    "Titans Defense": "Titans",
-})
 
 # Mu scheme name -> Madden BaseScheme member (§7.2 `SCHEME_MAP`). Madden has no Erhardt-Perkins member, so it is
 # mapped to MultiplePowerRun: that is what the save itself gives two of its four real Erhardt-Perkins coaches
