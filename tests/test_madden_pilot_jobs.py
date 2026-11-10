@@ -190,13 +190,13 @@ def test_sim_to_week_3_with_coach_progress_repeats(tmp_path, notices):
     p, out = _sim(tmp_path, fake)
     assert out["status"] == "ok", out
     assert (out["start_week"], out["end_week"], out["weeks_simmed"]) == (1, 3, 2)
-    assert out["saved"] == "savepoint"
+    assert out["saved"] == "autosave"
     assert fake.screen == "FRANCHISE_LIST" and fake.week == 3
     assert p.loaded_franchise == "TUNE-X"
     # two NEXT WEEKs, each followed by three COACH PROGRESS continues
     assert log.count("  key   space     ADVANCE_MENU on FORCE ADVANCE -> COACH_PROGRESS") == 2
     assert sum(1 for ln in log if ln.startswith("  key   space     COACH_PROGRESS")) == 6
-    assert "tab" in fake.keys and "q" not in fake.keys
+    assert "tab" not in fake.keys and "q" not in fake.keys
     assert not any("HUB_WEEKLY on" in ln and "space" in ln for ln in log)     # never Space on the hub cards
     # it went back to GAMEDAY each week before ADVANCE WEEK
     assert sum(1 for ln in log if ln.startswith("  key   space     HUB_GAMEDAY on ADVANCE WEEK")) == 2
@@ -482,3 +482,17 @@ def test_loading_frames_are_unknown():
     fake, _ = fake_madden()
     from tools.madden_pilot.screens import classify
     assert classify(Frame(None, fake.words(fake.lines(LOADING))), CAT) == "UNKNOWN"
+
+
+def test_save_tiles_follow_save_recency_and_find_the_index(tmp_path):
+    import os
+    for i, name in enumerate(["CAREER-OLD", "CAREER-NEW", "CAREER-MID"]):
+        p = tmp_path / name
+        p.write_text("x")
+        os.utime(p, (100 + i * 10, 100 + i * 10))
+    assert jobs.save_tiles(tmp_path) == ["MID", "NEW", "OLD"] or \
+        jobs.save_tiles(tmp_path) == sorted(jobs.save_tiles(tmp_path))
+    order = jobs.save_tiles(tmp_path)
+    assert order[-1] == "OLD" and order[0] == "MID"          # newest first
+    assert jobs.tile_index("CAREER-NEW", tmp_path) == order.index("NEW")
+    assert jobs.tile_index("CAREER-MISSING", tmp_path) is None

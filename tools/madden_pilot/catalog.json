@@ -77,6 +77,57 @@
         ]
       }
     },
+    "SAVEPOINT_OVERWRITE": {
+      "note": "Seen 2026-11-10 (P2-02): after choosing an existing save in SAVEPOINT_DIALOG, FILE OPERATION asks 'Are you sure you want to overwrite TUNE-P2A in System Storage?' with NO selected.",
+      "all": [
+        "FILE OPERATION"
+      ],
+      "any": [
+        "OVERWRITE"
+      ],
+      "none": [],
+      "options": [
+        "YES",
+        "NO"
+      ],
+      "default": "NO",
+      "nav": "vertical",
+      "highlight": "border",
+      "confirm_ok": [
+        "YES"
+      ],
+      "todo": false,
+      "exits": {}
+    },
+    "SAVEPOINT_DIALOG": {
+      "note": "Seen 2026-11-10 (P2-02): Tab (Create Savepoint) opens a SAVE AS list \u2014 FILE NAME / DATE / TYPE, 'NEW...' selected at the top and the saves newest first below (matching the folder's mtime order). Select a TUNE-* name to overwrite it, or NEW... to type a new one (the name entry dialog is not catalogued yet). Space saves, Backspace backs out.",
+      "all": [
+        "FILE NAME",
+        "DATE",
+        "TYPE"
+      ],
+      "any": [],
+      "none": [],
+      "options": [
+        "NEW..."
+      ],
+      "default": "NEW...",
+      "nav": "vertical",
+      "highlight": null,
+      "confirm_ok": [
+        "TUNE-*",
+        "NEW..."
+      ],
+      "todo": false,
+      "exits": {
+        "HUB_WEEKLY": [
+          [
+            "back",
+            1
+          ]
+        ]
+      }
+    },
     "PROGRESSION_WARNING": {
       "note": "Spike b6: loading a franchise offline. Drawn over CURRENT FRANCHISES, so it comes before FRANCHISE_LIST. Proceed is highlighted on arrival; the franchise loads in about 25 s.",
       "all": [
@@ -230,12 +281,12 @@
     "ADVANCE_MENU": {
       "note": "Spike b9, revisited for the all-user league 2026-11-10 (P2-01): Space on ADVANCE WEEK opens READY TO ADVANCE / FORCE ADVANCE, then JUMP AHEAD / SIM TO MIDSEASON. With all 32 teams user-controlled READY TO ADVANCE cannot run the week; one Down then Space on FORCE ADVANCE does (JR). The menu draws over GAMEDAY, so HUB_GAMEDAY and HUB_WEEKLY exclude READY TO ADVANCE.",
       "all": [
-        "READY TO ADVANCE"
+        "FORCE ADVANCE"
       ],
       "any": [
-        "FORCE ADVANCE",
-        "JUMP AHEAD",
+        "READY TO ADVANCE",
         "SIM TO MIDSEASON",
+        "JUMP AHEAD",
         "NEXT WEEK"
       ],
       "none": [],
@@ -340,7 +391,9 @@
         "MATCHUP"
       ],
       "none": [
-        "READY TO ADVANCE"
+        "READY TO ADVANCE",
+        "FORCE ADVANCE",
+        "SIM TO MIDSEASON"
       ],
       "options": [
         "WEEKLY RECAP",
@@ -426,12 +479,28 @@
         "DELEGATE",
         "2026 WEEK",
         "VIEW PLAYOFF",
-        "WILDCARD"
+        "WILDCARD",
+        "PRO BOWL",
+        "SUPER BOWL",
+        "STAFF WEEK",
+        "STAFF",
+        "RE-SIGN",
+        "RESIGN",
+        "FREE AGENCY",
+        "COMBINE",
+        "PRO DAY",
+        "DRAFT",
+        "UDFA",
+        "CUTDOWN",
+        "PRESEASON",
+        "OFFSEASON"
       ],
       "none": [
         "CURRENT FRANCHISES",
         "PROGRESSION WARNING",
-        "READY TO ADVANCE"
+        "READY TO ADVANCE",
+        "FORCE ADVANCE",
+        "SIM TO MIDSEASON"
       ],
       "nav": "horizontal",
       "highlight": "border",
@@ -439,7 +508,8 @@
       "forbidden_confirm": true,
       "never_select": true,
       "forbidden_keys": [
-        "q"
+        "q",
+        "tab"
       ],
       "exits": {
         "HUB_GAMEDAY": [
@@ -488,12 +558,11 @@
     "FRANCHISE_LANDING": {
       "note": "Seen 2026-11-10 (P2-01, full-screen capture after the driver was made DPI-aware): the Franchise mode page with three cards. CONTINUE is selected on arrival and resumes the last-played save; Right then Space on CREATE / LOAD opens CURRENT FRANCHISES (JR: 'it needs to go right ... hit Create and Load, not Continue'). The border reader picks CONTINUE correctly on arrival.",
       "all": [
-        "FRANCHISE",
-        "CONTINUE"
+        "FRANCHISE"
       ],
       "any": [
-        "CREATE/LOAD",
-        "CREATE / LOAD",
+        "CONTINUE",
+        "CREATE",
         "SEARCH"
       ],
       "none": [
@@ -541,7 +610,9 @@
         "CURRENT FRANCHISES",
         "GAMEDAY",
         "COACH CENTRAL",
-        "WEEKLY HUB"
+        "WEEKLY HUB",
+        "CONTINUE",
+        "CREATE"
       ],
       "highlight": "border",
       "confirm_ok": [

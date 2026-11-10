@@ -346,10 +346,17 @@ async function readStatRows(tables, bits, gameRowByRef, teamOfRef) {
     const s = t?.records[item.row];
     if (!s || s.isEmpty) continue;
     const names = fieldNames(s);
-    const entry = { kind: STAT_KINDS[t.name] ?? t.name, table: t.name };
-    if (names.includes('SeasonGame')) entry.game_row = gameRowByRef(s.SeasonGame);
-    if (names.includes('OpposingTeam')) entry.opponent_team_index = teamOfRef(s.OpposingTeam);
-    entry.stats = plainFields(s, names, STAT_REF_FIELDS);
+    let entry;
+    try {
+      entry = { kind: STAT_KINDS[t.name] ?? t.name, table: t.name };
+      if (names.includes('SeasonGame')) entry.game_row = gameRowByRef(s.SeasonGame);
+      if (names.includes('OpposingTeam')) entry.opponent_team_index = teamOfRef(s.OpposingTeam);
+      entry.stats = plainFields(s, names, STAT_REF_FIELDS);
+    } catch {
+      // A degenerate row (a reference field with no bytes behind it, seen in a postseason
+      // autosave 2026-11-10) must not fail the whole save: skip that row.
+      continue;
+    }
     rows.push(entry);
   }
   return rows;

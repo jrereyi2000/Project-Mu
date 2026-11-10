@@ -52,7 +52,14 @@ SIM_TIMEOUT = 240                  # seconds for one NEXT WEEK (spike: under 20 
 LOAD_TIMEOUT = 120                 # seconds for a franchise to load (spike: about 25 s)
 LAUNCH_TIMEOUT = 300               # seconds for Madden's window and first menu
 # Header words that mean the season moved past the playoffs (todo: not seen yet; guesses).
-OFFSEASON_WORDS = ("OFFSEASON", "RE-SIGN", "RESIGN", "FREE AGENCY", "DRAFT")
+OFFSEASON_WORDS = ("OFFSEASON", "STAFF", "RE-SIGN", "RESIGN", "FREE AGENCY", "COMBINE", "PRO DAY",
+                   "DRAFT", "UDFA", "CUTDOWN", "PRESEASON")
+
+# Standalone phase lines, highest priority first: an offseason stop must win over a card that
+# happens to say "SUPER BOWL THRILLER" (P2-02, 2026-11-10).
+PHASE_WORDS = ("STAFF WEEK", "STAFF", "RE-SIGN", "RESIGN", "FREE AGENCY", "COMBINE", "PRO DAY", "DRAFT",
+               "UDFA", "CUTDOWN", "PRESEASON", "OFFSEASON", "PRO BOWL", "SUPER BOWL",
+               "CONFERENCE CHAMPIONSHIP", "DIVISIONAL", "WILDCARD")
 
 # "2026. WEEK 1" (OCR reads 1 as I or l, and may drop the space: "WEEKI")
 _WEEK_RE = re.compile(r"\b(20\d\d)\s*[.:,]?\s*WEEK\s*([0-9IL|!O]{1,2})\b")
@@ -111,15 +118,13 @@ def read_header(frame):
         m = _PHASE_RE.search(str(line).upper())
         if m:
             return {"year": int(m.group(1)), "phase": norm(m.group(2)), "week": None}
-    # The postseason header may carry no year ("WILDCARD WEEK"): recognise the phase alone.
-    for line in frame.lines:
-        u = norm(line)
-        if len(u.split()) > 4:
-            continue
-        for word in ("WILDCARD", "WILD CARD", "DIVISIONAL", "CONFERENCE CHAMPIONSHIP", "SUPER BOWL",
-                     "PRO BOWL", "OFFSEASON"):
-            if word in u:
-                return {"year": None, "phase": word, "week": None}
+    # The postseason/offseason header may carry no year ("WILDCARD WEEK", "STAFF WEEK").
+    for word in PHASE_WORDS:
+        for line in frame.lines:
+            u = norm(line)
+            if len(u.split()) <= 4 and word in u:
+                phase = "STAFF" if word == "STAFF WEEK" else word
+                return {"year": None, "phase": phase, "week": None}
     return None
 
 
@@ -332,18 +337,54 @@ def _week_now(pilot, allow_unreadable=False):
     return head
 
 
-def _save_week(save_path):
-    """The save's current week from the save file (the fallback when the hub shows BYE WEEK)."""
+def _snapshot(save_path):
     import tempfile
     from pipeline.watch_save import snapshot_save
-    from pipeline.load_save import current_week
     folder = tempfile.mkdtemp(prefix="pilot_week_")
     try:
         snap = snapshot_save(str(save_path), folder)
         with open(snap) as fh:
-            return current_week(json.load(fh))
+            return json.load(fh)
     finally:
         shutil.rmtree(folder, ignore_errors=True)
+
+
+def _save_week(save_path):
+    """The save's current week from the save file (the fallback when the hub shows BYE WEEK)."""
+    from pipeline.load_save import current_week
+    try:
+        return current_week(_snapshot(save_path))
+    except Exception:  # noqa: BLE001 - a fallback; the hub header remains the first source
+        return None
+
+
+PLAYOFF_PHASES = {"wildcardplayoff": "WILDCARD", "divisionalplayoff": "DIVISIONAL",
+                  "conferenceplayoff": "CONFERENCE", "conferencechampionship": "CONFERENCE",
+                  "superbowl": "SUPER BOWL", "preseason": "PRESEASON"}
+
+
+def _save_header(save_path):
+    """The save's own week/phase (the fallback when the postseason hub shows no header at all)."""
+    from pipeline.load_save import current_week
+    try:
+        snap = _snapshot(save_path)
+    except Exception:  # noqa: BLE001
+        return None
+    s = snap.get("season") or {}
+    year = s.get("calendar_year")
+    if str(s.get("stage") or "").lower() == "offseason":
+        return {"year": year, "phase": "OFFSEASON", "week": None}
+    week = current_week(snap)
+    if week is not None:
+        return {"year": year, "phase": "WEEK", "week": week}
+    wt = str(s.get("week_type") or "")
+    if wt:
+        return {"year": year, "phase": PLAYOFF_PHASES.get(wt.lower(), wt.upper()), "week": None}
+    return None
+
+
+def _latest_save(save_path, auto_path):
+    return auto_path if (auto_path.is_file() and (_mtime(auto_path) or 0) > (_mtime(save_path) or 0)) else save_path
 
 
 def _settled_highlight(pilot, options, tries=8, wait=0.5):
@@ -413,12 +454,38 @@ def _done(kind, n, head):
     return head["phase"] != "WEEK" and any(w in head["phase"] for w in OFFSEASON_WORDS)
 
 
-def _load_franchise(pilot, tile):
+def save_tiles(folder=None):
+    """The franchise list's tiles in Madden's order: save files newest first, name minus CAREER-.
+
+    Autosaves are tiles of their own. JR, 2026-11-10: the list is ordered by save recency, so the
+    position of a wanted tile is computable from the saves folder."""
+    folder = Path(folder) if folder else saves_dir()
+    files = [p for p in folder.glob(CAREER_PREFIX + "*") if p.is_file()]
+    files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    return [tile_name(p.name) for p in files]
+
+
+def tile_index(save, folder=None):
+    """The 0-based position of `save`'s tile in the franchise list, or None when it isn't there."""
+    try:
+        return save_tiles(folder).index(tile_name(save))
+    except ValueError:
+        return None
+
+
+def _load_franchise(pilot, tile, save=None, folder=None):
     # Title -> main menu and the franchise load are long UNKNOWN splashes offline; goto's default
     # 20-look UNKNOWN limit (about 40 s) is too short for them.
     with patience(pilot, 180, 1.0):
         pilot.goto("FRANCHISE_LIST")
-    pilot.highlight(tile)
+    # The list opens on the newest tile; press Right to the wanted tile's computed position, then
+    # fall back to the OCR walk if the border doesn't land where the folder order says.
+    index = tile_index(save or tile, folder)
+    if index:
+        pilot.press("right", times=index)
+        pilot.look()
+    if index is None or pilot.highlighted(labels=[tile]) != tile:
+        pilot.highlight(tile)
     pilot.confirm_on("FRANCHISE_LIST", tile)
     # the dialog may take a moment; CURRENT FRANCHISES stays behind it and behind the loading frames
     _, screen = wait_known(pilot, ["PROGRESSION_WARNING", *HUBS], 60)
@@ -428,16 +495,10 @@ def _load_franchise(pilot, tile):
         wait_known(pilot, list(HUBS), LOAD_TIMEOUT)
 
 
-def _savepoint(pilot):
-    """Tab (Create Savepoint) on the Weekly Hub, when the catalog has the key. What follows Tab
-    isn't catalogued yet: the pilot waits for the hub to come back and stops as Unknown if it
-    doesn't. Without the key, the save is written on quit as <save>-AUTOSAVE."""
-    if "savepoint" not in pilot.keys:
-        return "on-quit (no savepoint key in the catalog)"
-    pilot.goto("HUB_WEEKLY")
-    pilot.press("savepoint", wait=2.0)
-    wait_known(pilot, list(HUBS), 60)
-    return "savepoint"
+def _savepoint(pilot, name=None):
+    """No savepoint step: Madden writes <save>-AUTOSAVE after every advance, and Tab opens the
+    Save-As dialog (which can overwrite the wrong file) — JR, 2026-11-10: never press Tab."""
+    return "autosave"
 
 
 def _mtime(path):
@@ -478,11 +539,12 @@ def sim_season(pilot, save=None, to="regular-season-end", watcher=None, folder=N
         # the screen here is wrong — the Advance menu is inside a franchise but is not a hub.
         pilot.loaded_franchise = norm(tile_name(franchise))
     else:
-        _load_franchise(pilot, tile)
+        _load_franchise(pilot, tile, save=save, folder=folder)
     head = _week_now(pilot, allow_unreadable=True)
     if head is None:
-        latest = auto_path if (auto_path.is_file() and (_mtime(auto_path) or 0) > (_mtime(save_path) or 0)) else save_path
-        week = _save_week(latest)
+        head = _save_header(_latest_save(save_path, auto_path))
+    if head is None:
+        week = _save_week(_latest_save(save_path, auto_path))
         if week is None:
             pilot.stop("can't read the week from the hub or the save", Stuck)
         head = {"year": None, "phase": "WEEK", "week": week}
@@ -495,6 +557,8 @@ def sim_season(pilot, save=None, to="regular-season-end", watcher=None, folder=N
         weeks += 1
         new = _week_now(pilot, allow_unreadable=True)
         if new is None:
+            new = _save_header(_latest_save(save_path, auto_path))
+        if new is None:
             # A bye week's hub shows only BYE WEEK: the advance moved exactly one week.
             if head.get("week") is None:
                 pilot.stop("the hub has no week header and the week is unknown", Stuck)
@@ -505,7 +569,12 @@ def sim_season(pilot, save=None, to="regular-season-end", watcher=None, folder=N
             pilot.stop(f"the header didn't move the week off {head}", Stuck)
         head = new
         progress.update(weeks_simmed=weeks, end_week=head.get("week"), end_phase=head["phase"])
-    saved = _savepoint(pilot)
+    saved = _savepoint(pilot, tile_name(save).removesuffix("-AUTOSAVE"))
+    if not save.upper().endswith("-AUTOSAVE") and auto_path.is_file() and \
+            (_mtime(auto_path) or 0) > (_mtime(save_path) or 0):
+        # JR: to make a real save, copy the autosave over the named save (no Tab).
+        shutil.copy2(auto_path, save_path)
+        saved = "autosave (copied to the named save)"
     progress.update(saved=saved)
     if quit:
         pilot.goto("FRANCHISE_LIST")
