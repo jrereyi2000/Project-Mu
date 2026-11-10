@@ -128,7 +128,7 @@ def _payroll(cur, season, team_id):
         return 0
     cur.execute("""SELECT person_kind, annual_salary FROM staff_contracts
                    WHERE team_id = %s AND person_kind IN ('HC', 'OC', 'DC', 'GM') AND signed_season <= %s
-                     AND total_years - (%s - signed_season) > 0""", (team_id, season, season))
+                     AND remaining_years > 0""", (team_id, season))
     return int(sce.staff_payroll([{"person_kind": k, "annual_salary": s} for k, s in cur.fetchall()]))
 
 

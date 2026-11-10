@@ -2510,7 +2510,9 @@ def annual_offseason_steps(cur, stage, season, wave, out=print):
 
     def comp_article():
         from newsroom import compensatory_picks_article
-        return compensatory_picks_article.run(season + 1, season=season, publish=True, conn_info=dsn)
+        # force: the article re-runs on every free-agency wave, so wave 2 and 3 must replace wave 1's row rather
+        # than answering SKIPPED_EXISTING.
+        return compensatory_picks_article.run(season + 1, season=season, publish=True, conn_info=dsn, force=True)
 
     def card_article():
         from newsroom import report_card_article

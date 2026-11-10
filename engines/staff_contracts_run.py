@@ -137,15 +137,29 @@ def annual(cur, season, dry_run=False):
             rolled.append({"id": row["id"], "from": row["remaining_years"], "to": target})
             if not dry_run:
                 cur.execute("UPDATE staff_contracts SET remaining_years = %s WHERE id = %s", (target, row["id"]))
-    # Everyone still in a staff post anywhere in the league: a coordinator poached or promoted to another team is
-    # a departure, not a firing, so his old team owes no buyout (JR, 2026-11-09).
-    employed_anywhere = {s["person_id"] for s in staff}
+    # Everyone still in a staff post anywhere in the league: a coordinator poached or promoted to another team is a
+    # departure, not a firing, so his old team owes no buyout (JR, 2026-11-09). Keyed BY ROLE TABLE: coaches.id,
+    # coordinators.id and gm_profiles.id all run 1..32+, so a bare id set matched almost every fired person against
+    # some unrelated GM's or coach's id.
+    role_of = {"HC": "COACH", "GM": "GM"}
+    employed_anywhere = {(role_of.get(s["person_kind"], "COORD"), s["person_id"]) for s in staff}
+    hc_names = {str(s.get("name") or "").strip().lower() for s in staff if s["person_kind"] == "HC"}
     for r in rows:
         if r["person_kind"] not in ("HC", "OC", "DC", "GM") or r["remaining_years"] <= 0:
             continue
         if (r["team_id"], r["person_kind"], r["person_id"]) in current:
             continue
-        if r["person_id"] in employed_anywhere:
+        role = role_of.get(r["person_kind"], "COORD")
+        moved = (role, r["person_id"]) in employed_anywhere
+        if not moved and role == "COORD":
+            # a coordinator promoted to a head-coach seat gets a new coaches.id, so match him by name
+            cur.execute("SELECT coordinator_name FROM coordinators WHERE id = %s", (r["person_id"],))
+            got = cur.fetchone()
+            moved = bool(got and str(got[0] or "").strip().lower() in hc_names)
+        if moved:
+            # close the old deal so it stops counting as active, but owe nothing: this is not a firing
+            if not dry_run:
+                cur.execute("UPDATE staff_contracts SET remaining_years = 0 WHERE id = %s", (r["id"],))
             continue
         after = sce.fire_contract({"annual_salary": r["annual_salary"], "remaining_years": r["remaining_years"],
                                    "buyout_owed": r["buyout_owed"]})

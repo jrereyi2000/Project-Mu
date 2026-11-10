@@ -107,4 +107,4 @@ def test_a_poached_coordinator_is_not_fired_and_owes_no_buyout():
     rep = scr.annual(cur, 2036)
     assert rep["fired"] == 0 and rep["status"] == "built"
     cur.execute("SELECT remaining_years, buyout_owed FROM staff_contracts WHERE team_id = 1 AND person_id = 20")
-    assert cur.fetchone() == (2, 0)                   # untouched: he was not fired
+    assert cur.fetchone() == (0, 0)                   # closed, but no buyout: he moved, he wasn't fired
