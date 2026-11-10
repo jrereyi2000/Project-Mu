@@ -258,7 +258,9 @@ def test_the_portrait_packs_queued_fields_ride_an_assign():
     _save_coach(snap, 102, "Ejiro", "Evero", 0)
     for coach in snap["coaches"]:
         coach["portrait"] = 7999                            # a created coach's placeholder until the pack is in
-    conn.execute("""UPDATE coach_madden_profiles SET portrait_id = 5324, portrait_status = 'PACKED'
+    # INSTALLED, not PACKED: the texture is not in the game until JR installs the pack, so only an installed
+    # portrait reaches the save (audit B10; `_portrait_updates` selects `portrait_status = 'INSTALLED'`).
+    conn.execute("""UPDATE coach_madden_profiles SET portrait_id = 5324, portrait_status = 'INSTALLED'
                      WHERE person_kind = 'COACH' AND person_id = 41""")
 
     # The seats all match, so only the portrait push is planned: an assign with the set and the held seat/contract.

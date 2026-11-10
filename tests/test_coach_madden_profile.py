@@ -201,7 +201,8 @@ def test_every_produced_enum_value_is_one_spike_a_measured(role, slant):
     assert row["body_type"] in cmp.BODY_TYPES
     assert row["personality"] in cmp.PERSONALITIES
     assert row["demeanor"] in cmp.DEMEANORS
-    assert row["face_shape"] in cmp.FACE_SHAPE_FALLBACKS
+    # B7: the hair/face presets carry the skin-tone digit the headshot reads, so they replace the bare sentinels.
+    assert row["face_shape"] in cmp.FACE_SHAPE_BY_TONE
     assert row["generic_head"] in cmp.GENERIC_HEAD_ASSETS
     assert row["portrait_status"] in ("NONE", "GENERATED", "PACKED", "INSTALLED")
 

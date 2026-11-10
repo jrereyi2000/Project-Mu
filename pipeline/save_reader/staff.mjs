@@ -372,7 +372,10 @@ export async function planStaff(franchise, staff = [], { freed = [] } = {}) {
       const d = decodeRef(team.record[key]);
       if (d && d.table === CID && d.row === row) seats.push({ team, key });
     }
-    const set = { TeamIndex: FREE_AGENT_TEAM, PrevTeamIndex: record.TeamIndex,
+    // A retire runs on a coach already in the free-agent pool (TeamIndex 32), where copying TeamIndex into
+    // PrevTeamIndex would lose the team he last coached (audit B11, 2026-11-10).
+    const leaving = record.TeamIndex !== FREE_AGENT_TEAM;
+    const set = { TeamIndex: FREE_AGENT_TEAM, PrevTeamIndex: leaving ? record.TeamIndex : record.PrevTeamIndex,
       ContractStatus: retire ? 'Retired' : 'FreeAgent', ContractYearsRemaining: 0, COACH_RATING: 50,
       IsUserControlled: false };
     errors.push(...fieldErrors(record, set, 'Coach').map(e => `${where}: ${e}`));
@@ -432,9 +435,15 @@ export async function planStaff(franchise, staff = [], { freed = [] } = {}) {
     // as the outgoing occupant so it can find the row that still follows him.
     let outgoing = seat?.holderRef ?? null;
     if (!outgoing) {
-      const fired = coachTable.records.findIndex(c => !c.isEmpty && c.PrevTeamIndex === team.teamIndex &&
-        (c.Position === 'HeadCoach' || c.OriginalPosition === 'HeadCoach'));
-      if (fired >= 0) outgoing = { table: CID, row: fired };
+      // The man Madden fired from this team: a free agent whose PrevTeamIndex is this team and who coached it as head
+      // coach. If several match, the most recently freed one (highest PresentationId) is the plausible tie; any other
+      // ambiguity is left alone rather than guessed (audit B11, 2026-11-10).
+      const firedRows = coachTable.records
+        .map((c, row) => ({ c, row }))
+        .filter(x => !x.c.isEmpty && x.c.TeamIndex === FREE_AGENT_TEAM && x.c.PrevTeamIndex === team.teamIndex &&
+          (x.c.Position === 'HeadCoach' || x.c.OriginalPosition === 'HeadCoach'))
+        .sort((a, b) => (b.c.PresentationId ?? 0) - (a.c.PresentationId ?? 0));
+      if (firedRows.length) outgoing = { table: CID, row: firedRows[0].row };
     }
     // teamUser compares decoded refs, so the new coach's encoded seat ref is decoded first.
     const user = teamUser(fuTable, TID, team.row, seat?.ref ? decodeRef(seat.ref) : null, outgoing);
@@ -477,6 +486,17 @@ export async function planStaff(franchise, staff = [], { freed = [] } = {}) {
     const set = { TeamIndex: team.teamIndex, ContractStatus: 'Signed', Position: position, ...contract };
     if (record.Position !== position) set.OriginalPosition = position;
     set.IsUserControlled = position === 'HeadCoach';
+    // A head coach's schemes are the target team's 16485 pair. Without this a coach moving teams kept the pair of the
+    // team he left, and his Mu scheme was never written at all (audit B9, 2026-11-10).
+    const assignRefs = {};
+    if (position === 'HeadCoach') {
+      const pair = HC_SCHEME_ROWS[team.teamIndex];
+      if (!pair) errors.push(`${where}: no 16485 head-coach scheme pair for team ${team.teamIndex}`);
+      else {
+        assignRefs.OffensiveScheme = encodeRef(16485, pair.offense);
+        assignRefs.DefensiveScheme = encodeRef(16485, pair.defense);
+      }
+    }
     // An optional "set" of further Coach fields on the same record (the portrait pack pushes Portrait and
     // Portrait_Force_Silhouette through it: Mu knows the coach's pgid, not his save row). Same shape as a "players"
     // edit's set, validated the same way; it may not set a field the assign itself writes.
@@ -496,7 +516,7 @@ export async function planStaff(franchise, staff = [], { freed = [] } = {}) {
     plan.assignments.push({ kind: 'assign', pgid, row, record, teamIndex: team.teamIndex,
       team: teamLabel(team, team.teamIndex), teamRow: team.row, teamRecord: team.record, position,
       seatKey: seat.seatKey, seatRef: seat.ref, clearSeats: staleSeats(row, team.teamIndex, position),
-      set, user: wiring.user, userSet: wiring.userSet, teamSet: wiring.teamSet });
+      set, refs: assignRefs, user: wiring.user, userSet: wiring.userSet, teamSet: wiring.teamSet });
   }
 
   // 3. Creates. Resolve the sub-record tables a create needs once.
@@ -821,6 +841,7 @@ export async function applyStaff(plan) {
   }
   for (const a of plan.assignments) {
     for (const [k, v] of Object.entries(a.set)) a.record[k] = v;
+    for (const [k, v] of Object.entries(a.refs ?? {})) a.record[k] = v;
     a.teamRecord[a.seatKey] = a.seatRef;
     if (a.user) for (const [k, v] of Object.entries(a.userSet)) a.user.r[k] = v;
     if (a.teamSet) for (const [k, v] of Object.entries(a.teamSet)) a.teamRecord[k] = v;

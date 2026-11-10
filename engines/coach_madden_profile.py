@@ -65,7 +65,12 @@ PERSONALITIES = ("Leader", "Intense", "Entertainer", "TeamPlayer", "Unpredictabl
 DEMEANORS = ("Classic", "Calm", "Intense")
 
 # CoachFace values an invented coach may use (§3.12). Real coaches use their named preset; the 118 generic
-# records use `Invalid_` or `MustBeUnique`.
+# records use `Invalid_` or `MustBeUnique`. The `coachhead_<tone>_*` presets are the only ones that carry a skin-tone
+# digit, and the headshot reads the tone from there (`coachhead_(\d)`), so an invented coach draws one of these rather
+# than `Invalid_`: without it the generated portrait's skin tone had nothing to follow and never matched his 3D head
+# (audit B7, 2026-11-10).
+FACE_SHAPE_BY_TONE = ("coachhead_1_B_N_01", "coachhead_2_B_M_20", "coachhead_3_B_N_21", "coachhead_4_B_G_01",
+                      "coachhead_5_B_G_20", "coachhead_6_B_M_20", "coachhead_7_B_B_20")
 FACE_SHAPE_FALLBACKS = ("Invalid_", "MustBeUnique")
 
 # The 53 head assets invented/free-agent coaches use (§3.12).
@@ -488,7 +493,7 @@ def _demeanor(sliders):
 def _look(rng):
     body_type = rng.choices(COACH_BODY_TYPES, weights=BODY_TYPE_WEIGHTS, k=1)[0]
     height = _clamp(rng.randint(68, 77), *COACH_HEIGHT_RANGE)
-    face_shape = rng.choice(FACE_SHAPE_FALLBACKS)
+    face_shape = rng.choice(FACE_SHAPE_BY_TONE)
     generic_head = rng.choice(GENERIC_HEAD_ASSETS)
     return body_type, height, face_shape, generic_head
 

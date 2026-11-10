@@ -1871,7 +1871,10 @@ def _portrait_updates(cur, plan, snapshot, staff):
     profiles it packed; the next league office write puts that id on the save record as `Portrait = <id>` with
     `Portrait_Force_Silhouette = false`. An assign already planned for the same coach gets the set merged into it;
     a coach whose seat is already right gets an assign of his own (an assign is a write of the Coach record, and the
-    writer needs the seat and contract it already holds). Returns (assign actions added, what was reported)."""
+    writer needs the seat and contract it already holds). Returns (assign actions added, what was reported).
+    Only an INSTALLED profile reaches the save: a portrait ID whose texture is not in the user's game yet draws
+    who-knows-what, and Portrait 0 drew nothing at all, so the silhouette is the safe state until JR installs the pack
+    (audit B10, 2026-11-10; plan D5)."""
     if not _staff_table(cur, "coach_madden_profiles"):
         return [], [], []
     cur.execute("""SELECT person_kind, person_id,
@@ -1879,7 +1882,7 @@ def _portrait_updates(cur, plan, snapshot, staff):
                           presentation_id, portrait_id
                      FROM coach_madden_profiles
                     WHERE portrait_id IS NOT NULL AND portrait_id > 0
-                      AND portrait_status IN ('PACKED', 'INSTALLED')
+                      AND portrait_status = 'INSTALLED'
                     ORDER BY presentation_id""")
     profiles = [dict(zip(("person_kind", "person_id", "person", "presentation_id", "portrait_id"), row))
                 for row in cur.fetchall()]
