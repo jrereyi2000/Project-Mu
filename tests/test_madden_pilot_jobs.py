@@ -545,6 +545,13 @@ def test_loading_frames_are_unknown():
     assert classify(Frame(None, fake.words(fake.lines(LOADING))), CAT) == "UNKNOWN"
 
 
+def test_every_screen_a_load_can_open_on_counts_as_a_hub():
+    # a bye week (HUB_BYE) was missing, so an advance that landed on one timed out for 120 s
+    for name in ("HUB_WEEKLY", "HUB_GAMEDAY", "HUB_OTHER", "HUB_WEEKLY_DRAFT_CARD", "HUB_BYE",
+                 "LIVE_EVENT_FRENZY", "LIVE_EVENT_FRENZY_MODAL", "FREE_AGENCY_ENDED", "DRAFT_HUB", "DRAFT_LAUNCH"):
+        assert name in jobs.HUBS, name
+
+
 def test_save_tiles_follow_save_recency_and_find_the_index(tmp_path):
     import os
     for i, name in enumerate(["CAREER-OLD", "CAREER-NEW", "CAREER-MID"]):

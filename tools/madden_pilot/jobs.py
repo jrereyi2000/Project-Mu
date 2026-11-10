@@ -48,7 +48,7 @@ WATCHER_CHECK = 'ps -eo args | grep "[p]ipeline[.]watch_save"'
 
 # Every screen a loaded franchise can open on. A live event takes the focus on load: at the Free
 # agency frenzy Madden opens the LIVE EVENT tab, not GAMEDAY (2026-11-10).
-HUBS = ("HUB_WEEKLY", "HUB_GAMEDAY", "HUB_OTHER", "HUB_WEEKLY_DRAFT_CARD", "LIVE_EVENT_FRENZY",
+HUBS = ("HUB_WEEKLY", "HUB_GAMEDAY", "HUB_OTHER", "HUB_WEEKLY_DRAFT_CARD", "HUB_BYE", "LIVE_EVENT_FRENZY",
         "LIVE_EVENT_FRENZY_MODAL", "FREE_AGENCY_ENDED", "DRAFT_HUB", "DRAFT_LAUNCH")
 MAX_SIM_WEEKS = 30                 # safety cap on NEXT WEEK presses in one run
 ADVANCE_STOP_TIMEOUT = 90          # seconds an `advance` waits for a catalogued landing screen
