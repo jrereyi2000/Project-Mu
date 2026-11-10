@@ -512,5 +512,7 @@ def test_a_starting_coach_takes_his_term_from_the_save():
     by = {(f["person_kind"], f["person_id"]): f for f in filed}
     hc = by[("HC", 10)]
     assert (hc["total_years"], hc["remaining_years"], hc["signed_season"]) == (5, 2, 2033)
-    assert by[("HC", 11)]["signed_season"] == 2036 and by[("HC", 11)]["remaining_years"] == 4
-    assert by[("GM", 101)]["signed_season"] == 2036 and by[("GM", 101)]["remaining_years"] == 4
+    # a zero years-remaining falls back to the tenure-start rule: hired 2035, 4-year role, 3 left at 2036
+    assert (by[("HC", 11)]["signed_season"], by[("HC", 11)]["remaining_years"]) == (2035, 3)
+    # a GM never reads the map, and his 2030 tenure has run out: a fresh deal from this season
+    assert (by[("GM", 101)]["signed_season"], by[("GM", 101)]["remaining_years"]) == (2036, 4)

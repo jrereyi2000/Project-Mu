@@ -118,8 +118,8 @@ def file_hires(cur, season, dry_run=False, starting_only=True, years_from=None):
 
     `years_from` ({(team_id, person_kind, person_id): (length, years_remaining)}) is how a starting coach's Mu deal
     takes its term from Madden's own contract (JR, 2026-11-10 via M-0225): Mu prices the salary, the save decides
-    the length and the years left. A zero or missing value falls back to the role's term from this season; a GM has
-    no Madden record, so he always does. Returns the rows filed."""
+    the length and the years left. A zero or missing value falls back to the tenure-start rule annual
+    applies; a GM has no Madden record, so he always does. Returns the rows filed."""
     if not (_table(cur, "staff_contracts") and _table(cur, "coach_tenures")):
         return []
     by_key = {(r["team_id"], r["person_kind"], r["person_id"]): r for r in contracts(cur)
@@ -132,7 +132,12 @@ def file_hires(cur, season, dry_run=False, starting_only=True, years_from=None):
         if row is not None and row["remaining_years"] > 0:
             continue
         years, salary = _years(s["person_kind"]), _salary(s["person_kind"], s["experience"], s["championships"])
-        signed, remaining = int(season), years
+        # The tenure-start rule, the same one annual applies: a man whose tenure began earlier has already served
+        # part of the role's term, and an old tenure with nothing left gets a fresh deal from this season (M-0225).
+        signed = int(s["start_season"] or season)
+        remaining = min(years, max(0, years - (int(season) - signed)))
+        if remaining <= 0:
+            signed, remaining = int(season), years
         save = (years_from or {}).get((s["team_id"], s["person_kind"], s["person_id"]))
         if save and s["person_kind"] != "GM" and int(save[1] or 0) > 0:
             length = int(save[0] or 0) or years
