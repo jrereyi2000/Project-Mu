@@ -388,8 +388,10 @@ def call_with_timeout(llm, prompt, seconds):
 _TALK_COLS = ("id", "season", "week", "trade_window", "offseason_stage", "user_team_id", "gm_team_id", "kind",
               "initiator_team_id", "source_proposal_id", "carried_weeks", "published_at", "status", "status_reason",
               "patience", "patience_left", "proposal_id", "trigger_kind", "created_at", "updated_at", "flags")
+# week/stage last: a row tuple written before 2027_02_14 then simply leaves them out of the dict (t.get -> None).
 _TURN_COLS = ("turn_no", "actor", "action", "assets", "surplus_user", "surplus_gm", "mood", "legality", "message",
-              "message_source", "actor_team_id", "options", "choice", "choice_source", "posture", "created_at")
+              "message_source", "actor_team_id", "options", "choice", "choice_source", "posture", "created_at",
+              "week", "stage")
 
 
 def _talk(cur, nid):
@@ -410,14 +412,16 @@ def _add_turn(cur, nid, actor, action, actor_team_id, assets=None, su=None, sg=N
                 (nid,))
     n = cur.fetchone()[0]
     from engines.front_office import _json_asset
-    js = None if assets is None else json.dumps([_json_asset(x, _team_abbrs(books or {})) for x in assets])
+    books = books or {}
+    js = None if assets is None else json.dumps([_json_asset(x, _team_abbrs(books)) for x in assets])
     cur.execute("""INSERT INTO gm_trade_negotiation_turns (negotiation_id, turn_no, actor, action, actor_team_id,
                        assets, options, choice, choice_source, posture, surplus_user, surplus_gm, mood, legality,
-                       message, message_source)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                       message, message_source, week, stage)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                 (nid, n, actor, action, actor_team_id, js,
                  json.dumps(options, default=str) if options is not None else None, choice, choice_source, posture,
-                 su, sg, mood, json.dumps(legality) if legality else None, message, source))
+                 su, sg, mood, json.dumps(legality) if legality else None, message, source,
+                 books.get("week"), books.get("stage")))
     cur.execute("UPDATE gm_trade_negotiations SET updated_at = now() WHERE id = %s", (nid,))
     return n
 
@@ -779,9 +783,21 @@ def _rejudge(b, valuer, talk, offer_assets):
     return None
 
 
+def _run_stop(cur, b):
+    """The stop a run plays at: (week, offseason stage). The offseason keeps week 24 for every stage, so the stage is
+    what tells one offseason stop from the next."""
+    if b.get("stage") is not None:
+        return b["week"], b["stage"]
+    if (b.get("window") or "IN_SEASON") == "OFFSEASON":
+        return b["week"], _ge().read_stage(cur, b["season"])
+    return b["week"], None
+
+
 def resume_talks(cur, b, valuer, rng, llm, log=None):
     """Resume every OPEN CPU talk of this season/window before the week's search (P1-17), so a team already carrying
-    a talk is in `rep["teams"]` and cannot open a second deal this week. Returns
+    a talk is in `rep["teams"]` and cannot open a second deal this week. A talk whose newest turn was already played
+    at this run's own stop (week, offseason stage) is skipped, so re-running a week — `--replay-week`, a retried run
+    — does not play the same talks twice. Returns
     {"talks": [...], "agreed": [...], "stalled": [...], "teams": set()}."""
     log = log or (lambda *a, **k: None)
     rep = {"talks": [], "agreed": [], "stalled": [], "teams": set()}
@@ -789,12 +805,17 @@ def resume_talks(cur, b, valuer, rng, llm, log=None):
     cur.execute("""SELECT id FROM gm_trade_negotiations
                    WHERE season = %s AND kind = 'CPU' AND status = 'OPEN' AND trade_window = %s ORDER BY id""",
                 (b["season"], b.get("window") or "IN_SEASON"))
+    stop = _run_stop(cur, b)
     for (nid,) in cur.fetchall():
         talk = _talk(cur, nid)
         if not talk:
             continue
         rep["teams"].update((_initiator(talk), talk["gm_team_id"]))
         turns = _turns(cur, nid)
+        if turns and (turns[-1].get("week"), turns[-1].get("stage")) == stop:
+            rep["talks"].append({"id": nid, "status": "OPEN", "resumed": False, "carried": True})
+            log(f"  talk #{nid}: already played this stop")
+            continue
         offer_turn = next((t for t in reversed(turns) if t.get("assets")), None)
         if offer_turn is not None:
             offer = _engine_assets(b, offer_turn["assets"])
@@ -980,7 +1001,7 @@ def talk_json(cur, nid, public=True):
     out_turns = []
     for t in turns:
         team = abbrs.get(_turn_actor_team(t, n))
-        row = {"turn_no": t["turn_no"], "week": n["week"], "team": team, "action": t["action"],
+        row = {"turn_no": t["turn_no"], "week": t.get("week") or n["week"], "team": team, "action": t["action"],
                "posture": t.get("posture"), "assets": _public_assets(cur, t.get("assets"), info),
                "message": t.get("message")}
         if not public:

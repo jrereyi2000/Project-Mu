@@ -89,9 +89,18 @@ class FakeCursor:
         elif text.startswith("SELECT from_team_id, person_name, from_role, to_role, tenure_years, source"):
             season = p[0]
             self._result = [(d["from_team_id"], d.get("person_name"), d["from_role"], d["to_role"],
-                             d["tenure_years"], d.get("source"))
+                             d["tenure_years"], d.get("source"), d.get("person_kind"), d.get("person_key"),
+                             d.get("hire_coach_id"))
                             for d in (self.departures or [])
                             if d.get("season") == season and d.get("eligible")]
+        elif text.startswith("SELECT id, player_id FROM qualifying_free_agents"):
+            season = p[0]
+            self._result = [(i + 1, r["player_id"]) for i, r in enumerate(self.qfa) if r["season"] == season]
+        elif text.startswith("UPDATE qualifying_free_agents SET canceled_by_qfa_id"):
+            canceller, cancelled = p
+            for i, r in enumerate(self.qfa):
+                if i + 1 == cancelled:
+                    self.qfa[i] = dict(r, canceled_by_qfa_id=canceller)
         elif text.startswith("DELETE FROM qualifying_free_agents"):
             self.qfa = [r for r in self.qfa if r["season"] != p[0]]
         elif text.startswith("DELETE FROM compensatory_pick_awards"):
@@ -270,6 +279,37 @@ def test_jc2a_is_off_by_default_even_with_the_departures_table():
     assert all(p["source"] != "JC2A" for p in cur.draft_picks)
     # the default path never even checks for the table
     assert not any("staff_development_departures" in s or s.startswith("SELECT to_regclass") for s in cur.sql)
+
+
+def test_a_jc2a_award_names_the_coach_the_hire_created():
+    """chunk-6 #13: source_coach_id is the coaches row the hire created (staff_development_departures
+    .hire_coach_id, 2027_02_15), not a name match; a departure journaled before that column keeps NULL."""
+    dep = [dict(DEPARTURES[0], hire_coach_id=41)]
+    cur = _fixture(departures=dep)
+    run.award_and_persist(cur, SEASON, DRAFT, league_apys=LEAGUE_APYS, jc2a_enabled=True)
+    jc_award = next(a for a in cur.comp_awards if a["award_kind"] == "JC2A")
+    assert jc_award["source_coach_id"] == 41
+    old = _fixture(departures=[DEPARTURES[0]])                      # no hire_coach_id: nothing to name
+    run.award_and_persist(old, SEASON, DRAFT, league_apys=LEAGUE_APYS, jc2a_enabled=True)
+    assert next(a for a in old.comp_awards if a["award_kind"] == "JC2A")["source_coach_id"] is None
+
+
+def test_a_gained_qfa_is_named_on_the_lost_qfa_it_cancelled():
+    """chunk-6 #13: canceled_by_qfa_id names the signing that cancelled the lost QFA. Team 2 signs 101 away from
+    team 1 and loses 107 to team 3: its own gain cancels that loss (no pick for 107), and 107's ledger row names
+    101's row."""
+    cur = FakeCursor(
+        offers=[_offer(1, 101, 2, 20_000_000),          # team 1 -> Round 3
+                _offer(2, 107, 3, 19_000_000)],         # team 2 -> Round 4
+        player_seasons=[{"player_id": 101, "season": SEASON, "team_id": 1},
+                        {"player_id": 107, "season": SEASON, "team_id": 2}],
+    )
+    result = run.award_and_persist(cur, SEASON, DRAFT, league_apys=LEAGUE_APYS)
+    ledger = {r["player_id"]: r for r in cur.qfa}
+    assert result["cancellations"] == [{"team_id": 2, "gained_player_id": 101, "cancelled_player_id": 107}]
+    assert ledger[107]["canceled_by_qfa_id"] == 1       # the SERIAL id of player 101's ledger row
+    assert ledger[101]["canceled_by_qfa_id"] is None
+    assert [a["team_id"] for a in cur.comp_awards] == [1]   # team 2's loss is cancelled, so no pick for it
 
 
 def test_jc2a_enabled_awards_the_two_round3_picks_and_persists_the_class_pick():

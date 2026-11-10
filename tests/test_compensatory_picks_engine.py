@@ -127,6 +127,15 @@ class CancellationTest(unittest.TestCase):
         # lost R3 + R6, gained R5 -> R5 cancels the R6 (nearest), leaving the R3
         self.assertEqual([d["round_tier"] for d in E.cancel_qfas([self._t(3), self._t(6)], [self._t(5)])], [3])
 
+    def test_cancel_pairs_name_the_gaining_qfa_that_cancelled_each_loss(self):
+        """The ledger's canceled_by_qfa_id needs the pairing, not just the survivors (chunk-6 #13)."""
+        lost = [dict(self._t(3), player_id=11), dict(self._t(5), player_id=12)]
+        gained = [dict(self._t(5), player_id=13)]
+        survivors, pairs = E.cancel_qfas_pairs(lost, gained)
+        self.assertEqual([q["player_id"] for q in survivors], [11])
+        self.assertEqual([(g["player_id"], c["player_id"]) for g, c in pairs], [(13, 12)])
+        self.assertEqual(E.cancel_qfas(lost, gained), survivors)          # the old entry point is unchanged
+
 
 class AllocationTest(unittest.TestCase):
     def _unc(self, team_id, tier, score, pid):

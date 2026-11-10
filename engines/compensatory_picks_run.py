@@ -41,8 +41,12 @@ formula. `pick_suffix` is the comp's within-round index, zero-padded ('01', '02'
 (draft_season, round, original_team_id).
 
 NOTES / graceful degradations:
-  * `qualifying_free_agents.canceled_by_qfa_id` is written NULL: the engine's `cancel_qfas` returns only survivors,
-    not the cancelled pairs, so the producer cannot name the canceller without duplicating engine logic.
+  * `qualifying_free_agents.canceled_by_qfa_id` names the signing that cancelled this one: the engine's
+    `cancel_qfas_pairs` keeps the pairing and `stamp_cancellations` resolves it to the ledger's own SERIAL ids
+    after the insert (both sides of a cancel are rows of the same season).
+  * `compensatory_pick_awards.source_coach_id` is the coaches row the hire created, journaled as
+    `staff_development_departures.hire_coach_id` (`2027_02_15`); a departure journaled before that migration has no
+    id and the award keeps NULL rather than matching on a name.
   * With no `player_contracts` APYs for the season, ranking falls back to the season's own QFA APYs.
   * The old team is `player_seasons` for `season` (the season the QFAs departed). The brief phrased it as
     `season - 1` when `season` is read as the draft year; in the live model the offseason runs with
@@ -250,14 +254,16 @@ def load_departures(cur, season):
 
 
 def _attach_person_names(awards, departures):
-    """Carry the departing person's name into each JC-2A award's `source_person_name` (for the reason text)."""
-    names = {}
+    """Carry the departing person into each JC-2A award: `source_person_name` for the reason text, and
+    `source_coach_id` — the coaches row the hire created (`hire_coach_id`, 2027_02_15) — for the award ledger. A
+    departure journaled before that migration has no id, so the award keeps NULL rather than matching on a name."""
+    facts = {}
     for d in departures:
         key = (d.get("team_id"), d.get("hire_from_role"), d.get("hire_to_role"))
-        if d.get("person_name") and key not in names:
-            names[key] = d["person_name"]
+        facts.setdefault(key, (d.get("person_name"), d.get("hire_coach_id")))
     for a in awards:
-        a["source_person_name"] = names.get((a.get("team_id"), a.get("from_role"), a.get("to_role")))
+        name, coach_id = facts.get((a.get("team_id"), a.get("from_role"), a.get("to_role")), (None, None))
+        a["source_person_name"], a["source_coach_id"] = name, coach_id
     return awards
 
 
@@ -297,7 +303,7 @@ def build_rows(cba_picks, jc2a_picks, draft_season):
                 name = item.get("source_person_name")
                 who = f" {name}" if name else ""
                 reason = (f"Resolution JC-2A: {item.get('from_role')} hired away as {item.get('to_role')}{who}")
-                source_player_id, source_coach_id = None, None
+                source_player_id, source_coach_id = None, item.get("source_coach_id")
             award_rows.append({
                 "draft_season": draft_season, "team_id": team_id, "round": rnd,
                 "slot_in_round": slot, "overall_pick": overall, "award_kind": kind,
@@ -309,6 +315,26 @@ def build_rows(cba_picks, jc2a_picks, draft_season):
                 "source": "COMP" if kind == "CBA" else "JC2A", "pick_suffix": f"{index0 + 1:02d}",
             })
     return award_rows, pick_rows, comp_schedule
+
+
+def stamp_cancellations(cur, season, cancellations):
+    """Name the signing that cancelled each cancelled QFA (`qualifying_free_agents.canceled_by_qfa_id`).
+
+    The ledger has one row per signing and both sides of a cancel are rows of the same season, so the pairing is
+    resolved by player id — but the ids are SERIAL values that only exist after the insert, hence this second pass.
+    Returns the number of rows stamped."""
+    if not cancellations:
+        return 0
+    cur.execute("SELECT id, player_id FROM qualifying_free_agents WHERE season = %s", (season,))
+    by_player = {pid: rid for rid, pid in cur.fetchall()}
+    n = 0
+    for c in cancellations:
+        canceller, cancelled = by_player.get(c["gained_player_id"]), by_player.get(c["cancelled_player_id"])
+        if canceller is None or cancelled is None or canceller == cancelled:
+            continue
+        cur.execute("UPDATE qualifying_free_agents SET canceled_by_qfa_id = %s WHERE id = %s", (canceller, cancelled))
+        n += 1
+    return n
 
 
 def _qfa_rows(qfas, league_apys, deadline, season):
@@ -379,6 +405,7 @@ def award_and_persist(cur, season, draft_season, league_apys=None, deadline=None
         cur.execute(DELETE_AWARDS_SQL, (draft_season,))
         cur.execute(DELETE_PICKS_SQL, (draft_season,))
         E.save_qfas(cur, qfa_rows)
+        stamp_cancellations(cur, season, result.get("cancellations") or [])
         E.save_awards(cur, award_rows)
         for row in pick_rows:
             cur.execute(INSERT_PICK_SQL, (row["draft_season"], row["round"], row["original_team_id"],
@@ -389,6 +416,7 @@ def award_and_persist(cur, season, draft_season, league_apys=None, deadline=None
         "season": season,
         "draft_season": draft_season,
         "qfas": qfa_rows,
+        "cancellations": list(result.get("cancellations") or []),
         "awards": award_rows,
         "draft_picks": pick_rows,
         "comp_schedule": comp_schedule,

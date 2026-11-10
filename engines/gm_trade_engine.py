@@ -525,7 +525,8 @@ def recent_form(cur, player_ids, season, week):
 def read_books(cur, season, week, window="IN_SEASON", stage=None):
     """Everything the engine needs, read-only."""
     from engines.gm_direction import read_injuries
-    b = {"season": season, "week": week, "window": window, "value_season": value_season(season, window)}
+    b = {"season": season, "week": week, "window": window, "stage": stage,
+         "value_season": value_season(season, window)}
     cur.execute("SELECT id, abbreviation, city, name, conference, division FROM teams WHERE abbreviation IS NOT NULL")
     b["teams"] = {r[0]: {"abbr": r[1], "city": r[2], "name": r[3], "conference": r[4], "division": r[5]}
                   for r in cur.fetchall()}

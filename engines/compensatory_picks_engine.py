@@ -176,21 +176,29 @@ def _value_key(q):
     return (q["round_tier"], -q.get("score", 0))
 
 
-def cancel_qfas(lost, gained):
-    """Cancel a team's lost QFAs against its gained QFAs. Each gained QFA (most valuable first) cancels the lost
-    QFA closest in round tier — same tier first, then nearest, ties broken toward the less valuable lost QFA — so
-    the most valuable uncancelled lost QFAs survive and yield picks. `lost`/`gained` are iterables of dicts with
-    `round_tier` (3..7) and `score`. Returns the uncancelled lost QFAs, most valuable first."""
+def cancel_qfas_pairs(lost, gained):
+    """Cancel a team's lost QFAs against its gained QFAs, keeping the pairing. Each gained QFA (most valuable first)
+    cancels the lost QFA closest in round tier — same tier first, then nearest, ties broken toward the less valuable
+    lost QFA — so the most valuable uncancelled lost QFAs survive and yield picks. Returns
+    `(survivors, pairs)`: the uncancelled lost QFAs (most valuable first) and `[(gained, cancelled), ...]` in the
+    order the cancels happened, which is what the ledger's `canceled_by_qfa_id` records."""
     lost = sorted(lost, key=_value_key)
     gained = sorted(gained, key=_value_key)
+    pairs = []
     for g in gained:
         if not lost:
             break
         i = min(range(len(lost)),
                 key=lambda k: (abs(lost[k]["round_tier"] - g["round_tier"]),
                                -lost[k]["round_tier"], lost[k].get("score", 0)))
+        pairs.append((g, lost[i]))
         del lost[i]
-    return lost
+    return lost, pairs
+
+
+def cancel_qfas(lost, gained):
+    """The uncancelled lost QFAs only (see `cancel_qfas_pairs`)."""
+    return cancel_qfas_pairs(lost, gained)[0]
 
 
 def allocate_comp_picks(uncancelled, league_cap=LEAGUE_COMP_PICK_CAP, franchise_cap=FRANCHISE_COMP_PICK_CAP):
@@ -262,9 +270,10 @@ def calculate_comp_picks(lost, gained, league_apys, *, post_draft_deadline=None,
     awards only CBA Article 6 picks. Pass True to award the two Round-3 JC-2A picks per eligible departure;
     departures supplied while it is off are ignored rather than erroring.
 
-    Returns {cba_picks, jc2a_picks, total, uncancelled}: `cba_picks` are the awarded CBA picks (uncancelled lost
-    QFAs, cap applied), `jc2a_picks` the JC-2A awards ([] unless `jc2a_enabled`), `total` their sum, and
-    `uncancelled` every survivor before the caps (so callers can see what the caps dropped)."""
+    Returns {cba_picks, jc2a_picks, total, uncancelled, cancellations}: `cba_picks` are the awarded CBA picks
+    (uncancelled lost QFAs, cap applied), `jc2a_picks` the JC-2A awards ([] unless `jc2a_enabled`), `total` their
+    sum, `uncancelled` every survivor before the caps (so callers can see what the caps dropped), and
+    `cancellations` the `{team_id, gained_player_id, cancelled_player_id}` pairings the ledger records."""
     lost_ev = [evaluate_qfa(q, league_apys) for q in lost if qfa_eligible(q, post_draft_deadline)]
     gained_ev = [evaluate_qfa(q, league_apys) for q in gained if qfa_eligible(q, post_draft_deadline)]
     lost_ev = [v for v in lost_ev if v["qualifies"]]
@@ -277,9 +286,12 @@ def calculate_comp_picks(lost, gained, league_apys, *, post_draft_deadline=None,
     for v in gained_ev:
         gained_by[v["team_id"]].append(v)
 
-    uncancelled = []
+    uncancelled, cancellations = [], []
     for tid in sorted(set(lost_by) | set(gained_by)):
-        uncancelled.extend(cancel_qfas(lost_by.get(tid, []), gained_by.get(tid, [])))
+        survivors, pairs = cancel_qfas_pairs(lost_by.get(tid, []), gained_by.get(tid, []))
+        uncancelled.extend(survivors)
+        cancellations.extend({"team_id": tid, "gained_player_id": g.get("player_id"),
+                              "cancelled_player_id": c.get("player_id")} for g, c in pairs)
 
     cba_picks = allocate_comp_picks(uncancelled, league_cap=league_cap, franchise_cap=franchise_cap)
 
@@ -289,7 +301,8 @@ def calculate_comp_picks(lost, gained, league_apys, *, post_draft_deadline=None,
                   if jc2a_enabled and draft_season is not None else [])
 
     return {"cba_picks": cba_picks, "jc2a_picks": jc2a_picks,
-            "total": len(cba_picks) + len(jc2a_picks), "uncancelled": uncancelled}
+            "total": len(cba_picks) + len(jc2a_picks), "uncancelled": uncancelled,
+            "cancellations": cancellations}
 
 
 # ---------------------------------------------------------------- database helpers (not called offline) ----

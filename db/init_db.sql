@@ -964,6 +964,8 @@ CREATE TABLE IF NOT EXISTS gm_trade_negotiation_turns (
     legality JSONB,
     message TEXT,                                     -- JR's note, or the GM's reply
     message_source VARCHAR(8) CHECK (message_source IN ('JR', 'LLM', 'TEMPLATE')),
+    week SMALLINT,                                    -- engine week the turn was played at (2027_02_14)
+    stage SMALLINT,                                   -- offseason stage it was played at, NULL in season
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (negotiation_id, turn_no)
 );
@@ -2054,6 +2056,9 @@ CREATE TABLE IF NOT EXISTS staff_development_departures (
     tenure_years INT,
     eligible     BOOLEAN NOT NULL DEFAULT true,
     source       TEXT,
+    person_kind  TEXT,                               -- the reviewed registry's kind (2027_02_15)
+    person_key   TEXT,                               -- its key: a db row id, or JR's reviewed key
+    hire_coach_id INT REFERENCES coaches(id),        -- the head-coach row the hire created: a JC-2A award's source coach
     created_at   TIMESTAMPTZ DEFAULT now()
 );
 
@@ -3908,5 +3913,7 @@ INSERT INTO schema_migrations (version, filename, checksum, source) VALUES
     ('2027_02_10_news_feed_post_shape', '2027_02_10_news_feed_post_shape.sql', '85f1d2db9cd238dc9e889010dcab8d0311e09d5b27ad271fddaceb56f58cc5ba', 'init_db.sql'),
     ('2027_02_11_scout_report_team_rows', '2027_02_11_scout_report_team_rows.sql', '83cd8b36d397e35d117a1ff67c36ac2011121d37e1bd65f33035bb4f6e5bf561', 'init_db.sql'),
     ('2027_02_12_trade_talk_flags', '2027_02_12_trade_talk_flags.sql', '5083e4799542b73b665b4ca68e117dd54af9de0c8ade61e7430785e843c233eb', 'init_db.sql'),
-    ('2027_02_13_gm_voice_cards', '2027_02_13_gm_voice_cards.sql', '73ece2378bf0f178bc693dde1d3f19ba2396bcf80cb56353804658f9db7134d7', 'init_db.sql')
+    ('2027_02_13_gm_voice_cards', '2027_02_13_gm_voice_cards.sql', '73ece2378bf0f178bc693dde1d3f19ba2396bcf80cb56353804658f9db7134d7', 'init_db.sql'),
+    ('2027_02_14_trade_turn_stop', '2027_02_14_trade_turn_stop.sql', '8e0cd2c0e60e310a1bcc930b43388edb40aa6218f83913a0df343bc509304912', 'init_db.sql'),
+    ('2027_02_15_jc2a_source_ids', '2027_02_15_jc2a_source_ids.sql', '9134260f512316714b66f917ea06bf76b1459cda967c04c18e94dda09a848d0a', 'init_db.sql')
 ON CONFLICT (version) DO NOTHING;

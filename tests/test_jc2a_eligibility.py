@@ -61,12 +61,14 @@ def test_eligibility_lookup_tolerates_absent_tables():
 def test_eligible_coordinator_with_two_plus_years_hired_away_records_one_departure():
     cur = FakeCursor(tables=BOTH, eligibility={("COORDINATOR", "7"): True})
     assert cc.record_staff_departure(cur, 2030, "COORDINATOR", 7, "Bo Coach", 1, 2, "OC", "HC", 3,
-                                     source="coaching_carousel:POACHED") is True
+                                     source="coaching_carousel:POACHED", hire_coach_id=41) is True
     assert len(cur.inserted) == 1
-    season, from_team, to_team, name, from_role, to_role, tenure, source = cur.inserted[0]
+    season, from_team, to_team, name, from_role, to_role, tenure, source, kind, key, coach_id = cur.inserted[0]
     assert (season, from_team, to_team, name, from_role, to_role, tenure) == \
         (2030, 1, 2, "Bo Coach", "OC", "HC", 3)
     assert source == "coaching_carousel:POACHED"
+    # 2027_02_15: the journal keeps the ids, so a JC-2A award can name the coach without matching on a name
+    assert (kind, key, coach_id) == ("COORDINATOR", "7", 41)
 
 
 def test_non_eligible_or_absent_person_records_none():
@@ -94,9 +96,11 @@ def test_same_club_or_non_qualifying_move_records_none():
 
 def test_pure_jc2a_contract_two_round3_picks_across_consecutive_drafts_from_a_departure_row():
     # A journalled eligible departure, read the way the comp producer will read it, then the pure contract.
-    cur = FakeCursor(tables=BOTH, departures=[(1, "Bo Coach", "OC", "HC", 3, "coaching_carousel:POACHED")])
+    cur = FakeCursor(tables=BOTH, departures=[(1, "Bo Coach", "OC", "HC", 3, "coaching_carousel:POACHED",
+                                               "COORDINATOR", "7", 41)])
     rows = cc.eligible_departures(cur, 2030)
     assert len(rows) == 1
+    assert (rows[0]["person_kind"], rows[0]["person_key"], rows[0]["hire_coach_id"]) == ("COORDINATOR", "7", 41)
     assert cpe.jc2a_eligible(rows[0]) is True
     awards = cpe.jc2a_awards(rows, 2030)
     assert [(a["draft_season"], a["team_id"], a["round"], a["award_kind"]) for a in awards] == \

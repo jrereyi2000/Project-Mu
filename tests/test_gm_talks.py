@@ -690,3 +690,64 @@ def test_a_talk_jr_is_in_leaks_positions_only_and_stops_after_an_insult():
     insulted = dict(turn, mood="INSULTED")
     assert all(gt.leak_events(dict(TALK, status="OPEN"), insulted, b, random.Random(i), user_team_id=1) == []
                for i in range(100))
+
+
+# --------------------------------------------------- resume stop (2027_02_14, chunk-4 B8) ----
+def _resume_books(**kw):
+    b, v = setup()
+    return {**b, "week": 8, "stage": None, **kw}, v
+
+
+def test_each_turn_records_the_stop_it_was_played_at():
+    """A turn stores the run's (week, offseason stage), which is what resume_talks compares against; before
+    2027_02_14 only the talk's opening week existed, so a re-run could not tell its own work apart."""
+    b, v = _resume_books(stage=3, window="OFFSEASON")
+    cur = ScriptedCur(lambda sql, params: [(1,)] if "COALESCE(max(turn_no)" in sql else [])
+    gt._add_turn(cur, 1, "GM", "COUNTER", 2, assets=[], books=b)
+    ins = next(i for i, s in enumerate(cur.sql) if "INSERT INTO gm_trade_negotiation_turns" in s)
+    assert cur.params[ins][-2:] == (8, 3)
+
+
+def test_rerunning_a_stop_does_not_play_a_carried_talk_twice(monkeypatch):
+    """Chunk-4 B8: a second run of the same week (or offseason stage) skips the talk instead of advancing it again,
+    and its teams still count as negotiating so the search does not hand them a second deal (P1-17)."""
+    b, v = _resume_books()
+    turn = dict(_leak_turn(), week=8, stage=None)
+    monkeypatch.setattr(gt, "stall_orphan_talks", lambda *a, **k: [])
+    monkeypatch.setattr(gt, "_talk", lambda cur, nid: dict(TALK))
+    monkeypatch.setattr(gt, "_turns", lambda cur, nid: [turn])
+    monkeypatch.setattr(gt, "advance_talk",
+                        lambda *a, **k: pytest.fail("replayed a talk already played at this stop"))
+    rep = gt.resume_talks(ScriptedCur(lambda sql, params: [(7,)]), b, v, random.Random(1), None)
+    assert rep["talks"] == [{"id": 7, "status": "OPEN", "resumed": False, "carried": True}]
+    assert rep["teams"] == {1, 2} and rep["agreed"] == [] and rep["stalled"] == []
+
+
+def test_a_carried_talk_plays_on_at_the_next_week(monkeypatch):
+    b, v = _resume_books()
+    turn = dict(_leak_turn(), week=7, stage=None)
+    calls = []
+    monkeypatch.setattr(gt, "stall_orphan_talks", lambda *a, **k: [])
+    monkeypatch.setattr(gt, "_talk", lambda cur, nid: dict(TALK))
+    monkeypatch.setattr(gt, "_turns", lambda cur, nid: [turn])
+    monkeypatch.setattr(gt, "_rejudge", lambda *a, **k: None)
+    monkeypatch.setattr(gt, "advance_talk", lambda *a, **k: calls.append(k) or "OPEN")
+    rep = gt.resume_talks(ScriptedCur(lambda sql, params: [(7,)]), b, v, random.Random(1), None)
+    assert calls and rep["talks"][0] == {"id": 7, "status": "OPEN", "resumed": True, "carried": True}
+
+
+def test_the_offseason_stage_is_what_moves_a_carried_talk(monkeypatch):
+    """Week 24 is every offseason stage, so a talk played at stage 2 must still play at stage 3."""
+    def resume(week, stage, turn_stage):
+        b, v = _resume_books(week=week, stage=stage, window="OFFSEASON")
+        monkeypatch.setattr(gt, "stall_orphan_talks", lambda *a, **k: [])
+        monkeypatch.setattr(gt, "_talk", lambda cur, nid: dict(TALK))
+        monkeypatch.setattr(gt, "_turns", lambda cur, nid: [dict(_leak_turn(), week=24, stage=turn_stage)])
+        monkeypatch.setattr(gt, "_rejudge", lambda *a, **k: None)
+        played = []
+        monkeypatch.setattr(gt, "advance_talk", lambda *a, **k: played.append(1) or "OPEN")
+        gt.resume_talks(ScriptedCur(lambda sql, params: [(7,)]), b, v, random.Random(1), None)
+        return bool(played)
+
+    assert not resume(24, 2, 2)                                  # same stage: already played
+    assert resume(24, 3, 2)                                      # the stage moved: the talk resumes
