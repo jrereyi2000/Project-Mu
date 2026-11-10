@@ -200,13 +200,26 @@ def read_state(cur, season):
             "unused_past": unused}
 
 
+def scored_season(cur, season):
+    """The newest season whose ratings card exists, at or before `season`. The post-Super Bowl hot seat runs before
+    the coming season is scanned, and `fo_quality` reads `player_seasons` for the season it scores — so scoring the
+    coming season found no rated rows and every GM's drafting dropped to None (counted as 0)."""
+    for s in (season, season - 1, season - 2):
+        cur.execute("SELECT count(*) FROM player_seasons WHERE season = %s AND overall_rating IS NOT NULL", (s,))
+        row = cur.fetchone()
+        if row and row[0]:
+            return s
+    return season
+
+
 def front_office_scores(cur, season, team_ids):
-    """[{fo_score, fo_rank}] per team id, computed now for the GMs about to be judged (engines/fo_standing.live,
-    with this season's roster cards loaded). A failure leaves them unscored (the term counts 0)."""
+    """[{fo_score, fo_rank}] per team id, computed now for the GMs about to be judged (engines/fo_standing.live over
+    `scored_season`: the season whose card exists, i.e. the one just played when the hot seat runs after the Super
+    Bowl). A failure leaves them unscored (the term counts 0)."""
     try:
         cur.execute("SAVEPOINT fo_standing")
         from engines import fo_standing
-        by = {r["team_id"]: r for r in fo_standing.live(cur, season)}
+        by = {r["team_id"]: r for r in fo_standing.live(cur, scored_season(cur, season))}
         cur.execute("RELEASE SAVEPOINT fo_standing")
     except Exception as e:
         cur.execute("ROLLBACK TO SAVEPOINT fo_standing")

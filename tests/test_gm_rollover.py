@@ -344,3 +344,35 @@ def test_step_gm_next_stage(monkeypatch):
     wc.step_gm(2036, next_stage=True)
     assert runs == [3]                                                   # all done / not the offseason: nothing
     assert any("all 5 stages have run" in m for m in logs) and any("isn't in the offseason" in m for m in logs)
+
+
+def test_the_post_super_bowl_hot_seat_scores_the_season_just_played(monkeypatch):
+    """chunk-7 B10 (CONFIRMED by the audit): the hot seat runs before the coming season is scanned, and
+    `fo_quality.fetch_rows` joins `player_seasons` for the season it scores — so scoring season+1 found no rated rows
+    and every GM's drafting fell to None, which `hot_seat_term` counts as 0."""
+    from engines import fo_standing
+
+    calls = []
+    monkeypatch.setattr(fo_standing, "live",
+                        lambda cur, season: calls.append(season) or [{"team_id": 1, "score": 0.5, "rank": 2}])
+
+    class Cur:
+        def execute(self, sql, params=None):
+            self._row = (5 if params and params[0] == 2036 else 0,) if "FROM player_seasons" in sql else None
+
+        def fetchone(self):
+            return self._row
+
+    assert gr.front_office_scores(Cur(), 2037, [1]) == [{"fo_score": 0.5, "fo_rank": 2}]
+    assert calls == [2036]                       # the season whose card exists, not the coming one
+
+
+def test_a_season_whose_card_exists_is_scored_as_itself():
+    class Cur:
+        def execute(self, sql, params=None):
+            self._row = (5,) if params and params[0] == 2037 else (0,)
+
+        def fetchone(self):
+            return self._row
+
+    assert gr.scored_season(Cur(), 2037) == 2037
