@@ -5,7 +5,8 @@
 //     {"action": "release", "pgid": 9001},                       // a fired coach leaves for the free-agent pool
 //     {"action": "release", "pgid": 9001, "retire": true},        // D8: unhired for three seasons -> Retired
 //     {"action": "assign",  "pgid": 9002, "team_index": 7, "position": "DefensiveCoordinator",
-//      "contract": {"ContractLength": 3, "ContractSalary": 450, "ContractYearsRemaining": 3}},
+//      "contract": {"ContractLength": 3, "ContractSalary": 450, "ContractYearsRemaining": 3},
+//      "set": {"Portrait": 5324, "Portrait_Force_Silhouette": false}},   // optional extra Coach fields
 //     {"action": "create",  "key": "coach-311", "team_index": 7, "position": "HeadCoach",
 //      "profile": { ...coach_madden_profiles fields... }, "visuals_template": 9010,
 //      "contract": {"ContractLength": 3, "ContractSalary": 450, "ContractYearsRemaining": 3}}
@@ -43,7 +44,7 @@
 // portrait at all, so a coach without a face now carries the game's own placeholder (7999) instead. Still to see:
 // whether IsCreated = true opens the in-game editor, whether a created head coach's AssetName yields a 3D model,
 // and whether a ContractStatus = Retired coach stays out of the pool.
-import { arraySlots, cloneInto, decodeRef, encodeRef, fieldMeta, NO_REF } from './lib.mjs';
+import { arraySlots, cloneInto, decodeRef, encodeRef, fieldMeta, fieldValueError, NO_REF } from './lib.mjs';
 import { fieldErrors, fieldMismatches, moveTables } from './sign.mjs';
 
 export const FREE_AGENT_TEAM = 32;
@@ -462,6 +463,21 @@ export async function planStaff(franchise, staff = [], { freed = [] } = {}) {
     const set = { TeamIndex: team.teamIndex, ContractStatus: 'Signed', Position: position, ...contract };
     if (record.Position !== position) set.OriginalPosition = position;
     set.IsUserControlled = position === 'HeadCoach';
+    // An optional "set" of further Coach fields on the same record (the portrait pack pushes Portrait and
+    // Portrait_Force_Silhouette through it: Mu knows the coach's pgid, not his save row). Same shape as a "players"
+    // edit's set, validated the same way; it may not set a field the assign itself writes.
+    const extra = item.set ?? {};
+    if (typeof extra !== 'object' || Array.isArray(extra)) {
+      errors.push(`${where}: set must be an object`);
+    } else {
+      for (const [k, v] of Object.entries(extra)) {
+        if (k in set) { errors.push(`${where}: set may not set ${k}, which the assign writes`); continue; }
+        const meta = fieldMeta(record, k);
+        const err = meta ? fieldValueError(meta, v) : 'no such Coach field';
+        if (err) errors.push(`${where} set ${k} = ${JSON.stringify(v)}: ${err}`);
+        else set[k] = v;
+      }
+    }
     errors.push(...fieldErrors(record, set, 'Coach').map(e => `${where}: ${e}`));
     plan.assignments.push({ kind: 'assign', pgid, row, record, teamIndex: team.teamIndex,
       team: teamLabel(team, team.teamIndex), teamRow: team.row, teamRecord: team.record, position,
