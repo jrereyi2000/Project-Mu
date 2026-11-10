@@ -201,6 +201,14 @@ def test_classify_the_empty_postseason_hub_by_its_phase_word(phase):
     assert classify(frame_of(lines), CAT) == "HUB_WEEKLY"
 
 
+def test_classify_a_hub_frame_that_lost_its_header_and_tab_label():
+    # 2026-11-10: OCR dropped both the "2026. WEEK 10" header and the highlighted WEEKLY HUB
+    # label, leaving only the tab row — the frame was UNKNOWN and stopped a season run.
+    lines = ["GAMEDAY", "News Center", "MANAGE ROSTER", "COACH CENTRAL", "LEAGUE", "OPTIONS",
+             "64/65", "BACK"]
+    assert classify(frame_of(lines), CAT) == "HUB_WEEKLY"
+
+
 def test_classify_the_bye_week_hub():
     # no matchup line and no week number: nothing else matches it, and goto used to spin on UNKNOWN
     lines = ["GAMEDAY", "WEEKLY HUB", "MANAGE ROSTER", "COACH CENTRAL", "LEAGUE", "OPTIONS", "BYE WEEK", "BACK"]
