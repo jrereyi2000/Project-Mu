@@ -16,7 +16,11 @@ franchise list in game strips the `CAREER-` prefix, so `CAREER-TUNE-P2A` is the 
 
 - **Make a clone:** `python3 -m tools.madden_pilot clone-save --from CAREER-MU2026 --to CAREER-TUNE-<name>`. It is a
   file copy, not a screen action. An existing `CAREER-TUNE-<name>` file is replaced, so re-cloning is the "fresh
-  save" reset.
+  save" reset. **The copy is then capacity-pruned** (`pipeline/save_reader/prune_capacity.mjs`): `Highlight` goes
+  from 3,200 allocated rows to 512, freeing 596,736 bytes of the 20 MiB unpacked window the modded season used to
+  truncate at. The game keeps the smaller capacity when it rewrites the save, so one prune per clone lasts the
+  whole run; a refused prune leaves the plain copy, prints a warning and records `pruned: false` in `result.json`.
+  See `docs/in_progress/SAVE_CAPACITY_PRUNE_PLAN.md` §9.
 - **How many:** keep the clone for the active run plus at most one predecessor with the same name. Delete older
   `CAREER-TUNE-*` clones by hand when a run is done. Never delete a `CAREER-MU*` file.
 - **Quit rule:** the pilot may only load, sim and quit `CAREER-TUNE-*` saves, and never while `pipeline.watch_save`

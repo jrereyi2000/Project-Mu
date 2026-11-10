@@ -1,7 +1,9 @@
 """Madden pilot jobs and CLI (plan section 2.3) against scripted fake Maddens. No PC, no database."""
 import json
 import os
+import shutil
 import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -91,6 +93,40 @@ def test_clone_copies_and_replaces_only_tune(tmp_path, notices):
     assert out["overwrote"] and (d / "CAREER-TUNE-X").read_bytes() == b"week1-v2"
     assert not [x for x in d.iterdir() if x.name.endswith(".tmp")]
     assert (d / "CAREER-MU2026").read_bytes() == b"week1-v2"            # source untouched
+
+
+SAMPLE_SAVE = Path(os.environ.get("MU_SAMPLE_SAVE", jobs.ROOT / "CAREER-GIANTS-AUTOSAVE"))
+needs_sample_save = pytest.mark.skipif(not SAMPLE_SAVE.is_file(), reason=f"no sample save at {SAMPLE_SAVE}")
+
+
+def _unpacked_size(path):
+    import zlib
+    raw = Path(path).read_bytes()
+    return len(zlib.decompress(raw[0x52:]))
+
+
+@needs_sample_save
+def test_clone_prunes_the_capacity_of_a_real_save(tmp_path, notices):
+    # Highlight 3,200 rows of allocated capacity is what the tuning season used to truncate at;
+    # a clone must come out smaller, with the rest of the save intact (SAVE_CAPACITY_PRUNE_PLAN §9).
+    d = tmp_path / "saves"
+    d.mkdir()
+    shutil.copyfile(SAMPLE_SAVE, d / "CAREER-MU2026")
+    out = jobs.clone_save(make_pilot(tmp_path / "run", fake_madden()[0]), dst="CAREER-TUNE-X", folder=d)
+    assert out["status"] == "ok" and out["copied"] and out["pruned"], out
+    assert "bytes freed" in out["prune"]
+    assert _unpacked_size(d / "CAREER-TUNE-X") < _unpacked_size(d / "CAREER-MU2026")
+    assert (d / "CAREER-MU2026").stat().st_size == (d / "CAREER-TUNE-X").stat().st_size  # the slot keeps its size
+    assert not [x for x in d.iterdir() if x.name.endswith(".tmp")]
+
+
+def test_clone_leaves_a_non_save_file_alone_and_says_so(tmp_path, notices, capsys):
+    # The fixtures in this module are not FBCHUNKS saves: the prune declines rather than failing.
+    d = _saves(tmp_path)
+    out = jobs.clone_save(make_pilot(tmp_path / "run", fake_madden()[0]), dst="CAREER-TUNE-X", folder=d)
+    assert out["pruned"] is False and out["prune"] == "not an FBCHUNKS save"
+    assert (d / "CAREER-TUNE-X").read_bytes() == b"week1"
+    assert "capacity prune skipped" in capsys.readouterr().out
 
 
 def test_clone_dry_run_copies_nothing(tmp_path, notices):

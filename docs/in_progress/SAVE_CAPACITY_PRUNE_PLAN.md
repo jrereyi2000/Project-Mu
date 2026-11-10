@@ -295,5 +295,8 @@ is, add the others back one at a time with `--set` and an in-game load test each
 game's own writes, so a yearly pass is for re-trimming anything the game allocates with fresh slack (and for
 any newly created table with a generous capacity), not for restoring the saving.
 
-**Remaining work:** wire the yearly pass into the tuning season loop (after the rollover ingest, before the
-pilot reloads), on `CAREER-TUNE-*` saves only. Never on the live franchise without JR.
+**Remaining work:** none for the tuning league. The pass is wired into `tools/madden_pilot/jobs.py`'s
+`clone_save`, so every `CAREER-TUNE-*` clone is pruned before the pilot loads it and the run then keeps that
+capacity for its whole life (`python3 -m tools.madden_pilot clone-save ...`). A clone that fails to prune
+warns, keeps the plain copy and records `pruned: false` in `result.json`. Never run the pruner on a live
+franchise without JR.

@@ -219,11 +219,50 @@ def _refuse(why, **extra):
 
 
 # ------------------------------------------------------------------------------- clone_save
+PRUNER = ROOT / "pipeline" / "save_reader" / "prune_capacity.mjs"
+
+
+def prune_capacity(save, out, timeout=180):
+    """Shrink a cloned save's empty table capacity: Highlight 3,200 rows down to 512 frees
+    582.8 KB of the 20 MiB unpacked limit the tuning season used to truncate at, and was
+    proved in game through the 2026 and 2027 seasons (docs/in_progress/SAVE_CAPACITY_PRUNE_PLAN.md
+    §9). Returns (pruned, detail) and never raises: a save that is not an FBCHUNKS file, a
+    missing node or a refused rebuild leaves the caller's copy untouched."""
+    node = shutil.which("node")
+    if node is None:
+        return False, "node not on PATH"
+    try:
+        with open(save, "rb") as fh:
+            if fh.read(8) != b"FBCHUNKS":
+                return False, "not an FBCHUNKS save"
+    except OSError as exc:
+        return False, f"unreadable: {exc}"
+    report = out.with_suffix(".report.json")
+    try:
+        proc = subprocess.run(
+            [node, str(PRUNER), str(save), "--out", str(out), "--report", str(report)],
+            capture_output=True, text=True, timeout=timeout, cwd=str(ROOT),
+        )
+        if proc.returncode != 0 or not out.is_file():
+            lines = (proc.stderr or proc.stdout or "no output").strip().splitlines()
+            return False, f"pruner failed: {lines[-1] if lines else 'no output'}"
+        data = json.loads(report.read_text()) if report.is_file() else {}
+    except (OSError, subprocess.TimeoutExpired, ValueError) as exc:
+        return False, f"pruner not run: {exc}"
+    finally:
+        if report.is_file():
+            report.unlink()
+    saved = data.get("saved", 0)
+    return True, f"{len(data.get('tables', []))} tables, {saved} bytes freed"
+
+
 @job("clone-save")
 def clone_save(pilot, src=BASELINE_SAVE, dst=None, folder=None, dry_run=False, progress=None):
     """Copy save `src` to `dst` inside MADDEN_SAVES_DIR. `dst` must be CAREER-TUNE-<name>; an
     existing CAREER-TUNE-* file is replaced, anything else never is. The copy gets a fresh
-    mtime, so Madden lists it first."""
+    mtime, so Madden lists it first. The copy is then capacity-pruned (prune_capacity) so
+    every tuning run starts with the headroom the season needs; a refused prune leaves the
+    plain copy and reports itself in the result."""
     folder = Path(folder) if folder else saves_dir()
     if not dst or not str(dst).upper().startswith(TUNE_SAVE_PREFIX) or len(dst) <= len(TUNE_SAVE_PREFIX):
         return _refuse(f"destination must be {TUNE_SAVE_PREFIX}<name>, not {dst!r}", src=src, dst=dst)
@@ -245,13 +284,19 @@ def clone_save(pilot, src=BASELINE_SAVE, dst=None, folder=None, dry_run=False, p
         print(f"[dry-run] would copy {src_path} -> {dst_path}", flush=True)
         return {**out, "copied": False}
     tmp = folder / f".mu-pilot-clone-{os.getpid()}.tmp"      # not CAREER-*: no watcher picks it up
+    pruned_tmp = folder / f".mu-pilot-clone-{os.getpid()}.pruned.tmp"
     try:
         shutil.copyfile(src_path, tmp)
-        os.replace(tmp, dst_path)
+        pruned, prune_detail = prune_capacity(tmp, pruned_tmp)
+        if not pruned:
+            print(f"WARNING: capacity prune skipped ({prune_detail}); {dst} keeps its full table capacity",
+                  flush=True)
+        os.replace(pruned_tmp if pruned else tmp, dst_path)
     finally:
-        if tmp.exists():
-            tmp.unlink()
-    return {**out, "copied": True}
+        for leftover in (tmp, pruned_tmp):
+            if leftover.exists():
+                leftover.unlink()
+    return {**out, "copied": True, "pruned": pruned, "prune": prune_detail}
 
 
 # ------------------------------------------------------------------------------- launch
