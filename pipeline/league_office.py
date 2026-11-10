@@ -62,14 +62,15 @@ players-edit field already planned with a different value is a CompositionError,
      Retirements, one decision per offseason (docs/done/RETIREMENT_WINDOW_PLAN.md): the decision stage is the
          first offseason stop (normally OFFSEASON_START) with no WRITTEN decision run for the season
          (Deps.retirement_window_inputs). There every player Madden retired is recorded in retirement_decisions and
-         Project Mu keeps (un-retires) him when deps.retirement_decision says so: as a free agent, or, with a proven
-         authority ($MU_RETIREMENT_AUTHORITY, Deps.retirement_authority) covering the stage, through
-         retirement_edits.plan_retirement_edits with the previous run's status and team. At every later stop through
+         Project Mu keeps (un-retires) him when deps.retirement_decision says so: always with the free-agent flip
+         (FreeAgent/32), authorized by retirement_edits.plan_retirement_edits when a proven authority
+         ($MU_RETIREMENT_AUTHORITY, Deps.retirement_authority) covers the stage. At every later stop through
          CUTDOWN step_retirement_window (before re-signings, free agency, the draft and cut-down) restores native
          retirements the decision didn't make, and a kept player Madden retired again (once a season), through the
-         same planner; without an authority they are recorded and reported only. Players who vanished since the
-         previous run are reported (rostered ones recorded). Every run's summary carries "retirement_window" with
-         the roster image the save holds after the write.
+         same planner and the same flip; without an authority they are recorded and reported only. The next run's
+         step_restore_retirees signs a restored free agent back to his old team with his stored contract. Players
+         who vanished since the previous run are reported (rostered ones recorded). Every run's summary carries
+         "retirement_window" with the roster image the save holds after the write.
      OFFSEASON_START  contracts for the practice-squad players Madden promoted (a 1-year minimum for the coming
          league year, contracts_engine.minimum_salary).
      RESIGN  transactions_engine.resign_decisions (CONTRACT / TAG / EXTENSION / OPTION rewrite the contract; LET_GO
@@ -1595,16 +1596,17 @@ def _schema_version(plan):
     return (plan.snapshot.get("meta") or {}).get("reader_version")
 
 
-def _apply_restores(plan, out, tag):
-    """Applies plan_retirement_edits' restore edits to the plan; returns [(pgid, set)]."""
+def _apply_free_agent_flip(plan, out):
+    """Restores each player plan_retirement_edits allowed by the proven legacy sequence: `FreeAgent`/32 in this
+    write, left `("Retired", None)` in the view so nothing signs or cuts him before the next run's sign-back
+    (RETIREMENT_WINDOW_SIGNING_RESTORE_PLAN §2.2). Returns the restored pgids."""
     done = []
     for e in (out.get("edits") or {}).get("players") or ():
-        g, st = e["pgid"], dict(e["set"])
-        plan.set_fields(g, st)
+        g = e["pgid"]
+        plan.set_fields(g, {"ContractStatus": "FreeAgent", "TeamIndex": FREE_AGENT_TEAM})
         plan.view[g] = ("Retired", None)   # signable / movable only in a later write
-        plan.image_overrides[g] = (st.get("ContractStatus"), st.get("TeamIndex"))
-        plan.counts[tag] += 1
-        done.append((g, st))
+        plan.image_overrides[g] = ("FreeAgent", FREE_AGENT_TEAM)
+        done.append(g)
     return done
 
 
@@ -1639,9 +1641,11 @@ def step_retirements(plan, seed, deps=None, cur=None, authority=None, prior_imag
         reqs = [{"decision_id": f"decision:{plan.season}:{g}", "pgid": g, "action": rw.KEEP_ACTION,
                  "state": rw.DEFAULT_CAREER_STATE} for g in kept]
         out = plan_retirement_edits(snap, reqs, auth)
-        for g, st in _apply_restores(plan, out, "unretired"):
+        for g in _apply_free_agent_flip(plan, out):
+            plan.counts["unretired"] += 1
             restored.append({"pgid": g, "player_id": plan.pid(g), "kind": "DECIDED_KEEP",
-                             "set": {"status": st.get("ContractStatus"), "team_index": st.get("TeamIndex")}})
+                             "restore": "free_agent",
+                             "set": {"status": "FreeAgent", "team_index": FREE_AGENT_TEAM}})
         for c in out["conflicts"]:
             g = c["pgid"]
             blocked.append({"pgid": g, "player_id": plan.pid(g), "kind": "DECIDED_KEEP", "reasons": c["reasons"]})
@@ -1684,9 +1688,15 @@ def step_retirement_window(plan, deps, cur, source_fingerprint, inputs, authorit
             return
         plan.db["retirements"].append({"player_id": pid, "mu_keep": keep, "reason": reason})
 
-    for g, st in _apply_restores(plan, out, "window_restored"):
-        restored.append(dict(by_pgid[g], player_id=plan.pid(g), name=plan.name(g)))
+    for g in _apply_free_agent_flip(plan, out):
+        plan.counts["window_restored"] += 1
+        plan.counts["window_free_agent"] += 1
+        restored.append(dict(by_pgid.get(g, {"pgid": g}), player_id=plan.pid(g), name=plan.name(g),
+                             restore="free_agent"))
         record(g, True, f"window:restored:{stage}")
+        if plan.stage == "CUTDOWN":
+            plan.warn(f"{plan.name(g)}: restore_at_last_stop (this free agent is signed at the week-1 advance, "
+                      "after the free-agent purge; he may not survive)")
     for c in out["conflicts"]:
         g = c["pgid"]
         blocked.append(dict(by_pgid.get(g, {"pgid": g}), player_id=plan.pid(g), name=plan.name(g),
@@ -1717,19 +1727,23 @@ def step_retirement_window(plan, deps, cur, source_fingerprint, inputs, authorit
 
 def step_restore_retirees(plan, kept, stored):
     """Signs a kept retiree (now a free agent) back to his old team when his stored contract runs into the league
-    year."""
+    year (RETIREMENT_WINDOW_SIGNING_RESTORE_PLAN §2.2). No stored contract leaves him a free agent and warns."""
     for pid in sorted(kept):
         g = plan.pgid(pid)
+        if g is None or plan.roster_status(g)[0] != "FreeAgent":
+            continue
         st = stored.get(pid)
-        if g is None or not st or plan.roster_status(g)[0] != "FreeAgent":
+        y = plan.target - st[1] if st else None
+        if not st or st[2] not in plan.team_index or not 0 <= y < st[0]["length"]:
+            plan.warn(f"{plan.name(g)}: no_restorable_contract (kept retiree has no stored contract running into "
+                      f"{plan.target}; left a free agent)")
             continue
         c, start, team_id = st[0], st[1], st[2]
-        y = plan.target - start
-        if team_id not in plan.team_index or not 0 <= y < c["length"]:
-            continue
         rest = dict(c, length=c["length"] - y, current_year=0, salary_by_year=c["salary_by_year"][y:],
                     bonus_by_year=c["bonus_by_year"][y:])
-        plan.sign_player(g, plan.team_index[team_id], "Roster", rest, PRIORITY_STAGE, "kept retiree back to his team")
+        if plan.sign_player(g, plan.team_index[team_id], "Roster", rest, PRIORITY_STAGE,
+                            "kept retiree back to his team"):
+            plan.counts["restored_retirees"] += 1
 
 
 def step_promoted_ps(plan, ps_ids):
