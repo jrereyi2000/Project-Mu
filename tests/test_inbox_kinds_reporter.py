@@ -22,13 +22,14 @@ CREATE TABLE injuries (
 CREATE TABLE games (
     id INTEGER PRIMARY KEY AUTOINCREMENT, season INT, week INT, game_type TEXT, status TEXT, home_team_id INT,
     away_team_id INT, home_score INT, away_score INT);
-CREATE TABLE league_office_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, season INT, status TEXT);
+CREATE TABLE league_office_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, season INT, status TEXT,
+                                 week INT);
 CREATE TABLE franchise_pending_moves (
     id INTEGER PRIMARY KEY AUTOINCREMENT, team_id INT, kind TEXT, status TEXT, payload TEXT, reason TEXT,
     written_run INT);
 CREATE TABLE contract_offers (
     id INTEGER PRIMARY KEY AUTOINCREMENT, team_id INT, player_id INT, season INT, from_user BOOLEAN, status TEXT,
-    total_value REAL);
+    total_value REAL, week INT);
 ALTER TABLE players ADD COLUMN full_name TEXT;
 ALTER TABLE player_seasons ADD COLUMN position TEXT;
 ALTER TABLE player_seasons ADD COLUMN age INT;
@@ -136,7 +137,7 @@ def test_a_five_game_streak_keeps_one_source_ref():
 
 
 def test_executed_trade_trigger(db, cur):
-    db.conn.execute("INSERT INTO league_office_runs (id, season, status) VALUES (1, 2026, 'WRITTEN')")
+    db.conn.execute("INSERT INTO league_office_runs (id, season, status, week) VALUES (1, 2026, 'WRITTEN', 5)")
     db.conn.execute("INSERT INTO franchise_pending_moves (team_id, kind, status, written_run) "
                     "VALUES (1, 'TRADE', 'WRITTEN', 1)")
     moves = [t for t in reporter.scan(cur, SEASON, WEEK, team(cur)) if t.intent == "MOVE"]
@@ -278,3 +279,32 @@ def test_a_failed_beat_writer_fallback_leaves_the_transaction_usable(scratch_pg)
     assert reporter._beat_writer(scratch_pg, 1) is None
     scratch_pg.execute("SELECT count(*) FROM agent_memories")           # InFailedSqlTransaction without a savepoint
     assert scratch_pg.fetchone()[0] == 0
+
+
+# ------------------------------------------------------------------- move recency (P5) ---
+def _trade(db, run_id, week):
+    db.conn.execute("INSERT INTO league_office_runs (id, season, status, week) VALUES (?, 2026, 'WRITTEN', ?)",
+                    (run_id, week))
+    db.conn.execute("INSERT INTO franchise_pending_moves (team_id, kind, status, written_run) "
+                    "VALUES (1, 'TRADE', 'WRITTEN', ?)", (run_id,))
+
+
+def _signing(db, oid, week, name="Free Agent"):
+    db.conn.execute("INSERT INTO players (id, player_name, full_name) VALUES (?, ?, ?)", (900 + oid, name, name))
+    db.conn.execute("INSERT INTO contract_offers (id, team_id, player_id, season, from_user, status, week) "
+                    "VALUES (?, 1, ?, 2026, 1, 'ACCEPTED', ?)", (oid, 900 + oid, week))
+
+
+def test_a_move_is_interviewed_only_in_its_own_week_and_the_next(db, cur):
+    """P5: every trade and signing of the season used to be interviewable in week 18. The window is the scan week
+    and the one before it, the same for a trade (its league-office run's week) and a signing (contract_offers.week)."""
+    _trade(db, 1, 5)        # this week: asked
+    _trade(db, 2, 4)        # last week: asked
+    _trade(db, 3, 3)        # older: not asked
+    _signing(db, 1, 5)      # this week: asked
+    _signing(db, 2, 4)      # last week: asked
+    _signing(db, 3, 2)      # older: not asked
+    _signing(db, 4, None)   # undated (pre-2027_02_18): out of window
+    moves = [t for t in reporter.scan(cur, SEASON, WEEK, team(cur)) if t.intent == "MOVE"]
+    assert sorted(t.source_ref for t in moves) == ["reporter:signing:1", "reporter:signing:2",
+                                                   "reporter:trade:1", "reporter:trade:2"]

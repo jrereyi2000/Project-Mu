@@ -601,6 +601,7 @@ CREATE TABLE IF NOT EXISTS contract_offers (
         CHECK (status IN ('OPEN','ACCEPTED','REJECTED','COUNTERED','WITHDRAWN','EXPIRED')),
     counter JSONB,                          -- {years, total_value, bonus, guaranteed} when COUNTERED
     seed TEXT NOT NULL,
+    week SMALLINT,                          -- engine week the offer was made (2027_02_18); NULL = undated
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS contract_offers_player ON contract_offers (player_id, season, status);
@@ -3920,5 +3921,6 @@ INSERT INTO schema_migrations (version, filename, checksum, source) VALUES
     ('2027_02_14_trade_turn_stop', '2027_02_14_trade_turn_stop.sql', '8e0cd2c0e60e310a1bcc930b43388edb40aa6218f83913a0df343bc509304912', 'init_db.sql'),
     ('2027_02_15_jc2a_source_ids', '2027_02_15_jc2a_source_ids.sql', '9134260f512316714b66f917ea06bf76b1459cda967c04c18e94dda09a848d0a', 'init_db.sql'),
     ('2027_02_16_choice_source_no_llm', '2027_02_16_choice_source_no_llm.sql', '462bd5af1d778d100be44e3a419969957a5a9bcdd1493c50214cd0ea632774ca', 'init_db.sql'),
-    ('2027_02_17_staff_contract_active_once', '2027_02_17_staff_contract_active_once.sql', '1b432423aea3d5bf4083c84ee1d83618b2ee976102cd508ece4401324ea94ed9', 'init_db.sql')
+    ('2027_02_17_staff_contract_active_once', '2027_02_17_staff_contract_active_once.sql', '1b432423aea3d5bf4083c84ee1d83618b2ee976102cd508ece4401324ea94ed9', 'init_db.sql'),
+    ('2027_02_18_contract_offer_week', '2027_02_18_contract_offer_week.sql', 'd7ad6551f3037ba512d0f22c992ca653634ed7ab8d703a9718c5ef119f798041', 'init_db.sql')
 ON CONFLICT (version) DO NOTHING;

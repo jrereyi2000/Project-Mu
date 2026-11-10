@@ -988,14 +988,28 @@ def fetch_league(cur, season, target=None):
                         fetch_players(cur, season), fetch_contracts(cur, season), fetch_fits(cur, season))
 
 
+def league_state_week(cur):
+    """league_state's current week (the engine week: 24+ in the offseason), or None without it. A written offer and a
+    trade's `league_office_runs.week` are read on the same clock, so the reporter's move window compares like with
+    like."""
+    try:
+        cur.execute("SELECT current_week FROM league_state WHERE id = 1")
+        row = cur.fetchone()
+    except Exception:  # noqa: BLE001 - a database without league_state stores the offer undated
+        return None
+    return int(row[0]) if row and row[0] is not None else None
+
+
 def store_offers(cur, offers, season, seed):
-    """INSERT each offer into contract_offers (OPEN, from_user false); sets offer["offer_id"]."""
+    """INSERT each offer into contract_offers (OPEN, from_user false); sets offer["offer_id"]. The offer's `week` is
+    the league's, so the REPORTER can decide whether it is recent enough to interview (P5)."""
+    week = league_state_week(cur)
     for o in offers:
         cur.execute("""INSERT INTO contract_offers (season, stage, wave, kind, player_id, team_id, from_user, years,
-                                                    total_value, bonus, guaranteed, status, seed)
-                       VALUES (%s, %s, %s, %s, %s, %s, false, %s, %s, %s, %s, 'OPEN', %s) RETURNING id""",
+                                                    total_value, bonus, guaranteed, status, seed, week)
+                       VALUES (%s, %s, %s, %s, %s, %s, false, %s, %s, %s, %s, 'OPEN', %s, %s) RETURNING id""",
                     (season, o["stage"], o["wave"], o["kind"], o["player_id"], o["team_id"], o["years"],
-                     o["total_value"], o["bonus"], o["guaranteed"], seed))
+                     o["total_value"], o["bonus"], o["guaranteed"], seed, week))
         row = cur.fetchone()
         o["offer_id"] = row[0] if row else None
     return offers

@@ -430,7 +430,7 @@ def test_public_functions_cover_32_teams_and_store_rows(fake_fits):
     for o, r in zip(offers, rows):
         assert o["offer_id"] is not None
         assert r == (S, "FREE_AGENCY", 3, "FREE_AGENT", o["player_id"], o["team_id"], o["years"], o["total_value"],
-                     o["bonus"], o["guaranteed"], "seed")
+                     o["bonus"], o["guaranteed"], "seed", None)      # week: the fake has no league_state
 
     # waivers: claims stored with awarded flags, one awarded per claimed player
     cur3 = FakeCursor(src2)
@@ -551,3 +551,26 @@ def test_evaluate_voluntary_contract_scores_through_shared_utility():
                                          seed="s")
     assert ev["status"] in ("ACCEPT", "COUNTER", "REJECT") and "policy_explanation" in ev["score"]
     assert ev["offer"]["team_id"] == 3 and ev["trace"]["bar_base"] == ev["bar"]
+
+
+def test_store_offers_dates_each_offer_with_the_league_week():
+    """P5: an offer records the league week it was made in, which the REPORTER's move window reads."""
+    class Cur:
+        def __init__(self):
+            self.inserts, self._row = [], None
+
+        def execute(self, sql, params=None):
+            if "FROM league_state" in sql:
+                self._row = (17,)
+            else:
+                self.inserts.append(params)
+                self._row = (1,)
+
+        def fetchone(self):
+            return self._row
+
+    cur = Cur()
+    offer = dict(stage="FREE_AGENCY", wave=1, kind="FREE_AGENT", player_id=1, team_id=1, years=2,
+                 total_value=10, bonus=0, guaranteed=0)
+    te.store_offers(cur, [offer], 2026, "seed")
+    assert cur.inserts[0][-1] == 17 and offer["offer_id"] == 1

@@ -480,12 +480,14 @@ def free_agent(cur, season: int, player_id: int) -> Optional[dict]:
 
 
 def insert_offer(cur, season, stage, kind, player_id, team_id, years, total, bonus, guaranteed, utility, status,
-                 counter, seed) -> int:
+                 counter, seed, week=None) -> int:
+    """One offer from JR. `week` is the league week it was made in, which the REPORTER's move window reads (P5)."""
     cur.execute("""INSERT INTO contract_offers (season, stage, wave, kind, player_id, team_id, from_user, years,
-                                                total_value, bonus, guaranteed, utility, status, counter, seed)
-                   VALUES (%s, %s, NULL, %s, %s, %s, true, %s, %s, %s, %s, %s, %s, %s::jsonb, %s) RETURNING id""",
+                                                total_value, bonus, guaranteed, utility, status, counter, seed, week)
+                   VALUES (%s, %s, NULL, %s, %s, %s, true, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s)
+                   RETURNING id""",
                 (season, stage, kind, player_id, team_id, years, total, bonus, guaranteed, utility, status,
-                 json.dumps(counter) if counter else None, seed))
+                 json.dumps(counter) if counter else None, seed, week))
     return cur.fetchone()[0]
 
 
@@ -1354,7 +1356,7 @@ def make_offer(abbr: str, body: OfferIn):
             return stale
         oid = insert_offer(cur, ctx["season"], stage_for(ctx["week"]), "FREE_AGENT", p["player_id"], ctx["team"]["id"],
                            body.years, body.total_value, body.bonus, body.guaranteed, score["utility"],
-                           STATUS[decision], counter, _seed(ctx))
+                           STATUS[decision], counter, _seed(ctx), week=ctx["week"])
         if inputs is not None:
             record_policy(cur, ctx, inputs, extra, oid, "FREE_AGENT", _terms(body), score, decision, counter, bar)
         conn.commit()
@@ -1452,7 +1454,7 @@ def propose(abbr: str, player_id: int, body: ProposeIn):
             return stale
         oid = insert_offer(cur, ctx["season"], stage_for(ctx["week"]), kind, player_id, ctx["team"]["id"], body.years,
                            body.total_value, body.bonus, body.guaranteed, score["utility"], STATUS[decision], counter,
-                           _seed(ctx))
+                           _seed(ctx), week=ctx["week"])
         if inputs is not None:
             record_policy(cur, ctx, inputs, extra, oid, kind, _terms(body), score, decision, counter, bar)
         conn.commit()

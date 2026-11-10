@@ -42,6 +42,7 @@ QUESTION_OPTIONS = [
 ]
 END_OPTION = {"id": "END_INTERVIEW", "label": "End the interview", "form": None, "needs_note": False,
               "default": None}
+MOVE_INTERVIEW_WEEKS = 2          # a move interview is offered for the scan week and the one before
 FOLLOW_UPS = [
     "What does that mean for the locker room?",
     "How do you see his role changing from here?",
@@ -117,18 +118,25 @@ def _injury(cur, team, writer, season, week):
 
 
 def _executed_moves(cur, team, writer, season, week):
+    """The team's completed trades and signings recent enough to interview JR about (P5's window): the week being
+    scanned and the one before it. A wider window kept asking about week-2 moves in week 18; a one-week window would
+    miss a move written after that week's last scan, since the scan runs on page open. A trade is dated by its
+    league-office run's week, a signing by `contract_offers.week` (`2027_02_18`); a NULL week is out of window."""
     out = []
+    lo = week - (MOVE_INTERVIEW_WEEKS - 1)
     if _regclass(cur, "franchise_pending_moves") and _regclass(cur, "league_office_runs"):
         cur.execute("""SELECT m.id FROM franchise_pending_moves m JOIN league_office_runs r ON r.id = m.written_run
                        WHERE m.team_id = %s AND m.kind = 'TRADE' AND m.status = 'WRITTEN' AND r.season = %s
-                       ORDER BY m.id""", (team["team_id"], season))
+                         AND r.week BETWEEN %s AND %s
+                       ORDER BY m.id""", (team["team_id"], season, lo, week))
         out += [_trigger(team, writer, "The trade you made", f"reporter:trade:{r[0]}",
                          {"topic": "MOVE", "move": "trade", "season": season, "week": week}, "MOVE")
                 for r in cur.fetchall()]
     if _regclass(cur, "contract_offers"):
         cur.execute("""SELECT o.id, p.player_name FROM contract_offers o LEFT JOIN players p ON p.id = o.player_id
                        WHERE o.team_id = %s AND o.season = %s AND o.from_user AND o.status = 'ACCEPTED'
-                       ORDER BY o.id""", (team["team_id"], season))
+                         AND o.week BETWEEN %s AND %s
+                       ORDER BY o.id""", (team["team_id"], season, lo, week))
         for oid, name in cur.fetchall():
             subject = f"The signing of {name}" if name else "The signing you made"
             out.append(_trigger(team, writer, subject, f"reporter:signing:{oid}",
