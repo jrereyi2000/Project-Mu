@@ -294,13 +294,29 @@ def test_sim_stuck_when_week_does_not_advance(tmp_path, notices):
     assert out["status"] == "stopped" and out["kind"] == "Stuck" and "header" in out["reason"]
 
 
-def test_the_loader_re_enters_the_list_when_a_new_clone_is_not_on_it(tmp_path, notices):
-    # CURRENT FRANCHISES is built when it opens: a clone made while it was already up is missing
-    # until the list is entered again (season_loop's first run, 2026-11-10)
+def test_the_loader_leaves_for_the_main_menu_when_a_new_clone_is_not_on_the_list(tmp_path, notices):
+    # CURRENT FRANCHISES only rebuilds on a fresh entry from the main menu: one Back to the
+    # landing page and in again keeps the stale list (JR, 2026-11-10; the p2g run walked the
+    # list and never saw TUNE-P2G).
     class StaleList(ScriptedMadden):
+        at_menu = False
+
+        def go(self, screen):
+            super().go(screen)
+            if screen == "MAIN_MENU":
+                self.at_menu = True
+            elif self.at_menu and screen == "FRANCHISE_LIST":
+                self.tiles, self.idx = ["OTHER", "TUNE-X"], 0
+
         def on_key(self, name):
             if name == "backspace" and self.screen == "FRANCHISE_LIST":
-                self.tiles, self.idx = ["OTHER", "TUNE-X"], 0
+                self.go("FRANCHISE_LANDING")
+                return
+            if name == "backspace" and self.screen == "FRANCHISE_LANDING":
+                self.go("MAIN_MENU")
+                return
+            if name == "space" and self.screen == "MAIN_MENU":
+                self.go("FRANCHISE_LANDING")
                 return
             super().on_key(name)
 

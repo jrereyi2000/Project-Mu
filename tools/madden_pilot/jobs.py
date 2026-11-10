@@ -641,6 +641,24 @@ def _walk_to_tile(pilot, tile, folder):
     return on_target()
 
 
+MAIN_MENU_SCREENS = ("MAIN_MENU", "MAIN_MENU_RAIL", "TITLE_SCREEN")
+
+
+def _leave_to_main_menu(pilot, max_backs=3):
+    """Back out of the franchise screens to the main menu; the last screen looked at is returned.
+
+    CURRENT FRANCHISES only rebuilds on a fresh entry from the main menu: a clone made while the
+    list was open stays missing after one Back and a re-entry from the Franchise landing page
+    (JR, 2026-11-10). Bounded, and a screen that Back won't leave is returned rather than guessed
+    at, so the caller's goto fails with a screenshot instead of pressing blind."""
+    for _ in range(max_backs):
+        _, screen = pilot.look()
+        if screen in MAIN_MENU_SCREENS:
+            return screen
+        pilot.press("back")
+    return pilot.look()[1]
+
+
 def _load_franchise(pilot, tile, save=None, folder=None):
     # Title -> main menu and the franchise load are long UNKNOWN splashes offline; goto's default
     # 20-look UNKNOWN limit (about 40 s) is too short for them.
@@ -654,9 +672,11 @@ def _load_franchise(pilot, tile, save=None, folder=None):
         pilot.goto("FRANCHISE_LIST")
     found = _walk_to_tile(pilot, tile, folder)
     if not found:
-        # CURRENT FRANCHISES is built when the screen opens: a clone made while it was already up
-        # does not appear until it is entered again (2026-11-10, season_loop's first run).
-        pilot.press("back")
+        # CURRENT FRANCHISES is built when the screen opens and a clone made while it was already
+        # up does not appear on re-entry from the landing page either: the list must be left for
+        # the main menu and entered again (JR, 2026-11-10: the p2g run walked the list and never
+        # saw TUNE-P2G).
+        _leave_to_main_menu(pilot)
         with patience(pilot, 180, 1.0):
             pilot.goto("FRANCHISE_LIST", timeout=180)
         found = _walk_to_tile(pilot, tile, folder)
