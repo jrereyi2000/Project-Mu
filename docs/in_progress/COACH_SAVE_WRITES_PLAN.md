@@ -1,6 +1,6 @@
 # Project Mu: Coach Save Writes Plan
 
-**Status:** approved by JR (2026-11-10); building, wave 0 of 5.
+**Status:** approved by JR (2026-11-10); building, wave 1 of 5 (wave 0 complete: Spikes A, B and D).
 
 **As built:**
 - **Spike A is in `docs/reference/MADDEN_COACH_RECORDS.md`** (`081670e`), measured on `CAREER-MUBASE`. It supplies every constant U1/U3 need: the 122-field Coach layout, the enum members actually in use, `PLAYBOOK_MAP`/`SCHEME_MAP` plus the enum→static-row tables, `TALENT_TEMPLATES` with the level scaling, the face/head/body lists, and `COACH_PORTRAIT_RANGE`. Three findings changed things: (1) **D11 is answered — `pipeline/character_visuals.py` is not reusable and leaves HOLD**, because `CharacterVisuals.RawData` is plain JSON (`bodyType` + `loadouts[]`) for coaches *and* players in schema 620, so the coach writer does JSON, not zstd/ISON; (2) **coach portraits share one numeric space and one texture bank with `PLYR_PORTRAIT`** (29 IDs are used by both), so `COACH_PORTRAIT_RANGE` is the free block 5324-5484 (161 IDs); (3) **team head coaches' scheme fields reference the static 16485 table, while coordinators and free agents use 16384** — whether a team HC accepts a 16384 ref is unconfirmed and joins Spike C's list.
