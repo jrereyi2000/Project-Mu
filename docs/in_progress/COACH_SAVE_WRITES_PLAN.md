@@ -1,6 +1,6 @@
 # Project Mu: Coach Save Writes Plan
 
-**Status:** approved by JR (2026-11-10); building, wave 2 of 5 done (wave 0: Spikes A, B, D; wave 1: U1, U2, U4; wave 2: U3, U5 merged). Next: Spike C.
+**Status:** approved by JR (2026-11-10); building, wave 3 of 5 (waves 0–2 done; Spike C passed in game 2026-11-10 — created coaches are accepted, show their 3D model and survive an offseason advance).
 
 **As built:**
 - **Spike C, first round (JR in game, 2026-11-10).** The created head coach is accepted: Tennessee's staff screen lists him, he is selectable, and nothing crashes — so the created record, the cloned talent list and the visuals clone are valid data. Three things were wrong or missing and are fixed in `8cf6d4e`: (1) `Portrait = 0` with `Portrait_Force_Silhouette = true` renders **no portrait at all**, so a coach without a face now carries the game's own placeholder (7999, the value both placeholder coach rows hold) with the flag off; (2) a created head coach had a blank `AssetName`, where all 32 real head coaches carry `<First><Last>_C_PRO` (the 94 without one are coordinators, whose model comes from `GenericHeadAssetName`) — a created head coach now gets that key; (3) the record is now marked `IsCreated = true`, which is the flag JR asked about for making a coach editable in game, and is how the 3D model can be inspected at all. The visuals read-back also compared blobs byte for byte and the library lowercases asset names on write, so a correct clone was reported as differing. Still open from Spike C: whether the placeholder portrait draws the default silhouette, whether the asset key produces a 3D model, whether `IsCreated` opens the in-game editor, whether a team head coach accepts a 16384 scheme reference, and whether a `Retired` coach stays out of the pool. JR also saw a "You've been fired" card on a clone that had **empty staff seats** (Madden's own firing had cleared them); the second clone fills every seat in the league so that can be told apart from a real regression.
@@ -366,7 +366,7 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 
 ### U6: League office wiring, notices and the portrait batch
 
-- **Owns:** `pipeline/league_office.py`, `pipeline/weekly_capture.py` (the carousel notice text only), `tools/coach_portrait_pack.py` (new), `tests/test_league_office_staff.py` (new), `tests/test_coach_portrait_pack.py` (new)
+- **Owns:** `pipeline/league_office.py`, `pipeline/weekly_capture.py` (the carousel notice text only), `pipeline/save_reader/staff.mjs` (only the optional `set` on `assign` that §2.8 needs), `pipeline/save_reader/test/staff.test.mjs` (only the test for it), `tools/coach_portrait_pack.py` (new), `tests/test_league_office_staff.py` (new), `tests/test_coach_portrait_pack.py` (new)
 - **Reads:** U3's block interface, U5's `plan_staff_edits`, U4's outputs, `pipeline/league_office.py:1985-2225` (`plan_stage`), `.claude/skills/build-mod/`
 - **Depends on:** U3, U4, U5, plus Spike C passed
 - **Done when:**
@@ -401,6 +401,8 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 | `headshots/local/jersey_plate.py` | U4 |
 | `pipeline/coach_link.py` | U5 |
 | `pipeline/league_office.py` | U6 |
+| `pipeline/save_reader/staff.mjs` | U6 (only the `assign` `set`) |
+| `pipeline/save_reader/test/staff.test.mjs` | U6 (only that test) |
 | `pipeline/load_save.py` | U5 |
 | `pipeline/save_reader/league_setup.mjs` | U3 |
 | `pipeline/save_reader/lib.mjs` | U3 |
