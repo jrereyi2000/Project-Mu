@@ -1494,3 +1494,47 @@ class LockTuningDraftOrderTest(unittest.TestCase):
         self.assertEqual(ws.lock_tuning_draft_order("dbname=madden_tune_a", "madden_tune_a",
                                                     log_fn=self.log.append), 0)
         self.assertTrue(any("could not lock" in ln for ln in self.log))
+
+
+class BootstrapTuningProgressionTest(unittest.TestCase):
+    """A tuning database is seeded and loaded but never set up, so the league office refuses at the
+    first progression stage until the neutral bootstrap that `league_office setup` gives a live
+    franchise is applied (madden_tune_p2f, 2026-11-10)."""
+
+    def setUp(self):
+        self.log = []
+        self.snapshot = {"players": [{"pgid": 1, "confidence": 50}, {"pgid": 2, "confidence": 50}]}
+
+    def test_a_neutral_tuning_save_is_bootstrapped_for_its_season(self):
+        import unittest.mock as m
+        connect = m.patch("psycopg.connect").start()
+        boot = m.patch("engines.progression_checkpoint.bootstrap_pass", return_value=["a", "b"]).start()
+        self.addCleanup(m.patch.stopall)
+        connect.return_value.__enter__.return_value.cursor.return_value.__enter__.return_value = m.MagicMock()
+        n = ws.bootstrap_tuning_progression("dbname=madden_tune_a", "madden_tune_a", self.snapshot, 2026,
+                                            source_fingerprint="sha", log_fn=self.log.append)
+        self.assertEqual(n, 2)
+        self.assertEqual(boot.call_args[0][2], 2026)
+        self.assertTrue(boot.call_args[1]["form_neutral"])
+        self.assertEqual(boot.call_args[1]["source_fingerprint"], "sha")
+        self.assertTrue(any("neutral bootstrap for 2 players" in ln for ln in self.log))
+
+    def test_a_save_that_is_not_neutral_is_left_alone(self):
+        import unittest.mock as m
+        connect = m.patch("psycopg.connect").start()
+        boot = m.patch("engines.progression_checkpoint.bootstrap_pass").start()
+        self.addCleanup(m.patch.stopall)
+        save = {"players": [{"pgid": 1, "confidence": 61}]}
+        self.assertEqual(ws.bootstrap_tuning_progression("dbname=madden_tune_a", "madden_tune_a", save, 2026,
+                                                         log_fn=self.log.append), 0)
+        boot.assert_not_called()
+        connect.assert_not_called()
+        self.assertTrue(any("not neutral" in ln for ln in self.log))
+
+    def test_nothing_happens_outside_a_tuning_database(self):
+        import unittest.mock as m
+        boot = m.patch("engines.progression_checkpoint.bootstrap_pass").start()
+        self.addCleanup(m.patch.stopall)
+        self.assertEqual(ws.bootstrap_tuning_progression("dbname=madden_mu2026", "madden_mu2026", self.snapshot, 2026,
+                                                         log_fn=self.log.append), 0)
+        boot.assert_not_called()

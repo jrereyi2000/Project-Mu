@@ -132,7 +132,8 @@ def log(msg):
 
 
 def setup_tuning_dsn(db, dsn, save_name, save_season, save_week, auto_init=False, reseed=False,
-                     confirm_reseed=None, dry_run=False, log_fn=log, league_id=None):
+                     confirm_reseed=None, dry_run=False, log_fn=log, league_id=None, snapshot=None,
+                     save_sha256=None):
     """Creates, seeds or resets the madden_tune_* database an explicit --dsn bypasses routing for.
 
     Tuning clones deliberately get no registry entry: the registry is keyed by LeagueID and every clone carries
@@ -1558,6 +1559,38 @@ def freeze_week(db, dsn, save_path, label, season, week, stage=None, extra=None,
         return None
 
 
+def bootstrap_tuning_progression(dsn, db, snapshot, season, source_fingerprint=None, log_fn=log):
+    """Give a freshly seeded tuning database the neutral progression bootstrap `league_office setup` gives a live
+    franchise.
+
+    A tuning database is seeded from `init_db.sql` and then loaded, which never touches progression state. The league
+    office refuses at the first progression stage without it — "explicit neutral bootstrap is required before offseason
+    progression" at OFFSEASON_START and "player N: explicit neutral bootstrap required" at a season's first regular
+    week (2026-11-10, madden_tune_p2f and madden_tune_p2e). The tuning league's clone source is CAREER-MU2026, which
+    `setup` produced with every ConfidenceRating at 50, so the save is neutral by construction; a save that isn't is
+    left alone with a warning. Never raises: a failure is a warning on the ingest.
+    """
+    if not is_tuning_db(db) or not snapshot:
+        return 0                       # nothing to bootstrap from
+    try:
+        confidences = {p.get("confidence") for p in (snapshot or {}).get("players") or []
+                       if p.get("confidence") is not None}
+        if confidences - {50}:
+            log_fn(f"[WARN] progression bootstrap skipped for {db}: the save is not neutral "
+                   f"(ConfidenceRating {sorted(confidences)[:5]})")
+            return 0
+        import psycopg
+        from engines import progression_checkpoint as pc
+        with psycopg.connect(dsn) as conn, conn.cursor() as cur:
+            rows = pc.bootstrap_pass(cur, snapshot, season, source_fingerprint=source_fingerprint, form_neutral=True)
+            conn.commit()
+        log_fn(f"Progression: neutral bootstrap for {len(rows)} players (season {season}).")
+        return len(rows)
+    except Exception as e:      # noqa: BLE001 - a missing bootstrap must not fail the ingest
+        log_fn(f"[WARN] could not bootstrap progression in {db}: {e}")
+        return 0
+
+
 def lock_tuning_draft_order(dsn, db, log_fn=log):
     """Lock the coming draft's order in a tuning database before the DRAFT stage runs (P2-03).
 
@@ -1631,7 +1664,8 @@ def process_save(save_path, season=None, dry_run=False, no_articles=False, no_en
     if dsn:
         db, just_seeded = db_name_of(dsn), False
         setup = setup_tuning_dsn(db, dsn, save_name, save_season, save_week, auto_init=auto_init, reseed=reseed,
-                                 confirm_reseed=confirm_reseed, dry_run=dry_run, log_fn=log_fn, league_id=fid)
+                                 confirm_reseed=confirm_reseed, dry_run=dry_run, log_fn=log_fn, league_id=fid,
+                           snapshot=snapshot, save_sha256=save_sha256)
         if setup == "no_op":
             shutil.rmtree(run_folder, ignore_errors=True)
             return {"status": "no_op", "reason": "database_missing", "db": db, "franchise": fid,
@@ -1722,6 +1756,10 @@ def process_save(save_path, season=None, dry_run=False, no_articles=False, no_en
                      no_engines=no_engines, save_name=save_name, log_fn=log_fn, save_path=save_path,
                      league_office=run_lo, league_office_dry_run=league_office_dry_run,
                      save_sha256=save_sha256, stage_only=stage_only)
+    if just_seeded and not dry_run:
+        # after the load: bootstrap_pass maps players by pgid from the database, so it has to be
+        # there first (2026-11-10: run before the load it silently created nothing)
+        bootstrap_tuning_progression(dsn, db, snapshot, save_season, source_fingerprint=save_sha256, log_fn=log_fn)
     freeze = None
     if not dry_run and not no_freeze:
         label = weekly_freeze.label_for(save_season, save_week, stage_info if stage_only else None)
