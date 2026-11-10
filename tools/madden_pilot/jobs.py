@@ -384,7 +384,9 @@ def _week_now(pilot, allow_unreadable=False):
     Gameday carries the header too (including the year-less postseason phase, "WILDCARD WEEK").
     Stuck when every header is unreadable (a bye week shows only BYE WEEK; the season loop passes
     allow_unreadable and counts instead)."""
-    frame, _ = pilot.look()
+    frame, screen = pilot.look()
+    if screen == "HUB_BYE":
+        return None                  # a bye week's hub carries no week number at all
     head = read_header(frame)
     if head is None:
         with patience(pilot, 120, 1.0):
@@ -729,9 +731,18 @@ def sim_season(pilot, save=None, to="regular-season-end", watcher=None, folder=N
     while not _done(kind, n, head):
         if weeks >= MAX_SIM_WEEKS:
             pilot.stop(f"simmed {weeks} weeks without reaching {to}", Stuck)
+        pre = _mtime(_latest_save(save_path, auto_path))
         _sim_one_week(pilot)
         weeks += 1
         new = _week_now(pilot, allow_unreadable=True)
+        if new is None and head.get("week") is not None and (head.get("phase") == "WEEK"):
+            # A bye week's hub shows nothing but "BYE WEEK", so the week can't be read from it.
+            # The advance still moved exactly one week, and Madden wrote the autosave: the file's
+            # mtime answers "did it move?" for free, where a reader snapshot costs a minute
+            # (2026-11-10, ~1.2 min/week on a bye week vs ~25 s otherwise).
+            post = _mtime(_latest_save(save_path, auto_path))
+            if post is not None and pre is not None and post > pre:
+                new = {"year": head.get("year"), "phase": "WEEK", "week": head["week"] + 1}
         if new is None:
             new = _save_header(_latest_save(save_path, auto_path))
         if new is None:

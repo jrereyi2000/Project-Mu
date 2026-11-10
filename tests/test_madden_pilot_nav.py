@@ -201,6 +201,12 @@ def test_classify_the_empty_postseason_hub_by_its_phase_word(phase):
     assert classify(frame_of(lines), CAT) == "HUB_WEEKLY"
 
 
+def test_classify_the_bye_week_hub():
+    # no matchup line and no week number: nothing else matches it, and goto used to spin on UNKNOWN
+    lines = ["GAMEDAY", "WEEKLY HUB", "MANAGE ROSTER", "COACH CENTRAL", "LEAGUE", "OPTIONS", "BYE WEEK", "BACK"]
+    assert classify(frame_of(lines), CAT) == "HUB_BYE"
+
+
 def test_classify_the_news_ticker_never_makes_a_weekly_hub_the_gameday_tab():
     # 2026-11-10: a blank Weekly Hub (cards not drawn) whose News Center ticker said "matchup"
     # classified as HUB_GAMEDAY; the pilot then pressed C to reach the Weekly Hub and landed on

@@ -624,6 +624,33 @@
         ]
       }
     },
+    "HUB_BYE": {
+      "note": "Seen 2026-11-10: the Weekly Hub on the user team's bye week — the tab row and BYE WEEK, no matchup line and no week number anywhere (the 2026-11-10 season run stopped here: nothing matched, goto spun on UNKNOWN until its timeout). The week is known only from the save, so jobs omits the header hunt on this screen and infers +1 from the autosave written by the advance.",
+      "all": [
+        "BYE WEEK"
+      ],
+      "any": [],
+      "none": [
+        "CURRENT FRANCHISES"
+      ],
+      "options": [],
+      "highlight": null,
+      "confirm_ok": [],
+      "exits": {
+        "HUB_GAMEDAY": [
+          [
+            "tab_prev",
+            1
+          ]
+        ],
+        "QUIT_CONFIRM": [
+          [
+            "back",
+            1
+          ]
+        ]
+      }
+    },
     "HUB_WEEKLY": {
       "note": "Spike b1, d1: the WEEKLY HUB tab (2026. WEEK 1 / VS BEARS). Its cards (roster decisions included) are optional content, never selected (JR, 2026-10-30); Space on one opens ROSTER_DECISION_PROMPT, so Space is never pressed here. Q = HOLD TO DELEGATE (forbidden until delegation is a deliberate policy). The hub doesn't show the save name. Anchored on the whole tab row 2026-11-10 (P2-01): the highlighted WEEKLY HUB tab reads as nothing in OCR (step 0045 of 2026-11-10_015210_sim-season), so requiring it flipped the loaded hub to UNKNOWN.",
       "all": [
