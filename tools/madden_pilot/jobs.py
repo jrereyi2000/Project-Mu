@@ -601,6 +601,44 @@ def _verify_loaded(pilot, save, folder):
                Stuck)
 
 
+def _walk_to_tile(pilot, tile, folder):
+    """Put the CURRENT FRANCHISES border on `tile`; True when it is there.
+
+    The list opens wherever it was last left. Madden orders the tiles by the save's own date, so
+    the saves folder is only a bound and the border is the truth: press one arrow, look, and stop
+    the moment the target is bordered. The first direction comes from the two labels' x positions
+    when both are on screen; a press that leaves the border where it was means an edge of the
+    list, and then it goes the other way (2026-11-10: a wrong-way jump swept 60 saves twice and
+    looked like a hung run).
+    """
+    order = save_tiles(folder)
+    bound = len(order) + 3
+
+    def on_target():
+        return pilot.highlighted(labels=[tile]) == tile
+
+    def current():
+        return pilot.highlighted(labels=order)
+
+    if on_target():
+        return True
+    a, b = pilot.frame.find(current()) if current() else None, pilot.frame.find(tile)
+    directions = ("left", "right") if a and b and b[0] < a[0] else ("right", "left")
+    for key in directions:
+        still = current()
+        for _ in range(bound):
+            pilot.press(key)
+            pilot.look()
+            if on_target():
+                return True
+            now = current()
+            if now is not None and still is not None and now == still:
+                break                   # the border can't move this way: an edge of the list
+            if now is not None:
+                still = now
+    return on_target()
+
+
 def _load_franchise(pilot, tile, save=None, folder=None):
     # Title -> main menu and the franchise load are long UNKNOWN splashes offline; goto's default
     # 20-look UNKNOWN limit (about 40 s) is too short for them.
@@ -612,38 +650,15 @@ def _load_franchise(pilot, tile, save=None, folder=None):
         frame, screen = pilot.look()
     with patience(pilot, 180, 1.0):
         pilot.goto("FRANCHISE_LIST")
-    # The list opens wherever it was last left. Madden orders the tiles by the save's OWN date —
-    # not the file's mtime, which a copy changes — so the folder order is only a bound, and the
-    # border is the truth: press one arrow, look, and stop the moment the target is bordered.
-    # The first direction comes from the two labels' x positions when both are on screen; a
-    # press that doesn't move the border means the list's edge, and then it goes the other way
-    # (2026-11-10: a wrong-way jump swept 60 saves twice and looked like a hung run).
-    order = save_tiles(folder)
-    bound = len(order) + 3
-
-    def on_target():
-        return pilot.highlighted(labels=[tile]) == tile
-
-    def current():
-        return pilot.highlighted(labels=order)
-
-    if not on_target():
-        a, b = pilot.frame.find(current()) if current() else None, pilot.frame.find(tile)
-        directions = ("left", "right") if a and b and b[0] < a[0] else ("right", "left")
-        for key in directions:
-            still = current()
-            for _ in range(bound):
-                pilot.press(key)
-                pilot.look()
-                if on_target():
-                    break
-                now = current()
-                if now == still:            # the border can't move this way: an edge of the list
-                    break
-                still = now
-            if on_target():
-                break
-    if not on_target():
+    found = _walk_to_tile(pilot, tile, folder)
+    if not found:
+        # CURRENT FRANCHISES is built when the screen opens: a clone made while it was already up
+        # does not appear until it is entered again (2026-11-10, season_loop's first run).
+        pilot.press("back")
+        with patience(pilot, 180, 1.0):
+            pilot.goto("FRANCHISE_LIST", timeout=180)
+        found = _walk_to_tile(pilot, tile, folder)
+    if not found:
         pilot.stop(f"couldn't find the {tile} tile in CURRENT FRANCHISES", Stuck)
     pilot.confirm_on("FRANCHISE_LIST", tile)
     # the dialog may take a moment; CURRENT FRANCHISES stays behind it and behind the loading frames

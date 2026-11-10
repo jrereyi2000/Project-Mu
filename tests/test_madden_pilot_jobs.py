@@ -294,6 +294,22 @@ def test_sim_stuck_when_week_does_not_advance(tmp_path, notices):
     assert out["status"] == "stopped" and out["kind"] == "Stuck" and "header" in out["reason"]
 
 
+def test_the_loader_re_enters_the_list_when_a_new_clone_is_not_on_it(tmp_path, notices):
+    # CURRENT FRANCHISES is built when it opens: a clone made while it was already up is missing
+    # until the list is entered again (season_loop's first run, 2026-11-10)
+    class StaleList(ScriptedMadden):
+        def on_key(self, name):
+            if name == "backspace" and self.screen == "FRANCHISE_LIST":
+                self.tiles, self.idx = ["OTHER", "TUNE-X"], 0
+                return
+            super().on_key(name)
+
+    fake = StaleList(CAT, tiles=["OTHER"], out=lambda s: None)
+    _, out = _sim(tmp_path, fake, to="week 2")
+    assert out["status"] == "ok", out
+    assert fake.screen == "FRANCHISE_LIST" and fake.week == 2
+
+
 def test_sim_refuses_to_quit_an_unknown_franchise_first(tmp_path, notices):
     fake, _ = fake_madden(start="HUB_WEEKLY")         # a franchise is open; the hub doesn't say which
     _, out = _sim(tmp_path, fake)
