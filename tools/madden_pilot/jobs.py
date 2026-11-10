@@ -117,12 +117,20 @@ def read_header(frame):
     for line in frame.lines:
         m = _PHASE_RE.search(str(line).upper())
         if m:
-            return {"year": int(m.group(1)), "phase": norm(m.group(2)), "week": None}
-    # The postseason/offseason header may carry no year ("WILDCARD WEEK", "STAFF WEEK").
+            phase = norm(m.group(2))
+            if phase == "WEEK":
+                continue          # a regular-season line whose number OCR dropped: use the save
+            return {"year": int(m.group(1)), "phase": phase, "week": None}
+    # The postseason/offseason header may carry no year ("WILDCARD WEEK", "STAFF WEEK"). Match
+    # whole tokens at the start of a short line, so a "RE-SIGNING?" card is not read as RE-SIGN.
     for word in PHASE_WORDS:
+        wanted = word.replace("-", " ").split()
         for line in frame.lines:
             u = norm(line)
-            if len(u.split()) <= 4 and word in u:
+            if len(u.split()) > 4:
+                continue
+            tokens = u.replace("-", " ").split()
+            if len(tokens) >= len(wanted) and tokens[:len(wanted)] == wanted:
                 phase = "STAFF" if word == "STAFF WEEK" else word
                 return {"year": None, "phase": phase, "week": None}
     return None
@@ -476,16 +484,29 @@ def tile_index(save, folder=None):
 def _load_franchise(pilot, tile, save=None, folder=None):
     # Title -> main menu and the franchise load are long UNKNOWN splashes offline; goto's default
     # 20-look UNKNOWN limit (about 40 s) is too short for them.
+    frame, screen = pilot.look()
+    for _ in range(8):                       # the mode rail may be on Ultimate Team or another mode
+        if screen != "MAIN_MENU_RAIL":
+            break
+        pilot.press("down")
+        frame, screen = pilot.look()
     with patience(pilot, 180, 1.0):
         pilot.goto("FRANCHISE_LIST")
-    # The list opens on the newest tile; press Right to the wanted tile's computed position, then
-    # fall back to the OCR walk if the border doesn't land where the folder order says.
-    index = tile_index(save or tile, folder)
-    if index:
-        pilot.press("right", times=index)
-        pilot.look()
-    if index is None or pilot.highlighted(labels=[tile]) != tile:
-        pilot.highlight(tile)
+    # The list opens wherever it was last left (and wraps). Walk one tile at a time: one lap left,
+    # then right if the target was on the other side (the dry-run's fake list does not wrap).
+    lap = len(save_tiles(folder)) + 1
+    found = False
+    for direction, steps in (("left", lap), ("right", 2 * lap)):
+        for _ in range(steps):
+            if pilot.highlighted(labels=[tile]) == tile:
+                found = True
+                break
+            pilot.press(direction)
+            pilot.look()
+        if found:
+            break
+    if not found:
+        pilot.stop(f"couldn't find the {tile} tile in CURRENT FRANCHISES", Stuck)
     pilot.confirm_on("FRANCHISE_LIST", tile)
     # the dialog may take a moment; CURRENT FRANCHISES stays behind it and behind the loading frames
     _, screen = wait_known(pilot, ["PROGRESSION_WARNING", *HUBS], 60)

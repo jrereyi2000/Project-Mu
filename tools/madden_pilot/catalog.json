@@ -36,7 +36,7 @@
       "todo": true
     },
     "QUIT_CONFIRM": {
-      "note": "Spike b3: Back on the hub. NO is highlighted on arrival; Up then Space chooses YES, which writes <save>-AUTOSAVE and returns to CURRENT FRANCHISES.",
+      "note": "Spike b3: Back on the hub. NO is highlighted on arrival; Up then Space chooses YES, which writes <save>-AUTOSAVE and returns to CURRENT FRANCHISES. 2026-11-10: Windows OCR does not read the NO label at all, so the cancel route is Backspace (the dialog closes exactly as NO does); YES is still found and bordered.",
       "all": [
         "ARE YOU SURE YOU WANT TO QUIT"
       ],
@@ -48,7 +48,7 @@
       ],
       "default": "NO",
       "nav": "vertical",
-      "highlight": "border",
+      "highlight": "ocr_order",
       "confirm_ok": [
         "YES",
         "NO"
@@ -281,12 +281,13 @@
     "ADVANCE_MENU": {
       "note": "Spike b9, revisited for the all-user league 2026-11-10 (P2-01): Space on ADVANCE WEEK opens READY TO ADVANCE / FORCE ADVANCE, then JUMP AHEAD / SIM TO MIDSEASON. With all 32 teams user-controlled READY TO ADVANCE cannot run the week; one Down then Space on FORCE ADVANCE does (JR). The menu draws over GAMEDAY, so HUB_GAMEDAY and HUB_WEEKLY exclude READY TO ADVANCE.",
       "all": [
-        "FORCE ADVANCE"
+        "JUMP AHEAD"
       ],
       "any": [
         "READY TO ADVANCE",
+        "FORCE ADVANCE",
         "SIM TO MIDSEASON",
-        "JUMP AHEAD",
+        "SIM TO PLAYOFFS",
         "NEXT WEEK"
       ],
       "none": [],
@@ -526,6 +527,29 @@
         ]
       }
     },
+    "BOOT_SPLASH": {
+      "note": "Seen 2026-11-10 (P2 reproduction): the cold-boot splash before the EA/MADDEN title \u2014 PRESS ANY BUTTON with the Frostbite/EA copyright line. One Space continues.",
+      "all": [
+        "PRESS ANY BUTTON"
+      ],
+      "any": [
+        "FROSTBITE",
+        "ELECTRONIC ARTS"
+      ],
+      "none": [],
+      "confirm_ok": [
+        "PRESS ANY BUTTON"
+      ],
+      "todo": false,
+      "exits": {
+        "TITLE_SCREEN": [
+          [
+            "confirm",
+            "PRESS ANY BUTTON"
+          ]
+        ]
+      }
+    },
     "TITLE_SCREEN": {
       "note": "Seen 2026-11-10 in the P2-01 retries: EA SPORTS / MADDEN NFL title with PRESS ANY BUTTON. The button sits below the captured client area (step 0021 of 2026-11-10_014049_sim-season), so OCR only reads the MADDEN logo; the screen is matched on that word with every menu/hub word excluded. One Space continues to the main menu; nothing else on this screen can be chosen.",
       "all": [
@@ -591,6 +615,34 @@
           [
             "confirm",
             "CREATE / LOAD"
+          ]
+        ]
+      }
+    },
+    "MAIN_MENU_RAIL": {
+      "note": "Seen 2026-11-10: the main-menu mode rail on a non-Franchise mode (ULTIMATE TEAM and its sub-tabs). JR: one Down moves ULTIMATE TEAM -> FRANCHISE; from other modes the pilot presses Down until FRANCHISE_LANDING appears (jobs._load_franchise).",
+      "all": [
+        "LEVEL"
+      ],
+      "any": [
+        "ULTIMATE TEAM",
+        "TEAM BUILDING",
+        "LIVE EVENTS",
+        "ONLINE PLAY"
+      ],
+      "none": [
+        "CONTINUE",
+        "CREATE",
+        "CURRENT FRANCHISES",
+        "GAMEDAY"
+      ],
+      "confirm_ok": [],
+      "todo": false,
+      "exits": {
+        "FRANCHISE_LANDING": [
+          [
+            "down",
+            1
           ]
         ]
       }

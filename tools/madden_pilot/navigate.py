@@ -169,6 +169,8 @@ class Pilot:
             self.stop(f"key {key!r} is forbidden on {self.screen}", Forbidden)
         if name == self.key_name("select") and not _confirm:
             self.stop(f"Space on {self.screen} outside confirm_on", Forbidden)
+        if os.environ.get("MU_PILOT_TRACE"):
+            print(f"[trace] press {name} hold={hold} times={times} on {self.screen}", flush=True)
         self._call(["key", "--name", name, "--hold", str(hold), "--times", str(times)])
         if self.cursor is not None and spec.get("highlight") == "ocr_order":
             fwd, back = self._nav_keys(spec)
@@ -311,6 +313,8 @@ class Pilot:
                 self.highlight(arg)
             elif op == "confirm":
                 self.confirm_on(screen, arg)
+            elif op == "hold":
+                self.press(arg, hold=2.0, wait=1.5)
             else:
                 self.press(op, times=int(arg))
 
@@ -321,21 +325,28 @@ class Pilot:
         try:
             end = self.clock() + timeout
             frame, screen = self.look()
-            same, backs, prev = 0, 0, None
+            same, backs, prev, unknown_run = 0, 0, None, 0
             while screen != target:
                 if self.clock() >= end:
                     self.stop(f"goto {target} timed out on {screen}", Stuck)
                 if screen == UNKNOWN:
                     video = self.spec(self.last_known)
                     if video.get("wait_or_back"):
-                        backs += 1
-                        if backs > video.get("max_backs", 15):
-                            self.stop(f"{self.last_known} didn't end after {backs - 1} backs", Stuck)
-                        self.press("back", wait=poll)
+                        # A video's frames are UNKNOWN every look; a screen whose OCR merely
+                        # jittered is UNKNOWN for a frame or two. Back out only after four in a
+                        # row, or a jittering hub spins into the quit dialog (P2, 2026-11-10).
+                        unknown_run += 1
+                        if unknown_run >= 4:
+                            backs += 1
+                            if backs > video.get("max_backs", 15):
+                                self.stop(f"{self.last_known} didn't end after {backs - 1} backs", Stuck)
+                            self.press("back", wait=poll)
+                            unknown_run = 0
                     else:
                         self.sleep(poll)
                     frame, screen = self.look()
                     continue
+                unknown_run = 0
                 same = same + 1 if screen == prev else 0
                 prev = screen
                 if same > self.spec(screen).get("repeat", 0) + self.stuck_limit:
