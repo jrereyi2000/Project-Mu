@@ -751,3 +751,53 @@ def test_the_offseason_stage_is_what_moves_a_carried_talk(monkeypatch):
 
     assert not resume(24, 2, 2)                                  # same stage: already played
     assert resume(24, 3, 2)                                      # the stage moved: the talk resumes
+
+
+# ---------------------------------------------------------------- diagnostics (chunk-5 plan gap) ----
+def _diagnostics_router(rows=None):
+    data = {
+        "status": [("AGREED", 2), ("STALLED", 1), ("WALKED_AWAY", 1)],
+        "posture": [("FIRM", 3), ("ANCHOR", 1)],
+        "action": [("OFFER", 4), ("COUNTER", 3), ("ACCEPT", 2), ("REJECT", 1), ("WALK_AWAY", 1)],
+        "pairs": [(1, 2), (1, 3), (2, 4), (1, 5)],
+        "quality": [(1, "NFC", "South"), (2, "NFC", "South"), (3, "NFC", "East"), (4, "AFC", "East"),
+                    (5, "AFC", "North")],
+        "leaks": [(2,)],
+    }
+    data.update(rows or {})
+
+    def router(sql, params):
+        if "GROUP BY status" in sql:
+            return data["status"]
+        if "GROUP BY t.posture" in sql:
+            return data["posture"]
+        if "GROUP BY t.action" in sql:
+            return data["action"]
+        if "SELECT user_team_id, gm_team_id" in sql:
+            return data["pairs"]
+        if "conference, division FROM teams" in sql:
+            return data["quality"]
+        if "to_regclass('gm_trade_leaks')" in sql:
+            return [(True,)]
+        if "FROM gm_trade_leaks" in sql:
+            return data["leaks"]
+        raise AssertionError("unexpected SQL: " + sql)
+    return router
+
+
+def test_talk_diagnostics_reports_openings_counters_rivals_and_leaks():
+    """UNILATERAL_TRADE_ENGINE_PLAN §9.1's diagnostics: what the season's stored CPU talks looked like, which is what
+    a TALK_STALL re-measure needs and what the pacing model alone cannot say."""
+    d = gt.talk_diagnostics(ScriptedCur(_diagnostics_router()), 2036)
+    assert d["talks"] == 4 and d["breakdown_share"] == 0.5
+    assert d["openings_share"] == {"FIRM": 0.75, "ANCHOR": 0.25}
+    assert d["turns"] == 11 and d["counters_per_talk"] == 0.75 and d["counter_share_of_turns"] == 0.273
+    assert d["rivals"] == {"division": 1, "conference": 1, "other": 2}
+    assert d["leaks"] == 2
+
+
+def test_talk_diagnostics_is_quiet_on_a_season_with_no_talks():
+    d = gt.talk_diagnostics(ScriptedCur(_diagnostics_router({
+        "status": [], "posture": [], "action": [], "pairs": [], "quality": [], "leaks": []})), 2036)
+    assert d["talks"] == 0 and d["breakdown_share"] is None and d["counters_per_talk"] is None
+    assert d["rivals"] == {"division": 0, "conference": 0, "other": 0}

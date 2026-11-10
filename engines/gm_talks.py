@@ -18,6 +18,7 @@ their transcript (`publish_talk`, `talk_json`).
 
   python3 -m engines.gm_talks --show <id>
   python3 -m engines.gm_talks --replay-week [--season S --week W] [--dry-run] [--no-llm]
+  python3 -m engines.gm_talks --diagnostics [--season S]     # the stored talks' openings, counters, rivals, leaks
 """
 import argparse
 import functools
@@ -779,6 +780,57 @@ def _rejudge(b, valuer, talk, offer_assets):
     return None
 
 
+def talk_diagnostics(cur, season):
+    """The season's stored CPU talks in the shape UNILATERAL_TRADE_ENGINE_PLAN §9.1 re-measures: how they opened
+    (the ANCHOR/FIRM share), how often a GM countered (per talk and per turn), how many were with a division or
+    conference rival, what leaked, and the outcome split that `TALK_STALL` is judged against. Read-only; a season
+    with no talks answers zeroes. The pacing model in `gm_trade_engine.simulate_season` builds no talks, so this
+    reads the talks a replay actually played."""
+    season = int(season)
+    cur.execute("""SELECT status, count(*) FROM gm_trade_negotiations
+                   WHERE season = %s AND kind = 'CPU' GROUP BY status""", (season,))
+    outcomes = {str(k): int(v) for k, v in cur.fetchall()}
+    talks = sum(outcomes.values())
+    cur.execute("""SELECT t.posture, count(*) FROM gm_trade_negotiation_turns t
+                   JOIN gm_trade_negotiations n ON n.id = t.negotiation_id
+                   WHERE n.season = %s AND n.kind = 'CPU' AND t.turn_no = 1 GROUP BY t.posture""", (season,))
+    openings = {str(p or "NONE"): int(v) for p, v in cur.fetchall()}
+    cur.execute("""SELECT t.action, count(*) FROM gm_trade_negotiation_turns t
+                   JOIN gm_trade_negotiations n ON n.id = t.negotiation_id
+                   WHERE n.season = %s AND n.kind = 'CPU' GROUP BY t.action""", (season,))
+    actions = {str(k): int(v) for k, v in cur.fetchall()}
+    turns = sum(actions.values())
+    cur.execute("""SELECT user_team_id, gm_team_id FROM gm_trade_negotiations
+                   WHERE season = %s AND kind = 'CPU'""", (season,))
+    pairs = cur.fetchall()
+    cur.execute("SELECT id, conference, division FROM teams WHERE abbreviation IS NOT NULL")
+    teams = {r[0]: {"conference": r[1], "division": r[2]} for r in cur.fetchall()}
+    rivals = {"division": 0, "conference": 0, "other": 0}
+    for a, other in pairs:
+        rivals[_ge().rivalry({"teams": teams}, a, other) or "other"] += 1
+    leaks = 0
+    cur.execute("SELECT to_regclass('gm_trade_leaks') IS NOT NULL")
+    row = cur.fetchone()
+    if row and row[0]:
+        cur.execute("SELECT count(*) FROM gm_trade_leaks WHERE season = %s", (season,))
+        row = cur.fetchone()
+        leaks = int(row[0]) if row else 0
+    broke_down = outcomes.get("STALLED", 0) + outcomes.get("WALKED_AWAY", 0)
+    return {
+        "season": season,
+        "talks": talks,
+        "outcomes": outcomes,
+        "breakdown_share": round(broke_down / talks, 3) if talks else None,
+        "openings": openings,
+        "openings_share": {k: round(v / talks, 3) for k, v in openings.items()} if talks else {},
+        "turns": turns,
+        "counters_per_talk": round(actions.get("COUNTER", 0) / talks, 2) if talks else None,
+        "counter_share_of_turns": round(actions.get("COUNTER", 0) / turns, 3) if turns else None,
+        "rivals": rivals,
+        "leaks": leaks,
+    }
+
+
 def _run_stop(cur, b):
     """The stop a run plays at: (week, offseason stage). The offseason keeps week 24 for every stage, so the stage is
     what tells one offseason stop from the next."""
@@ -1099,6 +1151,8 @@ def main(argv=None):
     g = ap.add_mutually_exclusive_group(required=True)
     g.add_argument("--show", type=int, metavar="ID", help="print a talk's transcript")
     g.add_argument("--replay-week", action="store_true", help="resume this season's open CPU talks")
+    g.add_argument("--diagnostics", action="store_true",
+                   help="print a season's stored CPU talks: openings, counters, rivals, leaks, outcomes")
     ap.add_argument("--season", type=int)
     ap.add_argument("--week", type=int)
     ap.add_argument("--dry-run", action="store_true", help="read-only: roll back")
@@ -1112,6 +1166,9 @@ def main(argv=None):
         if a.show is not None:
             print(json.dumps(talk_json(cur, a.show, public=True), indent=1, default=str))
             return
+        if a.diagnostics:
+            print(json.dumps(talk_diagnostics(cur, a.season or _ge().league_window(cur)[0]), indent=1))
+            return
         season, week, window = replay_target(_ge().league_window(cur), a.season, a.week)
         if window is None:
             print(f"trade window closed (week {week})")
@@ -1122,6 +1179,10 @@ def main(argv=None):
         rng = random.Random(f"talks:{season}:{week}:{window}:replay")
         rep = resume_talks(cur, b, valuer, rng, llm, log=print)
         print(f"resumed {len(rep['talks'])} talks: {len(rep['agreed'])} agreed, {len(rep['stalled'])} stalled")
+        d = talk_diagnostics(cur, season)
+        print(f"season {season}: {d['talks']} CPU talks, breakdown {d['breakdown_share']}, "
+              f"openings {d['openings_share']}, {d['counters_per_talk']} counters a talk, "
+              f"rivals {d['rivals']}, {d['leaks']} leak(s)")
         if a.dry_run:
             conn.rollback()
             print("dry run: rolled back")
