@@ -76,7 +76,8 @@ def test_one_season_clones_sims_ingests_and_reports(tmp_path, capsys):
     calls = []
     stops = [{"status": "ok", "to": {"year": 2026, "phase": "STAFF", "week": None}},
              {"status": "ok", "to": {"year": 2026, "phase": "RE-SIGN", "week": None}},
-             {"status": "ok", "to": {"year": 2027, "phase": "PRESEASON", "week": None}}]
+             {"status": "ok", "to": {"year": 2027, "phase": "PRESEASON", "week": None, "stop": "PRESEASON_0"}},
+             {"status": "ok", "to": {"year": 2027, "phase": "WEEK", "week": 1}}]
     tpath = tmp_path / "targets.json"
     tpath.write_text(json.dumps(TARGETS))
     out = L.run("unit", runner=_runner(calls, stops), python="py", seasons_dir=str(tmp_path / "seasons"),
@@ -91,7 +92,7 @@ def test_one_season_clones_sims_ingests_and_reports(tmp_path, capsys):
     assert "/saves/CAREER-TUNE-UNIT" in calls[3] and "madden_tune_unit" in " ".join(calls[3])
     assert calls[3].count("--no-articles") == 1 and "--no-freeze" in calls[3] and "--auto-init" in calls[3]
     assert out["db"] == "madden_tune_unit" and out["save"] == "CAREER-TUNE-UNIT"
-    assert len(out["stops"]) == 3 and out["steps"] == ["clone", "regular-season", "playoffs",
+    assert len(out["stops"]) == 4 and out["steps"] == ["clone", "regular-season", "playoffs",
                                                        "ingest-playoffs", "offseason"]
     assert out["report"]["season"] == 2026 and os.path.exists(out["report"]["report"])
     md = open(out["report"]["report"]).read()
@@ -101,14 +102,19 @@ def test_one_season_clones_sims_ingests_and_reports(tmp_path, capsys):
 
 def test_the_offseason_loop_ingests_after_every_stop_and_stops_at_preseason(tmp_path):
     calls = []
+    # the eight offseason stops, the preseason weeks and the cut day, then 2027 week 1
     stops = [{"status": "ok", "to": {"year": 2026, "phase": p, "week": None}}
-             for p in ("STAFF", "RE-SIGN", "FREE AGENCY", "COMBINE", "PRO DAY", "DRAFT", "UDFA", "PRESEASON")]
+             for p in ("STAFF", "RE-SIGN", "FREE AGENCY", "COMBINE", "PRO DAY", "DRAFT", "UDFA")]
+    stops += [{"status": "ok", "to": {"year": 2026, "phase": "PRESEASON", "week": None, "stop": f"PRESEASON_{n}"}}
+              for n in (0, 1, 2, 3)]
+    stops += [{"status": "ok", "to": {"year": 2027, "phase": "WEEK", "week": 1}}]
     out = L.run("unit", runner=_runner(calls, stops), python="py", seasons_dir=str(tmp_path / "s"),
                 saves_dir="/saves", do_report=False, offseason=True)
     advances = [c for c in calls if "advance" in c]
     ingests = [c for c in calls if "pipeline.watch_save" in c]
-    assert len(advances) == 8 and len(ingests) == 9          # the playoffs ingest plus one per stop
-    assert len(out["stops"]) == 8 and out["stops"][-1]["to"]["phase"] == "PRESEASON"
+    assert len(advances) == 12 and len(ingests) == 13        # the playoffs ingest plus one per stop
+    assert out["stops"][-1]["to"]["phase"] == "WEEK" and out["stops"][-1]["to"]["week"] == 1
+    assert out["stops"][-2]["to"]["stop"] == "PRESEASON_3"   # the cut day is ingested before week 1
     # every advance quits the franchise: the league office writes with it closed
     assert all("--no-quit" not in c for c in advances)
 

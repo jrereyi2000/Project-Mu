@@ -438,6 +438,12 @@ def _save_header(save_path):
         idx = s.get("week_index")
         return {"year": year, "phase": "OFFSEASON", "week": None, "stage": idx,
                 "stop": OFFSEASON_STOPS.get(idx, f"OFFSEASON_WEEK_{idx}")}
+    if str(s.get("week_type") or "") == "PreSeason":
+        # Madden's preseason hub header reads "2027. WEEK 1", the same shape as a regular-season
+        # week, so the save is the only thing that can tell them apart; the stage is the week.
+        idx = s.get("week_index")
+        return {"year": year, "phase": "PRESEASON", "week": None, "stage": idx,
+                "stop": f"PRESEASON_{idx}"}
     week = current_week(snap)
     if week is not None:
         return {"year": year, "phase": "WEEK", "week": week}
@@ -768,7 +774,8 @@ def advance(pilot, save=None, franchise=None, quit=True, watcher=None, folder=No
     before_save = _save_header(_latest_save(save_path, auto_path))
     # in the offseason the hub usually carries no phase word and its cards say things like "STAFF
     # SHAKE", so the save's own stage is the stop; the hub header is only used in season.
-    before = before_save if (before_save or {}).get("phase") == "OFFSEASON" else (read_header(frame) or before_save)
+    before = before_save if (before_save or {}).get("phase") in ("OFFSEASON", "PRESEASON") \
+        else (read_header(frame) or before_save)
     if screen0 not in HUBS:
         pilot.stop(f"advance: {screen0} is not a hub; no advance route is catalogued for it", Unknown)
     progress.update(save=save, from_screen=screen0, from_stop=before)
@@ -781,7 +788,7 @@ def advance(pilot, save=None, franchise=None, quit=True, watcher=None, folder=No
     # Madden writes the new stop to the autosave, so the stop is read from the newest file: the
     # named save is only overwritten below.
     after_save = _save_header(_latest_save(save_path, auto_path))
-    if (after_save or {}).get("phase") == "OFFSEASON":
+    if (after_save or {}).get("phase") in ("OFFSEASON", "PRESEASON"):
         after = after_save
         pilot.look()
     else:

@@ -13,7 +13,8 @@ through a subprocess (`runner` replaces subprocess.run in tests):
   4. the stage loop (P2-03), per stop: tools.madden_pilot advance (exactly one stop, then quit) ->
      pipeline.watch_save --once into madden_tune_<run>, which runs the weekly engines and the league office and
      writes Mu's decisions into the save with the franchise closed -> the pilot reloads the written save.
-     Madden never sims through the offseason (TUNING_LEAGUE.md §6); the loop ends at the first preseason stop.
+     Madden never sims through the offseason (TUNING_LEAGUE.md §6); the loop runs through the preseason
+     weeks and the cut day and ends when an advance lands on the next regular-season week.
   5. a season report: a pc_save_reader snapshot of the final save scored against the real-NFL targets
      (engines/tuning/compare.py), written to data/tuning/seasons/<run>/season_<year>.md and .json.
 
@@ -133,8 +134,13 @@ def ingest(run, *, runner=None, python=None, environ=None, auto_init=True, saves
     return _run_cmd(runner, cmd, f"ingest into {db_for(run)}", env=_ingest_env(environ))
 
 
-def walk_offseason(run, *, runner=None, python=None, max_stops=10, work_dir=None, environ=None):
-    """The P2-03 stage loop: advance one stop, ingest it, repeat until the first preseason stop."""
+def walk_offseason(run, *, runner=None, python=None, max_stops=14, work_dir=None, environ=None):
+    """The P2-03 stage loop: advance one stop, ingest it, repeat until the next regular season.
+
+    The stops are the eight offseason stages, the preseason weeks and the cut day; the loop ends
+    when an advance lands on a regular-season week (2027 week 1). The preseason weeks carry no
+    phase word of their own on the hub — it reads "2027. WEEK 1", the same as a regular-season
+    week — so the stop comes from the save (`PRESEASON_<n>`)."""
     stops = []
     for n in range(1, max_stops + 1):
         run_dir = os.path.join(work_dir, f"stop_{n:02d}") if work_dir else None
@@ -144,7 +150,7 @@ def walk_offseason(run, *, runner=None, python=None, max_stops=10, work_dir=None
             break
         ingest(run, runner=runner, python=python, auto_init=n == 1, environ=environ)
         after = res.get("to") or {}
-        if str(after.get("phase", "")).upper().startswith("PRESEASON"):
+        if str(after.get("phase", "")).upper() == "WEEK":       # the next regular season has begun
             break
     return stops
 
@@ -181,7 +187,7 @@ def report(snapshot_path, out_dir, *, targets_path=None):
 
 # ---------- the loop ----------
 
-def run(name, *, base_save=BASE_SAVE, resume=False, offseason=True, max_stops=10, targets_path=None,
+def run(name, *, base_save=BASE_SAVE, resume=False, offseason=True, max_stops=14, targets_path=None,
         runner=None, python=None, report_fn=print, seasons_dir=None, saves_dir=None, do_report=True,
         environ=None):
     """Clone, sim, walk the offseason and report one season. Returns
@@ -229,7 +235,7 @@ def main(argv=None):
     ap.add_argument("--from", dest="base_save", default=BASE_SAVE)
     ap.add_argument("--resume", action="store_true", help="don't clone or sim the regular season again")
     ap.add_argument("--no-offseason", action="store_true", help="stop after the postseason (no stage loop)")
-    ap.add_argument("--max-stops", type=int, default=10)
+    ap.add_argument("--max-stops", type=int, default=14)
     ap.add_argument("--targets", help="targets JSON (default data/tuning/targets_2015_2025.json)")
     ap.add_argument("--no-report", action="store_true")
     ap.add_argument("--dry-run", action="store_true", help="print the plan and exit")

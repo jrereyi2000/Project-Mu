@@ -588,6 +588,14 @@ def test_save_header_names_the_offseason_stop(monkeypatch):
                                       "stop": "PRO_DAY"}
 
 
+def test_save_header_separates_the_preseason_from_a_regular_season_week(monkeypatch):
+    # the preseason hub header reads "2027. WEEK 1", so only the save can tell the two apart
+    snap = {"season": {"calendar_year": 2027, "stage": "PreSeason", "week_type": "PreSeason", "week_index": 2}}
+    monkeypatch.setattr(jobs, "_snapshot", lambda path: snap)
+    assert jobs._save_header("x") == {"year": 2027, "phase": "PRESEASON", "week": None, "stage": 2,
+                                      "stop": "PRESEASON_2"}
+
+
 def test_advance_stops_when_the_save_did_not_move(tmp_path, notices, monkeypatch):
     # the hub header can move on its own; the stop is the save, so a save that didn't move is a stop
     monkeypatch.setattr(jobs, "_save_header",

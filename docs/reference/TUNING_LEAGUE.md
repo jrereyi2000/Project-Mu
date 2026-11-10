@@ -169,7 +169,10 @@ stage's own advance), the stop header read before and after, the autosave copied
 quit to the franchise list. It refuses anything but `CAREER-TUNE-*` and refuses while the watcher runs.
 
 The whole season is one command (`engines/tuning/season_loop.py`, P2-05): clone, regular season, postseason,
-ingest, the stage loop above one stop at a time, then a season report scored against the real-NFL targets.
+ingest, the stage loop above one stop at a time through the eight offseason stops **and the preseason weeks and
+cut day**, then a season report scored against the real-NFL targets. The loop ends when an advance lands on the
+next regular-season week. The preseason hub header reads like a regular-season one (`2027. WEEK 1`), so the stop
+comes from the save (`PRESEASON_<n>`) and the cut day is the week the league office detects as CUTDOWN.
 
 ```
 .venv/bin/python3 -m engines.tuning.season_loop --run p2c
