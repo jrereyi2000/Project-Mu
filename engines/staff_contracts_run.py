@@ -109,18 +109,20 @@ def current_staff(cur, season):
     return out
 
 
-def file_hires(cur, season, dry_run=False):
-    """Files a market deal for everyone whose tenure starts exactly in `season` and has no live contract row. The
-    hiring cycle calls this as it hires (M-0200), so the save carries the new deal from the first write instead of
-    the coach sitting at 0/0/0 until the next annual run; `annual` calls it for `season + 1` as a backstop. A
-    re-hire keeps his own pay as a floor and his full-control flag, as any refile does. Returns the rows filed."""
+def file_hires(cur, season, dry_run=False, starting_only=True):
+    """Files a market deal for everyone with no live contract row: by default only those whose tenure starts exactly
+    in `season` (a hire), else every current staffer of that season. The hiring cycle calls this as it hires
+    (M-0200), so the save carries the new deal from the first write instead of the coach sitting at 0/0/0 until the
+    next annual run; `annual` calls it for `season + 1` as a backstop, and `coach_link` files the starting staff it
+    seats at league start. A re-hire keeps his own pay as a floor and his full-control flag, as any refile does.
+    Returns the rows filed."""
     if not (_table(cur, "staff_contracts") and _table(cur, "coach_tenures")):
         return []
     by_key = {(r["team_id"], r["person_kind"], r["person_id"]): r for r in contracts(cur)
               if r["person_kind"] in ("HC", "OC", "DC", "GM")}
     filed = []
     for s in current_staff(cur, season):
-        if int(s["start_season"] or 0) != int(season):
+        if starting_only and int(s["start_season"] or 0) != int(season):
             continue
         row = by_key.get((s["team_id"], s["person_kind"], s["person_id"]))
         if row is not None and row["remaining_years"] > 0:

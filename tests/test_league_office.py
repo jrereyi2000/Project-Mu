@@ -436,14 +436,14 @@ def test_canonical_hash_is_the_engines_fingerprint():
 # ------------------------------------------------------------ pure helpers ----
 def test_contract_block_offsets_and_cap_hit():
     new = {"length": 2, "salary_by_year": [1_000_000, 2_000_000], "bonus_by_year": [500_000, 500_000]}
-    b, dropped = lo.contract_block(new, None, 0, slots=4)
+    b, dropped, _ = lo.contract_block(new, None, 0, slots=4)
     assert b == {"Length": 2, "CurrentYear": 0, "SalaryYear0": 100, "SalaryYear1": 200, "SalaryYear2": 0,
                  "SalaryYear3": 0, "BonusYear0": 50, "BonusYear1": 50, "BonusYear2": 0, "BonusYear3": 0}
     assert dropped == 0 and lo.block_hit(b, 0) == 150
     old = contract(length=2, cur=1, sal=(90, 95), bon=(10, 20))
-    b, _ = lo.contract_block(new, old, 1, slots=4)
+    b, _, _ = lo.contract_block(new, old, 1, slots=4)
     assert (b["Length"], b["SalaryYear0"], b["BonusYear0"], b["SalaryYear1"]) == (3, 95, 20, 100)
-    b, dropped = lo.contract_block(dict(new, length=2), old, 1, slots=2)
+    b, dropped, _ = lo.contract_block(dict(new, length=2), old, 1, slots=2)
     assert dropped == 1 and b["Length"] == 2
 
 
@@ -451,13 +451,20 @@ def test_contract_block_emits_only_the_bonus_slots_the_schema_has():
     """M-0196: Madden's PlayerContract has more SalaryYear fields than BonusYear ones, and the writer refuses a
     field the schema lacks, so a 10-year deal was refused on BonusYear7/8/9."""
     new = {"length": 10, "salary_by_year": [1_000_000] * 10, "bonus_by_year": [500_000] * 10}
-    b, dropped = lo.contract_block(new, None, 0, slots=10, bonus_slots=7)
+    b, dropped, bonus_dropped = lo.contract_block(new, None, 0, slots=10, bonus_slots=7)
+    assert bonus_dropped == 3                        # the three years the save has no BonusYear for
     assert dropped == 0 and b["Length"] == 10
     assert b["SalaryYear9"] == 100                     # the salary family is complete
     assert "BonusYear7" not in b and "BonusYear9" not in b and b["BonusYear6"] == 50
-    short, _ = lo.contract_block({"length": 3, "salary_by_year": [1_000_000] * 3, "bonus_by_year": [0] * 3},
+    short, _, _ = lo.contract_block({"length": 3, "salary_by_year": [1_000_000] * 3, "bonus_by_year": [0] * 3},
                                  None, 0)
     assert short["BonusYear6"] == 0 and "BonusYear7" not in short
+    # a stage offset prepends the old deal's remaining years, so a 7-year deal can drop a bonus year with none of
+    # its own years lost
+    old = contract(length=2, cur=1, sal=(90, 95), bon=(10, 20))
+    seven = {"length": 7, "salary_by_year": [1_000_000] * 7, "bonus_by_year": [500_000] * 7}
+    b, dropped, bonus_dropped = lo.contract_block(seven, old, 1, slots=10, bonus_slots=7)
+    assert dropped == 0 and bonus_dropped == 1 and "BonusYear7" not in b
 
 
 def test_release_cap_accelerates_bonus():

@@ -494,3 +494,10 @@ def test_a_rehire_keeps_his_pay_floor_and_his_full_control():
                  "VALUES (3, 12, 'HC', 20000000, 5, 0, 2032, 1, 60000000)")
     filed = scr.file_hires(FakeCursor(conn), 2037)
     assert filed[0]["annual_salary"] == 20_000_000 and filed[0]["full_control"] in (1, True)
+
+
+def test_file_hires_can_file_every_current_staffer_not_only_a_hire():
+    """coach_link seats the save's starting staff at league start; their deals must exist from that write (M-0203)."""
+    cur = FakeCursor(_db())
+    assert len(scr.file_hires(cur, 2036, starting_only=False)) == 5
+    assert scr.file_hires(cur, 2036, starting_only=False) == []

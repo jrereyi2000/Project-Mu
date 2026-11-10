@@ -413,7 +413,7 @@ def contract_block(new, old=None, offset=0, slots=DEFAULT_CONTRACT_SLOTS, bonus_
     snapshot contract's current-year terms come first. Slots past Length are zeroed; years past `slots` are dropped.
     The save's two families need not have the same field count (Madden's PlayerContract has more SalaryYear fields
     than BonusYear ones) and the writer refuses a field the schema lacks, so each is trimmed to its own count
-    (`bonus_slots`; M-0196). Returns (block, dropped_years)."""
+    (`bonus_slots`; M-0196). Returns (block, dropped_years, dropped_bonus_years)."""
     bonus_slots = slots if bonus_slots is None else bonus_slots
     m = ce.to_madden(dict(new, current_year=0))
     sal = [m.get(f"SalaryYear{i}", 0) for i in range(new["length"])]
@@ -425,13 +425,14 @@ def contract_block(new, old=None, offset=0, slots=DEFAULT_CONTRACT_SLOTS, bonus_
         pre_b = [o_bon[cy + i] if old and cy + i < len(o_bon) else 0 for i in range(offset)]
         sal, bon = pre_s + sal, pre_b + bon
     dropped = max(0, len(sal) - slots)
+    bonus_dropped = max(0, len(bon) - bonus_slots)        # the offset's prepended years count too
     sal, bon = sal[:slots], bon[:bonus_slots]
     block = {"Length": len(sal), "CurrentYear": 0}
     for i in range(slots):
         block[f"SalaryYear{i}"] = sal[i] if i < len(sal) else 0
     for i in range(bonus_slots):
         block[f"BonusYear{i}"] = bon[i] if i < len(bon) else 0
-    return block, dropped
+    return block, dropped, bonus_dropped
 
 
 def block_hit(block, year):
@@ -644,13 +645,13 @@ class Plan:
         if lst == "Roster" and block is None:
             if not contract:
                 return self.note(tag, False, f"a Roster signing of {self.name(pgid)} needs a contract")
-            block, dropped = contract_block(contract, None, self.offset if offset is None else offset, self.slots,
-                                         self.bonus_slots)
+            block, dropped, bonus_dropped = contract_block(
+                contract, None, self.offset if offset is None else offset, self.slots, self.bonus_slots)
             if dropped:
                 self.warn(f"{self.name(pgid)}: {dropped} contract years past the save's {self.slots} slots dropped")
-            if int(contract.get("length") or 0) > self.bonus_slots:
-                self.warn(f"{self.name(pgid)}: {contract['length'] - self.bonus_slots} bonus years past the save's "
-                          f"{self.bonus_slots} BonusYear fields are left unset")
+            if bonus_dropped:
+                self.warn(f"{self.name(pgid)}: {bonus_dropped} bonus years past the save's {self.bonus_slots} "
+                          f"BonusYear fields are left unset")
         if not self._claim(pgid, "sign", team_index, priority, tag):
             return False
         self.signs.append({"pgid": pgid, "team_index": team_index, "list": lst,
@@ -712,13 +713,13 @@ class Plan:
         if have and have.get("contract") is not None:
             return self.note(tag, False, f"{self.name(pgid)}: a contract change is already planned this write")
         if block is None:
-            block, dropped = contract_block(contract, old, self.offset if offset is None else offset, self.slots,
-                                         self.bonus_slots)
+            block, dropped, bonus_dropped = contract_block(
+                contract, old, self.offset if offset is None else offset, self.slots, self.bonus_slots)
             if dropped:
                 self.warn(f"{self.name(pgid)}: {dropped} contract years past the save's {self.slots} slots dropped")
-            if int(contract.get("length") or 0) > self.bonus_slots:
-                self.warn(f"{self.name(pgid)}: {contract['length'] - self.bonus_slots} bonus years past the save's "
-                          f"{self.bonus_slots} BonusYear fields are left unset")
+            if bonus_dropped:
+                self.warn(f"{self.name(pgid)}: {bonus_dropped} bonus years past the save's {self.bonus_slots} "
+                          f"BonusYear fields are left unset")
         if block == snapshot_block(old):
             return self.note(tag, True, "contract already as planned")
         h0, n0, b0 = cap_change(snapshot_block(old))
