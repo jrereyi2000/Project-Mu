@@ -810,6 +810,10 @@ def advance(pilot, save=None, franchise=None, quit=True, watcher=None, folder=No
     else:
         # a new offseason screen is the point of P2-02, so stop after a minute rather than four
         _sim_one_week(pilot, timeout=ADVANCE_STOP_TIMEOUT)
+        if pilot.screen in DRAFT_SCREENS:
+            # the advance from Pro day lands ON draft week: simming the draft is the advance
+            # (2026-11-10: quitting off DRAFT_HUB stopped the season run with "no route")
+            _simulate_draft(pilot)
     # the sim lands on the coach-progress tabs first; read the header off the hub behind them.
     # Madden writes the new stop to the autosave, so the stop is read from the newest file: the
     # named save is only overwritten below.

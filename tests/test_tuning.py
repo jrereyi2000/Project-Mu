@@ -205,6 +205,20 @@ def test_season_from_snapshot_other_season():
     assert sim["stats"]["QB.pass_yards.rank1"] == 5000 * 17
 
 
+def test_season_from_snapshot_uses_a_games_own_calendar_year():
+    # an offseason save rolls the franchise-year label forward (season 2027 / franchise year 1),
+    # and the season just played is only still identifiable by the game's calendar year (2026)
+    g = _game(1, "RegularSeason", "HomeWon", 0, 1, 24, 10, _box(250, 100, 3, 1), _box(200, 80, 2, 2))
+    g["calendar_year"] = 2026
+    snap = {"season": {"calendar_year": 2027, "franchise_year": 1, "base_calendar_year": 2026,
+                       "week_type": "OffSeason", "week_index": 11},
+            "games": [g], "players": []}
+    assert C.season_from_snapshot(snap, season=2026)["meta"]["games"] == 1
+    # the next season's own unplayed schedule is never folded into the season just played
+    nxt = dict(g, calendar_year=2027)
+    assert C.season_from_snapshot({**snap, "games": [nxt]}, season=2026)["meta"]["no_games"]
+
+
 def test_no_games_played():
     snap = snapshot(games=[_game(2, "RegularSeason", "Unplayed", 0, 1, 0, 0)])
     sim = C.season_from_snapshot(snap)

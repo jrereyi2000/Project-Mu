@@ -62,7 +62,16 @@ def season_from_snapshot(snapshot, season=None):
     year = season - base
     teams, box_missing = {}, 0
     for g in snapshot.get("games", []):
-        if g.get("franchise_year") != year or g.get("week_type") != "RegularSeason" or g.get("status") not in FINISHED:
+        # the reader labels each game with its own calendar year; falling back to the franchise-year
+        # offset keeps older snapshots working. An offseason save has rolled the label forward, so
+        # the calendar year is the only field that still says which season a game belongs to.
+        gyear = g.get("calendar_year")
+        if gyear is None:
+            if g.get("franchise_year") != year:
+                continue
+        elif gyear != season:
+            continue
+        if g.get("week_type") != "RegularSeason" or g.get("status") not in FINISHED:
             continue
         for side, other in (("home", "away"), ("away", "home")):
             idx = g.get(f"{side}_team_index")

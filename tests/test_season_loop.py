@@ -96,11 +96,12 @@ def test_one_season_clones_sims_ingests_and_reports(tmp_path, capsys):
     assert ["--from", "CAREER-MU2026", "--to", "CAREER-TUNE-UNIT"] == calls[0][-4:]
     assert "regular-season-end" in calls[1] and "--no-quit" in calls[1]      # the postseason continues in place
     assert "--franchise" in calls[2] and "playoffs-end" in calls[2]
-    assert "pipeline.watch_save" in calls[3]
-    assert "/saves/CAREER-TUNE-UNIT" in calls[3] and "madden_tune_unit" in " ".join(calls[3])
-    assert calls[3].count("--no-articles") == 1 and "--no-freeze" in calls[3] and "--auto-init" in calls[3]
+    assert calls[3][0] == "node"                                         # the report snapshot
+    assert "pipeline.watch_save" in calls[4]
+    assert "/saves/CAREER-TUNE-UNIT" in calls[4] and "madden_tune_unit" in " ".join(calls[4])
+    assert calls[4].count("--no-articles") == 1 and "--no-freeze" in calls[4] and "--auto-init" in calls[4]
     assert out["db"] == "madden_tune_unit" and out["save"] == "CAREER-TUNE-UNIT"
-    assert len(out["stops"]) == 4 and out["steps"] == ["clone", "regular-season", "playoffs",
+    assert len(out["stops"]) == 4 and out["steps"] == ["clone", "regular-season", "playoffs", "snapshot",
                                                        "ingest-playoffs", "offseason"]
     assert out["report"]["season"] == 2026 and os.path.exists(out["report"]["report"])
     md = open(out["report"]["report"]).read()

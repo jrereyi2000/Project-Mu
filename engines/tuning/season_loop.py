@@ -218,6 +218,12 @@ def run(name, *, base_save=BASE_SAVE, resume=False, offseason=True, max_stops=14
     sim(name, "playoffs-end", in_place=not resume, runner=runner, python=python,
         run_dir=os.path.join(run_dir, "pilot_playoffs"))
     steps.append("playoffs")
+    snap = os.path.join(run_dir, "snapshot.json")
+    if do_report:
+        # taken at the season's end: Madden rolls the per-game tables over at the new league year,
+        # so an offseason snapshot has the next season's unplayed schedule and no 2026 games
+        snapshot(name, snap, runner=runner, saves_dir=saves_dir)
+        steps.append("snapshot")
     ingest(name, runner=runner, python=python, saves_dir=saves_dir, environ=environ)
     steps.append("ingest-playoffs")
     stops = []
@@ -227,8 +233,6 @@ def run(name, *, base_save=BASE_SAVE, resume=False, offseason=True, max_stops=14
         steps.append("offseason")
     out = {"run_dir": run_dir, "steps": steps, "stops": stops, "db": db_for(name), "save": save_for(name)}
     if do_report:
-        snap = os.path.join(run_dir, "snapshot.json")
-        snapshot(name, snap, runner=runner, saves_dir=saves_dir)
         out["report"] = report(snap, run_dir, targets_path=targets_path)
         report_fn(json.dumps(out["report"], indent=1))
     out["minutes"] = round((time.time() - t0) / 60, 1)
