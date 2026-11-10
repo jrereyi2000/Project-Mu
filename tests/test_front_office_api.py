@@ -194,3 +194,32 @@ class EndpointTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class OwnerCashTest(unittest.TestCase):
+    def test_a_database_without_dead_buyouts_reads_it_as_zero(self):
+        """M-0161: the facility endpoints 500'd on a database without 2027_02_19; the failed SELECT is savepointed
+        so the transaction survives, and the missing column reads as 0."""
+        class PgLike:
+            def __init__(self):
+                self.aborted = False
+                self.row = None
+
+            def execute(self, q, a=None):
+                s = " ".join(str(q).split())
+                if s.startswith("ROLLBACK TO SAVEPOINT"):
+                    self.aborted = False
+                elif self.aborted:
+                    raise RuntimeError("InFailedSqlTransaction")
+                elif "dead_buyouts" in s:
+                    self.aborted = True
+                    raise RuntimeError('column "dead_buyouts" does not exist')
+                elif "total_cash_budget" in s:
+                    self.row = (100_000_000, 10_000_000, 20_000_000, 5_000_000)
+
+            def fetchone(self):
+                return self.row
+
+        cur = PgLike()
+        self.assertEqual(fo._owner_cash(cur, 2036, 1), (100_000_000, 10_000_000, 20_000_000, 5_000_000, 0))
+        self.assertEqual(fo._owner_cash(cur, 2036, 1), (100_000_000, 10_000_000, 20_000_000, 5_000_000, 0))

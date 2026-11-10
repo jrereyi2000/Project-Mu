@@ -460,7 +460,11 @@ def apply_take(cur, person_key: str, season: int, week: int, about: list) -> int
     return _guarded(cur, work, 0) or 0
 
 
-def _already_applied(cur, pk, target_type, target_id, ref) -> bool:
+def _already_applied(cur, pk, target_type, target_id, ref, season=None, week=None) -> bool:
+    """True when this graded ref was already applied. Two records count: the ref itself, and the sticky
+    APPLIED_REFS entry. A row written before that entry existed has lost its oldest refs to the evidence window, so
+    a graded event older than any evidence still on the row is also taken as applied: graded events are applied in
+    season/week order, so a later one on the same row proves the earlier ones were (M-0161)."""
     cur.execute("""SELECT evidence FROM persona_relationships
                    WHERE persona_type = 'writer' AND persona_id = %s AND target_type = %s AND target_id = %s;""",
                 (pk, target_type, str(target_id)))
@@ -470,12 +474,16 @@ def _already_applied(cur, pk, target_type, target_id, ref) -> bool:
     ev = row[0]
     if isinstance(ev, str):
         ev = json.loads(ev or "[]")
+    key = (int(season), int(week or 0)) if season is not None else None
     for e in ev or []:
         if not isinstance(e, dict):
             continue
         if e.get("ref") == ref:
             return True
         if e.get("kind") == "APPLIED_REFS" and ref in (e.get("refs") or []):
+            return True
+        if key is not None and e.get("ref") and e.get("kind") not in ("DECAY", "APPLIED_REFS") \
+                and (int(e.get("season") or 0), int(e.get("week") or 0)) >= key:
             return True
     return False
 
@@ -562,7 +570,7 @@ def apply_graded(cur, season: int, week: int | None) -> int:
     def work():
         n = 0
         for pk, ttype, tid, delta, tags, event in events:
-            if _already_applied(cur, pk, ttype, tid, event["ref"]):
+            if _already_applied(cur, pk, ttype, tid, event["ref"], event.get("season"), event.get("week")):
                 continue
             n += _adjust(cur, pk, ttype, tid, delta, event, add_tags=tags)
         return n

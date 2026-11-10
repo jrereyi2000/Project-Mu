@@ -243,6 +243,29 @@ def _regclass(cur, table: str) -> bool:
     return bool(cur.fetchone()[0])
 
 
+def _owner_cash(cur, season, team_id):
+    """The owner cash ledger row for a season. A database without 2027_02_19's dead_buyouts reads that column as 0
+    rather than failing the request: the failed SELECT is contained in a savepoint, so Postgres does not abort the
+    transaction (M-0161)."""
+    try:
+        cur.execute("SAVEPOINT owner_cash")
+        cur.execute("""SELECT total_cash_budget, capex_spent, staff_payroll, opex_committed, dead_buyouts
+                       FROM owner_cash_ledgers WHERE season = %s AND team_id = %s;""", (season, team_id))
+        row = cur.fetchone()
+        cur.execute("RELEASE SAVEPOINT owner_cash")
+    except Exception:      # noqa: BLE001 - a database without the buyout migration
+        try:
+            cur.execute("ROLLBACK TO SAVEPOINT owner_cash")
+            cur.execute("RELEASE SAVEPOINT owner_cash")
+        except Exception:  # noqa: BLE001
+            pass
+        cur.execute("""SELECT total_cash_budget, capex_spent, staff_payroll, opex_committed
+                       FROM owner_cash_ledgers WHERE season = %s AND team_id = %s;""", (season, team_id))
+        row = cur.fetchone()
+        row = (*row, 0) if row else row
+    return row
+
+
 def _tables_present(cur) -> bool:
     cur.execute("SELECT to_regclass('team_cap_seasons') IS NOT NULL AND to_regclass('player_contracts') IS NOT NULL "
                 "AND to_regclass('player_contract_years') IS NOT NULL;")
@@ -480,9 +503,7 @@ def facilities_upgrade(abbr: str, body: UpgradeIn):
                 raise HTTPException(409, f"{team_abbr} has no report card for season {season}")
             card = dict(zip(REPORT_CARD_COLS, row))
             order = plan_upgrade(card, body.category, body.tier, season)
-            cur.execute("""SELECT total_cash_budget, capex_spent, staff_payroll, opex_committed, dead_buyouts
-                           FROM owner_cash_ledgers WHERE season = %s AND team_id = %s;""", (season, team_id))
-            ledger = cur.fetchone()
+            ledger = _owner_cash(cur, season, team_id)
             if not ledger:
                 raise HTTPException(409, f"{team_abbr} has no owner cash ledger for season {season}")
             # The cash check has to see the whole ledger (staff payroll, dead buyouts and OpEx are commitments too),
@@ -543,9 +564,7 @@ def facilities_policy(abbr: str, body: PolicyIn):
                          next_toggles["private_chef"], cost))
             # An OpEx toggle is a cash commitment too: the ledger tracks the enabled policies' annual cost, and a
             # switch JR could not fund is refused before the card changes.
-            cur.execute("""SELECT total_cash_budget, capex_spent, staff_payroll, opex_committed, dead_buyouts
-                           FROM owner_cash_ledgers WHERE season = %s AND team_id = %s;""", (season, team_id))
-            ledger = cur.fetchone()
+            ledger = _owner_cash(cur, season, team_id)
             if ledger:
                 delta = int(cost or 0) - int(ledger[3] or 0)
                 if delta > 0:

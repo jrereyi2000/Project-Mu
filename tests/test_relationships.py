@@ -115,6 +115,7 @@ class FakeDB:
 
     def __init__(self, ready=True):
         self.ready, self.rows, self.next_id, self._result, self.rowcount = ready, {}, 1, [], 0
+        self.picks = []                     # (id, person_key, season, week, winner_backed, actual_winner)
 
     def execute(self, sql, params=None):
         s = " ".join(sql.split())
@@ -133,6 +134,10 @@ class FakeDB:
         elif s.startswith("SELECT target_type, target_id, trust, tags, evidence FROM persona_relationships"):
             self._result = [(k[1], k[2], r["trust"], r["tags"], json.dumps(r["evidence"]))
                             for k, r in self.rows.items() if k[0] == params[0]]
+        elif "FROM agent_predictions p" in s:
+            self._result = [tuple(p) for p in self.picks]
+        elif s.startswith("SELECT to_regclass('public.agent_season_calls')"):
+            self._result = [(False,)]
         elif s.startswith("SELECT evidence FROM persona_relationships"):
             row = self.rows.get(tuple(params))
             self._result = [(json.dumps(row["evidence"]),)] if row else []
@@ -225,6 +230,26 @@ class GradedTests(unittest.TestCase):
 
     def test_constants(self):
         self.assertEqual((rel.GROW_STEP, rel.EARN_RIGHT, rel.EARN_BURNED, rel.DECAY), (0.04, 0.03, -0.06, 0.8))
+
+    def test_a_row_written_before_the_marker_never_reapplies_a_trimmed_pick(self):
+        """M-0161 (B12's original case): the two oldest refs were trimmed out of the five-entry evidence window, so
+        a forced rerun applied them a second time (trust 0.21 -> 0.27). A graded event older than the surviving
+        evidence on the row was applied in the same ordered pass, so it is skipped."""
+        db = FakeDB()
+        db.rows[("p", "team", "1")] = {"id": 1, "trust": 0.21, "tags": [], "evidence": [
+            {"season": 2036, "week": w, "kind": "PICK_RIGHT", "delta": 0.03, "text": "x", "ref": f"pick:{w}"}
+            for w in range(3, 8)]}
+        db.picks = [(w, "p", 2036, w, 1, 1) for w in range(1, 8)]          # seven picks, weeks 1-7
+        self.assertEqual(rel.apply_graded(db, 2036, None), 0)
+        self.assertEqual(db.rows[("p", "team", "1")]["trust"], 0.21)
+
+    def test_a_new_graded_pick_after_the_evidence_is_still_applied(self):
+        db = FakeDB()
+        db.rows[("p", "team", "1")] = {"id": 1, "trust": 0.21, "tags": [], "evidence": [
+            {"season": 2036, "week": 3, "kind": "PICK_RIGHT", "delta": 0.03, "text": "x", "ref": "pick:3"}]}
+        db.picks = [(3, "p", 2036, 3, 1, 1), (4, "p", 2036, 4, 1, 1)]      # week 4 is new
+        self.assertEqual(rel.apply_graded(db, 2036, None), 1)
+        self.assertAlmostEqual(db.rows[("p", "team", "1")]["trust"], 0.24)
 
 
 class DecayTests(unittest.TestCase):
