@@ -32,6 +32,16 @@ def _db():
     return conn
 
 
+def _db_with_gms():
+    """The same league plus one veteran GM (team 1, hired 2030) and one first-year GM (team 2, hired 2036)."""
+    conn = _db()
+    conn.execute("CREATE TABLE gm_profiles (id INTEGER PRIMARY KEY, team_id INT, gm_name TEXT, "
+                 "start_season INT, end_season INT)")
+    conn.execute("INSERT INTO gm_profiles VALUES (101, 1, 'Veteran GM', 2030, NULL), "
+                 "(102, 2, 'Rookie GM', 2036, NULL)")
+    return conn
+
+
 def _rows(cur):
     cur.execute("SELECT team_id, person_kind, person_id, annual_salary, total_years, remaining_years, "
                 "signed_season, buyout_owed FROM staff_contracts ORDER BY team_id, person_kind, person_id")
@@ -78,6 +88,20 @@ def test_a_firing_moves_remaining_guaranteed_into_buyout():
     conn.execute("INSERT INTO coach_tenures (coach_id, team_id, start_season, end_season) VALUES (12, 2, 2037, NULL)")
     rep = scr.annual(cur, 2037)
     assert any(r[1] == "HC" and r[0] == 2 and r[5] > 0 for r in _rows(cur))
+
+
+def test_gm_experience_comes_from_his_start_season():
+    """A GM's experience is his seasons on the job, not the count of his gm_profiles row (always 1)."""
+    conn = _db_with_gms()
+    cur = FakeCursor(conn)
+    staff = scr.current_staff(cur, 2036)
+    gm_by_team = {s["team_id"]: s for s in staff if s["person_kind"] == "GM"}
+    assert gm_by_team[1]["experience"] == 7                  # hired 2030: 2030..2036
+    assert gm_by_team[2]["experience"] == 1                  # hired 2036
+    scr.annual(cur, 2036)
+    rows = {(r[0], r[1]): r for r in _rows(cur)}
+    assert rows[(1, "GM")][3] == 5_750_000                   # the veteran stays STANDARD
+    assert rows[(2, "GM")][3] == 2_750_000                   # a first-year GM is PROMOTION
 
 
 def test_dry_run_writes_nothing():

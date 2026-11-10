@@ -3,6 +3,7 @@ terms from an owner's personality. No database, model or random reads beyond the
 
   patience(owner_view)                 {hot_seat_line_scale 0.85..1.15, min_tenure_delta -1..+1}
   hiring_key(owner_view, candidate)    added to coaching_carousel.pick's score, |x| <= 0.15
+  gm_hiring_key(owner_view, candidate) added to gm_rollover's GM candidate score, |x| <= 0.25
   appeal_term(owner_view)              added to coaching_carousel.opening_appeal, |x| <= 0.05
   spending(owner_view)                 {cap_buffer_share 0..0.05, offers_per_wave 3..6, need_premium 0.05..0.15}
   is_big_move(move)                    a trade sending a top-10 player at his position, a top-50 free-agent
@@ -39,6 +40,16 @@ YOUNG_AGE = 45
 OPENNESS_FIRST_TIMER = 0.01   # per openness point from 5, for a first-time head coach
 APPEAL_CAP = 0.05
 MEDDLER_APPEAL = -0.05
+
+# GM hiring (GM_HIRING_SEARCH_PLAN §2.2): the owner's preference among GM candidate tiers.
+GM_HIRING_CAP = 0.25
+GM_HEADLINE_ELITE = 0.15
+GM_HEADLINE_PROMOTION = -0.05
+GM_DEEP_POCKETS_ELITE = 0.10
+GM_BUDGET_PROMOTION = 0.15
+GM_BUDGET_ELITE = -0.15
+GM_MEDDLER_PROMOTION = 0.15
+GM_MEDDLER_ELITE = -0.10
 
 # spending (today's constants: engines/transactions_engine.py CAP_BUFFER_SHARE, OFFERS_PER_WAVE, OFFER_NEED_PREMIUM)
 DEFAULT_SPENDING = {"cap_buffer_share": 0.02, "offers_per_wave": 4, "need_premium": 0.10}
@@ -98,6 +109,34 @@ def hiring_key(owner_view, candidate) -> float:
             and age < YOUNG_AGE):
         x += PATIENT_YOUNG_COORD
     return round(base.clamp(x, -HIRING_CAP, HIRING_CAP), 4)
+
+
+def gm_hiring_key(owner_view, candidate) -> float:
+    """candidate: a gm_rollover candidate ({key, tier ELITE|STANDARD|PROMOTION, stature, salary, ...}).
+    Returns a bounded modifier in [-GM_HIRING_CAP, GM_HIRING_CAP]; 0.0 for a neutral owner."""
+    traits = _traits(owner_view)
+    tier = (candidate or {}).get("tier")
+    x = 0.0
+    if "HEADLINE_HUNTER" in traits:
+        if tier == "ELITE":
+            x += GM_HEADLINE_ELITE
+        elif tier == "PROMOTION":
+            x += GM_HEADLINE_PROMOTION
+    if "DEEP_POCKETS" in traits and tier == "ELITE":
+        x += GM_DEEP_POCKETS_ELITE
+    if "BUDGET_CONSCIOUS" in traits:
+        if tier == "PROMOTION":
+            x += GM_BUDGET_PROMOTION
+        elif tier == "ELITE":
+            x += GM_BUDGET_ELITE
+    if "MEDDLER" in traits:
+        if tier == "PROMOTION":
+            x += GM_MEDDLER_PROMOTION
+        elif tier == "ELITE":
+            x += GM_MEDDLER_ELITE
+    if tier == "PROMOTION":
+        x += OPENNESS_FIRST_TIMER * (_slider(owner_view, "openness") - 5)
+    return round(base.clamp(x, -GM_HIRING_CAP, GM_HIRING_CAP), 4)
 
 
 def appeal_term(owner_view) -> float:

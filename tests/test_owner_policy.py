@@ -25,12 +25,16 @@ CANDS = [{"key": "coach:1", "kind": "RETREAD"}, {"key": "coord:2", "kind": "POAC
          {"key": "coord:3", "kind": "POACHED", "age": 55}, {"key": "x:4", "kind": "OUTSIDER"},
          {"key": "coord:5", "kind": "POACHED"}]
 
+GM_CANDS = [{"key": "gm:E", "tier": "ELITE"}, {"key": "gm:S", "tier": "STANDARD"},
+            {"key": "gm:P", "tier": "PROMOTION"}]
+
 
 def test_neutral_owner_is_todays_constants():
     for v in (None, {}, view()):
         assert op.patience(v) == {"hot_seat_line_scale": 1.0, "min_tenure_delta": 0}
         assert op.appeal_term(v) == 0.0
         assert all(op.hiring_key(v, c) == 0.0 for c in CANDS)
+        assert all(op.gm_hiring_key(v, c) == 0.0 for c in GM_CANDS)
         assert op.spending(v) == {"cap_buffer_share": te.CAP_BUFFER_SHARE, "offers_per_wave": te.OFFERS_PER_WAVE,
                                   "need_premium": te.OFFER_NEED_PREMIUM}
 
@@ -40,6 +44,7 @@ def test_every_policy_stays_in_its_bounds():
         p = op.patience(v)
         assert 0.85 <= p["hot_seat_line_scale"] <= 1.15 and -1 <= p["min_tenure_delta"] <= 1
         assert all(abs(op.hiring_key(v, c)) <= 0.15 for c in CANDS)
+        assert all(abs(op.gm_hiring_key(v, c)) <= op.GM_HIRING_CAP for c in GM_CANDS)
         assert abs(op.appeal_term(v)) <= 0.05
         s = op.spending(v)
         assert 0.0 <= s["cap_buffer_share"] <= 0.05 and 3 <= s["offers_per_wave"] <= 6
@@ -72,6 +77,34 @@ def test_hiring_terms():
     assert op.hiring_key(view(openness=9), CANDS[0]) == 0.0      # openness favours first-timers only
     assert op.hiring_key(view("PATIENT_BUILDER", openness=10), CANDS[1]) == 0.15   # capped
     assert op.appeal_term(view("MEDDLER")) == -0.05 and op.appeal_term(view("HANDS_OFF")) == 0.0
+
+
+def test_gm_hiring_terms():
+    elite, standard, promotion = GM_CANDS
+    assert op.gm_hiring_key(None, promotion) == 0.0
+    assert op.gm_hiring_key(view(), elite) == 0.0
+    # HEADLINE_HUNTER wants the proven architect, not the unknown first-timer
+    assert op.gm_hiring_key(view("HEADLINE_HUNTER"), elite) == 0.15
+    assert op.gm_hiring_key(view("HEADLINE_HUNTER"), standard) == 0.0
+    assert op.gm_hiring_key(view("HEADLINE_HUNTER"), promotion) == -0.05
+    # DEEP_POCKETS only sweetens ELITE
+    assert op.gm_hiring_key(view("DEEP_POCKETS"), elite) == 0.10
+    assert op.gm_hiring_key(view("DEEP_POCKETS"), promotion) == 0.0
+    # BUDGET_CONSCIOUS / MEDDLER prefer a controllable first-timer and cool on an elite
+    for trait in ("BUDGET_CONSCIOUS", "MEDDLER"):
+        assert op.gm_hiring_key(view(trait), promotion) == 0.15
+        assert op.gm_hiring_key(view(trait), standard) == 0.0
+    assert op.gm_hiring_key(view("BUDGET_CONSCIOUS"), elite) == -0.15
+    assert op.gm_hiring_key(view("MEDDLER"), elite) == -0.10
+    # openness favors the first-timer only
+    assert op.gm_hiring_key(view(openness=9), promotion) == 0.04
+    assert op.gm_hiring_key(view(openness=1), promotion) == -0.04
+    assert op.gm_hiring_key(view(openness=9), elite) == 0.0
+    # bounded to +-GM_HIRING_CAP
+    flush = view("BUDGET_CONSCIOUS", "MEDDLER", openness=10)
+    assert op.gm_hiring_key(flush, promotion) == 0.25            # 0.15 + 0.15 + 0.05, capped
+    assert op.gm_hiring_key(view("BUDGET_CONSCIOUS", "MEDDLER"), elite) == -0.25
+    assert op.gm_hiring_key(flush, {"key": "x"}) == 0.0          # no tier, no term
 
 
 MOVES = {
