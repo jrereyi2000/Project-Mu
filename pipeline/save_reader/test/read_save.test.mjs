@@ -20,7 +20,8 @@ const COACH_TABLE_ID = 4168;
 const TEAM_TABLE_ID = 1;
 const coachRecord = (over = {}) => ({
   isEmpty: false, PresentationId: 0, FirstName: '', LastName: '', Age: 0, Position: 'HeadCoach', TeamIndex: 0,
-  ContractStatus: 'Signed', Archetype: 'OffensiveGuru', Level: 1, Portrait: 0,
+  ContractStatus: 'Signed', ContractLength: 0, ContractSalary: 0, ContractYearsRemaining: 0,
+  Archetype: 'OffensiveGuru', Level: 1, Portrait: 0,
   OffensivePlaybook: NO_REF, DefensivePlaybook: NO_REF, OffensiveScheme: NO_REF, DefensiveScheme: NO_REF,
   IsUserControlled: false, ...over,
 });
@@ -34,7 +35,8 @@ function syntheticCoaches() {
     records: [
       coachRecord({
         PresentationId: 86, FirstName: 'Todd', LastName: 'Bowles', Age: 62, Position: 'HeadCoach', TeamIndex: 5,
-        ContractStatus: 'Signed', Archetype: 'DefensiveGenius', Level: 17, Portrait: 5,
+        ContractStatus: 'Signed', ContractLength: 4, ContractSalary: 450, ContractYearsRemaining: 2,
+        Archetype: 'DefensiveGenius', Level: 17, Portrait: 5,
         OffensivePlaybook: encodeRef(16384, 104463), DefensivePlaybook: encodeRef(16384, 104496),
         OffensiveScheme: encodeRef(16485, 57913), DefensiveScheme: encodeRef(16485, 57914),
         IsUserControlled: false,
@@ -86,7 +88,8 @@ test('coaches: every live Coach record, free agents included, in the reader_vers
   assert.deepEqual(coaches.map(c => c.row), [0, 1, 2, 3], 'the empty row is skipped');
   assert.deepEqual(coaches.find(c => c.pgid === 86), {
     pgid: 86, table: COACH_TABLE_ID, row: 0, first_name: 'Todd', last_name: 'Bowles', age: 62,
-    position: 'HeadCoach', team_index: 5, contract_status: 'Signed', archetype: 'DefensiveGenius', level: 17,
+    position: 'HeadCoach', team_index: 5, contract_status: 'Signed', contract_length: 4,
+    contract_salary: 450, contract_years_remaining: 2, archetype: 'DefensiveGenius', level: 17,
     portrait: 5, offensive_playbook: encodeRef(16384, 104463), defensive_playbook: encodeRef(16384, 104496),
     offensive_scheme: encodeRef(16485, 57913), defensive_scheme: encodeRef(16485, 57914), is_user_controlled: false,
   });

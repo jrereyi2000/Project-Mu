@@ -60,9 +60,14 @@ def _seat(snap, team_index, key, pgid):
             seat[key] = pgid
 
 
-def _save_coach(snap, pgid, first, last, team_index, status="Signed"):
+def _save_coach(snap, pgid, first, last, team_index, status="Signed", contract=(0, 0, 0)):
+    """One entry of the snapshot's `coaches` list; `contract` is (length, salary, years remaining) as the save holds
+    it, so the planner can tell whether a hire's deal still needs writing."""
+    length, salary, remaining = contract
     snap["coaches"].append({"pgid": pgid, "first_name": first, "last_name": last, "team_index": team_index,
-                            "contract_status": status, "position": "HeadCoach"})
+                            "contract_status": status, "position": "HeadCoach",
+                            "contract_length": length, "contract_salary": salary,
+                            "contract_years_remaining": remaining})
 
 
 def _hc(conn, coach_id, name, team_id, start, end=None):
@@ -286,3 +291,32 @@ def test_a_free_agent_unhired_for_three_seasons_retires_and_not_before():
     # 2035: 3 complete unhired seasons -> retired.
     result = cs.plan_staff_edits(FakeCursor(conn), snap, 2035)
     assert result["staff"] == [{"action": "release", "pgid": 150, "retire": True}]
+
+
+def test_a_seated_created_coach_gets_his_contract_written():
+    """A coach Mu invented is created without contract fields (no staff_contracts row exists at OFFSEASON_START), and
+    `annual` files the outgoing season, so the hire's deal lands a year later. Until the save carries it, the planner
+    emits a contract-only assign (audit B1 partial, 2026-11-10)."""
+    teams = [(1, "CAR", 0)]
+    conn, snap = _db(teams), _snapshot(teams)
+    _hc(conn, 41, "Dave Canales", 1, FINISHED - 2)
+    _coord(conn, 300, "Brad Idzik", 1, "OC", FINISHED - 2)
+    _coord(conn, 301, "Ejiro Evero", 1, "DC", FINISHED - 2)
+    _profile(conn, "COACH", 41, 100, source="CREATED")
+    _profile(conn, "COORD", 300, 101, "OffensiveCoordinator")
+    _profile(conn, "COORD", 301, 102, "DefensiveCoordinator")
+    _contract(conn, 1, "HC", 41, 3_000_000, 3, 2)
+    _seat(snap, 0, "hc", 100)
+    _seat(snap, 0, "oc", 101)
+    _seat(snap, 0, "dc", 102)
+    _save_coach(snap, 100, "Dave", "Canales", 0, contract=(0, 0, 0))     # created with no deal
+    _save_coach(snap, 101, "Brad", "Idzik", 0)
+    _save_coach(snap, 102, "Ejiro", "Evero", 0)
+    plan = cs.plan_staff_edits(FakeCursor(conn), snap, FINISHED)
+    assign = [a for a in plan["staff"] if a.get("pgid") == 100]
+    assert len(assign) == 1 and assign[0]["action"] == "assign"
+    assert assign[0]["contract"] == {"ContractLength": 3, "ContractSalary": 300, "ContractYearsRemaining": 2}
+    # once the save carries the deal, the plan is empty again
+    _save_coach(snap, 100, "Dave", "Canales", 0, contract=(3, 300, 2))
+    snap["coaches"] = [c for c in snap["coaches"] if not (c["pgid"] == 100 and c["contract_length"] == 0)]
+    assert cs.plan_staff_edits(FakeCursor(conn), snap, FINISHED)["staff"] == []

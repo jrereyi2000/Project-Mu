@@ -214,8 +214,8 @@ def test_the_real_planner_writes_only_the_seat_that_still_differs():
     _seat(snap, 0, "hc", 100)
     _seat(snap, 0, "oc", 101)
     _seat(snap, 0, "dc", 102)
-    _save_coach(snap, 100, "Dave", "Canales", 0)
-    _save_coach(snap, 101, "Brad", "Idzik", 0)
+    _save_coach(snap, 100, "Dave", "Canales", 0, contract=(3, 300, 2))
+    _save_coach(snap, 101, "Brad", "Idzik", 0, contract=(3, 100, 2))
     _save_coach(snap, 102, "Old", "Coord", 0)
 
     plan, doc, summary = _staff_plan(conn, snap)
@@ -253,8 +253,8 @@ def test_the_portrait_packs_queued_fields_ride_an_assign():
     _seat(snap, 0, "hc", 100)
     _seat(snap, 0, "oc", 101)
     _seat(snap, 0, "dc", 102)
-    _save_coach(snap, 100, "Dave", "Canales", 0)
-    _save_coach(snap, 101, "Brad", "Idzik", 0)
+    _save_coach(snap, 100, "Dave", "Canales", 0, contract=(3, 300, 2))
+    _save_coach(snap, 101, "Brad", "Idzik", 0, contract=(3, 100, 2))
     _save_coach(snap, 102, "Ejiro", "Evero", 0)
     for coach in snap["coaches"]:
         coach["portrait"] = 7999                            # a created coach's placeholder until the pack is in

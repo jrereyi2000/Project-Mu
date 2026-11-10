@@ -37,8 +37,9 @@
 // free agents in it are status FreeAgent on TeamIndex 32.
 //
 // reader_version 8 adds `coaches`: one entry for every live Coach record, free agents (TeamIndex 32) included, as
-// {pgid (PresentationId), table, row, first_name, last_name, age, position, team_index, contract_status, archetype,
-// level, portrait, offensive_playbook, defensive_playbook, offensive_scheme, defensive_scheme, is_user_controlled}.
+// {pgid (PresentationId), table, row, first_name, last_name, age, position, team_index, contract_status,
+// contract_length, contract_salary, contract_years_remaining, archetype, level, portrait, offensive_playbook,
+// defensive_playbook, offensive_scheme, defensive_scheme, is_user_controlled}.
 // It also adds `staff`: one {team_index, hc, oc, dc} per real team, each seat the referenced coach's pgid or null
 // when the Team.HeadCoach / OffensiveCoordinator / DefensiveCoordinator reference is empty. Read only: no Coach field
 // is written by the reader.
@@ -206,6 +207,11 @@ export function readCoaches(coachTable) {
       position: c.Position,
       team_index: c.TeamIndex,
       contract_status: c.ContractStatus,
+      // The deal as the save holds it, so the staff planner can tell whether a hire's contract still needs writing
+      // (money in $10,000 units, as Madden stores it).
+      contract_length: c.ContractLength,
+      contract_salary: c.ContractSalary,
+      contract_years_remaining: c.ContractYearsRemaining,
       archetype: c.Archetype,
       level: c.Level,
       portrait: c.Portrait,
