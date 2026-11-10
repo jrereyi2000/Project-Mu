@@ -580,6 +580,40 @@ def test_advance_refuses_non_tune_in_place_or_while_the_watcher_runs(tmp_path, n
     assert fake.keys == [] and fake.looks == 0
 
 
+def test_save_header_names_the_offseason_stop(monkeypatch):
+    snap = {"season": {"calendar_year": 2026, "stage": "OffSeason", "week_type": "OffSeason",
+                       "week_index": 7, "offseason_stage": 6}}
+    monkeypatch.setattr(jobs, "_snapshot", lambda path: snap)
+    assert jobs._save_header("x") == {"year": 2026, "phase": "OFFSEASON", "week": None, "stage": 7,
+                                      "stop": "PRO_DAY"}
+
+
+def test_advance_stops_when_the_save_did_not_move(tmp_path, notices, monkeypatch):
+    # the hub header can move on its own; the stop is the save, so a save that didn't move is a stop
+    monkeypatch.setattr(jobs, "_save_header",
+                        lambda path: {"year": 2026, "phase": "OFFSEASON", "week": None, "stage": 0, "stop": "STAFF"})
+    fake, _ = fake_madden(week=1)
+    _, out = _advance(tmp_path, fake)
+    assert out["status"] == "stopped" and out["kind"] == "Stuck"
+    assert "left the stop where it was (STAFF)" in out["reason"]
+
+
+def test_advance_reports_the_save_stop_in_the_offseason(tmp_path, notices, monkeypatch):
+    # the offseason hub has no header of its own and its cards mention "STAFF"; the save's stage is
+    # the stop. A save that stays on the same stage is a Stuck, and the reason names that stage.
+    monkeypatch.setattr(jobs, "_save_header",
+                        lambda path: {"year": 2026, "phase": "OFFSEASON", "week": None, "stage": 1, "stop": "RE-SIGN"})
+    fake, _ = fake_madden(week=1)
+    _, out = _advance(tmp_path, fake)
+    assert out["status"] == "stopped" and "RE-SIGN" in out["reason"]
+
+
+def test_stop_key_separates_offseason_stages():
+    assert jobs._stop_key({"year": 2026, "phase": "OFFSEASON", "week": None, "stage": 1}) != \
+        jobs._stop_key({"year": 2026, "phase": "OFFSEASON", "week": None, "stage": 2})
+    assert jobs._stop_key(None) is None
+
+
 def test_advance_stops_unknown_off_a_hub(tmp_path, notices):
     fake, _ = fake_madden(start="MAIN_MENU")
     p = make_pilot(tmp_path, fake)

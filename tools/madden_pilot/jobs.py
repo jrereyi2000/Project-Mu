@@ -46,7 +46,10 @@ MANAGER_EXE = "MMCModManager.exe"
 DEFAULT_MANAGER_DIR = "/mnt/c/Madden27Modding/MMC_Modding_Tools_v1.1.0.7/MMC_ModManager_v1.1.0.7"
 WATCHER_CHECK = 'ps -eo args | grep "[p]ipeline[.]watch_save"'
 
-HUBS = ("HUB_WEEKLY", "HUB_GAMEDAY", "HUB_OTHER", "HUB_WEEKLY_DRAFT_CARD")
+# Every screen a loaded franchise can open on. A live event takes the focus on load: at the Free
+# agency frenzy Madden opens the LIVE EVENT tab, not GAMEDAY (2026-11-10).
+HUBS = ("HUB_WEEKLY", "HUB_GAMEDAY", "HUB_OTHER", "HUB_WEEKLY_DRAFT_CARD", "LIVE_EVENT_FRENZY",
+        "LIVE_EVENT_FRENZY_MODAL", "FREE_AGENCY_ENDED", "DRAFT_HUB", "DRAFT_LAUNCH")
 MAX_SIM_WEEKS = 30                 # safety cap on NEXT WEEK presses in one run
 ADVANCE_STOP_TIMEOUT = 90          # seconds an `advance` waits for a catalogued landing screen
 SIM_TIMEOUT = 240                  # seconds for one NEXT WEEK (spike: under 20 s)
@@ -61,6 +64,11 @@ OFFSEASON_WORDS = ("OFFSEASON", "STAFF", "RE-SIGN", "RESIGN", "FREE AGENCY", "CO
 PHASE_WORDS = ("STAFF WEEK", "STAFF", "RE-SIGN", "RESIGN", "FREE AGENCY", "COMBINE", "PRO DAY", "DRAFT",
                "UDFA", "CUTDOWN", "PRESEASON", "OFFSEASON", "PRO BOWL", "SUPER BOWL",
                "CONFERENCE CHAMPIONSHIP", "CHAMPIONSHIP SUNDAY", "DIVISIONAL", "WILDCARD")
+
+# Madden's eight offseason stops by the save's week_index (JR's walkthrough, MADDEN_OFFSEASON_WALKTHROUGH.md);
+# the stage numbers in between are internal and never shown as a stop.
+OFFSEASON_STOPS = {0: "STAFF", 1: "RE-SIGN", 2: "FA_PREP", 3: "FREE_AGENCY", 5: "COMBINE", 7: "PRO_DAY",
+                   11: "DRAFT", 15: "RECAP_UDFA"}
 
 # "2026. WEEK 1" (OCR reads 1 as I or l, and may drop the space: "WEEKI")
 _WEEK_RE = re.compile(r"\b(20\d\d)\s*[.:,]?\s*WEEK\s*([0-9IL|!O]{1,2})\b")
@@ -427,7 +435,9 @@ def _save_header(save_path):
     s = snap.get("season") or {}
     year = s.get("calendar_year")
     if str(s.get("stage") or "").lower() == "offseason":
-        return {"year": year, "phase": "OFFSEASON", "week": None}
+        idx = s.get("week_index")
+        return {"year": year, "phase": "OFFSEASON", "week": None, "stage": idx,
+                "stop": OFFSEASON_STOPS.get(idx, f"OFFSEASON_WEEK_{idx}")}
     week = current_week(snap)
     if week is not None:
         return {"year": year, "phase": "WEEK", "week": week}
@@ -435,6 +445,13 @@ def _save_header(save_path):
     if wt:
         return {"year": year, "phase": PLAYOFF_PHASES.get(wt.lower(), wt.upper()), "week": None}
     return None
+
+
+def _stop_key(head):
+    """What a stop is, for "did the advance move?" — the header, the week, or the offseason stage."""
+    if not head:
+        return None
+    return (head.get("year"), head.get("phase"), head.get("week"), head.get("stage"))
 
 
 def _latest_save(save_path, auto_path):
@@ -497,6 +514,30 @@ def _sim_one_week(pilot, poll=3.0, timeout=SIM_TIMEOUT):
         rest = [n for n in pilot.screens if n != "FORCE_ADVANCE_CONFIRM"]
         _, screen = wait_known(pilot, rest, timeout, poll, what="the end of SIM AHEAD")
     return screen
+
+
+DRAFT_SCREENS = ("DRAFT_HUB", "DRAFT_LAUNCH")
+DRAFT_SIM_TIMEOUT = 600            # seconds the draft sim runs (JR: the draft only advances by simming it)
+
+
+def _simulate_draft(pilot, timeout=DRAFT_SIM_TIMEOUT, poll=4.0):
+    """Draft week: open the DRAFT tab, start the draft, take SIMULATE DRAFT, and wait for the next
+    hub. Simming the draft IS the advance — Madden moves to the recap stop itself, so no ADVANCE
+    WEEK is pressed. Project Mu has already written its picks into the save (TUNING_LEAGUE.md §6)."""
+    frame, screen = pilot.look()
+    if screen == "DRAFT_HUB":
+        pilot.confirm_on("DRAFT_HUB", "START THE NFL DRAFT", wait=2.5)
+        frame, screen = pilot.look()
+    if screen == "DRAFT_LAUNCH":
+        # Windows OCR reads the button as SIMULATEDRAFT / SIMULATEDUFT, so it can't be highlighted
+        # by name: one Down from the selected START DRAFTING, then prove the border has moved off.
+        pilot.press("down")
+        pilot.look()
+        pilot._run_steps("DRAFT_LAUNCH", [["border_off", "START DRAFTING"]])
+        pilot.confirm_on("DRAFT_LAUNCH", "SIMULATE DRAFT", wait=5.0)
+    # the draft runs a minute or two behind a Simulating frame; then the recap hub appears
+    others = [n for n in pilot.screens if n not in DRAFT_SCREENS]
+    return wait_known(pilot, others, timeout, poll, what="the end of the draft")
 
 
 def _done(kind, n, head):
@@ -724,17 +765,31 @@ def advance(pilot, save=None, franchise=None, quit=True, watcher=None, folder=No
     else:
         _load_franchise(pilot, tile_name(save), save=save, folder=folder)
     frame, screen0 = pilot.look()
-    before = read_header(frame) or _save_header(_latest_save(save_path, auto_path))
+    before_save = _save_header(_latest_save(save_path, auto_path))
+    # in the offseason the hub usually carries no phase word and its cards say things like "STAFF
+    # SHAKE", so the save's own stage is the stop; the hub header is only used in season.
+    before = before_save if (before_save or {}).get("phase") == "OFFSEASON" else (read_header(frame) or before_save)
     if screen0 not in HUBS:
         pilot.stop(f"advance: {screen0} is not a hub; no advance route is catalogued for it", Unknown)
     progress.update(save=save, from_screen=screen0, from_stop=before)
-    # a new offseason screen is the point of P2-02, so stop after a minute rather than four
-    _sim_one_week(pilot, timeout=ADVANCE_STOP_TIMEOUT)
-    # the sim lands on the coach-progress tabs first; read the header off the hub behind them
-    after = _week_now(pilot, allow_unreadable=True) or _save_header(save_path)
+    if screen0 in DRAFT_SCREENS:
+        _simulate_draft(pilot)
+    else:
+        # a new offseason screen is the point of P2-02, so stop after a minute rather than four
+        _sim_one_week(pilot, timeout=ADVANCE_STOP_TIMEOUT)
+    # the sim lands on the coach-progress tabs first; read the header off the hub behind them.
+    # Madden writes the new stop to the autosave, so the stop is read from the newest file: the
+    # named save is only overwritten below.
+    after_save = _save_header(_latest_save(save_path, auto_path))
+    if (after_save or {}).get("phase") == "OFFSEASON":
+        after = after_save
+        pilot.look()
+    else:
+        after = _week_now(pilot, allow_unreadable=True) or after_save
     landing = pilot.screen
-    if before is not None and after == before and landing == screen0:
-        pilot.stop(f"the advance left the header on {before}", Stuck)
+    if _stop_key(before_save) is not None and _stop_key(after_save) == _stop_key(before_save):
+        pilot.stop("the advance left the stop where it was "
+                   f"({(before_save or before).get('stop') or (before_save or before).get('phase')})", Stuck)
     written = {}
     if not save.upper().endswith("-AUTOSAVE") and auto_path.is_file() and \
             (_mtime(auto_path) or 0) > (_mtime(save_path) or 0):

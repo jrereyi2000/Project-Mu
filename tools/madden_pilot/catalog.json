@@ -354,6 +354,49 @@
       ],
       "exits": {}
     },
+    "DRAFT_LAUNCH": {
+      "note": "Seen 2026-11-10 (P2-02): after START THE NFL DRAFT, the page asks to kick off the 2027 draft with START DRAFTING and SIMULATE DRAFT. Project Mu has already written its picks into the save, so the pilot takes SIMULATE DRAFT and never drafts by hand (JR: 'click Draft and then click Simulate Draft'). Windows OCR reads the label as SIMULATEDRAFT.",
+      "all": [
+        "START DRAFTING"
+      ],
+      "any": [
+        "SIMULATE DRAFT"
+      ],
+      "none": [],
+      "options": [],
+      "default": null,
+      "nav": "vertical",
+      "highlight": null,
+      "confirm_ok": [
+        "SIMULATE DRAFT"
+      ],
+      "exits": {}
+    },
+    "DRAFT_HUB": {
+      "note": "Seen 2026-11-10 (P2-02): draft week replaces the GAMEDAY and WEEKLY HUB tabs with a DRAFT tab next to MANAGE ROSTER (JR). It holds the NFL DRAFT logo and one START THE NFL DRAFT button. Project Mu writes the picks into the save first; the pilot opens the draft and then simulates it (JR: 'click Draft and then click Simulate Draft').",
+      "all": [
+        "START THE NFL DRAFT"
+      ],
+      "any": [],
+      "none": [],
+      "options": [
+        "START THE NFL DRAFT"
+      ],
+      "default": "START THE NFL DRAFT",
+      "nav": "vertical",
+      "highlight": "border",
+      "confirm_ok": [
+        "START THE NFL DRAFT"
+      ],
+      "exits": {
+        "DRAFT_LAUNCH": [
+          [
+            "confirm",
+            "START THE NFL DRAFT"
+          ]
+        ]
+      }
+    },
     "HUB_OTHER": {
       "note": "The MANAGE ROSTER, COACH CENTRAL, LEAGUE and OPTIONS hub tabs. Anchored on GAMEDAY plus the tab PAGE's own words (2026-11-10): requiring COACH CENTRAL failed when OCR garbled it ('COACHCENTUL'), and the page then matched HUB_GAMEDAY instead and the pilot walked itself onto another tab. Z steps back one tab toward GAMEDAY.",
       "all": [
@@ -377,6 +420,120 @@
           [
             "tab_prev",
             1
+          ]
+        ]
+      }
+    },
+    "ADVANCE_LOCKED": {
+      "note": "Seen 2026-11-10 (P2-02): the GAMEDAY tab at the Free agency stop. 'ADVANCE WEEK LOCKED / The Free Agent Frenzy event has 10 hours remaining' is drawn over the standings page with one OK button, and there is no ADVANCE WEEK to highlight. This is JR's free-agency live event: the LIVE EVENT tab (one left of GAMEDAY) has to be dealt with before the week can advance.",
+      "all": [
+        "ADVANCE WEEK LOCKED"
+      ],
+      "any": [],
+      "none": [],
+      "options": [
+        "OK"
+      ],
+      "default": "OK",
+      "nav": "vertical",
+      "highlight": null,
+      "confirm_ok": [
+        "OK"
+      ],
+      "exits": {
+        "LIVE_EVENT_FRENZY": [
+          [
+            "confirm",
+            "OK"
+          ],
+          [
+            "tab_prev",
+            1
+          ]
+        ]
+      }
+    },
+    "FREE_AGENCY_ENDED": {
+      "note": "Seen 2026-11-10 (P2-02): after SIMULATE TO END OF FRENZY, 'FREE AGENT FRENZY ENDED / The Free Agent Frenzy event has ended. You can no longer negotiate with players.' with one OK button, drawn over the live-event page. Dismiss it and the week can advance again.",
+      "all": [
+        "FREE AGENT FRENZY ENDED"
+      ],
+      "any": [],
+      "none": [],
+      "options": [
+        "OK"
+      ],
+      "default": "OK",
+      "nav": "vertical",
+      "highlight": null,
+      "confirm_ok": [
+        "OK"
+      ],
+      "exits": {
+        "HUB_GAMEDAY": [
+          [
+            "confirm",
+            "OK"
+          ],
+          [
+            "tab_next",
+            1
+          ]
+        ]
+      }
+    },
+    "LIVE_EVENT_FRENZY_MODAL": {
+      "note": "Seen 2026-11-10 (P2-02): holding Escape on the LIVE EVENT tab opens 'ADVANCE FREE AGENT FRENZY / Currently on hour 1. Advance to hour 2?' with ADVANCE TO NEXT HOUR (selected), SIMULATE TO END OF FRENZY and CANCEL (JR; Windows OCR drops the END and reads SIMULATE TO OF FRENZY, so the label is anchored on SIMULATE TO). SIMULATE TO END OF FRENZY is the only one the pilot may take: it ends the event, which is what unlocks the week.",
+      "all": [
+        "ADVANCE FREE AGENT FRENZY"
+      ],
+      "any": [
+        "SIMULATE TO"
+      ],
+      "none": [],
+      "options": [
+        "ADVANCE TO NEXT HOUR",
+        "SIMULATE TO",
+        "CANCEL"
+      ],
+      "default": "ADVANCE TO NEXT HOUR",
+      "nav": "vertical",
+      "highlight": "border",
+      "confirm_ok": [
+        "SIMULATE TO",
+        "CANCEL"
+      ],
+      "exits": {
+        "HUB_GAMEDAY": [
+          [
+            "highlight",
+            "SIMULATE TO"
+          ],
+          [
+            "confirm",
+            "SIMULATE TO"
+          ]
+        ]
+      }
+    },
+    "LIVE_EVENT_FRENZY": {
+      "note": "Seen 2026-11-10 (P2-02): the LIVE EVENT tab at the Free agent frenzy stop (one tab left of GAMEDAY, the Z icon). It is a free-agent contract board (P.NACUA, SALARY OVERVIEW, DESIRED YEARS) and Project Mu owns every contract decision, so Space is never pressed here. Holding Escape opens LIVE_EVENT_FRENZY_MODAL (JR's skip for the free-agency live event).",
+      "all": [
+        "SALARY OVERVIEW",
+        "DESIRED YEARS"
+      ],
+      "any": [
+        "NEGOTIATE CONTRACT",
+        "ALL PLAYERS"
+      ],
+      "none": [],
+      "highlight": null,
+      "confirm_ok": [],
+      "exits": {
+        "LIVE_EVENT_FRENZY_MODAL": [
+          [
+            "hold",
+            "esc"
           ]
         ]
       }

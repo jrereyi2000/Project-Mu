@@ -315,6 +315,12 @@ class Pilot:
                 self.confirm_on(screen, arg)
             elif op == "hold":
                 self.press(arg, hold=2.0, wait=1.5)
+            elif op == "border_off":
+                # a screen whose target label OCR can't read at all: prove the highlight has left
+                # the label we know before confirming wherever it went (DRAFT_LAUNCH, 2026-11-10)
+                self.look()
+                if self.highlighted(labels=[arg]) == arg:
+                    self.stop(f"the highlight is still on {arg}", Stuck)
             else:
                 self.press(op, times=int(arg))
 
