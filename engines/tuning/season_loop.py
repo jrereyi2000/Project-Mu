@@ -162,6 +162,11 @@ def snapshot(run, out_path, *, runner=None, saves_dir=None):
     return _run_cmd(runner, ["node", READER, save_path, "--out", str(out_path)], "save reader")
 
 
+def _default_targets():
+    from engines.tuning import targets as T
+    return T.default_path()
+
+
 def report(snapshot_path, out_dir, *, targets_path=None):
     """Score the season against the real-NFL targets and write <out_dir>/season_<year>.md and .json."""
     from engines.tuning import compare as C
@@ -196,6 +201,9 @@ def run(name, *, base_save=BASE_SAVE, resume=False, offseason=True, max_stops=14
         raise Refused(f"bad run name {name!r} (letters, digits, - and _)")
     if base_save.startswith(TUNE_PREFIX) or not base_save.startswith("CAREER-"):
         raise Refused(f"base save must be a franchise save like {BASE_SAVE}, not {base_save!r}")
+    if do_report and not os.path.exists(targets_path or _default_targets()):
+        raise Refused(f"no real-NFL targets at {targets_path or _default_targets()}: build them with "
+                      "python3 -m engines.tuning.targets (refused up front rather than after a whole season)")
     t0 = time.time()
     run_dir = os.path.join(seasons_dir or SEASONS_DIR, name)
     os.makedirs(run_dir, exist_ok=True)

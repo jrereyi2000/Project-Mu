@@ -64,6 +64,14 @@ def test_bad_run_names_are_refused(name, tmp_path):
     assert calls == []
 
 
+def test_a_missing_targets_file_is_refused_before_any_work(tmp_path):
+    calls = []
+    with pytest.raises(L.Refused, match="no real-NFL targets"):
+        L.run("x", runner=_runner(calls), python="py", seasons_dir=str(tmp_path),
+              targets_path=str(tmp_path / "nope.json"))
+    assert calls == []
+
+
 def test_a_tune_save_is_refused_as_the_base(tmp_path):
     calls = []
     with pytest.raises(L.Refused, match="base save"):
