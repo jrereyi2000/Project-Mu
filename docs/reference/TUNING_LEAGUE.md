@@ -163,6 +163,17 @@ the draft screen only advances by simming the draft. The pilot sims the draft **
 and the run must read the save back to confirm Madden kept them. The one exception to the loop is P4's supersim
 measurement, which only needs `--to regular-season-end` and never touches the offseason.
 
+**Week 1 has one more Madden gate:** the Weekly Hub's draft-class card ("Which rookies will we see in April's
+draft?") must be delegated before the week can advance. The pilot highlights the card with the arrow keys (it is
+not always selected on arrival; the keys wrap) and holds **Q** (the footer's HOLD TO DELEGATE). The catalog models
+this as `HUB_WEEKLY_DRAFT_CARD`, the only screen on which Q is allowed; Space is still never pressed there.
+
+**Every weekly advance is Force Advance, not Next Week.** With all 32 teams user-controlled, READY TO ADVANCE
+cannot run the week. ADVANCE WEEK opens READY TO ADVANCE / FORCE ADVANCE (plus JUMP AHEAD / SIM TO MIDSEASON); the
+pilot presses Down once and confirms FORCE ADVANCE. `ADVANCE_MENU` anchors on READY TO ADVANCE so the overlay is
+never mistaken for the Gameday tab behind it. FORCE ADVANCE then asks ATTENTION / "You have selected to skip
+ahead multiple weeks" — the pilot presses Up to **SIM AHEAD** and confirms (`FORCE_ADVANCE_CONFIRM`).
+
 ## 7. Rules
 
 - Never simulate `CAREER-MUBASE` or `CAREER-MU2026`.

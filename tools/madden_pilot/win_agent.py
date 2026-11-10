@@ -16,8 +16,9 @@ Safety rules (spike P-a, plan R8):
   window first and refocus it if not (restore + Alt tap + SetForegroundWindow). ``key`` refuses when it
   still isn't foreground afterwards.
 - No command acts on a window whose process reports elevated (or whose elevation can't be read).
-- ``key`` refuses while the mouse is within 5 px of the top-left screen corner (JR's abort gesture);
-  the check runs before every press.
+- ``key`` refuses while the mouse is within 5 px of the top-left screen corner, or while the right
+  mouse button is held (JR's abort gestures); the check runs before every press and every capture,
+  including inside a focus wait, so a run that keeps taking the focus can still be stopped.
 
 This module imports nothing from the repo; it is run as a script by file path.
 """
@@ -212,6 +213,8 @@ def ensure_foreground(title_re: str, wait_s: float = 20.0) -> dict:
     end = time.monotonic() + wait_s
     w = find_window(title_re)
     while True:
+        if abort_requested():
+            raise AgentError("abort: top-left corner or right mouse button held", window=w, aborted=True)
         if w["foreground"] and not w["minimized"]:
             return w
         focus_window(w["hwnd"])
@@ -258,9 +261,27 @@ def in_abort_corner() -> bool:
     return any(abs(x - ox) <= ABORT_CORNER_PX and abs(y - oy) <= ABORT_CORNER_PX for ox, oy in origins)
 
 
+ABORT_BUTTONS = (0x02,)          # VK_RBUTTON: held, stops a run even while it holds the focus
+
+
+def abort_requested() -> bool:
+    """JR's abort gestures: the pointer in the top-left corner, or the right mouse button held.
+
+    The button exists because a running job keeps taking the focus back; holding it is a way to
+    stop the job long enough to talk to the agent (JR, 2026-11-10)."""
+    if in_abort_corner():
+        return True
+    get = getattr(win32api, "GetAsyncKeyState", None)     # absent from the tests' fake win32api
+    if get is None:
+        return False
+    return any(get(vk) & 0x8000 for vk in ABORT_BUTTONS)
+
+
 # ---------------------------------------------------------------- capture and OCR
 
 def capture(rect: list[int], path: str) -> dict:
+    if abort_requested():
+        raise AgentError("abort: top-left corner or right mouse button held", aborted=True)
     import mss
     from PIL import Image
 
@@ -340,8 +361,8 @@ def cmd_key(a) -> dict:
         raise AgentError(f"--hold must be 0..{MAX_HOLD_S} s and --gap >= 0")
     sent = 0
     for i in range(a.times):
-        if in_abort_corner():
-            raise AgentError("abort: mouse is in the top-left screen corner", sent=sent, aborted=True)
+        if abort_requested():
+            raise AgentError("abort: top-left corner or right mouse button held", sent=sent, aborted=True)
         try:
             ensure_foreground(a.title)
         except AgentError as e:

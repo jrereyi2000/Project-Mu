@@ -180,10 +180,10 @@ class ScriptedMadden:
                 self.pending = [LOADING] * 3
                 self.go("HUB_WEEKLY")
                 return
-            if self.screen == "ADVANCE_MENU" and label == "NEXT WEEK" and self.week > REGULAR_WEEKS:
+            if self.screen == "ADVANCE_MENU" and label in ("NEXT WEEK", "FORCE ADVANCE") and self.week > REGULAR_WEEKS:
                 self.go(POSTSEASON)
                 return
-            if self.screen == "ADVANCE_MENU" and label == "NEXT WEEK":
+            if self.screen == "ADVANCE_MENU" and label in ("NEXT WEEK", "FORCE ADVANCE"):
                 self.pending = [LOADING] * 3
                 self.week += 1
                 self.progress_tabs = 3
@@ -200,7 +200,7 @@ class ScriptedMadden:
 ROUTES = {
     "sim-season": ("FRANCHISE_LIST > highlight {tile} > Space > PROGRESSION_WARNING (Proceed) > HUB_WEEKLY "
                    "(read 2026. WEEK N) > [Z > HUB_GAMEDAY > highlight ADVANCE WEEK > Space > ADVANCE_MENU > "
-                   "NEXT WEEK > sim > COACH_PROGRESS x3 > HUB_WEEKLY (read week)] until {to} > Tab (savepoint) > "
+                   "FORCE ADVANCE > sim > COACH_PROGRESS x3 > HUB_WEEKLY (read week)] until {to} > Tab (savepoint) > "
                    "Backspace > QUIT_CONFIRM (YES) > FRANCHISE_LIST"),
     "launch": "MMCModManager.exe -launch {pack} > wait for the Madden window > MAIN_MENU or FRANCHISE_LIST",
     "quit": "hub > Backspace > QUIT_CONFIRM (YES, TUNE-* or --allow-quit only) > FRANCHISE_LIST",

@@ -20,8 +20,8 @@ SCREEN_LINES = {
                             "PROCEED WITHOUT PROGRESSION", "CANCEL", "SELECT"],
     "HUB_WEEKLY": TABS + ["2026. WEEK 1", "VS BEARS (0-0-0)", "BEARS WEEK", "Delegate", "CREATE SAVEPOINT", "BACK"],
     "HUB_GAMEDAY": TABS + ["MATCHUP", "WEEKLY STRATEGY", "ADVANCE WEEK", "PLAY SEASON GAME", "SELECT", "BACK"],
-    "ADVANCE_MENU": TABS + ["STATUS REPORT", "NEXT WEEK", "JUMP AHEAD", "SIM TO MIDSEASON", "ADVANCE WEEK",
-                            "PLAY SEASON GAME", "SELECT", "BACK"],
+    "ADVANCE_MENU": TABS + ["READY TO ADVANCE", "FORCE ADVANCE", "STATUS REPORT", "NEXT WEEK", "JUMP AHEAD",
+                            "SIM TO MIDSEASON", "ADVANCE WEEK", "PLAY SEASON GAME", "SELECT", "BACK"],
     "QUIT_CONFIRM": TABS + ["2026. WEEK 1", "WARNING", "Are you sure you want to quit?", "YES", "NO", "SELECT"],
     "COACH_PROGRESS": ["COACH PROGRESS", "LOADOUT PROGRESS", "UNLOCKS", "D. CANALES", "GOAL PROGRESSION",
                        "CONTINUE", "CLOSE"],
@@ -37,7 +37,7 @@ OPTIONS = {
     "PROGRESSION_WARNING": (["PROCEED WITHOUT PROGRESSION", "CANCEL"], 0),
     "QUIT_CONFIRM": (["YES", "NO"], 1),
     "HUB_GAMEDAY": (["ADVANCE WEEK", "PLAY SEASON GAME"], 0),
-    "ADVANCE_MENU": (["NEXT WEEK", "SIM TO MIDSEASON"], 0),
+    "ADVANCE_MENU": (["READY TO ADVANCE", "FORCE ADVANCE", "SIM TO MIDSEASON"], 0),
 }
 
 
@@ -161,7 +161,8 @@ def test_catalog_holds_spike_screens_and_pc_keys():
                  "PROGRESSION_WARNING", "COACH_PROGRESS", "ROSTER_DECISION_PROMPT", "WEEKLY_RECAP", "MAIN_MENU"]:
         assert name in CAT["screens"], name
     s = CAT["screens"]
-    assert s["MAIN_MENU"]["todo"] is True
+    assert s["MAIN_MENU"]["todo"] is False
+    assert s["MAIN_MENU"]["confirm_ok"] == ["FRANCHISE"]
     assert s["WEEKLY_RECAP"]["wait_or_back"] is True
     assert "q" in s["FRANCHISE_LIST"]["forbidden_keys"]
     assert s["ROSTER_DECISION_PROMPT"]["forbidden_confirm"] and s["ROSTER_DECISION_PROMPT"]["never_select"]
@@ -172,7 +173,7 @@ def test_catalog_holds_spike_screens_and_pc_keys():
             assert target in s, (name, target)
             assert not s[target].get("no_route"), (name, target)
             for step in steps:
-                assert step[0] in ("highlight", "confirm") or isinstance(step[1], int)
+                assert step[0] in ("highlight", "confirm", "hold") or isinstance(step[1], int)
                 if step[0] == "confirm":
                     assert any(label_match(step[1], ok) for ok in spec["confirm_ok"]), (name, step)
 

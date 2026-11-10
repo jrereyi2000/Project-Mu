@@ -97,7 +97,8 @@ class Frame:
                 joined = ""
                 for j in range(i, len(toks)):
                     joined = f"{joined} {toks[j]}".strip()
-                    if joined == p or (j == i and f" {p} " in f" {joined} "):
+                    if (joined == p or (j == i and f" {p} " in f" {joined} ")
+                            or (" " in p and joined.replace(" ", "") == p.replace(" ", ""))):
                         boxes = [w["box"] for w in g[i:j + 1] if w.get("box")]
                         return _union(boxes) if boxes else None
                     if len(joined) >= len(p):
@@ -156,7 +157,7 @@ def border_highlight(frame, labels, reach=0.06, bright=170, cover=0.85):
     W, H = img.size
     px = img.load()
     span = max(4, int(H * reach))
-    best, best_score = None, 0.0
+    best, best_key = None, None
     for lab in labels:
         box = frame.find(lab)
         if not box:
@@ -166,9 +167,20 @@ def border_highlight(frame, labels, reach=0.06, bright=170, cover=0.85):
         if x1 <= x0:
             continue
         rows = list(range(max(0, y - span), max(0, y))) + list(range(min(H, y + h), min(H, y + h + span)))
+        lab_score, lab_dist = 0.0, None
         for r in rows:
             lit = sum(1 for c in range(x0, x1) if px[c, r] >= bright)
             score = lit / (x1 - x0)
-            if score >= cover and score > best_score:
-                best, best_score = lab, score
+            if score < cover:
+                continue
+            dist = min(abs(r - y), abs(r - (y + h)))
+            if score > lab_score or (score == lab_score and (lab_dist is None or dist < lab_dist)):
+                lab_score, lab_dist = score, dist
+        if lab_score:
+            # Adjacent stacked options both see the selected row's border; the option whose box
+            # is nearest that row owns it (READY TO ADVANCE must not steal FORCE ADVANCE's
+            # border, P2-01 2026-11-10).
+            key = (round(lab_score, 3), -lab_dist)
+            if best_key is None or key > best_key:
+                best, best_key = lab, key
     return best

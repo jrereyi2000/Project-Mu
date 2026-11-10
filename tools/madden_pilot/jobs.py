@@ -111,6 +111,15 @@ def read_header(frame):
         m = _PHASE_RE.search(str(line).upper())
         if m:
             return {"year": int(m.group(1)), "phase": norm(m.group(2)), "week": None}
+    # The postseason header may carry no year ("WILDCARD WEEK"): recognise the phase alone.
+    for line in frame.lines:
+        u = norm(line)
+        if len(u.split()) > 4:
+            continue
+        for word in ("WILDCARD", "WILD CARD", "DIVISIONAL", "CONFERENCE CHAMPIONSHIP", "SUPER BOWL",
+                     "PRO BOWL", "OFFSEASON"):
+            if word in u:
+                return {"year": None, "phase": word, "week": None}
     return None
 
 
@@ -302,27 +311,96 @@ def launch(pilot, pack=DEFAULT_PACK, run=None, madden_running=None, timeout=LAUN
 
 
 # ------------------------------------------------------------------------------- sim_season
-def _week_now(pilot):
-    """Go to the Weekly Hub and read its header; tries GAMEDAY too. Stuck when unreadable."""
-    with patience(pilot, 120, 1.0):
-        frame = pilot.goto("HUB_WEEKLY")
+def _week_now(pilot, allow_unreadable=False):
+    """Read the week/phase header from the current hub, then the Gameday tab, then the Weekly Hub.
+
+    Gameday carries the header too (including the year-less postseason phase, "WILDCARD WEEK").
+    Stuck when every header is unreadable (a bye week shows only BYE WEEK; the season loop passes
+    allow_unreadable and counts instead)."""
+    frame, _ = pilot.look()
     head = read_header(frame)
     if head is None:
         with patience(pilot, 120, 1.0):
             frame = pilot.goto("HUB_GAMEDAY")
         head = read_header(frame)
     if head is None:
+        with patience(pilot, 20, 1.0):
+            frame = pilot.goto("HUB_WEEKLY")
+        head = read_header(frame)
+    if head is None and not allow_unreadable:
         pilot.stop("can't read the week header (2026. WEEK N) on the hub", Stuck)
     return head
 
 
+def _save_week(save_path):
+    """The save's current week from the save file (the fallback when the hub shows BYE WEEK)."""
+    import tempfile
+    from pipeline.watch_save import snapshot_save
+    from pipeline.load_save import current_week
+    folder = tempfile.mkdtemp(prefix="pilot_week_")
+    try:
+        snap = snapshot_save(str(save_path), folder)
+        with open(snap) as fh:
+            return current_week(json.load(fh))
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+
+
+def _settled_highlight(pilot, options, tries=8, wait=0.5):
+    """The highlighted option once two looks in a row agree, or the last read."""
+    last = None
+    for _ in range(tries):
+        cur = pilot.highlighted(labels=options)
+        if cur is not None and cur == last:
+            return cur
+        last = cur
+        pilot.sleep(wait)
+        pilot.look()
+    return last
+
+
+def _move_highlight(pilot, label, options, presses=4):
+    """Move onto `label` one verified press at a time.
+
+    A single arrow press is sometimes lost (focus switch) and a second press on a stale frame
+    overshoots (READY TO ADVANCE -> FORCE ADVANCE -> SIM TO MIDSEASON, JR 2026-11-10), so each
+    press is followed by a settled re-read before another is allowed.
+    """
+    for _ in range(presses):
+        cur = _settled_highlight(pilot, options)
+        if cur == label:
+            return True
+        if cur not in options:
+            return False
+        pilot.press("down" if options.index(label) > options.index(cur) else "up")
+        pilot.sleep(0.8)
+        pilot.look()
+    return _settled_highlight(pilot, options) == label
+
+
 def _sim_one_week(pilot, poll=3.0):
-    """GAMEDAY > ADVANCE WEEK (highlight checked) > NEXT WEEK, then wait out the sim."""
+    """GAMEDAY > ADVANCE WEEK > FORCE ADVANCE (READY TO ADVANCE can't run an all-user league),
+    then wait out the sim."""
     pilot.goto("ADVANCE_MENU")
-    pilot.highlight("NEXT WEEK")
-    pilot.confirm_on("ADVANCE_MENU", "NEXT WEEK")
+    if pilot.frame.has("FORCE ADVANCE"):
+        label = "FORCE ADVANCE"
+        if not _move_highlight(pilot, label, ["READY TO ADVANCE", "FORCE ADVANCE", "SIM TO MIDSEASON"]):
+            pilot.stop("couldn't settle the highlight on FORCE ADVANCE", Stuck)
+    elif pilot.frame.has("NEXT WEEK"):
+        label = "NEXT WEEK"
+        pilot.highlight(label)
+    else:
+        label = "READY TO ADVANCE"
+        pilot.highlight(label)
+    pilot.confirm_on("ADVANCE_MENU", label)
     others = [n for n in pilot.screens if n != "ADVANCE_MENU"]
-    _, screen = wait_known(pilot, others, SIM_TIMEOUT, poll, what="the end of NEXT WEEK")
+    _, screen = wait_known(pilot, others + ["FORCE_ADVANCE_CONFIRM"], SIM_TIMEOUT, poll, what=f"the end of {label}")
+    if screen == "FORCE_ADVANCE_CONFIRM":
+        if not _move_highlight(pilot, "SIM AHEAD", ["SIM AHEAD", "CANCEL"]):
+            pilot.stop("couldn't settle the highlight on SIM AHEAD", Stuck)
+        pilot.confirm_on("FORCE_ADVANCE_CONFIRM", "SIM AHEAD")
+        rest = [n for n in pilot.screens if n != "FORCE_ADVANCE_CONFIRM"]
+        _, screen = wait_known(pilot, rest, SIM_TIMEOUT, poll, what="the end of SIM AHEAD")
     return screen
 
 
@@ -396,13 +474,18 @@ def sim_season(pilot, save=None, to="regular-season-end", watcher=None, folder=N
     progress.update(save=save, to=to, weeks_simmed=0)
 
     if franchise:
+        # The operator says this franchise is already loaded: go straight to its hub. Checking
+        # the screen here is wrong — the Advance menu is inside a franchise but is not a hub.
         pilot.loaded_franchise = norm(tile_name(franchise))
-        _, screen = pilot.look()
-        if screen not in HUBS:
-            _load_franchise(pilot, tile)
     else:
         _load_franchise(pilot, tile)
-    head = _week_now(pilot)
+    head = _week_now(pilot, allow_unreadable=True)
+    if head is None:
+        latest = auto_path if (auto_path.is_file() and (_mtime(auto_path) or 0) > (_mtime(save_path) or 0)) else save_path
+        week = _save_week(latest)
+        if week is None:
+            pilot.stop("can't read the week from the hub or the save", Stuck)
+        head = {"year": None, "phase": "WEEK", "week": week}
     progress.update(start_week=head.get("week"), start_phase=head["phase"], end_week=head.get("week"))
     weeks = 0
     while not _done(kind, n, head):
@@ -410,9 +493,16 @@ def sim_season(pilot, save=None, to="regular-season-end", watcher=None, folder=N
             pilot.stop(f"simmed {weeks} weeks without reaching {to}", Stuck)
         _sim_one_week(pilot)
         weeks += 1
-        new = _week_now(pilot)
+        new = _week_now(pilot, allow_unreadable=True)
+        if new is None:
+            # A bye week's hub shows only BYE WEEK: the advance moved exactly one week.
+            if head.get("week") is None:
+                pilot.stop("the hub has no week header and the week is unknown", Stuck)
+            new = {"year": head.get("year"), "phase": "WEEK", "week": head["week"] + 1}
+        if new["phase"] == "WEEK" and new.get("week") and new["week"] > 18:
+            new = {"year": new.get("year"), "phase": "POSTSEASON", "week": None}
         if new == head:
-            pilot.stop(f"NEXT WEEK didn't move the header off {head}", Stuck)
+            pilot.stop(f"the header didn't move the week off {head}", Stuck)
         head = new
         progress.update(weeks_simmed=weeks, end_week=head.get("week"), end_phase=head["phase"])
     saved = _savepoint(pilot)

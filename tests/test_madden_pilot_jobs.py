@@ -194,7 +194,7 @@ def test_sim_to_week_3_with_coach_progress_repeats(tmp_path, notices):
     assert fake.screen == "FRANCHISE_LIST" and fake.week == 3
     assert p.loaded_franchise == "TUNE-X"
     # two NEXT WEEKs, each followed by three COACH PROGRESS continues
-    assert log.count("  key   space     ADVANCE_MENU on NEXT WEEK -> COACH_PROGRESS") == 2
+    assert log.count("  key   space     ADVANCE_MENU on FORCE ADVANCE -> COACH_PROGRESS") == 2
     assert sum(1 for ln in log if ln.startswith("  key   space     COACH_PROGRESS")) == 6
     assert "tab" in fake.keys and "q" not in fake.keys
     assert not any("HUB_WEEKLY on" in ln and "space" in ln for ln in log)     # never Space on the hub cards
@@ -209,7 +209,7 @@ def test_sim_already_at_target_only_saves_and_quits(tmp_path, notices):
     fake, log = fake_madden(week=3)
     _, out = _sim(tmp_path, fake, to="week 3")
     assert out["status"] == "ok" and out["weeks_simmed"] == 0
-    assert "  key   space     ADVANCE_MENU on NEXT WEEK -> COACH_PROGRESS" not in log
+    assert "  key   space     ADVANCE_MENU on FORCE ADVANCE -> COACH_PROGRESS" not in log
 
 
 def test_sim_no_quit_stays_in_the_franchise(tmp_path, notices):
@@ -434,7 +434,7 @@ def test_cli_dry_run_sim_season_prints_route(tmp_path, notices, monkeypatch):
     assert rc == 0
     text = "\n".join(lines)
     assert "FRANCHISE_LIST > highlight TUNE-SPIKE" in lines[0] and "until week 4" in lines[0]
-    assert text.count("ADVANCE_MENU on NEXT WEEK -> COACH_PROGRESS") == 3
+    assert text.count("ADVANCE_MENU on FORCE ADVANCE -> COACH_PROGRESS") == 3
     assert "QUIT_CONFIRM on YES -> FRANCHISE_LIST" in text
     res = result_json(tmp_path)
     assert res["status"] == "ok" and res["dry_run"] and res["end_week"] == 4
