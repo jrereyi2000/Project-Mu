@@ -24,6 +24,31 @@ export function encodeRef(table, row) {
   return table.toString(2).padStart(15, '0') + row.toString(2).padStart(17, '0');
 }
 
+// A record field read that treats a missing/undecodable field as undefined (league_setup.mjs's copy).
+const safeGet = (record, key) => { try { return record[key]; } catch { return undefined; } };
+
+// A copy of a record in a free row of its table (`takeRow(table)` picks the row and must not return one twice); array
+// slots start empty when `asEmptyArray`, and a TeamSetting gets its own AutoSubSlider (league_setup.mjs). `tables` is a
+// cache with byId (moveTables / tableCache). Returns the new row's reference.
+export async function cloneInto(tables, tableId, templateRow, asEmptyArray, takeRow) {
+  const t = await tables.byId(tableId);
+  const src = t.records[templateRow];
+  const i = takeRow(t);
+  const r = t.records[i];
+  for (const k of Object.keys(src.fields)) {
+    const v = safeGet(src, k);
+    if (v === undefined) continue;
+    if (t.name === 'TeamSetting' && k === 'AutoSubSlider' && decodeRef(v)) {
+      const d = decodeRef(v);
+      r[k] = await cloneInto(tables, d.table, d.row, false, takeRow);
+      continue;
+    }
+    r[k] = asEmptyArray && isRefValue(v) ? NO_REF : v;
+  }
+  if (r.isEmpty) throw new Error(`row ${i} of ${t.name} still empty after the copy`);
+  return encodeRef(tableId, i);
+}
+
 // An array record's slot fields (Player0, Player1, ..., Player99) in index order; Object.keys order isn't promised.
 export function arraySlots(fieldNames) {
   return fieldNames

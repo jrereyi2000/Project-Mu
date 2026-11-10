@@ -7,7 +7,7 @@ import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync } from 'fs'
 import { tmpdir } from 'os';
 import { join } from 'path';
 import Franchise from 'madden-franchise';
-import { decodeRef } from '../lib.mjs';
+import { cloneInto, decodeRef, encodeRef, NO_REF } from '../lib.mjs';
 import { leagueState, setupLeague } from '../league_setup.mjs';
 
 const savePath = process.env.MU_SAMPLE_SAVE;
@@ -135,6 +135,60 @@ test('setup makes all 32 teams real users with fill roster, coach firing and the
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// The cloneInto helper league_setup.mjs uses now lives in lib.mjs; this checks the move preserved its behaviour
+// (free-row allocation, a TeamSetting's own AutoSubSlider, array refs emptied when asked) without a save file.
+function cloneRecord(fields, values = {}, isEmpty = false) {
+  const target = { isEmpty, fields };
+  Object.assign(target, values);
+  return new Proxy(target, {
+    set(obj, key, value) { obj[key] = value; if (fields[key]) obj.isEmpty = false; return true; },
+  });
+}
+
+test('cloneInto (moved to lib.mjs) copies into a free row, clones AutoSubSlider and can empty array refs', async () => {
+  const fields = { Name: {}, Amount: {}, AutoSubSlider: {}, List: {} };
+  const arraySlots = { Entry0: {}, Entry1: {} };
+  const tablesById = new Map([
+    [7000, { header: { tableId: 7000 }, name: 'TeamSetting', records: [
+      cloneRecord(fields, { Name: 'template', Amount: 7, AutoSubSlider: encodeRef(7001, 0), List: encodeRef(7002, 0) }),
+      cloneRecord(fields, {}, true), cloneRecord(fields, {}, true),
+    ] }],
+    [7001, { header: { tableId: 7001 }, name: 'AutoSubSlider', records: [
+      cloneRecord({ Value: {} }, { Value: 5 }), cloneRecord({ Value: {} }, {}, true),
+    ] }],
+    [7002, { header: { tableId: 7002 }, name: 'Entry[]', records: [
+      cloneRecord(arraySlots, { Entry0: encodeRef(7001, 0), Entry1: encodeRef(7001, 0) }),
+      cloneRecord(arraySlots, {}, true),
+    ] }],
+  ]);
+  const tables = { byId: async id => tablesById.get(id) ?? null };
+  const used = new Map();
+  const takeRow = table => {
+    const id = table.header.tableId;
+    const row = table.records.findIndex((r, i) => r.isEmpty && !(used.get(id)?.has(i)));
+    assert.ok(row >= 0, `a free row in ${table.name}`);
+    used.set(id, new Set([...(used.get(id) ?? []), row]));
+    return row;
+  };
+
+  const ref = await cloneInto(tables, 7000, 0, false, takeRow);
+  assert.equal(ref, encodeRef(7000, 1));
+  const copy = tablesById.get(7000).records[1];
+  assert.deepEqual([copy.isEmpty, copy.Name, copy.Amount], [false, 'template', 7]);
+  // The AutoSubSlider reference was followed into a fresh row, not shared with the template.
+  const slider = decodeRef(copy.AutoSubSlider);
+  assert.deepEqual(slider, { table: 7001, row: 1 });
+  assert.equal(tablesById.get(7001).records[1].Value, 5);
+  assert.equal(copy.List, encodeRef(7002, 0), 'a plain reference is copied as is');
+
+  // asEmptyArray clears every reference in the copied row.
+  const emptyRef = await cloneInto(tables, 7002, 0, true, takeRow);
+  const emptied = tablesById.get(7002).records[1];
+  assert.equal(emptyRef, encodeRef(7002, 1));
+  assert.deepEqual([emptied.Entry0, emptied.Entry1], [NO_REF, NO_REF]);
+  assert.equal(emptied.isEmpty, false);
 });
 
 test('state reports the Team table, cap fields and spare contract rows', { skip }, async () => {

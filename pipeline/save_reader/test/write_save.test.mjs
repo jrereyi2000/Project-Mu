@@ -226,6 +226,83 @@ test('a player in two moves, or in a move and a conflicting players edit, writes
   }
 });
 
+test('the staff block runs before release in one write and the report lists the new PresentationId',
+  { skip, timeout: 600_000 }, async t => {
+    const dir = mkdtempSync(join(tmpdir(), 'mu-write-test-'));
+    try {
+      const a = await readSave(savePath);
+      const free = a.coaches.find(c => c.team_index === 32 && c.contract_status === 'FreeAgent');
+      const filled = a.staff.find(s => s.team_index < 32 && s.hc !== null && s.oc !== null);
+      const open = a.staff.find(s => s.team_index < 32 && s.hc !== null && s.oc === null);
+      if (!free || !filled || !open) {
+        t.skip('sample save has no free-agent coach, full staff or open coordinator seat');
+        return;
+      }
+      // A template coach with the sub-records a create clones, and an empty Coach row to fill.
+      const inspectDir = mkdtempSync(join(dir, 'inspect-'));
+      copyFileSync(savePath, join(inspectDir, 'save'));
+      const f = await Franchise.create(join(inspectDir, 'save'), { autoParse: true, saveOnChange: false });
+      const coachTables = f.getAllTablesByName('Coach');
+      for (const table of coachTables) await table.readRecords();
+      const coachTable = coachTables.reduce((best, x) => (!best || x.records.length > best.records.length ? x : best), null);
+      const template = coachTable?.records.find(r => !r.isEmpty && decodeRef(r.StaffTalents) && decodeRef(r.CharacterVisuals));
+      const hasEmpty = coachTable?.records.some(r => r.isEmpty);
+      if (!template || !hasEmpty) { t.skip('no template coach with talents/visuals, or no empty Coach row'); return; }
+
+      const x = await lists(savePath);
+      const cut = (x.teams[filled.team_index]?.roster ?? []).slice(-2);
+      if (cut.length < 2) { t.skip('no bench players to release'); return; }
+      const profile = {
+        first_name: 'Mu', last_name: 'Testcoach', age: 45, position: 'OffensiveCoordinator',
+        archetype: 'OffensiveGuru', specialty: 'Quarterbacks', level: 3, years_coaching: 5,
+        offensive_playbook: 'Panthers', defensive_playbook: 'Panthers',
+        offensive_scheme: 'WestCoastZoneRun', defensive_scheme: 'Tampa2', personality: 'TeamPlayer',
+        demeanor: 'Classic', body_type: 'Standard', height: 72, weight: 10, face_shape: 'Invalid_',
+        generic_head: 'coachhead_M_0001_HS',
+        talents: [{ slot: 'Gameday', talent: 'Field General', tier: 1 },
+          { slot: 'Playsheet', talent: 'West Coast Playsheet', tier: 1 }],
+        ratings: { COACH_QB: 70, COACH_RATING: 62 }, tendencies: { COACH_OFFTENDENCYRUNPASS: 55 },
+        visuals_template: template.PresentationId, portrait_id: 0,
+      };
+      const contract = { ContractLength: 3, ContractSalary: 450, ContractYearsRemaining: 3 };
+      const edits = {
+        release: cut,
+        staff: [
+          { action: 'release', pgid: filled.oc },
+          { action: 'assign', pgid: free.pgid, team_index: filled.team_index, position: 'OffensiveCoordinator', contract },
+          { action: 'create', key: 'coach-test', team_index: open.team_index, position: 'OffensiveCoordinator',
+            profile, contract },
+        ],
+      };
+      const before = hash(savePath);
+      const out = join(dir, 'CAREER-STAFF');
+      const report = await writeSave(savePath, edits, out);
+      assert.equal(hash(savePath), before, 'the input save is untouched');
+      assert.equal(report.verified, true);
+      assert.deepEqual([report.staff.released, report.staff.assigned, report.staff.created, report.release.released],
+        [1, 1, 1, 2]);
+      assert.equal(report.staff.presentation_ids.length, 1, 'the report carries the new PresentationId');
+      assert.equal(report.staff.presentation_ids[0].key, 'coach-test');
+
+      const b = await readSave(out);
+      assert.equal(b.staff.find(s => s.team_index === filled.team_index).oc, free.pgid,
+        'the free agent moved into the released seat');
+      const created = report.staff.presentation_ids[0];
+      assert.equal(b.staff.find(s => s.team_index === open.team_index).oc, created.presentation_id,
+        'the created coach fills the open seat');
+      const newCoach = b.coaches.find(c => c.pgid === created.presentation_id);
+      assert.ok(newCoach, 'the created coach is a live Coach record');
+      assert.deepEqual([newCoach.team_index, newCoach.position, newCoach.contract_status, newCoach.portrait],
+        [open.team_index, 'OffensiveCoordinator', 'Signed', 0], 'no portrait yet: the silhouette path');
+      const released = b.coaches.find(c => c.pgid === filled.oc);
+      assert.deepEqual([released.team_index, released.contract_status], [32, 'FreeAgent']);
+      const afterPlayers = new Map(b.players.map(p => [p.pgid, p]));
+      for (const pgid of cut) assert.equal(afterPlayers.get(pgid).status, 'FreeAgent');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
 // Plan risk R7: a league office stage writes every team's moves at once. 50 releases, 68 signings (50 reusing the
 // released contracts), 50 one-player trades and 32 depth charts = 200 moves in one writeSave.
 test('a 200-move write (timed)', { skip, timeout: 600_000 }, async t => {

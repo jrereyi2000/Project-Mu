@@ -7,15 +7,24 @@
 // edits.json, every key optional:
 //   {"players": [{"pgid": 22692, "set": {"FirstName": "Mu", "SpeedRating": 99, "PLYR_COMMENT": 4600}}],
 //    "records": [{"table": "DraftPick", "tableId": 4540, "row": 17, "set": {...}}],
+//    "staff": [{"action": "release", "pgid": 9001},
+//              {"action": "assign", "pgid": 9002, "team_index": 7, "position": "DefensiveCoordinator", "contract": {...}},
+//              {"action": "create", "key": "coach-311", "team_index": 7, "position": "HeadCoach",
+//               "profile": {...}, "visuals_template": 9010, "contract": {...}}],
 //    "release": [12345, ...],
 //    "sign":  [{"pgid": 123, "team_index": 3, "list": "Roster", "contract": {"Length": 3, "SalaryYear0": 105, ...}}],
 //    "trade": [{"from_team_index": 3, "to_team_index": 12, "pgids": [123], "picks": [{"tableId": 4540, "row": 17}]}],
 //    "depthCharts": [{"team_index": 3, "slots": {"QB": [22686, 9123], ...}}]}
-// (pgid = Player.PresentationId, field names as in the save's Player table).
+// (pgid = Player.PresentationId, field names as in the save's Player table; a staff pgid is Coach.PresentationId).
 // * "players" sets Player fields. An edit's optional "contract" block, {"Length": 4, "CurrentYear": 0, "SalaryYear0":
 //   1050, ...}, sets fields of the player's own PlayerContract record in place (contract_edits.mjs; money in $10,000
 //   units).
 // * "records" edits other tables by table id and row (record_edits.mjs: draft picks, draft-class rows).
+// * "staff" writes head coaches and coordinators (staff.mjs): a release leaves for the coach free-agent pool
+//   (TeamIndex 32; "retire": true makes him Retired), an assign moves an existing record to a team's HC/OC/DC seat, and
+//   a create clones a template coach's visuals/talents into an empty Coach row and assigns him. A head-coach seat also
+//   re-points the team's user (Team.UserCharacter, FranchiseUser.UserEntity/Team, Coach.IsUserControlled). This block
+//   plans and applies BEFORE the player moves; its report lists each new PresentationId for Mu to store.
 // * "release" sends rostered players to free agency (release.mjs: status, team, contract, team lists and depth charts,
 //   the free-agent list, roster counts).
 // * "sign" signs free agents and draft prospects to a Roster (reusing an unreferenced PlayerContract row, e.g. one a
@@ -23,9 +32,10 @@
 // * "trade" moves players with their contracts, and draft picks, from one team to another (trade.mjs).
 // * "depthCharts" replaces depth-chart positions with up to 6 rostered players each (depth_chart.mjs).
 // A player may appear in only one of release / sign / trade, and a signed or traded player's "players" edit may not
-// set a field the move sets (TeamIndex, ContractStatus, ...). Moves apply in the order release, sign, trade,
-// depthCharts, each against the lists as the earlier ones left them, so a release can free the contract row a signing
-// takes and a depth chart can list a player signed or traded in the same write.
+// set a field the move sets (TeamIndex, ContractStatus, ...). Moves apply in the order staff, release, sign, trade,
+// depthCharts, each against the lists as the earlier ones left them, so a staff release can free the Coach seat a
+// create fills, a release can free the contract row a signing takes, and a depth chart can list a player signed or
+// traded in the same write.
 //
 // Safety: the input save is never written (it is copied first, and --out may not be the input); --out must not
 // exist unless --overwrite-out. Every edit and move is planned and checked against the fields' schemas before anything
@@ -42,6 +52,7 @@ import { fieldMeta, fieldValueError } from './lib.mjs';
 import { contractRecordOf, planContractEdits } from './contract_edits.mjs';
 import { applyRecordEdits, planRecordEdits, verifyRecordEdits } from './record_edits.mjs';
 import { applyRelease, planRelease, releaseSummary, verifyRelease } from './release.mjs';
+import { applyStaff, planStaff, staffSummary, verifyStaff } from './staff.mjs';
 import { applySign, planSign, refreshPlan, signSummary, verifySign } from './sign.mjs';
 import { applyTrade, planTrade, tradeSummary, verifyTrade } from './trade.mjs';
 import { applyDepthCharts, depthChartSummary, planDepthCharts, verifyDepthCharts } from './depth_chart.mjs';
@@ -130,6 +141,10 @@ export async function writeSave(inputPath, edits, outPath, { overwriteOut = fals
     const records = await planRecordEdits(franchise, edits.records);
     errors.push(...records.errors);
     errors.push(...moveConflicts(edits));
+    // The staff block runs before the player moves (coaches and players share no records); its own release/assign/
+    // create order is internal (staff.mjs).
+    const staff = edits.staff?.length ? await planStaff(franchise, edits.staff) : null;
+    errors.push(...(staff?.errors ?? []));
     const release = edits.release?.length
       ? await planRelease(franchise, edits.release, { exclude: new Set(targets.map(t => t.pgid)) }) : null;
     errors.push(...(release?.errors ?? []));
@@ -152,6 +167,7 @@ export async function writeSave(inputPath, edits, outPath, { overwriteOut = fals
     if (errors.length) throw new Error(`edits refused, nothing written:\n  ${errors.join('\n  ')}`);
     for (const t of targets) t.record[t.key] = t.value;
     applyRecordEdits(records.targets);
+    if (staff) await applyStaff(staff.plan);
     if (release) applyRelease(release.plan);
     if (sign) applySign(sign.plan);
     if (trade) applyTrade(trade.plan);
@@ -184,6 +200,7 @@ export async function writeSave(inputPath, edits, outPath, { overwriteOut = fals
       }
     }
     mismatches.push(...await verifyRecordEdits(check, records.targets));
+    if (staff) mismatches.push(...await verifyStaff(check, staff.plan));
     if (release) mismatches.push(...await verifyRelease(check, release.plan));
     if (sign) mismatches.push(...await verifySign(check, sign.plan));
     if (trade) mismatches.push(...await verifyTrade(check, trade.plan));
@@ -192,6 +209,7 @@ export async function writeSave(inputPath, edits, outPath, { overwriteOut = fals
     return { out, players: new Set(targets.map(t => t.pgid)).size, fields: targets.length,
       contracts: new Set(targets.filter(t => t.contract).map(t => t.pgid)).size,
       records: new Set(records.targets.map(t => t.where)).size, recordFields: records.targets.length,
+      staff: staff ? staffSummary(staff.plan) : null,
       release: release ? releaseSummary(release.plan) : null, sign: sign ? signSummary(sign.plan) : null,
       trade: trade ? tradeSummary(trade.plan) : null, depthCharts: depth ? depthChartSummary(depth.plan) : null,
       verified: true };
@@ -221,6 +239,8 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
     const report = await writeSave(a.save, JSON.parse(readFileSync(a.edits, 'utf8')), a.out, a);
     console.error(`${report.fields} fields on ${report.players} players (${report.contracts} contracts) and `
       + `${report.recordFields} on ${report.records} other records written and read back → ${report.out}`);
+    if (report.staff) console.error(`staff: ${report.staff.released} released, ${report.staff.assigned} assigned, `
+      + `${report.staff.created} created ${JSON.stringify(report.staff)}`);
     if (report.release) console.error(`released to free agency: ${JSON.stringify(report.release)}`);
     if (report.sign) console.error(`signed: ${report.sign.signed} (${report.sign.roster} roster, ${report.sign.practice_squad} practice squad) ${JSON.stringify(report.sign)}`);
     if (report.trade) console.error(`traded: ${report.trade.players} players, ${report.trade.picks} picks ${JSON.stringify(report.trade)}`);
