@@ -440,3 +440,4 @@ All five questions were answered by JR on 2026-11-10; see D7–D11 at the top. N
 | Unit | Wave | Branch | Worktree | Result | Merge |
 |---|---|---|---|---|---|
 | Spike D | 0 | `worktree-agent-a1465b19dc48a9bc0` | `.claude/worktrees/agent-a1465b19dc48a9bc0` | merged — `docs/reference/COACH_DONOR_PHOTOS.md` | `df76bec` |
+| Spike B | 0 | — (orchestrator, two live saves) | — | merged — `docs/reference/MADDEN_COACH_FIRING_DIFF.md` | `b5a0f55`, `a4975b5` |
