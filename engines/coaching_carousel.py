@@ -22,6 +22,7 @@ import os
 import random
 
 from engines import coach_hot_seat as chs
+from engines import coach_madden_profile as cmp
 from engines import coaching_tree_hiring as th
 from engines import owner_policy as op
 from engines.staff_names import background, new_name, taken_names
@@ -696,6 +697,48 @@ def _insert_coordinator(cur, name, role, scheme, playbook, tendencies, notes):
     return cur.fetchone()[0]
 
 
+def _jsonb(value):
+    from psycopg.types.json import Jsonb
+    return Jsonb(value)
+
+
+def _mapped_playbook(value):
+    """`value` when build_profile's `PLAYBOOK_MAP` carries it, else None.
+
+    The carousel's own HC_STAFF coordinator rows store the nickname form ('Panthers Offense'), which the map does not
+    carry (it has the `<City> Offense/Defense` forms plus six nickname aliases); passing it to the builder would raise
+    and abort the hiring cycle, so the profile leaves that playbook NULL rather than guessing a Madden enum.
+    """
+    return value if value in cmp.PLAYBOOK_MAP else None
+
+
+def _store_created_profile(cur, person_id, name, role, *, slant=None, scheme=None, playbook=None, tendencies=None,
+                           sliders=None, background=None):
+    """Store the CREATED `coach_madden_profiles` row for one invented coach/coordinator (§2.4, U5).
+
+    One call and one insert per invented person, inside the caller's transaction. The seed is
+    `madden-coach:<coach_key>`, so a CREATED row and a later SAVE link for the same person draw the same profile.
+    `background` is None: `staff_names.background` returns narrative text, not the `{age, years}` mapping the builder
+    accepts, and the carousel has no better numeric values for an invented person.
+    """
+    if not _table_exists(cur, "coach_madden_profiles"):
+        return None
+    coach_key = f"{'coach' if role == 'HC' else 'coord'}-{person_id}"
+    row = cmp.build_profile({"name": name, "id": person_id}, role, slant=slant, scheme=scheme, playbook=playbook,
+                            tendencies=tendencies or {}, sliders=sliders or {}, background=background,
+                            contract=None, seed=f"madden-coach:{coach_key}")
+    columns = [c for c in (
+        "person_kind", "person_id", "source", "presentation_id", "first_name", "last_name", "age", "position",
+        "archetype", "specialty", "level", "years_coaching", "offensive_playbook", "defensive_playbook",
+        "offensive_scheme", "defensive_scheme", "team_philosophy", "personality", "demeanor", "body_type", "height",
+        "weight", "face_shape", "generic_head", "talents", "ratings", "tendencies", "visuals_template", "portrait_id",
+        "portrait_status", "headshot_path", "seed", "written_at") if c in row]
+    values = tuple(_jsonb(row[c]) if c in ("talents", "ratings", "tendencies") else row[c] for c in columns)
+    cur.execute(f"INSERT INTO coach_madden_profiles ({', '.join(columns)}) "
+                f"VALUES ({', '.join(['%s'] * len(columns))})", values)
+    return row
+
+
 def _move(cur, season, team_id, role, action, person, **kw):
     cols = ["season", "team_id", "role", "action", "person"] + list(kw)
     cur.execute(f"INSERT INTO staff_moves ({', '.join(cols)}) VALUES ({', '.join(['%s'] * len(cols))})",
@@ -911,6 +954,8 @@ def hiring_cycle(cur, season, log=print, personality=None):
         bg = background(seed, "PROMOTED", role)
         notes = f"{tm[team_id]['name']} {role} from {nxt}; promoted from {tm[team_id]['name']} {bg} {why}"
         cid = _insert_coordinator(cur, name, role, prev.get("scheme"), prev.get("playbook"), prev, notes)
+        _store_created_profile(cur, cid, name, role, scheme=prev.get("scheme"),
+                               playbook=_mapped_playbook(prev.get("playbook")), tendencies=prev)
         created.add(cid)
         events.append({"kind": "created", "event": f"carousel:{seed}", "creator": "coaching_carousel:PROMOTED",
                        "namespace": "db-coordinator", "external_id": cid})
@@ -1054,6 +1099,11 @@ def hiring_cycle(cur, season, log=print, personality=None):
                            VALUES (%s, %s, %s, %s, %s, 'Medium', %s, %s) RETURNING id""",
                         (name, slant, off, de, tend["pass_lean"], tend["blitz_rate"], tend["man_coverage"]))
             coach_id = cur.fetchone()[0]
+            _store_created_profile(cur, coach_id, name, "HC", slant=slant,
+                                   scheme={"offensive": off, "defensive": de},
+                                   playbook={"offensive": _mapped_playbook(oc.get("playbook")),
+                                             "defensive": _mapped_playbook(dc.get("playbook"))},
+                                   tendencies=tend)
         cur.execute("INSERT INTO coach_tenures (coach_id, team_id, start_season) VALUES (%s, %s, %s)",
                     (coach_id, tid, nxt))
         src = c["kind"]
@@ -1164,6 +1214,8 @@ def hiring_cycle(cur, season, log=print, personality=None):
                 notes = f"{tm[tid]['name']} {role} under {name} from {nxt}; {name}'s {bg} before following him"
                 cid = _insert_coordinator(cur, lname, role, mine_side["scheme"], f"{tm[tid]['name']} "
                                           f"{'Offense' if role == 'OC' else 'Defense'}", tend, notes)
+                _store_created_profile(cur, cid, lname, role, scheme=mine_side["scheme"], playbook=None,
+                                       tendencies=tend)
                 created.add(cid)
                 events.append({"kind": "created", "event": f"carousel:{lseed}", "creator": "coaching_carousel:HC_STAFF",
                                "namespace": "db-coordinator", "external_id": cid})
@@ -1220,6 +1272,8 @@ def hiring_cycle(cur, season, log=print, personality=None):
                 bg = background(seed, "OUTSIDE", role)
                 notes = f"{tm[tid]['name']} {role} from {nxt}; previously {bg}; keeps the {prev.get('scheme') or 'existing'} system"
                 cid = _insert_coordinator(cur, name, role, prev.get("scheme"), prev.get("playbook"), prev, notes)
+                _store_created_profile(cur, cid, name, role, scheme=prev.get("scheme"),
+                                       playbook=_mapped_playbook(prev.get("playbook")), tendencies=prev)
                 events.append({"kind": "created", "event": f"carousel:{seed}", "creator": "coaching_carousel:OUTSIDE",
                                "namespace": "db-coordinator", "external_id": cid})
                 cur.execute("INSERT INTO coordinator_tenures (coordinator_id, team_id, role, start_season) "

@@ -69,6 +69,7 @@ import sys
 import psycopg
 
 from pipeline.capture_matching import db_player_name
+from pipeline.coach_link import link_staff
 from pipeline.colleges import college_name
 from pipeline.contracts import insert_contract, supersede_active, upsert_team_cap
 from pipeline import draft_board
@@ -1199,6 +1200,7 @@ def load_snapshot(cur, snapshot, season=None, capture_id=None, capture_folder=No
     teams = team_ids(cur, snapshot)
     load_team_ratings(cur, snapshot, season, teams, report)
     players = load_players(cur, snapshot, season, teams, report)
+    report["coach_link"] = link_staff(cur, snapshot, season)
     load_retirements(cur, snapshot, season, teams, report, capture_id)
     load_player_attributes(cur, snapshot, season, players, report, capture_folder=capture_folder)
     games = load_games(cur, snapshot, season, teams, report)
