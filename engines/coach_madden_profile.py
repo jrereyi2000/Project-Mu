@@ -212,8 +212,11 @@ VISUALS_TEMPLATES = {
     ("DefensiveCoordinator", "Heavy"): 14,       # no DC Heavy in CAREER-MUBASE; Standard fallback
 }
 
-# Spike A §1.2/§7.5: every live coach record stores raw Weight = 10, so the profile keeps that record value.
-COACH_WEIGHT = 10
+# Every live coach record stores the placeholder Weight = 10, which is outside the field's own schema range (int,
+# 150-512), so the save writer's validation refuses it. A created coach gets a plausible human weight drawn from his
+# body type instead. Note the divergence from the 127 real records; Spike C checks that Madden accepts it.
+COACH_WEIGHT_BY_BODY = {"Thin": (160, 185), "Standard": (180, 215), "Muscular": (200, 235), "Heavy": (225, 290)}
+COACH_WEIGHT_DEFAULT = (180, 215)
 COACH_HEIGHT_RANGE = (68, 78)      # inches; the 127 live records run 68-77
 COACH_AGE_RANGE = (32, 72)         # plan D9's range for a created coach
 
@@ -540,7 +543,7 @@ def build_profile(person, role, *, slant, scheme, playbook, tendencies, sliders,
         "demeanor": _demeanor(sliders),
         "body_type": body_type,
         "height": height,
-        "weight": COACH_WEIGHT,
+        "weight": random.Random(f"{seed}:weight").randint(*COACH_WEIGHT_BY_BODY.get(body_type, COACH_WEIGHT_DEFAULT)),
         "face_shape": face_shape,
         "generic_head": generic_head,
         "talents": _talents(archetype, level),

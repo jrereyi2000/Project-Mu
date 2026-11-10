@@ -99,8 +99,15 @@ def _mu_person(head, coords, team_id, role):
     return coords.get((team_id, role))
 
 
+# Madden's Coach.Archetype enum holds 0 twice: "First" and "OffensiveGuru" (the field's own enum member list, and 68
+# of CAREER-MUBASE's 127 coaches sit on it). The snapshot reader reports the first name, so the link stores the
+# football meaning rather than the placeholder.
+_ARCHETYPE_ALIASES = {"First": "OffensiveGuru"}
+
+
 def _desired_row(person_kind, person_id, save, seat_position):
     """The `coach_madden_profiles` values read from one save coach record."""
+    archetype = str(save.get("archetype") or "")
     return {
         "presentation_id": save.get("pgid"),
         "source": "SAVE",
@@ -108,7 +115,7 @@ def _desired_row(person_kind, person_id, save, seat_position):
         "last_name": str(save.get("last_name") or "").strip(),
         "age": int(save.get("age") or 0),
         "position": save.get("position") or seat_position,
-        "archetype": str(save.get("archetype") or ""),
+        "archetype": _ARCHETYPE_ALIASES.get(archetype, archetype),
         "level": int(save.get("level") or 1),
         "portrait_id": save.get("portrait"),
         "seed": _seed(person_kind, person_id),

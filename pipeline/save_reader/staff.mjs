@@ -405,7 +405,8 @@ export async function planStaff(franchise, staff = [], { freed = [] } = {}) {
   // The user wiring a head-coach seat needs (league_setup.mjs's four links; the fourth is IsUserControlled).
   const wiringFor = (where, team, seat, position) => {
     if (position !== 'HeadCoach') return { user: null, userSet: null, teamSet: null };
-    const user = teamUser(fuTable, TID, team.row, seat?.ref, seat?.holderRef);
+    // teamUser compares decoded refs, so the new coach's encoded seat ref is decoded first.
+    const user = teamUser(fuTable, TID, team.row, seat?.ref ? decodeRef(seat.ref) : null, seat?.holderRef);
     if (user.error) { errors.push(`${where}: ${user.error}, so the team's user cannot be re-pointed`); return null; }
     return { user, userSet: { UserEntity: seat.ref, Team: encodeRef(TID, team.row) },
       teamSet: { UserCharacter: seat.ref } };
@@ -552,8 +553,11 @@ export async function planStaff(franchise, staff = [], { freed = [] } = {}) {
 
     // Playbooks and schemes: static references. A team head coach uses its 16485 pair; coordinators use 16384.
     const staticRefs = {};
-    const offName = profile.offensive_playbook ?? team.record.ShortName;
-    const defName = profile.defensive_playbook ?? team.record.ShortName;
+    // A profile with no playbook keeps the team's own, keyed by nickname ("Panthers"), which is what the static maps
+    // hold; ShortName is the abbreviation ("CAR") and is not a key.
+    const teamBook = team.record.NickName ?? team.record.DisplayName ?? null;
+    const offName = profile.offensive_playbook ?? teamBook;
+    const defName = profile.defensive_playbook ?? teamBook;
     if (offName != null) {
       if (!(offName in OFF_PLAYBOOK_ROWS)) errors.push(`${where}: no static row for offensive playbook ${JSON.stringify(offName)}`);
       else staticRefs.OffensivePlaybook = encodeRef(16384, OFF_PLAYBOOK_ROWS[offName]);
@@ -762,6 +766,18 @@ export async function applyStaff(plan) {
 
 const sameRef = (a, b) => Boolean(a && b && a.table === b.table && a.row === b.row);
 
+// A reference written as NO_REF reads back as null, so "no reference" compares equal either way; fieldMismatches
+// compares strictly and would report every cleared reference as a mismatch.
+const unsetRef = v => v == null || v === NO_REF;   // eslint-disable-line eqeqeq - null or undefined
+function refMismatches(record, refs, label) {
+  const bad = [];
+  for (const [k, v] of Object.entries(refs)) {
+    const raw = record[k];
+    if (unsetRef(v) ? !unsetRef(raw) : raw !== v) bad.push(`${label} ${k}: wrote ${v}, read ${raw}`);
+  }
+  return bad;
+}
+
 // Re-reads every release, assignment and create from the written file; returns the mismatches. For a head-coach seat it
 // checks the same four user links league_setup.mjs sets.
 export async function verifyStaff(check, plan) {
@@ -792,7 +808,7 @@ export async function verifyStaff(check, plan) {
       bad.push(`${label}: PresentationId wrote ${a.presentationId}, read ${record.PresentationId}`);
     }
     bad.push(...fieldMismatches(record, a.set, label));
-    bad.push(...fieldMismatches(record, a.refs ?? {}, `${label} references`));
+    bad.push(...refMismatches(record, a.refs ?? {}, `${label} references`));
     const team = teamTable.records[a.teamRow];
     const seat = decodeRef(team[a.seatKey]);
     if (!sameRef(seat, { table: plan.coachTable, row: a.row })) {

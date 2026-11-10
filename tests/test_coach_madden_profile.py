@@ -237,10 +237,15 @@ def test_visuals_template_is_the_same_position_and_body_type():
         assert template in {v for (pos, _), v in cmp.VISUALS_TEMPLATES.items() if pos == position}
 
 
-def test_height_and_weight_are_record_values():
+def test_height_and_weight_are_plausible_values():
     row = build()
     assert cmp.COACH_HEIGHT_RANGE[0] <= row["height"] <= cmp.COACH_HEIGHT_RANGE[1]
-    assert row["weight"] == cmp.COACH_WEIGHT == 10
+    # Madden's Coach.Weight field is int 150-512, and the save writer refuses anything outside a field's schema
+    # range. The 127 live records hold the placeholder 10, so a created coach gets a real weight instead.
+    low, high = cmp.COACH_WEIGHT_BY_BODY.get(row["body_type"], cmp.COACH_WEIGHT_DEFAULT)
+    assert low <= row["weight"] <= high
+    assert 150 <= row["weight"] <= 512
+    assert build()["weight"] == row["weight"]      # same seed, same draw
 
 
 # ---------------------------------------------------------------------------------------- identity/name ---
