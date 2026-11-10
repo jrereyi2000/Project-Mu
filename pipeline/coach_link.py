@@ -362,6 +362,12 @@ def link_staff(cur, snapshot, season):
             saved = save_coaches.get(pgid) if pgid is not None else None
             if person is None or not saved:
                 continue
+            # Only the man the seat actually holds in the save. On a seat the save gives to Madden's made-up coach, the
+            # save's deal belongs to him and he is about to be released — Mu's created man has no Madden record of his
+            # own and must fall back to the tenure-start rule (audit M-0230).
+            save_name = f"{saved.get('first_name') or ''} {saved.get('last_name') or ''}"
+            if not names_match(save_name, person[1]):
+                continue
             years_from[(team_id, role, person[0])] = (saved.get("contract_length"),
                                                       saved.get("contract_years_remaining"))
     fired = staff_contracts_run.file_hires(cur, season, starting_only=False, years_from=years_from)
