@@ -87,8 +87,9 @@ def lens_for(traits):
 
 
 def board_bias(director_view, prospect):
-    """A grade shift in [-MAX_BIAS, MAX_BIAS] from the director's traits. Pure: never mutates its inputs and never
-    reads or changes a prospect's ratings."""
+    """A shift of up to ±MAX_BIAS points from the director's traits, applied on his private report row as a grade
+    point and on his board as a board value point (the two scales meet near slope 1 mid-class). Pure: never mutates
+    its inputs and never reads or changes a prospect's ratings."""
     traits = set(director_view.get("traits") or [])
     bias = 0.0
     if "TRAITS_CHASER" in traits:

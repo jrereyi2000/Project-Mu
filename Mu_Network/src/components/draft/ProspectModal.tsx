@@ -174,8 +174,9 @@ function ScoutingReportView({ report, onEdition }: { report: ScoutReport; onEdit
 export const ProspectModal: React.FC<{
   prospectKey: string;
   step?: number | null;
+  team?: string;          // the franchise team: asks for its director-voiced report row instead of the department's
   onClose: () => void;
-}> = ({ prospectKey, step, onClose }) => {
+}> = ({ prospectKey, step, team, onClose }) => {
   const [dossier, setDossier] = useState<ProspectDossier | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>("");
@@ -207,7 +208,11 @@ export const ProspectModal: React.FC<{
   useEffect(() => {
     let live = true;
     setReport(null);
-    const q = reportEdition ? `?edition=${encodeURIComponent(reportEdition)}` : "";
+    const params = new URLSearchParams();
+    if (reportEdition) params.set("edition", reportEdition);
+    if (team) params.set("team", team);
+    const qs = params.toString();
+    const q = qs ? `?${qs}` : "";
     fetch(`${API_BASE}/api/draft/prospect/${encodeURIComponent(prospectKey)}/report${q}`)
       .then(async (r) => {
         if (r.status === 404) return null;
@@ -221,7 +226,7 @@ export const ProspectModal: React.FC<{
         if (live) setReport(null);
       });
     return () => { live = false; };
-  }, [prospectKey, reportEdition]);
+  }, [prospectKey, reportEdition, team]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

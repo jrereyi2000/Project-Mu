@@ -543,6 +543,7 @@ def run(cur, draft_season, step, dry_run=False, replace=False, log=print, extras
         cur.execute("DELETE FROM scout_runs WHERE draft_season = %s AND step = %s", (draft_season, step))
     out = compute(cur, draft_season, step, dry_run)
     out["params"] = params()
+    out["dry_run"] = bool(dry_run)          # default_extras computes the visits' events but must not stamp them
     if not dry_run:
         hook = director_lifecycle(personality) if personality else None
         out["directors"], out["directors_mode"] = directors_for(cur, season, hook)
@@ -688,17 +689,28 @@ def default_extras(cur, out, step, season):
         # CPU teams keep their seeded draw unchanged.
         from engines import scouting_interviews as si
         user_tids = {tid for tid, (abbr, _) in names.items() if abbr in _user_teams()}
-        for tid, keys in by_team.items():
-            picks = list(keys)
-            if tid in user_tids:
-                jr = si.jr_visit_keys(cur, draft_season, step, tid)
-                picks = jr + [k for k in picks if k not in jr][:si.VISITS_PER_STEP - len(jr)]
+        dry = bool(out.get("dry_run"))
+
+        def add_visits(tid, picks):
             for key in picks:
+                if key not in by_key:      # the class no longer carries it (withdrawn, or a replaced board row)
+                    continue
                 evs = out["events"].setdefault(key, [])
                 e = dict(ev.visit_event(by_key[key], *names[tid]), team_id=tid)
                 e["seq"] = sum(1 for x in evs if x["kind"] == "VISIT")
                 evs.append(e)
                 visited.setdefault(tid, set()).add(key)
+
+        for tid, keys in by_team.items():
+            picks = list(keys)
+            if tid in user_tids:
+                jr = si.jr_visit_keys(cur, draft_season, step, tid, stamp=not dry)
+                picks = jr + [k for k in picks if k not in jr][:si.VISITS_PER_STEP - len(jr)]
+            add_visits(tid, picks)
+        # A user team without a GM profile has no seeded draw to swap into, so its own interviews would never become
+        # VISITs and the window would close on them.
+        for tid in sorted(user_tids - set(ctxs)):
+            add_visits(tid, si.jr_visit_keys(cur, draft_season, step, tid, stamp=not dry)[:si.VISITS_PER_STEP])
     vols = volatility(cur, draft_season, step, cons)
     knots = sv.grade_map([p["V"] for p in cls if p.get("status") != "WITHDRAWN"])
     first = out["first_step"]

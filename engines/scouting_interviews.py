@@ -650,6 +650,8 @@ def ask(cur, interview_id, topic=None, text=None, llm=None):
     if questions_left <= 0:
         raise InterviewError("NO_QUESTIONS", "no questions left")
     prospect = _prospect(cur, row["draft_season"], row["prospect_uid"])
+    if prospect is None:                       # the board row is gone, or two prospects share his key
+        raise InterviewError("UNKNOWN_PROSPECT", "this prospect can't be interviewed (off the board, or his key is shared)")
     events = _events(cur, row["draft_season"], prospect["prospect_key"])
     prospect["events"] = events
     menu = topics(prospect, events, row["kind"])
@@ -691,9 +693,10 @@ def link_thread(cur, interview_id, thread_id):
     return _interview_row(cur, interview_id)
 
 
-def jr_visit_keys(cur, draft_season, step, team_id):
+def jr_visit_keys(cur, draft_season, step, team_id, stamp=True):
     """The team's VISIT interviews that are logged_step = step plus the unlogged ones opened at step - 1, which this
-    stamps logged_step = step; at most VISITS_PER_STEP, oldest first. Returns each prospect's CURRENT prospect_key."""
+    stamps logged_step = step (`stamp=False` for a dry run, which only reports them); at most VISITS_PER_STEP, oldest
+    first. Returns each prospect's CURRENT prospect_key."""
     cur.execute("SELECT id, prospect_uid, prospect_key, opened_at FROM scout_interviews WHERE draft_season = %s "
                 "AND team_id = %s AND kind = 'VISIT' AND logged_step = %s ORDER BY opened_at, id",
                 (draft_season, team_id, step))
@@ -704,8 +707,9 @@ def jr_visit_keys(cur, draft_season, step, team_id):
     candidates = cur.fetchall()
     room = VISITS_PER_STEP - len(already)
     stamped = candidates[:max(0, room)]
-    for iid, _uid, _key, _opened in stamped:
-        cur.execute("UPDATE scout_interviews SET logged_step = %s WHERE id = %s", (step, iid))
+    if stamp:
+        for iid, _uid, _key, _opened in stamped:
+            cur.execute("UPDATE scout_interviews SET logged_step = %s WHERE id = %s", (step, iid))
     merged = sorted(list(already) + stamped, key=lambda r: (r[3], r[0]))
     out = []
     for _iid, uid, key, _opened in merged:
@@ -716,8 +720,12 @@ def jr_visit_keys(cur, draft_season, step, team_id):
     return out
 
 
-def eligible(cur, draft_season, team_id, limit=VISIT_TOP):
-    """The prospects JR can still interview (by the latest step's consensus rank), with the kinds open to each."""
+def eligible(cur, draft_season, team_id, limit=None):
+    """The prospects JR can still interview (by the latest step's consensus rank), with the kinds open to each.
+
+    `limit` caps the consensus rank read; the default reads the whole board because a COMBINE interview only needs a
+    stored combine invite, not a top-150 rank — a shared 150 cap hid every combine-eligible prospect below it. A
+    VISIT still needs `rank <= VISIT_TOP`. A board is a few hundred rows, so the read is cheap."""
     w = window(cur, draft_season)
     if w["latest_step"] is None:
         return []
@@ -730,13 +738,14 @@ def eligible(cur, draft_season, team_id, limit=VISIT_TOP):
     cur.execute("SELECT prospect_key FROM scout_events WHERE draft_season = %s AND kind = 'COMBINE' AND step <= %s",
                 (draft_season, step))
     combine_keys = {r[0] for r in cur.fetchall()}
-    cur.execute("""SELECT c.rank, spi.prospect_uid, spi.prospect_key, d.full_name, d.position, d.college, sp.status
+    cap = " AND c.rank <= %s" if limit is not None else ""
+    cur.execute(f"""SELECT c.rank, spi.prospect_uid, spi.prospect_key, d.full_name, d.position, d.college, sp.status
                    FROM scout_consensus c
                    JOIN scout_prospects sp ON sp.draft_season = c.draft_season AND sp.prospect_key = c.prospect_key
                    JOIN scout_prospect_ids spi ON spi.draft_season = c.draft_season AND spi.prospect_key = c.prospect_key
                    LEFT JOIN draft_prospects d ON d.id = sp.prospect_id
-                   WHERE c.draft_season = %s AND c.step = %s AND spi.status = 'OK' AND c.rank <= %s
-                   ORDER BY c.rank""", (draft_season, step, limit))
+                   WHERE c.draft_season = %s AND c.step = %s AND spi.status = 'OK'{cap}
+                   ORDER BY c.rank""", (draft_season, step) + ((limit,) if limit is not None else ()))
     out = []
     for rank, uid, key, full_name, position, college, status in cur.fetchall():
         uid = str(uid)

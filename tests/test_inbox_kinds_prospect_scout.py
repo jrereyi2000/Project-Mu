@@ -372,3 +372,18 @@ def test_scout_templates_and_validate(cur):
     assert "FINAL" in line and "John Smith" in line
     ok, why = scout.validate("The FINAL reports are ready.", {"edition": "FINAL"})
     assert ok, why
+
+
+def test_shortlist_keeps_only_prospects_jr_can_still_interview(cur):
+    """M-0023 plan gap: a board row is not an invitation — a withdrawn name or one outside the windows stays off."""
+    seed_team(cur)
+    seed_run(cur, DRAFT, 24)
+    seed_prospect(cur, DRAFT, UID1, KEY1, 24, name="John Smith", position="QB", rank=5)
+    seed_prospect(cur, DRAFT, UID2, KEY2, 24, name="Jane Doe", position="WR", rank=6)
+    seed_prospect(cur, DRAFT, UID2 + "x", KEY2 + ":2", 24, name="Gone Prospect", position="TE", rank=7,
+                  status="WITHDRAWN")
+    for rank, key in ((1, KEY1), (2, KEY2), (3, KEY2 + ":2")):
+        cur.execute("INSERT INTO scout_team_boards (draft_season, step, team_id, prospect_key, team_grade, team_rank) "
+                    "VALUES (%s, %s, %s, %s, %s, %s)", (DRAFT, 24, 1, key, 85.0, rank))
+    res = scout.act(cur, {"team_id": 1, "season": SEASON}, "SHORTLIST", {}, None)
+    assert [i["name"] for i in res.facts["shortlist"]] == ["John Smith", "Jane Doe"]

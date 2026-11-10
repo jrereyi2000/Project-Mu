@@ -203,3 +203,66 @@ def test_visits_are_team_scoped(cls, season):
         assert seqs == list(range(len(seqs)))
     assert {r[2] for r in out["boards"]} == {5, 6, 7} and len(out["boards"]) == 3 * 100
     assert all(e["kind"] != "VISIT" for evs in events[25].values() for e in evs)
+
+
+def test_an_unknown_visit_key_is_skipped_instead_of_aborting_the_step(cls, season):
+    """M-0023: `by_key[key]` raised KeyError for a prospect the class no longer carries (withdrawn, or a replaced
+    board row), and one bad interview key took the whole scouting step down with it."""
+    sim, _ = season
+    from engines import scouting_boards as sb, scouting_interviews as si
+    ctxs = {5: sb.team_context({"team_id": 5, "needs": []})}
+    out = {"cls": cls, "cons": sim[25], "events": {}, "first_step": 4}
+    cur = mock.MagicMock()
+    cur.fetchall.return_value = [(5, "AAA", "Alphas")]
+    with mock.patch.object(se, "team_contexts", return_value=ctxs), \
+         mock.patch.object(se, "stored_visits", return_value={}), \
+         mock.patch.object(se, "volatility", return_value={}), \
+         mock.patch.object(se, "_user_teams", return_value=["AAA"]), \
+         mock.patch.object(si, "jr_visit_keys", return_value=["2037:GONE:DX"]):
+        se.default_extras(cur, out, 25, 2036)                    # no KeyError
+    assert "2037:GONE:DX" not in out["events"]
+
+
+def test_a_user_team_without_a_gm_still_logs_its_visits(cls, season):
+    """M-0023: the seeded draw only covers teams with a GM context, so a user-controlled team without one never
+    turned JR's interviews into VISITs and the window closed on them."""
+    sim, _ = season
+    from engines import scouting_boards as sb, scouting_interviews as si
+    ctxs = {6: sb.team_context({"team_id": 6, "needs": []})}     # team 5 is JR's, with no GM
+    key = cls[0]["key"]
+    out = {"cls": cls, "cons": sim[25], "events": {}, "first_step": 4}
+    cur = mock.MagicMock()
+    cur.fetchall.return_value = [(5, "AAA", "Alphas"), (6, "BBB", "Betas")]
+    calls = []
+
+    def fake_keys(_cur, _ds, _step, tid, stamp=True):
+        calls.append((tid, stamp))
+        return [key] if tid == 5 else []
+
+    with mock.patch.object(se, "team_contexts", return_value=ctxs), \
+         mock.patch.object(se, "stored_visits", return_value={}), \
+         mock.patch.object(se, "volatility", return_value={}), \
+         mock.patch.object(se, "_user_teams", return_value=["AAA"]), \
+         mock.patch.object(si, "jr_visit_keys", fake_keys):
+        se.default_extras(cur, out, 25, 2036)
+    assert (5, True) in calls
+    visits = [e for evs in out["events"].values() for e in evs if e["kind"] == "VISIT"]
+    assert any(e["team_id"] == 5 for e in visits)
+
+
+def test_a_dry_run_does_not_stamp_the_visit_keys(cls, season):
+    """M-0023: default_extras runs in a dry run too; it must compute the visits without writing logged_step."""
+    sim, _ = season
+    from engines import scouting_boards as sb, scouting_interviews as si
+    ctxs = {5: sb.team_context({"team_id": 5, "needs": []})}
+    out = {"cls": cls, "cons": sim[25], "events": {}, "first_step": 4, "dry_run": True}
+    cur = mock.MagicMock()
+    cur.fetchall.return_value = [(5, "AAA", "Alphas")]
+    stamps = []
+    with mock.patch.object(se, "team_contexts", return_value=ctxs), \
+         mock.patch.object(se, "stored_visits", return_value={}), \
+         mock.patch.object(se, "volatility", return_value={}), \
+         mock.patch.object(se, "_user_teams", return_value=["AAA"]), \
+         mock.patch.object(si, "jr_visit_keys", lambda c, d, s, t, stamp=True: stamps.append(stamp) or []):
+        se.default_extras(cur, out, 25, 2036)
+    assert stamps == [False]

@@ -509,3 +509,51 @@ def test_no_persona_trait_leaks_and_no_writes_outside_interviews(cur):
     assert writes
     for s in writes:
         assert "scout_interviews" in s, s
+
+
+# ----------------------------------------------------------------- the audit's edge cases ---
+def test_ask_on_a_prospect_who_left_the_board_is_an_error_not_a_crash(cur):
+    """M-0023: `ask` read prospect["prospect_key"] from a None `_prospect` (the board row gone, or a shared key) and
+    died with TypeError, which the inbox turned into a 500 instead of a refusal."""
+    seed_run(cur, 2027, 24)
+    seed_team(cur)
+    seed_prospect(cur, 2027, "u0", "2027:P0:QB", 24, "Prospect 0")
+    seed_event(cur, 2027, 24, "2027:P0:QB", "COMBINE", {"interviews": "strong"})
+    row = si.open_interview(cur, 2027, 1, "u0", "COMBINE")
+    cur.execute("UPDATE scout_prospect_ids SET status = 'KEY_COLLISION' WHERE prospect_uid = %s", ("u0",))
+
+    with pytest.raises(si.InterviewError) as e:
+        si.ask(cur, row["id"], topic="FOOTBALL_IQ")
+    assert e.value.code == "UNKNOWN_PROSPECT"
+
+
+def test_a_combine_eligible_prospect_past_rank_150_is_still_listed(cur):
+    """M-0023: `eligible` capped the whole read at VISIT_TOP, so a prospect with a combine invite but a rank below
+    150 never appeared — COMBINE never needed the top-150 rule, only a stored invite."""
+    seed_run(cur, 2027, 24)
+    seed_team(cur)
+    seed_prospect(cur, 2027, "u0", "2027:P0:QB", 24, "Prospect 0", rank=1)
+    seed_prospect(cur, 2027, "u1", "2027:P1:QB", 24, "Prospect 1", rank=si.VISIT_TOP + 25)
+    seed_event(cur, 2027, 24, "2027:P1:QB", "COMBINE", {"interviews": "strong"})    # invited, but a late-round name
+
+    by_uid = {e["prospect_uid"]: e for e in si.eligible(cur, 2027, 1)}
+    assert by_uid["u1"]["kinds"] == ["COMBINE"]                                     # not a VISIT: past the cut
+    assert by_uid["u0"]["kinds"] == ["VISIT"]                                       # no invite of his own
+
+
+def test_a_dry_run_lists_the_visit_keys_without_stamping_them(cur):
+    """M-0023: default_extras ran in a dry run too, and jr_visit_keys stamped logged_step — a dry run wrote."""
+    seed_run(cur, 2027, 24)
+    seed_team(cur)
+    seed_prospect(cur, 2027, "u0", "2027:P0:QB", 24, "Prospect 0")
+    seed_interview(cur, 2027, 1, "u0", "2027:P0:QB", "VISIT", window_step=24)
+    seed_run(cur, 2027, 25)
+
+    keys = si.jr_visit_keys(cur, 2027, 25, 1, stamp=False)
+    assert keys == ["2027:P0:QB"]
+    cur.execute("SELECT logged_step FROM scout_interviews WHERE prospect_uid = %s", ("u0",))
+    assert cur.fetchone()[0] is None                                                # untouched
+
+    assert si.jr_visit_keys(cur, 2027, 25, 1) == ["2027:P0:QB"]                     # the real run stamps it
+    cur.execute("SELECT logged_step FROM scout_interviews WHERE prospect_uid = %s", ("u0",))
+    assert cur.fetchone()[0] == 25

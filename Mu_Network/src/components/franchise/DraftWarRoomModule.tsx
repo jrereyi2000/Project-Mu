@@ -1,5 +1,5 @@
 // #franchise Draft War Room module (V2_CORE_BUILD_PLAN §2.9, V2_MASTER_PLAN §2.7): the franchise team's view of the
-// draft. Reads the existing war room (GET /api/draft/war-room?team={abbr}: Round 1 slots, the pick on the clock, the
+// draft. Reads the existing war room (GET /api/draft/war-room?team={teamAbbr}: Round 1 slots, the pick on the clock, the
 // team's private board) and the team's draft capital (GET /api/franchise/{abbr}/picks?seasons=3). Prospects open the
 // shared ProspectModal from Draft Central. Recording picks, locking the order and starting rounds stay on the full
 // war room (#draft?tab=war-room, components/draft/DraftWarRoom.tsx), which needs the debug token.
@@ -386,7 +386,8 @@ export default function DraftWarRoomModule({ teamAbbr }: { teamAbbr: string }) {
         </section>
       )}
 
-      {prospect && <ProspectModal prospectKey={prospect} step={wr?.step ?? null} onClose={() => setProspect(null)} />}
+      {prospect && <ProspectModal prospectKey={prospect} step={wr?.step ?? null} team={teamAbbr}
+                                onClose={() => setProspect(null)} />}
     </section>
   );
 }

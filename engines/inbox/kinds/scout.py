@@ -97,26 +97,33 @@ def options(cur, thread, last):
 
 
 def _shortlist(cur, thread):
-    """Up to 8 not-yet-interviewed prospects in JR's team-board order at the latest step, names and positions only."""
+    """Up to 8 prospects JR can still interview, in his team-board order at the latest step, names and positions
+    only. A board row is not an invitation: a withdrawn name, a shared key or a prospect outside the interview
+    windows stays off the list (`scouting_interviews.eligible` is the same rule the War Room shows)."""
     tid = thread["team_id"]
     draft_season = int(thread["season"]) + 1
     step = si.window(cur, draft_season)["latest_step"]
     if step is None or not _regclass(cur, "scout_team_boards"):
         return []
+    allowed = {e["prospect_uid"] for e in si.eligible(cur, draft_season, tid)}
+    if not allowed:
+        return []
     cur.execute("SELECT prospect_key FROM scout_interviews WHERE draft_season = %s AND team_id = %s",
                 (draft_season, tid))
     interviewed = {r[0] for r in cur.fetchall()}
     cur.execute("""
-        SELECT b.prospect_key, d.full_name, d.position
+        SELECT spi.prospect_uid, b.prospect_key, d.full_name, d.position
         FROM scout_team_boards b
         JOIN scout_prospects sp ON sp.draft_season = b.draft_season AND sp.prospect_key = b.prospect_key
+        JOIN scout_prospect_ids spi ON spi.draft_season = b.draft_season
+             AND spi.prospect_key = b.prospect_key AND spi.status = 'OK'
         LEFT JOIN draft_prospects d ON d.id = sp.prospect_id
         WHERE b.draft_season = %s AND b.step = %s AND b.team_id = %s
         ORDER BY b.team_rank
     """, (draft_season, step, tid))
     out = []
-    for key, name, position in cur.fetchall():
-        if key in interviewed:
+    for uid, key, name, position in cur.fetchall():
+        if key in interviewed or str(uid) not in allowed:
             continue
         out.append({"name": name, "position": position})
         if len(out) >= SHORTLIST_MAX:
