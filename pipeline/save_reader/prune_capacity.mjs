@@ -30,32 +30,25 @@ const MAGIC = 'FBCHUNKS';
 /**
  * Capacity ceiling per table name. `X` covers both `X` and `X[]` instances.
  *
- * Every table here was measured empty (or, for Highlight and the Persona group, within
- * a handful of rows) across eight saves spanning preseason, the regular season, the
- * postseason and the 2027 offseason, and Madden never resizes a table within a season,
- * so each target leaves a multiple of the highest live count ever seen.
+ * Only the tables proved in game belong here. `Highlight` (3,200 rows, one live row in
+ * every save ever measured) was taken to 512 on `CAREER-TUNE-CAPBIG`, loaded, advanced
+ * through the 2026 and 2027 seasons and both postseasons and reloaded several times,
+ * and the 2028 week-1 autosave still has it at 512 — so the saving survives Madden's
+ * own writes.
  *
- * `UILogicForm` and `UIFlowForm` also carry large slack (~620 KB and ~385 KB), but the
- * schema cannot decode their string-pool references; add them with --set once the core
- * set has been validated in game.
+ * The wider set measured below was in the first in-game attempt and the save would not
+ * load; at least one of them is rejected, and which is not yet known. Add them back one
+ * at a time with --set and an in-game load test, never as a batch:
+ *   NarrativeTag 512, UIContractNegotiationForm 128, PlayerEditTransactionHistoryEntry 128,
+ *   PlayerReSignNegotiation 256, MindsetChangeEvent 256, ReSign_TeamRequest 128,
+ *   ReSign_PlayerRequest 128, EvaluateContractOffersRequest 128, ContractOffer 128,
+ *   PlayerStatSnapShot 2048, UILogicForm 512, UIFlowForm 256,
+ *   PersonaNegotiationOptionAction 4096, PersonaNegotiationOption 1024,
+ *   PersonaNegotiationCelebrationInfoItem 1024, PersonaNegotiationDealbreaker 1024,
+ *   PersonaNegotiationPackage 256
  */
 export const DEFAULT_POLICY = {
   Highlight: 512,
-  NarrativeTag: 512,
-  UIContractNegotiationForm: 128,
-  PlayerEditTransactionHistoryEntry: 128,
-  PlayerReSignNegotiation: 256,
-  MindsetChangeEvent: 256,
-  ReSign_TeamRequest: 128,
-  ReSign_PlayerRequest: 128,
-  EvaluateContractOffersRequest: 128,
-  ContractOffer: 128,
-  PlayerStatSnapShot: 2048,
-  PersonaNegotiationOptionAction: 4096,
-  PersonaNegotiationOption: 1024,
-  PersonaNegotiationCelebrationInfoItem: 1024,
-  PersonaNegotiationDealbreaker: 1024,
-  PersonaNegotiationPackage: 256,
 };
 
 function parseArgs(argv) {

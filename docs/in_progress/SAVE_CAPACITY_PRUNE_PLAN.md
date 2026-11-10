@@ -260,3 +260,40 @@ had there.
    the cap is never hit.
 3. **Integrate**: a `prune-save-capacity` step in the tuning season loop after each ingest, before the pilot
    reloads. Never on the live franchise without JR.
+
+## 9. In-game validation (2026-11-10)
+
+**The full policy failed; one table worked, and it was enough.**
+
+- `CAREER-TUNE-P2B-CAPP` (all 22 tables from the §8 policy, 2.18 MB saved) **does not load**. Madden wrote no
+  crash dump, so it rejects the file cleanly rather than faulting on it.
+- `CAREER-TUNE-CAPBIG` (**`Highlight` 3,200 → 512, 596,736 bytes saved, 582.8 KB**) **loads and runs**: JR
+  advanced through the rest of the 2026 season, both postseasons, the whole 2027 season and into **2028 week 1**,
+  backing out and reloading several times. Nothing hit the limit.
+- **The saving is permanent.** The 2028 week-1 autosave Madden wrote itself still has `Highlight` at
+  `recordCapacity` 512 (114,002 bytes instead of 710,738), with its string pool cut to 91,136 and exactly one
+  `Highlight` table on disk. The game does not restore the capacity.
+
+Measured on that autosave (`CAREER-TUNE-CAPBIG-AUTOSAVE`, 2028 RegularSeason week index 0):
+
+| | bytes |
+|---|---:|
+| unpacked | 19,890,377 |
+| 20 MiB limit | 20,971,520 |
+| **headroom at the start of 2028** | **1,081,143** |
+
+The unpruned season grew ~373 KB from week 1 to the Wild Card and then crossed the limit at the Pro Bowl, so
+a season's peak is roughly 500 KB above its start: ~1.08 MB of headroom at the start is about twice what a
+season needs. The season-start baseline itself creeps up ~35 KB a season (20,452,593 unpruned in 2027 →
+19,890,377 pruned in 2028, i.e. ~34.5 KB above the pruned 2027 equivalent).
+
+**What is still unknown:** which of the other 21 tables is rejected. The `Highlight` cut alone is 2.8x the
+headroom the plan asked for (0.4–1 MB), so reclaiming the rest is not needed for the tuning league. If it ever
+is, add the others back one at a time with `--set` and an in-game load test each — never as a batch.
+
+**Operating model (JR, 2026-11-10):** prune once a year rather than once per stage. Capacity survives the
+game's own writes, so a yearly pass is for re-trimming anything the game allocates with fresh slack (and for
+any newly created table with a generous capacity), not for restoring the saving.
+
+**Remaining work:** wire the yearly pass into the tuning season loop (after the rollover ingest, before the
+pilot reloads), on `CAREER-TUNE-*` saves only. Never on the live franchise without JR.
