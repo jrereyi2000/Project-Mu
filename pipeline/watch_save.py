@@ -1558,6 +1558,44 @@ def freeze_week(db, dsn, save_path, label, season, week, stage=None, extra=None,
         return None
 
 
+def lock_tuning_draft_order(dsn, db, log_fn=log):
+    """Lock the coming draft's order in a tuning database before the DRAFT stage runs (P2-03).
+
+    The live franchise's Draft Room locks the order by hand (`engines.draft_room.lock_order`)
+    and JR can apply fixes while doing it; a tuning league has nobody to press the button, and
+    without the order the league office has no picks to write — it says so plainly ("no draft
+    order (draft_picks.overall_pick) ... no picks planned") and still marks its run WRITTEN.
+
+    Only a `madden_tune_*` destination is locked automatically, so the live franchise keeps its
+    manual step. Returns the number of picks ordered (0 when it was already locked or this is
+    not a tuning database) and never raises: a failure is a warning on the ingest.
+    """
+    if not is_tuning_db(db):
+        return 0
+    try:
+        import psycopg
+        from engines import draft_room as draft_room
+        with psycopg.connect(dsn) as conn, conn.cursor() as cur:
+            row = cur.execute("SELECT current_season FROM league_state WHERE id = 1").fetchone()
+            draft_season = (row[0] if row else 0) + 1
+            locked = cur.execute(
+                "SELECT count(*) FROM draft_picks WHERE draft_season = %s AND overall_pick IS NOT NULL",
+                (draft_season,)).fetchone()[0]
+            if locked:
+                log_fn(f"Draft order for {draft_season} is already locked ({locked} picks).")
+                return 0
+            draft_room.lock_order(cur, draft_season, log=log_fn)
+            n = cur.execute(
+                "SELECT count(*) FROM draft_picks WHERE draft_season = %s AND overall_pick IS NOT NULL",
+                (draft_season,)).fetchone()[0]
+            conn.commit()
+        log_fn(f"Locked the {draft_season} draft order for the tuning league ({n} picks).")
+        return n
+    except Exception as e:      # noqa: BLE001 - a missing order must not fail the ingest
+        log_fn(f"[WARN] could not lock the {db} draft order: {e}")
+        return 0
+
+
 def process_save(save_path, season=None, dry_run=False, no_articles=False, no_engines=False, force=False,
                  auto_init=False, reseed=False, confirm_reseed=None, user_teams=None, franchise_name=None,
                  run_folder=None, dsn=None, reader_script=READER_SCRIPT, log_fn=log, no_league_office=False,
@@ -1678,6 +1716,8 @@ def process_save(save_path, season=None, dry_run=False, no_articles=False, no_en
     log_fn(f"Ingesting {'offseason stage' if stage_only else 'week'}: season {save_season} week {save_week} into {db} "
            f"(dry_run={dry_run}, no_articles={no_articles}, no_engines={no_engines}, league_office={run_lo}"
            f"{', league office dry run' if run_lo and league_office_dry_run else ''})")
+    if stage_info and str(stage_info.get("stage")) == "DRAFT" and not dry_run:
+        lock_tuning_draft_order(dsn, db, log_fn=log_fn)
     res = run_ingest(snapshot_path, dsn, save_season, save_week, dry_run=dry_run, no_articles=no_articles,
                      no_engines=no_engines, save_name=save_name, log_fn=log_fn, save_path=save_path,
                      league_office=run_lo, league_office_dry_run=league_office_dry_run,

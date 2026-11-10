@@ -1445,3 +1445,52 @@ def test_a_tuning_clone_is_refused_before_routing(tmp_path, monkeypatch):
     with pytest.raises(ws.WatcherError):
         ws.process_save(str(save), run_folder=str(tmp_path / "run"), log_fn=lambda m: None)
     assert called == []                                       # routing never ran
+
+
+class LockTuningDraftOrderTest(unittest.TestCase):
+    """P2-03: a tuning ingest at the DRAFT stop locks the coming draft's order first, because a
+    tuning league has nobody to press the Draft Room's button and the league office has no picks
+    to write without it."""
+
+    def setUp(self):
+        self.log = []
+
+    def _connect(self, *fetchone_rows):
+        import unittest.mock as m
+        connect = m.patch("psycopg.connect").start()
+        lock = m.patch("engines.draft_room.lock_order").start()
+        self.addCleanup(m.patch.stopall)
+        cur = m.MagicMock()
+        cur.execute.return_value.fetchone.side_effect = list(fetchone_rows)
+        connect.return_value.__enter__.return_value.cursor.return_value.__enter__.return_value = cur
+        return connect, lock
+
+    def test_it_locks_the_coming_draft_in_a_tuning_database(self):
+        _, lock = self._connect((2026,), (0,), (672,))
+        n = ws.lock_tuning_draft_order("dbname=madden_tune_a", "madden_tune_a", log_fn=self.log.append)
+        self.assertEqual(n, 672)
+        lock.assert_called_once()
+        self.assertEqual(lock.call_args[0][1], 2027)          # the season after league_state's
+        self.assertTrue(any("Locked the 2027 draft order" in ln for ln in self.log))
+
+    def test_it_does_nothing_outside_a_tuning_database(self):
+        connect, lock = self._connect()
+        self.assertEqual(ws.lock_tuning_draft_order("dbname=madden_mu2026", "madden_mu2026",
+                                                    log_fn=self.log.append), 0)
+        connect.assert_not_called()
+        lock.assert_not_called()
+
+    def test_an_already_locked_order_is_left_alone(self):
+        _, lock = self._connect((2026,), (672,))
+        self.assertEqual(ws.lock_tuning_draft_order("dbname=madden_tune_a", "madden_tune_a",
+                                                    log_fn=self.log.append), 0)
+        lock.assert_not_called()
+
+    def test_a_failure_is_a_warning_not_an_error(self):
+        import unittest.mock as m
+        m.patch("psycopg.connect", side_effect=RuntimeError("no db")).start()
+        m.patch("engines.draft_room.lock_order").start()
+        self.addCleanup(m.patch.stopall)
+        self.assertEqual(ws.lock_tuning_draft_order("dbname=madden_tune_a", "madden_tune_a",
+                                                    log_fn=self.log.append), 0)
+        self.assertTrue(any("could not lock" in ln for ln in self.log))
