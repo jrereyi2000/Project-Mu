@@ -36,6 +36,8 @@ Label override: $ARGUMENTS
 
 **One pass (JR, 2026-11-10).** Take the whole open list for an area and fix all of it before you post. Post once per batch, not once per finding. The acceptance rules and the checks that prove them are in `docs/reference/ACCEPTANCE_CHECKS.md`; read it before the first batch that touches staff contracts or coach save-writes.
 
+**Context guard (JR, 2026-11-10).** Run `python3 -m tools.context_check` at the start of every batch, after every second board message you act on, and after each full test run. Exit 2 means 60% or more of the model's window is used: that is a hard stop, not advice. Finish nothing new, skip to the hand-over in §4, RELEASE your claims, stop the listener and end the turn. Never start an item you cannot finish before the line.
+
 1. **Group** related open items into a batch: same files, or one regression and its cause. Do the items an auditor marked HIGH, or "fix first", first.
 2. **CLAIM** the batch's files on the board before editing. Check open CLAIMs first. If another session holds a file you need, ask on the board and work on something else meanwhile.
 3. **Confirm each finding at current `main` before fixing it.** Read the cited lines, run the auditor's repro if one exists (`test_chunkN_confirm.py`-style repros assert the bug, so they FAIL once it's fixed), or write a failing test. If a finding is wrong, don't fix it: say why on the board, with `file:line`, and let the auditor or JR rule.
@@ -67,10 +69,11 @@ Label override: $ARGUMENTS
 - **Stay in scope.** Fixes and audit findings only. If you notice something outside that, post it; don't build it.
 - **Don't touch** other sessions' uncommitted changes, worktrees, scratch DBs or claimed files. Don't run `git stash`, `reset --hard` or `checkout --` on shared paths.
 - **Don't guess.** A fix you can't confirm with a test or a repro, say so. Never report a test result you didn't see.
-- **Handing over:** when your context is getting full or JR ends the session, post a handover NOTICE. It lists:
+- **Handing over:** at 60% from the context guard (§3) or when JR ends the session, post the handover NOTICE **before anything else**. It lists:
+  - the context line from `python3 -m tools.context_check`;
   - what's open (with message numbers);
   - what's awaiting the auditor;
   - your scratch DB;
-  - anything half-done (there should be nothing uncommitted).
+  - anything half-done (commit finished work only when its tests pass; otherwise say exactly what is uncommitted and where).
 
-  Then stop the listener. The next `/builder` session starts from that message.
+  Then RELEASE any claims, stop the listener and stop: no new item, no re-arming the listener. The next `/builder` session starts from that message.
