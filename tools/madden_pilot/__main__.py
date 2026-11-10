@@ -249,6 +249,8 @@ def run_dir_for(job, given=None, dry_run=False):
 def dry_pilot(catalog, run_dir, args, out=print):
     start, intro = {"launch": ("MAIN_MENU", 2), "sim-season": ("FRANCHISE_LIST", 0), "quit": ("HUB_WEEKLY", 0),
                     "set-setting": ("HUB_WEEKLY", 0), "verify-mods": ("MAIN_MENU", 0)}.get(args.job, ("MAIN_MENU", 0))
+    if args.job == "sim-season" and getattr(args, "franchise", None):
+        start = "HUB_WEEKLY"
     tiles = ["TUNE-SPIKE"]
     if args.job == "sim-season":
         tile = jobs.tile_name(args.save).upper()
@@ -299,7 +301,8 @@ def _run(args, run_dir, catalog, fmt, out):
             if jobs.watcher_running():
                 out("[dry-run] WARNING: pipeline.watch_save is running; a live run would refuse")
             watcher = lambda: False  # noqa: E731
-        result = jobs.sim_season(pilot, save=args.save, to=args.to, watcher=watcher, quit=not args.no_quit)
+        result = jobs.sim_season(pilot, save=args.save, to=args.to, watcher=watcher, quit=not args.no_quit,
+                                 franchise=args.franchise)
     elif args.job == "set-setting":
         result = jobs.set_setting(pilot, path=args.path, value=args.value)
     elif args.job == "verify-mods":
