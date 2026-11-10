@@ -79,11 +79,20 @@ def current_staff(cur, season):
                        ORDER BY team_id, start_season DESC, id DESC""", (season, season))
         for r in cur.fetchall():
             add(r[0], "GM", r[1], r[2], r[3], 0, r[4])
-    # Experience is the seasons in the job (plan §2.1), for coaches and coordinators as for a GM: counting tenure
-    # rows meant a man with a single long tenure was priced as a first-timer for ever, so a re-sign never gave him
-    # the raise his service earns (M-0179; the GM rule is `max(1, season - start_season + 1)`).
+    # Experience is the man's seasons in the role across ALL his tenures (plan §2.1; M-0179, M-0190): counting
+    # tenure rows priced a single long tenure as a first-timer for ever, and counting only the current tenure cut an
+    # HC on his fourth team back to a rookie's price. A GM's id is per hire, so his experience is his seasons in
+    # this job (`season - start_season + 1`), as before.
     for s in out:
-        s["experience"] = max(1, int(season) - int(s["start_season"] or season) + 1)
+        if s["person_kind"] not in ("HC", "OC", "DC"):
+            s["experience"] = max(1, int(season) - int(s["start_season"] or season) + 1)
+            continue
+        table, who = ("coach_tenures", "coach_id") if s["person_kind"] == "HC" else \
+            ("coordinator_tenures", "coordinator_id")
+        cur.execute(f"SELECT start_season, end_season FROM {table} WHERE {who} = %s AND start_season <= %s",
+                    (s["person_id"], season))
+        s["experience"] = max(1, sum(max(0, min(int(season), int(end or season)) - int(start or season) + 1)
+                                     for start, end in cur.fetchall()))
     # A person whose contract this producer already fired (a hot-seat firing settles it at once) is not filed
     # again: with the tenure comparison left at ">= season" so that a poached coordinator is never charged, his
     # row would otherwise be re-filed for the next league year and then fired a second time. The skip is bounded by
@@ -146,12 +155,13 @@ def annual(cur, season, dry_run=False):
             full_control = False
             if row is not None:
                 # His own deal's pay is a floor, never a freeze: an ELITE GM is not repriced down to STANDARD (his
-                # championships are not in the tables), a PROMOTION GM who has served the years does move up, and a
-                # man leaving is paid the season he worked at his own salary.
+                # championships are not in the tables) and a PROMOTION GM who has served the years does move up.
                 salary = max(int(row["annual_salary"]), salary)
                 full_control = bool(row["full_control"])
                 if s["end_season"] is not None:
-                    years = 1              # he leaves: only the season he worked, nothing beyond it
+                    # He leaves: only the season he worked, at exactly his old salary (JR, 2026-11-10 via
+                    # M-0190), and his full-control seat is released with him.
+                    years, salary, full_control = 1, int(row["annual_salary"]), False
             signed = max(int(row["signed_season"]), int(s["start_season"] or row["signed_season"])) if row \
                 else int(s["start_season"] or season)
             target = min(years, max(0, years - (season - signed)))

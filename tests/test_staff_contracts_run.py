@@ -301,7 +301,9 @@ DEALS = [
     dict(name="hc-kept-past-his-deal", kind="HC", salary=6_000_000, years=4, signed=2026, last=2032, path="annual",
          kept=True, expect=["S S S S", "S S S S"]),
     dict(name="hc-kept-then-leaves", kind="HC", salary=6_000_000, years=4, signed=2026, last=2030, path="annual",
-         expect=["S S S S", "S"]),                 # the season he worked past the deal is paid, nothing after
+         leaving_past_his_deal=True, expect=["S S S S", "S"]),   # the worked season paid, nothing after
+    dict(name="full-control-kept-then-leaves", kind="HC", salary=20_000_000, years=3, signed=2031, last=2034,
+         path="fc_settle", full_control=True, leaving_past_his_deal=True, expect=["S S S", "S"]),
     dict(name="gm-kept-then-fired", kind="GM", salary=3_000_000, years=4, signed=2033, last=2037, path="gm_settle",
          expect=["S S S S", "S"]),                 # the hot seat settles him with nothing owed; that season is paid
     dict(name="oc-lateral", kind="OC", salary=2_000_000, years=3, signed=2033, last=2034, path="annual",
@@ -421,9 +423,30 @@ def test_every_contract_year_is_paid_exactly_once(case):
     if case.get("coach_gm"):
         cur.execute("SELECT count(*) FROM staff_contracts WHERE person_kind = 'GM'")
         assert cur.fetchone()[0] == 0                        # one man, one deal
+    if case.get("leaving_past_his_deal"):
+        cur.execute("SELECT annual_salary, full_control FROM staff_contracts WHERE person_id = %s "
+                    "ORDER BY id DESC LIMIT 1", (person_id,))
+        pay, flagged = cur.fetchone()
+        assert int(pay) == case["salary"]                    # exactly his own salary, not a market reprice
+        if case.get("full_control"):
+            assert not flagged                               # his full-control seat is released with him
+            cur.execute("SELECT count(*) FROM staff_contracts WHERE full_control AND remaining_years > 0")
+            assert cur.fetchone()[0] == 0
     if case.get("full_control") and case.get("kept"):
         # JR: a full-control HC's re-sign keeps full control and its market, so he still counts toward the ceiling
         cur.execute("SELECT full_control, annual_salary FROM staff_contracts WHERE person_id = %s "
                     "ORDER BY id DESC LIMIT 1", (person_id,))
         flagged, pay = cur.fetchone()
         assert flagged in (1, True) and int(pay) >= case["salary"]
+
+def test_experience_is_the_seasons_in_the_role_across_his_tenures():
+    """M-0190: an HC on his fourth team keeps his career experience; the current tenure alone priced him as a
+    first-timer."""
+    conn = sqlite3.connect(":memory:", isolation_level=None)
+    conn.executescript(_INVARIANT_DDL)
+    conn.execute("INSERT INTO coaches VALUES (10, 'Mover')")
+    conn.execute("INSERT INTO coach_records VALUES (10, 0)")
+    conn.execute("INSERT INTO coach_tenures (coach_id, team_id, start_season, end_season) VALUES "
+                 "(10, 2, 2019, 2021), (10, 3, 2022, 2024), (10, 1, 2025, NULL)")
+    staff = scr.current_staff(FakeCursor(conn), 2030)
+    assert next(s for s in staff if s["person_kind"] == "HC")["experience"] == 12
