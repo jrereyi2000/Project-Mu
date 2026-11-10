@@ -615,14 +615,25 @@ def _walk_to_tile(pilot, tile, folder):
     tile this direction already passed means the list wrapped, so the tile is not on it.
     """
     order = save_tiles(folder)
-    bound = len(order) + 3
+    bound = max(len(order), 60) + 3
     stride = 3
+
+    def labels():
+        # The folder's saves plus whatever the frame reads as a name: a list built before a save
+        # was moved or archived shows tiles that are no longer files, and the border has to stay
+        # readable all the same (2026-11-10: the border read went blind after 166 saves moved).
+        seen = set(order)
+        seen.update(w["text"].strip() for w in pilot.frame.words
+                    if 3 <= len(w["text"].strip()) <= 40 and any(c.isalpha() for c in w["text"])
+                    and "/" not in w["text"] and ":" not in w["text"]
+                    and norm(w["text"]) not in LIST_WORDS)
+        return sorted(seen)
 
     def on_target():
         return pilot.highlighted(labels=[tile]) == tile
 
     def current():
-        return pilot.highlighted(labels=order)
+        return pilot.highlighted(labels=labels())
 
     def approach():
         """From the bordered tile, step toward the visible `tile` until it is bordered."""
@@ -667,6 +678,8 @@ def _walk_to_tile(pilot, tile, folder):
 
 
 MAIN_MENU_SCREENS = ("MAIN_MENU", "MAIN_MENU_RAIL", "TITLE_SCREEN")
+LIST_WORDS = frozenset({"CURRENT", "FRANCHISES", "CREATE", "NEW", "LEAGUE", "LEAGUES", "ACCEPT", "DELETE",
+                        "NEXT", "SELECT", "TIMES", "AM", "PM"})    # CURRENT FRANCHISES' own words
 
 
 def _leave_to_main_menu(pilot, max_backs=3):
@@ -675,11 +688,16 @@ def _leave_to_main_menu(pilot, max_backs=3):
     CURRENT FRANCHISES only rebuilds on a fresh entry from the main menu: a clone made while the
     list was open stays missing after one Back and a re-entry from the Franchise landing page
     (JR, 2026-11-10). Bounded, and a screen that Back won't leave is returned rather than guessed
-    at, so the caller's goto fails with a screenshot instead of pressing blind."""
+    at, so the caller's goto fails with a screenshot instead of pressing blind. One more Back on
+    the main menu opens EXIT MADDEN?; that dialog is dismissed (NO is its default), never
+    confirmed."""
     for _ in range(max_backs):
         _, screen = pilot.look()
         if screen in MAIN_MENU_SCREENS:
             return screen
+        if screen == "EXIT_MADDEN":
+            pilot.press(pilot.key_name("select"), _confirm=True)
+            continue
         pilot.press("back")
     return pilot.look()[1]
 
@@ -693,16 +711,15 @@ def _load_franchise(pilot, tile, save=None, folder=None):
             break
         pilot.press("down")
         frame, screen = pilot.look()
-    with patience(pilot, 180, 1.0):
-        pilot.goto("FRANCHISE_LIST")
-    if pilot.frame.find(tile) is None:
-        # CURRENT FRANCHISES is built when the screen opens, and a clone made while it was
-        # already up does not appear on a re-entry from the landing page either: the list only
-        # rebuilds after a round trip to the main menu (JR, 2026-11-10; the p2g run walked the
-        # whole stale list and never saw TUNE-P2G). Do it before walking 170 tiles.
-        _leave_to_main_menu(pilot)
+    if screen not in MAIN_MENU_SCREENS:
         with patience(pilot, 180, 1.0):
-            pilot.goto("FRANCHISE_LIST", timeout=180)
+            pilot.goto("FRANCHISE_LIST")
+    # Always come in from the main menu: Madden builds CURRENT FRANCHISES when the screen opens
+    # from there, and a list that was already up keeps tiles for saves no longer on disk — a
+    # clone is missing, an archived save still shows (JR, 2026-11-10). One round trip per load.
+    _leave_to_main_menu(pilot)
+    with patience(pilot, 180, 1.0):
+        pilot.goto("FRANCHISE_LIST", timeout=180)
     found = _walk_to_tile(pilot, tile, folder)
     if not found:
         pilot.stop(f"couldn't find the {tile} tile in CURRENT FRANCHISES", Stuck)

@@ -35,6 +35,33 @@
       "forbidden": true,
       "todo": true
     },
+    "EXIT_MADDEN": {
+      "note": "Backspace on MAIN_MENU opens this (2026-11-10, p2-finish). Its safe default NO is never OCR'd, and unlike the quit dialog Backspace does not close it: Space takes NO (JR, 2026-11-10). It is drawn over MAIN_MENU, whose own words stay readable, and it is listed before TITLE_SCREEN (whose word MADDEN it contains) and MAIN_MENU, because the first match wins. YES is never chosen and Up (which would move to it) is forbidden.",
+      "all": [
+        "EXIT MADDEN"
+      ],
+      "any": [
+        "YES EXIT TO DESKTOP",
+        "ARE YOU SURE YOU WANT TO EXIT MADDEN"
+      ],
+      "none": [
+        "CURRENT FRANCHISES",
+        "GAMEDAY"
+      ],
+      "options": [],
+      "confirm_ok": [],
+      "forbidden_keys": [
+        "up"
+      ],
+      "exits": {
+        "MAIN_MENU": [
+          [
+            "dismiss",
+            1
+          ]
+        ]
+      }
+    },
     "QUIT_CONFIRM": {
       "note": "Spike b3: Back on the hub. NO is highlighted on arrival; Up then Space chooses YES, which writes <save>-AUTOSAVE and returns to CURRENT FRANCHISES. 2026-11-10: Windows OCR does not read the NO label at all, so the cancel route is Backspace (the dialog closes exactly as NO does); YES is still found and bordered.",
       "all": [

@@ -315,6 +315,10 @@ class Pilot:
                 self.confirm_on(screen, arg)
             elif op == "hold":
                 self.press(arg, hold=2.0, wait=1.5)
+            elif op == "dismiss":
+                # A dialog whose safe default is not OCR'd (the exit prompt's NO): Space takes
+                # the default rather than picking a label, which the allow-list cannot do.
+                self.press(self.key_name("select"), _confirm=True)
             else:
                 self.press(op, times=int(arg))
 
