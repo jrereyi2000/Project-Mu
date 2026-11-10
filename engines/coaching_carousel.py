@@ -1,7 +1,8 @@
 """
 Coaching carousel (PROJECT_SPEC §2.19): head-coach firings (engines/coach_hot_seat.py), coordinator firings, and the
-hiring cycle after the Super Bowl, with poaching. JR mirrors head-coach changes in Madden: he fires the coaches Mu
-fires and hires any coach for each opening, and Mu's hire stands for that coach. Coordinators are Mu's own.
+hiring cycle after the Super Bowl, with poaching. Mu writes its own head coaches and coordinators into the Madden save
+(COACH_SAVE_WRITES_PLAN): every invented hire gets a CREATED coach_madden_profiles row here, and the league office's
+offseason write applies the staff. Nothing is mirrored by hand.
 
 Run by the weekly run's Step 7d (pipeline/weekly_capture.step_coach_hot_seat; weekly, playoff and postgame runs) or by
 hand:
