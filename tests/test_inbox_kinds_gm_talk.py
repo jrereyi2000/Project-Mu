@@ -216,7 +216,7 @@ def test_a_walk_away_closes_but_a_reject_stays_open(cur, monkeypatch):
 def test_make_offer_calls_offer_with_the_negotiation_id(cur, monkeypatch):
     calls = []
 
-    def fake_offer(c, nid, assets, note=None, llm=None, timeout=None, posture=None):
+    def fake_offer(c, nid, assets, note=None, llm=None, timeout=None, posture=None, history=None):
         calls.append((nid, assets, note, timeout))
         return negotiation("ACCEPT", status="AGREED", proposal_id=88)
 
@@ -336,7 +336,7 @@ def test_a_leak_draw_runs_after_every_gm_turn_and_never_speaks(cur, monkeypatch)
     monkeypatch.setattr("engines.gm_talks.leak_events", draw)
     monkeypatch.setattr(gm_negotiation, "_books", lambda c: ({}, None))
     monkeypatch.setattr(gm_negotiation, "offer",
-                        lambda c, nid, assets, note=None, llm=None, timeout=None, posture=None:
+                        lambda c, nid, assets, note=None, llm=None, timeout=None, posture=None, history=None:
                         negotiation("COUNTER"))
     t = make_thread(cur, state={"gm_team_id": 2, "negotiation_id": 5, "phase": "TALKS"},
                     source_ref="gm_talk:start:CAR:ATL")
@@ -352,7 +352,7 @@ def test_agreed_reply_names_the_queued_pending_move(cur, monkeypatch):
     cur.execute("INSERT INTO franchise_pending_moves (id, team_id, kind, payload, status) "
                 "VALUES (44, 1, 'TRADE', '{\"proposal_id\": 88}', 'PENDING')")
     monkeypatch.setattr(gm_negotiation, "offer",
-                        lambda c, nid, assets, note=None, llm=None, timeout=None, posture=None:
+                        lambda c, nid, assets, note=None, llm=None, timeout=None, posture=None, history=None:
                         negotiation("ACCEPT", status="AGREED", proposal_id=88))
     t = make_thread(cur, state={"gm_team_id": 2, "negotiation_id": 5, "phase": "TALKS"},
                     source_ref="gm_talk:start:CAR:ATL")
@@ -406,3 +406,20 @@ def test_a_failed_leak_draw_leaves_the_transaction_usable(scratch_pg, monkeypatc
     gm_talk._leak_after(scratch_pg, {"id": 5, "turns": turns}, thread, {"gm_team_id": 2})
     scratch_pg.execute("SELECT 1")                                       # InFailedSqlTransaction without a savepoint
     assert scratch_pg.fetchone()[0] == 1
+
+
+def test_the_writer_sees_the_threads_last_lines(cur, monkeypatch):
+    """The writer's history was JR's note alone, so the GM could repeat himself on every turn."""
+    seen = {}
+
+    def fake_offer(c, nid, assets, note=None, llm=None, timeout=None, posture=None, history=None):
+        seen["history"] = list(history or [])
+        return negotiation("COUNTER")
+
+    monkeypatch.setattr(gm_negotiation, "offer", fake_offer)
+    t = make_thread(cur, state={"gm_team_id": 2, "negotiation_id": 5, "phase": "TALKS"},
+                    source_ref="gm_talk:start:CAR:ATL")
+    store.add_message(cur, t["id"], "COUNTERPART", "We could talk about a pick.", "TEMPLATE")
+    gm_talk.act(cur, t, "MAKE_OFFER", {"players": [101]}, "Have a look at this")
+    assert seen["history"]
+    assert any("We could talk about a pick" in h["message"] for h in seen["history"])   # not just JR's note

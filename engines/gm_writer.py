@@ -20,6 +20,7 @@ STYLE_BANNED = re.compile(r"\b(efficiency|asset value|framework|process|leverage
                           r"market efficiency|floor[- ]raising)\b", re.I)
 ELLIPSIS_RE = re.compile(r"\.\.\.|…")
 RUN = 5                       # a repeated run of this many words is plagiarism of the previous line
+RESTATEMENT_WORDS = 8         # a restatement needs a run this long; shorter repeats fall to the phrase rule
 _WORD_RE = re.compile(r"[a-z0-9']+")
 
 
@@ -70,11 +71,16 @@ def check_style(text, prior, max_words=45, speaker=None):
         return False, "more than one ellipsis"
     prev = _prior_messages(prior)[-2:]
     w, nt = _words(t), _norm(t)
-    for p, _src, _team in prev:
-        np_ = _norm(p)
+    for p, src, team in prev:
+        if src in ("TEMPLATE", "USER") or (speaker and team and team == speaker):
+            continue                     # the same exemptions the phrase rule applies: a template or JR's own words
+        np_ = _norm(p)                   # are not the GM plagiarising himself, and he may repeat his own tic
         if not np_ or not nt:
             continue
-        if nt == np_ or (len(w) >= 6 and (nt in np_ or np_ in nt)):
+        # Compare word runs, not letters: `nt in np_ or np_ in nt` on the raw strings let a short earlier line
+        # ("No.", "JR: no") reject any later line that merely contained its letters.
+        if nt == np_ or (len(w) >= RESTATEMENT_WORDS and _runs(w, RESTATEMENT_WORDS)
+                         & _runs(_words(p), RESTATEMENT_WORDS)):
             return False, "restates an earlier line verbatim"
     for p, src, team in prev:
         if src in ("TEMPLATE", "USER") or (speaker and team and team == speaker):
@@ -166,11 +172,13 @@ def _call(llm, prompt, timeout):
 
 
 # ------------------------------------------------------------------ write ----
-def write_line(llm, *, card_text, sheet, history, move, scene, fallback, max_words=45, timeout=None):
+def write_line(llm, *, card_text, sheet, history, move, scene, fallback, max_words=45, timeout=None,
+               league=None):
     """(text, source). One model call writes a line from the card, scene, fixed move, fact sheet and the last
     three lines; it is kept only when `validate_rationale` and `check_style` both pass. A failure retries once
     with the reason appended, then returns `(fallback, "TEMPLATE")`. `source` is "LLM" or "TEMPLATE". With
-    `llm=None` the fallback comes back at once. `timeout` uses `gm_talks.call_with_timeout`."""
+    `llm=None` the fallback comes back at once. `timeout` uses `gm_talks.call_with_timeout`. `league` is the name
+    check `validate_rationale` runs against; without it a reply may name a team or player outside the deal."""
     if llm is None:
         return fallback, "TEMPLATE"
     from engines.gm_rationale import validate_rationale
@@ -183,11 +191,16 @@ def write_line(llm, *, card_text, sheet, history, move, scene, fallback, max_wor
             f"{prompt}\nYour previous answer was rejected: {why}. Write a different line that fixes it. "
             'Answer with JSON only: {"message": "..."}')
         raw = _call(llm, attempt, timeout)
+        if raw is None:
+            # a timed-out call has already spent the budget and is still running: retrying doubles the wall time
+            # (one inbox reply could take ~16 s against an 8 s budget) and bills a second call.
+            why = "the model timed out"
+            break
         text = _parse_message(raw)
         if not text:
             why = "empty or unreadable answer"
             continue
-        ok, fact_why = validate_rationale(text, sheet, None)
+        ok, fact_why = validate_rationale(text, sheet, league)
         if not ok:
             why = f"a fact that isn't on the sheet ({fact_why})"
             continue

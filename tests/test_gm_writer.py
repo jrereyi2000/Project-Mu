@@ -212,3 +212,27 @@ def test_the_module_does_not_import_gm_voices_or_gm_talks_at_import_time():
             "bad = [m for m in ('engines.gm_voices', 'engines.gm_talks') if m in sys.modules]; "
             "raise SystemExit(1 if bad else 0)")
     assert subprocess.run([sys.executable, "-c", code], cwd=str(__import__("pathlib").Path(__file__).parents[1])).returncode == 0
+
+
+def test_a_short_earlier_line_does_not_reject_a_later_one_by_its_letters():
+    """The old check compared raw strings, so "No." rejected "I know what..." and "JR: no" rejected "JR, no chance...".
+    """
+    assert gw.check_style("I know what he is about.", ["No."])[0]
+    assert gw.check_style("JR, no chance we move him.", ["JR: no"])[0]
+    # a real verbatim restatement is still caught
+    long_line = "I watched every snap he took last season and he is a real problem"
+    assert not gw.check_style(long_line, [long_line])[0]
+
+
+def test_a_timed_out_call_is_not_retried():
+    """A timed-out call already spent the budget and is still running; the retry doubled the wall time and the bill."""
+    calls = []
+
+    def llm(prompt):
+        calls.append(prompt)
+        return None                                  # a timeout
+
+    text, source = gw.write_line(llm, card_text="card", sheet={}, history=[], move={"action": "COUNTER"},
+                                 scene={}, fallback="fallback line", timeout=1.0)
+    assert (text, source) == ("fallback line", "TEMPLATE")
+    assert len(calls) == 1

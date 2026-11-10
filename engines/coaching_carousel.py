@@ -554,8 +554,10 @@ def _extend_full_control(cur, acc):
         # a dual vacancy: the GM seat is empty, so the new head coach becomes the GM (a new coach-GM tenure)
         from engines import gm_voices
         rng = random.Random(f"gm:{gm['team_id']}:{gm['start_season']}:godfather")
-        agg = round(rng.uniform(0.35, 0.75), 2)          # draw order is part of the seed: keep it
-        risk = round(rng.uniform(0.30, 0.70), 2)
+        # The draw order is part of the seed: pre-plan sent the first draw (0.35-0.75) to risk_appetite and the
+        # second (0.30-0.70) to aggressiveness, and 8ec3ec6 swapped them rather than restoring them.
+        risk = round(rng.uniform(0.35, 0.75), 2)
+        agg = round(rng.uniform(0.30, 0.70), 2)
         picks = round(rng.uniform(0.85, 1.20), 2)
         youth = round(rng.uniform(-0.5, 0.5), 2)
         traits = {"aggressiveness": agg, "risk_appetite": risk, "pick_affinity": picks, "youth_bias": youth}

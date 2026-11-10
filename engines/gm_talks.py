@@ -296,7 +296,9 @@ def _card_text(gm):
     when the row has none (a GM hired before the cards)."""
     from engines import gm_voices
     gm = gm or {}
-    card = gm.get("voice_card")
+    # Parse first, like the inbox's _gm_card_text: a stored card can be a JSON string or malformed, and rendering it
+    # unparsed raised KeyError in the middle of a CPU talk.
+    card = gm_voices.parse_card(gm.get("voice_card"))
     if not card:
         card = gm_voices.template_card({"aggressiveness": gm.get("aggressiveness", 0.5),
                                         "risk_appetite": gm.get("risk_appetite", 0.5),
@@ -332,12 +334,16 @@ def _relationship(sheet, side="b"):
     r = ((sheet.get("teams") or {}).get(side) or {}).get("rivalry") or {}
     rel, tax = r.get("relation"), r.get("tax") or 0
     base = {"division": "division rivals", "conference": "same-conference teams"}.get(rel, "different conferences")
-    return f"{base}, {round(float(tax) * 100)}% tax" if tax else base
+    # The sheet carries the tax as 0.65, so the scene says 0.65: "65% tax" is a number validate_rationale rejects,
+    # and a line repeating the scene verbatim fell back to the template.
+    return f"{base}, a {float(tax):.2f} rivalry tax" if tax else base
 
 
 def _scene(b, talk, sheet, side="b", mood=None):
     """The turn's scene (both teams' stakes and the rivalry from the sheet; the week and deadline from the books)."""
-    return {"week": b.get("week"), "deadline_week": _ge().TRADE_DEADLINE_WEEK,
+    # The deadline is named, not numbered: the sheet doesn't carry TRADE_DEADLINE_WEEK, so a line repeating
+    # "week 8" would fail validate_rationale and fall back to the template.
+    return {"week": b.get("week"), "deadline": "the trade deadline",
             "who_called": f"the {_abbr(b, _initiator(talk))} GM", "mood": mood,
             "stakes": _stakes(sheet), "relationship": _relationship(sheet, side)}
 
@@ -489,6 +495,13 @@ def open_talk(cur, b, valuer, deal, rng, llm=None):
     if not options:                                  # an asset that moved between the search and the talk
         su, sg = _gn().surpluses({"a": a, "b": other, "assets": deal["assets"]}, valuer, a)
         options = [Option("FIRM", "OFFER", deal.get("opening_posture") or "FIRM", list(deal["assets"]), su, sg)]
+    elif deal.get("opening_posture") == "FIRM":
+        # A FIRM deal must open on the package the search chose, not on the firm pool's first entry (the softmax
+        # pick was being thrown away, and the talk opened on a package whose hash the search never accepted).
+        h = _ge().deal_hash(a, other, deal["assets"])
+        if not any(_ge().deal_hash(a, other, o.assets) == h for o in options):
+            su, sg = _gn().surpluses({"a": a, "b": other, "assets": deal["assets"]}, valuer, a)
+            options.append(Option("FIRM", "OFFER", "FIRM", list(deal["assets"]), su, sg))
     opt = _opening_choice(options, deal, _gm(b, a), random.Random(f"talk:{season}:{nid}:1"))
     sheet = _sheet(cur, b, a, other, opt.assets)
     scene = _scene(b, talk, sheet, side="a")
@@ -546,7 +559,10 @@ def _choose(cur, b, talk, actor, offerer, offer_assets, options, turns, rng, llm
         persona["insulted"] = True
     key = policy_choice(options, persona, random.Random(f"talk:{talk['season']}:{talk['id']}:{len(turns) + 1}"))
     opt = next((o for o in options if o.key == key), options[0])
-    sheet = _sheet(cur, b, offerer, actor, offer_assets)
+    # The sheet must carry the legs the policy just chose, or the writer names a package it cannot see and its
+    # numbers fail validate_rationale (that was feeding the template-fallback share).
+    sheet = _sheet(cur, b, offerer, actor, offer_assets, counter_assets=opt.assets
+                   if getattr(opt, "action", None) in ("COUNTER", "OFFER") else None)
     scene = _scene(b, talk, sheet, side="b", mood=_last_mood(turns))
     text, source = _writer_line(b, actor, opt, sheet, scene, _history(turns, talk, b), llm)
     return opt, text, source

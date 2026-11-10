@@ -133,10 +133,11 @@ def test_the_godfather_coach_gm_insert_writes_a_template_card():
     assert card is not None and card["register"].startswith("Talks like a coach")
     assert params[3] == gm_voices.one_line(card)                     # the voice one-liner, not a placeholder
 
-    # The RNG draw order is part of the seed. Rebuild the old order: aggressiveness, risk, picks, youth.
+    # The RNG draw order is part of the seed: risk_appetite takes the first draw (0.35-0.75), aggressiveness the
+    # second (0.30-0.70), as every save seeded before the unilateral-trade plan has them.
     rng = random.Random("gm:5:2037:godfather")
-    agg = round(rng.uniform(0.35, 0.75), 2)
-    risk = round(rng.uniform(0.30, 0.70), 2)
+    risk = round(rng.uniform(0.35, 0.75), 2)
+    agg = round(rng.uniform(0.30, 0.70), 2)
     picks = round(rng.uniform(0.85, 1.20), 2)
     youth = round(rng.uniform(-0.5, 0.5), 2)
     assert (params[8], params[9], params[10], params[11]) == (risk, agg, picks, youth)

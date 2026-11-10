@@ -392,7 +392,7 @@ def _gm_card_text(b, gm):
 
 
 def gm_message(b, kind, user, gm, offer, counter_assets=None, mood=None, reasons=(), note=None, llm=None,
-               league=None, timeout=None, posture=None, recent=None):
+               league=None, timeout=None, posture=None, recent=None, history=None):
     """(text, source): the shared writer's line (gm_writer.write_line) from the GM's voice card, the v2 fact
     sheet and this turn's move and scene, else the template. The engine has already decided `kind`, `posture` and
     the assets, and the writer never changes them. `recent` is the {player_id: [line, ...]} last-three-game map
@@ -404,10 +404,14 @@ def gm_message(b, kind, user, gm, offer, counter_assets=None, mood=None, reasons
         return fallback, "TEMPLATE"
     from engines.gm_writer import write_line
     sheet = message_sheet(b, user, gm, offer, counter_assets, recent=recent)
-    history = [{"message": f"JR: {note[:500]}", "source": "USER"}] if note else []
+    # The thread's last lines plus JR's note, so the repetition and restatement rules can see what the GM has
+    # already said; without them he repeated himself every turn. The note rides last and only once.
+    history = list(history or [])
+    if note:
+        history.append({"message": f"JR: {note[:500]}", "source": "USER"})
     return write_line(llm, card_text=_gm_card_text(b, gm), sheet=sheet, history=history,
                       move=message_move(b, kind, user, gm, offer, counter_assets, posture),
-                      scene=message_scene(b, gm, sheet, mood), fallback=fallback, timeout=timeout)
+                      scene=message_scene(b, gm, sheet, mood), fallback=fallback, timeout=timeout, league=league)
 
 
 # --------------------------------------------------------------------- DB ----
@@ -557,10 +561,10 @@ def open_negotiation(cur, user_team, gm_team, assets, note=None, llm=None, timeo
                        gm_team_id, patience, patience_left) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
                 (b["season"], b["week"], b["window"], stage, user, gm, patience, patience))
     nid = cur.fetchone()[0]
-    return _jr_offer(cur, b, valuer, _neg(cur, nid), eng, note, llm, timeout, posture)
+    return _jr_offer(cur, b, valuer, _neg(cur, nid), eng, note, llm, timeout, posture, history)
 
 
-def offer(cur, nid, assets, note=None, llm=None, timeout=None, posture=None):
+def offer(cur, nid, assets, note=None, llm=None, timeout=None, posture=None, history=None):
     """JR's next offer in an OPEN negotiation."""
     expire_stale(cur)
     n = _neg(cur, nid)
@@ -568,7 +572,7 @@ def offer(cur, nid, assets, note=None, llm=None, timeout=None, posture=None):
         raise FrontOfficeError(409, f"negotiation {nid} is {n['status']}")
     b, valuer = _books(cur)
     eng = _engine_assets(cur, b, n["user_team_id"], n["gm_team_id"], assets)
-    return _jr_offer(cur, b, valuer, n, eng, note, llm, timeout, posture)
+    return _jr_offer(cur, b, valuer, n, eng, note, llm, timeout, posture, history)
 
 
 def _pick_counter_option(b, opts, gm, season, nid, turn_no, posture=None):
@@ -589,7 +593,7 @@ def _pick_counter_option(b, opts, gm, season, nid, turn_no, posture=None):
         [{k: o[k] for k in ("key", "action", "assets", "su", "sg")} for o in options]
 
 
-def _jr_offer(cur, b, valuer, n, eng, note, llm, timeout=None, posture=None):
+def _jr_offer(cur, b, valuer, n, eng, note, llm, timeout=None, posture=None, history=None):
     from engines.gm_rationale import league_names
     nid, user, gm = n["id"], n["user_team_id"], n["gm_team_id"]
     deal = {"a": user, "b": gm, "assets": eng}
@@ -615,7 +619,7 @@ def _jr_offer(cur, b, valuer, n, eng, note, llm, timeout=None, posture=None):
     recent = ge.recent_form(cur, [x["player_id"] for x in list(eng) + list(counter_assets or [])
                                   if x.get("type") == "PLAYER"], b["season"], b["week"])
     text, src = gm_message(b, act, user, gm, eng, counter_assets, j["mood"], res["reasons"], note, llm,
-                           league, timeout=timeout, posture=posture, recent=recent)
+                           league, timeout=timeout, posture=posture, recent=recent, history=history)
     if act == "COUNTER":
         _add_turn(cur, nid, "GM", "COUNTER", c["assets"], c["su"], c["sg"], None, c["checks"], text, src, abbr,
                   actor_team_id=gm, options=options, choice=choice, choice_source="POLICY" if choice else None,

@@ -203,7 +203,7 @@ def test_the_writer_receives_the_card_the_sheet_and_the_move(monkeypatch):
     assert seen["move"]["action"] == opt.action
     assert seen["move"]["gives"] == [ge.asset_label(b, x) for x in opt.assets if x["from"] == 2]
     assert seen["move"]["gets"] == [ge.asset_label(b, x) for x in opt.assets if x["to"] == 2]
-    assert seen["scene"]["deadline_week"] == ge.TRADE_DEADLINE_WEEK and seen["scene"]["week"] == b["week"]
+    assert seen["scene"]["deadline"] == "the trade deadline" and seen["scene"]["week"] == b["week"]
     assert "AAA" in seen["scene"]["who_called"]
     assert "AAA" in seen["scene"]["stakes"] and "BBB" in seen["scene"]["stakes"]
     assert isinstance(seen["scene"]["relationship"], str)
@@ -356,7 +356,7 @@ def test_open_talk_writes_the_opening_through_the_writer(monkeypatch):
     i = next(i for i, s in enumerate(cur.sql) if "INSERT INTO gm_trade_negotiation_turns" in s)
     params = cur.params[i]
     assert seen["move"]["action"] == "OFFER" and seen["move"]["gives"]
-    assert seen["scene"]["deadline_week"] == ge.TRADE_DEADLINE_WEEK
+    assert seen["scene"]["deadline"] == "the trade deadline"
     assert seen["history"] == []
     assert params[14] == "You called about the receiver."      # the writer's line
     assert params[15] == "LLM"                                 # message_source

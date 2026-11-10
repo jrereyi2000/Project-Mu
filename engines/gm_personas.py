@@ -132,10 +132,10 @@ def _style(t):
     return a, y, p, "; ".join(voice)
 
 
-def _card_for(abbr, traits, season, role="GM"):
-    """The authored card when the file covers this season and team, else the deterministic trait template."""
+def _card_for(abbr, traits, season, role="GM", gm_name=None):
+    """The authored card when the file covers this season, team and GM, else the deterministic trait template."""
     from engines import gm_voices
-    authored = gm_voices.authored_card(abbr, season)
+    authored = gm_voices.authored_card(abbr, season, gm_name=gm_name)
     if authored:
         return authored, "AUTHORED"
     return gm_voices.template_card(traits, role=role), "TEMPLATE"
@@ -152,7 +152,7 @@ def template_persona(abbr, ctx, traits, season, seed_key=None, start=None):
     a, y, p, voice = _style(traits)
     bio = (f"{name} has run the {ctx['city']} {ctx['name']} front office since {start}. "
            f"{name.split()[0]} {a}, {y}, and {p}.")
-    card, card_source = _card_for(abbr, traits, season)
+    card, card_source = _card_for(abbr, traits, season, gm_name=name)
     return {"gm_name": name, "bio": bio, "voice": voice, "start_season": start, "bio_source": "TEMPLATE",
             "voice_card": card, "voice_card_source": card_source}
 

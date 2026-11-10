@@ -197,8 +197,10 @@ def load_file(path=DATA_FILE):
         return json.load(fh)
 
 
-def authored_card(abbr, season, path=DATA_FILE):
-    """The authored card for a team and season, or None when the file is for another season or lacks the team."""
+def authored_card(abbr, season, path=DATA_FILE, gm_name=None):
+    """The authored card for a team and season, or None when the file is for another season, lacks the team, or —
+    when `gm_name` is given — belongs to a different man. A card is written for a named GM, so a 2026 replacement
+    or a model-named seed must not inherit it (`apply_file` refuses exactly that mismatch)."""
     try:
         data = load_file(path)
     except (OSError, ValueError):
@@ -206,7 +208,11 @@ def authored_card(abbr, season, path=DATA_FILE):
     if data.get("season") is None or int(data["season"]) != int(season):
         return None
     raw = (data.get("cards") or {}).get(str(abbr).upper())
-    return parse_card(raw) if raw else None
+    if not raw:
+        return None
+    if gm_name is not None and str((raw or {}).get("gm") or "").strip().lower() != str(gm_name).strip().lower():
+        return None
+    return parse_card(raw)
 
 
 # ------------------------------------------------------------------- apply --

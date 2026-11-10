@@ -45,6 +45,17 @@ def _front_office():
     return front_office
 
 
+def _thread_history(cur, thread, limit=3):
+    """The thread's last few stored lines, for the writer's repetition rules. Without them the GM only ever saw
+    JR's current note and could repeat himself on every turn."""
+    from engines.inbox import store
+    out = []
+    for m in store.messages(cur, thread["id"])[-limit:]:
+        who = "JR" if m.get("author") == "JR" else (thread.get("counterpart_name") or "the GM")
+        out.append({"message": f"{who}: {m.get('body') or ''}", "source": m.get("body_source")})
+    return out
+
+
 def _engine_call(fn, *args, **kwargs):
     """Call an engine helper, mapping its refusal to the inbox's HTTP-shaped error (R2's mismatch text)."""
     from fastapi import HTTPException
@@ -283,7 +294,7 @@ def _leak_after(cur, res, thread, state):
         with appraisal._savepoint(cur):        # a failed draw must not abort JR's reply
             b, _ = _negotiation()._books(cur)
             rng = random.Random(f"leak:{talk['season']}:{talk['id']}:{turn.get('turn_no')}")
-            gm_talks.record_leaks(cur, talk, turn, b, rng, turns)
+            gm_talks.record_leaks(cur, talk, turn, b, rng, turns, user_team_id=thread.get("team_id"))
     except Exception:
         return
 
@@ -365,7 +376,8 @@ def act(cur, thread, option_id, payload, note):
             res = _engine_call(_negotiation().open_negotiation, cur, user, _abbr(cur, gm_team_id), legs, note,
                                timeout=_llm_budget())
         else:
-            res = _engine_call(_negotiation().offer, cur, nid, legs, note, timeout=_llm_budget())
+            res = _engine_call(_negotiation().offer, cur, nid, legs, note, timeout=_llm_budget(),
+                               history=_thread_history(cur, thread))
         intent, facts, new_state = _from_result(cur, res, state, user)
         _leak_after(cur, res, thread, new_state)
         facts["gm"] = thread.get("counterpart_name") or facts.get("gm")
