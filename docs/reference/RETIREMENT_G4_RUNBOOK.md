@@ -1,14 +1,13 @@
 # Retirement restore authority (G4) — PC runbook
 
 Working document for **CLOSE_OUT_CHECKLIST P1-07**, following
-[`RETIREMENT_AUTHORITY.md`](RETIREMENT_AUTHORITY.md) §5.1 exactly. Status 2026-11-09: **sessions 1–2
-done on a `CAREER-TUNE-RETIRE` clone with CPU-controlled teams** (§Session 2 results below); session 3
-(the restore proof) is next and still needs JR's PC. The earlier census (2026-11-07) used JR's all-user
-offseason saves. `CAREER-MUBASE` is never simulated or edited.
+[`RETIREMENT_AUTHORITY.md`](RETIREMENT_AUTHORITY.md) §5.1 exactly. **Sessions 1–4 are done; the proof was
+approved by JR on 2026-11-09** (`g4-2026-11-09`, schema 7, stages `OFFSEASON_START`, `FREE_AGENCY` and
+`UDFA`, fields `ContractStatus`/`TeamIndex`). `CUTDOWN` is not claimed. The earlier census (2026-11-07)
+used JR's all-user offseason saves. `CAREER-MUBASE` is never simulated or edited.
 
-The proof file (`verify_output/retirement_g4/proof_draft.json`) is a **draft**: `proven` is false, the
-hash/stages/fixture are TODOs, and `approved_by` / `approved_on` are empty for JR. `retirement_window.load_proof`
-refuses it until JR fills and approves it, which is the intended state.
+The approved proof is `verify_output/retirement_g4/proof_draft.json` and `retirement_window.load_proof`
+accepts it; without `MU_RETIREMENT_AUTHORITY` the planner stays default-deny.
 
 ## What only JR can do
 
@@ -345,6 +344,11 @@ Fill `verify_output/retirement_g4/proof_draft.json` in the
 
 Point the watcher at it with `MU_RETIREMENT_AUTHORITY=/path/proof.json`. **Do not install the Contract
 Retirement Arbitrator** for Mu lineages. P1-07 is ticked only when JR approves the proof.
+
+**Done 2026-11-09.** The approved file carries `fixture_id: g4-2026-11-09`, `schema_version: 7`,
+`stages: ["OFFSEASON_START", "FREE_AGENCY", "UDFA"]`, `proof_save_hash` of the A3 save
+(`52559bcc…c5817c`), and `KEEP_NATIVE_RETIREE` proven for `ContractStatus` and `TeamIndex`. JR approved it
+with `approved_by: "JR"`, `approved_on: "2026-11-09"`.
 
 ## What the session-3 run leaves on the code side
 
