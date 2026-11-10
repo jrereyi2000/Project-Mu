@@ -128,6 +128,39 @@ FACIAL = [
 ]
 FACIAL_QB_K_P = [65, 15, 15, 5]  # these positions skew clean-shaven
 
+# ----------------------------------------------------------------------------
+# Coach mode (headshots/coach_headshots.py). Tunable estimates, coach-only.
+# ----------------------------------------------------------------------------
+
+# Coaches are not drawn by position, so skin tone uses a position-free mix.
+COACH_TONE_W = [40, 12, 20, 16, 12]
+
+# About 40% of coaches wear facial hair (60% clean-shaven).
+COACH_FACIAL = [
+    ("clean-shaven", 60),
+    ("light stubble", 18),
+    ("short trimmed beard", 15),
+    ("full beard", 7),
+]
+
+# About a quarter of coaches wear glasses.
+COACH_GLASSES_CHANCE = 0.25
+
+# Madden's CoachFace/Coach head skin-tone digit (1-7) -> the 5 tone brackets above.
+# Group 1 is the lightest and 7 the deepest; 4-5 land on medium-deep, 6-7 on deep brown.
+COACH_TONE_TO_INDEX = {1: 0, 2: 1, 3: 2, 4: 3, 5: 3, 6: 4, 7: 4}
+
+# Madden CharacterBodyType -> the build phrase that agrees with the 3D model.
+COACH_BUILD_BY_BODY_TYPE = {
+    "thin": "lean build, slim neck, narrow shoulders, defined jaw",
+    "lean": "lean build, slim neck, narrow shoulders, defined jaw",
+    "muscular": ("muscular stocky build, thick neck, very broad shoulders, "
+                 "fuller face"),
+    "heavy": ("very large build, very thick neck, extremely wide shoulders, "
+              "full round face with soft jawline"),
+    "standard": None,  # fall back to the height/weight BMI
+}
+
 # Attractiveness: normal distribution, most players land mid-range.
 # Raise ATTR_MEAN for a better-looking league, lower it for a plainer one.
 ATTR_MEAN, ATTR_SD = 5.5, 1.7
@@ -239,12 +272,166 @@ def pick_hair(name, team, ti, age, hair_version=1):
 
 
 # ----------------------------------------------------------------------------
+# Coach-mode helpers
+# ----------------------------------------------------------------------------
+
+def parse_skin_tone_group(value):
+    """Read Madden's 1-7 coach skin-tone digit from a face preset, a group, or an int.
+
+    Accepts ``3``, ``"3"``, ``"coachhead_3_B_N_21"`` (the first digit is the
+    skin-tone group, MADDEN_COACH_RECORDS §3.12), or a phrase such as
+    ``"skin tone 3"``. Returns ``None`` when nothing usable is present.
+    """
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value if 1 <= value <= 7 else None
+    text = str(value).strip().lower()
+    if not text:
+        return None
+    if text.isdigit():
+        n = int(text)
+        return n if 1 <= n <= 7 else None
+    m = re.search(r"coachhead_(\d)", text)
+    if m:
+        n = int(m.group(1))
+        return n if 1 <= n <= 7 else None
+    m = re.search(r"(?:skin[\s-]*tone|tone)[^\d]*(\d)", text)
+    if m:
+        n = int(m.group(1))
+        return n if 1 <= n <= 7 else None
+    return None
+
+
+def coach_age_cue(a):
+    """Age cue for a coach, 32-72, with more grey and lines after 55."""
+    a = max(32, min(72, int(a)))
+    if a < 40:
+        return "early-to-mid 30s, composed face"
+    if a < 48:
+        return "mid-40s, faint expression lines"
+    if a < 55:
+        return ("late 40s to early 50s, visible smile lines, "
+                "a touch of grey at the temples")
+    if a < 62:
+        return ("mid-50s, greying hair and deeper lines around the eyes")
+    if a < 68:
+        return ("late 50s to early 60s, mostly grey hair, pronounced "
+                "forehead and smile lines")
+    return ("late 60s to early 70s, white or grey hair, weathered mature face")
+
+
+def pick_coach_hair(name, team, ti, age, hair_version=1):
+    """Coach hair: the player stream plus coach-age grey and recession.
+
+    Separate function (not a branch in ``pick_hair``) so the player output is
+    untouched. The same name/team/hair_version gives the same result.
+    """
+    rng = make_rng(name, team, "hair", hair_version)
+    texture = rng.choices(HAIR_TEXTURES, weights=TEXTURE_W[ti])[0]
+    style = rng.choice(HAIR_STYLES[texture])
+    color = rng.choices(HAIR_COLORS, weights=COLOR_W[ti])[0]
+    if rng.random() < DYE_CHANCE:
+        color = rng.choice(DYE_COLORS)
+    receding_roll = rng.random()
+    grey_roll = rng.random()
+
+    if style in BALD_STYLES:
+        return style
+
+    out = f"{style} ({color} hair)"
+    if age >= 55 and grey_roll < 0.85:
+        out += ", mostly grey hair"
+    elif age >= 45 and grey_roll < 0.55:
+        out += ", salt-and-pepper grey"
+    elif age >= 38 and grey_roll < 0.25:
+        out += ", faint grey at the temples"
+
+    if age >= 55:
+        receding_chance = 0.55
+    elif age >= 45:
+        receding_chance = 0.30
+    elif age >= 35:
+        receding_chance = 0.12
+    else:
+        receding_chance = 0.0
+    if receding_roll < receding_chance:
+        out += ", receding hairline"
+
+    return out
+
+
+def coach_build(height_in, weight_lb, body_type=None):
+    """Build from height and weight, nudged to agree with the 3D body type."""
+    key = str(body_type or "").strip().lower()
+    phrase = COACH_BUILD_BY_BODY_TYPE.get(key)
+    if phrase and key != "standard":
+        return phrase
+    return build(height_in, weight_lb)
+
+
+def _coach_appearance(name, team, pos, height_in, weight_lb, age,
+                      version, face_version, hair_version,
+                      skin_tone_group, body_type):
+    """Coach branch of :func:`appearance`; never reached by the player default."""
+    coach_pos = str(pos).strip() or "Coach"
+    group = parse_skin_tone_group(skin_tone_group)
+
+    if group is not None:
+        ti = COACH_TONE_TO_INDEX[group]
+    else:
+        rng = make_rng(name, team, version)
+        ti = rng.choices(range(5), weights=COACH_TONE_W)[0]
+
+    hair = pick_coach_hair(name, team, ti, age, hair_version)
+    face = make_rng(name, team, "facial", version).choices(
+        [x[0] for x in COACH_FACIAL], weights=[x[1] for x in COACH_FACIAL])[0]
+    score, look = attractiveness(name, team, face_version)
+
+    glasses = make_rng(name, team, "glasses", version).random() < COACH_GLASSES_CHANCE
+    if glasses:
+        look = look + "; wearing thin-framed glasses"
+
+    age_text = coach_age_cue(age)
+    build_text = coach_build(height_in, weight_lb, body_type)
+
+    line = (
+        f"{name} | {team} | {coach_pos} | skin tone: {TONES[ti]} | hair: {hair} | "
+        f"facial hair: {face} | {build_text} | {age_text} | face: {look} | "
+        f"attr_score: {score}"
+    )
+    meta = {
+        "pos": coach_pos, "tone": TONES[ti], "hair": hair, "facial": face,
+        "score": score, "look": look, "age_cue": age_text, "build": build_text,
+        "glasses": glasses, "role": "coach", "skin_tone_group": group,
+        "body_type": body_type,
+    }
+    return line, meta
+
+
+# ----------------------------------------------------------------------------
 # Main appearance builder
 # ----------------------------------------------------------------------------
 
 def appearance(name, team, pos, height_in, weight_lb, age,
-               version=1, face_version=1, hair_version=1):
-    """Returns (line, meta) where meta holds values for summary stats."""
+               version=1, face_version=1, hair_version=1,
+               role="player", skin_tone_group=None, body_type=None):
+    """Returns (line, meta) where meta holds values for summary stats.
+
+    ``role="player"`` (the default) is the original player draw and is
+    byte-identical to before. ``role="coach"`` runs the coach draw: position
+    weights off, ages 32-72 with more grey/recession at 55+, glasses ~25%,
+    facial hair ~40%, and a build from height/weight plus the 3D body type.
+    The optional ``skin_tone_group`` (Madden's 1-7 head digit) pins the tone so
+    the portrait agrees with the 3D model.
+    """
+    if str(role).strip().lower() == "coach":
+        return _coach_appearance(
+            name, team, pos, height_in, weight_lb, age, version, face_version,
+            hair_version, skin_tone_group, body_type)
+
     pos = normalize_pos(pos)
     rng = make_rng(name, team, version)  # skin tone, hair, facial hair
 
