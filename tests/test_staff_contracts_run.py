@@ -4,6 +4,8 @@ Offline: the producer runs on an in-memory SQLite fake with the tenures and staf
 """
 import sqlite3
 
+import pytest
+
 from engines import staff_contracts_run as scr
 from tests.test_inbox_store import FakeCursor
 
@@ -243,6 +245,8 @@ def test_a_coach_rehired_into_the_same_seat_is_filed_again():
     conn.execute("UPDATE coach_tenures SET end_season = 2036 WHERE coach_id = 11")
     conn.execute("INSERT INTO coach_tenures (coach_id, team_id, start_season, end_season) "
                  "VALUES (11, 2, 2038, NULL)")
+    scr.annual(cur, 2036)
+    scr.annual(cur, 2037)
     rep = scr.annual(cur, 2038)
     assert rep["filed"] == 1
     cur.execute("SELECT remaining_years, signed_season, buyout_owed FROM staff_contracts "
@@ -263,3 +267,124 @@ def test_a_fired_coach_is_bought_out_for_the_years_he_had_left():
     scr.annual(cur, 2037)                                  # the run after the fired season
     after = next(r for r in _rows(cur) if r[1] == "HC" and r[0] == 2)
     assert after[5] == 0 and after[7] == before[3] * 2
+
+
+# ------------------------------------------------------------- one invariant (M-0158) ----
+# Every contract year is paid exactly once: as salary if he held the job that season, or as a buyout instalment if
+# he was fired before it — never both, never neither, never a year past the deal. The table runs the real producer
+# (annual at FREE_AGENCY, with the season just played) and both hot-seat settles over a one-person league.
+_INVARIANT_DDL = """
+    CREATE TABLE coaches (id INTEGER PRIMARY KEY, coach_name TEXT);
+    CREATE TABLE coach_records (coach_id INT, super_bowl_wins INT);
+    CREATE TABLE coach_tenures (id INTEGER PRIMARY KEY AUTOINCREMENT, coach_id INT, team_id INT,
+                                start_season INT, end_season INT);
+    CREATE TABLE coordinators (id INTEGER PRIMARY KEY, coordinator_name TEXT);
+    CREATE TABLE coordinator_tenures (id INTEGER PRIMARY KEY AUTOINCREMENT, coordinator_id INT, team_id INT,
+                                      role TEXT, start_season INT, end_season INT);
+    CREATE TABLE gm_profiles (id INTEGER PRIMARY KEY, team_id INT, gm_name TEXT, start_season INT, end_season INT,
+                              coach_id INT);
+    CREATE TABLE staff_contracts (id INTEGER PRIMARY KEY AUTOINCREMENT, team_id INT, person_id INT,
+                                  person_kind TEXT, annual_salary INT, total_years INT, remaining_years INT,
+                                  signed_season INT, full_control INT DEFAULT 0, buyout_owed INT DEFAULT 0,
+                                  buyout_total INT, buyout_fired_season INT, buyout_years INT);
+"""
+
+DEALS = [
+    dict(name="hc-mid-replaced", kind="HC", salary=6_000_000, years=4, signed=2026, last=2027, path="annual",
+         buyout=12_000_000, first=2028, successor=2028),
+    dict(name="hc-mid-vacant", kind="HC", salary=6_000_000, years=4, signed=2026, last=2027, path="annual",
+         buyout=12_000_000, first=2028),
+    dict(name="hc-first-year", kind="HC", salary=6_000_000, years=4, signed=2026, last=2026, path="annual",
+         buyout=18_000_000, first=2027),
+    dict(name="hc-last-year", kind="HC", salary=6_000_000, years=4, signed=2026, last=2029, path="annual",
+         buyout=0),
+    dict(name="oc-poached", kind="OC", salary=2_000_000, years=3, signed=2033, last=2034, path="annual",
+         buyout=0, moved_to=2, voided=True),
+    dict(name="gm-mid-deal", kind="GM", salary=3_000_000, years=4, signed=2033, last=2035, path="gm_settle",
+         buyout=6_000_000, first=2035),
+    dict(name="gm-first-year", kind="GM", salary=3_000_000, years=4, signed=2033, last=2033, path="gm_settle",
+         buyout=12_000_000, first=2033),
+    dict(name="full-control-100m", kind="HC", salary=20_000_000, years=5, signed=2033, last=2035, path="fc_settle",
+         full_control=True, buyout=60_000_000, first=2035),
+    dict(name="full-control-last-year", kind="HC", salary=4_000_000, years=5, signed=2031, last=2035,
+         path="fc_settle", full_control=True, buyout=4_000_000, first=2035),
+    dict(name="coach-gm", kind="HC", salary=20_000_000, years=5, signed=2030, last=2032, path="fc_settle",
+         full_control=True, coach_gm=True, buyout=60_000_000, first=2032),
+]
+
+
+def _scenario(case):
+    """One team, one staffer on the case's deal; returns (conn, cur, person_id)."""
+    conn = sqlite3.connect(":memory:", isolation_level=None)
+    conn.executescript(_INVARIANT_DDL)
+    kind, signed, last = case["kind"], case["signed"], case["last"]
+    person_id = {"GM": 101, "HC": 10}.get(kind, 20)
+    if kind == "GM":
+        conn.execute("INSERT INTO gm_profiles VALUES (101, 1, 'GM', ?, NULL, NULL)", (signed,))
+    elif kind == "HC":
+        conn.execute("INSERT INTO coaches VALUES (10, 'Coach')")
+        conn.execute("INSERT INTO coach_records VALUES (10, 0)")
+        conn.execute("INSERT INTO coach_tenures (coach_id, team_id, start_season, end_season) "
+                     "VALUES (10, 1, ?, ?)", (signed, last))
+        if case.get("coach_gm"):
+            conn.execute("INSERT INTO gm_profiles VALUES (101, 1, 'Coach-GM', ?, NULL, 10)", (signed,))
+        if case.get("successor"):
+            conn.execute("INSERT INTO coaches VALUES (11, 'Successor')")
+            conn.execute("INSERT INTO coach_records VALUES (11, 0)")
+            conn.execute("INSERT INTO coach_tenures (coach_id, team_id, start_season, end_season) "
+                         "VALUES (11, 1, ?, NULL)", (case["successor"],))
+    else:
+        conn.execute("INSERT INTO coordinators VALUES (20, 'Coord')")
+        conn.execute("INSERT INTO coordinator_tenures (coordinator_id, team_id, role, start_season, end_season) "
+                     "VALUES (20, 1, ?, ?, ?)", (kind, signed, last))
+        if case.get("moved_to"):
+            conn.execute("INSERT INTO coordinator_tenures (coordinator_id, team_id, role, start_season, end_season) "
+                         "VALUES (20, ?, ?, ?, NULL)", (case["moved_to"], kind, last + 1))
+    cur = FakeCursor(conn)
+    scr.annual(cur, signed)                            # the producer files the deal
+    conn.execute("UPDATE staff_contracts SET annual_salary = ?, total_years = ?, remaining_years = ?, "
+                 "full_control = ?", (case["salary"], case["years"], case["years"],
+                                      1 if case.get("full_control") else 0))
+    return conn, cur, person_id
+
+
+def _paid_to(cur, person_id, kind, season):
+    """The producer's own payroll rule, for this person on team 1: signed by the season and still active."""
+    cur.execute("""SELECT annual_salary FROM staff_contracts
+                   WHERE person_id = %s AND person_kind = %s AND team_id = 1
+                     AND signed_season <= %s AND remaining_years > 0""", (person_id, kind, season))
+    return sum(int(r[0] or 0) for r in cur.fetchall())
+
+
+@pytest.mark.parametrize("case", DEALS, ids=[d["name"] for d in DEALS])
+def test_every_contract_year_is_paid_exactly_once(case):
+    from engines import coach_hot_seat as chs, gm_rollover as gr
+
+    conn, cur, person_id = _scenario(case)
+    paid = {}
+    for season in range(case["signed"], case["last"] + 3):
+        if season == case["last"] and case["path"] != "annual":
+            if case["kind"] == "GM":
+                conn.execute("UPDATE gm_profiles SET end_season = ? WHERE id = 101", (season,))
+                gr._settle_gm_contract(cur, person_id, log=lambda *a: None, person_season=season)
+            else:
+                if case.get("coach_gm"):
+                    conn.execute("UPDATE gm_profiles SET end_season = ? WHERE id = 101", (season,))
+                chs._settle_full_control(cur, person_id, season)
+        scr.annual(cur, season)
+        paid[season] = _paid_to(cur, person_id, case["kind"], season)
+    cur.execute("""SELECT buyout_total, buyout_fired_season FROM staff_contracts
+                   WHERE person_id = %s AND team_id = 1 ORDER BY id""", (person_id,))
+    sched = cur.fetchall()
+    buyout = sum(int(r[0] or 0) for r in sched)
+    assert buyout == case["buyout"]
+    assert {r[1] for r in sched if r[1] is not None} == ({case["first"]} if case["buyout"] else set())
+    if case.get("coach_gm"):
+        cur.execute("SELECT count(*) FROM staff_contracts WHERE person_kind = 'GM'")
+        assert cur.fetchone()[0] == 0                        # one man, one deal
+    if case.get("voided"):
+        # a poach or lateral move is a departure: nothing owed, paid through his last season with the old team
+        assert all(paid[s] == case["salary"] for s in range(case["signed"], case["last"] + 1))
+    else:
+        assert sum(paid.values()) + buyout == case["salary"] * case["years"]
+    assert all(paid[s] == 0 for s in range(case["last"] + 1, case["last"] + 3))   # nothing past the end

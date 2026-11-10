@@ -39,11 +39,11 @@ def _table(cur, name):
 
 def current_staff(cur, season):
     """[{team_id, person_kind, person_id, name, start_season, experience, championships}] for each team's current
-    HC/OC/DC (the tenure covering `season`; a later-starting tenure wins). A tenure or GM hired for the coming league
-    year (`season + 1`) counts as current: the carousel hires before FREE_AGENCY's producer runs, and reading a
-    next-season hire as gone filed and fired him the day he was hired (M-0150 N1)."""
+    HC/OC/DC (the tenure covering `season`; a later-starting tenure wins). A hire for the coming league year is NOT
+    current: the carousel hires the successor before FREE_AGENCY's run, so reading him as staff would displace the
+    man who held the job in `season` (M-0158 R1). The firing loop treats a contract signed for a later year as a
+    hire instead (M-0150 N1)."""
     out, seen = [], set()
-    horizon = int(season) + 1
 
     def add(team_id, kind, person_id, name, start_season, championships):
         if (team_id, kind) in seen:
@@ -56,14 +56,14 @@ def current_staff(cur, season):
                    FROM coach_tenures t JOIN coaches c ON c.id = t.coach_id
                    LEFT JOIN coach_records r ON r.coach_id = t.coach_id
                    WHERE t.start_season <= %s AND (t.end_season IS NULL OR t.end_season >= %s)
-                   ORDER BY t.team_id, t.start_season DESC, t.id DESC""", (horizon, season))
+                   ORDER BY t.team_id, t.start_season DESC, t.id DESC""", (season, season))
     for r in cur.fetchall():
         add(r[0], "HC", r[1], r[2], r[3], int(r[4] or 0))
     if _table(cur, "coordinator_tenures"):
         cur.execute("""SELECT t.team_id, t.role, t.coordinator_id, c.coordinator_name, t.start_season
                        FROM coordinator_tenures t JOIN coordinators c ON c.id = t.coordinator_id
                        WHERE t.start_season <= %s AND (t.end_season IS NULL OR t.end_season >= %s)
-                       ORDER BY t.team_id, t.role, t.start_season DESC, t.id DESC""", (horizon, season))
+                       ORDER BY t.team_id, t.role, t.start_season DESC, t.id DESC""", (season, season))
         for r in cur.fetchall():
             add(r[0], r[1], r[2], r[3], r[4], 0)
     # The GM is staff too (plan §2.2 puts his salary in the owner's payroll); his open tenure is the contract the
@@ -72,7 +72,7 @@ def current_staff(cur, season):
     if _table(cur, "gm_profiles"):
         cur.execute("""SELECT team_id, id, gm_name, start_season FROM gm_profiles
                        WHERE end_season IS NULL AND coach_id IS NULL AND start_season <= %s ORDER BY team_id""",
-                    (horizon,))
+                    (season,))
         for r in cur.fetchall():
             add(r[0], "GM", r[1], r[2], r[3], 0)
     for s in out:
@@ -180,6 +180,10 @@ def annual(cur, season, dry_run=False):
         if r["person_kind"] not in ("HC", "OC", "DC", "GM") or r["remaining_years"] <= 0:
             continue
         if (r["team_id"], r["person_kind"], r["person_id"]) in current:
+            continue
+        if int(r["signed_season"] or 0) > season:
+            # A deal signed for a coming league year is a hire, not a departure: the carousel hires the successor
+            # before this run, and his row must not be fired the day he is hired (M-0150 N1).
             continue
         role = role_of.get(r["person_kind"], "COORD")
         moved = (role, r["person_id"]) in employed_anywhere

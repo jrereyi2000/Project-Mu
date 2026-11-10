@@ -302,9 +302,10 @@ def _settle_full_control(cur, coach_id, season):
         got = cur.fetchone()
         if got:
             from engines import staff_contracts_engine as sce
-            # Fired at Black Monday of `season`, so the buyout covers the seasons from the next league year on, not
-            # the stale stored remaining_years and not the season just played (M-0150 M1).
-            charge = int(season) + 1
+            # Fired at Black Monday of `season`: the row is zeroed before annual(season), so that season is in no
+            # payroll and the buyout carries it, starting there (M-0150 M1, corrected in M-0158). The stored
+            # remaining_years is stale, so the years are recomputed from the deal.
+            charge = int(season)
             owed = sce.owed_years(got[4], got[5], charge)
             cols = sce.firing_columns({"annual_salary": got[1], "remaining_years": owed, "buyout_owed": got[3]},
                                       charge, owed)

@@ -321,7 +321,7 @@ class SettleFullControlTests(unittest.TestCase):
         self.assertEqual(len(updates), 1)
         remaining, buyout, total, fired, years, row_id = updates[0]
         self.assertEqual((remaining, row_id), (0, 5))
-        # M-0150 M1: a 5-year deal signed 2033 is done after 2036, so it owes one more season, charged from the
-        # league year after the firing season - not the stored three over 2036-2038.
-        self.assertEqual(buyout, 10_000_000)
-        self.assertEqual((total, fired, years), (buyout, SEASON + 1, 1))
+        # M-0150 M1: a 5-year deal signed 2033 covers 2033-2037. Fired at Black Monday 2036, the season the settle
+        # zeroed is in no payroll, so the buyout carries 2036-2037: two seasons. Not the stored three.
+        self.assertEqual(buyout, 20_000_000)
+        self.assertEqual((total, fired, years), (buyout, SEASON, 2))

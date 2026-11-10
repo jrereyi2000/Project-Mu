@@ -374,10 +374,10 @@ def _settle_gm_contract(cur, person_id, log=print, person_season=None):
         row = cur.fetchone()
         if row:
             from engines import staff_contracts_engine as sce
-            # A hot-seat firing happens after the league year `person_season`, so the buyout covers the seasons from
-            # the next one on. The stored remaining_years was last rolled for person_season - 1, and using it charged
-            # an extra season past the end of the deal (M-0150 M1).
-            charge = None if person_season is None else person_season + 1
+            # The settle zeroes the row before annual(person_season), so that season is in no payroll: the buyout
+            # carries it, and starts there. The stored remaining_years was last rolled for person_season - 1, so
+            # using it charged one season past the end of the deal (M-0150 M1, corrected in M-0158).
+            charge = None if person_season is None else person_season
             owed = sce.owed_years(row[4], row[5], charge) if charge is not None else row[2]
             cols = sce.firing_columns({"annual_salary": row[1], "remaining_years": owed, "buyout_owed": row[3]},
                                       charge, owed)

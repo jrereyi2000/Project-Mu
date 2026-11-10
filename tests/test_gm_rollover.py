@@ -462,5 +462,5 @@ def test_a_fired_gm_is_bought_out_for_the_seasons_after_the_one_he_was_fired_in(
     assert len(updates) == 1
     remaining, buyout, total, fired, years, row_id = updates[0]
     assert (remaining, row_id) == (0, 9)
-    assert (buyout, total) == (3_000_000, 3_000_000)       # one season left (2036), not three
-    assert (fired, years) == (2036, 1)                     # charged from the year after the firing season
+    assert (buyout, total) == (6_000_000, 6_000_000)       # 2035 and 2036, not the stored three
+    assert (fired, years) == (2035, 2)                     # charged from the firing season, which no payroll covers
