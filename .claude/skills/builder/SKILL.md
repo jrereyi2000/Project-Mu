@@ -42,7 +42,7 @@ Label override: $ARGUMENTS
 6. **Databases:**
    - Tests and repros use only a scratch DB named `mu_scratch_<label>_test` in container `madden-db` (postgres/postgres). Drop it when you're done with it.
    - A new migration is a new file (never edit an applied one), mirrored in `db/init_db.sql` with its ledger row (`python3 -m db.migrate sync-init-db`; see the docstring in `db/migrate.py`). Take the next free date name in `db/migrations/` and CLAIM it on the board.
-   - You may apply it to `madden_test` and `madden_mu2026` only with `python3 -m db.migrate apply` once its tests pass, and say so in your NOTICE.
+   - Once its tests pass, apply it to `madden_test` and `madden_mu2026` with `python3 -m db.migrate apply` (JR approved this standing rule on 2026-11-10), then check `status` shows 0 pending and 0 drifted. Say so in your NOTICE.
    - Never touch `madden_2036`.
 7. **Spec:** update `PROJECT_SPEC.md` in the same commit for anything the fix changes that the spec describes (CLAUDE.md). Edit only the sections you touch, because other sessions edit it too.
 8. **Commit by path, never the whole index.** The main checkout is shared, and other sessions stage work in it.
