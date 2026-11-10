@@ -1,16 +1,111 @@
 // Reads a real save end to end. Uses $MU_SAMPLE_SAVE, else CAREER-GIANTS-AUTOSAVE at the repo root; skips if
-// neither exists (save files are git-ignored, so a fresh checkout has none).
+// neither exists (save files are git-ignored, so a fresh checkout has none). The coaches / staff tests below use an
+// in-memory synthetic fixture and always run; opening a real save is never required for them.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync, statSync } from 'fs';
 import { createHash } from 'crypto';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
-import { readSave } from '../pc_save_reader.mjs';
+import { READER_VERSION, readCoaches, readSave, readStaff } from '../pc_save_reader.mjs';
+import { encodeRef, NO_REF } from '../lib.mjs';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const savePath = process.env.MU_SAMPLE_SAVE || join(repoRoot, 'CAREER-GIANTS-AUTOSAVE');
 const skip = existsSync(savePath) ? false : `no sample save at ${savePath}`;
+
+// A synthetic Coach table (4168's id, five rows: 3 team coaches, 1 free agent, 1 empty), Team table and reader cache,
+// enough to exercise reader_version 8 without a save file.
+const COACH_TABLE_ID = 4168;
+const TEAM_TABLE_ID = 1;
+const coachRecord = (over = {}) => ({
+  isEmpty: false, PresentationId: 0, FirstName: '', LastName: '', Age: 0, Position: 'HeadCoach', TeamIndex: 0,
+  ContractStatus: 'Signed', Archetype: 'OffensiveGuru', Level: 1, Portrait: 0,
+  OffensivePlaybook: NO_REF, DefensivePlaybook: NO_REF, OffensiveScheme: NO_REF, DefensiveScheme: NO_REF,
+  IsUserControlled: false, ...over,
+});
+const teamRecord = (over = {}) => ({
+  isEmpty: false, TeamIndex: 0, HeadCoach: NO_REF, OffensiveCoordinator: NO_REF, DefensiveCoordinator: NO_REF, ...over,
+});
+
+function syntheticCoaches() {
+  return {
+    header: { tableId: COACH_TABLE_ID },
+    records: [
+      coachRecord({
+        PresentationId: 86, FirstName: 'Todd', LastName: 'Bowles', Age: 62, Position: 'HeadCoach', TeamIndex: 5,
+        ContractStatus: 'Signed', Archetype: 'DefensiveGenius', Level: 17, Portrait: 5,
+        OffensivePlaybook: encodeRef(16384, 104463), DefensivePlaybook: encodeRef(16384, 104496),
+        OffensiveScheme: encodeRef(16485, 57913), DefensiveScheme: encodeRef(16485, 57914),
+        IsUserControlled: false,
+      }),
+      coachRecord({
+        PresentationId: 120, FirstName: 'Synthetic', LastName: 'Coordinator', Age: 41,
+        Position: 'OffensiveCoordinator', TeamIndex: 5, Archetype: 'OffensiveGuru', Level: 9, Portrait: 321,
+      }),
+      coachRecord({
+        PresentationId: 130, FirstName: 'Synthetic', LastName: 'Defensive', Age: 47,
+        Position: 'DefensiveCoordinator', TeamIndex: 5, Archetype: 'DefensiveGenius', Level: 12, Portrait: 322,
+      }),
+      coachRecord({
+        PresentationId: 300, FirstName: 'Synthetic', LastName: 'FreeAgent', Age: 52, Position: 'HeadCoach',
+        TeamIndex: 32, ContractStatus: 'FreeAgent', Archetype: 'DevelopmentWizard', Level: 4, Portrait: 363,
+      }),
+      coachRecord({ isEmpty: true, PresentationId: 999, FirstName: 'Not', LastName: 'Live' }),
+    ],
+  };
+}
+
+function syntheticTeams() {
+  return {
+    header: { tableId: TEAM_TABLE_ID },
+    records: [
+      teamRecord({
+        TeamIndex: 0, HeadCoach: encodeRef(COACH_TABLE_ID, 0), OffensiveCoordinator: encodeRef(COACH_TABLE_ID, 1),
+        DefensiveCoordinator: encodeRef(COACH_TABLE_ID, 2),
+      }),
+      // one empty coordinator seat
+      teamRecord({
+        TeamIndex: 1, HeadCoach: encodeRef(COACH_TABLE_ID, 0), OffensiveCoordinator: NO_REF,
+        DefensiveCoordinator: encodeRef(COACH_TABLE_ID, 2),
+      }),
+      // an empty Coach row and a reference into a table that isn't Coach both read as null
+      teamRecord({
+        TeamIndex: 2, HeadCoach: encodeRef(COACH_TABLE_ID, 4), OffensiveCoordinator: encodeRef(99, 0),
+        DefensiveCoordinator: NO_REF,
+      }),
+      // the free-agent pseudo-team is not a real team and gets no staff entry
+      teamRecord({ TeamIndex: 32 }),
+    ],
+  };
+}
+
+test('coaches: every live Coach record, free agents included, in the reader_version 8 shape', () => {
+  assert.equal(READER_VERSION, 8);
+  const coaches = readCoaches(syntheticCoaches());
+  assert.deepEqual(coaches.map(c => c.row), [0, 1, 2, 3], 'the empty row is skipped');
+  assert.deepEqual(coaches.find(c => c.pgid === 86), {
+    pgid: 86, table: COACH_TABLE_ID, row: 0, first_name: 'Todd', last_name: 'Bowles', age: 62,
+    position: 'HeadCoach', team_index: 5, contract_status: 'Signed', archetype: 'DefensiveGenius', level: 17,
+    portrait: 5, offensive_playbook: encodeRef(16384, 104463), defensive_playbook: encodeRef(16384, 104496),
+    offensive_scheme: encodeRef(16485, 57913), defensive_scheme: encodeRef(16485, 57914), is_user_controlled: false,
+  });
+  const freeAgent = coaches.find(c => c.pgid === 300);
+  assert.ok(freeAgent, 'the TeamIndex 32 free agent is in coaches');
+  assert.deepEqual([freeAgent.team_index, freeAgent.contract_status], [32, 'FreeAgent']);
+  assert.ok(coaches.every(c => c.table === COACH_TABLE_ID));
+});
+
+test('staff: Team refs resolve to coach pgids and an empty seat is null', async () => {
+  const coachTable = syntheticCoaches();
+  const tables = { byId: async id => (id === COACH_TABLE_ID ? coachTable : null) };
+  const staff = await readStaff(tables, syntheticTeams(), COACH_TABLE_ID);
+  assert.deepEqual(staff, [
+    { team_index: 0, hc: 86, oc: 120, dc: 130 },
+    { team_index: 1, hc: 86, oc: null, dc: 130 },
+    { team_index: 2, hc: null, oc: null, dc: null },
+  ]);
+});
 
 test('reads a real Madden 27 save without changing it', { skip, timeout: 120_000 }, async () => {
   const hash = () => createHash('sha256').update(readFileSync(savePath)).digest('hex');
@@ -53,8 +148,9 @@ test('reads a real Madden 27 save without changing it', { skip, timeout: 120_000
     for (const line of lines) assert.ok(gameRows.has(line.game_row), 'every game line points at an exported game');
   }
 
-  // reader_version 7: per-team roster / practice squad and the league free-agent list (asserted below).
-  assert.equal(s.meta.reader_version, 7);
+  // reader_version 8: every live coach and each real team's HC / OC / DC seats (asserted below); reader_version 7:
+  // per-team roster / practice squad and the league free-agent list.
+  assert.equal(s.meta.reader_version, 8);
 
   // reader_version 6: top-level salary_cap and decoded team cap blocks in $10k units
   assert.ok(s.salary_cap, 'salary_cap block present');
@@ -149,6 +245,29 @@ test('reads a real Madden 27 save without changing it', { skip, timeout: 120_000
   }
   assert.ok(s.players.filter(p => p.status === 'FreeAgent').every(p => freeAgentPgids.has(p.pgid)),
     'every snapshot free agent is in free_agents');
+
+  // reader_version 8: every live Coach record (free agents on TeamIndex 32 included) and a full staff block.
+  assert.ok(Array.isArray(s.coaches) && s.coaches.length > 0, 'coaches array present');
+  const coachPgids = new Set(s.coaches.map(c => c.pgid));
+  assert.equal(coachPgids.size, s.coaches.length, 'coach pgid must be unique');
+  assert.ok(s.coaches.some(c => c.team_index === 32), 'free-agent coaches are included');
+  for (const c of s.coaches) {
+    assert.ok(Number.isInteger(c.table) && Number.isInteger(c.row), `coach ${c.pgid} table/row`);
+    assert.equal(typeof c.first_name, 'string');
+    assert.equal(typeof c.last_name, 'string');
+    for (const k of ['age', 'position', 'team_index', 'contract_status', 'archetype', 'level', 'portrait']) {
+      assert.ok(c[k] !== null && c[k] !== undefined, `coach ${c.pgid} ${k}`);
+    }
+    assert.equal(typeof c.is_user_controlled, 'boolean');
+  }
+  assert.deepEqual(s.staff.map(x => x.team_index), [...Array(32).keys()], 'one staff entry per real team');
+  assert.ok(s.staff.some(seat => seat.hc !== null), 'some head-coach seats are filled');
+  for (const seat of s.staff) {
+    for (const role of ['hc', 'oc', 'dc']) {
+      if (seat[role] === null) continue;
+      assert.ok(coachPgids.has(seat[role]), `team ${seat.team_index} ${role} is an exported coach`);
+    }
+  }
 
   const ls = s.league_settings;
   assert.equal(typeof ls.dev_trait_regression_enabled, 'boolean');

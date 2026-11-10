@@ -35,6 +35,13 @@
 // dropped. The snapshot also carries a top-level `free_agents`: League.FreeAgents (the sign.mjs pattern) as pgids.
 // That list also holds every practice-squad player (sign.mjs header), so membership is not a status test; the actual
 // free agents in it are status FreeAgent on TeamIndex 32.
+//
+// reader_version 8 adds `coaches`: one entry for every live Coach record, free agents (TeamIndex 32) included, as
+// {pgid (PresentationId), table, row, first_name, last_name, age, position, team_index, contract_status, archetype,
+// level, portrait, offensive_playbook, defensive_playbook, offensive_scheme, defensive_scheme, is_user_controlled}.
+// It also adds `staff`: one {team_index, hc, oc, dc} per real team, each seat the referenced coach's pgid or null
+// when the Team.HeadCoach / OffensiveCoordinator / DefensiveCoordinator reference is empty. Read only: no Coach field
+// is written by the reader.
 import { copyFileSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { basename, join, resolve } from 'path';
@@ -46,7 +53,7 @@ import {
   weightLbs,
 } from './lib.mjs';
 
-export const READER_VERSION = 7;
+export const READER_VERSION = 8;
 
 // Real teams are TeamIndex 0..31 (32 = free agents; the Team table has a few more rows).
 const REAL_TEAMS = 32;
@@ -178,6 +185,63 @@ function readTeams(teamTable) {
     });
   });
   return { teams, teamIndexByRow };
+}
+
+// The Coach table (4168; the one-row practice template 5866 loses the byName "most records" test) → reader_version 8's
+// coaches[]: every live record, free agents (TeamIndex 32) included. `table` and `row` identify the save record, the
+// same way a player's `college` reference does. Playbook and scheme fields are exported as stored (32-bit references
+// into the game's static tables) because those tables are not in the save.
+export function readCoaches(coachTable) {
+  if (!coachTable) return [];
+  const coaches = [];
+  coachTable.records.forEach((c, row) => {
+    if (c.isEmpty) return;
+    coaches.push({
+      pgid: c.PresentationId,
+      table: coachTable.header.tableId,
+      row,
+      first_name: c.FirstName,
+      last_name: c.LastName,
+      age: c.Age,
+      position: c.Position,
+      team_index: c.TeamIndex,
+      contract_status: c.ContractStatus,
+      archetype: c.Archetype,
+      level: c.Level,
+      portrait: c.Portrait,
+      offensive_playbook: c.OffensivePlaybook,
+      defensive_playbook: c.DefensivePlaybook,
+      offensive_scheme: c.OffensiveScheme,
+      defensive_scheme: c.DefensiveScheme,
+      is_user_controlled: c.IsUserControlled,
+    });
+  });
+  return coaches;
+}
+
+// Team.HeadCoach / OffensiveCoordinator / DefensiveCoordinator → reader_version 8's staff[]: one entry per real team,
+// each seat the referenced Coach record's pgid (league_setup.mjs's read-a-seat pattern). An empty reference, or one
+// that doesn't land on a live Coach row, is null — never dropped and never the number zero.
+export async function readStaff(tables, teamTable, coachTableId) {
+  if (!coachTableId) return [];
+  const seat = async bits => {
+    const ref = decodeRef(bits);
+    if (!ref || ref.table !== coachTableId) return null;
+    const coach = (await tables.byId(ref.table))?.records[ref.row];
+    if (!coach || coach.isEmpty) return null;
+    return coach.PresentationId;
+  };
+  const staff = [];
+  for (const team of teamTable.records) {
+    if (team.isEmpty || !(team.TeamIndex >= 0 && team.TeamIndex < REAL_TEAMS)) continue;
+    staff.push({
+      team_index: team.TeamIndex,
+      hc: await seat(team.HeadCoach),
+      oc: await seat(team.OffensiveCoordinator),
+      dc: await seat(team.DefensiveCoordinator),
+    });
+  }
+  return staff.sort((a, b) => a.team_index - b.team_index);
 }
 
 async function readGames(tables, gameTable, teamTableId, teamIndexByRow, baseCalendarYear) {
@@ -526,6 +590,10 @@ export async function readSave(savePath) {
       if (team) Object.assign(team, { roster: list.roster, practice_squad: list.practice_squad });
     }
     const freeAgents = await readFreeAgents(tables, playerTable.header.tableId, pgidByRow);
+    // reader_version 8: every live coach (free agents too) and each real team's HC / OC / DC seats.
+    const coachTable = await tables.byName('Coach');
+    const coaches = readCoaches(coachTable);
+    const staff = await readStaff(tables, teamTable, coachTable?.header.tableId);
     const depthCharts = await readDepthCharts(tables, teamTable, playerTable.header.tableId, pgidByRow);
     const leagueSettings = await readLeagueSettings(franchise, tables);
     const draftClass = readDraftClass(await tables.byName('DraftPlayer'), playerTable);
@@ -547,6 +615,8 @@ export async function readSave(savePath) {
       teams,
       games,
       players,
+      coaches,
+      staff,
       free_agents: freeAgents,
       depth_charts: depthCharts,
       league_settings: leagueSettings,
