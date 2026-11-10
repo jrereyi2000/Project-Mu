@@ -2132,7 +2132,10 @@ CREATE TABLE IF NOT EXISTS staff_contracts (
     signed_season INT NOT NULL,
     full_control BOOLEAN NOT NULL DEFAULT false,
     buyout_owed BIGINT NOT NULL DEFAULT 0,
-    buyout_charged_season INT,                        -- the season the buyout hit the owner's cash; NULL = not yet
+    buyout_charged_season INT,                        -- superseded by the schedule below (2027_02_19)
+    buyout_total BIGINT,                              -- the whole buyout, paid in instalments (2027_02_20)
+    buyout_fired_season INT,                          -- the first league year charged
+    buyout_years SMALLINT,                            -- how many league years it is spread over
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 -- One active contract per person, team and role (2027_02_17_staff_contract_active_once.sql).
@@ -3925,5 +3928,6 @@ INSERT INTO schema_migrations (version, filename, checksum, source) VALUES
     ('2027_02_16_choice_source_no_llm', '2027_02_16_choice_source_no_llm.sql', '462bd5af1d778d100be44e3a419969957a5a9bcdd1493c50214cd0ea632774ca', 'init_db.sql'),
     ('2027_02_17_staff_contract_active_once', '2027_02_17_staff_contract_active_once.sql', '1b432423aea3d5bf4083c84ee1d83618b2ee976102cd508ece4401324ea94ed9', 'init_db.sql'),
     ('2027_02_18_contract_offer_week', '2027_02_18_contract_offer_week.sql', 'd7ad6551f3037ba512d0f22c992ca653634ed7ab8d703a9718c5ef119f798041', 'init_db.sql'),
-    ('2027_02_19_owner_cash_buyouts', '2027_02_19_owner_cash_buyouts.sql', 'b7395abe8796d1772bfba9d9bc0322f4fc8b3638d1688ebf6dcf5e9b9c2674d8', 'init_db.sql')
+    ('2027_02_19_owner_cash_buyouts', '2027_02_19_owner_cash_buyouts.sql', 'b7395abe8796d1772bfba9d9bc0322f4fc8b3638d1688ebf6dcf5e9b9c2674d8', 'init_db.sql'),
+    ('2027_02_20_buyout_schedule', '2027_02_20_buyout_schedule.sql', 'ce290330016361b6a851d0919cd4596d58e24e51feb3703cd36ed590ca84be1d', 'init_db.sql')
 ON CONFLICT (version) DO NOTHING;

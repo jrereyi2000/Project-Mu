@@ -286,7 +286,7 @@ def decided(cur, season, phase="BLACK_MONDAY"):
     return cur.fetchone()[0] > 0
 
 
-def _settle_full_control(cur, coach_id):
+def _settle_full_control(cur, coach_id, season):
     """Settle the fired coach's own Full Control HC contract now rather than at the next staff-contract run: until it
     is fired, `godfather_gate` still counts it as an active full-control seat and could refuse the next offer."""
     cur.execute("SELECT to_regclass('staff_contracts') IS NOT NULL")
@@ -301,9 +301,12 @@ def _settle_full_control(cur, coach_id):
         got = cur.fetchone()
         if got:
             from engines import staff_contracts_engine as sce
-            after = sce.fire_contract({"annual_salary": got[1], "remaining_years": got[2], "buyout_owed": got[3]})
-            cur.execute("UPDATE staff_contracts SET remaining_years = %s, buyout_owed = %s WHERE id = %s",
-                        (after["remaining_years"], after["buyout_owed"], got[0]))
+            cols = sce.firing_columns({"annual_salary": got[1], "remaining_years": got[2], "buyout_owed": got[3]},
+                                      season, got[2])
+            cur.execute("""UPDATE staff_contracts SET remaining_years = %s, buyout_owed = %s, buyout_total = %s,
+                               buyout_fired_season = %s, buyout_years = %s WHERE id = %s""",
+                        (cols["remaining_years"], cols["buyout_owed"], cols["buyout_total"],
+                         cols["buyout_fired_season"], cols["buyout_years"], got[0]))
         cur.execute("RELEASE SAVEPOINT coach_fc_fire")
     except Exception:  # noqa: BLE001 - a database without staff_contracts is fine
         try:
@@ -328,12 +331,12 @@ def _vacate_gm_seat(cur, season, team_id, coach_id, rep, log):
         cur.execute("UPDATE gm_profiles SET end_season = %s, end_reason = %s WHERE id = %s",
                     (season, "fired with his head coach", seat))
         from engines import gm_rollover
-        gm_rollover._settle_gm_contract(cur, seat, log=log)
+        gm_rollover._settle_gm_contract(cur, seat, log=log, person_season=season)
         rep.setdefault("gm_seats_vacated", []).append(team_id)
         log(f"  {team_id}: the fired head coach also held the GM seat; the GM seat is open")
     # Even when the GM seat went first (the GM hot seat fires it on its own), his Full Control deal must stop
     # counting as an occupied seat, or `godfather_gate` refuses the next offer until the next staff-contract run.
-    _settle_full_control(cur, coach_id)
+    _settle_full_control(cur, coach_id, season)
 
 
 def _store(cur, season, phase, rows, decisions, rep, log):

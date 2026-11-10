@@ -316,9 +316,11 @@ class SettleFullControlTests(unittest.TestCase):
                 return (5, 10_000_000, 3, 0)
 
         cur = Cur()
-        chs._settle_full_control(cur, 41)
+        chs._settle_full_control(cur, 41, SEASON)
         updates = [a for s, a in cur.sql if s.startswith("UPDATE staff_contracts")]
         self.assertEqual(len(updates), 1)
-        remaining, buyout, row_id = updates[0]
+        remaining, buyout, total, fired, years, row_id = updates[0]
         self.assertEqual((remaining, row_id), (0, 5))
         self.assertGreater(buyout, 0)
+        # the buyout is spread over the years the deal had left, starting this league year
+        self.assertEqual((total, fired, years), (buyout, SEASON, 3))

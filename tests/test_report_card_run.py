@@ -192,35 +192,17 @@ def test_a_completed_renovation_is_not_re_applied_in_later_seasons():
     assert not applies("COMPLETED", 2028, 2032)
 
 
-def test_a_dead_buyout_is_deducted_once():
-    """B4 (chunk 9): the plan and the spec say the owner's cash deducts dead buyouts, and nothing read them. The
-    buyout now shrinks the reserve and is charged in one season only."""
-    import sqlite3
+def test_a_dead_buyout_is_paid_over_the_years_the_deal_had_left():
+    """JR, 2026-11-10: a buyout is paid in even instalments over the remaining contract years. The schedule lives on
+    the row, so rerunning a season charges the same amount and the instalments sum to the buyout."""
+    from engines import staff_contracts_engine as sce
 
-    from engines import report_card_run as rcr
-
-    class Cur:
-        """Answers only what _dead_buyouts and _charge_dead_buyouts ask."""
-        def __init__(self):
-            self.charged = []
-            self._row = None
-
-        def execute(self, sql, params=()):
-            s = " ".join(sql.split())
-            if s.startswith("UPDATE staff_contracts SET buyout_charged_season"):
-                self.charged.append(params)
-                self._row = None
-            elif "to_regclass" in s:
-                self._row = (True,)
-            elif "sum(buyout_owed)" in s:
-                self._row = (7_000_000,)
-            else:
-                self._row = None
-
-        def fetchone(self):
-            return self._row
-
-    cur = Cur()
-    assert rcr._dead_buyouts(cur, 2026, 1) == 7_000_000
-    rcr._charge_dead_buyouts(cur, 2026, 1)
-    assert cur.charged == [(2026, 1)]
+    row = sce.firing_columns({"annual_salary": 6_000_000, "remaining_years": 2, "buyout_owed": 0}, 2026, 2)
+    assert (row["buyout_total"], row["buyout_fired_season"], row["buyout_years"]) == (12_000_000, 2026, 2)
+    charges = [sce.buyout_instalment(row, s) for s in (2025, 2026, 2027, 2028)]
+    assert charges == [0, 6_000_000, 6_000_000, 0]          # the fired year and the one after it
+    assert sum(charges) == row["buyout_total"]
+    odd = sce.firing_columns({"annual_salary": 5_000_000, "remaining_years": 3, "buyout_owed": 0}, 2026, 3)
+    paid = [sce.buyout_instalment(odd, s) for s in (2026, 2027, 2028)]
+    assert sum(paid) == odd["buyout_total"] and paid[-1] >= paid[0]   # the last takes the remainder
+    assert sce.buyout_instalment({"buyout_total": None, "buyout_fired_season": None, "buyout_years": None}, 2026) == 0

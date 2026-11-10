@@ -78,7 +78,14 @@ def patch_fa(monkeypatch):
         state["scores"].append((p["player_id"], years, total, bonus, guaranteed, len(teammates)))
         return state["score"]
 
+    import inspect
+
+    from server import franchise_api as real_api
+
     def fake_insert(*args, **kwargs):
+        # Bind the real signature on every call, so a parameter added at the seam fails here rather than in
+        # production (M-0125: a hand-written argument list also passed on the parent code).
+        inspect.signature(real_api.insert_offer).bind(None, *args, **kwargs)
         state["inserts"].append((args, kwargs))
         return 500
 
@@ -238,17 +245,6 @@ def test_start_refuses_a_non_numeric_player_id(cur, monkeypatch):
 
 
 # --------------------------------------------------------------------------------------------- the helpers ---
-
-def test_the_kind_calls_the_real_insert_offer_signature():
-    """The fakes here take *args, so a new parameter at the seam went unseen: chunk 8's audit found the kind still
-    calling `insert_offer` without the `week` the offer now requires, a TypeError on every inbox contract offer."""
-    import inspect
-
-    from server import franchise_api as real
-
-    inspect.signature(real.insert_offer).bind(
-        None, 2026, "REGULAR_WEEK", "FREE_AGENT", 1, 1, 2, 10, 0, 0, {}, "OPEN", None, "seed", week=5)
-
 
 def test_the_franchise_api_helpers_this_kind_imports_exist():
     for name in ("_context", "_player", "_eligibility", "_score", "insert_offer", "stage_for", "STATUS", "_seed"):

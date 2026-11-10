@@ -413,9 +413,13 @@ def _adjust(cur, pk, target_type, target_id, delta, event, add_tags=(), strong_t
         rest = [e for e in evidence if not (isinstance(e, dict) and e.get("kind") == "APPLIED_REFS")]
         if sticky is None:
             sticky = {"kind": "APPLIED_REFS", "refs": []}
+        # Seed the sticky list from the refs still in the window: rows written before the marker existed then keep
+        # what they have instead of losing an old ref to trimming and applying it twice.
+        carried = [e.get("ref") for e in rest if isinstance(e, dict) and e.get("ref")]
         ref = (event or {}).get("ref")
-        if ref and ref not in sticky["refs"]:
-            sticky["refs"] = (sticky["refs"] + [ref])[-APPLIED_REFS_KEEP:]
+        for r in carried + ([ref] if ref else []):
+            if r and r not in sticky["refs"]:
+                sticky["refs"] = (sticky["refs"] + [r])[-APPLIED_REFS_KEEP:]
         evidence = [sticky] + (rest + [event])[-EVIDENCE_KEEP:]
     ev = json.dumps(evidence)
     if rid is None:

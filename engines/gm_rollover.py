@@ -287,7 +287,7 @@ def _hire_gm(cur, season, prior, abbr, team_id, llm, *, why, log=print, vacate_o
     cur.execute("UPDATE gm_profiles SET end_season = %s, end_reason = %s "
                 "WHERE team_id = %s AND end_season IS NULL", (prior, why, team_id))
     if outgoing:
-        _settle_gm_contract(cur, outgoing[0], log=log)      # a fired GM gets a coach's buyout (B3)
+        _settle_gm_contract(cur, outgoing[0], log=log, person_season=prior)   # a fired GM gets a coach's buyout
     if vacate_only:
         log(f"  hot seat: {abbr} vacates the GM seat (the carousel fills it)")
         return {"vacated": True}
@@ -359,11 +359,12 @@ def _hire_gm(cur, season, prior, abbr, team_id, llm, *, why, log=print, vacate_o
     return rep
 
 
-def _settle_gm_contract(cur, person_id, log=print):
+def _settle_gm_contract(cur, person_id, log=print, person_season=None):
     """Fire the outgoing GM's `staff_contracts` row exactly as a coach's is fired: zero the years left and record the
     buyout (`staff_contracts_engine.fire_contract`). Without this the row stayed "active" for ever, so the Front
     Office showed two live GM contracts with duplicate React keys. A database without the table, or a GM with no
     filed contract, is fine."""
+    person_season = int(person_season) if person_season is not None else None
     try:
         cur.execute("SAVEPOINT gm_fire")
         cur.execute("""SELECT id, annual_salary, remaining_years, buyout_owed FROM staff_contracts
@@ -372,10 +373,13 @@ def _settle_gm_contract(cur, person_id, log=print):
         row = cur.fetchone()
         if row:
             from engines import staff_contracts_engine as sce
-            after = sce.fire_contract({"annual_salary": row[1], "remaining_years": row[2], "buyout_owed": row[3]})
-            cur.execute("UPDATE staff_contracts SET remaining_years = %s, buyout_owed = %s WHERE id = %s",
-                        (after["remaining_years"], after["buyout_owed"], row[0]))
-            log(f"  gm contract settled: buyout ${int(after['buyout_owed'] or 0):,}")
+            cols = sce.firing_columns({"annual_salary": row[1], "remaining_years": row[2], "buyout_owed": row[3]},
+                                      person_season, row[2])
+            cur.execute("""UPDATE staff_contracts SET remaining_years = %s, buyout_owed = %s, buyout_total = %s,
+                               buyout_fired_season = %s, buyout_years = %s WHERE id = %s""",
+                        (cols["remaining_years"], cols["buyout_owed"], cols["buyout_total"],
+                         cols["buyout_fired_season"], cols["buyout_years"], row[0]))
+            log(f"  gm contract settled: buyout ${int(cols['buyout_owed'] or 0):,}")
         cur.execute("RELEASE SAVEPOINT gm_fire")
     except Exception:
         try:

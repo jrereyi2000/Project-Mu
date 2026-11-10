@@ -20,7 +20,8 @@ def _db():
                                           role TEXT, start_season INT, end_season INT);
         CREATE TABLE staff_contracts (id INTEGER PRIMARY KEY AUTOINCREMENT, team_id INT, person_id INT,
                                       person_kind TEXT, annual_salary INT, total_years INT, remaining_years INT,
-                                      signed_season INT, full_control INT DEFAULT 0, buyout_owed INT DEFAULT 0);
+                                      signed_season INT, full_control INT DEFAULT 0, buyout_owed INT DEFAULT 0,
+                                      buyout_total INT, buyout_fired_season INT, buyout_years INT);
     """)
     conn.execute("INSERT INTO coaches VALUES (10, 'Old Coach'), (11, 'New Coach')")
     conn.execute("INSERT INTO coach_records VALUES (10, 1), (11, 0)")
@@ -183,3 +184,29 @@ def test_a_stray_gm_contract_for_a_coach_gm_closes_without_a_buyout():
     out = scr.annual(cur, 2036)
     row = [r for r in _rows(cur) if r[0] == 3 and r[1] == "GM"][-1]
     assert row[5] == 0 and out["fired"] == 0
+
+
+def test_a_poached_coordinator_is_not_fired_when_the_annual_run_sees_his_closed_tenure():
+    """M-0125 High: filtering tenures on `end_season > season` dropped every mover at annual(S) and fired him with a
+    buyout, against JR's 2026-11-09 rule that a poached coordinator owes nothing."""
+    conn = _db()
+    # team 2's OC (id 22) took a job elsewhere: his tenure ends at 2036, and he is employed elsewhere by then
+    conn.execute("UPDATE coordinator_tenures SET end_season = 2036 WHERE coordinator_id = 22 AND team_id = 2")
+    cur = FakeCursor(conn)
+    scr.annual(cur, 2036)                                  # the league year he moved in
+    scr.annual(cur, 2036)
+    after = next(r for r in _rows(cur) if r[1] == "OC" and r[0] == 2)
+    assert after[7] == 0                                   # no buyout for a mover
+
+
+def test_a_fired_coach_is_bought_out_for_the_years_he_had_left():
+    """M-0125 Medium: the buyout is the deal's remaining seasons as of the season he stopped, not one more."""
+    conn = _db()
+    cur = FakeCursor(conn)
+    scr.annual(cur, 2035)
+    scr.annual(cur, 2036)
+    before = next(r for r in _rows(cur) if r[1] == "HC" and r[0] == 2)
+    conn.execute("UPDATE coach_tenures SET end_season = 2036 WHERE coach_id = 11")
+    scr.annual(cur, 2037)                                  # the run after the fired season
+    after = next(r for r in _rows(cur) if r[1] == "HC" and r[0] == 2)
+    assert after[5] == 0 and after[7] == before[3] * 2

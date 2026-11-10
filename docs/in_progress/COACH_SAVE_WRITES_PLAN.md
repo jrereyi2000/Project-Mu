@@ -3,14 +3,14 @@
 **Status:** approved by JR (2026-11-10); building, wave 0 of 5.
 
 **As built:**
-- The migration is `db/migrations/2027_02_20_coach_madden_profiles.sql`, not `2027_02_19`: builder-2 took `2027_02_19` for `2027_02_19_owner_cash_buyouts.sql` (commit `6e9fbcf`) before this build started.
+- The migration is `db/migrations/2027_02_21_coach_madden_profiles.sql`, not the plan's original `2027_02_19`: builder-2 took `2027_02_19` for `2027_02_19_owner_cash_buyouts.sql` (`6e9fbcf`) and then `2027_02_20` for `2027_02_20_buyout_schedule.sql` (M-0128) before U1 started.
 
 **Builds on:** PROJECT_SPEC §2.19 (coaching carousel), §2.20 (headshots), §2.21a (league office), [`LEAGUE_OFFICE_PLAN.md`](../done/LEAGUE_OFFICE_PLAN.md) §4.3, [`V2_CORE_BUILD_PLAN.md`](../done/V2_CORE_BUILD_PLAN.md) (the "coach-creation spike" row), [`REAL_COACH_PROFILES_PLAN.md`](../done/REAL_COACH_PROFILES_PLAN.md), [`STAFF_CONTRACTS_AND_FULL_CONTROL_PLAN.md`](../done/STAFF_CONTRACTS_AND_FULL_CONTROL_PLAN.md).
 
 **Goal:** Project Mu decides every coaching change: Black Monday firings, coordinator reviews, the hiring cycle, poaching, Godfather coach-GMs and JR's own coordinator firings. Today none of it reaches the game. The league office makes all 32 teams user teams and turns Madden's coach firing off, so Madden never changes a coach on its own. This plan makes the league office write Mu's head coaches and coordinators into the save. A person who is already in the save keeps his own coach record and is moved. A coach Mu invents gets a new Madden coach record with a full set of fields: name, age, body, head, wardrobe, archetype, talents, playbooks, schemes, personality, contract and portrait. Each new coach also gets a generated coaching headshot in team-colour coaching clothes, not a jersey. The headshot is served on the web, and each offseason's new portraits are packed into the Project Mu portrait mod.
 
 **Delivers:**
-- Migration `db/migrations/2027_02_20_coach_madden_profiles.sql` (also in `db/init_db.sql`): table `coach_madden_profiles`, one row per Mu coach or coordinator, holding every Madden coach field Mu writes plus the link to the save record.
+- Migration `db/migrations/2027_02_21_coach_madden_profiles.sql` (also in `db/init_db.sql`): table `coach_madden_profiles`, one row per Mu coach or coordinator, holding every Madden coach field Mu writes plus the link to the save record.
 - `engines/coach_madden_profile.py`: builds a full Madden profile for an invented coach from Mu's data (pure, seeded).
 - `pc_save_reader.mjs`: the snapshot gains `coaches` (every Coach record) and `staff` (each team's HC, OC and DC).
 - `pipeline/coach_link.py`: links Mu's coaches and coordinators to save records at load and backfills `coach_madden_profiles` rows with `source = 'SAVE'`.
@@ -81,7 +81,7 @@
 
 ## 2. Design
 
-### 2.1 Data: `coach_madden_profiles` (migration `2027_02_20_coach_madden_profiles.sql`)
+### 2.1 Data: `coach_madden_profiles` (migration `2027_02_21_coach_madden_profiles.sql`)
 
 ```sql
 CREATE TABLE IF NOT EXISTS coach_madden_profiles (
@@ -311,7 +311,7 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 
 ### U1: Profile schema and builder
 
-- **Owns:** `db/migrations/2027_02_20_coach_madden_profiles.sql` (new), `db/init_db.sql`, `engines/coach_madden_profile.py` (new), `tests/test_coach_madden_profile.py` (new)
+- **Owns:** `db/migrations/2027_02_21_coach_madden_profiles.sql` (new), `db/init_db.sql`, `engines/coach_madden_profile.py` (new), `tests/test_coach_madden_profile.py` (new)
 - **Reads:** `docs/reference/MADDEN_COACH_RECORDS.md` (Spike A), `engines/staff_names.py`, `engines/coaching_carousel.py:1000-1100`, `db/migrate.py` (ledger and checksum rules)
 - **Depends on:** Spike A
 - **Done when:** the migration applies twice cleanly to a scratch DB and is mirrored in `init_db.sql` with its ledger row, and `build_profile` returns a complete row for each role and slant.
@@ -381,7 +381,7 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 |---|---|
 | `data/headshots/coach_donors/registry.json` | U4 |
 | `db/init_db.sql` | U1 |
-| `db/migrations/2027_02_20_coach_madden_profiles.sql` | U1 |
+| `db/migrations/2027_02_21_coach_madden_profiles.sql` | U1 |
 | `engines/coach_madden_profile.py` | U1 |
 | `engines/coach_save_sync.py` | U5 |
 | `engines/coaching_carousel.py` | U5 |
@@ -419,7 +419,7 @@ No path appears twice. `docs/reference/MADDEN_COACH_RECORDS.md` is written by th
   - rewrite the notices bullet.
 - **§2.20 Headshots:** a "Coach headshots" bullet covering coach mode, the coach donor plates, the outputs and the offseason portrait batch.
 - **§2.21a League Office:** OFFSEASON_START (and catch-up) writes the `"staff"` block, and new PresentationIds are recorded back.
-- **§3.3 (data model):** a new `coach_madden_profiles` entry and the `2027_02_20` migration.
+- **§3.3 (data model):** a new `coach_madden_profiles` entry and the `2027_02_21` migration.
 - **Save tooling (the `pc_save_reader.mjs` and `save_writer.mjs` layout lines and their section):** the snapshot's `coaches`/`staff`, and the `"staff"` block's three actions in the edits.json description.
 - **Repository Layout:** `engines/coach_madden_profile.py`, `engines/coach_save_sync.py`, `pipeline/coach_link.py`, `pipeline/save_reader/staff.mjs`, `headshots/coach_headshots.py`, `tools/build_coach_donor_library.py`, `tools/coach_portrait_pack.py`, `static/coaches/`, `data/headshots/coach_donors/`, `docs/reference/MADDEN_COACH_RECORDS.md`, plus the new test files.
 

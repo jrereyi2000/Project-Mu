@@ -52,14 +52,14 @@ def current_staff(cur, season):
     cur.execute("""SELECT t.team_id, t.coach_id, c.coach_name, t.start_season, COALESCE(r.super_bowl_wins, 0)
                    FROM coach_tenures t JOIN coaches c ON c.id = t.coach_id
                    LEFT JOIN coach_records r ON r.coach_id = t.coach_id
-                   WHERE t.start_season <= %s AND (t.end_season IS NULL OR t.end_season > %s)
+                   WHERE t.start_season <= %s AND (t.end_season IS NULL OR t.end_season >= %s)
                    ORDER BY t.team_id, t.start_season DESC, t.id DESC""", (season, season))
     for r in cur.fetchall():
         add(r[0], "HC", r[1], r[2], r[3], int(r[4] or 0))
     if _table(cur, "coordinator_tenures"):
         cur.execute("""SELECT t.team_id, t.role, t.coordinator_id, c.coordinator_name, t.start_season
                        FROM coordinator_tenures t JOIN coordinators c ON c.id = t.coordinator_id
-                       WHERE t.start_season <= %s AND (t.end_season IS NULL OR t.end_season > %s)
+                       WHERE t.start_season <= %s AND (t.end_season IS NULL OR t.end_season >= %s)
                        ORDER BY t.team_id, t.role, t.start_season DESC, t.id DESC""", (season, season))
         for r in cur.fetchall():
             add(r[0], r[1], r[2], r[3], r[4], 0)
@@ -84,6 +84,14 @@ def current_staff(cur, season):
         else:
             cur.execute("SELECT count(*) FROM coordinator_tenures WHERE coordinator_id = %s", (s["person_id"],))
         s["experience"] = int(cur.fetchone()[0] or 0)
+    # A person whose contract this producer already fired (a hot-seat firing settles it at once) is not filed
+    # again: with the tenure comparison left at ">= season" so that a poached coordinator is never charged, his
+    # row would otherwise be re-filed for the next league year and then fired a second time.
+    if _table(cur, "staff_contracts"):
+        cur.execute("""SELECT team_id, person_kind, person_id FROM staff_contracts
+                       WHERE remaining_years <= 0 AND buyout_owed > 0 AND signed_season <= %s""", (season,))
+        settled = {(r[0], r[1], r[2]) for r in cur.fetchall()}
+        out = [s for s in out if (s["team_id"], s["person_kind"], s["person_id"]) not in settled]
     return out
 
 
@@ -183,13 +191,15 @@ def annual(cur, season, dry_run=False):
         # The years still owed, recomputed with the same rule the roll uses: the stored remaining_years was last
         # rolled for the previous league year, so buying it out as stored overpaid by one season.
         owed_years = max(0, int(r["total_years"]) - (season - int(r["signed_season"])))
-        after = sce.fire_contract({"annual_salary": r["annual_salary"], "remaining_years": owed_years,
-                                   "buyout_owed": r["buyout_owed"]})
+        cols = sce.firing_columns({"annual_salary": r["annual_salary"], "remaining_years": owed_years,
+                                   "buyout_owed": r["buyout_owed"]}, season, owed_years)
         fired.append({"id": r["id"], "team_id": r["team_id"], "person_kind": r["person_kind"],
-                      "buyout_owed": after["buyout_owed"]})
+                      "buyout_owed": cols["buyout_owed"]})
         if not dry_run:
-            cur.execute("UPDATE staff_contracts SET remaining_years = %s, buyout_owed = %s WHERE id = %s",
-                        (after["remaining_years"], after["buyout_owed"], r["id"]))
+            cur.execute("""UPDATE staff_contracts SET remaining_years = %s, buyout_owed = %s, buyout_total = %s,
+                               buyout_fired_season = %s, buyout_years = %s WHERE id = %s""",
+                        (cols["remaining_years"], cols["buyout_owed"], cols["buyout_total"],
+                         cols["buyout_fired_season"], cols["buyout_years"], r["id"]))
     active = [] if dry_run else [r for r in contracts(cur) if r["remaining_years"] > 0
                                  and r["person_kind"] in ("HC", "OC", "DC", "GM")]
     payroll = sce.staff_payroll(active)

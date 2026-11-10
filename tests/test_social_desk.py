@@ -1023,3 +1023,24 @@ def test_preseason_award_calls_have_player_candidates():
     a = by_kind(plan_social_week(ctx))["SEASON_CALL"][0]
     players = [c for c in a["facts"]["candidates"] if c["type"] == "player"]
     assert {"type": "player", "id": 9001, "name": "Vet Star"} in players
+
+
+def test_preseason_award_candidates_come_from_last_seasons_roster():
+    """Chunk 8 B10 (M-0125): the query used TOP_PLAYERS, which social_desk never imported — a swallowed NameError
+    left the candidate list empty on every preseason edition."""
+    from newsroom import social_desk as sd
+
+    class Cur:
+        def __init__(self):
+            self.params = None
+
+        def execute(self, sql, params=()):
+            self.params = params
+
+        def fetchall(self):
+            return [(9001, "Vet Star"), (9002, "Other Star")]
+
+    cur = Cur()
+    got = sd._award_candidates(cur, 2026)
+    assert got == [{"id": 9001, "name": "Vet Star"}, {"id": 9002, "name": "Other Star"}]
+    assert cur.params == (2025, sd.PRESEASON_CANDIDATES)          # last season's roster

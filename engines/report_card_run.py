@@ -133,27 +133,18 @@ def _payroll(cur, season, team_id):
 
 
 def _dead_buyouts(cur, season, team_id):
-    """The buyouts still to be charged against this team's cash: terminated staff rows (remaining_years 0) whose
-    buyout_owed has not been deducted yet. 0 without the column (an older database)."""
+    """This league year's instalments of the team's staff buyouts (JR, 2026-11-10): a firing's buyout is paid over the
+    years the deal had left (`staff_contracts.buyout_total/fired_season/years`, 2027_02_20), so each season charges
+    one. Computed from the stored schedule, so rerunning a season charges the same amount. 0 without the columns."""
     if not _table(cur, "staff_contracts"):
         return 0
     try:
-        cur.execute("""SELECT COALESCE(sum(buyout_owed), 0) FROM staff_contracts
-                       WHERE team_id = %s AND remaining_years <= 0 AND buyout_owed > 0
-                         AND buyout_charged_season IS NULL""", (team_id,))
-    except Exception:      # noqa: BLE001 - a database without 2027_02_19 has no charged season to read
+        cur.execute("""SELECT buyout_total, buyout_fired_season, buyout_years FROM staff_contracts
+                       WHERE team_id = %s AND buyout_total > 0""", (team_id,))
+    except Exception:      # noqa: BLE001 - a database without 2027_02_20 has no schedule to read
         return 0
-    return int(cur.fetchone()[0] or 0)
-
-
-def _charge_dead_buyouts(cur, season, team_id):
-    """Mark this team's outstanding buyouts as charged in `season`, so the next season does not deduct them again."""
-    try:
-        cur.execute("""UPDATE staff_contracts SET buyout_charged_season = %s
-                       WHERE team_id = %s AND remaining_years <= 0 AND buyout_owed > 0
-                         AND buyout_charged_season IS NULL""", (season, team_id))
-    except Exception:      # noqa: BLE001 - pre-migration database: nothing to mark
-        pass
+    return sum(sce.buyout_instalment({"buyout_total": t, "buyout_fired_season": f, "buyout_years": y}, season)
+               for t, f, y in cur.fetchall())
 
 
 def _previous_bands(cur, season):
@@ -285,9 +276,6 @@ def annual(cur, season, dry_run=False, cpu_upgrades=True, user_team_ids=()):
                          led["success_dividend"], led["total_cash_budget"], led["staff_payroll"],
                          led["opex_committed"], led["capex_spent"], led["dead_buyouts"],
                          led["accumulated_reserve"]))
-        for tid in cards:
-            if ledgers.get(tid, {}).get("dead_buyouts"):
-                _charge_dead_buyouts(cur, season, tid)
         for order in orders:
             cur.execute("""INSERT INTO facility_upgrades (team_id, season_ordered, category, cost_dollars,
                                target_grade, completion_season, status)

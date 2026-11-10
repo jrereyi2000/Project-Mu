@@ -158,6 +158,33 @@ def fire_contract(contract):
     return out
 
 
+def firing_columns(contract, season, years):
+    """The `staff_contracts` columns a firing records: the row fired, the buyout as a whole, and the schedule it is
+    paid on — one even instalment in each of the `years` the deal had left, the last taking the remainder (so the
+    instalments sum to the buyout). Stored rather than counted, so a rerun of any season charges the same amount."""
+    after = fire_contract(contract)
+    total = int(after["buyout_owed"] or 0)
+    scheduled = bool(total) and season is not None      # no season = no schedule: the buyout is not charged
+    return {"buyout_owed": total, "remaining_years": 0,
+            "buyout_total": total or None,
+            "buyout_fired_season": int(season) if scheduled else None,
+            "buyout_years": max(1, int(years or 1)) if scheduled else None}
+
+
+def buyout_instalment(row, season):
+    """The buyout instalment one contract row charges in `season`: 0 before its first year, after its last, or
+    without a schedule (a row fired before 2027_02_20)."""
+    total = int(row.get("buyout_total") or 0)
+    fired, years = row.get("buyout_fired_season"), row.get("buyout_years")
+    if not total or fired is None or not years or int(years) <= 0:
+        return 0
+    fired, years, season = int(fired), int(years), int(season)
+    if not (fired <= season < fired + years):
+        return 0
+    base = total // years
+    return total - base * (years - 1) if season == fired + years - 1 else base
+
+
 def offset_buyout(contract, new_salary):
     """The D5 offset clause: a copy of a fired contract whose buyout_owed is reduced by the new annual salary the
     person earns with another club, floored at 0."""

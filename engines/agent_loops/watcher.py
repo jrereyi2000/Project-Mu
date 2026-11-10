@@ -254,6 +254,7 @@ def promise_tick(cur, *, league_id, season, tick, universe_id, mode, user_team_i
         for team_id in _teams(cur):
             if team_id in mine:
                 continue
+            saved = _savepoint(cur, "promise_team")
             try:
                 hc = _head_coach(cur, team_id, season)
                 view = _coach_view(cur, universe_id, hc)
@@ -262,10 +263,18 @@ def promise_tick(cur, *, league_id, season, tick, universe_id, mode, user_team_i
                 now_chart = _madden_chart(cur, team_id, season, tick)
                 prev_chart = _madden_chart(cur, team_id, season, tick - 1)
                 roster = _roster(cur, team_id, season)
+                if saved:
+                    cur.execute("RELEASE SAVEPOINT promise_team")
             except Exception:  # noqa: BLE001 - one team never stops the tick
+                if saved:       # a caught SQL error aborts the caller's transaction: give it back to the next team
+                    try:
+                        cur.execute("ROLLBACK TO SAVEPOINT promise_team")
+                    except Exception:  # noqa: BLE001
+                        pass
                 result["errors"] += 1
                 continue
             for pid, name, pgid in roster:
+                saved = _savepoint(cur, "promise_player")
                 try:
                     if pid in already:
                         continue
@@ -288,7 +297,14 @@ def promise_tick(cur, *, league_id, season, tick, universe_id, mode, user_team_i
                         result["made"] += 1
                         if mode == "active" and out.get("event") is not None:
                             events.append(out["event"])
+                    if saved:
+                        cur.execute("RELEASE SAVEPOINT promise_player")
                 except Exception:  # noqa: BLE001 - one player never stops the tick
+                    if saved:
+                        try:
+                            cur.execute("ROLLBACK TO SAVEPOINT promise_player")
+                        except Exception:  # noqa: BLE001
+                            pass
                     result["errors"] += 1
 
     if mode == "active" and events:

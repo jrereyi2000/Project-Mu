@@ -244,6 +244,20 @@ WINDOWS = {
 
 
 # ---------------------------------------------------------------------------------------------- loading ---
+PRESEASON_CANDIDATES = 60        # last season's best players a preseason season call may name
+
+
+def _award_candidates(cur, season):
+    """Last season's best players, for the preseason edition's award calls: the current season has no totals yet at
+    Week 1, so without them MVP/OPOY/DPOY/ROY calls could name nobody and were dropped."""
+    cur.execute("""SELECT ps.player_id, COALESCE(p.full_name, p.player_name)
+                   FROM player_seasons ps JOIN players p ON p.id = ps.player_id
+                   WHERE ps.season = %s AND ps.overall_rating IS NOT NULL AND ps.released_week IS NULL
+                   ORDER BY ps.overall_rating DESC, ps.player_id LIMIT %s""",
+                (season - 1, PRESEASON_CANDIDATES))
+    return [{"id": r[0], "name": tidy_name(r[1])} for r in cur.fetchall()]
+
+
 def load_week_context(cur, season: int, week: int) -> dict:
     """Everything the planner reads for publication week `week`, from the database (one cursor)."""
     recap_week = week - 1
@@ -280,11 +294,7 @@ def load_week_context(cur, season: int, week: int) -> dict:
     # totals yet on the Week 1 edition).
     try:
         cur.execute("SAVEPOINT agent_wire_award_candidates")
-        cur.execute("""SELECT ps.player_id, COALESCE(p.full_name, p.player_name)
-                       FROM player_seasons ps JOIN players p ON p.id = ps.player_id
-                       WHERE ps.season = %s AND ps.overall_rating IS NOT NULL AND ps.released_week IS NULL
-                       ORDER BY ps.overall_rating DESC, ps.player_id LIMIT %s""", (season - 1, TOP_PLAYERS))
-        ctx["award_candidates"] = [{"id": r[0], "name": tidy_name(r[1])} for r in cur.fetchall()]
+        ctx["award_candidates"] = _award_candidates(cur, season)
         cur.execute("RELEASE SAVEPOINT agent_wire_award_candidates")
     except Exception:      # noqa: BLE001 - a database without the tables simply has no preseason candidates
         try:
