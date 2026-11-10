@@ -398,14 +398,14 @@ def godfather_owner_ok(owner_view, cash_pool):
 
 def godfather_candidate_ok(candidate):
     """True when the candidate has the §2.3 stature: a Super Bowl win as head coach or coordinator **and** a drive or
-    ego above 8 (JR, 2026-11-10 — the plan's two readings disagreed; this is the AND reading). It applies to any
+    ego of 8 or more (JR, 2026-11-10 — the plan's two readings disagreed; this is the AND reading). It applies to any
     head-coach hire the carousel makes: a poached coordinator, an unemployed former head coach or an outside hire.
     A sitting head coach under contract elsewhere is never a candidate in the first place."""
     if not candidate:
         return False
     won = (candidate.get("super_bowl_wins") or 0) >= 1 or bool(candidate.get("champion"))
     drive, ego = candidate.get("drive"), candidate.get("ego")
-    driven = (drive is not None and int(drive) > 8) or (ego is not None and int(ego) > 8)
+    driven = (drive is not None and int(drive) >= 8) or (ego is not None and int(ego) >= 8)
     return won and driven
 
 

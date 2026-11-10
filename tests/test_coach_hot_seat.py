@@ -63,13 +63,16 @@ class ScoreTests(unittest.TestCase):
 class FiringTests(unittest.TestCase):
     def test_who_is_safe(self):
         cases = {"made the playoffs": {"made_playoffs": True}, "first season": {"start_season": SEASON},
-                 "JR's team": {"user_controlled": True}, "also the GM": {"coach_gm": True}}
+                 "JR's team": {"user_controlled": True}}
         for why, kw in cases.items():
             h = hot_seat([coach(1, 2, 10.0, **kw)], SEASON)[1]
             self.assertFalse(h["fire"])
             self.assertEqual(h["inputs"]["safe"], why)
         h = hot_seat([coach(1, 9, 9.0)], SEASON)[1]
         self.assertEqual(h["inputs"]["safe"], "below the line")
+        # JR, 2026-11-10: a coach-GM is firable like any head coach; the GM seat vacates with him.
+        gm_h = hot_seat([coach(1, 0, 6.0, wins_before=0, losses_before=17, coach_gm=True)], SEASON)[1]
+        self.assertIsNone(gm_h["inputs"]["safe"])
         self.assertFalse(h["fire"])                                 # under FLOOR_LINE: never fired to fill the floor
 
     def test_floor_fills_with_the_next_worst(self):

@@ -99,7 +99,7 @@ def test_godfather_owner_and_candidate_checks():
     assert not godfather_candidate_ok({"super_bowl_wins": 1})              # a ring alone
     assert not godfather_candidate_ok({"drive": 9})                        # drive alone
     assert not godfather_candidate_ok({"ego": 9})
-    assert not godfather_candidate_ok({"super_bowl_wins": 1, "drive": 8})  # 8 is not above 8
+    assert godfather_candidate_ok({"super_bowl_wins": 1, "drive": 8})     # 8 counts (JR: 8 or above)
     assert not godfather_candidate_ok({"super_bowl_wins": 0, "drive": 7, "ego": 7})
     assert not godfather_candidate_ok(None)
 

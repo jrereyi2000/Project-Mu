@@ -105,10 +105,11 @@ def hot_seat(rows, season, max_fires=MAX_FIRES, min_fires=MIN_FIRES):
         score = round(sum(terms.values()), 3)
         p = min(0.95, max(0.0, 0.4 + 0.4 * (score - line)))
         draw = random.Random(f"coachseat:{season}:{r['abbr']}").random()
+        # A coach-GM is firable like any head coach (JR, 2026-11-10): `_store` then vacates the GM seat with him
+        # (D4) and the carousel's hiring cycle fills both.
         why_not = ("made the playoffs" if r.get("made_playoffs") else
                    "first season" if tenure < min_tenure else
-                   "JR's team" if r.get("user_controlled") else
-                   "also the GM" if r.get("coach_gm") else None)
+                   "JR's team" if r.get("user_controlled") else None)
         out[r["team_id"]] = {"coach_id": r["coach_id"], "score": score,
                              "fire": why_not is None and score >= line and draw < p,
                              "inputs": {"coach": r.get("coach_name"), "wins": wins, "losses": losses,
@@ -163,7 +164,6 @@ def contender_seat(rows, season, max_fires=MAX_EXIT_FIRES):
         why_not = ("won the Super Bowl" if r.get("champion") else
                    f"tenure under {min_tenure} seasons" if tenure < min_tenure else
                    "JR's team" if r.get("user_controlled") else
-                   "also the GM" if r.get("coach_gm") else
                    "below the line" if score < line else None)
         out[r["team_id"]] = {"coach_id": r["coach_id"], "score": round(score, 3),
                              "fire": why_not is None and draw < p,
@@ -285,6 +285,32 @@ def decided(cur, season, phase="BLACK_MONDAY"):
     return cur.fetchone()[0] > 0
 
 
+def _settle_full_control(cur, coach_id):
+    """Settle the fired coach's own Full Control HC contract now rather than at the next staff-contract run: until it
+    is fired, `godfather_gate` still counts it as an active full-control seat and could refuse the next offer."""
+    cur.execute("SELECT to_regclass('staff_contracts') IS NOT NULL")
+    row = cur.fetchone()
+    if not (row and row[0]):
+        return
+    try:
+        cur.execute("SAVEPOINT coach_fc_fire")
+        cur.execute("""SELECT id, annual_salary, remaining_years, buyout_owed FROM staff_contracts
+                       WHERE person_kind = 'HC' AND person_id = %s AND full_control AND remaining_years > 0
+                       ORDER BY id DESC LIMIT 1""", (coach_id,))
+        got = cur.fetchone()
+        if got:
+            from engines import staff_contracts_engine as sce
+            after = sce.fire_contract({"annual_salary": got[1], "remaining_years": got[2], "buyout_owed": got[3]})
+            cur.execute("UPDATE staff_contracts SET remaining_years = %s, buyout_owed = %s WHERE id = %s",
+                        (after["remaining_years"], after["buyout_owed"], got[0]))
+        cur.execute("RELEASE SAVEPOINT coach_fc_fire")
+    except Exception:  # noqa: BLE001 - a database without staff_contracts is fine
+        try:
+            cur.execute("ROLLBACK TO SAVEPOINT coach_fc_fire")
+        except Exception:  # noqa: BLE001
+            pass
+
+
 def _vacate_gm_seat(cur, season, team_id, coach_id, rep, log):
     """D4 (§2.3): a head coach who also holds his team's GM seat — a Full Control / Godfather hire — takes the seat
     with him when he is fired. Without this the GM row stayed open, the carousel's dual-vacancy gate never saw an
@@ -302,6 +328,7 @@ def _vacate_gm_seat(cur, season, team_id, coach_id, rep, log):
                 (season, "fired with his head coach", row[0]))
     from engines import gm_rollover
     gm_rollover._settle_gm_contract(cur, row[0], log=log)
+    _settle_full_control(cur, coach_id)
     rep.setdefault("gm_seats_vacated", []).append(team_id)
     log(f"  {team_id}: the fired head coach also held the GM seat; the GM seat is open")
 
