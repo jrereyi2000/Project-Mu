@@ -128,6 +128,11 @@ def fire(cur, season, abbr, role, replacement=None, scheme=None, playbook=None, 
                                                               else f"previously {bg}") + "; hired by JR")
             cid = cc._insert_coordinator(cur, name, role, scheme or cur_c["scheme"], playbook or cur_c["playbook"],
                                          cur_c, origin)
+            # JR's named replacement is invented like any carousel hire, so he needs the Madden profile the staff
+            # write creates him from; without it plan_staff_edits skips the seat (COACH_SAVE_WRITES_PLAN U5).
+            cc._store_created_profile(cur, cid, name, role, scheme=scheme or cur_c["scheme"],
+                                      playbook=cc._mapped_playbook(playbook or cur_c["playbook"]),
+                                      tendencies=cur_c)
             notes = (f"{'promoted from ' if src == 'PROMOTED' else 'previously '}{bg}; "
                      + (f"keeps {cur_c['name']}'s system" if keeps else f"runs {scheme or cur_c['scheme']}"))
             inputs["created_coordinator_id"] = cid
