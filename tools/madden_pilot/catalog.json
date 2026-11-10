@@ -630,35 +630,6 @@
         ]
       }
     },
-    "PRACTICE_TYPE": {
-      "note": "Seen 2026-11-10 (the p2e season run, week 9): after a FORCE ADVANCE, 'PRACTICE TYPE / Please select practice type' with NORMAL (selected), OFFENSE ONLY and KICK OFF. It blocks the week. Project Mu has no opinion on practice, so the pilot takes NORMAL, the game's default, and carries on.",
-      "all": [
-        "PRACTICE TYPE"
-      ],
-      "any": [
-        "PLEASE SELECT PRACTICE TYPE"
-      ],
-      "none": [],
-      "options": [
-        "NORMAL",
-        "OFFENSE ONLY",
-        "KICK OFF"
-      ],
-      "default": "NORMAL",
-      "nav": "vertical",
-      "highlight": "border",
-      "confirm_ok": [
-        "NORMAL"
-      ],
-      "exits": {
-        "HUB_WEEKLY": [
-          [
-            "confirm",
-            "NORMAL"
-          ]
-        ]
-      }
-    },
     "HUB_BYE": {
       "note": "Seen 2026-11-10: the Weekly Hub on the user team's bye week — the tab row and BYE WEEK, no matchup line and no week number anywhere (the 2026-11-10 season run stopped here: nothing matched, goto spun on UNKNOWN until its timeout). The week is known only from the save, so jobs omits the header hunt on this screen and infers +1 from the autosave written by the advance.",
       "all": [

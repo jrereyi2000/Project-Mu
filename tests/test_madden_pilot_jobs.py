@@ -283,28 +283,6 @@ def test_sim_playoffs_end_stops_unknown_on_unseen_screen(tmp_path, notices):
     assert any("Unknown" in m for m, _ in notices) and any("sim-season: stopped" in m for m, _ in notices)
 
 
-def test_sim_clears_a_practice_type_prompt_mid_advance(tmp_path, notices):
-    # Madden asks for a practice type as part of advancing the week (week 9 -> 10, p2e run);
-    # it blocks the week, so the pilot takes NORMAL and keeps waiting
-    class PracticeFake(ScriptedMadden):
-        def on_key(self, name):
-            if self.screen == "ADVANCE_MENU" and name == "space":
-                self.go("PRACTICE_TYPE")
-                return
-            if self.screen == "PRACTICE_TYPE" and name == "space":
-                self.pending = [LOADING] * 2
-                self.week += 1
-                self.progress_tabs = 3
-                self.go("COACH_PROGRESS")
-                return
-            super().on_key(name)
-
-    fake = PracticeFake(CAT, tiles=["TUNE-X"], out=lambda s: None)
-    _, out = _sim(tmp_path, fake, to="week 2")
-    assert out["status"] == "ok", out
-    assert out["end_week"] == 2 and fake.screen == "FRANCHISE_LIST"
-
-
 def test_sim_stuck_when_week_does_not_advance(tmp_path, notices):
     class NoAdvance(ScriptedMadden):
         def on_key(self, name):
