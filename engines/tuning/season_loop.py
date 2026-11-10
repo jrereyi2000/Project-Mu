@@ -86,6 +86,25 @@ def clone(run, base_save=BASE_SAVE, *, runner=None, python=None):
                              "--to", save_for(run)], "clone save")
 
 
+def release(run, *, runner=None, python=None, run_dir=None):
+    """Leave whatever franchise the game is inside, so the next step starts on CURRENT FRANCHISES.
+
+    A pilot run that stops (an unknown screen, a timeout) leaves Madden inside the franchise, and
+    the next `sim-season` cannot load from there: it is already in one and refuses to quit a
+    franchise it did not load. Best effort — a stopped quit is ignored here and the step that
+    follows reports whatever is really wrong. No-op (one look) when already on the list."""
+    runner, python = runner or subprocess.run, python or sys.executable
+    cmd = [python, "-m", "tools.madden_pilot", "quit", "--franchise", "TUNE-" + run]
+    if run_dir:
+        cmd += ["--run-dir", str(run_dir)]
+    proc = runner(cmd, cwd=ROOT, capture_output=True, text=True, env=None)
+    try:
+        res = json.loads((proc.stdout or "")[proc.stdout.index("{"):])
+    except ValueError:
+        return {"status": "stopped", "why": "the game is not on a screen the pilot can leave from"}
+    return res
+
+
 def sim(run, to, *, in_place=False, quit=True, runner=None, python=None, run_dir=None):
     """Sim forward with the pilot until `to` ('regular-season-end' or 'playoffs-end').
 
@@ -144,6 +163,7 @@ def walk_offseason(run, *, runner=None, python=None, max_stops=14, work_dir=None
     stops = []
     for n in range(1, max_stops + 1):
         run_dir = os.path.join(work_dir, f"stop_{n:02d}") if work_dir else None
+        release(run, runner=runner, python=python, run_dir=os.path.join(run_dir, "release") if run_dir else None)
         res = advance(run, runner=runner, python=python, run_dir=run_dir)
         stops.append(res)
         if res.get("status") != "ok":
@@ -209,6 +229,7 @@ def run(name, *, base_save=BASE_SAVE, resume=False, offseason=True, max_stops=14
     os.makedirs(run_dir, exist_ok=True)
     steps = []
     if not resume:
+        release(name, runner=runner, python=python)
         clone(name, base_save, runner=runner, python=python)
         steps.append("clone")
         sim(name, "regular-season-end", quit=False, runner=runner, python=python,

@@ -37,6 +37,9 @@ def _runner(calls, stops=None, advance_status="ok", fail=None):
             with open(out, "w") as fh:
                 json.dump(_snapshot(), fh)
             return types.SimpleNamespace(returncode=0, stdout="", stderr="")
+        if "quit" in cmd:
+            return types.SimpleNamespace(returncode=0, stdout=json.dumps({"status": "ok", "screen": "FRANCHISE_LIST"}),
+                                         stderr="")
         if "advance" in cmd:
             stop = stops.pop(0) if stops else {"status": "ok", "to": {"year": 2027, "phase": "PRESEASON", "week": None}}
             if advance_status != "ok":
@@ -90,16 +93,16 @@ def test_one_season_clones_sims_ingests_and_reports(tmp_path, capsys):
     tpath.write_text(json.dumps(TARGETS))
     out = L.run("unit", runner=_runner(calls, stops), python="py", seasons_dir=str(tmp_path / "seasons"),
                 saves_dir="/saves", targets_path=str(tpath), report_fn=lambda s: None)
-    jobs = [c[2] for c in calls if c[0] == "py"]
-    assert jobs[:2] == ["tools.madden_pilot", "tools.madden_pilot"]          # clone, sim
-    assert "clone-save" in calls[0]
-    assert ["--from", "CAREER-MU2026", "--to", "CAREER-TUNE-UNIT"] == calls[0][-4:]
-    assert "regular-season-end" in calls[1] and "--no-quit" in calls[1]      # the postseason continues in place
-    assert "--franchise" in calls[2] and "playoffs-end" in calls[2]
-    assert calls[3][0] == "node"                                         # the report snapshot
-    assert "pipeline.watch_save" in calls[4]
-    assert "/saves/CAREER-TUNE-UNIT" in calls[4] and "madden_tune_unit" in " ".join(calls[4])
-    assert calls[4].count("--no-articles") == 1 and "--no-freeze" in calls[4] and "--auto-init" in calls[4]
+    # the harness leaves the franchise first, then clone, sim, sim, snapshot, ingest
+    assert "quit" in calls[0] and "--franchise" in calls[0]
+    assert "clone-save" in calls[1]
+    assert ["--from", "CAREER-MU2026", "--to", "CAREER-TUNE-UNIT"] == calls[1][-4:]
+    assert "regular-season-end" in calls[2] and "--no-quit" in calls[2]      # the postseason continues in place
+    assert "--franchise" in calls[3] and "playoffs-end" in calls[3]
+    assert calls[4][0] == "node"                                             # the report snapshot
+    assert "pipeline.watch_save" in calls[5]
+    assert "/saves/CAREER-TUNE-UNIT" in calls[5] and "madden_tune_unit" in " ".join(calls[5])
+    assert calls[5].count("--no-articles") == 1 and "--no-freeze" in calls[5] and "--auto-init" in calls[5]
     assert out["db"] == "madden_tune_unit" and out["save"] == "CAREER-TUNE-UNIT"
     assert len(out["stops"]) == 4 and out["steps"] == ["clone", "regular-season", "playoffs", "snapshot",
                                                        "ingest-playoffs", "offseason"]
