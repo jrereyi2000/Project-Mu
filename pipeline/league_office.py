@@ -1,5 +1,5 @@
 """
-League office stage loop (docs/in_progress/V2_CORE_BUILD_PLAN.md §2.6, U13; docs/done/LEAGUE_OFFICE_PLAN.md §3.3;
+League office stage loop (docs/done/V2_CORE_BUILD_PLAN.md §2.6, U13; docs/done/LEAGUE_OFFICE_PLAN.md §3.3;
 progression contract: docs/in_progress/PROGRESSION_PLAN.md §5.3a-§5.3b).
 
 After JR advances Madden to a stage, saves and closes the franchise, the league office plans Project Mu's moves for that

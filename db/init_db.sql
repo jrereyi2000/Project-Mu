@@ -559,7 +559,7 @@ ALTER TABLE team_cap_seasons ADD COLUMN IF NOT EXISTS derived_at TIMESTAMPTZ;
 ALTER TABLE team_cap_seasons ADD COLUMN IF NOT EXISTS derived_transaction_id INT
     REFERENCES transactions(id) ON DELETE SET NULL;
 
--- V2 franchise OS core (2027_01_14_v2_franchise_os.sql, docs/in_progress/V2_CORE_BUILD_PLAN.md §2.1).
+-- V2 franchise OS core (2027_01_14_v2_franchise_os.sql, docs/done/V2_CORE_BUILD_PLAN.md §2.1).
 -- Contract instruments beyond Madden's plain deal.
 ALTER TABLE player_contracts ADD COLUMN IF NOT EXISTS contract_type VARCHAR(16) NOT NULL DEFAULT 'STANDARD'
     CHECK (contract_type IN ('STANDARD','ROOKIE','UDFA','FIFTH_YEAR_OPTION','FRANCHISE_EXCL','FRANCHISE_NONEXCL',
@@ -1537,7 +1537,7 @@ JOIN snap s ON s.coach_id = c.id
 LEFT JOIN add a ON a.coach_id = c.id;
 
 -- Season-end archive and head-coach records from 2035 (2026_12_24_season_archive.sql, engines/season_archive.py,
--- docs/in_progress/SEASON_CONTINUITY_PLAN.md phase 1).
+-- docs/done/SEASON_CONTINUITY_PLAN.md phase 1).
 -- One row per finished season.
 CREATE TABLE IF NOT EXISTS league_seasons (
     season INT PRIMARY KEY,
@@ -1593,7 +1593,7 @@ CREATE INDEX IF NOT EXISTS coach_season_lines_team ON coach_season_lines (team_i
 ALTER TABLE coach_seasons ADD COLUMN IF NOT EXISTS mu_era_only BOOLEAN NOT NULL DEFAULT false;
 
 -- Player season ledger and retirements (2027_01_03_player_season_ledger.sql, engines/season_ledger.py,
--- docs/in_progress/SEASON_CONTINUITY_PLAN.md phase 2a).
+-- docs/done/SEASON_CONTINUITY_PLAN.md phase 2a).
 -- The season a player retired after (a captured retirement; the 2026-2034 history's players are retired by their
 -- players.origin instead, plan D11). A later signing or roster scan that finds him clears it (plan D8).
 ALTER TABLE players ADD COLUMN IF NOT EXISTS retired_season INT;
@@ -2935,7 +2935,7 @@ CREATE INDEX IF NOT EXISTS progression_events_player_season
     ON progression_events (player_id, earned_season, status);
 
 -- Relationship event producers (2027_01_28_relationship_producers.sql, engines/relationship_producers/store.py,
--- docs/in_progress/RELATIONSHIP_EVENT_PRODUCERS_PLAN.md §2.3). Keyed by league_id so held events can exist
+-- docs/done/RELATIONSHIP_EVENT_PRODUCERS_PLAN.md §2.3). Keyed by league_id so held events can exist
 -- before the personality lifecycle registers the universe.
 CREATE TABLE IF NOT EXISTS relationship_producer_runs (
     league_id BIGINT NOT NULL,
@@ -2975,7 +2975,7 @@ CREATE TABLE IF NOT EXISTS relationship_pending_events (
 );
 CREATE INDEX IF NOT EXISTS relationship_pending_open ON relationship_pending_events (league_id, status);
 
--- Front-office inbox (2027_01_19_front_office_inbox.sql, engines/inbox/, docs/in_progress/FRONT_OFFICE_INBOX_PLAN.md §2.6)
+-- Front-office inbox (2027_01_19_front_office_inbox.sql, engines/inbox/, docs/done/FRONT_OFFICE_INBOX_PLAN.md §2.6)
 CREATE TABLE IF NOT EXISTS controlled_personas (
     team_id     INT NOT NULL REFERENCES teams(id),
     role        VARCHAR(8) NOT NULL CHECK (role IN ('GM','COACH','PLAYER')),
@@ -3057,7 +3057,7 @@ CREATE TABLE IF NOT EXISTS team_vision (
 );
 
 -- Scouting reports and combine interviews (2027_01_21_scouting_reports.sql, engines/prospect_ids.py,
--- pipeline/prospect_ratings.py; docs/in_progress/SCOUTING_REVAMP_PLAN.md §2.1). Placed after the inbox tables because
+-- pipeline/prospect_ratings.py; docs/done/SCOUTING_REVAMP_PLAN.md §2.1). Placed after the inbox tables because
 -- scout_interviews references inbox_threads. scout_prospect_ratings is hidden (never in a view, endpoint or #debug).
 -- Permanent prospect IDs (§2.1b). prospect_key is only the current alias into the older scouting tables.
 CREATE TABLE IF NOT EXISTS scout_prospect_ids (

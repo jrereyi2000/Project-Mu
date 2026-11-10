@@ -1,5 +1,5 @@
 """
-Drift check (docs/in_progress/V2_CORE_BUILD_PLAN.md §2.5): what changed in the Madden save since Project Mu last
+Drift check (docs/done/V2_CORE_BUILD_PLAN.md §2.5): what changed in the Madden save since Project Mu last
 wrote its state, i.e. what the user (or Madden) did in the game that Project Mu didn't.
 
   python3 -m pipeline.drift_check --snapshot captures/<run>/save.json [--season S --week W] [--dsn ...]

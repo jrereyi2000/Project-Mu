@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// The league office's Node side (docs/in_progress/V2_CORE_BUILD_PLAN.md §2.6, U13): the one-time franchise setup and
+// The league office's Node side (docs/done/V2_CORE_BUILD_PLAN.md §2.6, U13): the one-time franchise setup and
 // the league state the stage loop needs from a save that the snapshot doesn't carry.
 //
 //   node league_setup.mjs setup <CAREER-save> --out <new-save>

@@ -302,7 +302,7 @@ def team_front_office(abbr: str, season: Optional[int] = None):
 
 
 # ------------------------------------------------------------- report cards ----
-# NFLPA team report cards (docs/in_progress/NFLPA_REPORT_CARD_PLAN.md §2.5, U3): the read-only card (current +
+# NFLPA team report cards (docs/done/NFLPA_REPORT_CARD_PLAN.md §2.5, U3): the read-only card (current +
 # history, league rank and percentile, the OpEx policy toggles and the open CapEx projects), plus the two write
 # actions JR funds from the owner cash pool. Every read is guarded with to_regclass and a block is null/empty when
 # the migration isn't applied or a table has no rows; a grade is never invented. The validation/planning math is in

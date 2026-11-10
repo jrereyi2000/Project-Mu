@@ -1,4 +1,4 @@
-"""Compensatory draft picks engine (docs/in_progress/COMPENSATORY_PICKS_PLAN.md; PROJECT_SPEC §2.17/§3.3c/§4.6,
+"""Compensatory draft picks engine (docs/done/COMPENSATORY_PICKS_PLAN.md; PROJECT_SPEC §2.17/§3.3c/§4.6,
 planned §4.6x). Pure calculation logic: importable offline, no database connection at import time.
 
 Implements the CBA Article 6, Section 2 compensatory draft pick formula and the 2020 Resolution JC-2A minority

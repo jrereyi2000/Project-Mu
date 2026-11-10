@@ -7,7 +7,7 @@ JSON file for side-by-side review. Reads the database; writes nothing to it. Nee
   python3 tools/social_model_compare.py --week 18 --models gemini-3.8-flash gemini-3.5-flash-lite
   python3 tools/social_model_compare.py --models gemini-3.8-flash gemini-3.8-flash:low   # model:thinking level
 
-Prompt A/B (docs/in_progress/AGENT_WIRE_VOICE_PLAN.md §2.6): `--prompts old|new|both` writes the same sampled
+Prompt A/B (docs/done/AGENT_WIRE_VOICE_PLAN.md §2.6): `--prompts old|new|both` writes the same sampled
 assignments with the pre-U2 post writer (loaded from git at OLD_WRITER_REV) and/or the current one, side by side
 in captures/social_compare/. `both` also writes a blind-read Markdown file with the answer key at the end.
 `--dry-run` builds and saves the prompt pairs without any model call (useful for checking the pairing offline).

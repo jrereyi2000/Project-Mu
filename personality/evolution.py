@@ -1,6 +1,6 @@
 """Personality evolution: candidates, the seeded draw, the one-a-season arbiter and change notes.
 
-docs/in_progress/PERSONALITY_EVOLUTION_PLAN.md §2.3. Pure: no database, clock or global random state. The run
+docs/done/PERSONALITY_EVOLUTION_PLAN.md §2.3. Pure: no database, clock or global random state. The run
 (personality/evolution_run.py) reads the facts and profiles, calls these, then submits the chosen change through
 personality.store.change, whose core checks (revision, annual slot, validity) stay final.
 

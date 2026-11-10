@@ -1,4 +1,4 @@
-"""engines/tuning progression_fit + supersim_loop (docs/in_progress/MADDEN_PILOT_AND_TUNING_PLAN.md §2.4, §4).
+"""engines/tuning progression_fit + supersim_loop (docs/done/MADDEN_PILOT_AND_TUNING_PLAN.md §2.4, §4).
 Offline: synthetic snapshots, no Madden, no pilot, no harness, no database. The supersim loop's CLI steps go through a
 fake runner."""
 import json

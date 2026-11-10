@@ -1,5 +1,5 @@
 """
-Real NFL targets for tuning (docs/in_progress/MADDEN_PILOT_AND_TUNING_PLAN.md §2.4; JR's D2: 2015-2025).
+Real NFL targets for tuning (docs/done/MADDEN_PILOT_AND_TUNING_PLAN.md §2.4; JR's D2: 2015-2025).
 
   python3 -m engines.tuning.targets [--seasons 2015-2025] [--refresh] [--out PATH]
 

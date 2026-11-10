@@ -1967,7 +1967,7 @@ def get_team_stats_api(season: Optional[int] = None, category: str = "Passing", 
             return results
 
 
-# ─── Mu Fantasy articles (newsroom/fantasy_desk.py writes them; docs/in_progress/FANTASY_EDITORIAL_MATRIX.md) ───
+# ─── Mu Fantasy articles (newsroom/fantasy_desk.py writes them; docs/done/FANTASY_EDITORIAL_MATRIX.md) ───
 _NEWSROOM_CONFIG = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "newsroom", "config")
 
 

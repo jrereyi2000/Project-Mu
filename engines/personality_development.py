@@ -1,6 +1,6 @@
 """Pure personality development policy: preparation, teaching, mentoring and annual limits.
 
-docs/in_progress/PERSONALITY_DEVELOPMENT_COACHING_PLAN.md §§2.1-2.4. Nothing here reads a
+docs/done/PERSONALITY_DEVELOPMENT_COACHING_PLAN.md §§2.1-2.4. Nothing here reads a
 database, a profile store or a save. Callers pass scoped views (`personality.core.feature_view`
 for 'development' on players and mentors, 'coaching' on coaches) and the neutral output of
 `engines.progression_policy.evaluate_development`. Effects scale positive eligible

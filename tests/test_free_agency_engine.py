@@ -1,4 +1,4 @@
-"""Free agency engine (docs/in_progress/V2_CORE_BUILD_PLAN.md §2.4, U5). Synthetic dicts only: no database."""
+"""Free agency engine (docs/done/V2_CORE_BUILD_PLAN.md §2.4, U5). Synthetic dicts only: no database."""
 import math
 
 import pytest

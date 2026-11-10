@@ -1,5 +1,5 @@
 """
-Contracts engine: NFL CBA contract rules and cap maths (docs/in_progress/V2_CORE_BUILD_PLAN.md §2.4; V2_MASTER_PLAN
+Contracts engine: NFL CBA contract rules and cap maths (docs/done/V2_CORE_BUILD_PLAN.md §2.4; V2_MASTER_PLAN
 §3). Pure functions over contract dicts; nothing here touches the database.
 
 A contract dict, in whole dollars (the DB's unit; the save's $10,000 units only at to_madden / from_snapshot):

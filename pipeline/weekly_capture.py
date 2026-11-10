@@ -679,7 +679,7 @@ def step_coach_hot_seat(season):
 
 
 def step_inbox(season):
-    """Front-office inbox scan (engines/inbox/scan.py, docs/in_progress/FRONT_OFFICE_INBOX_PLAN.md §2.10) right
+    """Front-office inbox scan (engines/inbox/scan.py, docs/done/FRONT_OFFICE_INBOX_PLAN.md §2.10) right
     after step_gm: inbound conversations for the personas JR controls, promise reviews and the relationship-event
     outbox flush. A no-op with no registry user team or without the inbox migration. Optional: a failure only logs
     a warning and the run goes on."""

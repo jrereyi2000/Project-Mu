@@ -1,4 +1,4 @@
-"""Award candidates (docs/in_progress/OWNERS_SCOUTS_VOTERS_PLAN.md §2.5): stat-based candidate scores for the six
+"""Award candidates (docs/done/OWNERS_SCOUTS_VOTERS_PLAN.md §2.5): stat-based candidate scores for the six
 major awards and for every All-Pro slot, which the media panel (newsroom/award_ballots.py) votes on.
 
 Each candidate is {id, name, team_id, position, games, metrics: {...}, base_score}. Metrics are z-scores within

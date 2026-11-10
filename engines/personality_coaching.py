@@ -1,6 +1,6 @@
 """Pure coaching preferences: close-call youth/veteran opportunities and scheme-choice advice.
 
-docs/in_progress/PERSONALITY_DEVELOPMENT_COACHING_PLAN.md §2.5. Nothing here reads a database
+docs/done/PERSONALITY_DEVELOPMENT_COACHING_PLAN.md §2.5. Nothing here reads a database
 or writes a chart, scheme, playbook or installation. Callers pass a scoped
 `feature_view(profile, 'coaching')` and already-normalized candidates whose neutral score
 includes ability, eligibility penalty and scheme fit (so fit is never added twice).

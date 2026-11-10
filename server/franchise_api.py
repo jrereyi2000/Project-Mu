@@ -1,4 +1,4 @@
-"""Franchise API for the #franchise page (/api/franchise; docs/in_progress/V2_CORE_BUILD_PLAN.md §2.7, §2.7a).
+"""Franchise API for the #franchise page (/api/franchise; docs/done/V2_CORE_BUILD_PLAN.md §2.7, §2.7a).
 
 JR runs his team from Mu_Network: he reads the depth chart, roster, cap sheet and medical report, previews and queues
 roster moves, makes free-agent offers and extension proposals, evaluates trades, and launches the next game. Nothing

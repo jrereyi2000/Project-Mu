@@ -1,4 +1,4 @@
-"""Owner wiring and the OWNER inbox kind (docs/in_progress/OWNERS_SCOUTS_VOTERS_PLAN.md §2.3, §4, U5).
+"""Owner wiring and the OWNER inbox kind (docs/done/OWNERS_SCOUTS_VOTERS_PLAN.md §2.3, §4, U5).
 
 Offline only: pure engine functions, the league office test fakes and fake cursors. Off (and shadow) must give
 today's results; active applies the owner terms; JR's teams never get one.

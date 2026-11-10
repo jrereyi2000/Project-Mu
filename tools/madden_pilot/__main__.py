@@ -1,4 +1,4 @@
-"""Madden pilot CLI (docs/in_progress/MADDEN_PILOT_AND_TUNING_PLAN.md section 2.3).
+"""Madden pilot CLI (docs/done/MADDEN_PILOT_AND_TUNING_PLAN.md section 2.3).
 
     python3 -m tools.madden_pilot launch      [--pack "Mu Base"]
     python3 -m tools.madden_pilot clone-save  [--from CAREER-MUBASE] --to CAREER-TUNE-<name>

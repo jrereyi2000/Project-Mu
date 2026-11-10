@@ -1,4 +1,4 @@
-"""Pilot jobs (docs/in_progress/MADDEN_PILOT_AND_TUNING_PLAN.md section 2.3).
+"""Pilot jobs (docs/done/MADDEN_PILOT_AND_TUNING_PLAN.md section 2.3).
 
 Each job takes a navigate.Pilot (clone_save only uses its run_dir), writes run_dir/result.json,
 sends one ntfy summary through pipeline.notify (on finish, refusal and stop) and returns the

@@ -1,4 +1,4 @@
-"""Transactions engine (docs/in_progress/V2_CORE_BUILD_PLAN.md §2.4, U11). Synthetic 32-team leagues and a fake
+"""Transactions engine (docs/done/V2_CORE_BUILD_PLAN.md §2.4, U11). Synthetic 32-team leagues and a fake
 cursor only: no database."""
 import pytest
 

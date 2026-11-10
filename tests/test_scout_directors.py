@@ -1,4 +1,4 @@
-"""Scouting directors (docs/in_progress/OWNERS_SCOUTS_VOTERS_PLAN.md §2.4, §4).
+"""Scouting directors (docs/done/OWNERS_SCOUTS_VOTERS_PLAN.md §2.4, §4).
 
 Offline: a fake cursor dispatches on each statement's '/* q:<name> */' tag; a fake lifecycle stands in for the
 personality lifecycle creator hook. The bias is pure, so its cases need no cursor.

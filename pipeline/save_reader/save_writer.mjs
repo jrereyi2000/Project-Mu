@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Writes edits into a copy of a Madden 27 franchise save, then reads the copy back to verify them
-// (docs/done/PC_MIGRATION_PLAN.md §4.3, docs/in_progress/V2_CORE_BUILD_PLAN.md §2.3).
+// (docs/done/PC_MIGRATION_PLAN.md §4.3, docs/done/V2_CORE_BUILD_PLAN.md §2.3).
 //
 //   node save_writer.mjs <CAREER-save> <edits.json> --out <new-save> [--overwrite-out]
 //

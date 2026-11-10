@@ -1,5 +1,5 @@
 """
-NFLPA team report cards (docs/in_progress/NFLPA_REPORT_CARD_PLAN.md §2.1-2.4, U1).
+NFLPA team report cards (docs/done/NFLPA_REPORT_CARD_PLAN.md §2.1-2.4, U1).
 
 Pure functions over plain dicts, money in whole dollars, no DB access and no randomness; the baseline grades are
 a committed JSON config (engines/report_card_baseline.json). The engine owns the data layer and arithmetic only:

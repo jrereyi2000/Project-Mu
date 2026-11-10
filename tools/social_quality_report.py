@@ -1,4 +1,4 @@
-"""Agent Wire quality report (docs/in_progress/AGENT_WIRE_VOICE_PLAN.md §2.6, §2.7 rule 6).
+"""Agent Wire quality report (docs/done/AGENT_WIRE_VOICE_PLAN.md §2.6, §2.7 rule 6).
 
 Measures one season of Agent Wire posts against the S5 baseline: repetition (distinct two-word openers and
 within-week trigram overlap), how much of the week looks ahead, how number-heavy posts are, the kind mix and

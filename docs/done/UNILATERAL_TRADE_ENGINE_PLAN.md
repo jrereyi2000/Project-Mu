@@ -287,7 +287,7 @@ This plan was created after the initial **`P1-25`** replay on `madden_tt_replay`
 
 ### 9.2 Resumption checklist for the Close-Out Checklist Agent
 
-After `/execute-plan docs/not_started/UNILATERAL_TRADE_ENGINE_PLAN.md` finishes and moves this plan to `docs/done/`:
+After `/execute-plan docs/done/UNILATERAL_TRADE_ENGINE_PLAN.md` finishes and moves this plan to `docs/done/`:
 1. **Reset & re-run `P1-25` on `madden_tt_replay`:**
    - Truncate `gm_trade_negotiations`, `gm_trade_proposals`, and `agent_loop_decisions` (or re-clone `madden_tt_replay` from `madden_2036` and apply migrations).
    - Run `python3 -m engines.gm_talks --dsn postgresql://.../madden_tt_replay --season 2036 --week <w> --replay-week` across weeks 4–8.

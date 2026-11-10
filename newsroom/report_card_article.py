@@ -1,4 +1,4 @@
-"""Annual NFLPA Team Report Cards exposé (docs/in_progress/NFLPA_REPORT_CARD_PLAN.md §2/§5 U2).
+"""Annual NFLPA Team Report Cards exposé (docs/done/NFLPA_REPORT_CARD_PLAN.md §2/§5 U2).
 
 Builds the marquee ranking article from `team_report_cards` (joined to teams) for a season: the full 1–32 ranking
 with every category grade, the overall grade and score, and the top/bottom highlights. The article is deterministic:

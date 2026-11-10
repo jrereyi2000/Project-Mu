@@ -1,4 +1,4 @@
-"""Versioned personality evolution rules (docs/in_progress/PERSONALITY_EVOLUTION_PLAN.md §2.2). Pure.
+"""Versioned personality evolution rules (docs/done/PERSONALITY_EVOLUTION_PLAN.md §2.2). Pure.
 
 A rule turns one person's season facts (personality/evolution_facts.py) into at most one candidate change with a
 chance and a priority. The seeded draw and the one-a-season arbiter live in personality/evolution.py; nothing here

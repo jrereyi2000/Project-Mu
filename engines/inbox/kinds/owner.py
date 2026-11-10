@@ -1,5 +1,5 @@
 """
-OWNER: the team owner writes to JR's GM (docs/in_progress/OWNERS_SCOUTS_VOTERS_PLAN.md §2.3, §8 Q1; U5).
+OWNER: the team owner writes to JR's GM (docs/done/OWNERS_SCOUTS_VOTERS_PLAN.md §2.3, §8 Q1; U5).
 
 On JR's teams the owner only talks: he never vetoes JR's moves or fires his personas. Behind the switchboard's
 `owner_meddling` feature (engines/owner_context.feature_mode): only when it is **active** does the scan send

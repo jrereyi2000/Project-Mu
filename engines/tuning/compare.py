@@ -1,5 +1,5 @@
 """
-Scores a simulated season against the real-NFL targets (docs/in_progress/MADDEN_PILOT_AND_TUNING_PLAN.md §2.4).
+Scores a simulated season against the real-NFL targets (docs/done/MADDEN_PILOT_AND_TUNING_PLAN.md §2.4).
 
   python3 -m engines.tuning.compare <snapshot.json> [--season N] [--targets PATH] [--out report.md]
 

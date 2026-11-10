@@ -1,5 +1,5 @@
 """
-Offline progression fit (docs/in_progress/MADDEN_PILOT_AND_TUNING_PLAN.md §2.4, S6).
+Offline progression fit (docs/done/MADDEN_PILOT_AND_TUNING_PLAN.md §2.4, S6).
 
   python3 -m engines.tuning.progression_fit <snapshot.json> [--seasons 5] [--budget 200] [--seed 0]
                                             [--out data/tuning/progression_fit.json] [--careers CSV] [--no-hold-shape]

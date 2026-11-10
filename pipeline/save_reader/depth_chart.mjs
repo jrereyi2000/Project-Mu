@@ -1,5 +1,5 @@
 // Replaces depth-chart positions inside an open franchise, for save_writer.mjs's "depthCharts" list
-// (docs/in_progress/V2_CORE_BUILD_PLAN.md §2.3):
+// (docs/done/V2_CORE_BUILD_PLAN.md §2.3):
 //
 //   {"depthCharts": [{"team_index": 3, "slots": {"QB": [22686, 9123], "KR": [...], ...}}]}
 //

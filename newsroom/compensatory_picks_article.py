@@ -1,4 +1,4 @@
-"""Annual Compensatory Draft Picks announcement (docs/in_progress/COMPENSATORY_PICKS_PLAN.md §1/§5 U3;
+"""Annual Compensatory Draft Picks announcement (docs/done/COMPENSATORY_PICKS_PLAN.md §1/§5 U3;
 PROJECT_SPEC §2.17g/§3.3c/§4.6/§7).
 
 Builds the league-office announcement story from `compensatory_pick_awards` (joined to teams, and to the player or

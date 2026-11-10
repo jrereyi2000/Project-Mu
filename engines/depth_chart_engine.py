@@ -1,5 +1,5 @@
 """
-Depth chart engine, "Let Staff Set" (docs/in_progress/V2_CORE_BUILD_PLAN.md §2.4, V2_MASTER_PLAN.md §2.2).
+Depth chart engine, "Let Staff Set" (docs/done/V2_CORE_BUILD_PLAN.md §2.4, V2_MASTER_PLAN.md §2.2).
 
 Builds a team's full Madden depth chart, all 35 `Team.DepthChart` positions, each up to 6 players best first
 (pipeline/save_reader/release.mjs, depth_chart.mjs), from a roster, the staff's schemes and the injury list.

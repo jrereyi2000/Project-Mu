@@ -1,5 +1,5 @@
 """Writer relationships: each writer's favourites and grudges toward players, coaches and teams
-(docs/in_progress/AGENT_WIRE_VOICE_PLAN.md §2.1-§2.2; PROJECT_SPEC §3.3p, §7.7).
+(docs/done/AGENT_WIRE_VOICE_PLAN.md §2.1-§2.2; PROJECT_SPEC §3.3p, §7.7).
 
 Rows live in persona_relationships with persona_type = 'writer', persona_id = the writer's person_key (one person can
 run several accounts: Skip Bayless and his tweet account share 'Skip_Bayless'), target_type player | coach | team and

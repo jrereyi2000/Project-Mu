@@ -1,4 +1,4 @@
-"""engines/tuning targets + compare (docs/in_progress/MADDEN_PILOT_AND_TUNING_PLAN.md §2.4, §4). Offline: the nflverse
+"""engines/tuning targets + compare (docs/done/MADDEN_PILOT_AND_TUNING_PLAN.md §2.4, §4). Offline: the nflverse
 download is mocked with tiny CSVs and the snapshots are synthetic."""
 import csv
 import json

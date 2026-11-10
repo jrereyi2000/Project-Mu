@@ -62,7 +62,7 @@
 - An Interviews card in the Command Center's Draft War Room module (budget, window, eligible prospects, "Interview" buttons that start inbox threads).
 
 **Out (non-goals):**
-- Named scouts, scout personalities, regional bias numbers: personality phase 6, planned in the [owners, scouts and voters plan](../in_progress/OWNERS_SCOUTS_VOTERS_PLAN.md) (one generated scouting director per team through the `scout_voice` / `regional_bias` hooks).
+- Named scouts, scout personalities, regional bias numbers: personality phase 6, planned in the [owners, scouts and voters plan](../done/OWNERS_SCOUTS_VOTERS_PLAN.md) (one generated scouting director per team through the `scout_voice` / `regional_bias` hooks).
 - Prospect personality traits and any write to personality profiles: `PERSONALITY_DRAFT_INTEGRATION_PLAN.md`. Interview text and grades are never personality evidence (§2.6).
 - Allocating `source_person_id` or writing `persona_lifecycle_*` rows: the lifecycle plan (§2.1b says how it adopts this plan's IDs).
 - Re-keying the existing scouting tables (`scout_prospects`, `scout_consensus`, `scout_events`, …) off `prospect_key`: a separate change; this plan only stops new tables depending on it.

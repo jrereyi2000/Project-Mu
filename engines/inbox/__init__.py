@@ -1,5 +1,5 @@
 """
-Front-office inbox (docs/in_progress/FRONT_OFFICE_INBOX_PLAN.md, V2.9).
+Front-office inbox (docs/done/FRONT_OFFICE_INBOX_PLAN.md, V2.9).
 
 JR plays through personas he explicitly takes control of (a team's GM, its head coach, later a player). Each
 thread is one conversation between a persona JR controls and a counterpart agent. Engines decide every outcome;

@@ -1,5 +1,5 @@
 """
-Supersim tuning loop (docs/in_progress/MADDEN_PILOT_AND_TUNING_PLAN.md §2.4, R4, R6).
+Supersim tuning loop (docs/done/MADDEN_PILOT_AND_TUNING_PLAN.md §2.4, R4, R6).
 
   python3 -m engines.tuning.supersim_loop --run <name> --space <space.json> [--max-iters 20] [--from CAREER-MUBASE]
                                           [--to regular-season-end] [--repeats 1] [--targets PATH] [--dry-run]

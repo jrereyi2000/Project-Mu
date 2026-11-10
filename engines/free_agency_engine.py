@@ -1,5 +1,5 @@
 """
-Free agency engine (docs/in_progress/V2_CORE_BUILD_PLAN.md §2.4, U5; V2 master plan §4).
+Free agency engine (docs/done/V2_CORE_BUILD_PLAN.md §2.4, U5; V2 master plan §4).
 
 A free agent never signs with one click: he scores every offer with a utility and accepts, counters or rejects
 the best one. Pure functions over plain dicts, money in whole dollars, no DB access; randomness comes only from

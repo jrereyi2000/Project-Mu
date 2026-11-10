@@ -10,7 +10,7 @@
 // row pointing at its SeasonGame), season rows through Player.SeasonStats. Older weeks are purged by Madden, so
 // the loader must read every week (§5.3).
 //
-// reader_version 4 (docs/in_progress/V2_CORE_BUILD_PLAN.md §2.2) adds `depth_charts` (per real team, 35 positions × 6
+// reader_version 4 (docs/done/V2_CORE_BUILD_PLAN.md §2.2) adds `depth_charts` (per real team, 35 positions × 6
 // pgid slots, best first), `league_settings` (the four progression / regression slider records behind LeagueSetting
 // row 0, plus the dev-trait regression and breakout-scenario flags) and, per player, `confidence` (ConfidenceRating) and
 // `traits` (every PT_* flag).

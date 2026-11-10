@@ -406,7 +406,7 @@ def store_all_pro_teams(cur, season: int, week: int, article_id: int, persona: s
 
 
 # ----------------------------------------------------------------------------------------------------------------
-# Media voters (docs/in_progress/OWNERS_SCOUTS_VOTERS_PLAN.md §2.5, D5): when the panel's ballots decide the All-Pro
+# Media voters (docs/done/OWNERS_SCOUTS_VOTERS_PLAN.md §2.5, D5): when the panel's ballots decide the All-Pro
 # teams (newsroom/award_ballots.py store_all_pro), the Week 19 article reports them and is checked against them here.
 
 def load_stored_teams(cur, season: int) -> list:

@@ -1,5 +1,5 @@
 /**
- * JSON contract for the compensatory draft pick additions (docs/in_progress/COMPENSATORY_PICKS_PLAN.md U3,
+ * JSON contract for the compensatory draft pick additions (docs/done/COMPENSATORY_PICKS_PLAN.md U3,
  * PROJECT_SPEC §3.3c / §4.6 / §5.2). These shapes mirror `server/draft_api.py`:
  *
  *   GET /api/draft/compensatory?draft_season=&season=  -> CompensatoryResponse

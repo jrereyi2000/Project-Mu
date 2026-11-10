@@ -1,4 +1,4 @@
-"""Launch JR's next game through the MMC Mod Manager (docs/in_progress/V2_CORE_BUILD_PLAN.md §2.7, U14).
+"""Launch JR's next game through the MMC Mod Manager (docs/done/V2_CORE_BUILD_PLAN.md §2.7, U14).
 
     launch(team, season, week, dry_run=False, cur=None) -> {"pack", "command", "started", "refused", "game"}
 

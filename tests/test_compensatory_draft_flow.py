@@ -1,4 +1,4 @@
-"""Compensatory draft flow (docs/in_progress/COMPENSATORY_PICKS_PLAN.md §4, U2): round renumbering with comp
+"""Compensatory draft flow (docs/done/COMPENSATORY_PICKS_PLAN.md §4, U2): round renumbering with comp
 picks, extended pick surplus values on the §2.3 decay curve, and rookie-scale contracts past the 224-pick
 ceiling. Pure; no database."""
 import math

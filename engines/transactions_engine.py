@@ -1,5 +1,5 @@
 """
-Transactions engine: the team side of every transaction for all 32 teams (docs/in_progress/V2_CORE_BUILD_PLAN.md
+Transactions engine: the team side of every transaction for all 32 teams (docs/done/V2_CORE_BUILD_PLAN.md
 §2.4, U11; docs/done/LEAGUE_OFFICE_PLAN.md §4.4-§4.6, §4.11).
 
 Re-signings, extensions, tags, tenders and 5th-year options; CPU free-agent offers; cut-down; waivers; the practice
@@ -43,7 +43,7 @@ active mode, for that player only:
 Tenders (ERFA/RFA), tags, 5th-year options and rookie deals stay team instruments: no personality veto. Moves made
 through consent carry `consent` (ACCEPT | COUNTER | REJECT).
 
-Owner spending (docs/in_progress/OWNERS_SCOUTS_VOTERS_PLAN.md §2.3, U5; switchboard `owner_spending`, passed in by
+Owner spending (docs/done/OWNERS_SCOUTS_VOTERS_PLAN.md §2.3, U5; switchboard `owner_spending`, passed in by
 pipeline/league_office_personality.py). plan_offers / cpu_offers take keyword-only spending {team_id:
 {cap_buffer_share, offers_per_wave, need_premium}} (engines/owner_policy.spending) for CPU teams with a reviewed
 owner; a team without an entry uses CAP_BUFFER_SHARE, OFFERS_PER_WAVE and OFFER_NEED_PREMIUM, so spending=None is

@@ -424,7 +424,7 @@ def store_sb_mvp(cur, season: int, week: int, article_id: int, persona: str, ent
 
 
 # ----------------------------------------------------------------------------------------------------------------
-# Media voters (docs/in_progress/OWNERS_SCOUTS_VOTERS_PLAN.md §2.5, D4): when the panel's ballots decide the awards
+# Media voters (docs/done/OWNERS_SCOUTS_VOTERS_PLAN.md §2.5, D4): when the panel's ballots decide the awards
 # (newsroom/award_ballots.py), the Week 22 article reports the stored winners instead of choosing them, and is
 # checked against them here. Parsing and storing from the article (above) stays the path while `media_voters` is off.
 

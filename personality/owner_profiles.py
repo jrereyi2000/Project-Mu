@@ -1,4 +1,4 @@
-"""Reviewed real-inspired owner profiles (docs/in_progress/OWNERS_SCOUTS_VOTERS_PLAN.md §2.1-§2.2).
+"""Reviewed real-inspired owner profiles (docs/done/OWNERS_SCOUTS_VOTERS_PLAN.md §2.1-§2.2).
 
 One file per team in newsroom/config/owner_personas/<TEAM>.json (schema `owner-profile-v1`, or `owner-profile-v2`
 with motivation, focus and slider_inference as in coach_profiles; INFERRED_SLIDERS_AND_FOCUS_PLAN §2.1): the coach-profile

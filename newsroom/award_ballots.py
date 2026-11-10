@@ -1,4 +1,4 @@
-"""Media voters (docs/in_progress/OWNERS_SCOUTS_VOTERS_PLAN.md §2.5, D4-D5): a panel of 20 national-writer
+"""Media voters (docs/done/OWNERS_SCOUTS_VOTERS_PLAN.md §2.5, D4-D5): a panel of 20 national-writer
 personas casts seeded ballots for the six major awards and the All-Pro teams. No model calls.
 
   AWARDS, POINTS = (10, 5, 3, 2, 1), VOTER_ARCHETYPES (20 keys of newsroom/config/agent_personas.json)
