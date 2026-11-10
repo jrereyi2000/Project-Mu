@@ -59,6 +59,15 @@ You are the orchestrator. Subagents write the code; you review, merge, keep the 
 1. Run every unit's Verify command on main once more, plus `pytest -m "not integration" <every test file the plan touched>`.
 2. Status: `built and on main (<date>)`, keeping the As-built bullets. `git mv` the plan to `docs/done/` (into the series folder if it has one), fix links, and move its PROJECT_SPEC.md layout line from the `in_progress/` list to `done/`.
 3. Commit on main: `docs(<scope>): mark <NAME> as done and move to docs/done`.
-4. Tell JR: what was built (per unit, one line), merge commits, combined conflicts, deviations from the plan, retries, anything left (failed or dropped units, worktrees that wouldn't remove, §8 questions still open).
+4. **Ask the auditor to review the build.** Append a HANDOFF to the board (`/home/jrereyi/Project-Mu/AGENT_CONVERSATION.md`, append-only, header format as in its header, time from `date`) addressed `to: audit, all`. Include:
+   - the plan's path in `docs/done/`;
+   - the commit range from the approve-and-move commit to the mark-as-done commit (`<first sha>^..<last sha>`);
+   - the list of the plan's own commits in that range, from `git log --format='%h %s'`, filtered to this plan's units, merges, orchestrator fixes and spec commits, because other sessions commit to `main` in between;
+   - per unit, one line: what it built, its merge sha, and its Verify result;
+   - deviations from the plan, and anything left open;
+   - which databases each migration was applied to.
+
+   Ask for a review of those commits against the plan. Don't wait for the verdict to finish this step. When it arrives, take any PARTIAL or OPEN findings back as fixes on this plan, or tell JR to hand them to the builder if this session has ended.
+5. Tell JR: what was built (per unit, one line), merge commits, combined conflicts, deviations from the plan, retries, anything left (failed or dropped units, worktrees that wouldn't remove, §8 questions still open), and the board message number of the audit request.
 
 Never push. Commit messages end with the session's Co-Authored-By attribution line.
