@@ -61,9 +61,37 @@ So Madden leaves a null `UserCharacter`, nulls the user's `Team`, and leaves the
 - **`Position` is not changed by a release.** A fired head coach still reads `Position = HeadCoach`. An `assign` that changes role (a retread HC hired as an OC) must write `Position` and `OriginalPosition` itself.
 - **A second contract status exists: `Expiring`.** Several coordinators went `Signed → Expiring` without leaving their team (CLE's OC/DC, KC's DC, MIA's OC/DC, NO's OC/DC, TB's OC/DC). That is Madden's own "deal is running out" state, distinct from `FreeAgent`, and it keeps `TeamIndex` unchanged. Mu's release must write `FreeAgent`, not `Expiring`.
 - **Empty Coach rows exist for `create` to fill.** Table 4168 holds **470 rows, 127 live**, so 343 empty rows are available. A `create` can `autoUnempty` one, and a release in the same write frees one more. There is also a second, one-row Coach table (id 5866) which was not identified; it is not the pool.
-- **`COACH_RATING` is not a firing field.** It changed on many coaches across the transition (and the three fired HCs all landed on exactly 50), so it is a season-scoped recomputation, not a release write. The writer should not carry it.
+- **A released coach's `COACH_RATING` becomes 50.** The isolated coordinator firing (below) changed exactly one field on exactly one record beyond the release set: Idzik's rating, 54 → 50. The head-coach batch showed the same landing point for all three fired HCs, alongside season-wide recomputations that muddied it. 50 reads as the neutral value a teamless coach carries; a release should write it so a freed coach looks like a real free agent.
 - **Madden does not hire at the firing.** No Coach record was created at the transition; the seats stay empty. That matches the plan's timing: Mu's hiring cycle and the `OFFSEASON_START` write both land before the game fills anything.
 
-## 4. Still to measure
+## 4. The coordinator firing (second pair)
 
-JR is firing a coordinator at the start of the offseason and saving `CAREER-TUNECOACHBEFOREOC` / `CAREER-TUNECOACHAFTEROC`. When those land, this doc gains a coordinator section: whether a coordinator firing touches the user wiring (it should not) and whether the HC's seat is affected.
+| | Save | Frame | SHA-256 |
+|---|---|---|---|
+| Before | `CAREER-TUNECOACHBEFOREOC` | 2026, week index 0, `OffSeason` | `1529e292…` |
+| After | `CAREER-TUNECOACHAFTEROC` | 2026, week index 0, `OffSeason` | `96ba0e20…` |
+
+JR fired the Panthers' offensive coordinator, **Bradley Idzik**, on his own user team, in the same offseason frame on both sides — so this pair isolates the coordinator release with nothing else moving.
+
+Exactly one ref changed and exactly one record changed:
+
+| | Before | After |
+|---|---|---|
+| `Team 20 CAR` `OffensiveCoordinator` | table 4168 row 45 | **null** |
+| Idzik, `TeamIndex` | 20 | **32** |
+| Idzik, `PrevTeamIndex` | 0 | **20** |
+| Idzik, `ContractStatus` | `Signed` | **`FreeAgent`** |
+| Idzik, `ContractYearsRemaining` | 4 | **0** |
+| Idzik, `COACH_RATING` | 54 | **50** |
+| Idzik, `Position` | `OffensiveCoordinator` | **unchanged** |
+
+Everything else was untouched: CAR's `HeadCoach` ref, its `UserCharacter`, every `FranchiseUser` row (0 changed of 32), and all 126 other Coach records.
+
+**So a coordinator release does not touch the user wiring, and does not touch the head coach.** That is the clean case the `"staff"` block's `release` action can assume. The user-wiring repair from §1 is needed only when the seat being filled is a head-coach seat.
+
+## 5. What the writer can assume
+
+1. `release` is five field writes on one Coach record plus a null on the team's seat ref: `PrevTeamIndex`, `TeamIndex = 32`, `ContractStatus = FreeAgent`, `ContractYearsRemaining = 0`, `COACH_RATING = 50`. No array, no deletion, no new record.
+2. A coordinator release touches nothing else. A head-coach release additionally requires the user wiring to be re-established by the `assign` that fills the seat, because Madden's own flow would leave the team with no user.
+3. `Position` is the caller's responsibility on `assign`; release leaves it.
+4. Empty Coach rows are plentiful (343 in the measured save), so `create` never needs to recycle a live one first.
