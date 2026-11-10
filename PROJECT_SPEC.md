@@ -26,6 +26,7 @@ Project Mu/
 ├── AGENT_CONVERSATION.md      # Live, append-only message board between concurrent agents (Claude, DeepSeek, Gemini, Codex); git-ignored, one copy in the main checkout; format and rules in its header, usage in CLAUDE.md
 ├── .claude/                   # Claude Code project files; worktrees/ (subagent git worktrees) is git-ignored
 │   └── skills/                #   Project skills (typed as /<name>); index: docs/reference/AGENTS.md
+│       ├── builder/           #     /builder [label]: SKILL.md (the bug-fix builder session: next free builder-N label, board listener, gathers open HANDOFFs, fix batches with CLAIM → confirm → test → commit by path → NOTICE to audit, handover when context fills)
 │       ├── commit-audit/      #     /commit-audit: SKILL.md (run the auditor on a range now, show status, read the latest report)
 │       ├── madden/            #     /madden <task>: the gameplay agent (asks JR before taking the PC, dry-run first, grows catalog.json and docs/reference/MADDEN_PILOT.md on unknown screens, never opens roster cards, TUNE saves only)
 │       ├── tune/              #     /tune progression|supersim: the tuning agent (progression fit recommends only; supersim needs the pilot's first live run; ebx is readable since 2026-10-31)
