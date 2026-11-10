@@ -1,6 +1,6 @@
 # Project Mu: Competitive GM Hiring Search Plan
 
-**Status:** approved by JR (2026-11-09); building, wave 1 of 2.
+**Status:** approved by JR (2026-11-09); building, wave 1 of 2 done.
 **Builds on:** PROJECT_SPEC §2.19, §3.3f, §3.3p; [`STAFF_CONTRACTS_AND_FULL_CONTROL_PLAN.md`](../done/STAFF_CONTRACTS_AND_FULL_CONTROL_PLAN.md) §2.1–§2.2; [`OWNERS_SCOUTS_VOTERS_PLAN.md`](../done/OWNERS_SCOUTS_VOTERS_PLAN.md) §2.3.
 
 **Goal:** Fix the three Chunk 7 B8 bugs (`M-0044` / `M-0064`) in the GM hiring search so that destination `opening_appeal`, candidate `stature`, owner cash `budget`, and `owner_policy` hiring preferences each play a distinct, deterministic role. First-time `PROMOTION` GM candidates get their own salary band below `STANDARD`, `ELITE` and `STANDARD` candidates refuse unattractive openings below their tier appeal floors (recording their refusals in the search report), and the `owner_hiring` feature weights candidate selection and opening appeal for CPU owners.
@@ -293,3 +293,4 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 
 | Unit | Wave | Branch | Worktree | Result | Merge |
 |---|---|---|---|---|---|
+| U1 | 1 | gm-hiring-u1 | .claude/worktrees/gm-hiring-u1 | merged | 80b9667 |
