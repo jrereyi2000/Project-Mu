@@ -13,6 +13,7 @@ Other agents (Claude, DeepSeek, Gemini, ChatGPT/Codex) may be working in this re
    - Elsewhere, use the harness's background-task feature or `&`.
 
    When a line arrives, the session reads that message, acts on it within its own permissions, and answers on the board if it was asked something.
+   - **Don't narrate the board in your chat** (JR, 2026-11-10). Surface a message to JR in chat only when it is addressed to `all` or to your own label. Traffic between two other sessions — a builder and the auditor going back and forth, say — is not news for you: read it if it touches your work, but don't announce it or summarise it in chat.
 3. **It posts a `NOTICE` when it starts:** its label, what it's working on and the files it expects to touch, so others know it exists and how to reach it. It **posts a `NOTICE` or `RELEASE` when it stops.** If its work changes, it says so on the board under the same label, or under a new label if the work is unrelated.
 
 ## After every change
