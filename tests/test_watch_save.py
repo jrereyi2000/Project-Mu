@@ -671,6 +671,26 @@ class LeagueOfficeIngestTest(unittest.TestCase):
         # the mod pack is for the save's current week (Madden's next unplayed week)
         self.assertEqual(self.pack.call_args[0][1:3], (2036, 6))
 
+    def test_new_players_are_bootstrapped_before_the_league_office(self):
+        def load(*a, **k):
+            self.calls.load()
+            return {"league_state": "x", "players": 4, "players_created": 1, "players_created_ids": {5: 999},
+                    "games_completed": 16}
+        mock.patch("pipeline.load_save.load", side_effect=load).start()
+        def boot_them(*a, **k):
+            self.calls.new_players()
+            return 1
+        boot = mock.patch("pipeline.watch_save.bootstrap_new_players", side_effect=boot_them).start()
+        res = self.ingest({"status": "written", "replaced": True, "output_sha256": "out"})
+        self.assertEqual(self.order(), ["load", "new_players", "engines", "league_office", "articles", "mod_pack"])
+        self.assertEqual(boot.call_args[0][2], {5: 999})
+        self.assertEqual(res["new_players"], 1)
+
+    def test_no_new_players_means_no_bootstrap(self):
+        boot = mock.patch("pipeline.watch_save.bootstrap_new_players").start()
+        self.ingest({"status": "written"})
+        boot.assert_not_called()
+
     def test_league_office_off(self):
         self.lo = mock.patch("pipeline.watch_save.run_league_office").start()
         res = ws.ingest_snapshot(self.snapshot, 2036, 6, save_name="CAREER-A", save_path=self.save)
@@ -1537,4 +1557,63 @@ class BootstrapTuningProgressionTest(unittest.TestCase):
         self.addCleanup(m.patch.stopall)
         self.assertEqual(ws.bootstrap_tuning_progression("dbname=madden_mu2026", "madden_mu2026", self.snapshot, 2026,
                                                          log_fn=self.log.append), 0)
+        boot.assert_not_called()
+
+
+class BootstrapNewPlayersTest(unittest.TestCase):
+    """A player the load just created gets neutral progression state at that load (JR, 2026-11-10): the live
+    league's first rookie class and madden_tune_p2g's 389 would otherwise fail the first regular week with
+    "player N: explicit neutral bootstrap required"."""
+
+    def setUp(self):
+        self.log = []
+        self.draft = {"players": [{"pgid": 999, "ratings": {"Speed": 80}, "overall": 65, "age": 23,
+                                   "dev_trait": "College_Impact", "years_pro": 0, "confidence": 55}],
+                      "season": {"calendar_year": 2026, "stage": "offseason", "offseason_stage": 9,
+                                 "week_index": 11}}
+
+    def run_it(self, created=None, state_rows=1):
+        import unittest.mock as m
+        connect = m.patch("psycopg.connect").start()
+        cur = connect.return_value.__enter__.return_value.cursor.return_value.__enter__.return_value
+        cur.fetchone.side_effect = [(True,), (state_rows,)]
+        boot = m.patch("engines.progression_checkpoint.bootstrap_newcomers", return_value=["s"]).start()
+        self.addCleanup(m.patch.stopall)
+        n = ws.bootstrap_new_players("dbname=madden_car", self.draft,
+                                     created if created is not None else {5: 999},
+                                     source_fingerprint="sha", log_fn=self.log.append)
+        return n, boot, connect
+
+    def test_a_newcomer_is_bootstrapped_at_the_league_year_he_joins(self):
+        n, boot, _ = self.run_it()
+        self.assertEqual(n, 1)
+        self.assertEqual(boot.call_args[0][2], 2027)          # the DRAFT stop in 2026 is the 2027 league year
+        self.assertEqual(boot.call_args[1]["pgid_by_player"], {5: 999})
+        self.assertEqual(boot.call_args[1]["source_fingerprint"], "sha")
+        self.assertTrue(any("new players" in ln and "2027" in ln for ln in self.log))
+
+    def test_the_seeding_load_keeps_its_own_neutrality_gate(self):
+        n, boot, _ = self.run_it(state_rows=0)
+        self.assertEqual(n, 0)
+        boot.assert_not_called()
+
+    def test_nothing_happens_without_created_players_or_a_dsn(self):
+        import unittest.mock as m
+        boot = m.patch("engines.progression_checkpoint.bootstrap_newcomers").start()
+        connect = m.patch("psycopg.connect").start()
+        self.addCleanup(m.patch.stopall)
+        self.assertEqual(ws.bootstrap_new_players("dbname=madden_car", self.draft, {}, log_fn=self.log.append), 0)
+        self.assertEqual(ws.bootstrap_new_players(None, self.draft, {5: 999}, log_fn=self.log.append), 0)
+        boot.assert_not_called()
+        connect.assert_not_called()
+
+    def test_a_database_without_managed_progression_is_left_alone(self):
+        import unittest.mock as m
+        connect = m.patch("psycopg.connect").start()
+        cur = connect.return_value.__enter__.return_value.cursor.return_value.__enter__.return_value
+        cur.fetchone.return_value = (None,)
+        boot = m.patch("engines.progression_checkpoint.bootstrap_newcomers").start()
+        self.addCleanup(m.patch.stopall)
+        self.assertEqual(ws.bootstrap_new_players("dbname=madden_car", self.draft, {5: 999},
+                                                  log_fn=self.log.append), 0)
         boot.assert_not_called()

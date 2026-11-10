@@ -9,6 +9,7 @@ from engines import progression_inputs as inputs
 from engines import progression_offseason as offseason
 from pipeline import drift_check as drift
 from tests.test_progression_scenarios import career, scratch, snapshot, observed
+from tests.test_form_engine import DOC
 
 
 def test_hook_requires_bound_observation_and_receipt_context():
@@ -35,6 +36,30 @@ def test_weekly_adapter_forwards_supported_inputs_and_filters_absent_players(mon
     assert result == {"prepared": True}
     assert prepare.call_args.kwargs["player_inputs"] == {1: data[1]}
     assert prepare.call_args.kwargs["forms"] == {1: 2}
+
+
+@pytest.mark.integration
+def test_bootstrap_newcomers_seeds_only_the_players_this_load_created(career):
+    """A drafted rookie failed 2027 week 1 with "player N: explicit neutral bootstrap required" because nobody
+    seeded players who join after setup (madden_tune_p2g; the live league's first rookie class would hit it too).
+    The newcomer path seeds only the created ids, at the league year they join, and leaves existing state alone."""
+    conn, cur, base, _ = career
+    before = snapshot(base)
+    newcomer = dict(before["players"][0], pgid=102, confidence=61)
+    two = {"players": before["players"] + [newcomer], "league_settings": {}}
+    with pytest.raises(state.ProgressionStateError, match="player 2: explicit neutral bootstrap required"):
+        cp.prepare_player(cur, player_id=2, pgid=102, earned_season=2034, application_season=2034,
+                          as_of_week=4, source_fingerprint="save", player_games=[], team_games=[],
+                          position="WR", form_value=0.0, doc=DOC)
+    rows = cp.bootstrap_newcomers(cur, two, 2034, source_fingerprint="save", pgid_by_player={2: 102})
+    assert len(rows) == 1
+    assert rows[0]["application_season"] == 2034 and rows[0]["base_ratings"] == base
+    assert state.load_state(cur, 1)["source_fingerprint"] == "neutral-start"    # the setup cohort is untouched
+    assert cp.bootstrap_newcomers(cur, two, 2034, source_fingerprint="save", pgid_by_player={2: 102}) == []
+    event = cp.prepare_player(cur, player_id=2, pgid=102, earned_season=2034, application_season=2034,
+                              as_of_week=4, source_fingerprint="save", player_games=[], team_games=[],
+                              position="WR", form_value=0.0, doc=DOC)
+    assert event["status"] in ("PREPARED", "APPLIED")
 
 
 @pytest.mark.integration

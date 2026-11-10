@@ -423,10 +423,18 @@ def explain_prepared(cur, prepared, *, audience="public"):
     return reports
 
 
+def _bootstrap_player(cur, pid, p, season, source_fingerprint, *, form_neutral, newcomer=False):
+    from engines import progression
+    ceiling, _ = progression.seed_player_ceiling(pid, p["overall"], p.get("age") or 25, p.get("dev_trait"))
+    band = progression.seed_ceiling_band(pid, p["overall"], p.get("dev_trait"), ceiling, p.get("years_pro"))
+    return state.bootstrap_state(cur, pid, season, normalize_save_ratings(p["ratings"]), band,
+                                 source_fingerprint, confidence=p.get("confidence"), form_neutral=form_neutral,
+                                 newcomer=newcomer)
+
+
 def bootstrap_pass(cur, snapshot, season, *, source_fingerprint, form_neutral=False,
                    pgid_by_player=None):
     """Explicit setup from a known-neutral save. Raw ingests never call this."""
-    from engines import progression
     ids = pgid_by_player if pgid_by_player is not None else psave.fetch_pgid_map(cur)
     players = {p["pgid"]: p for p in snapshot.get("players", []) if p.get("pgid", 0) > 0}
     out = []
@@ -437,12 +445,29 @@ def bootstrap_pass(cur, snapshot, season, *, source_fingerprint, form_neutral=Fa
                 continue
             if state.load_state(cur, pid) is not None:
                 continue
-            ceiling, _ = progression.seed_player_ceiling(pid, p["overall"], p.get("age") or 25,
-                                                         p.get("dev_trait"))
-            band = progression.seed_ceiling_band(pid, p["overall"], p.get("dev_trait"), ceiling,
-                                                 p.get("years_pro"))
-            out.append(state.bootstrap_state(cur, pid, season, normalize_save_ratings(p["ratings"]), band,
-                source_fingerprint, confidence=p.get("confidence"), form_neutral=form_neutral))
+            out.append(_bootstrap_player(cur, pid, p, season, source_fingerprint, form_neutral=form_neutral))
+    return out
+
+
+def bootstrap_newcomers(cur, snapshot, season, *, source_fingerprint, pgid_by_player):
+    """Seed state for the players a save load just created (PROGRESSION_PLAN §5.3a).
+
+    A newcomer has no Mu history to adopt, so the setup pass's confidence-50 neutrality proof does not
+    apply (the ingest that first sees him is not a neutral save) and his form starts neutral. Only the
+    ids this load created are eligible; a missing state for an existing player stays a hard failure in
+    prepare_pass.
+    """
+    players = {p["pgid"]: p for p in snapshot.get("players", []) if p.get("pgid", 0) > 0}
+    out = []
+    with state._savepoint(cur):
+        for pid, pgid in sorted((pgid_by_player or {}).items()):
+            p = players.get(pgid)
+            if p is None or not p.get("ratings"):
+                continue
+            if state.load_state(cur, pid) is not None:
+                continue
+            out.append(_bootstrap_player(cur, pid, p, season, source_fingerprint,
+                                         form_neutral=True, newcomer=True))
     return out
 
 

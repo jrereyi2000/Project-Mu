@@ -1361,6 +1361,13 @@ def ingest_snapshot(snapshot_path, save_season, save_week, dry_run=False, no_art
         return {"status": "success", "dry_run": True, "season": save_season, "week": save_week, "load_report": load_report}
     dsn = os.environ.get("DATABASE_URL")
     lo_result = None
+    # Step: progression state for the players this load created, before any progression stage plans
+    created_ids = load_report.get("players_created_ids") or {}
+    new_players = 0
+    if created_ids:
+        with open(snapshot_path) as fh:
+            new_players = bootstrap_new_players(dsn, json.load(fh), created_ids,
+                                                source_fingerprint=save_sha256, log_fn=log_fn)
 
     # The personality switchboard, read once for this ingest (every feature off by default)
     modes = personality_modes(dsn, log_fn=log_fn)
@@ -1391,7 +1398,7 @@ def ingest_snapshot(snapshot_path, save_season, save_week, dry_run=False, no_art
         return {"status": "success", "dry_run": False, "season": save_season, "week": save_week,
                 "load_report": load_report, "league_office": lo_result, "relationship_producers": producers,
                 "coach_promises": coach_promises, "personality_evolution": evolution,
-                "focus_refresh": focus_refresh, "trade_requests": trade_requests}
+                "focus_refresh": focus_refresh, "trade_requests": trade_requests, "new_players": new_players}
 
     if stage_only:
         # An offseason stop: no current week, so no weekly engines, articles or mod pack.
@@ -1557,6 +1564,52 @@ def freeze_week(db, dsn, save_path, label, season, week, stage=None, extra=None,
         log_fn(f"[ERROR] {msg}")
         send_notify(msg, title="Mu: weekly freeze failed", priority="high", tags=("warning",))
         return None
+
+
+def bootstrap_new_players(dsn, snapshot, created_ids, *, source_fingerprint=None, log_fn=log):
+    """Give the players a load just created their neutral progression state (PROGRESSION_PLAN §5.3a).
+
+    `prepare_pass` treats missing state as a hard failure, and only `league_office setup` and the ingest that
+    seeds a tuning database ever bootstrap — so before this hook a drafted rookie failed the whole first
+    regular week he was rostered ("player 2848: explicit neutral bootstrap required", 2027 week 1 of
+    madden_tune_p2g) and the live league would hit the same wall at its first rookie class. A newcomer has
+    no Mu history to adopt, so his save ConfidenceRating is Madden's own and is not the setup pass's
+    neutrality proof; form starts neutral. Only the ids this load created are eligible.
+
+    Skipped while the database has no progression state at all: that is the seeding load, which keeps its
+    own neutrality gate (a played save's seed must still refuse, TUNING_LEAGUE.md). Never raises: a failure
+    is a warning and the league office's own plan reports the missing state.
+    """
+    if not dsn or not created_ids or not snapshot:
+        return 0
+    try:
+        import psycopg
+        from engines import progression_checkpoint as pc
+        with psycopg.connect(dsn) as conn, conn.cursor() as cur:
+            cur.execute("SELECT to_regclass('public.progression_player_state')")
+            reg = cur.fetchone()
+            if not reg or not reg[0]:
+                return 0                                   # a database without managed progression
+            cur.execute("SELECT count(*) FROM progression_player_state")
+            if not cur.fetchone()[0]:
+                return 0                                   # the seeding load: its own bootstrap decides
+            stage = league_office_stage(snapshot, log_fn=log_fn)
+            if stage is None:
+                log_fn(f"[WARN] progression state for {len(created_ids)} new players skipped: "
+                       "the save is not at a league office stage")
+                return 0
+            from pipeline import league_office as lo
+            application_season = lo.setup_application_season(stage["stage"], stage["season"])
+            source = source_fingerprint or pc.fingerprint(snapshot)
+            rows = pc.bootstrap_newcomers(cur, snapshot, application_season, source_fingerprint=source,
+                                          pgid_by_player=created_ids)
+            conn.commit()
+        log_fn(f"Progression: neutral bootstrap for {len(rows)} new players "
+               f"(application season {application_season}).")
+        return len(rows)
+    except Exception as e:      # noqa: BLE001 - a missing bootstrap must not fail the ingest
+        log_fn(f"[WARN] could not bootstrap progression for new players: {e}")
+        return 0
 
 
 def bootstrap_tuning_progression(dsn, db, snapshot, season, source_fingerprint=None, log_fn=log):

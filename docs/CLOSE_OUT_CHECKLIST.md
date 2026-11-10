@@ -544,7 +544,12 @@ Every open row in `docs/FOLLOW_UPS.md`, mapped. Nothing is dropped.
   stats inside the 2015-2025 band**.
 - **Open after that run:** the 2027 week-1 REGULAR_WEEK plan fails because a drafted rookie has no progression
   state (`player 2848: explicit neutral bootstrap required`) — nothing bootstraps players who join after setup.
-  `league_state.current_week` still waits at the seed week through an offseason ingest.
+  **Fixed 2026-11-10 (builder-4, `bootstrap_new_players`):** the load that creates a player now gives him his
+  neutral state at that load, at the league year the stage belongs to, for the live league and every
+  `madden_tune_*` database; proven on a scratch database and by tests, and the next full `--run` proves it end to
+  end (the 389 rookies in `madden_tune_p2g` are the repro). `league_state.current_week` still waits at the seed
+  week through an offseason ingest — JR decided 2026-11-10 to leave it (the stage is authoritative, nothing
+  plans wrong).
 
 - **A complete season under Mu's control:** `CAREER-TUNE-P2C` (a fresh, capacity-pruned clone of `CAREER-MU2026`)
   ran the 2026 regular season, the postseason, all eight offseason stages, the 2027 preseason weeks and the cut

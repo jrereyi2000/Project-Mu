@@ -503,6 +503,7 @@ class LoadTinySnapshotTest(unittest.TestCase):
     def test_load(self):
         r = ls.load_snapshot(self.cur, tiny_snapshot(), season=TEST_SEASON)
         self.assertEqual((r["players"], r["players_created"]), (3, 3))          # the prospect isn't loaded
+        self.assertEqual(sorted(r["players_created_ids"].values()), [900001, 900002, 900003])
         self.assertEqual(r["player_attributes"], 3)
         self.assertEqual((r["games"], r["games_completed"]), (2, 1))             # preseason skipped
         self.assertEqual(r["team_stat_rows"], 2)
@@ -645,6 +646,7 @@ class LoadTinySnapshotTest(unittest.TestCase):
         ls.load_snapshot(self.cur, snap, season=TEST_SEASON)
         r = ls.load_snapshot(self.cur, snap, season=TEST_SEASON)
         self.assertEqual(r["players_created"], 0)
+        self.assertEqual(r["players_created_ids"], {})
         self.assertEqual(self.one("SELECT count(*) FROM player_stats s JOIN games g ON g.id = s.game_id "
                                   "WHERE g.season = %s", TEST_SEASON), (2,))
         self.assertEqual(self.one("SELECT count(*) FROM games WHERE season = %s", TEST_SEASON), (2,))

@@ -162,9 +162,14 @@ def load_events(cur, player_id, earned_season, status="APPLIED"):
     return [dict(row) if isinstance(row, Mapping) else dict(zip(columns, row)) for row in cur.fetchall()]
 
 def bootstrap_state(cur, player_id, application_season, base_ratings, band, source_fingerprint,
-                    *, confidence=50, form_neutral=False):
-    """Explicit neutral-save initialization, never automatic adoption of an arbitrary ingest."""
-    if confidence != 50 or not form_neutral:
+                    *, confidence=50, form_neutral=False, newcomer=False):
+    """Explicit neutral-save initialization, never automatic adoption of an arbitrary ingest.
+
+    `newcomer=True` is the one exception to the confidence-50 gate: a player this load created has no Mu
+    state to adopt and no neutrality proof to demand, so his save ConfidenceRating (Madden's own) is
+    neither checked nor stored. The gate exists so an arbitrary played save is never adopted as neutral.
+    """
+    if (confidence != 50 and not newcomer) or not form_neutral:
         raise ProgressionStateError("bootstrap requires confidence 50 and explicitly neutral form")
     ratings = _ratings(base_ratings)
     if not isinstance(band, Mapping) or not band:

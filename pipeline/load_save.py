@@ -417,7 +417,7 @@ def team_ids(cur, snapshot):
 def load_players(cur, snapshot, season, teams, report):
     cur.execute("SELECT madden_pgid, id FROM players WHERE madden_pgid IS NOT NULL")
     by_pgid = dict(cur.fetchall())
-    ids, created = {}, 0
+    ids, created, created_ids = {}, 0, {}
     for p in snapshot["players"]:
         if p["status"] not in LOADED_STATUSES:
             continue
@@ -430,6 +430,7 @@ def load_players(cur, snapshot, season, teams, report):
                          p["weight_lbs"], p["jersey"], p["pgid"]))
             pid = cur.fetchone()[0]
             created += 1
+            created_ids[pid] = p["pgid"]
         else:
             # A roster row clears a captured retirement (SEASON_CONTINUITY_PLAN D8): he is playing again.
             cur.execute("UPDATE players SET height = %s, weight = %s, player_number = %s, retired_season = NULL "
@@ -446,6 +447,7 @@ def load_players(cur, snapshot, season, teams, report):
         ids[p["pgid"]] = (pid, team, position(p["position"]), db_player_name(p["first_name"], p["last_name"]))
     report["players"] = len(ids)
     report["players_created"] = created
+    report["players_created_ids"] = created_ids
     return ids
 
 

@@ -105,6 +105,20 @@ def test_bootstrap_requires_neutral_layers_and_is_explicit(scratch):
 
 
 @pytest.mark.integration
+def test_newcomer_bootstrap_skips_the_neutrality_proof_but_still_needs_neutral_form(scratch):
+    """A player the load just created has no Mu state to adopt: his save ConfidenceRating is Madden's own
+    (madden_tune_p2g's rookie class: 23 of 389 were 51-61 at 2027 week 1), so only the newcomer path may
+    bootstrap him — and it still refuses without explicitly neutral form."""
+    _, cur, *_ = scratch
+    with pytest.raises(ps.ProgressionStateError):
+        ps.bootstrap_state(cur, 2, 2027, BASE, BAND, "save", confidence=61, form_neutral=True)
+    state = ps.bootstrap_state(cur, 2, 2027, BASE, BAND, "save", confidence=61, form_neutral=True, newcomer=True)
+    assert state["application_season"] == 2027 and state["base_ratings"] == BASE
+    with pytest.raises(ps.ProgressionStateError):
+        ps.bootstrap_state(cur, 3, 2027, BASE, BAND, "save", confidence=61, form_neutral=False, newcomer=True)
+
+
+@pytest.mark.integration
 def test_prepare_does_not_spend_ack_requires_verified_source_and_hash(scratch):
     _, cur, *_ = scratch
     bootstrap(cur)
