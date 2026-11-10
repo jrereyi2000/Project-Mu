@@ -182,7 +182,7 @@ def focus_window(hwnd: int) -> bool:
         win32api.keybd_event(0x12, 0, 0, 0)
         win32api.keybd_event(0x12, 0, KEYEVENTF_KEYUP, 0)
         fg = win32gui.GetForegroundWindow()
-        ours = win32process.GetWindowThreadProcessId(hwnd)[0]
+        ours = win32api.GetCurrentThreadId()
         theirs = win32process.GetWindowThreadProcessId(fg)[0] if fg else 0
         attached = False
         try:
@@ -203,17 +203,24 @@ def focus_window(hwnd: int) -> bool:
     return win32gui.GetForegroundWindow() == hwnd
 
 
-def ensure_foreground(title_re: str) -> dict:
-    """Find the window and make sure it's in front, refocusing once if not. Returns the fresh
-    window info (its rect changes after a restore); raises when it still isn't foreground."""
+def ensure_foreground(title_re: str, wait_s: float = 20.0) -> dict:
+    """Find the window and make sure it's in front, refocusing until it is or `wait_s` passes.
+
+    A person switching to another window for a moment is normal (JR talks to the agent while a
+    run is going) and must not end the job; only a window that stays away for `wait_s` raises.
+    Returns the fresh window info (its rect changes after a restore)."""
+    end = time.monotonic() + wait_s
     w = find_window(title_re)
-    if w["foreground"] and not w["minimized"]:
-        return w
-    focus_window(w["hwnd"])
-    w = find_window(title_re)
-    if not w["foreground"]:
-        raise AgentError(f"{w['title']!r} is not the foreground window after refocusing", window=w)
-    return w
+    while True:
+        if w["foreground"] and not w["minimized"]:
+            return w
+        focus_window(w["hwnd"])
+        w = find_window(title_re)
+        if w["foreground"] and not w["minimized"]:
+            return w
+        if time.monotonic() >= end:
+            raise AgentError(f"{w['title']!r} is not the foreground window after refocusing", window=w)
+        time.sleep(0.5)
 
 
 # ---------------------------------------------------------------- input
