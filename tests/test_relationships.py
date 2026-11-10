@@ -113,9 +113,13 @@ class SeedingTests(unittest.TestCase):
 class FakeDB:
     """A tiny in-memory stand-in for the persona_relationships statements relationships.py runs."""
 
-    def __init__(self, ready=True):
+    def __init__(self, ready=True, refs_ready=False):
         self.ready, self.rows, self.next_id, self._result, self.rowcount = ready, {}, 1, [], 0
+        self.refs_ready = refs_ready
         self.picks = []                     # (id, person_key, season, week, winner_backed, actual_winner)
+        self.calls = []                     # (id, person_key, season, graded_week, call_type, subject_type,
+        #                                      subject_id, result, detail)
+        self.refs = set()                   # (persona, target_type, target_id, ref) recorded as applied
 
     def execute(self, sql, params=None):
         s = " ".join(sql.split())
@@ -136,8 +140,18 @@ class FakeDB:
                             for k, r in self.rows.items() if k[0] == params[0]]
         elif "FROM agent_predictions p" in s:
             self._result = [tuple(p) for p in self.picks]
+        elif "FROM agent_season_calls" in s and s.startswith("SELECT id, person_key"):
+            self._result = [tuple(c) for c in self.calls]
         elif s.startswith("SELECT to_regclass('public.agent_season_calls')"):
-            self._result = [(False,)]
+            self._result = [(True,)]
+        elif s.startswith("SELECT to_regclass('public.persona_relationship_event_refs')"):
+            self._result = [(self.refs_ready,)]
+        elif s.startswith("SELECT 1 FROM persona_relationship_event_refs"):
+            self._result = [(1,)] if tuple(params) in self.refs else []
+        elif s.startswith("INSERT INTO persona_relationship_event_refs"):
+            pk, ttype, tid, ref, _season = params
+            self.refs.add((pk, ttype, tid, ref))
+            self.rowcount = 1
         elif s.startswith("SELECT evidence FROM persona_relationships"):
             row = self.rows.get(tuple(params))
             self._result = [(json.dumps(row["evidence"]),)] if row else []
@@ -231,26 +245,74 @@ class GradedTests(unittest.TestCase):
     def test_constants(self):
         self.assertEqual((rel.GROW_STEP, rel.EARN_RIGHT, rel.EARN_BURNED, rel.DECAY), (0.04, 0.03, -0.06, 0.8))
 
-    def test_a_row_written_before_the_marker_never_reapplies_a_trimmed_pick(self):
-        """M-0161 (B12's original case): the two oldest refs were trimmed out of the five-entry evidence window, so
-        a forced rerun applied them a second time (trust 0.21 -> 0.27). A graded event older than the surviving
-        evidence on the row was applied in the same ordered pass, so it is skipped."""
-        db = FakeDB()
+    def test_applying_a_pick_records_its_ref_and_a_rerun_skips_it(self):
+        db = FakeDB(refs_ready=True)
+        db.picks = [(1, "p", 2036, 4, 1, 1)]
+        self.assertEqual(rel.apply_graded(db, 2036, None), 1)
+        self.assertIn(("p", "team", "1", "pick:1"), db.refs)
+        self.assertEqual(rel.apply_graded(db, 2036, None), 0)
+
+    def test_a_pre_marker_row_is_protected_by_the_backfilled_refs(self):
+        """M-0167: the guard reads the durable per-event set, not an ordering guess. Seven picks were applied; the
+        evidence kept five and the backfill recorded all seven (db/migrations/2027_02_22_backfill_applied_refs.py)."""
+        db = FakeDB(refs_ready=True)
         db.rows[("p", "team", "1")] = {"id": 1, "trust": 0.21, "tags": [], "evidence": [
             {"season": 2036, "week": w, "kind": "PICK_RIGHT", "delta": 0.03, "text": "x", "ref": f"pick:{w}"}
             for w in range(3, 8)]}
-        db.picks = [(w, "p", 2036, w, 1, 1) for w in range(1, 8)]          # seven picks, weeks 1-7
+        db.refs = {("p", "team", "1", f"pick:{w}") for w in range(1, 8)}
+        db.picks = [(w, "p", 2036, w, 1, 1) for w in range(1, 8)]
         self.assertEqual(rel.apply_graded(db, 2036, None), 0)
-        self.assertEqual(db.rows[("p", "team", "1")]["trust"], 0.21)
+        self.assertAlmostEqual(db.rows[("p", "team", "1")]["trust"], 0.21)
 
-    def test_a_new_graded_pick_after_the_evidence_is_still_applied(self):
-        db = FakeDB()
-        db.rows[("p", "team", "1")] = {"id": 1, "trust": 0.21, "tags": [], "evidence": [
-            {"season": 2036, "week": 3, "kind": "PICK_RIGHT", "delta": 0.03, "text": "x", "ref": "pick:3"}]}
-        db.picks = [(3, "p", 2036, 3, 1, 1), (4, "p", 2036, 4, 1, 1)]      # week 4 is new
+    def test_a_call_graded_in_the_same_week_as_a_pick_is_still_applied(self):
+        """M-0167: the ordering guess skipped it (both events share (season, week)); the exact set does not."""
+        db = FakeDB(refs_ready=True)
+        db.picks = [(1, "p", 2036, 10, 1, 1)]
+        db.calls = [(2, "p", 2036, 10, "MVP", "team", 1, "RIGHT", None)]
+        self.assertEqual(rel.apply_graded(db, 2036, None), 2)
+
+    def test_an_out_of_order_full_season_pass_applies_every_pick_once(self):
+        db = FakeDB(refs_ready=True)
+        db.picks = [(w, "p", 2036, w, 1, 1) for w in range(7, 0, -1)]
+        self.assertEqual(rel.apply_graded(db, 2036, None), 7)
+        self.assertEqual(rel.apply_graded(db, 2036, None), 0)
+
+    def test_a_pick_that_completes_after_a_later_call_is_still_applied(self):
+        db = FakeDB(refs_ready=True)
+        db.calls = [(2, "p", 2036, 11, "MVP", "team", 1, "RIGHT", None)]
         self.assertEqual(rel.apply_graded(db, 2036, None), 1)
-        self.assertAlmostEqual(db.rows[("p", "team", "1")]["trust"], 0.24)
+        db.picks = [(1, "p", 2036, 10, 1, 1)]             # its game only completes later
+        self.assertEqual(rel.apply_graded(db, 2036, None), 1)
 
+    def test_the_same_game_picked_in_two_articles_counts_twice(self):
+        db = FakeDB(refs_ready=True)
+        db.picks = [(1, "p", 2036, 4, 1, 1), (2, "p", 2036, 4, 1, 1)]
+        self.assertEqual(rel.apply_graded(db, 2036, None), 2)
+
+    def test_a_database_without_the_refs_table_still_guards_on_the_evidence(self):
+        db = FakeDB()                                    # no 2027_02_22
+        db.picks = [(1, "p", 2036, 4, 1, 1)]
+        self.assertEqual(rel.apply_graded(db, 2036, None), 1)
+        self.assertEqual(rel.apply_graded(db, 2036, None), 0)
+
+
+class BackfillTests(unittest.TestCase):
+    def test_it_records_the_evidence_refs_and_only_strictly_older_missing_ones(self):
+        """The one-time backfill (M-0167): what is provable, never a guess. A ref from the same week as the
+        earliest surviving event is left unrecorded rather than marked."""
+        import importlib
+        bf = importlib.import_module("db.migrations.2027_02_22_backfill_applied_refs")
+        evidence = [{"season": 2036, "week": w, "kind": "PICK_RIGHT", "ref": f"pick:{w}"} for w in (5, 6, 7)]
+        graded = [{"ref": "pick:1", "season": 2036, "week": 1},
+                  {"ref": "pick:5", "season": 2036, "week": 5},
+                  {"ref": "call:9", "season": 2036, "week": 5}]
+        self.assertEqual(bf.backfill_refs(evidence, graded),
+                         {"pick:1": 2036, "pick:5": 2036, "pick:6": 2036, "pick:7": 2036})
+
+    def test_a_row_with_no_evidence_gets_nothing(self):
+        import importlib
+        bf = importlib.import_module("db.migrations.2027_02_22_backfill_applied_refs")
+        self.assertEqual(bf.backfill_refs([], [{"ref": "pick:1", "season": 2036, "week": 1}]), {})
 
 class DecayTests(unittest.TestCase):
     def test_decayed_trust_keeps_seeded_signs(self):

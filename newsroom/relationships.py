@@ -431,6 +431,8 @@ def _adjust(cur, pk, target_type, target_id, delta, event, add_tags=(), strong_t
     else:
         cur.execute("""UPDATE persona_relationships SET trust = %s, tags = %s, evidence = %s::jsonb, updated_at = NOW()
                        WHERE id = %s;""", (new, tags, ev, rid))
+    if event and event.get("ref") and _refs_ready(cur):
+        _record_applied(cur, pk, target_type, target_id, event["ref"], event.get("season"))
     return True
 
 
@@ -460,11 +462,33 @@ def apply_take(cur, person_key: str, season: int, week: int, about: list) -> int
     return _guarded(cur, work, 0) or 0
 
 
-def _already_applied(cur, pk, target_type, target_id, ref, season=None, week=None) -> bool:
-    """True when this graded ref was already applied. Two records count: the ref itself, and the sticky
-    APPLIED_REFS entry. A row written before that entry existed has lost its oldest refs to the evidence window, so
-    a graded event older than any evidence still on the row is also taken as applied: graded events are applied in
-    season/week order, so a later one on the same row proves the earlier ones were (M-0161)."""
+def _refs_ready(cur) -> bool:
+    """True when 2027_02_22's per-event applied-refs table exists."""
+    def q():
+        cur.execute("SELECT to_regclass('public.persona_relationship_event_refs') IS NOT NULL;")
+        return bool(cur.fetchone()[0])
+    return bool(_guarded(cur, q, False))
+
+
+def _record_applied(cur, pk, target_type, target_id, ref, season):
+    """Records a graded event's ref as applied, once: the durable fact the guard reads. The evidence window cannot
+    hold every ref, and inferring from its order got real events wrong (M-0167)."""
+    cur.execute("""INSERT INTO persona_relationship_event_refs
+                   (persona_type, persona_id, target_type, target_id, ref, season)
+                   VALUES ('writer', %s, %s, %s, %s, %s) ON CONFLICT DO NOTHING;""",
+                (pk, target_type, str(target_id), ref, season))
+
+
+def _already_applied(cur, pk, target_type, target_id, ref) -> bool:
+    """True when this graded ref was already applied: the per-event table is the record. Without that table (an
+    older database) the ref's own evidence entry and the sticky APPLIED_REFS list still count; nothing is inferred
+    from the order of the evidence."""
+    if _refs_ready(cur):
+        cur.execute("""SELECT 1 FROM persona_relationship_event_refs
+                       WHERE persona_type = 'writer' AND persona_id = %s AND target_type = %s
+                         AND target_id = %s AND ref = %s LIMIT 1;""",
+                    (pk, target_type, str(target_id), ref))
+        return cur.fetchone() is not None
     cur.execute("""SELECT evidence FROM persona_relationships
                    WHERE persona_type = 'writer' AND persona_id = %s AND target_type = %s AND target_id = %s;""",
                 (pk, target_type, str(target_id)))
@@ -474,16 +498,12 @@ def _already_applied(cur, pk, target_type, target_id, ref, season=None, week=Non
     ev = row[0]
     if isinstance(ev, str):
         ev = json.loads(ev or "[]")
-    key = (int(season), int(week or 0)) if season is not None else None
     for e in ev or []:
         if not isinstance(e, dict):
             continue
         if e.get("ref") == ref:
             return True
         if e.get("kind") == "APPLIED_REFS" and ref in (e.get("refs") or []):
-            return True
-        if key is not None and e.get("ref") and e.get("kind") not in ("DECAY", "APPLIED_REFS") \
-                and (int(e.get("season") or 0), int(e.get("week") or 0)) >= key:
             return True
     return False
 
@@ -570,7 +590,7 @@ def apply_graded(cur, season: int, week: int | None) -> int:
     def work():
         n = 0
         for pk, ttype, tid, delta, tags, event in events:
-            if _already_applied(cur, pk, ttype, tid, event["ref"], event.get("season"), event.get("week")):
+            if _already_applied(cur, pk, ttype, tid, event["ref"]):
                 continue
             n += _adjust(cur, pk, ttype, tid, delta, event, add_tags=tags)
         return n

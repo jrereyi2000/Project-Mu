@@ -1885,6 +1885,19 @@ CREATE TABLE IF NOT EXISTS persona_relationships (
 );
 CREATE INDEX IF NOT EXISTS idx_persona_rel_lookup ON persona_relationships (persona_type, persona_id);
 
+-- Every graded pick and call a writer's relationship row has already been charged for (2027_02_22; M-0167): the
+-- evidence window holds five events, so the applied ref is recorded on its own row rather than inferred from it.
+CREATE TABLE IF NOT EXISTS persona_relationship_event_refs (
+    persona_type VARCHAR(32) NOT NULL,
+    persona_id VARCHAR(64) NOT NULL,
+    target_type VARCHAR(32) NOT NULL,
+    target_id VARCHAR(64) NOT NULL,
+    ref VARCHAR(64) NOT NULL,               -- 'pick:<agent_predictions.id>' or 'call:<agent_season_calls.id>'
+    season INT,
+    applied_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (persona_type, persona_id, target_type, target_id, ref)
+);
+
 CREATE TABLE IF NOT EXISTS persona_trait_history (
     id SERIAL PRIMARY KEY,
     persona_type VARCHAR(32) NOT NULL CHECK (persona_type IN ('writer', 'gm', 'player', 'coach', 'owner', 'scout')),
@@ -3966,5 +3979,6 @@ INSERT INTO schema_migrations (version, filename, checksum, source) VALUES
     ('2027_02_18_contract_offer_week', '2027_02_18_contract_offer_week.sql', 'd7ad6551f3037ba512d0f22c992ca653634ed7ab8d703a9718c5ef119f798041', 'init_db.sql'),
     ('2027_02_19_owner_cash_buyouts', '2027_02_19_owner_cash_buyouts.sql', 'b7395abe8796d1772bfba9d9bc0322f4fc8b3638d1688ebf6dcf5e9b9c2674d8', 'init_db.sql'),
     ('2027_02_20_buyout_schedule', '2027_02_20_buyout_schedule.sql', 'ce290330016361b6a851d0919cd4596d58e24e51feb3703cd36ed590ca84be1d', 'init_db.sql'),
-    ('2027_02_21_coach_madden_profiles', '2027_02_21_coach_madden_profiles.sql', '57c19dbbd71734bbf240a9831018a4447e6985c037f5b55240c5bd21c3f5b8f7', 'init_db.sql')
+    ('2027_02_21_coach_madden_profiles', '2027_02_21_coach_madden_profiles.sql', '57c19dbbd71734bbf240a9831018a4447e6985c037f5b55240c5bd21c3f5b8f7', 'init_db.sql'),
+    ('2027_02_22_relationship_applied_refs', '2027_02_22_relationship_applied_refs.sql', '6d24a303ad4affdca5645e264d82220864fd357916c874e97849d3bfc08d9e39', 'init_db.sql')
 ON CONFLICT (version) DO NOTHING;
