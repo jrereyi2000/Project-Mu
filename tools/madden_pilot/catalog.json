@@ -569,35 +569,35 @@
       }
     },
     "LIVE_EVENT_FRENZY_MODAL": {
-      "note": "Seen 2026-11-10 (P2-02): holding Escape on the LIVE EVENT tab opens 'ADVANCE FREE AGENT FRENZY / Currently on hour 1. Advance to hour 2?' with ADVANCE TO NEXT HOUR (selected), SIMULATE TO END OF FRENZY and CANCEL (JR; Windows OCR drops the END and reads SIMULATE TO OF FRENZY, so the label is anchored on SIMULATE TO). SIMULATE TO END OF FRENZY is the only one the pilot may take: it ends the event, which is what unlocks the week.",
+      "note": "Seen 2026-11-10 (P2-02): holding Escape on the LIVE EVENT tab opens 'ADVANCE FREE AGENT FRENZY / Currently on hour 1. Advance to hour 2?' with ADVANCE TO NEXT HOUR (selected), SIMULATE TO END OF FRENZY and CANCEL. Windows OCR drops the END and sometimes the whole 'TO END OF', reading only SIMULATE (2026-11-10, p2g stop 4), so the button is anchored on the single word SIMULATE. SIMULATE is the only one the pilot may take: it ends the event, which unlocks the week.",
       "all": [
         "ADVANCE FREE AGENT FRENZY"
       ],
       "any": [
-        "SIMULATE TO"
+        "SIMULATE"
       ],
       "none": [],
       "options": [
         "ADVANCE TO NEXT HOUR",
-        "SIMULATE TO",
+        "SIMULATE",
         "CANCEL"
       ],
       "default": "ADVANCE TO NEXT HOUR",
       "nav": "vertical",
       "highlight": "border",
       "confirm_ok": [
-        "SIMULATE TO",
+        "SIMULATE",
         "CANCEL"
       ],
       "exits": {
         "HUB_GAMEDAY": [
           [
             "highlight",
-            "SIMULATE TO"
+            "SIMULATE"
           ],
           [
             "confirm",
-            "SIMULATE TO"
+            "SIMULATE"
           ]
         ]
       }
@@ -610,7 +610,9 @@
       ],
       "any": [
         "NEGOTIATE CONTRACT",
-        "ALL PLAYERS"
+        "ALL PLAYERS",
+        "RATINGS",
+        "PLAYERDNA"
       ],
       "none": [],
       "highlight": null,
@@ -713,7 +715,7 @@
       }
     },
     "HUB_BYE": {
-      "note": "Seen 2026-11-10: the Weekly Hub on the user team's bye week — the tab row and BYE WEEK, no matchup line and no week number anywhere (the 2026-11-10 season run stopped here: nothing matched, goto spun on UNKNOWN until its timeout). The week is known only from the save, so jobs omits the header hunt on this screen and infers +1 from the autosave written by the advance.",
+      "note": "Seen 2026-11-10: the Weekly Hub on the user team's bye week \u2014 the tab row and BYE WEEK, no matchup line and no week number anywhere (the 2026-11-10 season run stopped here: nothing matched, goto spun on UNKNOWN until its timeout). The week is known only from the save, so jobs omits the header hunt on this screen and infers +1 from the autosave written by the advance.",
       "all": [
         "BYE WEEK"
       ],
