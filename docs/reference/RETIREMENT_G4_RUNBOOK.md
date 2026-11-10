@@ -243,7 +243,7 @@ Findings:
 **Conclusion:** the field-only restore is accepted but incomplete and not durable through cutdown. Do not
 approve the proof on `ContractStatus`/`TeamIndex` alone. The window needs a signing step after the field
 edit — the stored contract through `plan.sign_player`/`sign.mjs`, which also writes the roster list — and
-the proof must be rerun with a contract row present.
+the proof must be rerun with a contract row present. The signed branch below validates that shape.
 
 ### Signed-restore branch (2026-11-09)
 
@@ -262,6 +262,27 @@ empty `PlayerContract` rows; the reader shows all three `Signed` on their old te
 JR advances it exactly like the field-only branch: 2027 preseason week 1, cut-down, 2027 week 1. Success is
 all three still present at cut-down and week 1 with the contract row intact; the direct comparison is the
 field-only branch, where two of the three were deleted at cut-down.
+
+**Result (2026-11-09): the signed restore passes.**
+
+| stop | Lawrence | Lewis | Woods |
+|---|---|---|---|
+| 2027 PS W1 | Signed/27, 1-yr contract, depth LE | Signed/16, 1-yr contract, depth CB | Signed/11, 1-yr contract, depth FS |
+| CUTDOWN | unchanged | unchanged | unchanged |
+| 2027 W1 | unchanged | unchanged | unchanged |
+
+All three survive the preseason purge (85 purged, the same as the field-only branch), **cut-down deletes
+none**, and they are still `Signed` with their contracts at 2027 week 1. The census reports no vanished
+rostered player, no re-retirement, and no new retirees. Madden also put each on his team's depth chart at
+the next advance — the field-only restores never appeared there. The A/B is decisive: the contract is what
+makes the restore durable.
+
+**Conclusion:** the window restore must be a signing, not a field edit. `step_restore_retirees`
+(`plan.sign_player` → `sign.mjs`) is the proven shape. Two ways to wire it: sign the player back inside the
+window's own write (extend `sign.mjs` to accept a `Retired` player, so `Retired → Signed` with a contract
+and roster entry is one move), or keep the legacy two-step (the window sets him `FreeAgent`, the next run
+signs him, as `step_restore_retirees` already does for decision-stage keeps). The proof must be rerun on
+whichever path the window actually takes.
 
 
 
@@ -306,8 +327,9 @@ are built and green. The missing input is no longer only the proof:
 
 - **A contract step for a window restore.** The planner edits `ContractStatus`/`TeamIndex` only. Session 3
   showed Madden accepts that, never creates a contract or roster entry, and deletes two of three such
-  players at the cutdown advance. A restore should sign the player back with his stored contract (the
-  `step_restore_retirees` model, `sign.mjs`), and the proof should be rerun with the contract row present.
+  players at the cutdown advance. The signed branch survives all three advances with the contract row,
+  roster entry and a Madden-populated depth slot, so a restore must sign the player back with his stored
+  contract (the `step_restore_retirees` model, `sign.mjs`), and the proof must be rerun on that path.
 - **Roster and practice-squad lists in the reader.** The proof cannot record roster/PS membership today;
   adding them is a reader change, which resets the proof's `schema_version`, so do it before the rerun.
 - The transaction record still needs a league office run on the fixture lineage (session 3 used no database).
