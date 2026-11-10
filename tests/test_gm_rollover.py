@@ -169,6 +169,138 @@ def test_hot_seat_hire_writes_a_card(monkeypatch):
     assert rep["gm"] == p["gm_name"]
 
 
+# ---------------------------------------------------- competitive GM search (GM_HIRING_SEARCH_PLAN §2.3) ----
+def test_gm_candidate_pool_salaries_and_acceptance_floors():
+    pool = {c["tier"]: c for c in gr.gm_candidate_pool("CAR", 2036)}
+    assert pool["PROMOTION"]["salary"] == 2_750_000
+    assert pool["STANDARD"]["salary"] == 5_750_000
+    assert pool["ELITE"]["salary"] == 10_000_000
+    assert pool["PROMOTION"]["salary"] < pool["STANDARD"]["salary"] < pool["ELITE"]["salary"]
+    assert {t: c["min_appeal"] for t, c in pool.items()} == {"ELITE": 0.55, "STANDARD": 0.35, "PROMOTION": 0.0}
+    assert gr.GM_MIN_APPEAL == {"ELITE": 0.55, "STANDARD": 0.35, "PROMOTION": 0.0}
+    assert gr.GM_APPEAL_WEIGHT == {"ELITE": 0.40, "STANDARD": 0.20, "PROMOTION": 0.05}
+
+
+def test_gm_candidate_score_weights_appeal_by_tier():
+    elite = {"key": "E", "tier": "ELITE", "stature": 0.80, "min_appeal": 0.55}
+    standard = {"key": "S", "tier": "STANDARD", "stature": 0.50, "min_appeal": 0.35}
+    assert gr.gm_candidate_score(elite, 0.75) == round(0.80 + 0.40 * (0.75 - 0.55), 4)
+    assert gr.gm_candidate_score(standard, 0.75) == round(0.50 + 0.20 * (0.75 - 0.35), 4)
+    assert gr.gm_candidate_score(elite, 0.50) == 0.80          # appeal below the floor is never a surplus
+
+
+def test_chunk7_g1_appeal_changes_the_pick():
+    pool = gr.gm_candidate_pool("CAR", 2036)
+    picks = {appeal: gr.gm_search(pool, appeal=appeal, budget=30_000_000)["tier"]
+             for appeal in (0.0, 0.5, 1.0)}
+    assert picks == {0.0: "PROMOTION", 0.5: "STANDARD", 1.0: "ELITE"}
+
+
+def test_chunk7_g2_all_tiers_reachable_by_budget():
+    pool = gr.gm_candidate_pool("CAR", 2036)
+    picks = {budget: gr.gm_search(pool, appeal=0.6, budget=budget)["tier"]
+             for budget in (0, 1_000_000, 5_750_000, 10_000_000)}
+    assert picks == {0: "PROMOTION", 1_000_000: "PROMOTION", 5_750_000: "STANDARD", 10_000_000: "ELITE"}
+    assert set(picks.values()) == {"PROMOTION", "STANDARD", "ELITE"}
+
+
+def test_gm_search_records_appeal_and_budget_refusals():
+    pool = gr.gm_candidate_pool("CAR", 2036)
+    low = gr.gm_search(pool, appeal=0.40, budget=50_000_000)        # ELITE refuses below its 0.55 floor
+    assert low["tier"] == "STANDARD"
+    assert next(d for d in low["declined"] if d["tier"] == "ELITE") == {
+        "key": "CAR:ELITE", "tier": "ELITE", "reason": "appeal", "min_appeal": 0.55, "appeal": 0.40}
+
+    willing = gr.gm_search(pool, appeal=0.70, budget=6_000_000)     # ELITE accepts but cannot be afforded
+    assert willing["tier"] == "STANDARD"
+    assert next(d for d in willing["declined"] if d["tier"] == "ELITE") == {
+        "key": "CAR:ELITE", "tier": "ELITE", "reason": "budget", "salary": 10_000_000, "budget": 6_000_000}
+
+
+def test_meddler_owner_pushes_a_0_56_opening_below_the_elite_floor():
+    pool = gr.gm_candidate_pool("CAR", 2036)
+    res = gr.gm_search(pool, appeal=0.56, budget=50_000_000, owner_view={"traits": ["MEDDLER"]})
+    assert res["effective_appeal"] == 0.51                         # appeal_term -0.05
+    assert res["tier"] == "STANDARD"
+    assert any(d["tier"] == "ELITE" and d["reason"] == "appeal" and d["appeal"] == 0.51
+               for d in res["declined"])
+
+
+def test_owner_can_pick_promotion_over_a_low_stature_standard():
+    view = {"traits": ["BUDGET_CONSCIOUS", "MEDDLER"], "sliders": {"openness": 10}}
+    pool = [
+        {"key": "T:ELITE", "tier": "ELITE", "salary": 10_000_000, "stature": 0.85, "min_appeal": 0.55},
+        {"key": "T:STANDARD", "tier": "STANDARD", "salary": 5_750_000, "stature": 0.48, "min_appeal": 0.35},
+        {"key": "T:PROMOTION", "tier": "PROMOTION", "salary": 2_750_000, "stature": 0.38, "min_appeal": 0.0},
+    ]
+    res = gr.gm_search(pool, appeal=0.58, budget=30_000_000, owner_view=view)
+    assert res["effective_appeal"] == 0.53                         # MEDDLER appeal_term
+    assert res["tier"] == "PROMOTION"                              # BUDGET_CONSCIOUS + MEDDLER + openness
+    assert gr.gm_search(pool, appeal=0.58, budget=30_000_000)["tier"] == "ELITE"   # a neutral owner picks ELITE
+
+
+# ---------------------------------------------------- owner_hiring wiring in _hire_gm (§2.4) ----
+OWNER_HIRE_POOL = [
+    {"key": "ATL:ELITE", "tier": "ELITE", "salary": 10_000_000, "stature": 0.85, "min_appeal": 0.55},
+    {"key": "ATL:STANDARD", "tier": "STANDARD", "salary": 5_750_000, "stature": 0.55, "min_appeal": 0.35},
+    {"key": "ATL:PROMOTION", "tier": "PROMOTION", "salary": 2_750_000, "stature": 0.30, "min_appeal": 0.0},
+]
+
+
+def _hire_with_owner(monkeypatch, mode, *, user_ids=(), view=None):
+    from engines import coaching_carousel as cc
+    from engines import owner_context as oc
+    monkeypatch.setattr(cc, "opening_parts", lambda cur, prior, ids: {})
+    monkeypatch.setattr(cc, "opening_appeal", lambda parts: 0.56)          # ELITE accepts a neutral owner, not a MEDDLER
+    monkeypatch.setattr(gr, "_gm_budget", lambda *a, **k: 30_000_000)
+    monkeypatch.setattr(gr, "gm_candidate_pool", lambda abbr, season: [dict(c) for c in OWNER_HIRE_POOL])
+    monkeypatch.setattr(oc, "feature_mode", lambda cur, f: mode)
+    monkeypatch.setattr(oc, "user_team_ids", lambda cur: set(user_ids))
+    monkeypatch.setattr(oc, "team_owner_views", lambda cur, **k: {1: view} if view is not None else {})
+    monkeypatch.setattr(gm_personas, "read_teams",
+                        lambda cur, season: {"ATL": {"id": 1, "city": "Atlanta", "name": "Falcons", "coach": "X"}})
+    monkeypatch.setattr(gm_personas, "read_open", lambda cur: {})
+    monkeypatch.setattr(gm_personas, "insert_gm", lambda *a, **k: 99)
+
+    class Cur:
+        def execute(self, q, a=None):
+            pass
+
+        def fetchone(self):
+            return None
+
+    return gr._hire_gm(Cur(), 2037, 2036, "ATL", 1, None, why="hot seat", log=lambda *a: None)
+
+
+def test_hire_gm_owner_hiring_off_shadow_and_active(monkeypatch):
+    meddler = {"traits": ["MEDDLER"]}
+    off = _hire_with_owner(monkeypatch, "off", view=meddler)
+    assert off["tier"] == "ELITE" and "owner_shadow" not in off
+
+    shadow = _hire_with_owner(monkeypatch, "shadow", view=meddler)
+    assert shadow["tier"] == "ELITE"                              # shadow hires as off
+    assert shadow["owner_shadow"] == {"picked": "ELITE", "owner_pick": "STANDARD",
+                                      "appeal": 0.56, "owner_appeal": 0.51}
+
+    active = _hire_with_owner(monkeypatch, "active", view=meddler)
+    assert active["tier"] == "STANDARD"                           # the owner's terms apply
+    assert active["effective_appeal"] == 0.51
+    assert "owner_shadow" not in active
+    assert any(d["key"] == "ATL:ELITE" and d["reason"] == "appeal" for d in active["declined"])
+
+
+def test_hire_gm_never_applies_owner_terms_to_jrs_teams(monkeypatch):
+    for mode in ("shadow", "active"):
+        rep = _hire_with_owner(monkeypatch, mode, user_ids={1}, view={"traits": ["MEDDLER"]})
+        assert rep["tier"] == "ELITE" and "owner_shadow" not in rep
+
+
+def test_hire_gm_without_a_reviewed_owner_uses_the_neutral_search(monkeypatch):
+    for mode in ("shadow", "active"):
+        rep = _hire_with_owner(monkeypatch, mode, view=None)
+        assert rep["tier"] == "ELITE" and "owner_shadow" not in rep
+
+
 def test_step_gm_next_stage(monkeypatch):
     """weekly_capture.step_gm(next_stage=True): the stage after the last one, only in the offseason."""
     import pipeline.weekly_capture as wc
