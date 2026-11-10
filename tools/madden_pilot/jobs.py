@@ -370,12 +370,16 @@ def _mtime(path):
 
 
 @job("sim-season")
-def sim_season(pilot, save=None, to="regular-season-end", watcher=None, folder=None, quit=True, progress=None):
+def sim_season(pilot, save=None, to="regular-season-end", watcher=None, folder=None, quit=True, progress=None,
+               franchise=None):
     """Load CAREER-TUNE-<name> from the franchise list, sim with NEXT WEEK until `to`, create a
     savepoint, and quit back to the franchise list. Refuses other saves and a running watcher
-    before touching the PC."""
+    before touching the PC. `franchise` (a TUNE-* tile name) says that franchise is already
+    loaded: sim it in place instead of quitting to the list and loading it again."""
     if not save or not str(save).upper().startswith(TUNE_SAVE_PREFIX) or not _valid_save_name(save):
         return _refuse(f"only {TUNE_SAVE_PREFIX}* saves are simmed, not {save!r}", save=save)
+    if franchise and not norm(tile_name(franchise)).startswith("TUNE"):
+        return _refuse(f"only a TUNE-* franchise may be simmed in place, not {franchise!r}", save=save)
     try:
         kind, n = parse_target(to)
     except ValueError as e:
@@ -391,7 +395,13 @@ def sim_season(pilot, save=None, to="regular-season-end", watcher=None, folder=N
     tile = tile_name(save)
     progress.update(save=save, to=to, weeks_simmed=0)
 
-    _load_franchise(pilot, tile)
+    if franchise:
+        pilot.loaded_franchise = norm(tile_name(franchise))
+        _, screen = pilot.look()
+        if screen not in HUBS:
+            _load_franchise(pilot, tile)
+    else:
+        _load_franchise(pilot, tile)
     head = _week_now(pilot)
     progress.update(start_week=head.get("week"), start_phase=head["phase"], end_week=head.get("week"))
     weeks = 0

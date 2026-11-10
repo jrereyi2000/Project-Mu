@@ -226,6 +226,8 @@ def build_parser():
     s.add_argument("--save", required=True)
     s.add_argument("--to", default="regular-season-end", help="'week N', regular-season-end or playoffs-end")
     s.add_argument("--no-quit", action="store_true", help="stay in the franchise after the savepoint")
+    s.add_argument("--franchise", help="the franchise already loaded, e.g. TUNE-P2A: sim it in place "
+                   "instead of going back to CURRENT FRANCHISES (the hub doesn't show the save name)")
     s = sub.add_parser("set-setting", parents=[common], help="walk a menu path and set a value")
     s.add_argument("--path", required=True)
     s.add_argument("--value", required=True)
