@@ -228,8 +228,9 @@ def run(name, *, base_save=BASE_SAVE, resume=False, offseason=True, max_stops=14
     run_dir = os.path.join(seasons_dir or SEASONS_DIR, name)
     os.makedirs(run_dir, exist_ok=True)
     steps = []
+    # whatever a previous run left open, start from CURRENT FRANCHISES (a no-op when already there)
+    release(name, runner=runner, python=python)
     if not resume:
-        release(name, runner=runner, python=python)
         clone(name, base_save, runner=runner, python=python)
         steps.append("clone")
         sim(name, "regular-season-end", quit=False, runner=runner, python=python,
