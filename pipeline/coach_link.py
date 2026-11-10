@@ -345,7 +345,9 @@ def link_staff(cur, snapshot, season):
     # avoids for its hires (audit M-0203). The producer prices them; this only decides when.
     if created:
         from engines import staff_contracts_run                                # local: the link is a loader module
-        fired = staff_contracts_run.file_hires(cur, season)
+        # `starting_only=False` files every current staffer with no live row, not only this season's hires: the
+        # coaches Mu creates are starting staff whose tenure may predate the season (audit M-0203).
+        fired = staff_contracts_run.file_hires(cur, season, starting_only=False)
     else:
         fired = []
     return {"linked": linked, "created": created, "linked_free_agents": linked_free,
