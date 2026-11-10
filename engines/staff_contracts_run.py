@@ -38,43 +38,47 @@ def _table(cur, name):
 
 
 def current_staff(cur, season):
-    """[{team_id, person_kind, person_id, name, start_season, experience, championships}] for each team's current
-    HC/OC/DC (the tenure covering `season`; a later-starting tenure wins). A hire for the coming league year is NOT
-    current: the carousel hires the successor before FREE_AGENCY's run, so reading him as staff would displace the
-    man who held the job in `season` (M-0158 R1). The firing loop treats a contract signed for a later year as a
-    hire instead (M-0150 N1)."""
+    """[{team_id, person_kind, person_id, name, start_season, end_season, experience, championships}] for each
+    team's current HC/OC/DC/GM (the tenure covering `season`; a later-starting tenure wins). A hire for the coming
+    league year is NOT current: the carousel hires the successor before FREE_AGENCY's run, so reading him as staff
+    would displace the man who held the job in `season` (M-0158 R1). The firing loop treats a contract signed for a
+    later year as a hire instead (M-0150 N1). `end_season` tells the producer whether the man still holds the job
+    (None) or leaves at the end of `season` (a firing, a poach or retirement), which decides the re-signing."""
     out, seen = [], set()
 
-    def add(team_id, kind, person_id, name, start_season, championships):
+    def add(team_id, kind, person_id, name, start_season, championships, end_season=None):
         if (team_id, kind) in seen:
             return
         seen.add((team_id, kind))
         out.append({"team_id": team_id, "person_kind": kind, "person_id": person_id, "name": name,
-                    "start_season": start_season, "championships": championships})
+                    "start_season": start_season, "end_season": end_season, "championships": championships})
 
-    cur.execute("""SELECT t.team_id, t.coach_id, c.coach_name, t.start_season, COALESCE(r.super_bowl_wins, 0)
+    cur.execute("""SELECT t.team_id, t.coach_id, c.coach_name, t.start_season, COALESCE(r.super_bowl_wins, 0),
+                          t.end_season
                    FROM coach_tenures t JOIN coaches c ON c.id = t.coach_id
                    LEFT JOIN coach_records r ON r.coach_id = t.coach_id
                    WHERE t.start_season <= %s AND (t.end_season IS NULL OR t.end_season >= %s)
                    ORDER BY t.team_id, t.start_season DESC, t.id DESC""", (season, season))
     for r in cur.fetchall():
-        add(r[0], "HC", r[1], r[2], r[3], int(r[4] or 0))
+        add(r[0], "HC", r[1], r[2], r[3], int(r[4] or 0), r[5])
     if _table(cur, "coordinator_tenures"):
-        cur.execute("""SELECT t.team_id, t.role, t.coordinator_id, c.coordinator_name, t.start_season
+        cur.execute("""SELECT t.team_id, t.role, t.coordinator_id, c.coordinator_name, t.start_season, t.end_season
                        FROM coordinator_tenures t JOIN coordinators c ON c.id = t.coordinator_id
                        WHERE t.start_season <= %s AND (t.end_season IS NULL OR t.end_season >= %s)
                        ORDER BY t.team_id, t.role, t.start_season DESC, t.id DESC""", (season, season))
         for r in cur.fetchall():
-            add(r[0], r[1], r[2], r[3], r[4], 0)
-    # The GM is staff too (plan §2.2 puts his salary in the owner's payroll); his open tenure is the contract the
-    # producer files, rolls and settles. A coach-GM (a Full Control / Godfather hire, `gm_profiles.coach_id` set) is
-    # skipped: his HC contract already pays him, and filing a GM deal on top counted the same man twice.
+            add(r[0], r[1], r[2], r[3], r[4], 0, r[5])
+    # The GM is staff too (plan §2.2 puts his salary in the owner's payroll); his tenure is the contract the
+    # producer files, rolls and settles. Like a coach, a GM whose tenure ended in `season` is still current for it,
+    # so one fired by the hot seat before the first annual run of a fresh league is still filed and paid (M-0165).
+    # A coach-GM (a Full Control / Godfather hire, `gm_profiles.coach_id` set) is skipped: his HC contract already
+    # pays him, and filing a GM deal on top counted the same man twice.
     if _table(cur, "gm_profiles"):
-        cur.execute("""SELECT team_id, id, gm_name, start_season FROM gm_profiles
-                       WHERE end_season IS NULL AND coach_id IS NULL AND start_season <= %s ORDER BY team_id""",
-                    (season,))
+        cur.execute("""SELECT team_id, id, gm_name, start_season, end_season FROM gm_profiles
+                       WHERE (end_season IS NULL OR end_season >= %s) AND coach_id IS NULL AND start_season <= %s
+                       ORDER BY team_id""", (season, season))
         for r in cur.fetchall():
-            add(r[0], "GM", r[1], r[2], r[3], 0)
+            add(r[0], "GM", r[1], r[2], r[3], 0, r[4])
     for s in out:
         if s["person_kind"] == "GM":
             # A GM's experience is his seasons on the job (plan §2.1): the old `count(*) FROM gm_profiles WHERE
@@ -138,7 +142,13 @@ def annual(cur, season, dry_run=False):
     for s in staff:
         key = (s["team_id"], s["person_kind"], s["person_id"])
         row = by_key.get(key)
-        if row is None or row["remaining_years"] <= 0:
+        # R4 (JR, 2026-11-10, via the audit): a man the team keeps gets a new deal at market price for the season
+        # his old one runs out, so every season he holds the job is paid. A tenure that ended in that season is a
+        # firing, a poach or a retirement: his deal is simply left to expire, and the firing loop settles it.
+        resign = (row is not None and row["remaining_years"] > 0
+                  and max(0, int(row["total_years"]) - (season - int(row["signed_season"]))) <= 0
+                  and s["end_season"] is None)
+        if row is None or row["remaining_years"] <= 0 or resign:
             years, salary = _years(s["person_kind"]), _salary(s["person_kind"], s["experience"],
                                                              s["championships"])
             if s["person_kind"] == "GM" and row is not None:
@@ -151,6 +161,12 @@ def annual(cur, season, dry_run=False):
             target = min(years, max(0, years - (season - signed)))
             if target <= 0:                       # an old tenure with no live contract: file a fresh deal
                 signed, target = season, years
+            if resign:
+                # Close the finished deal first, so the new one is the only active contract for the person
+                # (staff_contracts_active_once).
+                rolled.append({"id": row["id"], "from": row["remaining_years"], "to": 0, "resigned": True})
+                if not dry_run:
+                    cur.execute("UPDATE staff_contracts SET remaining_years = 0 WHERE id = %s", (row["id"],))
             filed.append({"team_id": s["team_id"], "person_kind": s["person_kind"], "person_id": s["person_id"],
                           "annual_salary": salary, "total_years": years, "remaining_years": target,
                           "signed_season": signed})

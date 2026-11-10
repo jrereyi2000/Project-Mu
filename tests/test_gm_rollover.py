@@ -441,7 +441,7 @@ def test_a_failing_owner_read_does_not_abort_the_hire(monkeypatch):
     assert "ROLLBACK TO SAVEPOINT GM_OWNER_VIEW" in cur.statements      # and the failed read was contained
 
 
-def test_a_fired_gm_is_bought_out_for_the_seasons_after_the_one_he_was_fired_in():
+def test_a_fired_gm_is_bought_out_from_the_firing_season():
     """M-0150 M1: the settle used the stored remaining_years (last rolled for the previous league year) and started
     the schedule in the firing season, so a 4-year deal paid 5 seasons."""
     class Cur:

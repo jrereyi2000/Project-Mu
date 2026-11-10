@@ -248,7 +248,7 @@ def test_a_coach_rehired_into_the_same_seat_is_filed_again():
     scr.annual(cur, 2036)
     scr.annual(cur, 2037)
     rep = scr.annual(cur, 2038)
-    assert rep["filed"] == 1
+    assert rep["filed"] >= 1                          # his fresh deal, plus any other man's that day
     cur.execute("SELECT remaining_years, signed_season, buyout_owed FROM staff_contracts "
                 "WHERE team_id = 2 AND person_kind = 'HC' AND person_id = 11 ORDER BY id")
     rows = cur.fetchall()
@@ -291,25 +291,37 @@ _INVARIANT_DDL = """
 
 DEALS = [
     dict(name="hc-mid-replaced", kind="HC", salary=6_000_000, years=4, signed=2026, last=2027, path="annual",
-         buyout=12_000_000, first=2028, successor=2028),
+         successor=2028, expect=["S S B B"]),
     dict(name="hc-mid-vacant", kind="HC", salary=6_000_000, years=4, signed=2026, last=2027, path="annual",
-         buyout=12_000_000, first=2028),
+         expect=["S S B B"]),
     dict(name="hc-first-year", kind="HC", salary=6_000_000, years=4, signed=2026, last=2026, path="annual",
-         buyout=18_000_000, first=2027),
+         expect=["S B B B"]),
     dict(name="hc-last-year", kind="HC", salary=6_000_000, years=4, signed=2026, last=2029, path="annual",
-         buyout=0),
-    dict(name="oc-poached", kind="OC", salary=2_000_000, years=3, signed=2033, last=2034, path="annual",
-         buyout=0, moved_to=2, voided=True),
+         expect=["S S S S"]),
+    dict(name="hc-kept-past-his-deal", kind="HC", salary=6_000_000, years=4, signed=2026, last=2032, path="annual",
+         kept=True, expect=["S S S S", "S S S S"]),
+    dict(name="oc-lateral", kind="OC", salary=2_000_000, years=3, signed=2033, last=2034, path="annual",
+         moved_to=2, voided=True, expect=["S S -"]),
+    dict(name="oc-poached-to-a-head-coach-job", kind="OC", salary=2_000_000, years=3, signed=2033, last=2034,
+         path="annual", poached_to_hc=True, voided=True, expect=["S S -"]),
     dict(name="gm-mid-deal", kind="GM", salary=3_000_000, years=4, signed=2033, last=2035, path="gm_settle",
-         buyout=6_000_000, first=2035),
+         expect=["S S B B"]),
     dict(name="gm-first-year", kind="GM", salary=3_000_000, years=4, signed=2033, last=2033, path="gm_settle",
-         buyout=12_000_000, first=2033),
+         expect=["B B B B"]),
+    dict(name="gm-last-year", kind="GM", salary=3_000_000, years=4, signed=2033, last=2036, path="gm_settle",
+         expect=["S S S B"]),
+    dict(name="gm-replaced", kind="GM", salary=3_000_000, years=4, signed=2033, last=2035, path="gm_settle",
+         gm_successor=2036, expect=["S S B B"]),
+    dict(name="gm-league-start-fired-first", kind="GM", salary=3_000_000, years=4, signed=2033, last=2033,
+         path="gm_settle", no_initial_run=True, expect=["S B B B"]),   # no contract row when the hot seat fired him
     dict(name="full-control-100m", kind="HC", salary=20_000_000, years=5, signed=2033, last=2035, path="fc_settle",
-         full_control=True, buyout=60_000_000, first=2035),
+         full_control=True, expect=["S S B B B"]),
+    dict(name="full-control-first-year", kind="HC", salary=20_000_000, years=5, signed=2031, last=2031,
+         path="fc_settle", full_control=True, expect=["B B B B B"]),
     dict(name="full-control-last-year", kind="HC", salary=4_000_000, years=5, signed=2031, last=2035,
-         path="fc_settle", full_control=True, buyout=4_000_000, first=2035),
+         path="fc_settle", full_control=True, expect=["S S S S B"]),
     dict(name="coach-gm", kind="HC", salary=20_000_000, years=5, signed=2030, last=2032, path="fc_settle",
-         full_control=True, coach_gm=True, buyout=60_000_000, first=2032),
+         full_control=True, coach_gm=True, expect=["S S B B B"]),
 ]
 
 
@@ -318,14 +330,18 @@ def _scenario(case):
     conn = sqlite3.connect(":memory:", isolation_level=None)
     conn.executescript(_INVARIANT_DDL)
     kind, signed, last = case["kind"], case["signed"], case["last"]
+    end = None if case.get("kept") else last
     person_id = {"GM": 101, "HC": 10}.get(kind, 20)
     if kind == "GM":
         conn.execute("INSERT INTO gm_profiles VALUES (101, 1, 'GM', ?, NULL, NULL)", (signed,))
+        if case.get("gm_successor"):
+            conn.execute("INSERT INTO gm_profiles VALUES (102, 1, 'Next GM', ?, NULL, NULL)",
+                         (case["gm_successor"],))
     elif kind == "HC":
         conn.execute("INSERT INTO coaches VALUES (10, 'Coach')")
         conn.execute("INSERT INTO coach_records VALUES (10, 0)")
         conn.execute("INSERT INTO coach_tenures (coach_id, team_id, start_season, end_season) "
-                     "VALUES (10, 1, ?, ?)", (signed, last))
+                     "VALUES (10, 1, ?, ?)", (signed, end))
         if case.get("coach_gm"):
             conn.execute("INSERT INTO gm_profiles VALUES (101, 1, 'Coach-GM', ?, NULL, 10)", (signed,))
         if case.get("successor"):
@@ -336,33 +352,33 @@ def _scenario(case):
     else:
         conn.execute("INSERT INTO coordinators VALUES (20, 'Coord')")
         conn.execute("INSERT INTO coordinator_tenures (coordinator_id, team_id, role, start_season, end_season) "
-                     "VALUES (20, 1, ?, ?, ?)", (kind, signed, last))
+                     "VALUES (20, 1, ?, ?, ?)", (kind, signed, end))
         if case.get("moved_to"):
             conn.execute("INSERT INTO coordinator_tenures (coordinator_id, team_id, role, start_season, end_season) "
                          "VALUES (20, ?, ?, ?, NULL)", (case["moved_to"], kind, last + 1))
+        if case.get("poached_to_hc"):
+            conn.execute("INSERT INTO coaches VALUES (12, 'Coord')")
+            conn.execute("INSERT INTO coach_tenures (coach_id, team_id, start_season, end_season) "
+                         "VALUES (12, 2, ?, NULL)", (last + 1,))
     cur = FakeCursor(conn)
-    scr.annual(cur, signed)                            # the producer files the deal
-    conn.execute("UPDATE staff_contracts SET annual_salary = ?, total_years = ?, remaining_years = ?, "
-                 "full_control = ?", (case["salary"], case["years"], case["years"],
-                                      1 if case.get("full_control") else 0))
+    if not case.get("no_initial_run"):
+        scr.annual(cur, signed)                        # the producer files the deal
+        conn.execute("UPDATE staff_contracts SET annual_salary = ?, total_years = ?, remaining_years = ?, "
+                     "full_control = ?", (case["salary"], case["years"], case["years"],
+                                          1 if case.get("full_control") else 0))
     return conn, cur, person_id
-
-
-def _paid_to(cur, person_id, kind, season):
-    """The producer's own payroll rule, for this person on team 1: signed by the season and still active."""
-    cur.execute("""SELECT annual_salary FROM staff_contracts
-                   WHERE person_id = %s AND person_kind = %s AND team_id = 1
-                     AND signed_season <= %s AND remaining_years > 0""", (person_id, kind, season))
-    return sum(int(r[0] or 0) for r in cur.fetchall())
 
 
 @pytest.mark.parametrize("case", DEALS, ids=[d["name"] for d in DEALS])
 def test_every_contract_year_is_paid_exactly_once(case):
-    from engines import coach_hot_seat as chs, gm_rollover as gr
+    """S = paid as salary that season, B = that season's buyout instalment, - = he moved on. Every year of every
+    deal is exactly one of them, and salary seasons + buyout total = annual salary x length."""
+    from engines import coach_hot_seat as chs, gm_rollover as gr, staff_contracts_engine as sce
 
     conn, cur, person_id = _scenario(case)
-    paid = {}
-    for season in range(case["signed"], case["last"] + 3):
+    through = max(case["last"] + 1, case["signed"] + case["years"])
+    active = {}
+    for season in range(case["signed"], through + 1):
         if season == case["last"] and case["path"] != "annual":
             if case["kind"] == "GM":
                 conn.execute("UPDATE gm_profiles SET end_season = ? WHERE id = 101", (season,))
@@ -372,19 +388,30 @@ def test_every_contract_year_is_paid_exactly_once(case):
                     conn.execute("UPDATE gm_profiles SET end_season = ? WHERE id = 101", (season,))
                 chs._settle_full_control(cur, person_id, season)
         scr.annual(cur, season)
-        paid[season] = _paid_to(cur, person_id, case["kind"], season)
-    cur.execute("""SELECT buyout_total, buyout_fired_season FROM staff_contracts
-                   WHERE person_id = %s AND team_id = 1 ORDER BY id""", (person_id,))
-    sched = cur.fetchall()
-    buyout = sum(int(r[0] or 0) for r in sched)
-    assert buyout == case["buyout"]
-    assert {r[1] for r in sched if r[1] is not None} == ({case["first"]} if case["buyout"] else set())
+        cur.execute("""SELECT id, remaining_years, signed_season FROM staff_contracts
+                       WHERE person_id = %s AND person_kind = %s AND team_id = 1""", (person_id, case["kind"]))
+        for rid, remaining, signed_at in cur.fetchall():
+            active.setdefault(rid, {})[season] = bool(remaining and remaining > 0 and signed_at <= season)
+    cur.execute("""SELECT id, annual_salary, total_years, signed_season, buyout_total, buyout_fired_season,
+                          buyout_years
+                   FROM staff_contracts WHERE person_id = %s AND person_kind = %s AND team_id = 1 ORDER BY id""",
+                (person_id, case["kind"]))
+    rows = cur.fetchall()
+    assert len(rows) == len(case["expect"]), rows
+    for (rid, salary, years, signed_at, total, fired, n), want in zip(rows, case["expect"]):
+        status = []
+        for season in range(signed_at, signed_at + years):
+            instalment = sce.buyout_instalment({"buyout_total": total, "buyout_fired_season": fired,
+                                                "buyout_years": n}, season)
+            on_payroll = active.get(rid, {}).get(season, False)
+            assert not (on_payroll and instalment)                # never twice
+            status.append("S" if on_payroll else ("B" if instalment else "-"))
+        assert " ".join(status) == want, (rid, status, want)
+        if not case.get("voided"):                    # a poach or lateral move voids the rest of the deal
+            assert status.count("S") * int(salary) + int(total or 0) == int(salary) * int(years)
+        if total:
+            assert int(n) == status.count("B")
+            assert int(fired) == int(signed_at) + status.index("B")
     if case.get("coach_gm"):
         cur.execute("SELECT count(*) FROM staff_contracts WHERE person_kind = 'GM'")
         assert cur.fetchone()[0] == 0                        # one man, one deal
-    if case.get("voided"):
-        # a poach or lateral move is a departure: nothing owed, paid through his last season with the old team
-        assert all(paid[s] == case["salary"] for s in range(case["signed"], case["last"] + 1))
-    else:
-        assert sum(paid.values()) + buyout == case["salary"] * case["years"]
-    assert all(paid[s] == 0 for s in range(case["last"] + 1, case["last"] + 3))   # nothing past the end
