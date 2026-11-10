@@ -503,7 +503,14 @@ def _sim_one_week(pilot, poll=3.0, timeout=SIM_TIMEOUT):
     then wait out the sim."""
     pilot.goto("ADVANCE_MENU")
     if pilot.frame.has("FORCE ADVANCE"):
+        # The top item, READY TO ADVANCE, often fails OCR; the border reader then credits its
+        # border to FORCE ADVANCE and Space takes READY, which a 32-user league cannot run — the
+        # menu just closes and the week never moves (2026-11-10, p2g week 3). Position is
+        # reliable: three Ups clamp on the top item, one Down lands on FORCE ADVANCE.
         label = "FORCE ADVANCE"
+        pilot.press("up", times=3)
+        pilot.press("down")
+        pilot.look()
         if not _move_highlight(pilot, label, ["READY TO ADVANCE", "FORCE ADVANCE", "SIM TO MIDSEASON"]):
             pilot.stop("couldn't settle the highlight on FORCE ADVANCE", Stuck)
     elif pilot.frame.has("NEXT WEEK"):

@@ -250,6 +250,19 @@ def test_sim_to_week_3_with_coach_progress_repeats(tmp_path, notices):
     assert len(notices) == 1 and "sim-season: ok" in notices[0][0]
 
 
+def test_the_advance_menu_is_pinned_to_the_top_before_forcing(tmp_path, notices):
+    # READY TO ADVANCE is the menu's top item and often fails OCR; the border reader then credits
+    # its border to FORCE ADVANCE, Space takes READY, and an all-user league just closes the menu
+    # without moving the week (2026-11-10, p2g week 3). Selection is pinned by position instead.
+    fake, log = fake_madden()
+    _, out = _sim(tmp_path, fake, to="week 2")
+    assert out["status"] == "ok", out
+    lines = [ln for ln in log if ln.startswith("  key")]
+    names = [ln.split()[1] for ln in lines]
+    confirms = [i for i, ln in enumerate(lines) if "on FORCE ADVANCE" in ln]
+    assert confirms and names[confirms[0] - 4:confirms[0]] == ["up", "up", "up", "down"]
+
+
 def test_sim_already_at_target_only_saves_and_quits(tmp_path, notices):
     fake, log = fake_madden(week=3)
     _, out = _sim(tmp_path, fake, to="week 3")
