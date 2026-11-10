@@ -538,3 +538,30 @@ class CallerIntegrationTests(unittest.TestCase):
         usage = {"input": 1000, "cached": 0, "output": 500, "thinking": 0}
         self.assertEqual(cost_usd("ollama/qwen2.5:14b", usage), 0.0)
         self.assertEqual(cost_usd("ollama:qwen2.5:14b", usage), 0.0)
+
+
+class NoLlmSwitchTest(unittest.TestCase):
+    """P2-07: MU_NO_LLM is the hard kill switch a tuning ingest runs under."""
+
+    def test_make_llm_falls_back_to_templates_when_disabled(self):
+        with mock.patch.dict(os.environ, {"MU_NO_LLM": "1"}), \
+                mock.patch("engines.gm_llm.GeminiText") as gemini:
+            self.assertIsNone(make_llm("gm_rationale", client=mock.Mock()))
+            gemini.assert_not_called()
+
+    def test_generate_text_refuses_when_disabled(self):
+        from engines.llm_provider import LLMDisabled
+        with mock.patch.dict(os.environ, {"MU_NO_LLM": "on"}), \
+                mock.patch("requests.post") as post:
+            with self.assertRaises(LLMDisabled):
+                generate_text("hello", source="press")
+            post.assert_not_called()
+
+    def test_unset_or_zero_means_enabled(self):
+        from engines.llm_provider import llm_disabled
+        for value, expected in ((None, False), ("0", False), ("off", False), ("1", True), ("yes", True)):
+            env = {} if value is None else {"MU_NO_LLM": value}
+            with mock.patch.dict(os.environ, env, clear=False):
+                if value is None:
+                    os.environ.pop("MU_NO_LLM", None)
+                self.assertEqual(llm_disabled(), expected, value)

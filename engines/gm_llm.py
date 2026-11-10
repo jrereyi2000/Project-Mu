@@ -63,7 +63,9 @@ def make_llm(label, model=DEFAULT_MODEL, enabled=True, thinking_level=None, clie
     provider is unavailable."""
     if not enabled:
         return None
-    from engines.llm_provider import resolve_provider, ProviderText
+    from engines.llm_provider import resolve_provider, ProviderText, llm_disabled
+    if llm_disabled():
+        return None
     prov = resolve_provider(label=label, model=model, provider=provider)
     key = api_key()
     if prov == "gemini" and not key and client is None:

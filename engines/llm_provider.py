@@ -43,6 +43,19 @@ OLLAMA_FALLBACK_EXCEPTIONS = (
     TimeoutError,
 )
 
+# A tuning ingest must never spend API budget (CLOSE_OUT_CHECKLIST P2-07). watch_save sets this for a
+# madden_tune_* destination; an operator can also set it by hand for any local run.
+NO_LLM_ENV = "MU_NO_LLM"
+
+
+class LLMDisabled(RuntimeError):
+    """MU_NO_LLM is on: the run must not reach any model, local or paid."""
+
+
+def llm_disabled() -> bool:
+    """True when MU_NO_LLM asks every LLM path to fall back to templates / refuse the call."""
+    return os.environ.get(NO_LLM_ENV, "").strip().lower() in ("1", "true", "yes", "on")
+
 
 def get_ollama_base_url() -> str:
     """Return the normalized base URL for the Ollama HTTP API (e.g. 'http://localhost:11434')."""
@@ -340,6 +353,8 @@ def generate_text(
     fallback would score Gemini's answer as the local model's, and the archive DB is read-only).
     ollama_options passes think / num_ctx / timeout through to call_ollama.
     """
+    if llm_disabled():
+        raise LLMDisabled(f"model calls are disabled by {NO_LLM_ENV}")
     effective_label = label or source
     prov = resolve_provider(label=effective_label, source=source, model=model, provider=provider)
 

@@ -465,6 +465,32 @@ class IngestSnapshotTest(unittest.TestCase):
         self.assertIn("--no-articles", res["argv"])
         self.assertEqual(res["argv"][res["argv"].index("--week") + 1], "6")
 
+    def _run_ingest_env(self, dsn, save_name):
+        def fake_run(cmd, cwd, env):
+            with open(os.path.join(self.tmp, "ingest_result.json"), "w") as f:
+                json.dump({"status": "success"}, f)
+            self.child_env = env
+            return mock.Mock(returncode=0)
+
+        self.child_env = None
+        with mock.patch("pipeline.watch_save.subprocess.run", side_effect=fake_run):
+            ws.run_ingest(self.snapshot, dsn, 2026, 1, no_articles=True, save_name=save_name)
+        return self.child_env
+
+    def test_a_tuning_ingest_disables_every_model_call(self):
+        """P2-07: a CAREER-TUNE-* ingest into madden_tune_* must not reach a model, local or paid."""
+        env = self._run_ingest_env("host=localhost dbname=madden_tune_p2a user=postgres", "CAREER-TUNE-P2A")
+        self.assertEqual(env["MU_NO_LLM"], "1")
+
+    def test_an_explicit_mu_no_llm_override_is_left_alone(self):
+        with mock.patch.dict(os.environ, {"MU_NO_LLM": "0"}):
+            env = self._run_ingest_env("host=localhost dbname=madden_tune_p2a user=postgres", "CAREER-TUNE-P2A")
+        self.assertEqual(env["MU_NO_LLM"], "0", "an operator's explicit override wins")
+
+    def test_a_live_ingest_keeps_model_calls(self):
+        env = self._run_ingest_env("host=localhost dbname=madden_colts user=postgres", "CAREER-MU2026")
+        self.assertIn(env.get("MU_NO_LLM"), (None, ""))
+
     def test_queue_nightly_jobs_hook(self):
         logs = []
         with mock.patch("pipeline.gpu_queue.queue.GPUQueue") as mock_q_cls:
@@ -1147,6 +1173,82 @@ class FindFilesTest(unittest.TestCase):
             ws.check_tuning_destination("CAREER-TUNE-A", "madden_mu2026")
         self.assertTrue(ws.is_tuning_save("/saves/CAREER-TUNE-x"))
         self.assertFalse(ws.is_tuning_save("CAREER-MUBASE"))
+
+
+class TuningDsnSetupTest(unittest.TestCase):
+    """P2-04/P2-06: --dsn bypasses routing, so creating/resetting a tuning database is explicit and tuning-only."""
+
+    def setUp(self):
+        self.logs = []
+        self.log = self.logs.append
+
+    def _patches(self, exists=False, state="empty"):
+        return [
+            mock.patch("pipeline.watch_save.franchises.db_exists", return_value=exists),
+            mock.patch("pipeline.watch_save.franchises.db_state", return_value=state),
+            mock.patch("pipeline.watch_save.franchises.create_db"),
+            mock.patch("pipeline.watch_save.franchises.drop_db"),
+            mock.patch("db.seed_clean_db.run_clean_seed"),
+            mock.patch("pipeline.watch_save.franchises.stamp_league_id"),
+        ]
+
+    def test_no_setup_flags_is_the_old_behaviour(self):
+        ps = self._patches()
+        mocks = [p.start() for p in ps]
+        for p in ps:
+            self.addCleanup(p.stop)
+        self.assertFalse(ws.setup_tuning_dsn("madden_tune_a", "dbname=madden_tune_a", "CAREER-TUNE-A",
+                                             2026, 1, log_fn=self.log))
+        mocks[2].assert_not_called()
+
+    def test_it_refuses_a_non_tuning_destination(self):
+        with self.assertRaises(ws.WatcherError):
+            ws.setup_tuning_dsn("madden_mu2026", "dbname=madden_mu2026", "CAREER-TUNE-A", 2026, 1,
+                                auto_init=True, log_fn=self.log)
+        with self.assertRaises(ws.WatcherError):
+            ws.setup_tuning_dsn("madden_tune_a", "dbname=madden_tune_a", "CAREER-MU2026", 2026, 1,
+                                auto_init=True, log_fn=self.log)
+
+    def test_reseed_needs_the_database_name(self):
+        with self.assertRaises(ws.WatcherError):
+            ws.setup_tuning_dsn("madden_tune_a", "dbname=madden_tune_a", "CAREER-TUNE-A", 2026, 1,
+                                reseed=True, confirm_reseed="madden_tune_b", log_fn=self.log)
+
+    def test_it_creates_and_seeds_a_missing_tuning_database(self):
+        ps = self._patches(exists=False, state="empty")
+        mocks = [p.start() for p in ps]
+        for p in ps:
+            self.addCleanup(p.stop)
+        create, seed = mocks[2], mocks[4]
+        self.assertEqual(ws.setup_tuning_dsn("madden_tune_a", "dbname=madden_tune_a", "CAREER-TUNE-A", 2026, 1,
+                                             auto_init=True, log_fn=self.log, league_id=1287775425), "seeded")
+        create.assert_called_once_with("madden_tune_a")
+        self.assertEqual(seed.call_args[1]["season"], 2026)
+        self.assertEqual(seed.call_args[1]["week"], 1)
+        self.assertEqual(seed.call_args[1]["user_teams"], [])
+        mocks[5].assert_called_once_with("dbname=madden_tune_a", 1287775425)
+
+    def test_reseed_drops_then_seeds(self):
+        ps = self._patches(exists=False, state="empty")
+        mocks = [p.start() for p in ps]
+        for p in ps:
+            self.addCleanup(p.stop)
+        drop, create, seed = mocks[3], mocks[2], mocks[4]
+        self.assertEqual(ws.setup_tuning_dsn("madden_tune_a", "dbname=madden_tune_a", "CAREER-TUNE-A", 2026, 1,
+                                             reseed=True, confirm_reseed="madden_tune_a", log_fn=self.log), "seeded")
+        drop.assert_called_once_with("madden_tune_a")
+        create.assert_called_once_with("madden_tune_a")
+        seed.assert_called_once()
+
+    def test_a_dry_run_that_would_create_is_a_no_op(self):
+        ps = self._patches(exists=False, state="empty")
+        mocks = [p.start() for p in ps]
+        for p in ps:
+            self.addCleanup(p.stop)
+        create = mocks[2]
+        self.assertEqual(ws.setup_tuning_dsn("madden_tune_a", "dbname=madden_tune_a", "CAREER-TUNE-A", 2026, 1,
+                                             auto_init=True, dry_run=True, log_fn=self.log), "no_op")
+        create.assert_not_called()
 
 
 @pytest.mark.integration

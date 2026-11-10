@@ -48,10 +48,12 @@ Options:
   --no-engines             Run the loader only (no engines, no articles)
   --season N               Override season year (default: save's calendar year)
   --force                  Proceed even if week is same as or older than league_state
-  --auto-init              Create and seed the database of a franchise seen for the first time
+  --auto-init              Create and seed the database of a franchise seen for the first time; with --dsn, create
+                           and seed a madden_tune_* database from a CAREER-TUNE-* clone (no registry entry)
   --franchise-name NAME    Name for a new franchise (its database becomes madden_<name>)
   --user-team TEAMS        Comma-separated user-controlled team abbreviations for a new franchise (e.g. IND)
-  --reseed                 Drop and recreate this franchise's database, then seed it (--once only)
+  --reseed                 Drop and recreate this franchise's database, then seed it (--once only); with a
+                           madden_tune_* --dsn it is the tuning reset path
   --confirm-reseed DB      Required with --reseed: the database name being dropped
   --dsn DSN                Load into this database instead of routing by franchise (tests, one-off loads)
   --allow-tune-save        Process CAREER-TUNE-* clones (default: ignored; the same is implied by a --dsn that
@@ -127,6 +129,51 @@ def check_tuning_destination(save_name, db):
 
 def log(msg):
     print(f"[{datetime.datetime.now():%H:%M:%S}] [watch_save] {msg}", flush=True)
+
+
+def setup_tuning_dsn(db, dsn, save_name, save_season, save_week, auto_init=False, reseed=False,
+                     confirm_reseed=None, dry_run=False, log_fn=log, league_id=None):
+    """Creates, seeds or resets the madden_tune_* database an explicit --dsn bypasses routing for.
+
+    Tuning clones deliberately get no registry entry: the registry is keyed by LeagueID and every clone carries
+    the live franchise's, so registering one would collide with the live franchise. `league_id` is only stamped
+    into league_state (the personality universe key). Returns "seeded" when this call created and seeded the
+    database (the load that follows is the first one), "no_op" when a dry run would have needed to set it up,
+    else False. Without --auto-init/--reseed it does nothing, as before.
+    """
+    if not (auto_init or reseed):
+        return False
+    if not is_tuning_db(db) or not is_tuning_save(save_name):
+        raise WatcherError(f"--auto-init/--reseed with --dsn is only for a CAREER-TUNE-* clone into a "
+                           f"{TUNE_DB_PREFIX}* database (got {os.path.basename(save_name)} -> {db})")
+    if reseed:
+        if confirm_reseed != db:
+            raise WatcherError(f"--reseed drops {db}; pass --confirm-reseed {db} to confirm.")
+        if dry_run:
+            raise WatcherError("--reseed can't be combined with --dry-run.")
+        log_fn(f"Reseed: dropping {db}...")
+        franchises.drop_db(db)
+    if not franchises.db_exists(db):
+        if dry_run:
+            log_fn(f"Dry run: would create and seed {db}.")
+            return "no_op"
+        log_fn(f"Creating tuning database {db}...")
+        franchises.create_db(db)
+    if franchises.db_state(dsn) == "empty":
+        if dry_run:
+            log_fn(f"Dry run: would seed {db}.")
+            return "no_op"
+        initial_week = save_week if save_week is not None else 1
+        log_fn(f"Seeding tuning database {db} for season {save_season}, week {initial_week} "
+               "(no registry entry: a clone shares the live franchise's LeagueID)")
+        from db.seed_clean_db import run_clean_seed
+        run_clean_seed(dsn=dsn, season=save_season, week=initial_week, user_teams=[], log=log_fn)
+        # The clone carries the live franchise's LeagueID; stamping it (not registering it) keeps the
+        # personality universe resolvable without giving the tuning copy a registry entry.
+        if league_id is not None and str(league_id).lstrip("-").isdigit():
+            franchises.stamp_league_id(dsn, int(league_id))
+        return "seeded"
+    return False
 
 
 @contextmanager
@@ -1449,7 +1496,13 @@ def run_ingest(snapshot_path, dsn, save_season, save_week, dry_run=False, no_art
             cmd.append("--league-office-dry-run")
     if stage_only:
         cmd.append("--stage-only")
-    p = subprocess.run(cmd, cwd=ROOT, env={**os.environ, "DATABASE_URL": dsn})
+    child_env = {**os.environ, "DATABASE_URL": dsn}
+    # A tuning season must not spend API budget (P2-07): the whole child process runs with every LLM seam
+    # falling back to templates. An explicit MU_NO_LLM=0 is the operator's deliberate override.
+    if is_tuning_db(db_name_of(dsn)) and not os.environ.get("MU_NO_LLM"):
+        child_env["MU_NO_LLM"] = "1"
+        log_fn(f"{db_name_of(dsn)}: model calls disabled for this tuning ingest (MU_NO_LLM=1)")
+    p = subprocess.run(cmd, cwd=ROOT, env=child_env)
     if p.returncode != 0 or not os.path.exists(result_path):
         raise WatcherError(f"Ingest of {save_name} into {db_name_of(dsn)} failed (exit {p.returncode}); see the log above.")
     with open(result_path) as fh:
@@ -1534,6 +1587,13 @@ def process_save(save_path, season=None, dry_run=False, no_articles=False, no_en
 
     if dsn:
         db, just_seeded = db_name_of(dsn), False
+        setup = setup_tuning_dsn(db, dsn, save_name, save_season, save_week, auto_init=auto_init, reseed=reseed,
+                                 confirm_reseed=confirm_reseed, dry_run=dry_run, log_fn=log_fn, league_id=fid)
+        if setup == "no_op":
+            shutil.rmtree(run_folder, ignore_errors=True)
+            return {"status": "no_op", "reason": "database_missing", "db": db, "franchise": fid,
+                    "season": save_season, "week": save_week}
+        just_seeded = setup == "seeded"
     else:
         route = route_franchise(fid, save_name, save_season, save_week, auto_init=auto_init, reseed=reseed,
                                 confirm_reseed=confirm_reseed, user_teams=user_teams,
@@ -1786,10 +1846,14 @@ def main():
                          f"(the real run needs {FRANCHISE_CLOSED_ENV}=1 while Madden27.exe is open)")
     ap.add_argument("--season", type=int, help="Override season year (default: save's calendar year)")
     ap.add_argument("--force", action="store_true", help="Run even if week is same as or older than league_state")
-    ap.add_argument("--auto-init", action="store_true", help="Create and seed the database of a franchise seen for the first time")
+    ap.add_argument("--auto-init", action="store_true",
+                    help="Create and seed the database of a franchise seen for the first time; with --dsn, create "
+                         f"and seed a {TUNE_DB_PREFIX}* database from a {TUNE_SAVE_PREFIX}* clone (no registry entry)")
     ap.add_argument("--franchise-name", help="Name for a new franchise (its database becomes madden_<name>)")
     ap.add_argument("--user-team", default="", help="Comma-separated user-controlled teams for a new franchise (e.g. IND or IND,CAR)")
-    ap.add_argument("--reseed", action="store_true", help="Drop and recreate this franchise's database, then seed it (--once only)")
+    ap.add_argument("--reseed", action="store_true",
+                    help="Drop and recreate this franchise's database, then seed it (--once only); with a "
+                         f"{TUNE_DB_PREFIX}* --dsn it is the tuning reset path")
     ap.add_argument("--confirm-reseed", metavar="DB", help="Required with --reseed: the database name being dropped")
     ap.add_argument("--dsn", help="Load into this database instead of routing by franchise")
     ap.add_argument("--allow-tune-save", action="store_true",
