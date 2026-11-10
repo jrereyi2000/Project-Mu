@@ -180,6 +180,20 @@ def test_a_failed_clone_stops_the_season(tmp_path):
         L.run("unit", runner=_runner([], fail="clone-save"), python="py", seasons_dir=str(tmp_path), do_report=False)
 
 
+def test_an_empty_report_never_replaces_a_real_one(tmp_path):
+    tpath = tmp_path / "targets.json"
+    tpath.write_text(json.dumps(TARGETS))
+    real, empty = tmp_path / "real.json", tmp_path / "empty.json"
+    real.write_text(json.dumps(_snapshot()))
+    empty.write_text(json.dumps({"season": {"calendar_year": 2026, "franchise_year": 0}, "games": [], "players": []}))
+    first = L.report(real, tmp_path / "out", targets_path=str(tpath))
+    assert first["stats"] and not first.get("kept_existing")
+    before = open(first["report"]).read()
+    second = L.report(empty, tmp_path / "out", targets_path=str(tpath))
+    assert second.get("kept_existing") and second["stats"] == 0
+    assert open(first["report"]).read() == before
+
+
 # ---------------------------------------------------------------- CLI
 def test_main_dry_run_prints_the_plan(capsys):
     assert L.main(["--run", "p2c", "--dry-run"]) == 0

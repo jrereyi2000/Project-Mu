@@ -200,6 +200,13 @@ def report(snapshot_path, out_dir, *, targets_path=None):
     season = rep.meta.get("season")
     os.makedirs(out_dir, exist_ok=True)
     md_path = os.path.join(out_dir, f"season_{season}.md")
+    if rep.no_games and os.path.exists(md_path):
+        # a resumed run that starts after the season rolled over cannot see its games; keep the
+        # report the run that actually simmed the season wrote rather than replacing it with an
+        # empty one (2026-11-10)
+        return {"season": season, "score": None, "report": md_path,
+                "json": os.path.join(out_dir, f"season_{season}.json"), "inside": 0, "stats": 0,
+                "kept_existing": True}
     with open(md_path, "w") as fh:
         fh.write(C.format_report(rep))
     json_path = os.path.join(out_dir, f"season_{season}.json")
