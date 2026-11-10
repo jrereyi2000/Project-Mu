@@ -541,7 +541,8 @@ def _simulate_draft(pilot, timeout=DRAFT_SIM_TIMEOUT, poll=4.0):
     WEEK is pressed. Project Mu has already written its picks into the save (TUNING_LEAGUE.md §6)."""
     frame, screen = pilot.look()
     if screen == "DRAFT_HUB":
-        pilot.confirm_on("DRAFT_HUB", "START THE NFL DRAFT", wait=2.5)
+        # the button OCRs as just START (2026-11-10, p2g), so the catalog anchors it on that word
+        pilot.confirm_on("DRAFT_HUB", "START", wait=2.5)
         frame, screen = pilot.look()
     if screen == "DRAFT_LAUNCH":
         # Windows OCR reads the button as SIMULATEDRAFT / SIMULATEDUFT, so it cannot be found by
