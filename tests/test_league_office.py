@@ -1639,6 +1639,7 @@ def test_the_next_run_signs_a_restored_free_agent_with_his_stored_contract():
     assert block["SalaryYear2"] == 0
     assert p["summary"]["restored_retirees"] == 1
     assert not any("no_restorable_contract" in w for w in p["warnings"])
+    assert not any("restore_at_last_stop" in w for w in p["warnings"])
 
 
 def test_a_kept_retiree_without_a_stored_contract_stays_a_free_agent_and_warns():
@@ -1649,14 +1650,25 @@ def test_a_kept_retiree_without_a_stored_contract_stays_a_free_agent_and_warns()
     assert p["summary"].get("restored_retirees", 0) == 0
 
 
-def test_a_cutdown_restore_signs_but_warns_it_lands_after_the_purge():
+def test_a_cutdown_window_restore_warns_it_signs_after_the_purge():
+    snap = snapshot("PreSeason", "PreSeason", 3, players=[player(1, 0), player(2, 0, status="Retired")])
+    proof = dict(PROOF, stages=PROOF["stages"] + ["CUTDOWN"])
+    p = plan("CUTDOWN", snap, window_deps(snap, decision=DECISION, prior=PRIOR, proof=proof))
+    w = p["summary"]["retirement_window"]
+    assert [r["pgid"] for r in w["restored"]] == [2] and w["restored"][0]["restore"] == "free_agent"
+    assert {e["pgid"]: e["set"] for e in p["edits"]["players"]}[2] == {"ContractStatus": "FreeAgent", "TeamIndex": 32}
+    assert any("restore_at_last_stop" in x for x in p["warnings"])
+
+
+def test_a_sign_back_at_cutdown_does_not_warn_about_the_purge():
+    # the sign is written into the CUTDOWN save, so it lands before the next advance's purge: the safe case
     snap = snapshot("PreSeason", "PreSeason", 3, players=[player(1, 0), player(8, 32, status="FreeAgent")])
     c = contract(length=2, cur=0, sal=(3_000_000, 4_000_000), bon=(0, 0))
     p = plan("CUTDOWN", snap, window_deps(snap, decision=DECISION, prior=PRIOR, kept={pid(8)},
                                           stored={pid(8): (c, SEASON, CHI)}))
     assert [s["pgid"] for s in p["edits"]["sign"]] == [8]
     assert p["summary"]["restored_retirees"] == 1
-    assert any("restore_at_last_stop" in w for w in p["warnings"])
+    assert not any("restore_at_last_stop" in w for w in p["warnings"])
 
 
 def test_window_conflicts_vanished_and_reason_prefixes():

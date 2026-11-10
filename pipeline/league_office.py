@@ -1694,6 +1694,9 @@ def step_retirement_window(plan, deps, cur, source_fingerprint, inputs, authorit
         restored.append(dict(by_pgid.get(g, {"pgid": g}), player_id=plan.pid(g), name=plan.name(g),
                              restore="free_agent"))
         record(g, True, f"window:restored:{stage}")
+        if plan.stage == "CUTDOWN":
+            plan.warn(f"{plan.name(g)}: restore_at_last_stop (this free agent is signed at the week-1 advance, "
+                      "after the free-agent purge; he may not survive)")
     for c in out["conflicts"]:
         g = c["pgid"]
         blocked.append(dict(by_pgid.get(g, {"pgid": g}), player_id=plan.pid(g), name=plan.name(g),
@@ -1741,9 +1744,6 @@ def step_restore_retirees(plan, kept, stored):
         if plan.sign_player(g, plan.team_index[team_id], "Roster", rest, PRIORITY_STAGE,
                             "kept retiree back to his team"):
             plan.counts["restored_retirees"] += 1
-            if plan.stage == "CUTDOWN":
-                plan.warn(f"{plan.name(g)}: restore_at_last_stop (signed at the week-1 advance, after the "
-                          "free-agent purge; he may not survive)")
 
 
 def step_promoted_ps(plan, ps_ids):
