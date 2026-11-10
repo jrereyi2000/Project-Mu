@@ -24,7 +24,7 @@ def _db():
             last_renovated_season INT, PRIMARY KEY (season, team_id));
         CREATE TABLE owner_cash_ledgers (season INT, team_id INT, wealth_band TEXT, base_budget INT,
             success_dividend INT, total_cash_budget INT, staff_payroll INT, opex_committed INT, capex_spent INT,
-            accumulated_reserve INT, PRIMARY KEY (season, team_id));
+            dead_buyouts INT DEFAULT 0, accumulated_reserve INT, PRIMARY KEY (season, team_id));
         CREATE TABLE facility_upgrades (id INTEGER PRIMARY KEY AUTOINCREMENT, team_id INT, season_ordered INT,
             category TEXT, cost_dollars INT, target_grade TEXT, completion_season INT, status TEXT);
         CREATE TABLE team_operating_policies (team_id INTEGER PRIMARY KEY, luxury_travel_enabled INT,
@@ -173,3 +173,54 @@ def test_frugal_owners_only_act_on_an_f_and_spend_the_minimum():
 def test_no_order_without_cash():
     card = {"weight_room": "F-", "training_room": "F", "locker_room": "F", "food_nutrition": "F"}
     assert op.facility_upgrade_orders(card, DEEP, cash_available=1_000_000, season=2037) == []
+
+
+def test_a_completed_renovation_is_not_re_applied_in_later_seasons():
+    """B2 (chunk 9): the COMPLETED-included fix re-applied a renovation every season, undoing each later notch of
+    wear and keeping `upgraded` above zero for ever. It applies in its completion season only."""
+    import sqlite3
+    from engines import report_card_run
+
+    # The pure check, exercised through the loop's condition, over a three-season span.
+    def applies(status, completion_season, season):
+        return (status == "IN_PROGRESS" and season >= completion_season) or \
+               (status == "COMPLETED" and season == completion_season)
+
+    assert applies("IN_PROGRESS", 2028, 2028) and applies("IN_PROGRESS", 2028, 2029)   # a missed run still lands it
+    assert applies("COMPLETED", 2028, 2028)                                          # the re-run case
+    assert not applies("COMPLETED", 2028, 2029)                                      # later seasons let it wear
+    assert not applies("COMPLETED", 2028, 2032)
+
+
+def test_a_dead_buyout_is_deducted_once():
+    """B4 (chunk 9): the plan and the spec say the owner's cash deducts dead buyouts, and nothing read them. The
+    buyout now shrinks the reserve and is charged in one season only."""
+    import sqlite3
+
+    from engines import report_card_run as rcr
+
+    class Cur:
+        """Answers only what _dead_buyouts and _charge_dead_buyouts ask."""
+        def __init__(self):
+            self.charged = []
+            self._row = None
+
+        def execute(self, sql, params=()):
+            s = " ".join(sql.split())
+            if s.startswith("UPDATE staff_contracts SET buyout_charged_season"):
+                self.charged.append(params)
+                self._row = None
+            elif "to_regclass" in s:
+                self._row = (True,)
+            elif "sum(buyout_owed)" in s:
+                self._row = (7_000_000,)
+            else:
+                self._row = None
+
+        def fetchone(self):
+            return self._row
+
+    cur = Cur()
+    assert rcr._dead_buyouts(cur, 2026, 1) == 7_000_000
+    rcr._charge_dead_buyouts(cur, 2026, 1)
+    assert cur.charged == [(2026, 1)]

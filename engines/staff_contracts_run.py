@@ -68,7 +68,8 @@ def current_staff(cur, season):
     # skipped: his HC contract already pays him, and filing a GM deal on top counted the same man twice.
     if _table(cur, "gm_profiles"):
         cur.execute("""SELECT team_id, id, gm_name, start_season FROM gm_profiles
-                       WHERE end_season IS NULL AND coach_id IS NULL ORDER BY team_id""")
+                       WHERE end_season IS NULL AND coach_id IS NULL AND start_season <= %s ORDER BY team_id""",
+                    (season,))
         for r in cur.fetchall():
             add(r[0], "GM", r[1], r[2], r[3], 0)
     for s in out:
@@ -130,7 +131,7 @@ def annual(cur, season, dry_run=False):
                 # what his experience now prices at.
                 salary = max(int(row["annual_salary"]), salary)
             signed = int(row["signed_season"]) if row else s["start_season"]
-            target = max(0, years - (season - signed))
+            target = min(years, max(0, years - (season - signed)))
             if target <= 0:                       # an old tenure with no live contract: file a fresh deal
                 signed, target = season, years
             filed.append({"team_id": s["team_id"], "person_kind": s["person_kind"], "person_id": s["person_id"],
@@ -179,7 +180,10 @@ def annual(cur, season, dry_run=False):
             if not dry_run:
                 cur.execute("UPDATE staff_contracts SET remaining_years = 0 WHERE id = %s", (r["id"],))
             continue
-        after = sce.fire_contract({"annual_salary": r["annual_salary"], "remaining_years": r["remaining_years"],
+        # The years still owed, recomputed with the same rule the roll uses: the stored remaining_years was last
+        # rolled for the previous league year, so buying it out as stored overpaid by one season.
+        owed_years = max(0, int(r["total_years"]) - (season - int(r["signed_season"])))
+        after = sce.fire_contract({"annual_salary": r["annual_salary"], "remaining_years": owed_years,
                                    "buyout_owed": r["buyout_owed"]})
         fired.append({"id": r["id"], "team_id": r["team_id"], "person_kind": r["person_kind"],
                       "buyout_owed": after["buyout_owed"]})

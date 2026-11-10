@@ -1425,3 +1425,19 @@ class RetirementWindowNoticeTest(unittest.TestCase):
         self.assertIsNone(ws.retirement_window_notice(None))
         self.assertIsNone(ws.retirement_window_notice({"status": "failed"}))
         self.assertIsNone(ws.retirement_window_notice({"retirement_window": {"role": "image", "roster_image": {}}}))
+
+
+def test_a_tuning_clone_is_refused_before_routing(tmp_path, monkeypatch):
+    """B10 (chunk 9): routing writes the clone's name into the live franchise's registry before
+    check_tuning_destination refuses (and --reseed would drop the live database). The refusal comes first now."""
+    called = []
+    monkeypatch.setattr(ws, "route_franchise", lambda *a, **k: called.append(a) or {"status": "new"})
+    save = tmp_path / "CAREER-TUNE-X"
+    save.write_bytes(b"x")
+    monkeypatch.setattr(ws, "snapshot_save", lambda *a, **k: str(tmp_path / "save.json"))
+    monkeypatch.setattr(ws, "current_week", lambda snapshot: 1)
+    monkeypatch.setattr(ws, "franchise_id", lambda snapshot, path: "1")
+    (tmp_path / "save.json").write_text('{"season": {"calendar_year": 2027}, "franchise": {"league_id": 1}}')
+    with pytest.raises(ws.WatcherError):
+        ws.process_save(str(save), run_folder=str(tmp_path / "run"), log_fn=lambda m: None)
+    assert called == []                                       # routing never ran

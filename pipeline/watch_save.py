@@ -1600,6 +1600,11 @@ def process_save(save_path, season=None, dry_run=False, no_articles=False, no_en
                     "season": save_season, "week": save_week}
         just_seeded = setup == "seeded"
     else:
+        # The guard runs before routing: a CAREER-TUNE-* clone carries the live LeagueID, so routing would write it
+        # into the live franchise's registry (and --reseed would drop the live database) before the refusal.
+        if is_tuning_save(save_name):
+            raise WatcherError(f"{os.path.basename(save_name)} is a CAREER-TUNE-* clone; it is only ingested into a "
+                               f"{TUNE_DB_PREFIX}* database (pass --dsn naming one)")
         route = route_franchise(fid, save_name, save_season, save_week, auto_init=auto_init, reseed=reseed,
                                 confirm_reseed=confirm_reseed, user_teams=user_teams,
                                 franchise_name=franchise_name, dry_run=dry_run, log_fn=log_fn)

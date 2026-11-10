@@ -177,3 +177,47 @@ def test_baseline_records_every_migration(fresh):
         for m in migrate.migrations():
             conn.execute(f"INSERT INTO {migrate.LEDGER} (version, filename, checksum, source) "
                          f"VALUES (%s, %s, %s, 'init_db.sql')", (m["version"], m["filename"], m["checksum"]))
+
+
+def test_the_archive_guard_sees_through_dsn_spellings():
+    """B6 (chunk 9): the old regex missed quoted values, URL forms with no host, and PGDATABASE, so a refused
+    database could be written to. Strings only: nothing connects to the archive."""
+    import os
+
+    from db import migrate as m
+
+    for dsn in ("dbname=madden_2036", "dbname='madden_2036'", "postgresql:///madden_2036",
+                "host=localhost user=postgres dbname=madden_2036"):
+        with pytest.raises(m.MigrationError):
+            m.check_dsn(dsn)
+    old = os.environ.get("PGDATABASE")
+    os.environ["PGDATABASE"] = "madden_2036"
+    try:
+        with pytest.raises(m.MigrationError):
+            m.check_dsn("host=localhost user=postgres")
+    finally:
+        if old is None:
+            os.environ.pop("PGDATABASE", None)
+        else:
+            os.environ["PGDATABASE"] = old
+
+
+def test_apply_with_a_file_that_matches_nothing_is_an_error():
+    """B11 (chunk 9): --file with a typo reported 'applied 0 (no-op)' and exited 0."""
+    from db import migrate as m
+
+    class Conn:
+        def execute(self, sql, params=()):
+            if sql == m.LEDGER_DDL or "CREATE TABLE" in sql:
+                return self
+            self._row = (None,)
+            return self
+
+        def fetchone(self):
+            return getattr(self, "_row", None)
+
+        def fetchall(self):
+            return []
+
+    with pytest.raises(m.MigrationError):
+        m.apply(Conn(), only="2027_99_99_typo.sql")

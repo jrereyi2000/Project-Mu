@@ -82,7 +82,9 @@ def test_a_firing_moves_remaining_guaranteed_into_buyout():
     rep = scr.annual(cur, 2037)
     assert rep["fired"] == 1
     after = next(r for r in _rows(cur) if r[1] == "HC" and r[0] == 2)
-    assert after[5] == 0 and after[7] == before[3] * before[5]      # salary x remaining years
+    # B3 (chunk 9): recomputed with the roll's own rule, the deal owes 2 seasons here (the stored 3 was last rolled
+    # for the previous league year, so buying it out as stored overpaid by one).
+    assert after[5] == 0 and after[7] == before[3] * 2
     # a fired coach's replacement is filed fresh
     conn.execute("INSERT INTO coaches VALUES (12, 'Replacement'), (23, 'Replacement OC')")
     conn.execute("INSERT INTO coach_tenures (coach_id, team_id, start_season, end_season) VALUES (12, 2, 2037, NULL)")

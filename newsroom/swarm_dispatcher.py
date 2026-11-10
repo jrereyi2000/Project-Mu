@@ -1841,8 +1841,11 @@ If you need specific stats, use your database tools before producing your final 
                                 n = store_power_rankings(cur, season, week, article_id, compiled_prompt["archetype"], entries)
                                 print(f"📊 [POWER RANKINGS STORED] Season {season} Week {week}: {n} teams from article #{article_id}.")
 
+                        # The ballots only decide when the panel actually stored them: a failed ballot brief (B9,
+                        # chunk 9) left nothing stored, and the check-then-nothing branch published no All-Pro team
+                        # at all. With nothing stored, fall through to the article-parse path as before f770fb4.
                         if article_id and ctype == "ARTICLE" and at_id == "OFFICIAL_AP_ALL_PRO_ROSTER" and \
-                                award_ballots.feature_mode(cur) == "active":
+                                award_ballots.feature_mode(cur) == "active" and load_stored_all_pro(cur, season):
                             # media_voters active: the panel's ballots decided and stored the teams; check the article
                             ap_errors = check_all_pro_against_stored(generated_text, load_stored_all_pro(cur, season),
                                                                      load_roster_index(cur, season))
@@ -1857,7 +1860,7 @@ If you need specific stats, use your database tools before producing your final 
                                 print(f"🏆 [ALL-PRO STORED] Season {season} Week {week}: {n} selections saved to awards from article #{article_id}.")
 
                         if article_id and ctype == "ARTICLE" and at_id == "AWARDS_TRACKER" and week == 22 and \
-                                award_ballots.feature_mode(cur) == "active":
+                                award_ballots.feature_mode(cur) == "active" and load_stored_winners(cur, season):
                             # media_voters active: the panel's ballots decided and stored the winners; check the article
                             aw_errors = check_awards_against_stored(generated_text, load_stored_winners(cur, season),
                                                                     load_roster_index(cur, season), load_coach_index(cur, season))

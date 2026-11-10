@@ -82,17 +82,33 @@ def migrations():
 # --- DSN --------------------------------------------------------------------------------------------------
 
 def dbname_of(dsn):
-    m = re.search(r"(?:^|\s)dbname\s*=\s*([^\s'\"]+)", dsn or "")
+    """The database a DSN resolves to: libpq's own parse (quoted values, URL forms, defaults) over the raw text,
+    with PGDATABASE as the fallback libpq itself would use."""
+    try:
+        from psycopg.conninfo import conninfo_to_dict
+        name = conninfo_to_dict(dsn or "").get("dbname")
+        if name:
+            return name
+    except Exception:      # noqa: BLE001 - an unparsable DSN: fall back to the text forms below
+        pass
+    m = re.search(r"(?:^|\s)dbname\s*=\s*['\"]?([^\s'\"]+)", dsn or "")
     if m:
         return m.group(1)
     m = re.search(r"postgres(?:ql)?://[^/]+/([^\s?]+)", dsn or "")
-    return m.group(1) if m else ""
+    if m:
+        return m.group(1)
+    return os.environ.get("PGDATABASE", "")
 
 
 def check_dsn(dsn):
     name = dbname_of(dsn)
     if name in REFUSED_DBS:
         raise MigrationError(f"refusing to run migrations against {name!r}")
+
+
+def database_name_of(conn):
+    """The database the connection is actually on, so a refusal never depends on how the DSN was spelled."""
+    return conn.execute("SELECT current_database()").fetchone()[0]
 
 
 # --- ledger -----------------------------------------------------------------------------------------------
@@ -151,19 +167,23 @@ def apply_migration(conn, m):
 
 
 def apply(conn, dry_run=False, only=None):
-    """Apply pending migrations in order. Returns the versions applied (or that would be, with dry_run)."""
+    """Apply pending migrations in order. Returns the versions applied (or that would be, with dry_run). A `only`
+    filter that names no migration is an error, and drift is reported for every file, filtered or not."""
     ensure_ledger(conn)
     known = applied_rows(conn)
+    files = migrations()
+    if only and not any(m["version"] == only or m["filename"] == only for m in files):
+        raise MigrationError(f"--file {only!r} matches no migration in db/migrations/")
     todo = []
-    for m in migrations():
+    for m in files:
         row = known.get(m["version"])
+        if row is not None and row["checksum"] != m["checksum"]:
+            raise MigrationError(f"{m['filename']} was recorded with a different checksum; its file changed "
+                                 f"after it was applied")
         if only and m["version"] != only and m["filename"] != only:
             continue
         if row is None:
             todo.append(m)
-        elif row["checksum"] != m["checksum"]:
-            raise MigrationError(f"{m['filename']} was recorded with a different checksum; its file changed "
-                                 f"after it was applied")
     if dry_run:
         return [m["version"] for m in todo]
     for m in todo:
@@ -368,6 +388,11 @@ def main(argv=None):
     check_dsn(args.dsn)
     try:
         with _connect(args.dsn) as conn:
+            # A DSN can resolve to a refused database without naming it in the text (quoted values, URL forms,
+            # PGDATABASE); the connection itself is the authority.
+            actual = database_name_of(conn)
+            if actual in REFUSED_DBS:
+                raise MigrationError(f"refusing to run migrations against {actual!r}")
             if args.cmd == "status":
                 _print_status(args.dsn, status_of(conn))
                 return 0

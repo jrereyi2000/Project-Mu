@@ -132,6 +132,30 @@ def _payroll(cur, season, team_id):
     return int(sce.staff_payroll([{"person_kind": k, "annual_salary": s} for k, s in cur.fetchall()]))
 
 
+def _dead_buyouts(cur, season, team_id):
+    """The buyouts still to be charged against this team's cash: terminated staff rows (remaining_years 0) whose
+    buyout_owed has not been deducted yet. 0 without the column (an older database)."""
+    if not _table(cur, "staff_contracts"):
+        return 0
+    try:
+        cur.execute("""SELECT COALESCE(sum(buyout_owed), 0) FROM staff_contracts
+                       WHERE team_id = %s AND remaining_years <= 0 AND buyout_owed > 0
+                         AND buyout_charged_season IS NULL""", (team_id,))
+    except Exception:      # noqa: BLE001 - a database without 2027_02_19 has no charged season to read
+        return 0
+    return int(cur.fetchone()[0] or 0)
+
+
+def _charge_dead_buyouts(cur, season, team_id):
+    """Mark this team's outstanding buyouts as charged in `season`, so the next season does not deduct them again."""
+    try:
+        cur.execute("""UPDATE staff_contracts SET buyout_charged_season = %s
+                       WHERE team_id = %s AND remaining_years <= 0 AND buyout_owed > 0
+                         AND buyout_charged_season IS NULL""", (season, team_id))
+    except Exception:      # noqa: BLE001 - pre-migration database: nothing to mark
+        pass
+
+
 def _previous_bands(cur, season):
     """{team_id: wealth_band} from each team's latest owner cash ledger before `season`."""
     cur.execute("""SELECT team_id, wealth_band FROM owner_cash_ledgers WHERE season < %s
@@ -175,10 +199,12 @@ def annual(cur, season, dry_run=False, cpu_upgrades=True, user_team_ids=()):
         last_renovated = (old or {}).get("last_renovated_season")
         # 2. this season's completed renovations
         for u in upgrades:
-            # COMPLETED included: a re-run of the same season used to skip the upgrade it had already completed,
-            # falling back to season-1's card, reverting the renovation and letting a CPU owner order it again.
-            if u["team_id"] == tid and u["status"] in ("IN_PROGRESS", "COMPLETED") \
-                    and season >= u["completion_season"]:
+            # A COMPLETED renovation applies only in the season it completed: that keeps a same-season re-run from
+            # reverting it, without re-applying it for ever (which undid every later wear and kept `upgraded` at 1).
+            # IN_PROGRESS applies once its completion season has arrived (or passed, for a missed run).
+            applies = (u["status"] == "IN_PROGRESS" and season >= u["completion_season"]) or \
+                      (u["status"] == "COMPLETED" and season == u["completion_season"])
+            if u["team_id"] == tid and applies:
                 card[u["category"]] = u["target_grade"]
                 last_renovated = max(last_renovated or 0, u["completion_season"]) or None
                 completed.append(u["id"])
@@ -210,16 +236,17 @@ def annual(cur, season, dry_run=False, cpu_upgrades=True, user_team_ids=()):
         payroll = _payroll(cur, season, tid)
         ordered = [u for u in upgrades if u["team_id"] == tid and u["season_ordered"] == season]
         capex = sum(int(u["cost_dollars"] or 0) for u in ordered)
-        reserve = max(0, _previous_reserve(cur, season, tid) + budget - payroll - pol["opex"] - capex)
+        dead = _dead_buyouts(cur, season, tid)
+        reserve = max(0, _previous_reserve(cur, season, tid) + budget - payroll - pol["opex"] - capex - dead)
         ledgers[tid] = {"season": season, "team_id": tid, "wealth_band": band,
                         "base_budget": rce.base_budget(band),
                         "success_dividend": budget - rce.base_budget(band), "total_cash_budget": budget,
                         "staff_payroll": payroll, "opex_committed": pol["opex"], "capex_spent": capex,
-                        "accumulated_reserve": reserve}
+                        "dead_buyouts": dead, "accumulated_reserve": reserve}
         # 7. CPU owners spend on facilities on their own policy (P1-23)
         if cpu_upgrades and tid not in user:
             reserve_floor = int(budget * op.FACILITY_RESERVE_SHARE[op.facility_style(views.get(tid))])
-            avail = max(0, budget - payroll - pol["opex"] - capex - reserve_floor)
+            avail = max(0, budget - payroll - pol["opex"] - capex - dead - reserve_floor)
             already = {u["category"] for u in ordered}
             chosen = [o for o in op.facility_upgrade_orders(card, views.get(tid), avail, season)
                       if o["category"] not in already]
@@ -245,17 +272,22 @@ def annual(cur, season, dry_run=False, cpu_upgrades=True, user_team_ids=()):
                         tuple(card[k] for k in CARD_COLS))
         for tid, led in ledgers.items():
             cur.execute("""INSERT INTO owner_cash_ledgers (season, team_id, wealth_band, base_budget, success_dividend,
-                               total_cash_budget, staff_payroll, opex_committed, capex_spent, accumulated_reserve)
-                           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                               total_cash_budget, staff_payroll, opex_committed, capex_spent, dead_buyouts,
+                               accumulated_reserve)
+                           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                            ON CONFLICT (season, team_id) DO UPDATE SET wealth_band = EXCLUDED.wealth_band,
                                base_budget = EXCLUDED.base_budget, success_dividend = EXCLUDED.success_dividend,
                                total_cash_budget = EXCLUDED.total_cash_budget,
                                staff_payroll = EXCLUDED.staff_payroll, opex_committed = EXCLUDED.opex_committed,
-                               capex_spent = EXCLUDED.capex_spent,
+                               capex_spent = EXCLUDED.capex_spent, dead_buyouts = EXCLUDED.dead_buyouts,
                                accumulated_reserve = EXCLUDED.accumulated_reserve""",
                         (led["season"], led["team_id"], led["wealth_band"], led["base_budget"],
                          led["success_dividend"], led["total_cash_budget"], led["staff_payroll"],
-                         led["opex_committed"], led["capex_spent"], led["accumulated_reserve"]))
+                         led["opex_committed"], led["capex_spent"], led["dead_buyouts"],
+                         led["accumulated_reserve"]))
+        for tid in cards:
+            if ledgers.get(tid, {}).get("dead_buyouts"):
+                _charge_dead_buyouts(cur, season, tid)
         for order in orders:
             cur.execute("""INSERT INTO facility_upgrades (team_id, season_ordered, category, cost_dollars,
                                target_grade, completion_season, status)

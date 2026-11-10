@@ -2460,6 +2460,16 @@ def _conninfo(cur):
     return dsn
 
 
+def _run_season(cur, run_id):
+    """The season a run belongs to (None when the row or column is unreadable)."""
+    try:
+        cur.execute("SELECT season FROM league_office_runs WHERE id = %s", (run_id,))
+        row = cur.fetchone()
+        return row[0] if row else None
+    except Exception:      # noqa: BLE001 - a fake cursor in tests
+        return None
+
+
 def _user_team_ids(cur):
     try:
         return Deps().user_team_ids(cur)
@@ -2726,6 +2736,13 @@ def recover(cur, run_id, save_path=None, deps=None, out=print):
         _store_operation(cur, run_id, op, summary)
         _finish_run(cur, run_id, "WRITTEN")
         conn.commit()
+        # A recovered write still owes the season's annual producers (B5, chunk 9): a wave-1 run that ended
+        # NEEDS_RECOVERY skipped staff contracts, report cards and both articles, and nothing retried them. Every
+        # step is idempotent, so re-running them fills in what the crashed run never reached.
+        if getattr(deps, "annual_steps", False):
+            season = _run_season(cur, run_id)
+            if season is not None:
+                annual_offseason_steps(cur, row["stage"], season, 1, out)
         out(json.dumps({"run_id": run_id, "status": "WRITTEN", "recovered": True, "output_sha256": current,
                         "acknowledged_events": acknowledged}))
         return "ACKNOWLEDGED"

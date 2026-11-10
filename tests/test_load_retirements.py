@@ -74,3 +74,14 @@ def test_no_retirements_reports_zero_and_writes_nothing():
     assert report["retirements"] == 0
     cur.execute("SELECT count(*) FROM player_retirements")
     assert cur.fetchone()[0] == 0
+
+
+def test_a_player_madden_keeps_retired_is_not_recorded_again():
+    """B7 (chunk 9): Kelce and Rodgers stay `Retired` after the purge, so every load of a later season recorded him
+    retiring again (for a season that had not ended) and the ledger labelled him RETIRED year after year."""
+    cur = FakeCursor(_db())
+    assert ls.load_retirements(cur, SNAP, 2026, {0: 100}, {}) == 2
+    later = dict(SNAP, season={"week_type": "RegularSeason", "week_index": 5})
+    assert ls.load_retirements(cur, later, 2027, {0: 100}, {}) == 0        # already retired: no new row
+    cur.execute("SELECT count(*) FROM player_retirements")
+    assert cur.fetchone()[0] == 2

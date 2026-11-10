@@ -213,3 +213,16 @@ def test_validate_rationale_accepts_a_quoted_sheet_stat_and_rejects_an_invented_
     sheet = build_fact_sheet(sheet_books(), sheet_deal())
     assert validate_rationale("He put up 986 yards for us last season.", sheet)[0]
     assert not validate_rationale("He put up 1200 yards for us last season.", sheet)[0]
+
+
+def test_a_small_invented_amount_does_not_ground_on_non_money_numbers():
+    """B8 (chunk 9): the money check accepted any plain sheet number within 51k, so an age or an OVR grounded
+    "$50K" on any sheet."""
+    sheet = {"assets": [{"kind": "player", "name": "A", "age": 21, "ovr": 78, "years_left": 3}],
+             "teams": {}, "cap": {}, "recent": {}}
+    ok, why = validate_rationale("We move $50K his way.", sheet)
+    assert not ok and "not on the sheet" in why
+    ok, _ = validate_rationale("He is 21 and a 78.", sheet)          # plain numbers still ground
+    assert ok
+    big = {"assets": [], "teams": {}, "cap": {"total_value": 88_000_000}, "recent": {}}
+    assert validate_rationale("We will take on $88.0M.", big)[0]   # a plain sheet number still grounds it

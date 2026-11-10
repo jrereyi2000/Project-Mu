@@ -468,6 +468,11 @@ def load_retirements(cur, snapshot, season, teams, report, capture_id=None):
     cur.execute("SELECT madden_pgid, id FROM players WHERE madden_pgid IS NOT NULL")
     by_pgid = dict(cur.fetchall())
     retired_after = retirement_season(snapshot, season)
+    # A player Madden keeps `Retired` past the purge (Kelce, Rodgers in the G4 run) is still on the list every load;
+    # without this he got a fresh row for each new season and the ledger labelled him RETIRED year after year. A
+    # restored player has `players.retired_season` cleared (D8), so a genuine second retirement still counts.
+    cur.execute("SELECT id FROM players WHERE retired_season IS NOT NULL")
+    already_retired = {r[0] for r in cur.fetchall()}
     count = 0
     for p in rows:
         pid = by_pgid.get(p["pgid"])
@@ -479,6 +484,8 @@ def load_retirements(cur, snapshot, season, teams, report, capture_id=None):
                          p["weight_lbs"], p["jersey"], p["pgid"]))
             pid = cur.fetchone()[0]
             by_pgid[p["pgid"]] = pid
+        if pid in already_retired:
+            continue
         cur.execute("INSERT INTO player_retirements (season, player_id, player_name, position, team_id, capture_id) "
                     "VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT DO NOTHING",
                     (retired_after, pid, db_player_name(p["first_name"], p["last_name"]), position(p["position"]),
