@@ -1,6 +1,6 @@
 # Project Mu: Coach Save Writes Plan
 
-**Status:** approved by JR (2026-11-10); building, wave 1 of 5 done (wave 0: Spikes A, B and D).
+**Status:** approved by JR (2026-11-10); building, wave 2 of 5 (wave 0: Spikes A, B, D; wave 1: U1, U2, U4 merged).
 
 **As built:**
 **U1 (mapping settled by JR, 2026-11-10):** every Mu playbook maps (six were nickname aliases of the 64 `<City> Offense/Defense` strings). **Erhardt-Perkins** now maps to `MultiplePowerRun` — Madden has no EP member, and the save itself gives two of its four real EP coaches that scheme (Vrabel, McDaniels; Daboll is `WestCoastZoneRun`, Saleh `WestCoastPowerRun`). **West Coast** stays `WestCoastPowerRun` as built. U1 also found `staff_names.background` returns no age/years, so `build_profile` accepts a `{age, years}` mapping and otherwise seeds them; Madden's raw coach `Weight` is the constant 10 on all 127 records, so the profile stores 10 and a headshot build must come from `body_type`/height.
