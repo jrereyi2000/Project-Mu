@@ -43,7 +43,7 @@ import { tmpdir } from 'os';
 import { basename, join, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import Franchise from 'madden-franchise';
-import { arraySlots, decodeRef, encodeRef, NO_REF, salaryCapUnits, schemaFieldName } from './lib.mjs';
+import { arraySlots, cloneInto, decodeRef, encodeRef, NO_REF, salaryCapUnits, schemaFieldName } from './lib.mjs';
 
 export const REAL_TEAMS = 32;
 export const USER_ID_BASE = 2147483648;
@@ -138,25 +138,9 @@ export async function applySetup(franchise) {
     used.add(`${t.header.tableId}:${i}`);
     return i;
   };
-  // A copy of a record in a free row of its table; array slots start empty, TeamSetting gets its own AutoSubSlider.
-  const cloneInto = async (tableId, templateRow, asEmptyArray) => {
-    const t = await tables.byId(tableId);
-    const src = t.records[templateRow];
-    const i = freeRow(t);
-    const r = t.records[i];
-    for (const k of Object.keys(src.fields)) {
-      const v = safe(src, k);
-      if (v === undefined) continue;
-      if (t.name === 'TeamSetting' && k === 'AutoSubSlider' && decodeRef(v)) {
-        const d = decodeRef(v);
-        r[k] = await cloneInto(d.table, d.row, false);
-        continue;
-      }
-      r[k] = asEmptyArray && isRef(v) ? NO_REF : v;
-    }
-    if (r.isEmpty) throw new Error(`row ${i} of ${t.name} still empty after the copy`);
-    return encodeRef(tableId, i);
-  };
+  // A copy of a record in a free row of its table (lib.mjs cloneInto); array slots start empty, TeamSetting gets its
+  // own AutoSubSlider.
+  const clone = (tableId, templateRow, asEmptyArray) => cloneInto(tables, tableId, templateRow, asEmptyArray, freeRow);
   const registry = await userRegistry(tables);
   let slot = registry.slots.findIndex(k => !decodeRef(registry.arr[k]));
   let k = 0;
@@ -182,7 +166,7 @@ export async function applySetup(franchise) {
       const d = isRef(v) ? decodeRef(v) : null;
       if (key === 'Team') nu[key] = encodeRef(team.header.tableId, ti);
       else if (key === 'UserEntity') nu[key] = encodeRef(hc.table, hc.row);
-      else if (d && PER_USER.has(key)) nu[key] = await cloneInto(d.table, d.row, (await tables.byId(d.table)).name.endsWith('[]'));
+      else if (d && PER_USER.has(key)) nu[key] = await clone(d.table, d.row, (await tables.byId(d.table)).name.endsWith('[]'));
       else if (key === 'AdminLevel') nu[key] = 'None';
       else if (key === 'UserIdUpper') nu[key] = nextId();
       else if (NULLED.has(key)) nu[key] = NO_REF;
