@@ -302,3 +302,13 @@ cannot raise, and the owner-view lookup is wrapped so a failing owner read can n
 `owner_context`'s rule that the switchboard never fails an engine). Both are covered by the `_hire_gm` mode tests.
 The plan's predicted red test (`test_gm_search_picks_the_best_affordable_candidate`) was corrected in U2 to expect
 PROMOTION at `budget=1_000_000`. No deviations in U1; no blockers in either unit.
+
+**Audit (2026-11-10, `claude-opus-5-5` at `145d6cb`):** built as written — §2.1–§2.4 all present, B8 closed (appeal
+changes the pick, all three tiers reachable, PROMOTION pays $2.75M, shadow never changes a hire), the one active
+GM-contract index breaks no hire path, 103 plan tests pass. Five defects were found in the surrounding paths and
+handed to the builder: **B1** the fallback winner also appears in its own `declined` list; **B2** the
+`team_owner_views` guard has no savepoint; **B3** a Godfather coach-GM gets a second, GM contract; **B4** seeded GMs
+start in 2030, so every seeded incumbent prices as PROMOTION; **B5** a re-filed ELITE GM drops to STANDARD because
+`championships` is hard-coded. Design note for JR: the ELITE-favouring owner terms (`HEADLINE_HUNTER`,
+`DEEP_POCKETS`) never change a pick, because every owner-driven flip is downward and mostly `MEDDLER`'s, so
+`owner_hiring` needs tuning before it goes active.
