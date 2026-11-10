@@ -1,7 +1,9 @@
 # Save-capacity pruning (Madden 27 saves) — brief for a new session
 
-**Status:** not started. Research spike, P2 blocker for the tuning league. Written 2026-11-10 at the end of
-the `p2-tuning` session, from its measurements. Owner: a new session; label it e.g. `save-capacity`.
+**Status:** in progress (2026-11-10, `save-capacity`). Steps 1–4 are done: the audit, the tail, the
+rebuild tool (`pipeline/save_reader/prune_capacity.mjs`) and its offline validation. Step 5, the in-game
+load/advance test, is next and needs JR at the PC. §8 has the measured results and what is left.
+Written 2026-11-10 at the end of the `p2-tuning` session, from its measurements.
 
 ## 1. The problem
 
@@ -87,12 +89,15 @@ references) and `TeamValue_RankingInt[]` (20). This is the table group the game 
 
 ## 4. The format, as measured
 
-Unpacked `Grtk` buffer:
+Unpacked `FrTk` buffer (the brief originally said `Grtk`; the magic is `FrTk`):
 
-- `[0x00]` `Grtk`, `[0x04]` assetTableOffset (128 in every save seen), `[0x08]` 4, `[0x0c]` 1.
+- `[0x00]` `FrTk`, `[0x04]` assetTableOffset (128 in every save seen), `[0x08]` 4, `[0x0c]` 1.
+- `[0x14]` and `[0x1c]` the **table count** (3,004 in `CAREER-TUNE-P2B`, 1,931 in `CAREER-MU2026`). A rebuild
+  that changes the number of tables must update both; a rebuild that keeps the tables and only shrinks some
+  needs no change here.
 - `[0x24]` assetTableEntries (318).
 - Tables start at `assetTableOffset + assetTableEntries * 8` (2672 in every save seen) and run as a *sequence
-  of self-describing table binaries* to the end of the buffer. No global table count.
+  of self-describing table binaries*. After the last table there are 8 zero bytes to the end of the buffer.
 - Per table header (M20/M24 strategy, offsets from the table start):
   - name = NUL-terminated string at table[0]; `isArray` if the name contains `[]`.
   - `tableId` u32 at 0x80, `uniqueId` at 0x84, `table2Capacity` at 0x88, store length at 0x80+36.
@@ -158,3 +163,100 @@ Unpacked `Grtk` buffer:
 - `docs/reference/TUNING_LEAGUE.md` has the isolation recipe, the 20 MiB blocker and the P2-03 decision.
 - `docs/reference/MADDEN_PILOT.md` documents every catalogued screen; the pilot now trains, drafts, advances
   (READY TO ADVANCE at week 1, FORCE ADVANCE after), and runs the postseason to the Staff stop.
+
+## 8. What the `save-capacity` session measured and built (2026-11-10)
+
+### The container, settled
+
+- The raw file is a **fixed 5,662,392-byte slot** — all 157 franchise saves on JR's PC are exactly that size.
+- `[0x00]` `FBCHUNKS`; the zlib stream starts at `[0x52]`; **the 24-bit little-endian field at `[0x4a..0x4c]
+  is the deflate stream length** — verified equal to the real length on all 157 saves.
+- **The tail never moves.** `RelocationTracker` sits at absolute offset **3,826,513** in every save tried,
+  whatever the stream length (`CAREER-MU2026` 3,056,764 B, `CAREER-TUNE-P2B` 3,504,566 B, `CAREER-2026SB`
+  3,537,018 B), and the region after it is byte-identical across four different franchises. It is leftover
+  content from the save template the slot started as: no save has ever compressed past 0x35F87A, so nothing
+  has overwritten it since. The library's `postPackFile` preserves it at the same absolute offsets by
+  slicing the original raw file at the *new* length; this tool does the same but **zero-fills the gap**
+  instead of leaving stale compressed bytes there, which is what Madden itself writes.
+- Consequence: shrinking the stream is safe as long as the new stream is no longer than the old one. The
+  tool refuses to write if it would be.
+
+### Capacity is frozen for the franchise's life
+
+`Highlight` 3,200, `PersonaNegotiationOptionAction` 64,000, `NarrativeTag` 4,030 … are the **same numbers**
+in `CAREER-MU2026` (week 1), `CAREER-CUTDOWN` (preseason) and `CAREER-TUNE-P2B` (Wild Card). Madden does not
+resize a table inside a season, so a capacity cut is permanent — which is the upside, and also the risk: a
+table that later needs more rows than its new capacity has no way to grow.
+
+### Choosing targets
+
+Live counts were taken across eight saves — `CAREER-MU2026`, `CAREER-CUTDOWN`, `CAREER-TUNE-P2B`,
+`CAREER-TUNE-P2B-PRUNE-AUTOSAVE` (2027 preseason), `CAREER-2026SB`, `CAREER-2029SB`, `CAREER-TUNE-G4-FAW1`,
+`CAREER-TUNE-RETIRE`:
+
+- **Empty in all eight** (pure capacity): `NarrativeTag` (4,030), `UIContractNegotiationForm` (512),
+  `PlayerEditTransactionHistoryEntry` (742), `PlayerReSignNegotiation` (2,049), `MindsetChangeEvent` (3,960),
+  `ReSign_TeamRequest` (512), `ReSign_PlayerRequest` (512), `EvaluateContractOffersRequest` (500),
+  `ContractOffer` (1,050).
+- **One live row in every save**: `Highlight` (1 of 3,200 — 694 KB).
+- **Genuinely used, with huge slack**: the Persona negotiation group — `PersonaNegotiationOptionAction` peaks
+  at 467 live of 70,400 (441 in the free-agency save), `PersonaNegotiationOption` at 168 of 8,320,
+  `CelebrationInfoItem` at 54 of 13,440, `Dealbreaker` at 84 of 7,680, `Package` at 67 of 1,920.
+- **Left alone**: `UILogicForm` (620 KB of slack) and `UIFlowForm` (385 KB) are also mostly empty, but the
+  schema cannot decode their string-pool references, so they are only opt-in (`--set UILogicForm=512`).
+
+`PlayerStatSnapShot` (0–316 live of 5,760) is in the default set with a 2,048 target.
+
+### The rebuild
+
+`pipeline/save_reader/prune_capacity.mjs`:
+
+- Rows `0..newCapacity-1` are kept byte-for-byte, so **no row is ever re-indexed and no reference anywhere in
+  the save has to be rewritten**. A table's target is raised automatically if a live row sits above it.
+- Empty rows among the kept rows are relinked into the free list the library and the game walk (first u32 of
+  an empty row = the next empty row, the last pointing at the capacity), and the rest of an empty row is
+  zeroed.
+- Header fields recomputed: `data1RecordCount`, `recordCapacity`, `nextRecordToUse` (all at
+  `0xa8 + tableStoreLength`), `table1Length` and `table1Length2` (`32 + indexBlock + cap*recordWords*4`),
+  `table2Length`, `tableTotalLength`. Note the library reports `header.headerOffset` as a constant `0xe8`;
+  the field block actually starts at `0xa8 + tableStoreLength`.
+- The string pool (table 2) is cut to the same proportion of capacity, **never below the pool's last
+  non-zero byte** or the highest offset a kept row still references, so no string is lost even when the
+  schema cannot say which row owns it.
+- The image is reassembled as `header + tables + 8 trailing bytes`, deflated, and written back into the
+  slot. It refuses to write a stream longer than the original.
+
+### Measured result
+
+**2,278,922 bytes (2.18 MB) saved on every save tried**, because the capacities are frozen:
+
+| save | unpacked before | after |
+|---|---:|---:|
+| `CAREER-MU2026` | 20,458,364 | 18,179,442 |
+| `CAREER-CUTDOWN` | 20,447,917 | 18,168,995 |
+| `CAREER-TUNE-P2B` (Wild Card) | 20,831,756 | 18,552,834 |
+| `CAREER-TUNE-P2B-PRUNE-AUTOSAVE` (2027 wk 0) | 20,452,593 | 18,173,671 |
+| `CAREER-2026SB` | 20,455,744 | 18,176,822 |
+
+That is **2.4 MB of headroom under the 20 MiB limit at the Wild Card**, against the ~140 KB the unpruned save
+had there.
+
+### Offline validation
+
+- `node --test test/prune_capacity.test.mjs` — 8 tests (rebuild arithmetic, free-list shape, pool truncation,
+  refusals, and two end-to-end runs on the sample save). Full reader suite: 79 pass, 0 fail, 4 skipped.
+- `pc_save_reader.mjs` on the pruned `CAREER-TUNE-P2B` produces a snapshot **identical to the original's**
+  except `meta` (timestamps and source path): 3,238 players, 326 games, 35 teams, 32 depth charts, 389 draft
+  prospects, same season. `read Save` on the output parses, every rebuilt table shows the new capacity, every
+  live row is still live, and the tail is byte-identical from the old stream end to EOF.
+
+### What is left
+
+1. **In-game test (needs JR, `CLAIM · Madden PC`)**: load the pruned `CAREER-TUNE-P2B` copy, open a player
+   page, advance a week, quit; confirm the autosave loads, is smaller, and still parses. Then check whether
+   **Madden rewrites the capacities back** to 3,200 / 64,000 — if it does, the saving is one-shot and the
+   approach needs rethinking; if the autosave keeps them, it is permanent.
+2. If the week-1 advance is clean, run a season rollover and a Pro Bowl advance on the pruned save to prove
+   the cap is never hit.
+3. **Integrate**: a `prune-save-capacity` step in the tuning season loop after each ingest, before the pilot
+   reloads. Never on the live franchise without JR.
