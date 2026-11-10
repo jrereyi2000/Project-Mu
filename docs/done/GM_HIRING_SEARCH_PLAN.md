@@ -1,6 +1,6 @@
 # Project Mu: Competitive GM Hiring Search Plan
 
-**Status:** approved by JR (2026-11-09); building, wave 1 of 2 done.
+**Status:** built and on main (2026-11-09); approved by JR 2026-11-09.
 **Builds on:** PROJECT_SPEC §2.19, §3.3f, §3.3p; [`STAFF_CONTRACTS_AND_FULL_CONTROL_PLAN.md`](../done/STAFF_CONTRACTS_AND_FULL_CONTROL_PLAN.md) §2.1–§2.2; [`OWNERS_SCOUTS_VOTERS_PLAN.md`](../done/OWNERS_SCOUTS_VOTERS_PLAN.md) §2.3.
 
 **Goal:** Fix the three Chunk 7 B8 bugs (`M-0044` / `M-0064`) in the GM hiring search so that destination `opening_appeal`, candidate `stature`, owner cash `budget`, and `owner_policy` hiring preferences each play a distinct, deterministic role. First-time `PROMOTION` GM candidates get their own salary band below `STANDARD`, `ELITE` and `STANDARD` candidates refuse unattractive openings below their tier appeal floors (recording their refusals in the search report), and the `owner_hiring` feature weights candidate selection and opening appeal for CPU owners.
@@ -294,3 +294,11 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 | Unit | Wave | Branch | Worktree | Result | Merge |
 |---|---|---|---|---|---|
 | U1 | 1 | gm-hiring-u1 | .claude/worktrees/gm-hiring-u1 | merged | 80b9667 |
+| U2 | 2 | gm-hiring-u2 | .claude/worktrees/gm-hiring-u2 | merged | 7f06382 |
+
+**As built:** both units landed exactly as designed. U2 added two robustness guards inside `_hire_gm` that the
+plan did not spell out: the shadow comparison uses `.get` on the winner key/appeal so an empty-pool fallback dict
+cannot raise, and the owner-view lookup is wrapped so a failing owner read can never fail a hire (matching
+`owner_context`'s rule that the switchboard never fails an engine). Both are covered by the `_hire_gm` mode tests.
+The plan's predicted red test (`test_gm_search_picks_the_best_affordable_candidate`) was corrected in U2 to expect
+PROMOTION at `budget=1_000_000`. No deviations in U1; no blockers in either unit.
