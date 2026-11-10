@@ -21,6 +21,7 @@ the owners' identities exist in the league (U6's team_owners and the lifecycle b
 """
 from engines.inbox import InboxError, appraisal
 from engines.inbox.registry import ActResult, Trigger
+from engines.inbox.helpers import regclass as _regclass
 
 KIND = "OWNER"
 COUNTERPART_TYPE = "owner"
@@ -100,12 +101,6 @@ def _season_complete(cur, season):
                    WHERE season = %s AND game_type = 'REGULAR_SEASON'""", (season,))
     total, open_ = cur.fetchone()
     return bool(total) and not open_
-
-
-def _regclass(cur, table):
-    cur.execute("SELECT to_regclass(%s) IS NOT NULL", (table,))
-    row = cur.fetchone()
-    return bool(row and row[0])
 
 
 def _big_moves(cur, team_id, season):

@@ -13,6 +13,7 @@ An ACCEPTED offer is stored in contract_offers and closes the thread. The league
 """
 from engines.inbox import InboxError
 from engines.inbox.registry import ActResult, Trigger
+from engines.inbox.helpers import abbr as _abbr
 
 KIND = "CONTRACT"
 COUNTERPART_TYPE = "player"
@@ -41,12 +42,6 @@ def _call(fn, *args, **kwargs):
         return fn(*args, **kwargs)
     except HTTPException as e:
         raise InboxError(e.status_code, str(e.detail)) from None
-
-
-def _abbr(cur, team_id):
-    cur.execute("SELECT abbreviation FROM teams WHERE id = %s", (team_id,))
-    row = cur.fetchone()
-    return str(row[0]).upper() if row and row[0] else None
 
 
 def _terms(payload):

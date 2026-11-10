@@ -30,6 +30,7 @@ import re
 import time
 
 from engines.inbox import InboxError, appraisal as appraisal_mod, store
+from engines.inbox.helpers import regclass as _regclass
 
 INBOX_LLM_BUDGET_S = 4.0          # P1-09 spike 2026-11-09: p50 1.99 s, p95 2.46 s, max 2.50 s
                                   # (gemini-3.8-flash, filled CONTRACT prompt, Madden open)
@@ -152,12 +153,6 @@ def loop_thread(thread):
     if out.get("week") is None and out.get("tick") is None:
         out["tick"] = 24
     return out
-
-
-def _regclass(cur, table):
-    cur.execute("SELECT to_regclass(%s) IS NOT NULL", (table,))
-    row = cur.fetchone()
-    return bool(row and row[0])
 
 
 def _core_view(cur, role, namespace, external_id, universe_id):

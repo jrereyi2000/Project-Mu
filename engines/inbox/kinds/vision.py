@@ -19,7 +19,14 @@ any time (source vision:jr:<season>:<week>); one open per team (the store's VISI
 from engines import gm_direction, team_vision
 from engines.inbox import InboxError
 from engines.inbox import actors as actors_mod
+from engines.inbox import helpers
 from engines.inbox.registry import ActResult, Trigger
+
+
+def _abbr(cur, team_id):
+    """The team's abbreviation; a missing row falls back to the id, which is what a fresh franchise shows."""
+    return helpers.abbr(cur, team_id, default=str(team_id))
+
 
 KIND = "VISION"
 COUNTERPART_TYPE = "gm"                # the coach -> GM case; a GM actor talks to the head coach (coach)
@@ -27,12 +34,6 @@ VOICE = "a front-office professional who cares about where this franchise is hea
 SEASON_SOURCE = "vision:season:{season}"
 SHIFT_SOURCE = "vision:shift:{season}:{week}"
 JR_SOURCE = "vision:jr:{season}:{week}"
-
-
-def _abbr(cur, team_id):
-    cur.execute("SELECT abbreviation FROM teams WHERE id = %s", (team_id,))
-    row = cur.fetchone()
-    return str(row[0]).upper() if row and row[0] else str(team_id)
 
 
 def _actor(team):

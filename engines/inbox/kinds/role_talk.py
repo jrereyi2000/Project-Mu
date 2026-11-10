@@ -19,6 +19,8 @@ Only a controlled COACH actor is served. Nothing here commits.
 from engines import depth_chart_engine as dce
 from engines.inbox import InboxError, appraisal, store
 from engines.inbox.registry import ActResult, Trigger
+from engines.inbox.helpers import regclass as _regclass
+from engines.inbox.helpers import as_int as _int
 
 KIND = "ROLE_TALK"
 COUNTERPART_TYPE = "player"
@@ -30,19 +32,6 @@ MAX_REVIEW_WEEK = 23                 # the last regular-season tick a depth char
 
 
 # ------------------------------------------------------------------------------------------------- helpers ---
-
-def _regclass(cur, table):
-    cur.execute("SELECT to_regclass(%s) IS NOT NULL", (table,))
-    row = cur.fetchone()
-    return bool(row and row[0])
-
-
-def _int(value, default=None):
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return default
-
 
 def _roster(cur, team_id, season):
     """[{player_id, name, position, age, overall, archetype}] of the team's active players this season."""

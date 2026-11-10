@@ -31,6 +31,7 @@ import json
 import uuid
 
 from psycopg.types.json import Jsonb
+from engines.inbox.helpers import regclass as _regclass
 
 RELATIONSHIP_SCHEMA_VERSION = "relationships-v1"
 SOURCE_KIND = "inbox"
@@ -300,12 +301,6 @@ def _relationship_store():
         if exc.name in (RELATIONSHIP_STORE, "personality"):
             return None
         raise
-
-
-def _regclass(cur, table):
-    cur.execute("SELECT to_regclass(%s) IS NOT NULL", (table,))
-    row = cur.fetchone()
-    return bool(row and row[0])
 
 
 def _universe(cur, rel_store):

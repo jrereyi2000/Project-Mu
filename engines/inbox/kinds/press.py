@@ -12,6 +12,7 @@ The four press tables are guarded with `to_regclass`: an unmigrated database sca
 """
 from engines.inbox import InboxError, store
 from engines.inbox.registry import ActResult, Trigger
+from engines.inbox.helpers import regclass as _regclass
 
 KIND = "PRESS"
 COUNTERPART_TYPE = "system"
@@ -24,12 +25,6 @@ COUNTERPART_NAME = "Press Room"
 OPEN_STATUSES = ("SCHEDULED", "LIVE", "REVIEW")     # presser states that wait on JR
 OPEN_PRESSER = {"id": "OPEN_PRESSER", "label": "Go to the podium", "form": None, "needs_note": False,
                 "default": None}
-
-
-def _regclass(cur, table):
-    cur.execute("SELECT to_regclass(%s) IS NOT NULL", (table,))
-    row = cur.fetchone()
-    return bool(row and row[0])
 
 
 def _close_finished(cur, team_id):

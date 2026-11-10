@@ -19,7 +19,8 @@ import json
 import random
 import re
 
-from engines.inbox import InboxError
+from engines.inbox import InboxError, actors
+from engines.inbox.helpers import abbr as _abbr
 from engines.inbox.registry import ActResult, Trigger
 
 KIND = "GM_TALK"
@@ -78,12 +79,6 @@ def _llm_budget():
     return INBOX_LLM_BUDGET_S
 
 
-def _abbr(cur, team_id):
-    cur.execute("SELECT abbreviation FROM teams WHERE id = %s", (team_id,))
-    row = cur.fetchone()
-    return str(row[0]).upper() if row and row[0] else None
-
-
 def _team_id(cur, value):
     """A team id from an abbreviation or a numeric id, or None."""
     if value is None:
@@ -93,14 +88,6 @@ def _team_id(cur, value):
     cur.execute("SELECT id FROM teams WHERE abbreviation = %s", (str(value).upper(),))
     row = cur.fetchone()
     return int(row[0]) if row else None
-
-
-def _gm(cur, team_id):
-    """(gm_profiles.id, gm_name) of the team's open GM tenure, or (None, None)."""
-    cur.execute("SELECT id, gm_name FROM gm_profiles WHERE team_id = %s AND end_season IS NULL "
-                "ORDER BY start_season DESC, id DESC LIMIT 1", (team_id,))
-    row = cur.fetchone()
-    return (row[0], row[1]) if row else (None, None)
 
 
 def _player_name(cur, player_id):
@@ -176,7 +163,8 @@ def scan(cur, season, week, team):
         source_ref = f"gm_talk:proposal:{p['id']}"
         if store.find_thread(cur, tid, KIND, source_ref) is not None:
             continue
-        gm_id, gm_name = _gm(cur, other)
+        gm = actors.current_gm(cur, other)
+        gm_id, gm_name = (gm["id"], gm["name"]) if gm else (None, None)
         if gm_id is None or _abbr(cur, other) is None:
             continue
         labels = _asset_labels(cur, p.get("assets") or [])
@@ -201,7 +189,8 @@ def start(cur, team, body):
         raise InboxError(400, "pick the GM's team")
     if gm_team_id == team["team_id"]:
         raise InboxError(400, "that's your own team's front office: pick another team's GM")
-    gm_id, gm_name = _gm(cur, gm_team_id)
+    gm = actors.current_gm(cur, gm_team_id)
+    gm_id, gm_name = (gm["id"], gm["name"]) if gm else (None, None)
     if gm_id is None:
         raise InboxError(400, f"{_abbr(cur, gm_team_id)} has no GM")
     # One open talk per GM, and a fresh ref per attempt: (team, kind, source_ref) is unique over closed threads too,

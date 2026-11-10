@@ -11,6 +11,7 @@ from engines import scouting_interviews as si
 from engines import scouting_narrative as sn
 from engines.inbox import InboxError
 from engines.inbox.registry import ActResult, Trigger
+from engines.inbox.helpers import regclass as _regclass
 
 KIND = "SCOUT"
 COUNTERPART_TYPE = "scout"
@@ -23,12 +24,6 @@ COUNTERPART_NAME = "Mu Scouting Department"
 
 SHORTLIST_MAX = 8
 RISER_MAX = 5
-
-
-def _regclass(cur, table):
-    cur.execute("SELECT to_regclass(%s) IS NOT NULL", (table,))
-    row = cur.fetchone()
-    return bool(row and row[0])
 
 
 def scan(cur, season, week, team):

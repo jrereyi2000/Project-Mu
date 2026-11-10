@@ -20,6 +20,8 @@ Nothing here commits.
 from engines.inbox import InboxError, appraisal, store
 from engines.inbox.kinds import role_talk
 from engines.inbox.registry import ActResult, Trigger
+from engines.inbox.helpers import regclass as _regclass
+from engines.inbox.helpers import as_int as _int
 
 KIND = "REPORTER"
 COUNTERPART_TYPE = "writer"
@@ -48,19 +50,6 @@ FOLLOW_UPS = [
 
 
 # ------------------------------------------------------------------------------------------------- helpers ---
-
-def _regclass(cur, table):
-    cur.execute("SELECT to_regclass(%s) IS NOT NULL", (table,))
-    row = cur.fetchone()
-    return bool(row and row[0])
-
-
-def _int(value, default=None):
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return default
-
 
 def _beat_writer(cur, team_id):
     """The team's beat writer {agent_id, handle, name}, falling back to any assigned account, or None."""
