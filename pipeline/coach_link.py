@@ -311,7 +311,29 @@ def link_staff(cur, snapshot, season):
             _upsert_profile(cur, person_kind, person_id,
                             _desired_row(person_kind, person_id, save, seat_position))
             linked += 1
-    return {"linked": linked, "created": created, "unmatched": unmatched}
+    # A coach Madden itself fired is a free agent in the save with his own record, and Mu can hire him later. Link
+    # those too, so a poached coordinator is a move rather than a second person (audit follow-up, 2026-11-10). Only an
+    # exactly normalised name matches here: a free agent is not pinned to a team or role, so the seat's tie-breakers
+    # are gone and a near match would be a guess.
+    linked_free = 0
+    seated = {seat.get(k) for seat in staff for k in ("hc", "oc", "dc") if seat.get(k) is not None}
+    mu_by_name = {}
+    for person_kind, people in (("COACH", head.values()), ("COORD", coords.values())):
+        for person_id, mu_name in people:
+            bucket = mu_by_name.setdefault(normalize_name(mu_name), set())
+            bucket.add((person_kind, person_id))
+    for pgid, save in save_coaches.items():
+        if pgid in seated or save.get("team_index") != 32 or save.get("contract_status") != "FreeAgent":
+            continue
+        key = normalize_name(f"{save.get('first_name') or ''} {save.get('last_name') or ''}")
+        people = sorted(mu_by_name.get(key) or ())
+        if len(people) != 1:
+            continue                                   # unknown, or two Mu people share the name: leave it alone
+        person_kind, person_id = people[0]
+        if _upsert_profile(cur, person_kind, person_id,
+                           _desired_row(person_kind, person_id, save, save.get("position"))):
+            linked_free += 1
+    return {"linked": linked, "created": created, "linked_free_agents": linked_free, "unmatched": unmatched}
 
 
 def _ensure_created_profile(cur, person_kind, person_id, mu_name, seat_position):

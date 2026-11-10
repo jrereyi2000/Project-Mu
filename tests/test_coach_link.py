@@ -241,3 +241,22 @@ def test_names_do_not_match_different_people():
     for save_name, mu_name in [("Orson Grizzly", "Press Taylor"), ("Bill Summers", "Vic Fangio"),
                                ("Sean Mannion", "Kevin Patullo"), ("Andy Reid", "Ron Leonard")]:
         assert not cl.names_match(save_name, mu_name), (save_name, mu_name)
+
+
+def test_a_free_agent_coach_mu_could_hire_is_linked_not_duplicated():
+    """A coach Madden fired is a free agent in the save with his own record. If Mu hires him later, the staff write
+    must move that record rather than create a second person (audit follow-up, 2026-11-10)."""
+    conn = _league()
+    snap = _snapshot()
+    save = [c for c in snap["coaches"] if c["pgid"] == 201][0]
+    save.update({"team_index": 32, "contract_status": "FreeAgent"})       # Madden fired him; the seat is empty
+    for seat in snap["staff"]:
+        if seat.get("oc") == 201:
+            seat["oc"] = None
+    result = cl.link_staff(FakeCursor(conn), snap, SEASON)
+    assert result["linked_free_agents"] == 1, result
+    # The save's pgid 201 is Mu's coordinator 302. He keeps the CREATED marker his empty seat gave him (the headshot
+    # pipeline selects CREATED coaches), but the recorded PresentationId is what matters: a later hire is an assign.
+    row = conn.execute("SELECT source, presentation_id FROM coach_madden_profiles"
+                       " WHERE person_kind = 'COORD' AND person_id = 302").fetchone()
+    assert row == ("CREATED", 201), row
