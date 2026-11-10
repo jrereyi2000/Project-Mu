@@ -153,7 +153,8 @@ def ingest(run, *, runner=None, python=None, environ=None, auto_init=True, saves
     return _run_cmd(runner, cmd, f"ingest into {db_for(run)}", env=_ingest_env(environ))
 
 
-def walk_offseason(run, *, runner=None, python=None, max_stops=14, work_dir=None, environ=None):
+def walk_offseason(run, *, runner=None, python=None, max_stops=14, work_dir=None, environ=None,
+                   saves_dir=None):
     """The P2-03 stage loop: advance one stop, ingest it, repeat until the next regular season.
 
     The stops are the eight offseason stages, the preseason weeks and the cut day; the loop ends
@@ -168,7 +169,7 @@ def walk_offseason(run, *, runner=None, python=None, max_stops=14, work_dir=None
         stops.append(res)
         if res.get("status") != "ok":
             break
-        ingest(run, runner=runner, python=python, auto_init=n == 1, environ=environ)
+        ingest(run, runner=runner, python=python, auto_init=n == 1, environ=environ, saves_dir=saves_dir)
         after = res.get("to") or {}
         if str(after.get("phase", "")).upper() == "WEEK":       # the next regular season has begun
             break
@@ -253,12 +254,20 @@ def run(name, *, base_save=BASE_SAVE, resume=False, offseason=True, max_stops=14
         # so an offseason snapshot has the next season's unplayed schedule and no 2026 games
         snapshot(name, snap, runner=runner, saves_dir=saves_dir)
         steps.append("snapshot")
-    ingest(name, runner=runner, python=python, saves_dir=saves_dir, environ=environ)
+    proc = ingest(name, runner=runner, python=python, saves_dir=saves_dir, environ=environ)
     steps.append("ingest-playoffs")
+    if "Clean seed" in (proc.stdout or ""):
+        # The load that creates and seeds a tuning database deliberately skips the league office,
+        # so without a second pass the season's first stage is never planned: OFFSEASON_START is
+        # what prepares the next season's progression state, and without it the first regular week
+        # of that season fails with "ProgressionStateError: player 1: explicit neutral bootstrap
+        # required" (2026-11-10). The second pass is a no-op when the first already ran it.
+        ingest(name, runner=runner, python=python, saves_dir=saves_dir, environ=environ)
+        steps.append("ingest-playoffs-seeded")
     stops = []
     if offseason:
         stops = walk_offseason(name, runner=runner, python=python, max_stops=max_stops, work_dir=run_dir,
-                               environ=environ)
+                               environ=environ, saves_dir=saves_dir)
         steps.append("offseason")
     out = {"run_dir": run_dir, "steps": steps, "stops": stops, "db": db_for(name), "save": save_for(name)}
     if do_report:

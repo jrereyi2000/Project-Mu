@@ -175,6 +175,28 @@ def test_the_ingest_runs_with_the_franchise_closed(tmp_path):
     assert envs and envs[0]["LEAGUE_OFFICE_FRANCHISE_CLOSED"] == "1" and envs[0]["PATH"] == "/bin"
 
 
+def test_a_seeding_ingest_is_followed_by_one_that_runs_the_league_office(tmp_path):
+    # the load that seeds a tuning database skips the league office, so OFFSEASON_START (which
+    # prepares the next season's progression state) would never run without a second pass
+    calls = []
+
+    def runner(cmd, **kw):
+        calls.append([str(c) for c in cmd])
+        if "advance" in cmd:
+            return types.SimpleNamespace(returncode=0, stdout=json.dumps({"status": "ok", "to": {"phase": "WEEK", "week": 1}}), stderr="")
+        if "pipeline.watch_save" in cmd:
+            n = sum(1 for c in calls if "pipeline.watch_save" in c)
+            out = "SUCCESS: Clean seed committed to database." if n == 1 else "ok"
+            return types.SimpleNamespace(returncode=0, stdout=out, stderr="")
+        return types.SimpleNamespace(returncode=0, stdout=json.dumps({"status": "ok"}), stderr="")
+
+    L.run("unit", runner=runner, python="py", seasons_dir=str(tmp_path / "s"), saves_dir="/saves", do_report=False)
+    ingests = [c for c in calls if "pipeline.watch_save" in c]
+    assert len(ingests) == 3                 # the seeding load, its second pass, then the one stop
+    assert ingests[0] == ingests[1]           # same save, same database: the second pass is a no-op
+                                             # when the first already ran the league office
+
+
 def test_a_failed_clone_stops_the_season(tmp_path):
     with pytest.raises(L.StepFailed, match="clone save"):
         L.run("unit", runner=_runner([], fail="clone-save"), python="py", seasons_dir=str(tmp_path), do_report=False)
