@@ -87,6 +87,7 @@ def _snapshot(overrides=None):
     for idx, key, pgid, first, last, portrait in SEATS:
         entry = {"pgid": pgid, "table": 4168, "row": pgid, "first_name": first, "last_name": last,
                  "age": 50, "position": SAVE_POSITION[key], "team_index": idx, "contract_status": "Signed",
+                 "contract_length": 4, "contract_salary": 400, "contract_years_remaining": 2,
                  "archetype": "OffensiveGuru", "level": 5, "portrait": portrait,
                  "offensive_playbook": 16384, "defensive_playbook": 16384,
                  "offensive_scheme": 16485, "defensive_scheme": 16485, "is_user_controlled": False}
@@ -290,4 +291,23 @@ def test_the_link_files_contracts_even_when_it_created_nothing(monkeypatch):
     snap = _snapshot()                                   # every seat matches: nothing is created
     result = cl.link_staff(FakeCursor(conn), snap, SEASON)
     assert result["created"] == 0
-    assert calls == [(SEASON, {"starting_only": False})], calls
+    assert len(calls) == 1 and calls[0][0] == SEASON, calls
+    assert calls[0][1]["starting_only"] is False
+    # the save's contract years go through for the seated coaches (JR's F1 rule)
+    assert calls[0][1]["years_from"], calls
+
+
+def test_the_save_sets_a_starting_coachs_contract_years(monkeypatch):
+    """JR's F1: Mu prices a starting coach, the save sets the term. The link passes the save's two numbers through,
+    and a coach Mu invents has no save record, so he is absent and the producer's tenure-start rule applies."""
+    calls = []
+    from engines import staff_contracts_run
+    monkeypatch.setattr(staff_contracts_run, "file_hires",
+                        lambda cur, season, **kw: calls.append(kw) or [])
+    conn = _league()
+    snap = _snapshot()
+    snap["coaches"][0]["contract_length"], snap["coaches"][0]["contract_years_remaining"] = 5, 1
+    cl.link_staff(FakeCursor(conn), snap, SEASON)
+    years = calls[0]["years_from"]
+    assert years[(1, "HC", 41)] == (5, 1), years          # CAR's head coach, the save's term
+    assert all(v[0] == 4 and v[1] == 2 for k, v in years.items() if k != (1, "HC", 41))

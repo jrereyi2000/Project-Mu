@@ -349,7 +349,22 @@ def link_staff(cur, snapshot, season):
     # writes nothing when everyone already has a row, so this is free on a rerun.
     # `starting_only=False` files every current staffer with no live row, not only this season's hires: the coaches Mu
     # creates are starting staff whose tenure may predate the season (audit M-0203).
-    fired = staff_contracts_run.file_hires(cur, season, starting_only=False)
+    #
+    # JR's rule (audit F1): a starting coach keeps Madden's contract years — Mu prices him, the save sets the term.
+    # A coach Mu creates has no save record, so he is absent from the map and the producer's tenure-start rule applies;
+    # a GM has no Madden record at all and is never in it.
+    years_from = {}
+    for seat in staff:
+        team_id = team_map.get(seat.get("team_index"))
+        for key, role, _seat_position, _person_kind in SEATS:
+            pgid = seat.get(key)
+            person = _mu_person(head, coords, team_id, role) if team_id is not None else None
+            saved = save_coaches.get(pgid) if pgid is not None else None
+            if person is None or not saved:
+                continue
+            years_from[(team_id, role, person[0])] = (saved.get("contract_length"),
+                                                      saved.get("contract_years_remaining"))
+    fired = staff_contracts_run.file_hires(cur, season, starting_only=False, years_from=years_from)
     return {"linked": linked, "created": created, "linked_free_agents": linked_free,
             "contracts_filed": len(fired), "unmatched": unmatched}
 
