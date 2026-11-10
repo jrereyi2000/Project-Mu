@@ -167,17 +167,39 @@ def find_window(title_re: str) -> dict:
 
 
 def focus_window(hwnd: int) -> bool:
-    """Restore + Alt tap + SetForegroundWindow (Windows only hands over the foreground right
-    after input). Returns whether it is the foreground window afterwards."""
+    """Restore + Alt tap + SetForegroundWindow, with the foreground thread's input attached.
+
+    Windows only hands over the foreground right after input, and refuses outright when another
+    process owns it; attaching this thread to the current foreground thread's input queue lets the
+    call through. Three tries, because a starting sim or a notification can steal it back once
+    (P2-01 2026-11-10). Returns whether it is the foreground window afterwards.
+    """
     if win32gui.IsIconic(hwnd):
         win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-    win32api.keybd_event(0x12, 0, 0, 0)
-    win32api.keybd_event(0x12, 0, KEYEVENTF_KEYUP, 0)
-    try:
-        win32gui.SetForegroundWindow(hwnd)
-    except Exception:  # noqa: BLE001 - pywin32 raises pywintypes.error; the check below decides
-        pass
-    time.sleep(FOCUS_SETTLE_S)
+    for _ in range(3):
+        if win32gui.GetForegroundWindow() == hwnd:
+            return True
+        win32api.keybd_event(0x12, 0, 0, 0)
+        win32api.keybd_event(0x12, 0, KEYEVENTF_KEYUP, 0)
+        fg = win32gui.GetForegroundWindow()
+        ours = win32process.GetWindowThreadProcessId(hwnd)[0]
+        theirs = win32process.GetWindowThreadProcessId(fg)[0] if fg else 0
+        attached = False
+        try:
+            if theirs and theirs != ours:
+                win32process.AttachThreadInput(theirs, ours, True)
+                attached = True
+            win32gui.BringWindowToTop(hwnd)
+            win32gui.SetForegroundWindow(hwnd)
+        except Exception:  # noqa: BLE001 - pywin32 raises pywintypes.error; the check below decides
+            pass
+        finally:
+            if attached:
+                try:
+                    win32process.AttachThreadInput(theirs, ours, False)
+                except Exception:  # noqa: BLE001
+                    pass
+        time.sleep(FOCUS_SETTLE_S)
     return win32gui.GetForegroundWindow() == hwnd
 
 
@@ -400,7 +422,21 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
+def _dpi_aware() -> None:
+    """Report real pixels. Without this, a display scaled above 100% makes GetClientRect return
+    logical size (1280x720 for a 2560x1440 window), so mss captured only the top-left quarter and
+    the bottom of every screen was lost to OCR (found 2026-11-10 in P2-01)."""
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)      # PROCESS_PER_MONITOR_DPI_AWARE
+    except Exception:
+        try:
+            ctypes.windll.user32.SetProcessDPIAware()
+        except Exception:
+            pass
+
+
 def main(argv: list[str] | None = None) -> int:
+    _dpi_aware()
     try:
         a = build_parser().parse_args(argv)
     except SystemExit as e:

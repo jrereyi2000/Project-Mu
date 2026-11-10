@@ -22,9 +22,18 @@ def norm(s):
 
 
 def label_match(label, pattern):
-    """True when an on-screen label matches a catalog label or fnmatch pattern (TUNE-*)."""
+    """True when an on-screen label matches a catalog label or fnmatch pattern (TUNE-*).
+
+    Windows OCR sometimes loses the space inside a two-word label ("ADVANCEWEEK",
+    "COACHCENTRAL", P2-01 2026-11-10), so a multi-word label also matches its space-stripped form.
+    """
     pat = " ".join(re.sub(r"[^A-Z0-9&\-*?]+", " ", str(pattern).upper()).split())
-    return fnmatch.fnmatchcase(norm(label), pat)
+    lab = norm(label)
+    if fnmatch.fnmatchcase(lab, pat):
+        return True
+    if " " in pat and not any(ch in pat for ch in "*?["):
+        return lab.replace(" ", "") == pat.replace(" ", "")
+    return False
 
 
 def _union(boxes):
@@ -61,11 +70,20 @@ class Frame:
         return " | ".join(ln.upper() for ln in self.lines)
 
     def has(self, phrase):
-        """True when `phrase` appears as whole words inside one OCR line."""
+        """True when `phrase` appears as whole words inside one OCR line.
+
+        A multi-word phrase also matches when OCR dropped the space between its words
+        ("ADVANCE WEEK" -> "ADVANCEWEEK"), which P2-01 met on the Madden hub.
+        """
         p = norm(phrase)
         if not p:
             return False
-        return any(f" {p} " in f" {ln} " for ln in self._norm_lines)
+        if any(f" {p} " in f" {ln} " for ln in self._norm_lines):
+            return True
+        if " " in p:
+            compact = p.replace(" ", "")
+            return any(compact in ln.replace(" ", "") for ln in self._norm_lines)
+        return False
 
     def find(self, phrase):
         """The [x, y, w, h] box of `phrase` (a run of consecutive OCR words on one line, or one

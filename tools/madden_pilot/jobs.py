@@ -304,10 +304,12 @@ def launch(pilot, pack=DEFAULT_PACK, run=None, madden_running=None, timeout=LAUN
 # ------------------------------------------------------------------------------- sim_season
 def _week_now(pilot):
     """Go to the Weekly Hub and read its header; tries GAMEDAY too. Stuck when unreadable."""
-    frame = pilot.goto("HUB_WEEKLY")
+    with patience(pilot, 120, 1.0):
+        frame = pilot.goto("HUB_WEEKLY")
     head = read_header(frame)
     if head is None:
-        frame = pilot.goto("HUB_GAMEDAY")
+        with patience(pilot, 120, 1.0):
+            frame = pilot.goto("HUB_GAMEDAY")
         head = read_header(frame)
     if head is None:
         pilot.stop("can't read the week header (2026. WEEK N) on the hub", Stuck)
@@ -334,7 +336,10 @@ def _done(kind, n, head):
 
 
 def _load_franchise(pilot, tile):
-    pilot.goto("FRANCHISE_LIST")
+    # Title -> main menu and the franchise load are long UNKNOWN splashes offline; goto's default
+    # 20-look UNKNOWN limit (about 40 s) is too short for them.
+    with patience(pilot, 180, 1.0):
+        pilot.goto("FRANCHISE_LIST")
     pilot.highlight(tile)
     pilot.confirm_on("FRANCHISE_LIST", tile)
     # the dialog may take a moment; CURRENT FRANCHISES stays behind it and behind the loading frames
