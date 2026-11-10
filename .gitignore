@@ -60,3 +60,4 @@ PC_MODS/
 
 # Live agent-to-agent message board (see CLAUDE.md, "Talking to other agents")
 AGENT_CONVERSATION.md
+docs/agent_board_archive/
