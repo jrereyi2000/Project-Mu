@@ -260,3 +260,20 @@ def test_a_free_agent_coach_mu_could_hire_is_linked_not_duplicated():
     row = conn.execute("SELECT source, presentation_id FROM coach_madden_profiles"
                        " WHERE person_kind = 'COORD' AND person_id = 302").fetchone()
     assert row == ("CREATED", 201), row
+
+
+def test_a_duplicate_free_agent_does_not_take_over_a_seated_link():
+    """An old duplicate free agent with a linked coach's name must not steal the link, or every write swaps two
+    records (audit, 2026-11-10)."""
+    conn = _league()
+    snap = _snapshot()
+    # Mu's ATL OC is linked to his seat; the save also carries a stale free-agent copy of the same name.
+    cl.link_staff(FakeCursor(conn), snap, SEASON)
+    seated = [c for c in snap["coaches"] if c["pgid"] == 201][0]
+    dup = dict(seated, pgid=999, team_index=32, contract_status="FreeAgent")
+    snap["coaches"].append(dup)
+    result = cl.link_staff(FakeCursor(conn), snap, SEASON)
+    assert result["linked_free_agents"] == 0, result
+    row = conn.execute("SELECT presentation_id FROM coach_madden_profiles"
+                       " WHERE person_kind = 'COORD' AND person_id = 302").fetchone()
+    assert row == (201,), row

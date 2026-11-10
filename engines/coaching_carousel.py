@@ -1307,6 +1307,11 @@ def hiring_cycle(cur, season, log=print, personality=None):
     # (that is what hot_seat_only(cur, season + 1) works with), so the hire's start, first draft and signed
     # season are all `nxt`.
     report["gm_fills"] = gm_rollover.fill_vacant_gms(cur, nxt, log=log)
+    # File the hires' contracts now rather than waiting for the next annual run: otherwise a new coach sits on
+    # 0/0/0 in the save across Madden's league-year rollover (audit M-0200). The producer prices them, the same way
+    # it prices anyone else; `annual` calls it again as a backstop.
+    from engines import staff_contracts_run
+    report["hiring_contracts"] = staff_contracts_run.file_hires(cur, nxt)
     report["personality"] = staff_lifecycle(cur, events, personality)
     return report
 

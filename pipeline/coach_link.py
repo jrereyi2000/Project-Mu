@@ -330,6 +330,13 @@ def link_staff(cur, snapshot, season):
         if len(people) != 1:
             continue                                   # unknown, or two Mu people share the name: leave it alone
         person_kind, person_id = people[0]
+        # A man already linked to a seat keeps it: an old duplicate free agent with the same name must not take the
+        # link over, or every write swaps the two records (audit, 2026-11-10).
+        cur.execute("SELECT presentation_id FROM coach_madden_profiles WHERE person_kind = %s AND person_id = %s",
+                    (person_kind, person_id))
+        existing = cur.fetchone()
+        if existing and existing[0] in seated:
+            continue
         if _upsert_profile(cur, person_kind, person_id,
                            _desired_row(person_kind, person_id, save, save.get("position"))):
             linked_free += 1
