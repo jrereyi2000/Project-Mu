@@ -407,11 +407,14 @@ def offer_contract(offer, signed_season, contract_type="STANDARD"):
             "drafted_round": None}
 
 
-def contract_block(new, old=None, offset=0, slots=DEFAULT_CONTRACT_SLOTS):
+def contract_block(new, old=None, offset=0, slots=DEFAULT_CONTRACT_SLOTS, bonus_slots=None):
     """The writer's contract block ({Length, CurrentYear 0, SalaryYearN, BonusYearN}, $10,000 units) for a contract
     dict `new` that starts `offset` league years after the save's current contract year; with offset 1 the old
     snapshot contract's current-year terms come first. Slots past Length are zeroed; years past `slots` are dropped.
-    Returns (block, dropped_years)."""
+    The save's two families need not have the same field count (Madden's PlayerContract has more SalaryYear fields
+    than BonusYear ones) and the writer refuses a field the schema lacks, so each is trimmed to its own count
+    (`bonus_slots`; M-0196). Returns (block, dropped_years)."""
+    bonus_slots = slots if bonus_slots is None else bonus_slots
     m = ce.to_madden(dict(new, current_year=0))
     sal = [m.get(f"SalaryYear{i}", 0) for i in range(new["length"])]
     bon = [m.get(f"BonusYear{i}", 0) for i in range(new["length"])]
@@ -422,11 +425,11 @@ def contract_block(new, old=None, offset=0, slots=DEFAULT_CONTRACT_SLOTS):
         pre_b = [o_bon[cy + i] if old and cy + i < len(o_bon) else 0 for i in range(offset)]
         sal, bon = pre_s + sal, pre_b + bon
     dropped = max(0, len(sal) - slots)
-    sal, bon = sal[:slots], bon[:slots]
+    sal, bon = sal[:slots], bon[:bonus_slots]
     block = {"Length": len(sal), "CurrentYear": 0}
     for i in range(slots):
         block[f"SalaryYear{i}"] = sal[i] if i < len(sal) else 0
-    for i in range(slots):
+    for i in range(bonus_slots):
         block[f"BonusYear{i}"] = bon[i] if i < len(bon) else 0
     return block, dropped
 
@@ -514,8 +517,12 @@ class Plan:
         self.players = {p["pgid"]: p for p in snapshot.get("players") or [] if p.get("pgid") is not None}
         self.state = state
         self.league_cap_dollars = league_cap(state, snapshot)
-        self.slots = next((len(p["contract"]["salary_by_year"]) for p in self.players.values()
-                           if p.get("contract") and p["contract"].get("salary_by_year")), DEFAULT_CONTRACT_SLOTS)
+        contract0 = next((p["contract"] for p in self.players.values()
+                          if p.get("contract") and p["contract"].get("salary_by_year")), None) or {}
+        self.slots = len(contract0.get("salary_by_year") or []) or DEFAULT_CONTRACT_SLOTS
+        # The schema's bonus family can be shorter than its salary family, and the writer refuses a field it does
+        # not have; the old snapshot carries the real counts (pc_save_reader numberedFields; M-0196).
+        self.bonus_slots = len(contract0.get("bonus_by_year") or []) or DEFAULT_CONTRACT_SLOTS
         # current view: pgid -> (status, team_index); IR view: pgid -> bool
         self.view = {g: (p.get("status"), p.get("team_index")) for g, p in self.players.items()}
         self.ir = {g: bool((p.get("injury") or {}).get("injured_reserve")) for g, p in self.players.items()}
@@ -637,7 +644,8 @@ class Plan:
         if lst == "Roster" and block is None:
             if not contract:
                 return self.note(tag, False, f"a Roster signing of {self.name(pgid)} needs a contract")
-            block, dropped = contract_block(contract, None, self.offset if offset is None else offset, self.slots)
+            block, dropped = contract_block(contract, None, self.offset if offset is None else offset, self.slots,
+                                         self.bonus_slots)
             if dropped:
                 self.warn(f"{self.name(pgid)}: {dropped} contract years past the save's {self.slots} slots dropped")
         if not self._claim(pgid, "sign", team_index, priority, tag):
@@ -701,7 +709,8 @@ class Plan:
         if have and have.get("contract") is not None:
             return self.note(tag, False, f"{self.name(pgid)}: a contract change is already planned this write")
         if block is None:
-            block, dropped = contract_block(contract, old, self.offset if offset is None else offset, self.slots)
+            block, dropped = contract_block(contract, old, self.offset if offset is None else offset, self.slots,
+                                         self.bonus_slots)
             if dropped:
                 self.warn(f"{self.name(pgid)}: {dropped} contract years past the save's {self.slots} slots dropped")
         if block == snapshot_block(old):

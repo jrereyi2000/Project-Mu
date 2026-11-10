@@ -189,6 +189,29 @@ def annual(cur, season, dry_run=False):
             rolled.append({"id": row["id"], "from": row["remaining_years"], "to": target})
             if not dry_run:
                 cur.execute("UPDATE staff_contracts SET remaining_years = %s WHERE id = %s", (target, row["id"]))
+    # A hire for the coming league year is not current staff (he must not displace the man still in the job), but
+    # his contract is filed now: the save writer needs a live staff_contracts row at the stage the carousel makes
+    # the hire, or he plays a season with no contract fields (M-0196 B1). A deal signed for `season + 1` is left out
+    # of season `season`'s payroll (the filter is `signed_season <= season`) and is never read as a departure (the
+    # firing loop skips a later-signed row), so filing it early changes nothing about this season's money.
+    for s in current_staff(cur, season + 1):
+        key = (s["team_id"], s["person_kind"], s["person_id"])
+        if key in current:
+            continue
+        row = by_key.get(key)
+        if row is not None and row["remaining_years"] > 0:
+            continue
+        years, salary = _years(s["person_kind"]), _salary(s["person_kind"], s["experience"], s["championships"])
+        if s["person_kind"] == "GM" and row is not None:
+            salary = max(int(row["annual_salary"]), salary)
+        filed.append({"team_id": s["team_id"], "person_kind": s["person_kind"], "person_id": s["person_id"],
+                      "annual_salary": salary, "total_years": years, "remaining_years": years,
+                      "signed_season": season + 1, "full_control": False})
+        if not dry_run:
+            cur.execute("""INSERT INTO staff_contracts (team_id, person_id, person_kind, annual_salary,
+                               total_years, remaining_years, signed_season, full_control, buyout_owed)
+                           VALUES (%s, %s, %s, %s, %s, %s, %s, false, 0)""",
+                        (s["team_id"], s["person_id"], s["person_kind"], salary, years, years, season + 1))
     # Everyone still in a staff post anywhere in the league: a coordinator poached or promoted to another team is a
     # departure, not a firing, so his old team owes no buyout (JR, 2026-11-09). Keyed BY ROLE TABLE: coaches.id,
     # coordinators.id and gm_profiles.id all run 1..32+, so a bare id set matched almost every fired person against
@@ -238,7 +261,9 @@ def annual(cur, season, dry_run=False):
                                buyout_fired_season = %s, buyout_years = %s WHERE id = %s""",
                         (cols["remaining_years"], cols["buyout_owed"], cols["buyout_total"],
                          cols["buyout_fired_season"], cols["buyout_years"], r["id"]))
+    # The season's payroll, by the ledger's own filter: a deal signed for a later league year is not charged yet.
     active = [] if dry_run else [r for r in contracts(cur) if r["remaining_years"] > 0
+                                 and int(r["signed_season"] or 0) <= season
                                  and r["person_kind"] in ("HC", "OC", "DC", "GM")]
     payroll = sce.staff_payroll(active)
     return {"season": season, "status": "dry_run" if dry_run else "built", "filed": len(filed),

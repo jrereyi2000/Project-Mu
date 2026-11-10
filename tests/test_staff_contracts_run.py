@@ -246,9 +246,8 @@ def test_a_coach_rehired_into_the_same_seat_is_filed_again():
     conn.execute("INSERT INTO coach_tenures (coach_id, team_id, start_season, end_season) "
                  "VALUES (11, 2, 2038, NULL)")
     scr.annual(cur, 2036)
-    scr.annual(cur, 2037)
-    rep = scr.annual(cur, 2038)
-    assert rep["filed"] >= 1                          # his fresh deal, plus any other man's that day
+    scr.annual(cur, 2037)                    # his coming-season deal is filed with the hire (M-0196 B1)
+    scr.annual(cur, 2038)
     cur.execute("SELECT remaining_years, signed_season, buyout_owed FROM staff_contracts "
                 "WHERE team_id = 2 AND person_kind = 'HC' AND person_id = 11 ORDER BY id")
     rows = cur.fetchall()
@@ -450,3 +449,22 @@ def test_experience_is_the_seasons_in_the_role_across_his_tenures():
                  "(10, 2, 2019, 2021), (10, 3, 2022, 2024), (10, 1, 2025, NULL)")
     staff = scr.current_staff(FakeCursor(conn), 2030)
     assert next(s for s in staff if s["person_kind"] == "HC")["experience"] == 12
+
+
+def test_a_hire_for_the_coming_season_gets_his_contract_now():
+    """M-0196 B1: the save writer needs a live staff_contracts row at the stage the carousel hires, not a year
+    later, and the coming season's deal must not be charged to this one."""
+    conn = _db()
+    conn.execute("INSERT INTO coaches VALUES (12, 'Next Coach')")
+    conn.execute("INSERT INTO coach_records VALUES (12, 0)")
+    conn.execute("INSERT INTO coach_tenures (coach_id, team_id, start_season, end_season) "
+                 "VALUES (12, 3, 2037, NULL)")
+    cur = FakeCursor(conn)
+    first = scr.annual(cur, 2036)
+    cur.execute("SELECT annual_salary, total_years, remaining_years, signed_season FROM staff_contracts "
+                "WHERE person_id = 12 AND person_kind = 'HC'")
+    salary, years, remaining, signed = cur.fetchone()
+    assert (years, remaining, signed) == (4, 4, 2037) and salary > 0
+    cur.execute("SELECT sum(annual_salary) FROM staff_contracts WHERE signed_season <= 2036 AND remaining_years > 0")
+    assert first["payroll"] == cur.fetchone()[0]               # the 2037 deal is not in 2036's payroll
+    assert scr.annual(cur, 2037)["filed"] == 0                 # and he is not filed twice

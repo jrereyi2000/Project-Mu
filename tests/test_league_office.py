@@ -447,6 +447,19 @@ def test_contract_block_offsets_and_cap_hit():
     assert dropped == 1 and b["Length"] == 2
 
 
+def test_contract_block_emits_only_the_bonus_slots_the_schema_has():
+    """M-0196: Madden's PlayerContract has more SalaryYear fields than BonusYear ones, and the writer refuses a
+    field the schema lacks, so a 10-year deal was refused on BonusYear7/8/9."""
+    new = {"length": 10, "salary_by_year": [1_000_000] * 10, "bonus_by_year": [500_000] * 10}
+    b, dropped = lo.contract_block(new, None, 0, slots=10, bonus_slots=7)
+    assert dropped == 0 and b["Length"] == 10
+    assert b["SalaryYear9"] == 100                     # the salary family is complete
+    assert "BonusYear7" not in b and "BonusYear9" not in b and b["BonusYear6"] == 50
+    short, _ = lo.contract_block({"length": 3, "salary_by_year": [1_000_000] * 3, "bonus_by_year": [0] * 3},
+                                 None, 0)
+    assert short["BonusYear6"] == 0 and "BonusYear7" not in short
+
+
 def test_release_cap_accelerates_bonus():
     b = lo.snapshot_block(contract(length=4, cur=1, sal=(100, 200, 300, 400), bon=(50, 50, 50, 50)))
     assert lo.release_cap(b) == (250 - 150, 350, 200)
@@ -1860,3 +1873,13 @@ def test_conninfo_carries_the_password(monkeypatch):
         connection = OtherConn()
 
     assert lo._conninfo(Other()) == "host=localhost dbname=elsewhere user=postgres"   # a different database
+
+
+def test_the_plan_reads_the_bonus_slot_count_from_the_snapshot():
+    """M-0196: the old snapshot carries the schema's real SalaryYear and BonusYear counts; the plan emits the bonus
+    family only as far as the save has fields for it."""
+    snap = snapshot(players=[player(1, 0)])
+    snap["players"][0]["contract"] = {"length": 10, "current_year": 0, "salary_by_year": [1] * 10,
+                                      "bonus_by_year": [1] * 7}
+    plan = lo.Plan(snap, "FREE_AGENCY", SEASON, 3, 1, "seed", {0: 100}, {})
+    assert (plan.slots, plan.bonus_slots) == (10, 7)
