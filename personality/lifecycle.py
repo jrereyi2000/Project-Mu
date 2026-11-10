@@ -414,6 +414,9 @@ def validate_inventory(snapshot, classifications, *, universe, cutoff, staff=Non
                      reader_version=(snapshot.get('meta') or {}).get('reader_version'),
                      input_hashes=dict(snapshot=snap_hash, classifications=canonical_hash(classifications or {}),
                                        staff=canonical_hash(staff or [])),
+                     # The reviewed receipts themselves ride along: the applied batch is the durable record of
+                     # what classified whom, and consumers (the scouting directors' staff:scout) read them there.
+                     classifications=deepcopy(classifications or {}),
                      people=people, issues=issues)
     inventory['counts'] = _counts(people)
     return inventory
@@ -540,6 +543,7 @@ def plan_lifecycle(inventory, existing, *, core_version, catalogue_version, cata
     manifest = dict(schema=SCHEMA, kind='manifest', visibility='restricted', universe=deepcopy(universe),
                     cutoff=deepcopy(inventory['cutoff']), reader_version=inventory.get('reader_version'),
                     input_hashes=dict(inventory['input_hashes'], inventory=canonical_hash(inventory)),
+                    classifications=deepcopy(inventory.get('classifications') or {}),
                     core_version=core_version, catalogue_version=catalogue_version,
                     preconditions=dict(existing_sha256=canonical_hash(existing or {}),
                                        expected={f"{p['role']}:{p['source_person_id']}": p['expected']
