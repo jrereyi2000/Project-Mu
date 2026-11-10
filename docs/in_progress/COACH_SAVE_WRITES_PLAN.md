@@ -3,6 +3,7 @@
 **Status:** approved by JR (2026-11-10); building, wave 0 of 5.
 
 **As built:**
+- Spike D (`df76bec`) found the source and the licence shape in `docs/reference/COACH_DONOR_PHOTOS.md`. Club coach photos on `static.clubs.nfl.com` are the only good plates (every club has them; ESPN's coach headshots are 404, Pro-Football-Reference is Cloudflare-403), but their terms are personal, non-commercial, no redistribution: **the donor library stays local and git-ignored**, and Wikimedia Commons is the clean-licence fallback. `static/coaches/` is served by the existing `/static` mount with nothing new (`server/api.py:188-190`).
 - The migration is `db/migrations/2027_02_21_coach_madden_profiles.sql`, not the plan's original `2027_02_19`: builder-2 took `2027_02_19` for `2027_02_19_owner_cash_buyouts.sql` (`6e9fbcf`) and then `2027_02_20` for `2027_02_20_buyout_schedule.sql` (M-0128) before U1 started.
 
 **Builds on:** PROJECT_SPEC §2.19 (coaching carousel), §2.20 (headshots), §2.21a (league office), [`LEAGUE_OFFICE_PLAN.md`](../done/LEAGUE_OFFICE_PLAN.md) §4.3, [`V2_CORE_BUILD_PLAN.md`](../done/V2_CORE_BUILD_PLAN.md) (the "coach-creation spike" row), [`REAL_COACH_PROFILES_PLAN.md`](../done/REAL_COACH_PROFILES_PLAN.md), [`STAFF_CONTRACTS_AND_FULL_CONTROL_PLAN.md`](../done/STAFF_CONTRACTS_AND_FULL_CONTROL_PLAN.md).
@@ -433,3 +434,4 @@ All five questions were answered by JR on 2026-11-10; see D7–D11 at the top. N
 
 | Unit | Wave | Branch | Worktree | Result | Merge |
 |---|---|---|---|---|---|
+| Spike D | 0 | `worktree-agent-a1465b19dc48a9bc0` | `.claude/worktrees/agent-a1465b19dc48a9bc0` | merged — `docs/reference/COACH_DONOR_PHOTOS.md` | `df76bec` |
