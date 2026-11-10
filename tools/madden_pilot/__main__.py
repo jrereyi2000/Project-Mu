@@ -115,6 +115,15 @@ class ScriptedMadden:
         return out
 
     def words(self, lines):
+        # CURRENT FRANCHISES lays its tiles out along one row, so their x positions order the
+        # list; every other screen is a column (the pilot's highlight logic compares x).
+        if self.screen == "FRANCHISE_LIST":
+            row = [w for ln in lines if ln in self.tiles for w in ln.split()]
+            return [{"text": w, "box": [100 + 200 * (row.index(w) if w in row else 0), 600, 150, 30],
+                     "line": len(row)} for w in row] + \
+                   [{"text": w, "box": [100 + 120 * j, 40 * i, 100, 30], "line": i}
+                    for i, ln in enumerate(lines) if ln not in self.tiles
+                    for j, w in enumerate(ln.split())]
         return [{"text": w, "box": [100 + 120 * j, 40 * i, 100, 30], "line": i}
                 for i, ln in enumerate(lines) for j, w in enumerate(ln.split())]
 

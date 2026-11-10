@@ -607,14 +607,16 @@ def _walk_to_tile(pilot, tile, folder):
     """Put the CURRENT FRANCHISES border on `tile`; True when it is there.
 
     The list opens wherever it was last left. Madden orders the tiles by the save's own date, so
-    the saves folder is only a bound and the border is the truth: press one arrow, look, and stop
-    the moment the target is bordered. The first direction comes from the two labels' x positions
-    when both are on screen; a press that leaves the border where it was means an edge of the
-    list, and then it goes the other way (2026-11-10: a wrong-way jump swept 60 saves twice and
-    looked like a hung run).
+    the saves folder is only a bound and the border is the truth. A page shows more than three
+    tiles, so it moves three presses at a time and looks for the tile anywhere in the frame —
+    one press per look swept 170 saves at about a second a press (JR, 2026-11-10, a p2g run that
+    looked hung) — then steps onto the tile's border one at a time. A press that leaves the
+    border where it was is an edge of the list, and it then goes the other way; coming back to a
+    tile this direction already passed means the list wrapped, so the tile is not on it.
     """
     order = save_tiles(folder)
     bound = len(order) + 3
+    stride = 3
 
     def on_target():
         return pilot.highlighted(labels=[tile]) == tile
@@ -622,22 +624,45 @@ def _walk_to_tile(pilot, tile, folder):
     def current():
         return pilot.highlighted(labels=order)
 
-    if on_target():
-        return True
-    a, b = pilot.frame.find(current()) if current() else None, pilot.frame.find(tile)
-    directions = ("left", "right") if a and b and b[0] < a[0] else ("right", "left")
-    for key in directions:
-        still = current()
-        for _ in range(bound):
-            pilot.press(key)
-            pilot.look()
+    def approach():
+        """From the bordered tile, step toward the visible `tile` until it is bordered."""
+        for _ in range(stride + 4):
             if on_target():
                 return True
+            here, there = current(), pilot.frame.find(tile)
+            box = pilot.frame.find(here) if here else None
+            if not (there and box):
+                return False
+            dx = there[0] - box[0]
+            if abs(dx) < 20:            # same x: the frame says nothing about the direction
+                return False
+            pilot.press("right" if dx > 0 else "left")
+            pilot.look()
+        return on_target()
+
+    if on_target():
+        return True
+    here, there = current(), pilot.frame.find(tile)
+    if there is not None and approach():
+        return True                 # on this page already: step onto it, no galloping
+    directions = ("left", "right") if here and there and there[0] < pilot.frame.find(here)[0] \
+        else ("right", "left")
+    for key in directions:
+        seen, prev = set(), current()
+        for _ in range(bound // stride + 2):
+            pilot.press(key, times=stride)
+            pilot.look()
             now = current()
-            if now is not None and still is not None and now == still:
+            if pilot.frame.find(tile) is not None:
+                return approach()
+            if now is None:
+                continue
+            if now == prev:
                 break                   # the border can't move this way: an edge of the list
-            if now is not None:
-                still = now
+            if now in seen:
+                return False            # wrapped the whole list: the tile is not on it
+            seen.add(now)
+            prev = now
     return on_target()
 
 
@@ -670,16 +695,15 @@ def _load_franchise(pilot, tile, save=None, folder=None):
         frame, screen = pilot.look()
     with patience(pilot, 180, 1.0):
         pilot.goto("FRANCHISE_LIST")
-    found = _walk_to_tile(pilot, tile, folder)
-    if not found:
-        # CURRENT FRANCHISES is built when the screen opens and a clone made while it was already
-        # up does not appear on re-entry from the landing page either: the list must be left for
-        # the main menu and entered again (JR, 2026-11-10: the p2g run walked the list and never
-        # saw TUNE-P2G).
+    if pilot.frame.find(tile) is None:
+        # CURRENT FRANCHISES is built when the screen opens, and a clone made while it was
+        # already up does not appear on a re-entry from the landing page either: the list only
+        # rebuilds after a round trip to the main menu (JR, 2026-11-10; the p2g run walked the
+        # whole stale list and never saw TUNE-P2G). Do it before walking 170 tiles.
         _leave_to_main_menu(pilot)
         with patience(pilot, 180, 1.0):
             pilot.goto("FRANCHISE_LIST", timeout=180)
-        found = _walk_to_tile(pilot, tile, folder)
+    found = _walk_to_tile(pilot, tile, folder)
     if not found:
         pilot.stop(f"couldn't find the {tile} tile in CURRENT FRANCHISES", Stuck)
     pilot.confirm_on("FRANCHISE_LIST", tile)
