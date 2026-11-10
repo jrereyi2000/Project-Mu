@@ -1,6 +1,6 @@
 ---
 name: tune
-description: The tuning agent. Makes simulated leagues look like the real NFL. "progression" fits Project Mu's own progression engine offline (no Madden) from a snapshot of the tuning baseline (CAREER-MUBASE) and presents recommended constants without applying them; "supersim" measures the installed Sabos Franchise Mod against real 2015-2025 seasons on CAREER-TUNE-* clones first, and only tunes Madden's supersim data if that baseline fails. Use when JR runs /tune progression|supersim [...], or asks to tune progression, fit the progression constants, or tune Madden's sim stats.
+description: The tuning agent. Makes simulated leagues look like the real NFL. "progression" fits Project Mu's own progression engine offline (no Madden) from a snapshot of the tuning baseline (CAREER-MU2026) and presents recommended constants without applying them; "supersim" measures the installed Sabos Franchise Mod against real 2015-2025 seasons on CAREER-TUNE-* clones first, and only tunes Madden's supersim data if that baseline fails. Use when JR runs /tune progression|supersim [...], or asks to tune progression, fit the progression constants, or tune Madden's sim stats.
 argument-hint: progression [--seasons 5] [--budget 200] [--seed 0] | supersim <run name> [--space PATH] [--max-iters N] [--repeats N]
 ---
 
@@ -13,7 +13,7 @@ Plan: `docs/done/MADDEN_PILOT_AND_TUNING_PLAN.md` §2.4, §2.5 (and R4, R6). Cod
 ## Hard rules
 
 - **Never apply what a fit recommends.** Never edit `engines/progression.py` (V2 core U7 owns it) or any engine constant. Present the numbers and stop. Applying them is a follow-up that JR approves for the progression owner.
-- Read saves only through `node pipeline/save_reader/pc_save_reader.mjs <save> --out <scratch>`. It reads a temp copy. Never write into Madden's saves folder (`/mnt/c/Users/jrere/Documents/Madden NFL 27/saves`) yourself, and never touch `CAREER-MUBASE` (the tuning baseline, D1; superseded `CAREER-WEEK1` on 2026-11-09 because WEEK1 lacks the roster-size mod).
+- Read saves only through `node pipeline/save_reader/pc_save_reader.mjs <save> --out <scratch>`. It reads a temp copy. Never write into Madden's saves folder (`/mnt/c/Users/jrere/Documents/Madden NFL 27/saves`) yourself, and never touch `CAREER-MU2026` (the tuning baseline, D1) or `CAREER-MUBASE` (its archived creation input, hash-pinned in `data/baselines/`).
 - Supersim only: follow `/madden`'s rules (`.claude/skills/madden/SKILL.md`). **Ask JR before taking the PC, every time**, and say how long it will take. Only `CAREER-TUNE-*` saves are simmed, never while `pipeline.watch_save` runs. Never play online, buy anything or delete saves.
 - **Never search for, download, or ask JR to paste the Madden 27 key.** JR enters it himself in MMC Editor's prompt.
 - Tuning mods are JR's own `Mu_*` builds, installed only into the `Mu Tune` pack (never `Mu Base`).
@@ -21,8 +21,8 @@ Plan: `docs/done/MADDEN_PILOT_AND_TUNING_PLAN.md` §2.4, §2.5 (and R4, R6). Cod
 ## /tune progression
 
 1. **Targets.** If `data/tuning/targets_2015_2025.json` is missing, build it: `.venv/bin/python3 -m engines.tuning.targets` (downloads nflverse once through the history cache). The progression fit doesn't score against it. It scores against the snapshot's own league shape and `data/history/nfl_careers_through_2025.csv`. But `/tune supersim` and `compare` need it, so keep it current.
-2. **Snapshot** the tuning baseline (`CAREER-MUBASE`), read-only, into the scratchpad:
-   `node pipeline/save_reader/pc_save_reader.mjs "/mnt/c/Users/jrere/Documents/Madden NFL 27/saves/CAREER-MUBASE" --out <scratchpad>/mubase.json`
+2. **Snapshot** the tuning baseline (`CAREER-MU2026`), read-only, into the scratchpad:
+   `node pipeline/save_reader/pc_save_reader.mjs "/mnt/c/Users/jrere/Documents/Madden NFL 27/saves/CAREER-MU2026" --out <scratchpad>/mu2026.json`
    (about 2 s, 2,279 rostered players). If JR names another save, use that one the same way.
 3. **Fit**: `.venv/bin/python3 -m engines.tuning.progression_fit <scratchpad>/week1.json --seasons 5 --budget 200 --seed 0`.
    - A replay takes about 0.8 s per season on a full league, so the default takes about 15 minutes. Run it in the background and wait for it to finish.
@@ -56,7 +56,7 @@ That is a legitimate result (JR, 2026-11-09).
    - Build it from the worst stats in the baseline `compare` report (R4), and set **`start` to the running value in the installed game** (Sabos's), never a vanilla value. First establish whether `ebx-dump` returns the installed or the vanilla values — that decides how the space is built.
    - Dump the `football/attribsys/data/supersim_*` assets with `tools.mod_builder.harness.run(['ebx-dump', <asset>, <out.json>])`.
    - Show JR the list before running.
-4. **The clone and the pilot.** The run sims `CAREER-TUNE-<run>`, made by `python3 -m tools.madden_pilot clone-save` before every season from the **tuning baseline**: `CAREER-MUBASE` now, switching to the post-setup canonical save (`CAREER-MU2026`) once `league_office setup` has run (CLOSE_OUT_CHECKLIST P2-09). Never `CAREER-WEEK1` — it lacks the roster-size mod. Before starting, check three things:
+4. **The clone and the pilot.** The run sims `CAREER-TUNE-<run>`, made by `python3 -m tools.madden_pilot clone-save` before every season from the **tuning baseline** `CAREER-MU2026` (CLOSE_OUT_CHECKLIST P2-09). Never `CAREER-WEEK1` — it lacks the roster-size mod. Before starting, check three things:
    - The pilot CLI exists (`tools/madden_pilot/jobs.py`).
    - The save watcher isn't running: `ps -eo args | grep "[p]ipeline[.]watch_save"` should print nothing.
    - Madden's Mod Manager is closed (install needs it closed).

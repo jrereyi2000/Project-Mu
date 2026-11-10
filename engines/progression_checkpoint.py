@@ -26,6 +26,16 @@ def fingerprint(value):
                                      allow_nan=False).encode()).hexdigest()
 
 
+def normalize_save_ratings(ratings):
+    """Madden's saved ratings brought into the progression model's range.
+
+    Madden stores 100 for a handful of legacy ratings (CAREER-MUBASE: Jerry Rice's catching and three route-running
+    ratings are 100), while the engine's model is 0..99 and `progression_state._ratings` refuses anything outside
+    it. Normalise at ingestion so the engine invariant stays strict; non-integers are left for the guard to reject.
+    """
+    return {k: (min(v, 99) if isinstance(v, int) and v > 99 else v) for k, v in (ratings or {}).items()}
+
+
 def _prior(cur, player_id, season):
     events = state.load_events(cur, player_id, season, status=None)
     applied = [e for e in events if e["status"] == "APPLIED"]
@@ -428,7 +438,7 @@ def bootstrap_pass(cur, snapshot, season, *, source_fingerprint, form_neutral=Fa
                                                          p.get("dev_trait"))
             band = progression.seed_ceiling_band(pid, p["overall"], p.get("dev_trait"), ceiling,
                                                  p.get("years_pro"))
-            out.append(state.bootstrap_state(cur, pid, season, p["ratings"], band,
+            out.append(state.bootstrap_state(cur, pid, season, normalize_save_ratings(p["ratings"]), band,
                 source_fingerprint, confidence=p.get("confidence"), form_neutral=form_neutral))
     return out
 

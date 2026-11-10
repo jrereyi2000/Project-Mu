@@ -53,19 +53,19 @@ def test_scripted_fake_screens_classify_back():
 def _saves(tmp_path):
     d = tmp_path / "saves"
     d.mkdir()
-    (d / "CAREER-MUBASE").write_bytes(b"week1")
+    (d / "CAREER-MU2026").write_bytes(b"week1")
     (d / "CAREER-2029SB").write_bytes(b"real")
     return d
 
 
-@pytest.mark.parametrize("dst", [None, "CAREER-2029SB", "CAREER-MUBASE", "TUNE-X", "CAREER-TUNE-",
+@pytest.mark.parametrize("dst", [None, "CAREER-2029SB", "CAREER-MU2026", "TUNE-X", "CAREER-TUNE-",
                                  "CAREER-TUNE-../CAREER-2029SB", "CAREER-TUNE-a/b"])
 def test_clone_refuses_non_tune_destinations(tmp_path, notices, dst):
     d = _saves(tmp_path)
-    out = jobs.clone_save(make_pilot(tmp_path / "run", fake_madden()[0]), src="CAREER-MUBASE", dst=dst, folder=d)
+    out = jobs.clone_save(make_pilot(tmp_path / "run", fake_madden()[0]), src="CAREER-MU2026", dst=dst, folder=d)
     assert out["status"] == "refused"
     assert (d / "CAREER-2029SB").read_bytes() == b"real"
-    assert sorted(p.name for p in d.iterdir()) == ["CAREER-2029SB", "CAREER-MUBASE"]
+    assert sorted(p.name for p in d.iterdir()) == ["CAREER-2029SB", "CAREER-MU2026"]
     assert result_json(tmp_path / "run")["status"] == "refused"
     assert len(notices) == 1 and "refused" in notices[0][0]
 
@@ -81,16 +81,16 @@ def test_clone_refuses_missing_source_and_same_name(tmp_path, notices):
 def test_clone_copies_and_replaces_only_tune(tmp_path, notices):
     d = _saves(tmp_path)
     p = make_pilot(tmp_path / "run", fake_madden()[0])
-    os.utime(d / "CAREER-MUBASE", (1_000_000, 1_000_000))
+    os.utime(d / "CAREER-MU2026", (1_000_000, 1_000_000))
     out = jobs.clone_save(p, dst="CAREER-TUNE-X", folder=d)
     assert out["status"] == "ok" and out["copied"] and not out["overwrote"]
     assert (d / "CAREER-TUNE-X").read_bytes() == b"week1"
     assert (d / "CAREER-TUNE-X").stat().st_mtime > 1_000_000          # fresh mtime: listed first
-    (d / "CAREER-MUBASE").write_bytes(b"week1-v2")
+    (d / "CAREER-MU2026").write_bytes(b"week1-v2")
     out = jobs.clone_save(p, dst="CAREER-TUNE-X", folder=d)
     assert out["overwrote"] and (d / "CAREER-TUNE-X").read_bytes() == b"week1-v2"
     assert not [x for x in d.iterdir() if x.name.endswith(".tmp")]
-    assert (d / "CAREER-MUBASE").read_bytes() == b"week1-v2"            # source untouched
+    assert (d / "CAREER-MU2026").read_bytes() == b"week1-v2"            # source untouched
 
 
 def test_clone_dry_run_copies_nothing(tmp_path, notices):
@@ -112,7 +112,7 @@ def test_saves_dir_from_env(monkeypatch, tmp_path):
 
 
 # ---------------------------------------------------------------- sim_season refusals
-@pytest.mark.parametrize("save", [None, "CAREER-MUBASE", "CAREER-2029SB", "TUNE-X", "career-tunex", "CAREER-TUNE-a b"])
+@pytest.mark.parametrize("save", [None, "CAREER-MU2026", "CAREER-2029SB", "TUNE-X", "career-tunex", "CAREER-TUNE-a b"])
 def test_sim_refuses_non_tune_saves(tmp_path, notices, save):
     fake, _ = fake_madden()
     out = jobs.sim_season(make_pilot(tmp_path, fake), save=save, to="week 3", watcher=lambda: False, folder=tmp_path)
@@ -451,7 +451,7 @@ def test_cli_dry_run_warns_when_watcher_runs(tmp_path, notices, monkeypatch):
 
 def test_cli_dry_run_refusal_exit_code(tmp_path, notices, monkeypatch):
     monkeypatch.setattr(jobs, "watcher_running", lambda: False)
-    rc = cli.main(["sim-season", "--save", "CAREER-MUBASE", "--dry-run", "--run-dir", str(tmp_path)],
+    rc = cli.main(["sim-season", "--save", "CAREER-MU2026", "--dry-run", "--run-dir", str(tmp_path)],
                   out=lambda s: None)
     assert rc == 1 and result_json(tmp_path)["status"] == "refused"
 

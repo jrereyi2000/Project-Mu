@@ -144,3 +144,12 @@ def test_weekly_progression_cannot_skip_offseason_reconciliation(career):
     with pytest.raises(state.ProgressionStateError,match="reconcile offseason"):
         cp.prepare_player(cur,player_id=1,pgid=101,earned_season=2035,application_season=2035,
             as_of_week=4,source_fingerprint="future",player_games=[],team_games=[],position="WR")
+
+
+def test_normalize_save_ratings_clamps_madden_100s_only():
+    # CAREER-MUBASE ships Jerry Rice with four ratings at 100; the engine model is 0..99.
+    saved = {"Catching": 100, "Speed": 87, "Awareness": 99}
+    assert cp.normalize_save_ratings(saved) == {"Catching": 99, "Speed": 87, "Awareness": 99}
+    # Non-integers are the guard's business, not the normaliser's.
+    assert cp.normalize_save_ratings({"Speed": 99.5}) == {"Speed": 99.5}
+    assert cp.normalize_save_ratings(None) == {}

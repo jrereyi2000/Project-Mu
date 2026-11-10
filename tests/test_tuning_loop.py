@@ -250,7 +250,7 @@ def test_one_mocked_iteration_end_to_end(tmp_path):
                     ["tools.madden_pilot", "clone-save"], ["tools.madden_pilot", "launch"],
                     ["tools.madden_pilot", "sim-season"], ["node"]]
     assert calls[1][-2:] == ["--pack", "Mu Tune"] and calls[3][-1] == "Mu Tune"
-    assert ["--from", "CAREER-MUBASE", "--to", "CAREER-TUNE-unit"] == calls[2][-4:]
+    assert ["--from", "CAREER-MU2026", "--to", "CAREER-TUNE-unit"] == calls[2][-4:]
     assert calls[5][2] == "/saves/CAREER-TUNE-unit"
     recipe = json.loads((tmp_path / "builds" / "mu_tune_unit" / "recipe.json").read_text())
     assert recipe["title"] == "Mu Tune unit" and {o["op"] for o in recipe["ops"]} == {"ebx-set"}

@@ -1,7 +1,7 @@
 """Madden pilot CLI (docs/done/MADDEN_PILOT_AND_TUNING_PLAN.md section 2.3).
 
     python3 -m tools.madden_pilot launch      [--pack "Mu Base"]
-    python3 -m tools.madden_pilot clone-save  [--from CAREER-MUBASE] --to CAREER-TUNE-<name>
+    python3 -m tools.madden_pilot clone-save  [--from CAREER-MU2026] --to CAREER-TUNE-<name>
     python3 -m tools.madden_pilot sim-season  --save CAREER-TUNE-<name> [--to "week N"|regular-season-end|playoffs-end]
     python3 -m tools.madden_pilot set-setting --path "Settings>Gameplay>Accel Clamp" --value Off
     python3 -m tools.madden_pilot verify-mods --check first_down_line
