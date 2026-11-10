@@ -1,4 +1,4 @@
-"""Owner policy (docs/in_progress/OWNERS_SCOUTS_VOTERS_PLAN.md §2.3): pure patience, hiring, spending and meddling
+"""Owner policy (docs/done/OWNERS_SCOUTS_VOTERS_PLAN.md §2.3): pure patience, hiring, spending and meddling
 terms from an owner's personality. No database, model or random reads beyond the seeded meddling draw.
 
   patience(owner_view)                 {hot_seat_line_scale 0.85..1.15, min_tenure_delta -1..+1}

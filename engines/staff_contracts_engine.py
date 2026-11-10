@@ -1,5 +1,5 @@
 """
-Staff contracts & full control (docs/in_progress/STAFF_CONTRACTS_AND_FULL_CONTROL_PLAN.md §2.2-2.4, U1).
+Staff contracts & full control (docs/done/STAFF_CONTRACTS_AND_FULL_CONTROL_PLAN.md §2.2-2.4, U1).
 
 Pure, offline-testable functions over plain dicts; money in whole dollars; no DB access at import time (the one
 cur-based helper, godfather_gate, is a read over staff_contracts and full_control_history that U2 calls inside its
