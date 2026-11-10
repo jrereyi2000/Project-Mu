@@ -616,17 +616,21 @@ class StaffOfferIn(BaseModel):
     signed_season: Optional[int] = None
 
 
+STAFF_OFFER_MAX_YEARS = 10          # a coaching contract is short: the SMALLINT column must not be trusted
+STAFF_OFFER_MAX_SALARY = 50_000_000
+
+
 def validate_staff_offer(person_kind: str, annual_salary: int, total_years: int, full_control: bool):
-    """400 for an offer the staff-contract rules don't allow: an unknown role, a non-positive salary or length, or
-    full control on anything but a head-coach offer."""
+    """400 for an offer the staff-contract rules don't allow: an unknown role, a salary or length outside the
+    sane bounds, or full control — which JR cannot grant at all (plan Q3/D6; only the Godfather path does)."""
     if person_kind not in STAFF_OFFER_KINDS:
         raise HTTPException(400, f"person_kind must be one of: {', '.join(STAFF_OFFER_KINDS)}")
-    if annual_salary <= 0:
-        raise HTTPException(400, "annual_salary must be a positive whole number of dollars")
-    if total_years <= 0:
-        raise HTTPException(400, "total_years must be a positive number of seasons")
-    if full_control and person_kind != FULL_CONTROL_KIND:
-        raise HTTPException(400, "full_control is only available on a head-coach offer")
+    if not 0 < annual_salary <= STAFF_OFFER_MAX_SALARY:
+        raise HTTPException(400, f"annual_salary must be between 1 and {STAFF_OFFER_MAX_SALARY}")
+    if not 0 < total_years <= STAFF_OFFER_MAX_YEARS:
+        raise HTTPException(400, f"total_years must be between 1 and {STAFF_OFFER_MAX_YEARS}")
+    if full_control:
+        raise HTTPException(400, "full control is granted only through the Godfather offer, never by hand")
 
 
 @router.post("/api/team/{abbr}/staff/offer")
@@ -640,13 +644,18 @@ def staff_offer(abbr: str, body: StaffOfferIn):
                 raise HTTPException(409, "league_state has no season")
             if not _regclass(cur, "staff_contracts"):
                 raise HTTPException(409, "the staff contracts migration isn't applied")
-            if body.full_control:
-                gate = godfather_gate(cur, season)
-                if not gate["eligible"]:
-                    raise HTTPException(409, "full control is blocked by the Godfather rarity gate: "
-                                             f"{gate['active_full_control']} active and last offered season "
-                                             f"{gate['last_godfather_season']}")
+            from server.franchise_api import user_teams
+            teams = user_teams()
+            if teams and team_abbr.upper() not in teams:
+                raise HTTPException(403, f"{team_abbr} isn't one of your teams ({', '.join(teams)})")
+            # The person must exist and must not already hold an active deal of that kind on this team.
+            cur.execute("SELECT count(*) FROM staff_contracts WHERE team_id = %s AND person_kind = %s "
+                        "AND person_id = %s AND remaining_years > 0", (team_id, body.person_kind, body.person_id))
+            if cur.fetchone()[0]:
+                raise HTTPException(409, f"{body.person_kind} {body.person_id} already has an active contract")
             signed = body.signed_season if body.signed_season is not None else season
+            if signed != season:
+                raise HTTPException(400, f"signed_season must be the current season ({season})")
             cur.execute("""INSERT INTO staff_contracts
                            (team_id, person_id, person_kind, annual_salary, total_years, remaining_years,
                             signed_season, full_control)

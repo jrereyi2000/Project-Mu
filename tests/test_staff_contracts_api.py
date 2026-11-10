@@ -57,8 +57,17 @@ def test_fetch_staff_contracts_orders_hc_gm_oc_dc_and_is_none_when_empty():
 
 # ------------------------------------------------------------------ offer validation ----
 def test_validate_staff_offer_accepts_a_valid_offer():
-    fo.validate_staff_offer("HC", 9_000_000, 5, True)          # full control on a head coach is fine
+    fo.validate_staff_offer("HC", 9_000_000, 5, False)
     fo.validate_staff_offer("DC", 2_000_000, 3, False)          # a plain coordinator offer
+
+
+def test_validate_staff_offer_rejects_a_salary_or_length_out_of_bounds():
+    """total_years 40000 used to reach the SMALLINT column and answer 500."""
+    with pytest.raises(HTTPException) as e:
+        fo.validate_staff_offer("HC", 9_000_000, 40_000, False)
+    assert e.value.status_code == 400
+    with pytest.raises(HTTPException):
+        fo.validate_staff_offer("HC", 60_000_000, 4, False)
 
 
 def test_validate_staff_offer_rejects_unknown_kind():
@@ -80,12 +89,13 @@ def test_validate_staff_offer_rejects_non_positive_salary_and_years():
         assert e.value.status_code == 400
 
 
-def test_validate_staff_offer_rejects_full_control_outside_a_head_coach():
-    for kind in ("GM", "OC", "DC"):
+def test_validate_staff_offer_refuses_full_control_entirely():
+    """Plan Q3/D6: full control is the Godfather offer's, never something JR grants by hand."""
+    for kind in ("HC", "GM", "OC", "DC"):
         with pytest.raises(HTTPException) as e:
             fo.validate_staff_offer(kind, 5_000_000, 4, True)
         assert e.value.status_code == 400
-        assert "full_control" in e.value.detail
+        assert "Godfather" in e.value.detail
 
 
 # ------------------------------------------------------------------ offer endpoint ----
@@ -176,19 +186,9 @@ def test_staff_offer_inserts_an_active_contract(monkeypatch):
                                 "total_years": 5, "remaining_years": 5, "signed_season": 2037, "full_control": False}
 
 
-def test_staff_offer_full_control_blocked_by_the_godfather_gate(monkeypatch):
-    # 2 active full-control coaches league-wide: the ceiling gate rejects the offer with 409.
-    client = _client(monkeypatch, _FakeCursor(active_full_control=2))
-    r = client.post("/api/team/car/staff/offer",
-                    json={"person_kind": "HC", "person_id": 77, "annual_salary": 20_000_000, "total_years": 6,
-                          "full_control": True})
-    assert r.status_code == 409
-
-
-def test_staff_offer_full_control_allowed_when_the_gate_passes(monkeypatch):
+def test_staff_offer_refuses_full_control_even_when_the_gate_would_pass(monkeypatch):
     client = _client(monkeypatch, _FakeCursor(active_full_control=0, last_godfather_season=None))
     r = client.post("/api/team/car/staff/offer",
                     json={"person_kind": "HC", "person_id": 77, "annual_salary": 20_000_000, "total_years": 6,
                           "full_control": True})
-    assert r.status_code == 200
-    assert r.json()["contract"]["full_control"] is True
+    assert r.status_code == 400 and "Godfather" in r.json()["detail"]

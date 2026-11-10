@@ -202,12 +202,20 @@ def _gm_budget(cur, season, team_id, abbr):
     return max(0, int(pool) - int(payroll))
 
 
-def _hire_gm(cur, season, prior, abbr, team_id, llm, *, why, log=print):
+def _hire_gm(cur, season, prior, abbr, team_id, llm, *, why, log=print, vacate_only=False, first_draft=None):
     """The competitive GM hiring search (plan S3): close the old tenure, score the personnel-director pool by the
     team's enhanced opening appeal and the owner's staff budget, and seed the winner's persona. Returns the search
-    report."""
+    report. `vacate_only`: close the outgoing tenure and stop — P1-27 runs the GM hot seat before the coaching
+    carousel, and the seat it empties is filled by `fill_vacant_gms` once the head coaches are hired (a hire here
+    always left the seat occupied, so the carousel's dual-vacancy gate could never pass). `first_draft`: the first
+    draft class the new GM runs; default the one after `season`."""
     from engines import coaching_carousel as cc
     from engines import gm_personas
+    cur.execute("UPDATE gm_profiles SET end_season = %s, end_reason = %s "
+                "WHERE team_id = %s AND end_season IS NULL", (prior, why, team_id))
+    if vacate_only:
+        log(f"  hot seat: {abbr} vacates the GM seat (the carousel fills it)")
+        return {"vacated": True}
     appeal = 0.5
     try:
         parts = cc.opening_parts(cur, prior, [team_id])
@@ -222,23 +230,45 @@ def _hire_gm(cur, season, prior, abbr, team_id, llm, *, why, log=print):
     others = {a: t for a, t in open_.items() if a != abbr}
     traits = gm_personas.replacement_traits(abbr, season, others)
     taken = [g["gm_name"] for g in open_.values() if g.get("gm_name")]
-    cur.execute("UPDATE gm_profiles SET end_season = %s, end_reason = %s "
-                "WHERE team_id = %s AND end_season IS NULL", (prior, why, team_id))
     p = gm_personas.make_persona(abbr, teams[abbr], traits, season, llm, taken,
                                  seed_key=f"gm:{abbr}:{season}", start=season)
-    p = dict(p, first_draft_season=season + 1)      # hired after this season's draft (Season scan / hot seat)
+    # A carousel hire lands after the Super Bowl and before that season's draft, so he runs it; a preseason hire
+    # lands after the draft and takes the next class.
+    p = dict(p, first_draft_season=first_draft if first_draft is not None else season + 1)
     gid = gm_personas.insert_gm(cur, teams[abbr]["id"], p, traits, f"gm:{abbr}:{season}")
     try:
+        cur.execute("SAVEPOINT gm_contract")
         cur.execute("""INSERT INTO staff_contracts (team_id, person_id, person_kind, annual_salary, total_years,
                                                     remaining_years, signed_season, full_control, buyout_owed)
                        VALUES (%s, %s, 'GM', %s, 4, 4, %s, false, 0)""",
                     (team_id, gid, winner["salary"], season))
+        cur.execute("RELEASE SAVEPOINT gm_contract")
     except Exception:
-        pass
+        # A database without staff_contracts must not abort the whole hot seat / hiring cycle.
+        try:
+            cur.execute("ROLLBACK TO SAVEPOINT gm_contract")
+        except Exception:
+            pass
     log(f"  gm search: {abbr} hires a {winner['tier']} GM (appeal {appeal:.3f}, budget ${budget:,}, "
         f"${winner['salary']:,})")
     return {"gm": p["gm_name"], "tier": winner["tier"], "salary": winner["salary"],
             "appeal": round(appeal, 3), "budget": budget}
+
+
+def fill_vacant_gms(cur, season, llm=None, log=print):
+    """Hire a GM for every team with no open tenure, running the same search a firing team gets. The coaching
+    carousel calls it at the end of its hiring cycle: P1-27 moved the GM hot seat to before the carousel, so the
+    seats it vacates would otherwise stay empty (only a Godfather coach-GM fills one on its own)."""
+    cur.execute("""SELECT t.id, t.abbreviation FROM teams t
+                   WHERE t.abbreviation IS NOT NULL
+                     AND NOT EXISTS (SELECT 1 FROM gm_profiles g WHERE g.team_id = t.id AND g.end_season IS NULL)
+                   ORDER BY t.id""")
+    out = []
+    for team_id, abbr in cur.fetchall():
+        hire = _hire_gm(cur, season, season - 1, abbr, team_id, llm, why="the seat was vacant", log=log,
+                        first_draft=season)
+        out.append({"team": abbr, **hire})
+    return out
 
 
 def _owner_state(cur, season, state, rep):
@@ -262,7 +292,7 @@ def _owner_state(cur, season, state, rep):
     return state
 
 
-def _fire_hot_seat(cur, season, decisions, rep, llm, log):
+def _fire_hot_seat(cur, season, decisions, rep, llm, log, vacate_only=False):
     """Writes the hot seat's scores for season-1 and fires the GMs it names. Returns the fired team ids."""
     prior = season - 1
     if decisions is None:
@@ -280,7 +310,7 @@ def _fire_hot_seat(cur, season, decisions, rep, llm, log):
         abbr, coach_gm = cur.fetchone()
         # A head coach who was also GM loses the GM job only: Madden decides who coaches.
         why = f"hot seat after {prior}: score {h['score']}" + ("; stays head coach" if coach_gm else "")
-        hire = _hire_gm(cur, season, prior, abbr, tid, llm, why=why, log=log)
+        hire = _hire_gm(cur, season, prior, abbr, tid, llm, why=why, log=log, vacate_only=vacate_only)
         rep["fired"].append({"team": abbr, "score": h["score"], **hire})
         fired_tids.append(tid)
         log(f"  hot seat: {abbr} replaces its GM (score {h['score']})")
@@ -309,7 +339,7 @@ def hot_seat_only(cur, season, llm=None, log=print):
         rep["skipped"] = "already decided"
         return rep
     state = _owner_state(cur, season, state, rep)
-    fired = _fire_hot_seat(cur, season, rollover_actions(state)["hot_seat"], rep, llm, log)
+    fired = _fire_hot_seat(cur, season, rollover_actions(state)["hot_seat"], rep, llm, log, vacate_only=True)
     rep["fired_team_ids"] = fired
     return rep
 

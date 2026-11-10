@@ -181,7 +181,14 @@ def godfather_eligible(season, *, active_full_control=0, last_godfather_season=N
 def godfather_gate(cur, season):
     """The cur-based read of the two hard gates over staff_contracts and full_control_history (what U2 calls).
     Returns {eligible, active_full_control, last_godfather_season, ceiling_ok, cooldown_ok}."""
-    cur.execute("SELECT count(*) FROM staff_contracts WHERE full_control AND remaining_years > 0")
+    # A full-control seat is either a staff contract flagged full_control or an open coach-GM tenure (the lore
+    # coach-GMs are filed with full_control = false, and a coach-GM's deal that expires is refiled without the flag
+    # while he still holds the seat), so counting contracts alone under-read the ceiling.
+    cur.execute("""SELECT count(DISTINCT COALESCE(sc.person_id, -g.id)) FROM staff_contracts sc
+                   FULL OUTER JOIN (SELECT gp.id, gp.coach_id FROM gm_profiles gp
+                                    WHERE gp.end_season IS NULL AND gp.coach_id IS NOT NULL) g
+                     ON g.coach_id = sc.person_id AND sc.person_kind = 'GM'
+                   WHERE (sc.full_control AND sc.remaining_years > 0) OR g.coach_id IS NOT NULL""")
     active = cur.fetchone()[0]
     cur.execute("SELECT max(season) FROM full_control_history")
     last = cur.fetchone()[0]

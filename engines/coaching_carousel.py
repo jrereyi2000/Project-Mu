@@ -244,6 +244,10 @@ def qb_appeal(qb):
     if age is not None and int(age) <= 25 and ovr is not None and int(ovr) >= 76 \
             and ("star" in dev or "x-factor" in dev):
         return 0.90
+    # A very good starter short of Tier 1 used to fall through to 0.10, BELOW a 78-OVR average starter: the scale
+    # has to be monotonic in OVR or the opening appeal ranks a worse quarterback higher.
+    if ovr is not None and age is not None and int(ovr) >= 85 and int(age) <= 33:
+        return 0.75
     if ovr is not None and age is not None and 78 <= int(ovr) <= 84 and 26 <= int(age) <= 31:
         return 0.60
     if age is not None and int(age) >= 34 and ovr is not None and int(ovr) <= 78 and int(cap or 0) >= 30_000_000:
@@ -499,11 +503,20 @@ def godfather_acceptance(season, team_id, coach_id, coach_name, *, salary, years
 
 
 def _gm_vacant(cur, team_id):
-    """True when the team has no open GM tenure (a dual HC+GM vacancy needs the GM seat empty too)."""
+    """True when the team has no open GM tenure (a dual HC+GM vacancy needs the GM seat empty too). A failed read
+    must not abort the caller's transaction — without the savepoint the next statement raised
+    InFailedSqlTransaction and killed the whole hiring cycle."""
     try:
+        cur.execute("SAVEPOINT gm_vacant")
         cur.execute("SELECT count(*) FROM gm_profiles WHERE team_id = %s AND end_season IS NULL", (team_id,))
-        return cur.fetchone()[0] == 0
+        count = cur.fetchone()[0]
+        cur.execute("RELEASE SAVEPOINT gm_vacant")
+        return count == 0
     except Exception:
+        try:
+            cur.execute("ROLLBACK TO SAVEPOINT gm_vacant")
+        except Exception:
+            pass
         return False
 
 
@@ -583,8 +596,14 @@ def _maybe_godfather(cur, season, tid, abbr, coach_id, coach_name, slant, candid
     owners plan's U6 migration, so this normally no-ops."""
     from engines import staff_contracts_engine as sce
     try:
+        cur.execute("SAVEPOINT godfather_gate")
         gate = sce.godfather_gate(cur, season)
+        cur.execute("RELEASE SAVEPOINT godfather_gate")
     except Exception:
+        try:
+            cur.execute("ROLLBACK TO SAVEPOINT godfather_gate")
+        except Exception:
+            pass
         return None
     cash = _godfather_cash_pool(cur, season, tid, abbr)
     decision = godfather_offer(gate=gate, owner_view=owner_view, cash_pool=cash,
@@ -1206,6 +1225,10 @@ def hiring_cycle(cur, season, log=print, personality=None):
 
     cur.execute("SELECT DISTINCT team_id FROM staff_moves WHERE season = %s", (season,))
     check_staffs(cur, nxt, (set(tm) - mine) | {r[0] for r in cur.fetchall()})
+    # P1-27 runs the GM hot seat BEFORE this cycle, so the seats it vacated are still empty; a Godfather coach-GM
+    # fills his own, every other one is filled here, after the head-coach hires.
+    from engines import gm_rollover
+    report["gm_fills"] = gm_rollover.fill_vacant_gms(cur, season, log=log)
     report["personality"] = staff_lifecycle(cur, events, personality)
     return report
 
