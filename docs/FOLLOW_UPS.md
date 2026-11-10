@@ -54,3 +54,9 @@ lifecycle batch. JR's steps:
    --dsn "<the franchise DSN>"` (or `load_save --personality-manifest/--personality-review`).
 4. Run the scouting step: the log line "scouting directors off" disappears, and each team gets its director,
    board lean and private report rows once `scout_directors` is shadow or active.
+
+Until `754a658` (2026-11-09) step 4 could not work however carefully steps 1–3 were done: `plan_lifecycle` kept
+the receipts only as a hash, so the applied batch's manifest had no `classifications` and the loader reported "the
+applied lifecycle batch carries no staff:scout receipt" every time. The receipts now ride in the manifest, and
+`tests/test_scout_directors_e2e_pg.py` proves the whole path on a scratch database. A batch applied before that
+commit has no receipts stored: preview and apply once more (the hash changes) before expecting directors.
