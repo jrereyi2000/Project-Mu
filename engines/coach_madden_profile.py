@@ -110,14 +110,17 @@ PLAYBOOK_MAP.update({
     "Titans Defense": "Titans",
 })
 
-# Mu scheme name -> Madden BaseScheme member (§7.2 `SCHEME_MAP`). `Erhardt-Perkins` has no Madden scheme
-# member and is deliberately absent, so it raises rather than guessing.
+# Mu scheme name -> Madden BaseScheme member (§7.2 `SCHEME_MAP`). Madden has no Erhardt-Perkins member, so it is
+# mapped to MultiplePowerRun: that is what the save itself gives two of its four real Erhardt-Perkins coaches
+# (Vrabel and McDaniels; Daboll is WestCoastZoneRun and Saleh WestCoastPowerRun). JR's decision, 2026-11-10.
+# An unmapped name still raises rather than guessing.
 SCHEME_MAP = {
-    "Wide Zone West Coast": "WestCoastZoneRun",   # §7.2 (JR marked "West Coast" for confirmation)
-    "West Coast": "WestCoastPowerRun",
+    "Wide Zone West Coast": "WestCoastZoneRun",
+    "West Coast": "WestCoastPowerRun",            # JR confirmed 2026-11-10
     "Spread": "Spread",
     "3-4": "Base3_4",
     "4-3": "Base4_3",
+    "Erhardt-Perkins": "MultiplePowerRun",
 }
 
 # Talent templates by archetype (§5.3). Spike A has no MasterMotivator list (no live coach carries that

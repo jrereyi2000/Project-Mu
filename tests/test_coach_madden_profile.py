@@ -84,8 +84,16 @@ def test_an_unmapped_playbook_raises_and_names_the_value():
 
 
 def test_an_unmapped_scheme_raises_and_names_the_value():
-    with pytest.raises(ValueError, match="Erhardt-Perkins"):
-        build(scheme={"offensive": "Erhardt-Perkins"})
+    with pytest.raises(ValueError, match="Atlantis West Coast"):
+        build(scheme={"offensive": "Atlantis West Coast"})
+
+
+def test_erhardt_perkins_maps_to_multiple_power_run():
+    """JR's call, 2026-11-10: no Madden member for it, and the save itself gives 2 of its 4 real EP coaches
+    MultiplePowerRun (Vrabel, McDaniels)."""
+    assert cmp.SCHEME_MAP["Erhardt-Perkins"] == "MultiplePowerRun"
+    row = build(scheme={"offensive": "Erhardt-Perkins"})
+    assert row["offensive_scheme"] == "MultiplePowerRun"
 
 
 def test_the_maps_cover_what_the_engines_and_tables_use():
@@ -93,9 +101,8 @@ def test_the_maps_cover_what_the_engines_and_tables_use():
                      "Colts Offense", "Dolphins Offense", "Jets Offense", "Packers Offense",
                      "Titans Offense", "Titans Defense"):
         assert playbook in cmp.PLAYBOOK_MAP
-    for scheme in ("Wide Zone West Coast", "West Coast", "Spread", "3-4", "4-3"):
+    for scheme in ("Wide Zone West Coast", "West Coast", "Spread", "3-4", "4-3", "Erhardt-Perkins"):
         assert scheme in cmp.SCHEME_MAP
-    assert "Erhardt-Perkins" not in cmp.SCHEME_MAP
 
 
 def test_a_single_playbook_name_is_the_persons_own_side_only():
