@@ -1,8 +1,9 @@
 # Save-capacity pruning (Madden 27 saves) — brief for a new session
 
-**Status:** in progress (2026-11-10, `save-capacity`). Steps 1–4 are done: the audit, the tail, the
-rebuild tool (`pipeline/save_reader/prune_capacity.mjs`) and its offline validation. Step 5, the in-game
-load/advance test, is next and needs JR at the PC. §8 has the measured results and what is left.
+**Status:** done (2026-11-10, `save-capacity`). All six steps are done: the audit, the tail, the rebuild
+tool (`pipeline/save_reader/prune_capacity.mjs`), its offline validation, the in-game load/advance test (§9:
+two more seasons and both postseasons with 1.08 MB of headroom) and the integration into the pilot's
+`clone-save`. §8 has the measurements, §9 the in-game proof and the one loose end.
 Written 2026-11-10 at the end of the `p2-tuning` session, from its measurements.
 
 ## 1. The problem
