@@ -29,6 +29,12 @@
 // CAREER-STAFF), the older sample save in one 672-row table, so every DraftPick table is read. Each
 // player also gets `college` = {table, row}: Player.College decoded, a reference into the game's static college list
 // (table 16384 in Madden 27; the names aren't in the save, pipeline/colleges.py maps the rows), null when unset.
+//
+// reader_version 7 adds, per real team, `roster` and `practice_squad`: pgid arrays in list order, read from the team's
+// Team.Roster and Team.PracticeSquad Player[] records. A reference to a player the snapshot doesn't export (deleted) is
+// dropped. The snapshot also carries a top-level `free_agents`: League.FreeAgents (the sign.mjs pattern) as pgids.
+// That list also holds every practice-squad player (sign.mjs header), so membership is not a status test; the actual
+// free agents in it are status FreeAgent on TeamIndex 32.
 import { copyFileSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { basename, join, resolve } from 'path';
@@ -40,7 +46,7 @@ import {
   weightLbs,
 } from './lib.mjs';
 
-export const READER_VERSION = 6;
+export const READER_VERSION = 7;
 
 // Real teams are TeamIndex 0..31 (32 = free agents; the Team table has a few more rows).
 const REAL_TEAMS = 32;
@@ -340,6 +346,45 @@ async function readPlayers(tables, playerTable, gameTableId, teamTableId, teamIn
   return players;
 }
 
+// A Player[] array record (Team.Roster, Team.PracticeSquad, League.FreeAgents) as pgids in slot order. A slot that is
+// empty or points at a player the snapshot doesn't export (deleted) is dropped.
+async function listPgids(tables, bits, playerTableId, pgidByRow) {
+  const ref = decodeRef(bits);
+  const arr = ref && await tables.byId(ref.table);
+  if (!ref || arr?.name !== 'Player[]') return [];
+  const holder = arr.records[ref.row];
+  if (!holder) return [];
+  const out = [];
+  for (const slot of arraySlots(fieldNames(holder))) {
+    const r = decodeRef(holder[slot]);
+    if (!r || r.table !== playerTableId) continue;
+    const pgid = pgidByRow.get(r.row);
+    if (pgid != null) out.push(pgid);
+  }
+  return out;
+}
+
+// Team.Roster / Team.PracticeSquad → one entry per real team: { team_index, roster: [pgid], practice_squad: [pgid] },
+// both in list order. readSave attaches the two arrays to the matching teams[] entry.
+async function readLists(tables, teamTable, playerTableId, pgidByRow) {
+  const lists = [];
+  for (const team of teamTable.records) {
+    if (team.isEmpty || !(team.TeamIndex >= 0 && team.TeamIndex < REAL_TEAMS)) continue;
+    lists.push({
+      team_index: team.TeamIndex,
+      roster: await listPgids(tables, team.Roster, playerTableId, pgidByRow),
+      practice_squad: await listPgids(tables, team.PracticeSquad, playerTableId, pgidByRow),
+    });
+  }
+  return lists.sort((a, b) => a.team_index - b.team_index);
+}
+
+// League.FreeAgents (the one-row League table; the sign.mjs:290 pattern) as pgids in list order.
+async function readFreeAgents(tables, playerTableId, pgidByRow) {
+  const league = await tables.byName('League');
+  return listPgids(tables, league?.records[0]?.FreeAgents, playerTableId, pgidByRow);
+}
+
 // Team.DepthChart → one DepthChart row per team whose position fields (QB, HB, ..., 3DRB, SLWR: 35 of them, plus
 // LockedEntries) each point at a Player[] row of 6 slots, best first (release.mjs). One entry per real team:
 // { team_index, slots: { <position>: [pgid | null × 6] } }. A slot pointing at a player the snapshot doesn't export
@@ -473,6 +518,14 @@ export async function readSave(savePath) {
     const games = await readGames(tables, gameTable, teamTable.header.tableId, teamIndexByRow, season.base_calendar_year);
     const players = await readPlayers(tables, playerTable, gameTable.header.tableId, teamTable.header.tableId, teamIndexByRow);
     const pgidByRow = new Map(players.map(p => [p.row, p.pgid]));
+    // reader_version 7: attach each real team's roster and practice squad to its teams[] entry, and export the league
+    // free-agent list at the top level.
+    const teamByIndex = new Map(teams.map(t => [t.team_index, t]));
+    for (const list of await readLists(tables, teamTable, playerTable.header.tableId, pgidByRow)) {
+      const team = teamByIndex.get(list.team_index);
+      if (team) Object.assign(team, { roster: list.roster, practice_squad: list.practice_squad });
+    }
+    const freeAgents = await readFreeAgents(tables, playerTable.header.tableId, pgidByRow);
     const depthCharts = await readDepthCharts(tables, teamTable, playerTable.header.tableId, pgidByRow);
     const leagueSettings = await readLeagueSettings(franchise, tables);
     const draftClass = readDraftClass(await tables.byName('DraftPlayer'), playerTable);
@@ -494,6 +547,7 @@ export async function readSave(savePath) {
       teams,
       games,
       players,
+      free_agents: freeAgents,
       depth_charts: depthCharts,
       league_settings: leagueSettings,
       draft_class: draftClass,
