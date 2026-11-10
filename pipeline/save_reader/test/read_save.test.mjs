@@ -53,8 +53,10 @@ test('reads a real Madden 27 save without changing it', { skip, timeout: 120_000
     for (const line of lines) assert.ok(gameRows.has(line.game_row), 'every game line points at an exported game');
   }
 
+  // reader_version 7: per-team roster / practice squad and the league free-agent list (asserted below).
+  assert.equal(s.meta.reader_version, 7);
+
   // reader_version 6: top-level salary_cap and decoded team cap blocks in $10k units
-  assert.equal(s.meta.reader_version, 6);
   assert.ok(s.salary_cap, 'salary_cap block present');
   assert.ok(Number.isInteger(s.salary_cap.table_id));
   assert.equal(s.salary_cap.row, 0);
@@ -117,6 +119,36 @@ test('reads a real Madden 27 save without changing it', { skip, timeout: 120_000
   }
   assert.ok(filled > 32 * 35, 'depth charts are mostly filled');
   for (const d of s.depth_charts) assert.ok(d.slots.QB[0] !== null, `team ${d.team_index} has a starting QB`);
+
+  // reader_version 7: each real team's roster and practice squad, in list order, and the league free-agent list.
+  const playerByPgid = new Map(s.players.map(p => [p.pgid, p]));
+  for (const t of realTeams) {
+    for (const key of ['roster', 'practice_squad']) {
+      const list = t[key];
+      assert.ok(Array.isArray(list), `${t.short_name} ${key} array`);
+      assert.equal(new Set(list).size, list.length, `${t.short_name} ${key} has no duplicates`);
+      for (const pgid of list) assert.ok(pgidSet.has(pgid), `${t.short_name} ${key} pgid ${pgid} is an exported player`);
+    }
+    assert.ok(t.roster.length > 0, `${t.short_name} roster is not empty`);
+    // The snapshot's cap block carries SalCapRosterSize; Team.ActiveRosterSize (the size Madden raises on a signing)
+    // equals it on every team of the sample save, so the roster list is checked against it where it is present.
+    if (Number.isInteger(t.cap?.SalCapRosterSize)) {
+      assert.equal(t.roster.length, t.cap.SalCapRosterSize, `${t.short_name} roster length matches its roster size`);
+    }
+  }
+  assert.ok(Array.isArray(s.free_agents), 'free_agents array present');
+  assert.equal(new Set(s.free_agents).size, s.free_agents.length, 'free_agents has no duplicates');
+  const freeAgentPgids = new Set(s.free_agents);
+  for (const pgid of s.free_agents) {
+    const p = playerByPgid.get(pgid);
+    assert.ok(p, `free-agent list pgid ${pgid} is an exported player`);
+    // League.FreeAgents also lists every practice-squad player (sign.mjs header), so its real free agents are the
+    // status FreeAgent players on TeamIndex 32; a practice-squad entry is on its own team.
+    if (p.status === 'FreeAgent') assert.equal(p.team_index, 32, `free agent pgid ${pgid} is on team 32`);
+    else assert.equal(p.status, 'PracticeSquad', `free-agent list pgid ${pgid} is a free agent or on a practice squad`);
+  }
+  assert.ok(s.players.filter(p => p.status === 'FreeAgent').every(p => freeAgentPgids.has(p.pgid)),
+    'every snapshot free agent is in free_agents');
 
   const ls = s.league_settings;
   assert.equal(typeof ls.dev_trait_regression_enabled, 'boolean');

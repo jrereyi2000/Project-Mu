@@ -11,9 +11,10 @@ import { decodeRef } from '../lib.mjs';
 import { readSave } from '../pc_save_reader.mjs';
 import { writeSave } from '../save_writer.mjs';
 
-// Team cap fields a roster move may change (the writer updates roster counts; Madden recalculates cap totals itself).
+// Team fields a roster move may change: the cap block (the writer updates roster counts; Madden recalculates cap
+// totals itself) and the reader v7 roster / practice-squad lists, which the test asserts explicitly.
 function teamsApartFromCap(teams) {
-  return teams.map(({ cap, ...rest }) => rest);
+  return teams.map(({ cap, roster, practice_squad, ...rest }) => rest);
 }
 function capChanges(before, after) {
   const out = new Set();
