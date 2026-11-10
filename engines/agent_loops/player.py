@@ -158,19 +158,22 @@ def respond_contract(cur, player_view, offer, ctx, *, llm, seen=False):
     status = "ACCEPT" if key == "ACCEPT" else "REJECT" if key == "REJECT" else "COUNTER"
     leak = None
     if key == "LEAK_AND_COUNTER":
-        leak = _leak(st, player, persona, team_name, offer, detail["counter"], decision, llm,
-                     league_id=league_id, season=season, tick=tick)
+        # A shadow season records what he would have said but publishes nothing, and spends no model call: the
+        # counter it leaks about was never put to the team.
+        shadow = bool(ctx.get("shadow"))
+        leak = _leak(st, player, persona, team_name, offer, detail["counter"], decision,
+                     None if shadow else llm, league_id=league_id, season=season, tick=tick, shadow=shadow)
     return {"decision": decision, "status": status, "counter": detail.get("counter"), "leak": leak}
 
 
-def _leak(st, player, persona, team_name, offer, asked, decision, llm, *, league_id, season, tick):
+def _leak(st, player, persona, team_name, offer, asked, decision, llm, *, league_id, season, tick, shadow=False):
     facts = statement_facts(player, team_name, offer, asked)
     option = base.Option("STATEMENT", "STATEMENT", {}, "Say publicly that you want a deal")
     ref = (f"agent_loop_decisions:{league_id}:{season}:{tick}:CONTRACT:{decision['subject_key']}")
     row = base.decide(st, league_id=league_id, season=season, tick=tick, kind="LEAK",
                       subject=f"player:{facts['player_id']}:leak", options=[option], persona=persona,
                       weights={"STATEMENT": 1.0}, facts=facts, seen=True, llm=llm, store=st, cause_refs=[ref],
-                      visibility="public")
+                      visibility="private" if shadow else "public")
     if row["text"] is None:
         row["text"] = statement_text(facts)
     return row
@@ -189,7 +192,9 @@ def inbox_options(thread, facts):
             c = (facts.get("counters") or {}).get(key)
             if c:
                 out.append(base.Option(key, "COUNTER", {"counter": c}, f"Counter at {_fmt(c)}"))
-        if facts.get("engine_status") != "ACCEPT":
+        # A thread whose engine countered offers its counters and nothing else: a REJECT beside a live counter let
+        # the player's words turn the offer down while the thread kept his counter on the table.
+        if facts.get("engine_status") == "REJECT" or not out:
             out.append(base.Option("REJECT", "REJECT", {}, "Turn the offer down"))
         return out
     if thread.get("kind") == "ROLE_TALK":

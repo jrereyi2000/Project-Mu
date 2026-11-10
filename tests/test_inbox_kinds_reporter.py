@@ -308,3 +308,18 @@ def test_a_move_is_interviewed_only_in_its_own_week_and_the_next(db, cur):
     moves = [t for t in reporter.scan(cur, SEASON, WEEK, team(cur)) if t.intent == "MOVE"]
     assert sorted(t.source_ref for t in moves) == ["reporter:signing:1", "reporter:signing:2",
                                                    "reporter:trade:1", "reporter:trade:2"]
+
+
+def test_the_window_reaches_back_to_the_last_completed_run_across_an_offseason_jump(db, cur):
+    """M-0107: the offseason jumps (26 → 29); a signing made at 26 must still be asked about at 29, but only back to a
+    run that actually wrote (a FAILED run does not widen the window)."""
+    db.conn.execute("INSERT INTO league_office_runs (id, season, status, week) VALUES (9, 2026, 'WRITTEN', 26)")
+    _signing(db, 1, 26)
+    db.conn.execute("UPDATE league_office_runs SET status = 'FAILED' WHERE id = 9")
+    db.conn.execute("INSERT INTO league_office_runs (id, season, status, week) VALUES (10, 2026, 'FAILED', 28)")
+    moves_at_28 = [t for t in reporter.scan(cur, SEASON, 29, team(cur)) if t.intent == "MOVE"]
+    assert not moves_at_28                                       # the only run in range failed: no widening
+
+    db.conn.execute("UPDATE league_office_runs SET status = 'WRITTEN' WHERE id = 9")
+    moves_at_29 = [t for t in reporter.scan(cur, SEASON, 29, team(cur)) if t.intent == "MOVE"]
+    assert [t.source_ref for t in moves_at_29] == ["reporter:signing:1"]

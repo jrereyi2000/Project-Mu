@@ -203,22 +203,19 @@ def read_state(cur, season):
             "unused_past": unused}
 
 
-RATED_CARD_MIN = 500          # a real roster card rates every rostered player; a stub or half-loaded scan does not
-
-
 def scored_season(cur, season, log=None):
     """The newest season whose ratings card exists, at or before `season`. The post-Super Bowl hot seat runs before
     the coming season is scanned, and `fo_quality` reads `player_seasons` for the season it scores — so scoring the
     coming season found no rated rows and every GM's drafting dropped to None (counted as 0).
 
-    A season only counts when its card is actually populated (at least RATED_CARD_MIN rated rows and half the
-    season's rows), so a stub or half-loaded scan cannot pass for a card. With none, `season` is returned and the
+    A season only counts when its card is actually populated (rated rows are at least half the season's rows), so a
+    stub or half-loaded scan cannot pass for a card. With none, `season` is returned and the
     caller's log says the hot seat scored nobody."""
     for s in (season, season - 1, season - 2):
         cur.execute("SELECT count(*), count(overall_rating) FROM player_seasons WHERE season = %s", (s,))
         row = cur.fetchone() or (0, 0)
         total, rated = int(row[0] or 0), int(row[1] or 0)
-        if rated >= RATED_CARD_MIN and rated * 2 >= total:
+        if rated and rated * 2 >= total:
             return s
     if log:
         log(f"  [WARN] no rated player card in {season - 2}..{season}: the hot seat scores no front office")
@@ -436,11 +433,25 @@ def _fire_hot_seat(cur, season, decisions, rep, llm, log, vacate_only=False):
     for tid, h in sorted(decisions.items(), key=lambda kv: -kv[1]["score"]):
         if not h["fire"]:
             continue
-        cur.execute("""SELECT t.abbreviation, g.coach_id IS NOT NULL FROM teams t
+        cur.execute("""SELECT t.abbreviation, g.coach_id FROM teams t
                        LEFT JOIN gm_profiles g ON g.team_id = t.id AND g.end_season IS NULL WHERE t.id = %s""",
                     (tid,))
-        abbr, coach_gm = cur.fetchone()
-        # A head coach who was also GM loses the GM job only: Madden decides who coaches.
+        abbr, coach_gm_id = cur.fetchone()
+        coach_gm = coach_gm_id is not None
+        # A head coach who was also GM loses the GM job only: Madden decides who coaches. The full control came with
+        # the GM seat, so his HC contract stops carrying it.
+        if coach_gm:
+            try:
+                cur.execute("SAVEPOINT gm_only_fire")
+                cur.execute("""UPDATE staff_contracts SET full_control = false
+                               WHERE person_kind = 'HC' AND person_id = %s AND remaining_years > 0""",
+                            (coach_gm_id,))
+                cur.execute("RELEASE SAVEPOINT gm_only_fire")
+            except Exception:      # noqa: BLE001 - a database without staff_contracts is fine
+                try:
+                    cur.execute("ROLLBACK TO SAVEPOINT gm_only_fire")
+                except Exception:  # noqa: BLE001
+                    pass
         why = f"hot seat after {prior}: score {h['score']}" + ("; stays head coach" if coach_gm else "")
         hire = _hire_gm(cur, season, prior, abbr, tid, llm, why=why, log=log, vacate_only=vacate_only)
         rep["fired"].append({"team": abbr, "score": h["score"], **hire})

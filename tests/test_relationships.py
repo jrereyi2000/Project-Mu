@@ -186,7 +186,8 @@ class TakeTests(unittest.TestCase):
         self.assertIn("FAVOURITE", fav["tags"])
         self.assertLessEqual(grudge["trust"], -rel.STRONG)
         self.assertIn("GRUDGE", grudge["tags"])
-        self.assertEqual(len(fav["evidence"]), rel.EVIDENCE_KEEP)
+        # the last EVIDENCE_KEEP moves, plus the sticky applied-refs entry (B12)
+        self.assertEqual(len(fav["evidence"]), rel.EVIDENCE_KEEP + 1)
 
     def test_trust_stays_in_range(self):
         db = FakeDB()

@@ -441,16 +441,19 @@ def save_post(cur, ctx, a, post, posted_at, eng, slot, tagger=None, parent_id=No
 
     game = _find_game(ctx, a)
     game_id = game["id"] if game else (a.get("parent_game_id") if a["kind"] == "REPLY" else None)
-    cur.execute("""
+    shape_ok = _post_shape_ok(cur)
+    cur.execute(f"""
         INSERT INTO news_feed (season, week, team_id, content_type, persona, slot, content, created_at,
                                agent_id, post_kind, posted_at, reply_to_id, linked_article_id, subject_game_id,
-                               subject_player_id, likes, reposts, reply_count, views, hashtags, post_shape)
-        VALUES (%s, %s, %s, 'TWEET', %s, %s, %s, NOW(), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                               subject_player_id, likes, reposts, reply_count, views, hashtags
+                               {", post_shape" if shape_ok else ""})
+        VALUES (%s, %s, %s, 'TWEET', %s, %s, %s, NOW(), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                {", %s" if shape_ok else ""})
         RETURNING id
     """, (ctx["season"], ctx["week"], a.get("team_id"), a["archetype"], slot, post["text"], a["agent_id"], a["kind"],
           posted_at, parent_id, subj["id"] if a["kind"] == "SHARE" else None, game_id,
           subj["id"] if subj["type"] == "player" else None, eng["likes"], eng["reposts"], eng["reply_count"],
-          eng["views"], post.get("hashtags") or [], a.get("post_shape")))
+          eng["views"], post.get("hashtags") or [], *((a.get("post_shape"),) if shape_ok else ())))
     post_id = cur.fetchone()[0]
     if tagger:
         tagger.extract_and_store_entities(cur=cur, article_id=post_id, headline="", content=post["text"],
@@ -464,16 +467,60 @@ def save_post(cur, ctx, a, post, posted_at, eng, slot, tagger=None, parent_id=No
                        VALUES (%s, %s, %s, 'PRIMARY', 1, NOW()) ON CONFLICT (article_id, player_id) DO NOTHING""",
                     (post_id, subj["id"], subj.get("team_id") or a.get("team_id")))
     if a["kind"] != "SHARE":
+        saved = _savepoint(cur, "post_take")
         try:
             from newsroom import agent_memory
             agent_memory.store_tweet_take(cur, a["agent_id"], ctx["season"], ctx["week"], post_id, post["text"], a.get("team_id"))
+            if saved:
+                cur.execute("RELEASE SAVEPOINT post_take")
         except Exception as e:  # memory never blocks a post
+            if saved:
+                _rollback_to(cur, "post_take")
             print(f"⚠️  MEMORY NOT RECORDED for post #{post_id}: {e}")
+    saved = _savepoint(cur, "post_relationships")
     try:
         _record_post_relationships(cur, ctx, a, post, post_id)   # takes, picks and calls never block a post
+        if saved:
+            cur.execute("RELEASE SAVEPOINT post_relationships")
     except Exception as e:
+        # Without this the failed INSERT left the transaction aborted: `save_post` still answered an id, the
+        # commit silently rolled back, and replies to the post failed on the foreign key.
+        if saved:
+            _rollback_to(cur, "post_relationships")
         print(f"⚠️  RELATIONSHIPS/PICKS NOT RECORDED for post #{post_id}: {e}")
     return post_id
+
+
+def _savepoint(cur, name):
+    """True when the savepoint could be taken (a scripted cursor in tests cannot)."""
+    try:
+        cur.execute(f"SAVEPOINT {name}")
+        return True
+    except Exception:      # noqa: BLE001
+        return False
+
+
+def _rollback_to(cur, savepoint):
+    try:
+        cur.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+    except Exception:      # noqa: BLE001 - no transaction to recover (a scripted cursor in tests)
+        pass
+
+
+def _post_shape_ok(cur):
+    """True when news_feed has `post_shape` (2027_02_10). Probed once per connection: on a database without the
+    migration every post used to fail to save, while the read fell back quietly."""
+    conn = getattr(cur, "connection", None)
+    cached = getattr(conn, "_mu_post_shape_ok", None) if conn is not None else None
+    if cached is None:
+        cur.execute("""SELECT 1 FROM information_schema.columns
+                       WHERE table_name = 'news_feed' AND column_name = 'post_shape' LIMIT 1""")
+        cached = bool(cur.fetchone())
+        try:
+            conn._mu_post_shape_ok = cached
+        except Exception:      # noqa: BLE001 - a connection that refuses attributes: probe again next time
+            pass
+    return cached
 
 
 def publishable(post: dict, fantasy_active: bool = True) -> bool:

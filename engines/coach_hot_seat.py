@@ -69,8 +69,9 @@ def hot_seat(rows, season, max_fires=MAX_FIRES, min_fires=MIN_FIRES):
     second straight losing season under him, 0.6 for a third) + drought (0.1 a season past two without a playoff trip
     under him, at most 0.5) - 0.4 after a playoff trip last season - 0.3 after a conference final in the last two
     seasons - 0.3 in his second season - 1.0 within SUPER_BOWL_YEARS seasons of a Super Bowl win with the team.
-    A coach can be fired when his team missed the playoffs, his tenure is at least MIN_TENURE seasons, JR doesn't run
-    the team and he isn't also its GM. He is fired when score >= HOT_SEAT_LINE and a seeded draw
+    A coach can be fired when his team missed the playoffs, his tenure is at least MIN_TENURE seasons and JR doesn't
+    run the team — a coach-GM included (JR, 2026-11-10; his GM seat vacates with him, D4). He is fired when
+    score >= HOT_SEAT_LINE and a seeded draw
     (random.Random(f"coachseat:{season}:{abbr}")) falls under min(0.95, 0.4 + 0.4 (score - 1)); then, while fewer
     than min_fires are fired, the highest remaining scores at or above FLOOR_LINE (inputs.floor); the worst scores
     first, at most max_fires. Returns {team_id: {coach_id, score, fire, inputs}}."""
@@ -142,7 +143,7 @@ def contender_seat(rows, season, max_fires=MAX_EXIT_FIRES):
     playoff game). score = 0.5 for no playoff win + 0.5 for a contender (CONTENDER_EXPECTED_WINS expected wins or
     CONTENDER_WINS wins) + 0.5 per earlier one-and-done (at most 2) + any regular-season shortfall (expected - wins)/2
     - 1.0 within SUPER_BOWL_YEARS seasons of a Super Bowl win with the team. Fired when he isn't the champion, his
-    tenure is at least EXIT_MIN_TENURE, score >= 1.0, JR doesn't run the team, he isn't also its GM, and the seeded
+    tenure is at least EXIT_MIN_TENURE, score >= 1.0, JR doesn't run the team (a coach-GM included), and the seeded
     draw (random.Random(f"coachexit:{season}:{abbr}")) falls under min(0.6, 0.2 + 0.3 (score - 1)); worst first, at
     most max_fires. Returns {team_id: {coach_id, score, fire, inputs}}."""
     out = {}
@@ -317,20 +318,22 @@ def _vacate_gm_seat(cur, season, team_id, coach_id, rep, log):
     opening, and the seat could never be re-filled by a Godfather offer. His contract is settled like a coach's."""
     cur.execute("SELECT to_regclass('gm_profiles') IS NOT NULL")
     row = cur.fetchone()
-    if not (row and row[0]):
-        return
-    cur.execute("SELECT id FROM gm_profiles WHERE team_id = %s AND coach_id = %s AND end_season IS NULL",
-                (team_id, coach_id))
-    row = cur.fetchone()
-    if not row:
-        return
-    cur.execute("UPDATE gm_profiles SET end_season = %s, end_reason = %s WHERE id = %s",
-                (season, "fired with his head coach", row[0]))
-    from engines import gm_rollover
-    gm_rollover._settle_gm_contract(cur, row[0], log=log)
+    seat = None
+    if row and row[0]:
+        cur.execute("SELECT id FROM gm_profiles WHERE team_id = %s AND coach_id = %s AND end_season IS NULL",
+                    (team_id, coach_id))
+        row = cur.fetchone()
+        seat = row[0] if row else None
+    if seat is not None:
+        cur.execute("UPDATE gm_profiles SET end_season = %s, end_reason = %s WHERE id = %s",
+                    (season, "fired with his head coach", seat))
+        from engines import gm_rollover
+        gm_rollover._settle_gm_contract(cur, seat, log=log)
+        rep.setdefault("gm_seats_vacated", []).append(team_id)
+        log(f"  {team_id}: the fired head coach also held the GM seat; the GM seat is open")
+    # Even when the GM seat went first (the GM hot seat fires it on its own), his Full Control deal must stop
+    # counting as an occupied seat, or `godfather_gate` refuses the next offer until the next staff-contract run.
     _settle_full_control(cur, coach_id)
-    rep.setdefault("gm_seats_vacated", []).append(team_id)
-    log(f"  {team_id}: the fired head coach also held the GM seat; the GM seat is open")
 
 
 def _store(cur, season, phase, rows, decisions, rep, log):

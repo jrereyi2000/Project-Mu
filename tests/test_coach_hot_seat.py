@@ -294,3 +294,31 @@ class GmSeatVacateTests(unittest.TestCase):
                    {5: {"coach_id": 41, "score": 2.5, "fire": True, "inputs": {}}}, rep, lambda *a: None)
         self.assertFalse(any(s.startswith("UPDATE gm_profiles") for s in cur.sql))
         self.assertNotIn("gm_seats_vacated", rep)
+
+
+class SettleFullControlTests(unittest.TestCase):
+    """M-0119 N5: the fired coach's Full Control deal is fired on the spot, with its buyout."""
+
+    def test_the_hc_row_is_fired_with_a_buyout(self):
+        from engines import coach_hot_seat as chs
+
+        class Cur:
+            def __init__(self):
+                self.sql = []
+
+            def execute(self, q, a=None):
+                s = " ".join(str(q).split())
+                self.sql.append((s, a))
+
+            def fetchone(self):
+                if "to_regclass" in self.sql[-1][0]:
+                    return (True,)
+                return (5, 10_000_000, 3, 0)
+
+        cur = Cur()
+        chs._settle_full_control(cur, 41)
+        updates = [a for s, a in cur.sql if s.startswith("UPDATE staff_contracts")]
+        self.assertEqual(len(updates), 1)
+        remaining, buyout, row_id = updates[0]
+        self.assertEqual((remaining, row_id), (0, 5))
+        self.assertGreater(buyout, 0)

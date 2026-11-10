@@ -129,7 +129,7 @@ def _insert(cur, ctx, p, terms, score, decision, counter):
     kind = _contract_kind(p, ctx)
     return _call(fa.insert_offer, cur, ctx["season"], fa.stage_for(ctx["week"]), kind, p["player_id"],
                  ctx["team"]["id"], years, total, bonus, guaranteed, score["utility"],
-                 fa.STATUS[decision], counter, fa._seed(ctx))
+                 fa.STATUS[decision], counter, fa._seed(ctx), week=ctx["week"])
 
 
 def _result(intent, facts, engine_ref, close, state, judge=True):

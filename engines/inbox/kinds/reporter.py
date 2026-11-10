@@ -128,7 +128,8 @@ def _executed_moves(cur, team, writer, season, week):
     # The offseason jumps (week 26 -> 29 between stages), and a move written at 26 would fall out of a 28..29 window.
     # Reach back to the last week a league-office run wrote, within MOVE_INTERVIEW_MAX_GAP weeks.
     if _regclass(cur, "league_office_runs"):
-        cur.execute("SELECT max(week) FROM league_office_runs WHERE season = %s AND week < %s", (season, week))
+        cur.execute("SELECT max(week) FROM league_office_runs WHERE season = %s AND week < %s "
+                    "AND status = 'WRITTEN'", (season, week))
         row = cur.fetchone()
         prev = int(row[0]) if row and row[0] is not None else None
         if prev is not None and week - MOVE_INTERVIEW_MAX_GAP <= prev < lo:

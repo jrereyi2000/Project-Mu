@@ -1011,3 +1011,15 @@ class LeakRoutingTests(unittest.TestCase):
                           "outcome": "open", "source": "LEAK", "insider_key": "SCHEFTER_TWEET", "fresh": True}
                          for i in range(3)]
         self.assertEqual(len(by_kind(plan_social_week(ctx))["TRADE_RUMOR"]), TRADE_RUMOR_MAX)
+
+
+def test_preseason_award_calls_have_player_candidates():
+    """B10 (chunk 8): at Week 1 there are no season totals, so MVP/OPOY/DPOY/ROY calls could name nobody and every
+    preseason award call was dropped. They resolve against last season's roster."""
+    ctx = league(week=1, played_weeks=[])
+    ctx["season_totals"] = {}
+    ctx["award_candidates"] = [{"id": 9001, "name": "Vet Star"}, {"id": 9002, "name": "Other Star"}]
+    ctx["coaches"] = []
+    a = by_kind(plan_social_week(ctx))["SEASON_CALL"][0]
+    players = [c for c in a["facts"]["candidates"] if c["type"] == "player"]
+    assert {"type": "player", "id": 9001, "name": "Vet Star"} in players

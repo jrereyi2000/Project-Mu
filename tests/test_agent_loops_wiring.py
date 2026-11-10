@@ -297,10 +297,13 @@ def test_marquee_floor_is_the_50th_highest_active_contract_aav():
     d = deps(features=ContractFeatures())
     assert d._marquee_floor(cur, SEASON) == 11                   # the 50th-highest
     assert d._marquee_floor(cur, SEASON) == 11                   # cached per deps/season
-    sql = [q for q, _ in cur.queries]
+    # the guarded block takes a savepoint around its two queries (chunk-8 B8), so count the real reads only
+    real = [(q, p) for q, p in cur.queries
+            if not q.strip().upper().startswith(("SAVEPOINT", "RELEASE", "ROLLBACK"))]
+    sql = [q for q, _ in real]
     assert any('to_regclass' in q for q in sql) and any("status = 'ACTIVE'" in q for q in sql)
-    assert cur.queries[-1][1] == (SEASON,)
-    assert len(cur.queries) == 2                                 # one table check + one read, then the cache
+    assert real[-1][1] == (SEASON,)
+    assert len(real) == 2                                        # one table check + one read, then the cache
 
 
 @pytest.mark.parametrize('cur', [ContractCursor(has_table=False), ContractCursor([]), ContractCursor(fail=True)])

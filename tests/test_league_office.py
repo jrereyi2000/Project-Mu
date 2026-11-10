@@ -1814,3 +1814,28 @@ def test_a_failed_execution_after_the_save_is_written_does_not_wedge_recover(mon
 
     monkeypatch.setattr(fo, "_execute", boom)
     lo.record_written(FakeCursor(), p, 80)          # the save is already replaced: log it, never raise
+
+
+def test_conninfo_carries_the_password(monkeypatch):
+    """chunk-9 B1: `info.dsn` redacts the password, so the annual articles opened their own connection without one
+    and never published. The configured pipeline DSN is used when it targets the same database."""
+    from pipeline import league_office as lo, load_save as ls
+
+    class Conn:
+        class info:
+            dsn = "host=localhost dbname=franchise user=postgres"
+
+    class Cur:
+        connection = Conn()
+
+    monkeypatch.setattr(ls, "DSN", "host=localhost dbname=franchise user=postgres password=secret")
+    assert lo._conninfo(Cur()) == "host=localhost dbname=franchise user=postgres password=secret"
+
+    class OtherConn:
+        class info:
+            dsn = "host=localhost dbname=elsewhere user=postgres"
+
+    class Other:
+        connection = OtherConn()
+
+    assert lo._conninfo(Other()) == "host=localhost dbname=elsewhere user=postgres"   # a different database

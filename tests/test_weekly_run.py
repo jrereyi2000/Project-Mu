@@ -61,9 +61,12 @@ class WriterRelationshipUpkeepTests(unittest.TestCase):
         self.assertEqual(order, [("grade", 2026), ("apply", 2026, 2)])
         self.assertTrue(conn.committed)
 
-    def test_week_one_grades_last_season_and_decays(self):
+    def test_week_one_grades_and_applies_last_season_before_decaying(self):
+        """B1 (chunk 8): the season-end calls are graded at the next Week 1 and were never applied, so MVP and the
+        awards moved no trust. The whole finished season is applied before the decay."""
         result, order, conn = self._run(week=1, season=2026)
-        self.assertEqual(order, [("grade", 2025), ("decay", 2026)])
+        self.assertEqual(order, [("grade", 2025), ("apply", 2025, None), ("decay", 2026)])
+        self.assertEqual(result, {"graded": 1, "changed": 4})       # 2 applied + 2 decayed
         self.assertTrue(conn.committed)
 
     def test_a_failure_is_reported_and_never_raised(self):

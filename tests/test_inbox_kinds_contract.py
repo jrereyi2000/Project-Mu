@@ -78,8 +78,8 @@ def patch_fa(monkeypatch):
         state["scores"].append((p["player_id"], years, total, bonus, guaranteed, len(teammates)))
         return state["score"]
 
-    def fake_insert(*args):
-        state["inserts"].append(args)
+    def fake_insert(*args, **kwargs):
+        state["inserts"].append((args, kwargs))
         return 500
 
     monkeypatch.setattr(fa, "_context", lambda c, abbr: state["ctx"])
@@ -142,8 +142,9 @@ def test_make_offer_uses_the_shared_score_path_and_a_counter_stays_open(cur, pat
     r = contract.act(cur, t, "MAKE_OFFER", {"years": 3, "total_value": 40_000_000, "bonus": 0,
                                             "guaranteed": 15_000_000}, None)
     assert patch_fa["scores"] == [(101, 3, 40_000_000, 0, 15_000_000, 1)]
-    (args,) = patch_fa["inserts"]
+    (args, kwargs) = patch_fa["inserts"][0]
     assert args[3] == "EXTENSION" and args[4] == 101 and args[10] == 0.62 and args[11] == "COUNTERED"
+    assert kwargs["week"] == 5                       # P5: the offer carries the league week
     assert r.intent == "COUNTER" and r.close is False
     assert r.state["counter"] == {"years": 4, "total_value": 44_000_000, "bonus": 0, "guaranteed": 18_000_000}
     assert r.engine_ref["decision"] == "COUNTER" and r.engine_ref["kind"] == "EXTENSION"
@@ -153,7 +154,8 @@ def test_an_accepted_offer_closes_the_thread(cur, patch_fa):
     patch_fa["score"] = ({"utility": 0.81}, "ACCEPT", None, 1, 0.75)
     t = make_thread(cur)
     r = contract.act(cur, t, "MAKE_OFFER", {"years": 4, "total_value": 52_000_000, "guaranteed": 20_000_000}, None)
-    assert patch_fa["inserts"][0][11] == "ACCEPTED"
+    assert patch_fa["inserts"][0][0][11] == "ACCEPTED"
+    assert patch_fa["inserts"][0][1]["week"] == 5
     assert r.intent == "ACCEPTED" and r.close is True and r.state["phase"] == "AGREED"
 
 
@@ -236,6 +238,17 @@ def test_start_refuses_a_non_numeric_player_id(cur, monkeypatch):
 
 
 # --------------------------------------------------------------------------------------------- the helpers ---
+
+def test_the_kind_calls_the_real_insert_offer_signature():
+    """The fakes here take *args, so a new parameter at the seam went unseen: chunk 8's audit found the kind still
+    calling `insert_offer` without the `week` the offer now requires, a TypeError on every inbox contract offer."""
+    import inspect
+
+    from server import franchise_api as real
+
+    inspect.signature(real.insert_offer).bind(
+        None, 2026, "REGULAR_WEEK", "FREE_AGENT", 1, 1, 2, 10, 0, 0, {}, "OPEN", None, "seed", week=5)
+
 
 def test_the_franchise_api_helpers_this_kind_imports_exist():
     for name in ("_context", "_player", "_eligibility", "_score", "insert_offer", "stage_for", "STATUS", "_seed"):

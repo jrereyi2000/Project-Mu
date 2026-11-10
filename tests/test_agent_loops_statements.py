@@ -67,10 +67,15 @@ class LoadPlayerStatementsTests(unittest.TestCase):
         self.assertEqual(cur.log[1][1][0], SEASON)
         self.assertEqual(cur.log[1][1][1], [8, 9])          # recap week N-1 and publication week N
 
-    def test_week_one_looks_back_at_the_offseason_tick(self):
+    def test_week_one_looks_back_at_the_offseason_window(self):
+        """B4 (chunk 8): CPU contract leaks are recorded under the finished season at ticks 25/26/30, so the
+        offseason edition must read the whole offseason window, not just the new season's tick 24."""
         cur = StatementCursor([])
         SD.load_player_statements(cur, SEASON, 1)
-        self.assertEqual(cur.log[1][1][1], [1, 24])
+        params = cur.log[1][1]
+        self.assertEqual(params[0], SEASON)          # this season, tick 1
+        self.assertEqual(params[2], SEASON - 1)      # the season that just ended, ticks 24..32
+        self.assertEqual(params[3], list(range(24, 33)))
 
     def test_cap_at_leak_max_per_week(self):
         rows = [leak_row(pid=4400 + i, name=f"Player {i}", week=9) for i in range(LEAK_MAX_PER_WEEK + 2)]

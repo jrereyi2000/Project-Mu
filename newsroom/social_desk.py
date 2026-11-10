@@ -42,7 +42,8 @@ EVENT_KINDS = ("SHARE", "REACTION", "BEAT", "TRADE_NEWS", "TRADE_RUMOR", "MOVE_N
                "MOVE_REACTION", "INJURY_SHOCK", "DRAFT_BOARD", "PLAYER_STATEMENT")
 # Season calls (graded at season's end): the preseason (Week 1 publication), midseason and trade-deadline weeks.
 SEASON_CALL_WEEKS = {1: "preseason", 9: "midseason", TRADE_DEADLINE_WEEK: "trade deadline"}
-SEASON_CALL_TYPES = ("MVP", "SUPER_BOWL", "OPOY", "DPOY", "ROY", "PLAYOFF_TEAM", "COACH_FIRED")
+SEASON_CALL_TYPES = ("MVP", "SUPER_BOWL", "OPOY", "DPOY", "ROY", "PLAYOFF_TEAM", "MISSES_PLAYOFFS",
+                     "COACH_FIRED")
 PICK_GAMES_MAX = 4            # games on one writer's pick card
 ONE_SCORE_MARGIN = 8
 
@@ -274,6 +275,23 @@ def load_week_context(cur, season: int, week: int) -> dict:
     except Exception:
         cur.execute("ROLLBACK TO SAVEPOINT agent_wire_coaches")
         ctx["coaches"] = []
+
+    # Players a preseason season call may name: last season's roster, best OVR first (the current season has no
+    # totals yet on the Week 1 edition).
+    try:
+        cur.execute("SAVEPOINT agent_wire_award_candidates")
+        cur.execute("""SELECT ps.player_id, COALESCE(p.full_name, p.player_name)
+                       FROM player_seasons ps JOIN players p ON p.id = ps.player_id
+                       WHERE ps.season = %s AND ps.overall_rating IS NOT NULL AND ps.released_week IS NULL
+                       ORDER BY ps.overall_rating DESC, ps.player_id LIMIT %s""", (season - 1, TOP_PLAYERS))
+        ctx["award_candidates"] = [{"id": r[0], "name": tidy_name(r[1])} for r in cur.fetchall()]
+        cur.execute("RELEASE SAVEPOINT agent_wire_award_candidates")
+    except Exception:      # noqa: BLE001 - a database without the tables simply has no preseason candidates
+        try:
+            cur.execute("ROLLBACK TO SAVEPOINT agent_wire_award_candidates")
+        except Exception:  # noqa: BLE001
+            pass
+        ctx["award_candidates"] = []
 
     game_cols = ("id", "week", "home_team_id", "away_team_id", "home_score", "away_score", "status",
                  "game_time", "game_type", "excitement_index", "projected_excitement")
@@ -663,13 +681,21 @@ def load_player_statements(cur, season: int, week: int) -> list:
     if not found or not found[0]:
         return []
     ticks = sorted({t for t in (week - 1, week) if t >= 1})
+    windows = [(season, ticks)]
     if week - 1 < 1:
-        ticks.append(24)                    # the offseason edition's tick
-    cur.execute("""/* desk:player_statements */
+        # The offseason edition: CPU contract talks run through the offseason stages, and the loop records them under
+        # the season that just ended at ticks 25 (re-signing), 26 (free agency) and 30 (UDFA). Reading only the new
+        # season's tick 24 found nothing, so the PLAYER_STATEMENT path was dead end to end.
+        windows.append((season - 1, list(range(24, 33))))
+    clauses = " OR ".join("(season = %s AND tick = ANY(%s))" for _ in windows)
+    params = []
+    for s, ts in windows:
+        params.extend((s, ts))
+    cur.execute(f"""/* desk:player_statements */
         SELECT season, tick, subject_key, text, facts FROM agent_loop_decisions
-        WHERE kind = 'LEAK' AND visibility = 'public' AND season = %s AND tick = ANY(%s)
+        WHERE kind = 'LEAK' AND visibility = 'public' AND ({clauses})
         ORDER BY tick, subject_key
-        LIMIT %s""", (season, ticks, LEAK_MAX_PER_WEEK))
+        LIMIT %s""", (*params, LEAK_MAX_PER_WEEK))
     out = []
     for s, tick, _subject_key, text, facts in cur.fetchall()[:LEAK_MAX_PER_WEEK]:
         if isinstance(facts, str):
@@ -2347,8 +2373,9 @@ def plan_picks(ctx: dict, acc, n_writers: int, W=None) -> list:
 
 
 CALL_WORDS = {"MVP": "who wins MVP", "SUPER_BOWL": "who wins the Super Bowl", "OPOY": "Offensive Player of the Year",
-              "DPOY": "Defensive Player of the Year", "ROY": "a Rookie of the Year", "PLAYOFF_TEAM": "a team that makes "
-              "(or misses) the playoffs", "COACH_FIRED": "a head coach who gets fired"}
+              "DPOY": "Defensive Player of the Year", "ROY": "a Rookie of the Year", "PLAYOFF_TEAM": "a team that "
+              "makes the playoffs", "MISSES_PLAYOFFS": "a team that misses the playoffs",
+              "COACH_FIRED": "a head coach who gets fired"}
 
 
 def plan_season_calls(ctx: dict, acc, n: int, W=None, topics=None) -> list:
@@ -2371,6 +2398,13 @@ def plan_season_calls(ctx: dict, acc, n: int, W=None, topics=None) -> list:
     players = {t["player_id"]: tidy_name(t["name"]) for t in (W.season_totals or {}).values() if t.get("player_id")}
     candidates = [{"type": "team", "id": t, "name": W.team_label(t)} for t in W.teams]
     seen = {(c["type"], c["id"]) for c in candidates}
+    if not players:
+        # The preseason edition has no season totals yet, so MVP/OPOY/DPOY/ROY calls could name nobody and were
+        # dropped: seed the candidates from last season's roster instead.
+        for c in ctx.get("award_candidates") or []:
+            if ("player", c["id"]) not in seen:
+                seen.add(("player", c["id"]))
+                candidates.append({"type": "player", "id": c["id"], "name": c["name"]})
     for topic in topics:
         for s in topic.get("subjects") or []:
             if s["type"] == "player" and s["id"] in players and ("player", s["id"]) not in seen:

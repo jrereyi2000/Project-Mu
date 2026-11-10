@@ -149,6 +149,15 @@ def contract_policy(snapshot, *, counterfactual=False):
     return cfg
 
 
+def _savepoint(cur, name):
+    """True when the savepoint could be taken (a scripted cursor in tests cannot)."""
+    try:
+        cur.execute(f"SAVEPOINT {name}")
+        return True
+    except Exception:      # noqa: BLE001
+        return False
+
+
 class LiveFeatures:
     """Production adapters over the merged feature modules. Each returns plain data; tests replace the object."""
 
@@ -417,6 +426,7 @@ class PersonalityDeps(lo.Deps):
         if season in self._marquee_floors:
             return self._marquee_floors[season]
         floor = None
+        saved = _savepoint(cur, "marquee_floor")
         try:
             from engines.agent_loops import player as player_loop
             cur.execute("SELECT to_regclass('player_contracts') IS NOT NULL")
@@ -427,7 +437,14 @@ class PersonalityDeps(lo.Deps):
                 aavs = [tv / ln for tv, ln in cur.fetchall() if tv is not None and ln]
                 if aavs:
                     floor = player_loop.marquee_floor(aavs)
+            if saved:
+                cur.execute("RELEASE SAVEPOINT marquee_floor")
         except Exception:      # noqa: BLE001 - the floor is an optimization, never a rule
+            if saved:
+                try:
+                    cur.execute("ROLLBACK TO SAVEPOINT marquee_floor")
+                except Exception:  # noqa: BLE001
+                    pass
             floor = None
         self._marquee_floors[season] = floor
         return floor
@@ -448,7 +465,8 @@ class PersonalityDeps(lo.Deps):
             team_id = team.get('team_id') or (offer or {}).get('team_id')
             ctx = {'league_id': self.league_id, 'season': season, 'tick': tick, 'player': player, 'team': team,
                    'market': market, 'bar': bar, 'accepts': False, 'store': base.SqlStore(cur),
-                   'attachment': attachment_share(context, team_id), 'marquee_floor': floor}
+                   'attachment': attachment_share(context, team_id), 'marquee_floor': floor,
+                   'shadow': mode != 'active'}
             name = team.get('name') or team.get('abbr')
             if name:
                 ctx['team_name'] = name
@@ -557,6 +575,10 @@ class PersonalityDeps(lo.Deps):
         dev_mode, loop_mode = self.mode('development_opportunity'), self.mode('coach_loop')
         if not roster or (dev_mode == 'off' and loop_mode == 'off'):
             return None
+        # A CPU loop never runs for JR's own team (plan §0 S4 and the non-goals): the caller skips it only when it
+        # has JR's chart stored, so the guard belongs here too.
+        if loop_mode != 'off' and team_id in (self.user_team_ids(cur) or set()):
+            loop_mode = 'off'
         scheme, injuries = scheme or {}, injuries or {}
 
         def dev_baseline():

@@ -26,6 +26,7 @@ DECAY = 0.8
 STRONG = 0.5            # |trust| at which a take-driven row gains FAVOURITE / GRUDGE
 SHOWN_MIN = 0.2         # non-subject rows weaker than this stay out of the prompt block
 EVIDENCE_KEEP = 5
+APPLIED_REFS_KEEP = 200  # graded refs remembered per row; a forced rerun never reapplies one
 TOP_PLAYERS = 60
 DECAY_FLOOR = 0.1       # OWN_TEAM / RIVAL rows never decay below this magnitude
 
@@ -406,7 +407,16 @@ def _adjust(cur, pk, target_type, target_id, delta, event, add_tags=(), strong_t
     if strong_tags and new <= -STRONG and "GRUDGE" not in tags:
         tags.append("GRUDGE")
     if delta or add_tags:
-        evidence = (evidence + [event])[-EVIDENCE_KEEP:]
+        # Applied refs ride in their own sticky entry: the last-EVIDENCE_KEEP window would otherwise drop an older
+        # ref and a forced rerun would apply the same pick or call twice.
+        sticky = next((e for e in evidence if isinstance(e, dict) and e.get("kind") == "APPLIED_REFS"), None)
+        rest = [e for e in evidence if not (isinstance(e, dict) and e.get("kind") == "APPLIED_REFS")]
+        if sticky is None:
+            sticky = {"kind": "APPLIED_REFS", "refs": []}
+        ref = (event or {}).get("ref")
+        if ref and ref not in sticky["refs"]:
+            sticky["refs"] = (sticky["refs"] + [ref])[-APPLIED_REFS_KEEP:]
+        evidence = [sticky] + (rest + [event])[-EVIDENCE_KEEP:]
     ev = json.dumps(evidence)
     if rid is None:
         cur.execute("""INSERT INTO persona_relationships (persona_type, persona_id, target_type, target_id, trust, tags,
@@ -456,7 +466,14 @@ def _already_applied(cur, pk, target_type, target_id, ref) -> bool:
     ev = row[0]
     if isinstance(ev, str):
         ev = json.loads(ev or "[]")
-    return any(isinstance(e, dict) and e.get("ref") == ref for e in ev or [])
+    for e in ev or []:
+        if not isinstance(e, dict):
+            continue
+        if e.get("ref") == ref:
+            return True
+        if e.get("kind") == "APPLIED_REFS" and ref in (e.get("refs") or []):
+            return True
+    return False
 
 
 def graded_events(pick_rows: list, call_rows: list) -> list:
@@ -495,6 +512,12 @@ def graded_events(pick_rows: list, call_rows: list) -> list:
 
 
 def _load_graded(cur, season, week, pk_expr):
+    """Picks and graded calls of `season` up to and including `week` (week None = the whole season). `<=`, not `=`:
+    a publication week can be skipped, and a season's final weeks are only graded after the Super Bowl."""
+    pick_week = "" if week is None else " AND p.week <= %s"
+    call_week = "" if week is None else " AND graded_week <= %s"
+    pick_params = (season,) if week is None else (season, week)
+    call_params = (season,) if week is None else (season, week)
     cur.execute(f"""
         SELECT p.id, {pk_expr}, p.season, p.week,
                CASE WHEN p.pick_type = 'WINNER' THEN p.winner_team_id
@@ -504,24 +527,26 @@ def _load_graded(cur, season, week, pk_expr):
         FROM agent_predictions p
         JOIN games g ON g.id = p.game_id
         LEFT JOIN agent_memories m ON m.agent_id = p.agent_id
-        WHERE p.season = %s AND p.week = %s AND g.status = 'COMPLETED';""", (season, week))
+        WHERE p.season = %s AND g.status = 'COMPLETED'{pick_week};""", pick_params)
     picks = [{"id": r[0], "person_key": r[1], "season": r[2], "week": r[3], "winner_backed": r[4],
               "actual_winner": r[5]} for r in cur.fetchall()]
     calls = []
     cur.execute("SELECT to_regclass('public.agent_season_calls') IS NOT NULL;")
     if cur.fetchone()[0]:
-        cur.execute("""SELECT id, person_key, season, graded_week, call_type, subject_type, subject_id, result, detail
-                       FROM agent_season_calls WHERE season = %s AND graded_week = %s AND result IN ('RIGHT', 'WRONG');""",
-                    (season, week))
+        cur.execute(f"""SELECT id, person_key, season, graded_week, call_type, subject_type, subject_id, result, detail
+                        FROM agent_season_calls WHERE season = %s{call_week}
+                          AND result IN ('RIGHT', 'WRONG');""", call_params)
         calls = [dict(zip(("id", "person_key", "season", "graded_week", "call_type", "subject_type", "subject_id",
                            "result", "detail"), r)) for r in cur.fetchall()]
     return picks, calls
 
 
-def apply_graded(cur, season: int, week: int) -> int:
-    """Run once per weekly run for the previous week: graded picks of `week` and season calls graded in `week` move
-    the backed subject by EARN_RIGHT / EARN_BURNED (a right call against a subject adds DOUBTER and evidence only).
-    Safe to rerun: each pick or call is applied once (its ref is kept in evidence). Returns rows changed."""
+def apply_graded(cur, season: int, week: int | None) -> int:
+    """Run once per weekly run: graded picks and season calls of `season` up to and including `week` (None = the
+    whole season, which is what the new season's first run applies to the season that just ended) move the backed
+    subject by EARN_RIGHT / EARN_BURNED (a right call against a subject adds DOUBTER and evidence only). `<=` rather
+    than `=`, so a skipped publication week is not lost. Safe to rerun: each pick or call is applied once (its ref is
+    kept in evidence). Returns rows changed."""
     if not _tables_ready(cur):
         return 0
     pk_expr = "COALESCE(m.person_key, p.agent_id)" if has_person_key(cur) else "p.agent_id"

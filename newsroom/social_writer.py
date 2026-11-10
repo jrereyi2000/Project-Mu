@@ -160,9 +160,11 @@ RECENT_SHAPES = 3
 PROFANITY_ARCHETYPES = {"DIE_HARD_FAN", "BANDWAGON_FAN"}      # D6: mild, rare, fans only
 PROFANITY_LEVELS = ("none", "mild_rare")
 PICK_CONFIDENCE = ("lock", "lean", "upset")
-SEASON_CALL_TYPES = ("MVP", "OPOY", "DPOY", "ROY", "SUPER_BOWL", "PLAYOFF_TEAM", "COACH_FIRED")
+SEASON_CALL_TYPES = ("MVP", "OPOY", "DPOY", "ROY", "SUPER_BOWL", "PLAYOFF_TEAM", "MISSES_PLAYOFFS",
+                     "COACH_FIRED")
 CALL_SUBJECT_TYPES = {"MVP": ("player",), "OPOY": ("player",), "DPOY": ("player",), "ROY": ("player",),
-                      "SUPER_BOWL": ("team",), "PLAYOFF_TEAM": ("team",), "COACH_FIRED": ("coach", "team")}
+                      "SUPER_BOWL": ("team",), "PLAYOFF_TEAM": ("team",), "MISSES_PLAYOFFS": ("team",),
+                      "COACH_FIRED": ("coach", "team")}
 
 OUTPUT_CONTRACT = (
     "OUTPUT: return only a JSON object, \"text\" first:\n"

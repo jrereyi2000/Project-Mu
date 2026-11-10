@@ -52,14 +52,14 @@ def current_staff(cur, season):
     cur.execute("""SELECT t.team_id, t.coach_id, c.coach_name, t.start_season, COALESCE(r.super_bowl_wins, 0)
                    FROM coach_tenures t JOIN coaches c ON c.id = t.coach_id
                    LEFT JOIN coach_records r ON r.coach_id = t.coach_id
-                   WHERE t.start_season <= %s AND (t.end_season IS NULL OR t.end_season >= %s)
+                   WHERE t.start_season <= %s AND (t.end_season IS NULL OR t.end_season > %s)
                    ORDER BY t.team_id, t.start_season DESC, t.id DESC""", (season, season))
     for r in cur.fetchall():
         add(r[0], "HC", r[1], r[2], r[3], int(r[4] or 0))
     if _table(cur, "coordinator_tenures"):
         cur.execute("""SELECT t.team_id, t.role, t.coordinator_id, c.coordinator_name, t.start_season
                        FROM coordinator_tenures t JOIN coordinators c ON c.id = t.coordinator_id
-                       WHERE t.start_season <= %s AND (t.end_season IS NULL OR t.end_season >= %s)
+                       WHERE t.start_season <= %s AND (t.end_season IS NULL OR t.end_season > %s)
                        ORDER BY t.team_id, t.role, t.start_season DESC, t.id DESC""", (season, season))
         for r in cur.fetchall():
             add(r[0], r[1], r[2], r[3], r[4], 0)
@@ -125,9 +125,10 @@ def annual(cur, season, dry_run=False):
             years, salary = _years(s["person_kind"]), _salary(s["person_kind"], s["experience"],
                                                              s["championships"])
             if s["person_kind"] == "GM" and row is not None:
-                # Carry his own deal's pay: a GM's tier is not recomputable from the tables (championships are stored
-                # for coaches, not GMs), so a re-file would quietly price an ELITE GM as STANDARD.
-                salary = int(row["annual_salary"])
+                # His own deal's pay is a floor, never a freeze: an ELITE GM is not repriced down to STANDARD (his
+                # championships are not in the tables), but a PROMOTION GM who has served the years does move up to
+                # what his experience now prices at.
+                salary = max(int(row["annual_salary"]), salary)
             signed = int(row["signed_season"]) if row else s["start_season"]
             target = max(0, years - (season - signed))
             if target <= 0:                       # an old tenure with no live contract: file a fresh deal
@@ -151,6 +152,10 @@ def annual(cur, season, dry_run=False):
     # coordinators.id and gm_profiles.id all run 1..32+, so a bare id set matched almost every fired person against
     # some unrelated GM's or coach's id.
     role_of = {"HC": "COACH", "GM": "GM"}
+    coach_gm_ids = set()
+    if _table(cur, "gm_profiles"):
+        cur.execute("SELECT id FROM gm_profiles WHERE end_season IS NULL AND coach_id IS NOT NULL")
+        coach_gm_ids = {r[0] for r in cur.fetchall()}
     employed_anywhere = {(role_of.get(s["person_kind"], "COORD"), s["person_id"]) for s in staff}
     hc_names = {str(s.get("name") or "").strip().lower() for s in staff if s["person_kind"] == "HC"}
     for r in rows:
@@ -165,6 +170,10 @@ def annual(cur, season, dry_run=False):
             cur.execute("SELECT coordinator_name FROM coordinators WHERE id = %s", (r["person_id"],))
             got = cur.fetchone()
             moved = bool(got and str(got[0] or "").strip().lower() in hc_names)
+        if not moved and r["person_kind"] == "GM" and r["person_id"] in coach_gm_ids:
+            # A GM contract the old producer filed for a coach-GM on top of his full-control HC deal: the row should
+            # never have existed, so it closes without a buyout rather than reading as a firing.
+            moved = True
         if moved:
             # close the old deal so it stops counting as active, but owe nothing: this is not a firing
             if not dry_run:

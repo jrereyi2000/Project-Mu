@@ -64,6 +64,15 @@ class Reply:
 
 # ------------------------------------------------------------------------------------------------ the model ---
 
+def _savepoint(cur, name):
+    """True when the savepoint could be taken (a scripted cursor in tests cannot)."""
+    try:
+        cur.execute(f"SAVEPOINT {name}")
+        return True
+    except Exception:      # noqa: BLE001
+        return False
+
+
 def default_llm():
     """The inbox's model (make_llm("inbox")), or None for templates: MU_INBOX_LLM=0, no API key, or unavailable."""
     if os.environ.get("MU_INBOX_LLM", "1").strip() == "0":
@@ -352,9 +361,17 @@ def compose(cur, kind, thread, intent, facts, history=(), note=None, llm=None, b
         return Reply(_template(kind, intent, facts), "TEMPLATE")
     hook = getattr(kind, "loop_reply", None)
     if callable(hook):
+        saved = _savepoint(cur, "inbox_loop")
         try:
             words = hook(cur, thread, intent, facts, llm, history, note)
+            if saved:
+                cur.execute("RELEASE SAVEPOINT inbox_loop")
         except Exception as e:      # noqa: BLE001 - the inbox always answers; the voice is the fallback
+            if saved:               # the loop's own writes would otherwise abort the caller's transaction
+                try:
+                    cur.execute("ROLLBACK TO SAVEPOINT inbox_loop")
+                except Exception:   # noqa: BLE001
+                    pass
             print(f"[inbox] {thread.get('kind')} player loop failed, using the voice: {e}", flush=True)
             words = None
         if words and str(words).strip():

@@ -156,3 +156,28 @@ def test_a_refiled_gm_contract_keeps_his_own_pay():
     scr.annual(cur, 2036)
     filed = [r for r in _rows(cur) if r[0] == 1 and r[1] == "GM"]
     assert filed and filed[-1][3] == 10_000_000
+
+
+def test_a_promotion_gm_moves_up_once_he_has_served_the_years():
+    """M-0117 N2: carrying the salary forward froze a PROMOTION GM at $2.75M for ever. The old salary is a floor,
+    not a freeze."""
+    conn = _db_with_gms()
+    conn.execute("INSERT INTO staff_contracts (team_id, person_id, person_kind, annual_salary, total_years, "
+                 "remaining_years, signed_season) VALUES (1, 101, 'GM', 2750000, 4, 0, 2034)")
+    cur = FakeCursor(conn)
+    scr.annual(cur, 2036)                                            # the veteran now has 7 seasons
+    filed = [r for r in _rows(cur) if r[0] == 1 and r[1] == "GM"]
+    assert filed[-1][3] == 5_750_000                                 # STANDARD, not the frozen $2.75M
+
+
+def test_a_stray_gm_contract_for_a_coach_gm_closes_without_a_buyout():
+    """M-0117 N3: the old producer filed a GM deal for a coach-GM; closing it as a firing charged an $11M buyout for
+    a contract that should never have existed."""
+    conn = _db_with_gms()
+    conn.execute("INSERT INTO gm_profiles VALUES (103, 3, 'Coach-GM', 2030, NULL, 41)")
+    conn.execute("INSERT INTO staff_contracts (team_id, person_id, person_kind, annual_salary, total_years, "
+                 "remaining_years, signed_season) VALUES (3, 103, 'GM', 2750000, 4, 4, 2030)")
+    cur = FakeCursor(conn)
+    out = scr.annual(cur, 2036)
+    row = [r for r in _rows(cur) if r[0] == 3 and r[1] == "GM"][-1]
+    assert row[5] == 0 and out["fired"] == 0

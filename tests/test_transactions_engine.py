@@ -576,3 +576,24 @@ def test_store_offers_dates_each_offer_with_the_league_week():
                  total_value=10, bonus=0, guaranteed=0)
     te.store_offers(cur, [offer], 2026, "seed")
     assert cur.inserts[0][-1] == 17 and offer["offer_id"] == 1
+
+
+def test_league_state_week_is_contained_by_its_savepoint():
+    """M-0107: a caught SQL error leaves a PostgreSQL transaction aborted, and the offer insert right after it would
+    fail, so the read rolls back to its own savepoint."""
+    class Cur:
+        def __init__(self):
+            self.sql = []
+
+        def execute(self, sql, params=None):
+            s = " ".join(str(sql).split())
+            self.sql.append(s.upper())
+            if "FROM LEAGUE_STATE" in s.upper():
+                raise RuntimeError("no league_state")
+
+        def fetchone(self):
+            return None
+
+    cur = Cur()
+    assert te.league_state_week(cur) is None
+    assert "ROLLBACK TO SAVEPOINT OFFER_WEEK" in cur.sql

@@ -2440,10 +2440,24 @@ def _load_run(cur, run_id):
 
 # -------------------------------------------------------------------- run ----
 def _conninfo(cur):
+    """A DSN the annual articles can open for themselves. psycopg's `info.dsn` leaves the password out (it is
+    redacted), so on a password-authenticated port the articles' own connection failed and they never published.
+    The pipeline's configured DSN is used when it carries a password and targets the same database."""
     try:
-        return cur.connection.info.dsn
+        dsn = cur.connection.info.dsn
     except Exception:      # noqa: BLE001 - a fake cursor in tests
         return ls.DSN
+    try:
+        from psycopg.conninfo import conninfo_to_dict
+        mine = conninfo_to_dict(dsn)
+        configured = getattr(ls, "DSN", "") or ""
+        theirs = conninfo_to_dict(configured) if configured else {}
+        if configured and not mine.get("password") and theirs.get("password") \
+                and theirs.get("dbname") == mine.get("dbname"):
+            return configured
+    except Exception:      # noqa: BLE001 - an unparsable DSN: use the connection's own
+        pass
+    return dsn
 
 
 def _user_team_ids(cur):

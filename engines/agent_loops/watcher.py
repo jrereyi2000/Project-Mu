@@ -155,6 +155,16 @@ def _injured_ids(cur, season, tick, snapshot):
     return {int(r[0]) for r in cur.fetchall()}
 
 
+def _savepoint(cur, name):
+    """True when the savepoint could be taken. A scripted cursor in tests cannot, and then the guarded block just
+    runs unguarded — the savepoint only matters on a real database."""
+    try:
+        cur.execute(f"SAVEPOINT {name}")
+        return True
+    except Exception:      # noqa: BLE001
+        return False
+
+
 def _lost_slot(prev_chart, now_chart, player_id):
     """The first base slot where he was a depth-1 starter last tick and is not this tick, or None.
 
@@ -211,10 +221,18 @@ def promise_tick(cur, *, league_id, season, tick, universe_id, mode, user_team_i
     def injured(player_id):
         return int(player_id) in injured_set
 
+    saved = _savepoint(cur, "promise_reviews")
     try:
         reviews = coach.review_promises(cur, season, tick, league_id=league_id, chart_depth=chart_depth,
                                         injured=injured, store=st)
+        if saved:
+            cur.execute("RELEASE SAVEPOINT promise_reviews")
     except Exception:  # noqa: BLE001 - a review error never stops the creation pass
+        if saved:      # on PostgreSQL a caught SQL error aborts the transaction: the creation pass needs it back
+            try:
+                cur.execute("ROLLBACK TO SAVEPOINT promise_reviews")
+            except Exception:  # noqa: BLE001
+                pass
         result["errors"] += 1
         reviews = []
     for review in reviews:

@@ -85,8 +85,12 @@ def update_writer_relationships(conn_info: str, season: int, week: int) -> dict:
     try:
         with psycopg.connect(conn_info) as conn, conn.cursor() as cur:
             if week == 1:
+                # The previous season's end-of-season calls (MVP, the awards, SUPER_BOWL, COACH_FIRED) can only be
+                # graded now, after the last weekly run; apply the whole season's graded picks and calls before the
+                # decay, or those calls move no trust at all.
                 graded = agent_memory.grade_season_calls(cur, season - 1)
-                changed = relationships.decay(cur, season)
+                applied = relationships.apply_graded(cur, season - 1, None)
+                changed = relationships.decay(cur, season) + applied
             else:
                 graded = agent_memory.grade_season_calls(cur, season)
                 changed = relationships.apply_graded(cur, season, week - 1)

@@ -156,8 +156,26 @@ def test_respond_inbox_uses_the_model_and_stores_the_reply():
     contract = {"id": 42, "kind": "CONTRACT", "season": 2026, "week": 25, "league_id": 1}
     cfacts = {"engine_status": "COUNTER", "counters": {"COUNTER_MIN": {"years": 2, "total_value": 30000000}},
               "message_seq": 1}
-    assert keys(pl.inbox_options(contract, cfacts)) == ["COUNTER_MIN", "REJECT"]
+    # B6 (chunk 8): when the engine countered, the player's options are its counters — a REJECT beside a live
+    # counter let the words turn the offer down while the thread kept the counter.
+    assert keys(pl.inbox_options(contract, cfacts)) == ["COUNTER_MIN"]
     res = pl.respond_inbox(None, contract, NEUTRAL, cfacts, llm=None, store=store)
-    assert res["stance"] in ("COUNTER_MIN", "REJECT") and res["text"] is None
+    assert res["stance"] == "COUNTER_MIN" and res["text"] is None
+    rejected = {"engine_status": "REJECT", "counters": {}, "message_seq": 1}
+    assert keys(pl.inbox_options(contract, rejected)) == ["REJECT"]
     with pytest.raises(base.AgentLoopError):
         pl.inbox_options({"kind": "GM_TALK"}, {})
+
+
+def test_a_shadow_leak_is_private_and_costs_no_model_call():
+    """B5 (chunk 8): shadow recorded the leak as public and still called the model, so a shadow season would have
+    published statements for counters that were never put to the team."""
+    store = base.MemoryStore()
+    seen = []
+    p = dict(P, id=7, name="Name7 Last7")
+    c = ctx(player=p, store=store, tick=25, team_name="Carolina", shadow=True)
+    out = pl.respond_contract(None, NEUTRAL, dict(offer(), player_id=7), c, seen=True,
+                              llm=lambda prompt: seen.append(prompt) or
+                              '{"choice": "LEAK_AND_COUNTER", "message": "I want a new deal."}')
+    assert out["leak"] is not None and out["leak"]["visibility"] == "private"
+    assert len(seen) == 1                            # the contract decision's call only: the leak costs none

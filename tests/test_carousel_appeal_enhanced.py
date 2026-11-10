@@ -73,7 +73,7 @@ def test_godfather_rarity_gate_rejects_active_cap_and_cooldown():
 
 def test_godfather_offer_requires_every_condition():
     owner = {"traits": ["DEEP_POCKETS", "HEADLINE_HUNTER"]}
-    candidate = {"super_bowl_wins": 1, "drive": 9}      # JR 2026-11-10: a ring AND drive/ego > 8
+    candidate = {"super_bowl_wins": 1, "drive": 9}      # JR 2026-11-10: a ring AND drive/ego >= 8
     gate = {"eligible": True}
     kwargs = dict(gate=gate, owner_view=owner, cash_pool=45_000_000, hc_vacant=True, gm_vacant=True,
                   candidate=candidate)
@@ -93,7 +93,7 @@ def test_godfather_owner_and_candidate_checks():
     assert not godfather_owner_ok({"traits": ["DEEP_POCKETS", "HEADLINE_HUNTER"]}, 34_000_000)
     assert not godfather_owner_ok(None, 50_000_000)
 
-    # JR, 2026-11-10: a Super Bowl win AND (drive > 8 or ego > 8). The plan's other reading (either alone) is out.
+    # JR, 2026-11-10: a Super Bowl win AND (drive >= 8 or ego >= 8). The plan's other reading (either alone) is out.
     assert godfather_candidate_ok({"super_bowl_wins": 1, "drive": 9})
     assert godfather_candidate_ok({"champion": True, "ego": 9})
     assert not godfather_candidate_ok({"super_bowl_wins": 1})              # a ring alone
@@ -141,3 +141,10 @@ def test_gm_search_picks_the_best_affordable_candidate():
     assert poor["tier"] == "PROMOTION"
     assert poor["salary"] == 2_750_000
     assert poor["salary"] == min(c["salary"] for c in pool)
+
+
+def test_the_stature_boundary_is_eight():
+    """M-0119 N5: drive 7 with a ring fails, drive 8 passes."""
+    assert not godfather_candidate_ok({"super_bowl_wins": 1, "drive": 7, "ego": 7})
+    assert godfather_candidate_ok({"super_bowl_wins": 1, "drive": 8})
+    assert godfather_candidate_ok({"champion": True, "ego": 8})
