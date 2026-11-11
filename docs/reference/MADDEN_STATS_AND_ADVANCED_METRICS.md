@@ -104,15 +104,17 @@ The permanent player historical ledger where Madden persists its Next Gen tracki
 Combining Madden's surfaced counters with its hidden engine telemetry enables the computation of industry-standard analytics. Each metric carries a **status**, matching the ingest plan §2.5 and `engines/advanced_metrics.py`:
 
 - **OK** — computable now from the stored counters. `engines/advanced_metrics.py` computes it.
-- **BLOCKED** — waiting on what a counter actually means (today only `ROUTESRUN`).
+- **BLOCKED** — waiting on what a counter actually means (`ROUTESRUN`), or the measured counters contradict the metric's premise (audit M1).
 - **IMPOSSIBLE** — Madden does not record the inputs.
 
 Rates below are fractions (0–1), not percentages. A missing input or a zero denominator yields `None`, never 0.
 
+Both sides of every rate are built from the same games (audit H3): the engine sums the `delta` JSONB on `player_week_counters`, so the full box counters (`RECEIVECATCHES`, `TARGETS`, `PASSATTEMPTS`, `PASSSACKED`, `RUSHATTEMPTS`, `DLINESACKS`, `DSECINTS`, `RECEIVEDROPS`, ...) stay on one side over the same tracked weeks. BASELINE, PARTIAL, TABLE_CHANGED, RESET and CROSS_SEASON rows are never used, and a week whose team inside/outside-pocket attempts do not account for its `PASSATTEMPTS` growth is treated as untracked and excluded, counted in `weeks_unknown` like an unknown week. The stat line supplies only a field the Career row does not carry (kicking and special teams); a rate that would mix the two sources over different game counts is `None`, and `player_metrics`' `coverage` reports why. Team denominators are summed from `team_stats` over the same game weeks as the numerator.
+
 | Status | Metrics |
 | :--- | :--- |
-| **OK** | 4.1.3 Target share; 4.1.5 QB aDOT; 4.1.7 Catch rate, Drop rate; 4.2.1 P2S; 4.2.2 Pressure rate; 4.2.5 Pocket split; 4.3.1 Rush success; 4.3.2 YAC/Att; 4.3.3 BTK rate; 4.3.4 Explosive rate; 4.3.5 Loaded/light box rate; 4.4.1 `coverage_rating_lite`; 4.4.2 Burn %; 4.4.4 Sack conversion; 4.4.5 Stop rate and `stuff_rate_all_snaps`; 4.5.3 Snap share; 4.5.4 TB % |
-| **BLOCKED** | 4.1.1 TPRR; 4.1.2 YPRR; 4.1.4 Route participation — `ROUTESRUN` is not routes run (spike S22) |
+| **OK** | 4.1.3 Target share; 4.1.5 QB aDOT (unverified); 4.1.7 Catch rate, Drop rate; 4.2.1 P2S; 4.2.2 Pressure rate; 4.2.5 Pocket split; 4.3.1 Rush success; 4.3.2 YAC/Att; 4.3.3 BTK rate; 4.3.5 Loaded/light box rate; 4.4.5 Stop rate and `stuff_rate_all_snaps`; 4.5.4 TB % |
+| **BLOCKED** | 4.1.1 TPRR; 4.1.2 YPRR; 4.1.4 Route participation — `ROUTESRUN` is not routes run (spike S22). 4.3.4 Explosive rate (`RUSH10YARDRUNS` is lower than `RUSH20YARDRUNS`); 4.4.1 `coverage_rating_lite`, 4.4.2 Burn % (`DEFTARGETS` is more than triple the league's targets); 4.4.4 Sack conversion (`DLINESACKS` exceeds `DEFPRESSURES`); 4.5.3 Snap share (`DOWNSPLAYED` exceeds the team's plays) — audit M1 |
 | **IMPOSSIBLE** | 4.1.5 receiver aDOT and 4.1.6 RACR (air yards is a passer stat); 4.1.8 Separation index (passer-side, aliased buckets); 4.2.3 Deep rate; 4.2.4 Depth-stratified efficiency; 4.2.6 Blitz rating; 4.2.7 Scramble rate; 4.3.6 Inside/outside concept split; 4.4.1 full coverage rating; 4.4.3 PRate; 4.4.5 Stuff rate per run-defense snap; 4.4.6 Press frequency; 4.5.1 Pass-block sack rate; 4.5.2 Pancake rate |
 
 ### 4.1 Wide Receiver & Tight End Metrics
@@ -126,14 +128,14 @@ Rates below are fractions (0–1), not percentages. A missing input or a zero de
    *Status: BLOCKED — same reason: no real routes-run count.*
 3. **Target Share**:
    $$\text{Target Share} = \frac{\text{TARGETS}}{\text{Team Pass Attempts}}$$
-   *Status: OK — `targets / team_pass_attempts`, with the team total summed from `team_stats` for the season or week.*
+   *Status: OK — `targets / team_pass_attempts`, with the team total summed from `team_stats` over the same game weeks as the Career `TARGETS`.*
 4. **Route Participation Rate**:
    $$\text{Route Participation} = \frac{\text{ROUTESRUN}}{\text{Team Dropbacks}}$$
    *Status: BLOCKED — same `ROUTESRUN` problem (spike S22).*
 5. **Average Depth of Target (aDOT), quarterback**:
    $$\text{aDOT}_{QB} = \frac{\text{AIRYARDS}}{\text{PASSATTEMPTS}}$$
    *Significance*: Measures how far downfield a quarterback's attempts travel, independent of completion.
-   *Status: OK — `qb_adot`, air yards from the passer's Career delta over season pass attempts.*
+   *Status: OK, unverified — `qb_adot`, air yards and pass attempts both from the same Career delta. `AIRYARDS` averages about 5.5 per attempt over the 2026 season against a real intended aDOT near 8, so what the counter means is still a suspicion (audit).*
    The receiver version, $\text{aDOT} = \text{AIRYARDS} / \text{TARGETS}$, is **IMPOSSIBLE**: Madden records `AIRYARDS` only on the passer's Career row, never per receiver (spike S9). It stays in the catalog as `rec_adot` marked IMPOSSIBLE.
 6. **Receiver Air Conversion Ratio (RACR)**:
    $$\text{RACR} = \frac{\text{RECEIVEYARDS}}{\text{AIRYARDS}}$$
@@ -141,7 +143,7 @@ Rates below are fractions (0–1), not percentages. A missing input or a zero de
    *Status: IMPOSSIBLE — air yards is a passer counter, so there is no per-receiver air-yards denominator (spike S9).*
 7. **True Catch Rate & True Drop Rate**:
    $$\text{Catch Rate} = \frac{\text{RECEIVECATCHES}}{\text{TARGETS}}, \quad \text{Drop Rate} = \frac{\text{RECEIVEDROPS}}{\text{RECEIVECATCHES} + \text{RECEIVEDROPS}}$$
-   *Status: OK — catches and targets from the stat lines; drops from the newly stored `rec_drops` on the game/season rows.*
+   *Status: OK — catches, targets and drops all from the same Career delta (`RECEIVECATCHES`, `TARGETS`, `RECEIVEDROPS`), so no game is counted on one side only.*
 8. **Separation Index**:
    $$\text{Open Rate} = \frac{\text{SEPARATION\_OPEN} + \text{SEPARATION\_WIDEOPEN}}{\text{TARGETS}}, \quad \text{Contested Rate} = \frac{\text{SEPARATION\_TIGHT}}{\text{TARGETS}}$$
    *Status: IMPOSSIBLE — separation is a passer-side count, and the `TIGHT` / `NORMAL` / `OPEN` buckets are aliased in the save (spike S9, S21).*
@@ -150,10 +152,10 @@ Rates below are fractions (0–1), not percentages. A missing input or a zero de
 1. **Pressure-to-Sack Rate (P2S)**:
    $$\text{P2S} = \frac{\text{PASSSACKED}}{\text{PRESSURES}}$$
    *Significance*: Disentangles offensive line fault from quarterback pocket presence. High P2S ($> 20\%$) indicates pocket holding and inability to navigate pressure.
-   *Status: OK.*
+   *Status: OK — `PASSSACKED` and `PRESSURES` both from the same Career delta.*
 2. **Pressure Rate Faced**:
    $$\text{Pressure Rate} = \frac{\text{PRESSURES}}{\text{PASSATTEMPTS} + \text{PASSSACKED}}$$
-   *Status: OK.*
+   *Status: OK — all three from the same Career delta.*
 3. **Deep Ball Attempt Rate**:
    $$\text{Deep Rate} = \frac{\text{DEEPPASS\_ATTEMPTS}}{\text{PASSATTEMPTS}}$$
    *Status: IMPOSSIBLE — `SHORT` / `MEDIUM` / `DEEPPASS_*` never grow; they hold real-NFL legacy totals (spike S19).*
@@ -166,7 +168,7 @@ Rates below are fractions (0–1), not percentages. A missing input or a zero de
 5. **Platform Disparity (In-Pocket vs. Off-Platform)**:
    Comparison of efficiency metrics between `INSIDEPOCKETTHROW_*` and `OUTSIDEPOCKETTHROW_*`.
    $$\text{Pocket Split} = \text{Passer Rating}_{\text{in pocket}} - \text{Passer Rating}_{\text{outside pocket}}$$
-   *Status: OK — both partitions are computed from their Career deltas, so the two ratings and their difference are real. Ratio the counters against themselves; their sum is about `PASSATTEMPTS`, not exactly it (spike S20).*
+   *Status: OK — both partitions come from the same Career delta, so the two ratings and their difference are real. Ratio the counters against themselves; their sum is about `PASSATTEMPTS`, not exactly it (spike S20). A week whose team pocket attempts do not account for its `PASSATTEMPTS` growth is treated as untracked and excluded.*
 6. **Blitz Resilience Rating**:
    Passer rating and turnover rate specifically under blitz looks (`BLITZ_*`).
    *Status: IMPOSSIBLE — `BLITZ_*` never grows; it holds real-NFL legacy totals (spike S19).*
@@ -178,7 +180,7 @@ Rates below are fractions (0–1), not percentages. A missing input or a zero de
 1. **Rushing Success Rate**:
    $$\text{Success Rate} = \frac{\text{RUSHSUCCESS}}{\text{RUSHATTEMPTS}}$$
    *Significance*: Measures situational down-to-down consistency rather than aggregate volume.
-   *Status: OK — `RUSHSUCCESS` from the Career delta, attempts from the stat line.*
+   *Status: OK — `RUSHSUCCESS` and `RUSHATTEMPTS` both from the same Career delta.*
 2. **Yards After Contact Per Attempt (YAC/Att)**:
    $$\text{YAC/Att} = \frac{\text{RUSHYARDSAFTER1STHIT}}{\text{RUSHATTEMPTS}}$$
    *Significance*: Isolates individual creation ability from offensive line push.
@@ -188,7 +190,7 @@ Rates below are fractions (0–1), not percentages. A missing input or a zero de
    *Status: OK.*
 4. **Explosive Run Rate**:
    $$\text{Explosive Rate} = \frac{\text{RUSH10YARDRUNS} + \text{RUSH20YARDRUNS}}{\text{RUSHATTEMPTS}}$$
-   *Status: OK — the 10+ count comes from the Career delta (`rush_10plus`), the 20+ count from the game/season rows (`rush_20plus`); the formula adds both, as written above.*
+   *Status: BLOCKED — the counters contradict the metric: `RUSH10YARDRUNS` (179) is lower than `RUSH20YARDRUNS` (306) over the 2026 season, and 34 of the 90 backs with a 20+ run have no 10+ run, so the buckets do not nest (audit M1).*
 5. **Loaded Box Rate & Front Adaptation**:
    $$\text{Loaded Box Rate} = \frac{\text{LOADEDBOX}}{\text{RUSHATTEMPTS}}, \quad \text{Light Box Rate} = \frac{\text{LIGHTBOX}}{\text{RUSHATTEMPTS}}$$
    Examines whether production is sustained against stacked 8+ man fronts or aided by light fronts.
@@ -200,21 +202,21 @@ Rates below are fractions (0–1), not percentages. A missing input or a zero de
 ### 4.4 Defensive & Secondary Metrics
 1. **Passer Rating Allowed in Coverage**:
    Calculated directly for individual cornerbacks and safeties using `DEFTARGETS`, `CTHALLOWED`, depth completions/yards/TDs, and `DSECINTS`.
-   *Status: IMPOSSIBLE as specified — coverage yards and coverage TDs are not recorded. The shipped approximation is `coverage_rating_lite` (**OK**): the passer-rating formula with catches allowed as completions, `DEFTARGETS` as attempts, `DSECINTS` as interceptions, and zero yards and TDs. It measures catch rate allowed and interception rate only.*
+   *Status: IMPOSSIBLE as specified — coverage yards and coverage TDs are not recorded. The shipped approximation is `coverage_rating_lite`, now **BLOCKED**: `DEFTARGETS` (48,001) is more than triple the league's targets (14,117) and receptions (10,124) while `CTHALLOWED` is 10,003, so the pair cannot be a catch rate (audit M1).*
 2. **Catch Rate Allowed (Burn %)**:
    $$\text{Burn \%} = \frac{\text{CTHALLOWED}}{\text{DEFTARGETS}}$$
    *Significance*: Primary benchmark for lockdown cornerback performance.
-   *Status: OK.*
+   *Status: BLOCKED — same counter contradiction as `coverage_rating_lite`: `DEFTARGETS` is more than triple the league's targets, so the ratio is not a catch rate (audit M1).*
 3. **Pass Rush Pressure Rate (PRate)**:
    $$\text{PRate} = \frac{\text{DEFPRESSURES}}{\text{Pass Rush Snaps}}$$
    *Significance*: $3\times$ more predictive of future defensive disruption than raw sack totals.
    *Status: IMPOSSIBLE — Madden does not split snaps by type, so there is no pass-rush snap count.*
 4. **Sack Conversion Rate**:
    $$\text{Conversion Rate} = \frac{\text{DLINESACKS} + 0.5 \times \text{DLINEHALFSACK}}{\text{DEFPRESSURES}}$$
-   *Status: OK — the loader stores `DLINESACKS + 0.5 × DLINEHALFSACK` as `def_sacks`, so the numerator is already a full-sack count.*
+   *Status: BLOCKED — the counters contradict the premise: `DLINESACKS` (1,305, or 1,363 with the half sacks) exceeds `DEFPRESSURES` (732) over the 2026 season, so the pair cannot be a sack-per-pressure rate (audit M1).*
 5. **Defensive Stop Rate & Stuff Rate**:
    $$\text{Stop Rate} = \frac{\text{STOPS}}{\text{DOWNSPLAYED}}, \quad \text{Stuff Rate} = \frac{\text{STUFFS}}{\text{Run Defense Snaps}}$$
-   *Status: Stop Rate **OK**. Stuff Rate **IMPOSSIBLE** per run-defense snap (Madden does not split snaps by type); the computable approximation ships as `stuff_rate_all_snaps` = `STUFFS / DOWNSPLAYED` (**OK**, but it is not the doc's per-run-snap rate).*
+   *Status: Stop Rate **OK** — `STOPS` and `DOWNSPLAYED` from the same Career delta. Stuff Rate **IMPOSSIBLE** per run-defense snap (Madden does not split snaps by type); the computable approximation ships as `stuff_rate_all_snaps` = `STUFFS / DOWNSPLAYED` (**OK**, but it is not the doc's per-run-snap rate).*
 6. **Press Technique Frequency & Success**:
    $$\text{Press Frequency} = \frac{\text{COVERAGEDEPTH\_PRESS}}{\text{Total Coverage Snaps}}$$
    *Status: IMPOSSIBLE — `COVERAGEDEPTH_*` never fills (spike S10), and there is no coverage-snap count.*
@@ -229,10 +231,10 @@ Rates below are fractions (0–1), not percentages. A missing input or a zero de
 3. **True Snap Share**:
    $$\text{Snap Share} = \frac{\text{DOWNSPLAYED}}{\text{Total Team Snaps}}$$
    *Significance*: Universal playing-time share across all 22 offensive, defensive, and special teams positions.
-   *Status: OK — `downs_played / total_team_plays`, with the team total summed from `team_stats` for the season or week.*
+   *Status: BLOCKED — the counters contradict the premise: `DOWNSPLAYED` over the team's total plays exceeds 1 for real players (J. Horn 193/172 = 1.12), so they do not share a denominator (audit M1).*
 4. **Touchback Percentage**:
    $$\text{TB \%} = \frac{\text{KICKTOUCHBACKS}}{\text{KICKNUMKICKOFFS}}$$
-   *Status: OK.*
+   *Status: OK — both counters from the kicking Career row, or from the stat line when the player has no Career kicking row; the same games either way.*
 
 ---
 
@@ -246,4 +248,4 @@ Rates below are fractions (0–1), not percentages. A missing input or a zero de
 | **Agent Wire & Newsroom** | `CTHALLOWED` (CB coverage), `P2S` (QB pocket collapse), `SEPARATION_*` | Contextual story prompts: calling out blown coverage assignments, QB holding the ball, or lockdown shadow corners. |
 | **Command Center Front Office** | `PRate`, `YPRR`, `P2S`, `OLINESACKSALLOWED` | Evaluates true market value in contract extensions independent of raw box-score inflation. |
 
-**Status note:** the tracked-metric column lists what each system could use once the metrics exist. Today §4 marks `ROUTESRUN` / `TPRR` / `YPRR` BLOCKED and `4QCOMEBACKS`, `GAMEWINFG*`, `QBSCRAMBLE_*`, `SEPARATION_*` and `PRate` IMPOSSIBLE, so those entries are not usable yet. Usable now: `TARGETS` (through the Career delta), `CTHALLOWED`, `BIGHITS`, `P2S`, `YAC/Att`, `Snap Share` and the rest of the OK metrics in §4.
+**Status note:** the tracked-metric column lists what each system could use once the metrics exist. Today §4 marks `ROUTESRUN` / `TPRR` / `YPRR` BLOCKED, the five audit-M1 counters (explosive rate, `coverage_rating_lite`, burn %, sack conversion, snap share) BLOCKED, and `4QCOMEBACKS`, `GAMEWINFG*`, `QBSCRAMBLE_*`, `SEPARATION_*` and `PRate` IMPOSSIBLE, so those entries are not usable yet. Usable now: `TARGETS` (through the Career delta), `CTHALLOWED`, `BIGHITS`, `P2S`, `YAC/Att` and the rest of the OK metrics in §4.

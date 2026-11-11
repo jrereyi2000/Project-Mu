@@ -72,22 +72,32 @@ FULL_ROW = {
 
 
 class StubCursor:
-    """Returns the prepared rows in order and records each execute()."""
+    """Serves the prepared results in order: a list for fetchall(), anything else for fetchone()."""
 
-    def __init__(self, rows):
-        self.rows = list(rows)
+    def __init__(self, results):
+        self.results = list(results)
         self.calls = []
+        self._current = None
 
     def execute(self, sql, params=None):
         self.calls.append((sql, params))
+        self._current = self.results.pop(0)
 
     def fetchone(self):
-        assert self.rows, "unexpected fetchone"
-        return self.rows.pop(0)
+        assert not isinstance(self._current, list), "unexpected fetchone on a row list"
+        return self._current
+
+    def fetchall(self):
+        assert isinstance(self._current, list), "unexpected fetchall on a single row"
+        return list(self._current)
 
 
 def _blank(columns):
     return {name: None for name in columns}
+
+
+def _tuple_row(columns, values):
+    return tuple(values.get(name) for name in columns)
 
 
 def test_every_doc_metric_has_a_metric_entry():
@@ -106,7 +116,15 @@ def test_metric_status_shape_and_statuses():
         assert row["status"] in am.STATUSES
         assert row["label"].strip()
     counts = {status: sum(1 for row in rows if row["status"] == status) for status in am.STATUSES}
-    assert counts[am.OK] > 0 and counts[am.BLOCKED] > 0 and counts[am.IMPOSSIBLE] > 0
+    # Audit M1 moved five metrics whose counters contradict their premise to BLOCKED.
+    assert counts == {am.OK: 15, am.BLOCKED: 8, am.IMPOSSIBLE: 14}
+
+
+def test_m1_blocked_metrics_carry_the_counter_evidence():
+    for key in ("explosive_rate", "coverage_rating_lite", "burn_pct", "sack_conversion_rate", "snap_share"):
+        metric = am.METRICS[key]
+        assert metric.status == am.BLOCKED, key
+        assert "audit M1" in metric.reason, key
 
 
 def test_every_ok_metric_computes_on_a_full_row():
@@ -119,7 +137,6 @@ def test_every_ok_metric_computes_on_a_full_row():
     assert result["catch_rate"] == pytest.approx(109 / 136)
     assert result["qb_adot"] == pytest.approx(720 / 240)
     assert result["p2s"] == pytest.approx(10 / 50)
-    assert result["burn_pct"] == pytest.approx(54 / 90)
     assert result["stop_rate"] == pytest.approx(27 / 900)
 
     # Spot checks for the other computed counters.
@@ -128,16 +145,11 @@ def test_every_ok_metric_computes_on_a_full_row():
     assert result["pressure_rate"] == pytest.approx(50 / (240 + 10))
     assert result["yac_per_att"] == pytest.approx(250 / 100)
     assert result["btk_rate"] == pytest.approx(15 / 100)
-    assert result["explosive_rate"] == pytest.approx((12 + 4) / 100)
     assert result["loaded_box_rate"] == pytest.approx(20 / 100)
     assert result["light_box_rate"] == pytest.approx(30 / 100)
-    assert result["sack_conversion_rate"] == pytest.approx(5 / 25)
     assert result["stuff_rate_all_snaps"] == pytest.approx(9 / 900)
-    assert result["snap_share"] == pytest.approx(900 / 1000)
     assert result["tb_pct"] == pytest.approx(25 / 40)
 
-    # Catch-and-INT rating: (a + 0 + 0 + d) / 6 * 100 with comp% 0.60 and 3 INTs in 90 targets.
-    assert result["coverage_rating_lite"] == pytest.approx(50.7)
     # Pocket disparity is the inside rating minus the outside rating.
     assert result["pocket_split"] == pytest.approx(108.8 - 89.6)
 
@@ -146,8 +158,7 @@ def test_zero_denominator_gives_none():
     row = dict(FULL_ROW, targets=0, team_pass_attempts=0, pressures_faced=0, downs_played=0,
                def_targets=0, kick_kickoffs=0, team_total_plays=0)
     result = am.compute(row)
-    for key in ("catch_rate", "target_share", "p2s", "burn_pct", "stop_rate", "stuff_rate_all_snaps",
-                "snap_share", "tb_pct"):
+    for key in ("catch_rate", "target_share", "p2s", "stop_rate", "stuff_rate_all_snaps", "tb_pct"):
         assert result[key] is None, f"{key} should be None on a zero denominator"
 
 
@@ -175,78 +186,152 @@ def test_blocked_and_impossible_are_never_computed_and_explain_why():
         assert metric.reason.strip(), f"{metric.key} ({metric.status}) needs a reason"
 
 
-def test_player_metrics_merges_counters_stat_line_and_team_totals():
-    counters = _blank(am.COUNTER_COLUMNS)
-    counters.update({"targets": 136, "air_yards": 720, "pressures_faced": 50,
-                     "downs_played": 900, "def_targets": 90, "def_pressures": 25,
-                     "stops": 27, "stuffs": 9, "weeks_unknown": 2})
+def _career(week=4, prev_week=0, prev_season=2026, status="OK", games=4, **delta):
+    row = {"season": 2026, "week": week, "prev_season": prev_season, "prev_week": prev_week,
+           "status": status, "delta": delta or None, "games_covered": games}
+    return row
+
+
+def _tracking(pass_att, pocket_att, week=4, prev_week=0, prev_season=2026):
+    return [{"week": week, "prev_week": prev_week, "prev_season": prev_season,
+             "pass_att": pass_att, "pocket_att": pocket_att}]
+
+
+def test_player_metrics_sums_career_deltas_and_uses_the_stat_line_only_for_missing_counters():
+    # H3: receptions, targets, drops and attempts all come from the Career delta, which carries the full
+    # box counters. The stat line's own receptions lose; only kicking (absent from the Career row) is taken
+    # from the line.
     line = _blank(am.STAT_COLUMNS)
-    line.update({"team_id": 7, "receptions": 109, "rec_drops": 7, "pass_attempts": 240,
-                 "pass_sacks": 10, "rush_attempts": 100, "rush_success": 45, "rush_yac": 250,
-                 "rush_btk": 15, "rush_10plus": 12, "rush_20plus": 4, "loaded_box": 20,
-                 "def_catches_allowed": 54, "def_ints": 3, "def_sacks": 5,
-                 "downs_played": 600, "kick_kickoffs": 40, "kick_touchbacks": 25})
+    line.update({"team_id": 7, "games_played": 4, "receptions": 100, "kick_kickoffs": 40,
+                 "kick_touchbacks": 25})
+    career = _career(
+        TARGETS=136, RECEIVECATCHES=109, RECEIVEDROPS=7, PASSATTEMPTS=240, PASSSACKED=10,
+        PRESSURES=50, AIRYARDS=720, RUSHATTEMPTS=100, RUSHSUCCESS=45, RUSHYARDSAFTER1STHIT=250,
+        RUSHBROKENTACKLES=15, LIGHTBOX=30, LOADEDBOX=20, DOWNSPLAYED=900, STOPS=27, STUFFS=9,
+        DEFTARGETS=90, CTHALLOWED=54, DSECINTS=3, DLINESACKS=4, DLINEHALFSACK=2, DEFPRESSURES=25,
+        INSIDEPOCKETTHROW_ATTEMPTS=200, INSIDEPOCKETTHROW_COMPLETIONS=140, INSIDEPOCKETTHROW_YARDS=1600,
+        INSIDEPOCKETTHROW_TD=14, INSIDEPOCKETTHROW_INTERCEPTIONS=4,
+        OUTSIDEPOCKETTHROW_ATTEMPTS=40, OUTSIDEPOCKETTHROW_COMPLETIONS=24, OUTSIDEPOCKETTHROW_YARDS=300,
+        OUTSIDEPOCKETTHROW_TD=2, OUTSIDEPOCKETTHROW_INTERCEPTIONS=1)
     team = {"team_pass_attempts": 544, "team_total_plays": 1000}
-    cur = StubCursor([counters, line, team])
+    cur = StubCursor([line, [career], _tracking(240, 240), team])
 
-    result = am.player_metrics(cur, 2027, 42)
+    result = am.player_metrics(cur, 2026, 42)
 
-    # The Career delta wins where both sides carry the same column; the stat line fills the rest.
-    assert result["inputs"]["downs_played"] == 900
+    assert result["inputs"]["receptions"] == 109          # Career wins over the line's 100
     assert result["inputs"]["targets"] == 136
-    assert result["inputs"]["receptions"] == 109
+    assert result["inputs"]["rec_drops"] == 7
+    assert result["inputs"]["kick_kickoffs"] == 40         # only the line carries kicking
+    assert result["inputs"]["def_sacks"] == 5.0            # 4 full + 0.5 * 2 half
     assert result["inputs"]["team_pass_attempts"] == 544
-    assert result["inputs"]["team_total_plays"] == 1000
-    assert result["weeks_unknown"] == 2
+    assert result["weeks_unknown"] == 0
+    assert result["coverage"] == {"games_covered": 4, "stat_line_games": 4, "same_games": True,
+                                  "untracked_weeks": 0, "games_lost": 0, "mixed_sources": False}
     assert result["metrics"]["catch_rate"] == pytest.approx(109 / 136)
-    assert result["metrics"]["snap_share"] == pytest.approx(900 / 1000)
+    assert result["metrics"]["drop_rate"] == pytest.approx(7 / (109 + 7))
+    assert result["metrics"]["target_share"] == pytest.approx(136 / 544)
     assert result["metrics"]["stop_rate"] == pytest.approx(27 / 900)
+    assert result["metrics"]["tb_pct"] == pytest.approx(25 / 40)
+    assert "coverage_rating_lite" not in result["metrics"]    # BLOCKED, never computed
+    assert "snap_share" not in result["metrics"]              # BLOCKED, never computed
 
-    assert "player_season_counters" in cur.calls[0][0]
-    assert "season_stat_lines" in cur.calls[1][0]
-    assert "team_stats" in cur.calls[2][0]
-    assert cur.calls[2][1]["team_id"] == 7
+    assert "season_stat_lines" in cur.calls[0][0]
+    assert "player_week_counters" in cur.calls[1][0]
+    assert "player_seasons" in cur.calls[2][0]
+    assert "team_stats" in cur.calls[3][0]
+    assert cur.calls[3][1]["team_id"] == 7
+    assert cur.calls[3][1]["weeks"] == [1, 2, 3, 4]      # the Career rows' game weeks
 
 
-def _tuple_row(columns, values):
-    return tuple(values.get(name) for name in columns)
+def test_player_metrics_excludes_an_untracked_career_week():
+    # H3: the team's tracked pocket attempts (100) do not account for its 138 pass attempts, so week 1 was
+    # not tracked. The whole blob is untracked (a single multi-week delta cannot be split): no catch rate,
+    # and the week is reported like an unknown week.
+    line = _blank(am.STAT_COLUMNS)
+    line.update({"team_id": 7, "games_played": 4, "receptions": 27, "kick_kickoffs": 40,
+                 "kick_touchbacks": 25})
+    career = _career(TARGETS=20, RECEIVECATCHES=27, PASSATTEMPTS=138,
+                     INSIDEPOCKETTHROW_ATTEMPTS=60, OUTSIDEPOCKETTHROW_ATTEMPTS=40)
+    cur = StubCursor([line, [career], _tracking(138, 100), {"team_pass_attempts": 138, "team_total_plays": 500}])
+
+    result = am.player_metrics(cur, 2026, 2090)
+
+    assert result["inputs"].get("targets") is None        # the untracked delta is not used
+    assert result["inputs"]["receptions"] == 27            # the stat line still reports the box score
+    assert result["metrics"]["catch_rate"] is None
+    assert result["weeks_unknown"] == 1
+    assert result["coverage"]["untracked_weeks"] == 1
+    assert result["coverage"]["games_covered"] == 0
+    assert result["coverage"]["stat_line_games"] == 4
+    assert result["coverage"]["same_games"] is False
+
+
+def test_player_metrics_suppresses_a_metric_that_mixes_sources_over_different_game_counts():
+    # A Career row with 4 games and a stat line with 5: drop rate would mix a Career reception count with a
+    # line drop count, so it returns None and the coverage flag names the mix. Career-only and line-only
+    # metrics still compute.
+    line = _blank(am.STAT_COLUMNS)
+    line.update({"team_id": 7, "games_played": 5, "rec_drops": 5, "kick_kickoffs": 40,
+                 "kick_touchbacks": 25})
+    career = _career(TARGETS=100, RECEIVECATCHES=60)
+    cur = StubCursor([line, [career], _tracking(240, 240), {"team_pass_attempts": 300, "team_total_plays": 900}])
+
+    result = am.player_metrics(cur, 2026, 42)
+
+    assert result["metrics"]["catch_rate"] == pytest.approx(0.6)   # both sides Career
+    assert result["metrics"]["drop_rate"] is None                  # Career receptions + line drops
+    assert result["metrics"]["tb_pct"] == pytest.approx(25 / 40)   # line only
+    assert result["coverage"]["mixed_sources"] is True
+    assert result["coverage"]["same_games"] is False
+    assert result["coverage"]["games_covered"] == 4
+    assert result["coverage"]["stat_line_games"] == 5
 
 
 def test_player_metrics_accepts_positional_rows():
     """Ordinary psycopg cursors return tuples, not dicts."""
-    counters = _tuple_row(("weeks_unknown",) + am.COUNTER_COLUMNS,
-                          {"weeks_unknown": 1, "targets": 136})
-    line = _tuple_row(("team_id",) + am.STAT_COLUMNS, {"team_id": 7, "receptions": 109})
+    line = _tuple_row(("team_id", "games_played") + am.STAT_COLUMNS,
+                      {"team_id": 7, "games_played": 4, "receptions": 109})
+    career = _tuple_row(("season", "week", "prev_season", "prev_week", "status", "delta", "games_covered"),
+                        {"season": 2026, "week": 4, "prev_season": 2026, "prev_week": 0, "status": "OK",
+                         "delta": {"TARGETS": 136, "RECEIVECATCHES": 109}, "games_covered": 4})
+    tracking = (4, 0, 2026, 240, 240)
     team = (544, 1000)
-    cur = StubCursor([counters, line, team])
+    cur = StubCursor([line, [career], [tracking], team])
 
-    result = am.player_metrics(cur, 2027, 42)
+    result = am.player_metrics(cur, 2026, 42)
 
     assert result["inputs"]["targets"] == 136
     assert result["inputs"]["team_pass_attempts"] == 544
-    assert result["weeks_unknown"] == 1
+    assert result["weeks_unknown"] == 0
     assert result["metrics"]["catch_rate"] == pytest.approx(109 / 136)
     assert result["metrics"]["target_share"] == pytest.approx(136 / 544)
 
 
-def test_player_metrics_week_uses_week_views_and_marks_unknown_weeks():
-    counters = _blank(am.COUNTER_COLUMNS)
-    counters.update({"status": "TABLE_CHANGED", "targets": 10, "downs_played": 60})
+def test_player_metrics_week_reads_only_its_row_and_marks_unknown_weeks():
+    # H1/H3: the week reads its own WEEK-stage row. A TABLE_CHANGED row is not a usable delta, so its
+    # counters are not borrowed and the week counts as unknown; the line still reports the box score.
     line = _blank(am.STAT_COLUMNS)
     line.update({"team_id": 7, "receptions": 6, "pass_attempts": 30, "downs_played": 55})
+    career = _career(week=3, prev_week=2, status="TABLE_CHANGED", games=1,
+                     TARGETS=10, RECEIVECATCHES=6)
+    career["delta"] = None
     team = {"team_pass_attempts": 35, "team_total_plays": 70}
-    cur = StubCursor([counters, line, team])
+    cur = StubCursor([line, [career], [], team])
 
-    result = am.player_metrics(cur, 2027, 42, week=3)
+    result = am.player_metrics(cur, 2026, 42, week=3)
 
-    assert "player_week_counters" in cur.calls[0][0]
-    assert "game_stat_lines" in cur.calls[1][0]
-    assert cur.calls[0][1]["week"] == 3
+    assert "game_stat_lines" in cur.calls[0][0]
+    assert "player_week_counters" in cur.calls[1][0]
+    assert cur.calls[1][1]["week"] == 3
     assert result["weeks_unknown"] == 1
-    assert result["inputs"]["downs_played"] == 60
-    assert result["metrics"]["catch_rate"] == pytest.approx(6 / 10)
+    assert result["inputs"]["receptions"] == 6
+    assert result["inputs"].get("targets") is None
+    assert result["metrics"]["catch_rate"] is None
+    assert cur.calls[3][1]["weeks"] == [3]
 
-    # An OK week is not counted as unknown.
-    counters_ok = dict(counters, status="OK")
-    cur = StubCursor([counters_ok, line, team])
-    assert am.player_metrics(cur, 2027, 42, week=3)["weeks_unknown"] == 0
+    # An OK, tracked week is not counted as unknown.
+    career_ok = _career(week=3, prev_week=2, status="OK", games=1, TARGETS=10, RECEIVECATCHES=6)
+    cur = StubCursor([line, [career_ok], _tracking(30, 30, week=3, prev_week=2), team])
+    result = am.player_metrics(cur, 2026, 42, week=3)
+    assert result["weeks_unknown"] == 0
+    assert result["metrics"]["catch_rate"] == pytest.approx(6 / 10)
