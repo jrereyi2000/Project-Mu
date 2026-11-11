@@ -21,7 +21,7 @@ import sys
 from tools.mod_builder import build_dir, mod_file_name
 from tools.mod_builder import recipe as recipe_mod
 
-HARNESS_OPS = ("texture-recolor", "texture-replace", "ebx-set")   # op kinds with a harness command (§2.4)
+HARNESS_OPS = ("texture-recolor", "texture-replace", "ebx-set", "legacy-replace")   # op kinds with a harness command (§2.4)
 
 
 # ---------------------------------------------------------------------------------------------- paths ---
@@ -85,13 +85,16 @@ def plan_build(rcp, route, p, force=False):
             value = op.get("value")
             value = value if isinstance(value, str) else json.dumps(value)
             steps.append({"kind": "harness", "cmd": ["ebx-set", project, op.asset, op.get("path"), value]})
+        elif op.kind == "legacy-replace":
+            steps.append({"kind": "harness", "cmd": ["import-legacy", project, op.asset, rcp.resolve(op.get("file"))]})
     if gui_ops:
         steps += _gui_steps(rcp, gui_ops, p, project_exists=bool(harness_ops))
     else:
         steps.append({"kind": "harness", "cmd": [
             "export-mod", project, p["fbmod"], "--title", rcp.title, "--author", rcp.author,
             "--version", rcp.version, "--category", rcp.category or "Cosmetic",
-            "--description", rcp.description or ""]})
+            "--description", rcp.description or ""]
+            + (["--legacy"] if any(op.kind == "legacy-replace" for op in harness_ops) else [])})
     return steps
 
 

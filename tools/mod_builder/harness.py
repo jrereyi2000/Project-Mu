@@ -24,6 +24,7 @@ PATH_ARGS: dict[str, tuple[int, ...]] = {
     "info": (),
     "export-res": (2,),
     "export-legacy": (2,),
+    "import-legacy": (1, 3),
     "find": (),
     "export-texture": (2,),
     "import-texture": (1, 3),

@@ -495,6 +495,18 @@ class CliTest(TempDirTest):
         with open(path, "w") as f:
             json.dump(data, f)
 
+    def test_dry_run_legacy_replace_uses_import_legacy(self):
+        self.new_recipe([{"op": "legacy-replace", "path": "common/ui/node_fe/mainmenu/corenode.ast",
+                          "file": "work/corenode.ast"}])
+        code, out = self.run_cli("build", "yellow_first_down", "--dry-run")
+        self.assertEqual(code, 0)
+        lines = [l.strip() for l in out.splitlines()[1:]]
+        cmds = [l.split()[2] for l in lines if l.startswith("harness:")]
+        self.assertEqual(cmds, ["info", "import-legacy", "export-mod"])
+        export = [l for l in lines if "export-mod" in l][0]
+        self.assertTrue(export.endswith("--legacy"))
+        self.assertNotIn("gui:", out)
+
     def test_new_refuses_twice_and_empty_recipe_fails(self):
         self.run_cli("new", "yellow_first_down")
         code, out = self.run_cli("new", "yellow_first_down")

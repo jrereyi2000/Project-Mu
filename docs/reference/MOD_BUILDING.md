@@ -129,11 +129,12 @@ python3 -c "from tools.mod_builder.harness import run; print(run(['ebx-dump', '<
 | `info` | Loads the profile, file system and cache | `editor_version`, `profile`, `data_version`, `game_build`, `catalogs`, `ebx_count`, `must_add_chunks`, `requires_key`, `key_file`, `key_file_present`, `initfs_files`, `ebx_readable`, `cache_build`, `fingerprint`, `harness_version` |
 | `find <pattern> [--kind ebx\|res\|chunk\|legacy] [--limit N]` | Asset names from the loaded asset manager (default limit 200). `*`/`?` makes it a case-blind glob on the whole name, else a substring. `--kind legacy` lists legacy file paths through MMC's legacy file manager | `count`, `truncated`, `matches[{name, kind, type}]` |
 | `export-legacy <legacy/file/path> <out.bin>` | A vanilla legacy file's bytes (Lua, XML, JSON, `.ast`, ...), read only | `path`, `type`, `size`, `legacy_manager` |
+| `import-legacy <project> <legacy/file/path> <in.bin>` | Opens the `.fbproject` (or starts one), replaces one existing vanilla legacy file with the input's bytes through `AssetManager.ModifyCustomAsset` (the editor's Legacy Explorer import), saves. Never adds a new path | `path`, `type`, `size`, `vanilla_size`, `sha256`, `modified_legacy` |
 | `export-texture <asset> <out.png\|.dds\|.tga\|.hdr> [--project P]` | Through TexturePlugin's `TextureExporter`. With `--project`, the texture as that project has it (the read-back after an import) | `out`, `bytes`, `texture{width, height, depth, mips, first_mip, format, type, flags, chunk}` |
 | `import-texture <project> <asset> <in.png\|.tga\|.hdr\|.dds> [--raw]` | Opens the `.fbproject` (or starts one), imports, saves. The texture keeps its own pixel format: PNG/TGA/HDR are encoded with the editor's `dxtex.dll`, mips generated; a DDS in the same format goes in as is, another format is decoded and re-encoded. `--raw` keeps a DDS's own format. 2D textures only | `original`, `imported` (texture info), `note`, `modified_assets` |
 | `ebx-dump <asset> <out.json> [--project P]` | The ebx root object as JSON (`$type`, `$guid`; internal pointers inline, `{"$ref": path}` on repeats; external pointers `{"$external": name, file_guid, class_guid}`). **Needs the initfs key** | `type`, `out`, `fields`, `color_fields` (first 50 paths of every Vec3/Vec4 and colour/tint field), `color_field_count` |
 | `ebx-set <project> <asset> <field.path> <value>` | Sets one field (path like `Materials[0].Color.x`, through internal pointers only), `ModifyEbx`, saves the project. `#RRGGBB`/`#RRGGBBAA` is written in the field's own type (Vec3/Vec4 floats 0–1, or packed ints); else number, bool, enum name, string, GUID. **Needs the initfs key** | `field_type`, `old`, `new`, `modified_assets` |
-| `export-mod <project> <out.fbmod> --title T --author A --version V [--category C] [--description D]` | Loads the project, sets `ModSettings`, calls `FrostyProject.WriteToMod`. Refuses a project with no modified assets | `out`, `bytes`, `title`, `author`, `version`, `category`, `modified_assets` |
+| `export-mod <project> <out.fbmod> --title T --author A --version V [--category C] [--description D] [--legacy]` | Loads the project, sets `ModSettings`, calls `FrostyProject.WriteToMod`. `--legacy` registers the legacy file manager first, so `import-legacy` edits are read back and exported (with their merged collector chunk). Refuses a project with no modified assets | `out`, `bytes`, `title`, `author`, `version`, `category`, `modified_assets`, `modified_legacy` |
 
 `MmcHarness.exe --help` (or no command) prints the usage line for each.
 
@@ -144,7 +145,7 @@ python3 -c "from tools.mod_builder.harness import run; print(run(['ebx-dump', '<
 | `texture-recolor` | `export-texture` → local recolour → local `png_to_dds` → `import-texture` |
 | `texture-replace` | (a PNG is turned into a DDS locally) → `import-texture` |
 | `ebx-set` | `ebx-set` (needs `ebx_readable`, §3) |
-| `legacy-replace` | no harness command: always the window route (§6) |
+| `legacy-replace` | `import-legacy`; `export-mod` gets `--legacy`. Make the replacement file first (for a `.ast` UI scene: `python3 -m tools.mod_builder.apt_ast`, MOD_REVERSE_ENGINEERING §2.6) |
 
 Every harness build starts with `info` and ends with `export-mod`, then `check`.
 
@@ -233,7 +234,7 @@ If it doesn't show: check that `Mu Test` was the pack applied, that the mod sits
 
 ## 6. The window route (fallback outline)
 
-For an op the harness can't do (`legacy-replace`, a cube/array/3D texture, an edit through an external pointer), or to look at a texture in the editor's preview. No click-by-click runbook exists: spike S-b was dropped because the harness exports through the same `WriteToMod` code as the editor's menu. If a recipe ever needs this route, record the screens into this section as you go.
+For an op the harness can't do (a cube/array/3D texture, an edit through an external pointer), or to look at a texture in the editor's preview. No click-by-click runbook exists: spike S-b was dropped because the harness exports through the same `WriteToMod` code as the editor's menu. If a recipe ever needs this route, record the screens into this section as you go.
 
 - **Ask JR every time** before taking the screen, in that conversation (JR declined screen access once on 2026-10-30). Only work on MMC Editor's window.
 - `python3 -m tools.mod_builder build <slug> --route gui` clicks nothing: it prints the steps (start *MMC Editor* from the Start menu, no admin, open the Madden27 profile; open or create the project; per op: Data Explorer → find the asset → Export/Import, the property grid for an ebx field, the Legacy Explorer for a legacy file; *File → Save Project*; *File → Export Mod* with the recipe's title, author, version, category and description, saved as `<slug>.fbmod`). Run it again after exporting a texture into `work/` and it does the recolour locally.
@@ -275,7 +276,7 @@ The teal jersey's primary is black, so the palette very likely drives the trim, 
 - **2D textures only** through the harness. Cube, array and 3D textures go through the window (§6). Meshes, audio, animation and face scans are out of scope.
 - **13–47 s per harness call**, almost all loading the asset index. Each step of a build is its own call, so a one-texture mod is about four calls (two minutes). Batch ops into one recipe (one project) rather than many builds.
 - `ebx-set` edits fields of internal objects only; it can't repoint a `PointerRef` or edit through an external pointer.
-- `legacy-replace` has no harness command; it always goes through the window route.
+- `legacy-replace` replaces an existing legacy file only; it can't add a new legacy path.
 - Legacy-format `.fbproject` files, and projects from another editor format version, are refused; open and re-save them in MMC Editor.
 - **Mu Test holds one mod at a time** (each install rebuilds it from `Mu Base`).
 - The harness-made yellow mod's in-game check by JR is the proof that the Mod Manager accepts harness exports (plan R3). Until JR reports it, treat harness exports as unproven in game.

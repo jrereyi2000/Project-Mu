@@ -496,13 +496,14 @@ namespace MuHarness
             "  export-res <asset-name-or-hex-rid> <out.bin>\n" +
             "  find <pattern> [--kind ebx|res|chunk|legacy] [--limit N]\n" +
             "  export-legacy <legacy/file/path> <out.bin>\n" +
+            "  import-legacy <project.fbproject> <legacy/file/path> <in.bin>\n" +
             "  export-texture <asset> <out.png|out.dds|out.tga> [--project P]\n" +
             "  import-texture <project.fbproject> <asset> <in.png|in.dds|in.tga> [--raw]\n" +
             "  ebx-dump <asset> <out.json> [--project P]\n" +
             "  hud-away-probe <project.fbproject> <mu/research/afc-hud> <comma-separated-afc-ids> [--rebuild]\n" +
             "  ebx-clone <project.fbproject> <source> <mu/research/destination>\n" +
             "  ebx-set <project.fbproject> <asset> <field.path[0].x> <value>\n" +
-            "  export-mod <project.fbproject> <out.fbmod> --title T --author A --version V [--category C] [--description D]";
+            "  export-mod <project.fbproject> <out.fbmod> --title T --author A --version V [--category C] [--description D] [--legacy]";
 
         internal static JObj Dispatch(string[] args)
         {
@@ -514,7 +515,7 @@ namespace MuHarness
             for (int i = 1; i < args.Length; i++)
             {
                 var a = args[i];
-                if (a == "--raw" || a == "--rebuild") { flags.Add(a); continue; }
+                if (a == "--raw" || a == "--rebuild" || a == "--legacy") { flags.Add(a); continue; }
                 if (a.StartsWith("--") && a.Length > 2)
                 {
                     if (i + 1 >= args.Length) throw new HarnessException("missing value for " + a);
@@ -528,6 +529,7 @@ namespace MuHarness
                 case "info": Need(pos, 0, "info"); return Info();
                 case "export-res": Need(pos, 2, "export-res <asset-name-or-hex-rid> <out.bin>"); return ExportRes(pos[0], pos[1]);
                 case "export-legacy": Need(pos, 2, "export-legacy <legacy/file/path> <out.bin>"); return ExportLegacy(pos[0], pos[1]);
+                case "import-legacy": Need(pos, 3, "import-legacy <project> <legacy/file/path> <in.bin>"); return ImportLegacy(pos[0], pos[1], pos[2]);
                 case "find": Need(pos, 1, "find <pattern>"); return Find(pos[0], Opt(opts, "kind", null), int.Parse(Opt(opts, "limit", "200")));
                 case "export-texture": Need(pos, 2, "export-texture <asset> <out>"); return ExportTexture(pos[0], pos[1], Opt(opts, "project", null));
                 case "import-texture": Need(pos, 3, "import-texture <project> <asset> <in>"); return ImportTexture(pos[0], pos[1], pos[2], flags.Contains("--raw"));
@@ -539,7 +541,7 @@ namespace MuHarness
                     Need(pos, 2, "export-mod <project> <out.fbmod> --title T --author A --version V");
                     foreach (var k in new[] { "title", "author", "version" })
                         if (!opts.ContainsKey(k)) throw new HarnessException("export-mod needs --" + k);
-                    return ExportMod(pos[0], pos[1], opts);
+                    return ExportMod(pos[0], pos[1], opts, flags.Contains("--legacy"));
                 default: throw new HarnessException("unknown command '" + args[0] + "'\n" + Usage);
             }
         }
@@ -656,6 +658,35 @@ namespace MuHarness
             }
             return new JObj().Set("ok", true).Set("path", entry.Name).Set("type", entry.Type).Set("out", outPath)
                 .Set("size", new FileInfo(outPath).Length).Set("legacy_manager", Boot.LegacyManager);
+        }
+
+        // Replaces one existing vanilla legacy file in a project (loaded if it exists, new otherwise)
+        // through AssetManager.ModifyCustomAsset, the call MMC Editor's legacy Import makes, then saves.
+        // Only an existing legacy path can be replaced; nothing is added.
+        static JObj ImportLegacy(string projectPath, string path, string inPath)
+        {
+            if (!File.Exists(inPath)) throw new HarnessException("input not found: " + inPath);
+            Boot.WantLegacy = true;
+            Boot.Start();
+            var project = Projects.Open(projectPath);
+            var entry = Boot.Am.GetCustomAssetEntry("legacy", Norm(path));
+            if (entry == null) throw new HarnessException("legacy file not found: " + path + " (legacy manager " + Boot.LegacyManager + ")");
+            long vanilla;
+            using (var input = Boot.Am.GetCustomAsset("legacy", entry)) { vanilla = input == null ? -1 : input.Length; }
+            var data = File.ReadAllBytes(inPath);
+            Boot.Am.ModifyCustomAsset("legacy", entry.Name, data);
+            Projects.Save(project, projectPath);
+            string sha;
+            using (var h = System.Security.Cryptography.SHA256.Create())
+                sha = BitConverter.ToString(h.ComputeHash(data)).Replace("-", "").ToLowerInvariant();
+            return new JObj().Set("ok", true).Set("project", projectPath).Set("path", entry.Name).Set("type", entry.Type)
+                .Set("in", inPath).Set("size", data.Length).Set("vanilla_size", vanilla).Set("sha256", sha)
+                .Set("modified_legacy", LegacyModifiedCount()).Set("legacy_manager", Boot.LegacyManager);
+        }
+
+        static int LegacyModifiedCount()
+        {
+            return Boot.LegacyManager == null ? 0 : Boot.Am.EnumerateCustomAssets("legacy", true).Count();
         }
 
         static Func<string, bool> MakeMatcher(string pattern)
@@ -1002,12 +1033,16 @@ namespace MuHarness
         }
 
         // ---- export
-        static JObj ExportMod(string projectPath, string outPath, Dictionary<string, string> opts)
+        // --legacy registers the legacy file manager before the project loads, so a project holding
+        // import-legacy edits keeps them (without it the legacy entries would not be read back).
+        static JObj ExportMod(string projectPath, string outPath, Dictionary<string, string> opts, bool legacy)
         {
+            if (legacy) Boot.WantLegacy = true;
             Boot.Start();
             if (!File.Exists(projectPath)) throw new HarnessException("project not found: " + projectPath);
             var project = Projects.Open(projectPath);
-            if (Boot.Am.GetModifiedCount() == 0) throw new HarnessException("project has no modified assets: " + projectPath);
+            int legacyModified = LegacyModifiedCount();
+            if (Boot.Am.GetModifiedCount() == 0 && legacyModified == 0) throw new HarnessException("project has no modified assets: " + projectPath);
             var ms = project.GetModSettings();
             var set = new[] {
                 new[] { "Title", Opt(opts, "title", null) }, new[] { "Author", Opt(opts, "author", null) },
@@ -1025,7 +1060,8 @@ namespace MuHarness
             if (!File.Exists(outPath)) throw new HarnessException("WriteToMod wrote nothing to " + outPath);
             return new JObj().Set("ok", true).Set("project", projectPath).Set("out", outPath)
                 .Set("bytes", new FileInfo(outPath).Length).Set("title", ms.Title).Set("author", ms.Author)
-                .Set("version", ms.Version).Set("category", ms.Category).Set("modified_assets", Boot.Am.GetModifiedCount());
+                .Set("version", ms.Version).Set("category", ms.Category).Set("modified_assets", Boot.Am.GetModifiedCount())
+                .Set("modified_legacy", legacyModified);
         }
     }
 
