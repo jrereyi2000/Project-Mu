@@ -81,6 +81,20 @@ class MappingTest(unittest.TestCase):
         d = ls.group_lines([{"stats": {"DEFTACKLES": 5, "ASSDEFTACKLES": 2, "DLINESACKS": 1, "DLINEHALFSACK": 1}}])["defense"]
         self.assertEqual((d["solo"], d["assists"], d["tackles"], d["sacks"]), (5, 2, 7, 1.5))
 
+    def test_column_maps_carry_the_new_counters(self):
+        off = ls.offense_cols({"RECEIVEDROPS": 2, "RUSH20YARDRUNS": 1})
+        self.assertEqual((off["rec_drops"], off["rush_20plus"]), (2, 1))
+        de = ls.defense_cols({"BIGHITS": 3, "CTHALLOWED": 4})
+        self.assertEqual((de["big_hits"], de["catches_allowed"]), (3, 4))
+        self.assertEqual(ls.blocking_cols({"OLINEPANCAKES": 5, "OLINESACKSALLOWED": 1}),
+                         {"sacks_allowed": 1, "pancakes": 5})
+        self.assertEqual(ls.offense_rates(off)["rec_drops"], 2)             # the rates keep the new keys
+        self.assertEqual(ls.blocking_cols({}), {"sacks_allowed": 0, "pancakes": 0})
+
+    def test_group_lines_takes_games_started_as_the_max(self):
+        rows = [{"stats": {"GAMESSTARTED": 1, "DOWNSPLAYED": 30}}, {"stats": {"GAMESSTARTED": 0}}]
+        self.assertEqual(ls.group_lines(rows)["general"], {"downs_played": 30, "games_started": 1})
+
     def test_team_box(self):
         box = ls.team_box({"FIRSTDOWNS": 17, "OFFYARDS": 405, "TOTALYARDS": 483, "RUSHATTEMPTS": 30, "PASSATTEMPTS": 38,
                            "SACKSALLOWED": 2, "OFFRUSHYARDS": 118, "OFFPASSYARDS": 287, "THIRDDOWNS": 18,
@@ -281,16 +295,33 @@ def v6_snapshot():
     return snap
 
 
+def v10_snapshot():
+    """v6_snapshot() as reader_version 10: career_stats on the passer and the receiver (the free agent and the
+    prospect have none), plus a field the counter view has no typed column for."""
+    snap = v6_snapshot()
+    snap["meta"].update(reader_version=10, read_at="2026-11-11T01:00:00Z")
+    snap["players"][0]["career_stats"] = {
+        "table": "CareerOffensiveStats",
+        "stats": {"GAMESPLAYED": 12, "TARGETS": 40, "ROUTESRUN": 120, "SHORTPASS_ATTEMPTS": 5}}
+    snap["players"][1]["career_stats"] = {
+        "table": "CareerOffensiveStats", "stats": {"GAMESPLAYED": 8, "TARGETS": 25}}
+    return snap
+
+
 class FakeCursor:
     """Records execute / executemany calls (depth_chart_engine.store's DELETE then INSERT rows)."""
     def __init__(self):
         self.calls = []
+        self.result = None
 
     def execute(self, sql, args=None):
         self.calls.append(("execute", sql, args))
 
     def executemany(self, sql, rows):
         self.calls.append(("executemany", sql, list(rows)))
+
+    def fetchone(self):
+        return self.result
 
     def inserted(self):
         return [r for kind, _, rows in self.calls if kind == "executemany" for r in rows]
@@ -485,6 +516,58 @@ class DepthChartsAndSettingsTest(unittest.TestCase):
         self.assertEqual(ls.nonzero_sliders(snap), [])
 
 
+class CareerCountersTest(unittest.TestCase):
+    # pgid -> (player id, team id, position, name), as load_players returns
+    PLAYERS = {900001: (11, 100, "QB", "T. Passer"), 900002: (12, 100, "WR", "T. Catcher"),
+               900003: (13, None, "WR", "F. Agent")}
+
+    def test_career_counter_values_keeps_counters_only(self):
+        vals = ls.career_counter_values({"table": "CareerOffensiveStats",
+                                         "stats": {"GAMESPLAYED": 12, "TARGETS": 40, "STAT_KEEP": True, "RATIO": 1.5}})
+        self.assertEqual(vals, ("CareerOffensiveStats", {"GAMESPLAYED": 12, "TARGETS": 40}, 12))
+        self.assertIsNone(ls.career_counter_values(None))
+        self.assertIsNone(ls.career_counter_values({"table": "CareerOffensiveStats", "stats": {}}))
+        self.assertIsNone(ls.career_counter_values({"table": None, "stats": {"TARGETS": 1}}))
+
+    def test_older_readers_write_nothing(self):
+        cur, report = FakeCursor(), {}
+        ls.load_career_counters(cur, tiny_snapshot(), TEST_SEASON, self.PLAYERS, None, report)
+        self.assertEqual(cur.calls, [])
+        self.assertEqual(report, {"career_counters": f"reader_version < {ls.CAREER_COUNTERS_READER_VERSION}"})
+
+    def test_missing_table_reports_and_writes_nothing(self):
+        cur, report = FakeCursor(), {}
+        cur.result = (None,)                     # SELECT to_regclass(...) -> the table isn't there
+        ls.load_career_counters(cur, v10_snapshot(), TEST_SEASON, self.PLAYERS, None, report)
+        self.assertEqual([sql for kind, sql, _ in cur.calls], ["SELECT to_regclass('public.player_career_counters')"])
+        self.assertEqual(report, {"career_counters": "table missing"})
+
+    def test_upserts_one_row_per_matched_player(self):
+        cur, report = FakeCursor(), {}
+        cur.result = ("player_career_counters",)
+        ls.load_career_counters(cur, v10_snapshot(), TEST_SEASON, self.PLAYERS, 7, report)
+        inserts = [(sql, args) for kind, sql, args in cur.calls if "INSERT INTO player_career_counters" in sql]
+        self.assertEqual(len(inserts), 2)        # the free agent and the prospect have no career_stats
+        sql, args = inserts[0]
+        self.assertIn("ON CONFLICT (season, week, player_id) DO UPDATE", sql)
+        self.assertEqual(args[:4], (TEST_SEASON, 2, 11, "CareerOffensiveStats"))
+        counts = json.loads(args[4])
+        self.assertEqual((counts["GAMESPLAYED"], counts["TARGETS"], counts["ROUTESRUN"], counts["SHORTPASS_ATTEMPTS"]),
+                         (12, 40, 120, 5))
+        self.assertEqual((args[5], args[6], args[7]), (12, 7, "2026-11-11T01:00:00Z"))
+        self.assertEqual((report["career_counter_rows"], report["career_counters"]), (2, "2 rows (week 2)"))
+
+    def test_off_season_loads_use_week_zero(self):
+        snap = v10_snapshot()
+        snap["season"].update(week_type="OffSeason", week_index=0)
+        cur, report = FakeCursor(), {}
+        cur.result = ("player_career_counters",)
+        ls.load_career_counters(cur, snap, TEST_SEASON, self.PLAYERS, None, report)
+        args = [a for kind, sql, a in cur.calls if "INSERT INTO player_career_counters" in sql][0]
+        self.assertEqual((args[0], args[1]), (TEST_SEASON, 0))
+        self.assertEqual(report["career_counters"], "2 rows (week 0)")
+
+
 @pytest.mark.integration
 class LoadTinySnapshotTest(unittest.TestCase):
     def setUp(self):
@@ -636,8 +719,8 @@ class LoadTinySnapshotTest(unittest.TestCase):
         self.cur.execute("SELECT id FROM draft_prospects WHERE draft_season = %s ORDER BY projected_pick", (TEST_SEASON + 1,))
         self.assertEqual([x[0] for x in self.cur.fetchall()], [x[0] for x in rows])
 
-    def test_v5_load_stores_the_team_cap(self):
-        ls.load_snapshot(self.cur, v5_snapshot(), season=TEST_SEASON)
+    def test_v6_load_stores_the_team_cap(self):
+        ls.load_snapshot(self.cur, v6_snapshot(), season=TEST_SEASON)
         self.cur.execute("SELECT cap, rollover, adjusted_cap, cap_space, salaries, cap_penalty, total_spend, "
                          "next_rookie_reserve, derived_at FROM team_cap_seasons c JOIN teams t ON t.id = c.team_id "
                          "WHERE c.season = %s AND t.abbreviation = 'CHI'", (TEST_SEASON,))
@@ -732,6 +815,109 @@ class LoadTinySnapshotTest(unittest.TestCase):
                              "VALUES (%s, 'J. Williams', %s, 'HB', 5)", (game, team))
         self.assertEqual(self.one("SELECT count(*) FROM player_stats WHERE game_id = %s AND player_name = 'J. Williams'",
                                   game), (2,))
+
+    def test_new_counter_columns_load_from_stat_rows(self):
+        snap = tiny_snapshot()
+        extra = {"RECEIVEDROPS": 2, "RUSH20YARDRUNS": 1, "BIGHITS": 3, "CTHALLOWED": 4,
+                 "OLINEPANCAKES": 5, "GAMESSTARTED": 1}
+        snap["players"][0]["game_stats"][0]["stats"].update(extra)
+        snap["players"][0]["season_stats"][0]["stats"].update(extra)
+        ls.load_snapshot(self.cur, snap, season=TEST_SEASON)
+        pid = self.one("SELECT id FROM players WHERE madden_pgid = 900001")[0]
+        gid = self.one("SELECT id FROM games WHERE season = %s AND week = 1", TEST_SEASON)[0]
+        self.assertEqual(self.one("SELECT rec_drops, rush_20plus FROM player_stats WHERE game_id = %s AND player_id = %s",
+                                  gid, pid), (2, 1))
+        self.assertEqual(self.one("SELECT rec_drops, rush_20plus FROM season_stats WHERE season = %s AND player_id = %s",
+                                  TEST_SEASON, pid), (2, 1))
+        self.assertEqual(self.one("SELECT big_hits, catches_allowed FROM game_stat_defense WHERE game_id = %s "
+                                  "AND player_id = %s", gid, pid), (3, 4))
+        self.assertEqual(self.one("SELECT big_hits, catches_allowed FROM season_stat_defense WHERE season = %s "
+                                  "AND player_id = %s", TEST_SEASON, pid), (3, 4))
+        self.assertEqual(self.one("SELECT pancakes FROM game_stat_blocking WHERE game_id = %s AND player_id = %s",
+                                  gid, pid), (5,))
+        self.assertEqual(self.one("SELECT pancakes FROM season_stat_blocking WHERE season = %s AND player_id = %s",
+                                  TEST_SEASON, pid), (5,))
+        self.assertEqual(self.one("SELECT downs_played, games_started FROM game_stat_general WHERE game_id = %s "
+                                  "AND player_id = %s", gid, pid), (65, 1))
+        self.assertEqual(self.one("SELECT games_played, downs_played, games_started FROM season_stat_general "
+                                  "WHERE season = %s AND player_id = %s", TEST_SEASON, pid), (1, 65, 1))
+        # The line views carry the six appended columns, in order, for existing readers.
+        self.assertEqual(self.one("SELECT rec_drops, rush_20plus, def_big_hits, def_catches_allowed, blk_pancakes, "
+                                  "games_started FROM season_stat_lines WHERE season = %s AND player_id = %s",
+                                  TEST_SEASON, pid), (2, 1, 3, 4, 5, 1))
+        self.assertEqual(self.one("SELECT rec_drops, rush_20plus, def_big_hits, def_catches_allowed, blk_pancakes, "
+                                  "games_started FROM game_stat_lines WHERE game_id = %s AND player_id = %s",
+                                  gid, pid), (2, 1, 3, 4, 5, 1))
+
+    def test_career_counters_load_and_a_reload_replaces_the_week(self):
+        r = ls.load_snapshot(self.cur, v10_snapshot(), season=TEST_SEASON)
+        self.assertEqual(r["career_counter_rows"], 2)
+        self.assertEqual(r["career_counters"], "2 rows (week 2)")
+        self.cur.execute("SELECT p.madden_pgid, c.madden_table, c.counters, c.games_played, c.week "
+                         "FROM player_career_counters c JOIN players p ON p.id = c.player_id "
+                         "WHERE c.season = %s ORDER BY p.madden_pgid", (TEST_SEASON,))
+        self.assertEqual(self.cur.fetchall(), [
+            (900001, "CareerOffensiveStats", {"GAMESPLAYED": 12, "TARGETS": 40, "ROUTESRUN": 120,
+                                              "SHORTPASS_ATTEMPTS": 5}, 12, 2),
+            (900002, "CareerOffensiveStats", {"GAMESPLAYED": 8, "TARGETS": 25}, 8, 2)])
+
+        again = v10_snapshot()                                 # the same week loaded again: replaced, not duplicated
+        again["players"][0]["career_stats"]["stats"].update(GAMESPLAYED=13, TARGETS=44)
+        r = ls.load_snapshot(self.cur, again, season=TEST_SEASON)
+        self.assertEqual(r["career_counter_rows"], 2)
+        self.assertEqual(self.one("SELECT count(*) FROM player_career_counters WHERE season = %s", TEST_SEASON), (2,))
+        self.assertEqual(self.one("SELECT counters, games_played FROM player_career_counters c JOIN players p "
+                                  "ON p.id = c.player_id WHERE c.season = %s AND p.madden_pgid = 900001",
+                                  TEST_SEASON)[:2],
+                         ({"GAMESPLAYED": 13, "TARGETS": 44, "ROUTESRUN": 120, "SHORTPASS_ATTEMPTS": 5}, 13))
+
+    def test_off_season_career_counters_use_week_zero(self):
+        snap = v10_snapshot()
+        snap["season"].update(week_type="OffSeason", week_index=0)
+        r = ls.load_snapshot(self.cur, snap, season=TEST_SEASON)
+        self.assertEqual(r["career_counters"], "2 rows (week 0)")
+        self.assertEqual(self.one("SELECT DISTINCT week FROM player_career_counters WHERE season = %s",
+                                  TEST_SEASON), (0,))
+
+    def test_career_counter_views_report_statuses(self):
+        ls.load_snapshot(self.cur, tiny_snapshot(), season=TEST_SEASON)
+        pid = self.one("SELECT id FROM players WHERE madden_pgid = 900001")[0]
+        rows = [(0, "CareerOffensiveStats", {"GAMESPLAYED": 0, "TARGETS": 10}),
+                (1, "CareerOffensiveStats", {"GAMESPLAYED": 1, "TARGETS": 12}),
+                (2, "CareerOffensiveStats", {"GAMESPLAYED": 1, "TARGETS": 12}),
+                (3, "CareerOffensiveStats", {"GAMESPLAYED": 0, "TARGETS": 12}),
+                (4, "CareerOffensiveKPReturnStats", {"GAMESPLAYED": 0, "TARGETS": 100}),
+                (5, "CareerOffensiveKPReturnStats", {"GAMESPLAYED": 1, "TARGETS": 103})]
+        for week, table, counters in rows:
+            self.cur.execute("INSERT INTO player_career_counters (season, week, player_id, madden_table, counters, "
+                             "games_played) VALUES (%s, %s, %s, %s, %s, %s)",
+                             (TEST_SEASON, week, pid, table, json.dumps(counters), counters["GAMESPLAYED"]))
+        self.cur.execute("SELECT week, status, games_covered, delta ->> 'TARGETS', targets, madden_routes "
+                         "FROM player_week_counters WHERE season = %s AND player_id = %s ORDER BY week",
+                         (TEST_SEASON, pid))
+        self.assertEqual(self.cur.fetchall(), [
+            (0, "BASELINE", None, None, None, None),
+            (1, "OK", 1, "2", 2, None),                 # the week's difference, and NULL for an absent field
+            (2, "NO_GAMES", 0, "0", 0, None),
+            (3, "RESET", -1, None, None, None),         # games_played fell
+            (4, "TABLE_CHANGED", 0, None, None, None),  # the career row changed table
+            (5, "OK", 1, "3", 3, None)])
+        self.assertEqual(self.one("SELECT games_covered, weeks_unknown, delta ->> 'TARGETS', targets "
+                                  "FROM player_season_counters WHERE season = %s AND player_id = %s",
+                                  TEST_SEASON, pid), (2, 2, "5", 5))
+
+    def test_missing_career_counters_table_reports_and_writes_nothing(self):
+        snap = v10_snapshot()
+        ls.load_snapshot(self.cur, snap, season=TEST_SEASON)          # the fixture rows are there to find
+        pid = self.one("SELECT id FROM players WHERE madden_pgid = 900001")[0]
+        self.cur.execute("ALTER TABLE player_career_counters RENAME TO player_career_counters_off")
+        report = {}
+        players = {p["pgid"]: (pid if p["pgid"] == 900001 else pid + 1, None, p["position"], "x")
+                   for p in snap["players"]}
+        ls.load_career_counters(self.cur, snap, TEST_SEASON, players, None, report)
+        self.assertEqual(report, {"career_counters": "table missing"})
+        self.cur.execute("ALTER TABLE player_career_counters_off RENAME TO player_career_counters")
+        self.assertEqual(self.one("SELECT count(*) FROM player_career_counters WHERE season = %s", TEST_SEASON), (2,))
 
 
 @pytest.mark.integration
@@ -831,3 +1017,27 @@ class LoadSampleSaveTest(unittest.TestCase):
         self.assertGreater(r["player_attributes"], 1500)
         self.cur.execute("SELECT count(*) FROM player_attributes WHERE season = %s", (TEST_SEASON,))
         self.assertGreater(self.cur.fetchone()[0], 1500)
+
+    def test_new_counter_columns_match_between_season_and_game_rows(self):
+        """The six new columns (rec_drops, rush_20plus, big_hits, catches_allowed, pancakes, games_started) are
+        summed from the game rows exactly as the yards are: a season value must equal the game rows' sum."""
+        ls.load_snapshot(self.cur, self.snapshot, season=TEST_SEASON)
+        checks = [("season_stats", "player_stats", ("rec_drops", "rush_20plus")),
+                  ("season_stat_defense", "game_stat_defense", ("big_hits", "catches_allowed")),
+                  ("season_stat_blocking", "game_stat_blocking", ("pancakes",)),
+                  ("season_stat_general", "game_stat_general", ("games_started",))]
+        for season_table, game_table, cols in checks:
+            select = ", ".join(f"s.{c}, COALESCE(SUM(l.{c}), 0)" for c in cols)
+            group = ", ".join(f"s.{c}" for c in cols)
+            self.cur.execute(f"""
+                SELECT s.player_id, {select}
+                FROM {season_table} s
+                LEFT JOIN {game_table} l ON l.player_id = s.player_id
+                     AND l.game_id IN (SELECT id FROM games WHERE season = %s)
+                WHERE s.season = %s
+                GROUP BY s.player_id, {group}""", (TEST_SEASON, TEST_SEASON))
+            rows = self.cur.fetchall()
+            self.assertGreater(len(rows), 100)
+            bad = [(r[0], cols[i]) for r in rows for i in range(len(cols))
+                   if r[1 + 2 * i] is not None and r[1 + 2 * i] != r[2 + 2 * i]]
+            self.assertEqual(bad, [], f"{season_table}.{cols}: {len(bad)} season counters differ from their game rows")
