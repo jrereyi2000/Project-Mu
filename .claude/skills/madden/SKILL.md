@@ -26,6 +26,7 @@ Read `docs/reference/MADDEN_PILOT.md` first. It has the keys, every catalogued s
 - **Never confirm on a screen that isn't in the catalog.** On UNKNOWN, stop and look (below). Don't press Space or Enter to "see what happens".
 - **Never play online, buy anything, or delete anything:** no saves, no franchises, no mods. On the franchise list, Q is Delete and is forbidden.
 - **Only `CAREER-TUNE-*` saves, and never while the watcher runs.** `sim-season` refuses other names, and it refuses while `pipeline.watch_save` runs: a clone keeps the real franchise's LeagueID, so the watcher would ingest it. If the watcher is running, ask JR to stop it. Don't kill it yourself. Tuning saves are clones of the canonical base `CAREER-MU2026` (the post-`league_office setup` save: 32 user teams, fill-roster off, morale 50, produced from the archived `CAREER-MUBASE`). Never sim `CAREER-MU2026` or `CAREER-MUBASE` themselves.
+- **`catch-up` is the one job that drives the real franchise, and only under `CLAIM · Madden PC`.** It sims the real `CAREER-<name>` save one week at a time with `pipeline.watch_save` **running** (the reverse of `sim-season`), waits for the league office to write that week's mirror after each sim, and stops at the first LIVE week or `--to-week`. Ask JR for the PC and take the board claim first. It refuses a `CAREER-TUNE-*` clone, a stopped watcher, a disabled mirror and a week that is not CATCH_UP; the TUNE-only rule above stays for every other job.
 - **Ask JR before quitting a franchise that isn't `TUNE-*`.** Quitting writes `<save>-AUTOSAVE`. The hub never shows which save is loaded, so if you didn't load it in this run, ask him which one is open. Use `quit --franchise TUNE-<x>` only when you know, and `--allow-quit` only after his yes.
 - Don't kill Madden or the Mod Manager unless JR asks.
 - Never connect to a database from this skill.
@@ -36,6 +37,7 @@ Read `docs/reference/MADDEN_PILOT.md` first. It has the keys, every catalogued s
 .venv/bin/python3 -m tools.madden_pilot launch      [--pack "Mu Base"]
 .venv/bin/python3 -m tools.madden_pilot clone-save  [--from CAREER-MU2026] --to CAREER-TUNE-<name>
 .venv/bin/python3 -m tools.madden_pilot sim-season  --save CAREER-TUNE-<name> --to "week N" | regular-season-end | playoffs-end
+.venv/bin/python3 -m tools.madden_pilot catch-up    --save CAREER-<name> [--to-week N] [--dsn ...]
 .venv/bin/python3 -m tools.madden_pilot set-setting --path "A>B>Setting" --value V
 .venv/bin/python3 -m tools.madden_pilot verify-mods --check first_down_line
 .venv/bin/python3 -m tools.madden_pilot quit        [--franchise TUNE-<name>] [--allow-quit]
@@ -50,7 +52,7 @@ Read `docs/reference/MADDEN_PILOT.md` first. It has the keys, every catalogued s
 ## Steps
 
 1. **Plan.** Turn the task into jobs. For a tuning sim: `clone-save` (if needed), then `launch`, then `sim-season`. Run each with `--dry-run` and check the route.
-2. **Ask JR** (the rules above): what, how long, minimize Claude, the top-left corner aborts, and the watcher must be stopped for sims.
+2. **Ask JR** (the rules above): what, how long, minimize Claude, the top-left corner aborts, and the watcher must be stopped for sims but **running** for `catch-up`.
 3. **Run** the jobs one by one. After each one, read the `status` in its output.
 4. **On a stop** (`stopped`), read `stop.json` in the run dir and **view the screenshot** it names with the Read tool (it shows the PNG). The `steps/NNNN_<screen>.json` files next to it hold the OCR lines.
    - `Unknown`: a screen the catalog doesn't know. Go to "Growing the catalog".

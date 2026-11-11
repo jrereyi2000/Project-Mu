@@ -3,6 +3,7 @@
     python3 -m tools.madden_pilot launch      [--pack "Mu Base"]
     python3 -m tools.madden_pilot clone-save  [--from CAREER-MU2026] --to CAREER-TUNE-<name>
     python3 -m tools.madden_pilot sim-season  --save CAREER-TUNE-<name> [--to "week N"|regular-season-end|playoffs-end]
+    python3 -m tools.madden_pilot catch-up    --save CAREER-<name> [--to-week N] [--dsn ...]
     python3 -m tools.madden_pilot set-setting --path "Settings>Gameplay>Accel Clamp" --value Off
     python3 -m tools.madden_pilot verify-mods --check first_down_line
     python3 -m tools.madden_pilot quit        [--franchise TUNE-<name>] [--allow-quit]
@@ -213,6 +214,23 @@ class ScriptedMadden:
             self.go(target)
 
 
+class DryMirrorStore:
+    """Stand-in for nfl_mirror_settings/nfl_mirror_weeks in --dry-run: the mirror is on and every
+    week the job asks about reads WRITTEN, so the fake loop never waits."""
+
+    def __init__(self, season=jobs.CATCH_UP_SEASON):
+        self.season = season
+
+    def settings(self):
+        return {"enabled": True, "season": self.season, "last_week": None}
+
+    def week_status(self, season, week):
+        return "WRITTEN"
+
+    def close(self):
+        pass
+
+
 ROUTES = {
     "sim-season": ("FRANCHISE_LIST > highlight {tile} > Space > PROGRESSION_WARNING (Proceed) > HUB_WEEKLY "
                    "(read 2026. WEEK N) > [Z > HUB_GAMEDAY > highlight ADVANCE WEEK > Space > ADVANCE_MENU > "
@@ -221,6 +239,9 @@ ROUTES = {
     "advance": "FRANCHISE_LIST > highlight {tile} > Space > PROGRESSION_WARNING (Proceed) > hub > GAMEDAY > "
                "ADVANCE WEEK > FORCE ADVANCE > SIM AHEAD > (read the stop) > Backspace > QUIT_CONFIRM (YES) > "
                "FRANCHISE_LIST",
+    "catch-up": "FRANCHISE_LIST > highlight {tile} > Space > PROGRESSION_WARNING (Proceed) > hub > GAMEDAY > "
+                "ADVANCE WEEK > FORCE ADVANCE > sim > Backspace > QUIT_CONFIRM (YES) > main menu > wait for "
+                "nfl_mirror_weeks WRITTEN > reload > ... until the first LIVE week (or --to-week)",
     "launch": "MMCModManager.exe -launch {pack} > wait for the Madden window > press through ACCOUNT ERROR, "
               "splash and title > a menu (MAIN_MENU, FRANCHISE_LANDING or FRANCHISE_LIST)",
     "quit": "hub > Backspace > QUIT_CONFIRM (YES, TUNE-* or --allow-quit only) > FRANCHISE_LIST",
@@ -252,6 +273,11 @@ def build_parser():
     s.add_argument("--save", required=True)
     s.add_argument("--no-quit", action="store_true", help="stay in the franchise after the advance")
     s.add_argument("--franchise", help="the TUNE-* franchise already loaded: advance it in place")
+    s = sub.add_parser("catch-up", parents=[common],
+                       help="sim the real CAREER-* franchise one week at a time, waiting for the NFL mirror")
+    s.add_argument("--save", required=True)
+    s.add_argument("--to-week", type=int, help="stop once the save reaches this Mu week")
+    s.add_argument("--dsn", help="the franchise database (default: DATABASE_URL, else the active franchise)")
     s = sub.add_parser("set-setting", parents=[common], help="walk a menu path and set a value")
     s.add_argument("--path", required=True)
     s.add_argument("--value", required=True)
@@ -275,12 +301,13 @@ def run_dir_for(job, given=None, dry_run=False):
 
 def dry_pilot(catalog, run_dir, args, out=print):
     start, intro = {"launch": ("MAIN_MENU", 2), "sim-season": ("FRANCHISE_LIST", 0), "quit": ("HUB_WEEKLY", 0),
-                    "advance": ("FRANCHISE_LIST", 0), "set-setting": ("HUB_WEEKLY", 0),
+                    "advance": ("FRANCHISE_LIST", 0), "catch-up": ("FRANCHISE_LIST", 0),
+                    "set-setting": ("HUB_WEEKLY", 0),
                     "verify-mods": ("MAIN_MENU", 0)}.get(args.job, ("MAIN_MENU", 0))
     if args.job in ("sim-season", "advance") and getattr(args, "franchise", None):
         start = "HUB_WEEKLY"
     tiles = ["TUNE-SPIKE"]
-    if args.job in ("sim-season", "advance"):
+    if args.job in ("sim-season", "advance", "catch-up"):
         tile = jobs.tile_name(args.save).upper()
         tiles = ["ALLUSER-AUTOSAVE", tile] + (["TUNE-SPIKE"] if tile != "TUNE-SPIKE" else [])
     fake = ScriptedMadden(catalog, start=start, tiles=tiles, intro=intro, out=out)
@@ -296,7 +323,7 @@ def main(argv=None, out=print):
     run_dir = run_dir_for(args.job, args.run_dir, args.dry_run)
     catalog = load_catalog()
     fmt = {k: v for k, v in vars(args).items() if v is not None}
-    if args.job in ("sim-season", "advance"):
+    if args.job in ("sim-season", "advance", "catch-up"):
         fmt["tile"] = jobs.tile_name(args.save)
     real_notice = navigate.send_notice
     try:
@@ -337,6 +364,19 @@ def _run(args, run_dir, catalog, fmt, out):
             watcher = lambda: False  # noqa: E731
         result = jobs.advance(pilot, save=args.save, watcher=watcher, quit=not args.no_quit,
                               franchise=args.franchise)
+    elif args.job == "catch-up":
+        kw = {}
+        if args.dry_run:
+            try:
+                running = jobs.watcher_running()
+            except Exception:  # noqa: BLE001 - the dry run only reports the real check
+                running = False
+            if not running:
+                out("[dry-run] note: pipeline.watch_save isn't running; a live catch-up would refuse")
+            kw = {"watcher": lambda: True, "store": DryMirrorStore(),
+                  "mode_for": lambda week: "CATCH_UP" if week <= REGULAR_WEEKS else "LIVE",
+                  "week_reader": lambda path: fake.week}
+        result = jobs.catch_up(pilot, save=args.save, to_week=args.to_week, dsn=args.dsn, **kw)
     elif args.job == "set-setting":
         result = jobs.set_setting(pilot, path=args.path, value=args.value)
     elif args.job == "verify-mods":
