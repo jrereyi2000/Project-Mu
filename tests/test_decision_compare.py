@@ -316,6 +316,8 @@ class FakeCursor:
             self._rows = [(3,)]
         elif "count(*) FROM draft_picks" in s:
             self._rows = [(10,)]
+        elif "SELECT id FROM players WHERE draft_round BETWEEN 1 AND 7" in s:
+            self._rows = [(21,), (22,)]
         elif "SELECT DISTINCT player_id FROM draft_prospects" in s:
             self._rows = [(21,), (22,)]
         elif "FROM draft_prospects WHERE player_id IS NOT NULL" in s:
@@ -340,6 +342,56 @@ def test_extract_reads_every_gate():
     assert obs["draft_by_round"]["1"]["n"] == 1                       # the 2026 and 2027 classes are too recent
     assert obs["rookie_usage"]["n"] == 2                              # the 2025 WR and the 2026 QB
     assert obs["data"]["regular_weeks_run"] == 18
+
+
+class CohortCursor:
+    """Answers the three cohort queries with different answers, so a test can tell which one the code used:
+    Madden's own draft round (players 21, 23), linked Mu picks (21, 99) and ledger DRAFTED (98)."""
+
+    def __init__(self):
+        self._rows = []
+
+    def execute(self, sql, params=None):
+        s = " ".join(sql.split())
+        if "SELECT id FROM players WHERE draft_round BETWEEN 1 AND 7" in s:
+            self._rows = [(21,), (23,)]
+        elif "SELECT DISTINCT player_id FROM draft_prospects" in s:
+            self._rows = [(21,), (99,)]
+        elif "SELECT DISTINCT player_id FROM player_season_transitions" in s:
+            self._rows = [(98,)]
+        else:                                  # pragma: no cover - a new query needs a branch here
+            raise AssertionError(f"unexpected query: {s}")
+
+    def fetchall(self):
+        return self._rows
+
+
+def test_drafted_cohort_is_maddens_draft_rounds_not_mu_picks():
+    # §7 decision 10: PLYR_DRAFTROUND on every player is the cohort. The old route (draft_prospects actual picks /
+    # player_season_transitions DRAFTED) would return {21, 99, 98} here.
+    assert C.read_drafted_ids(CohortCursor()) == {21, 23}
+
+
+@pytest.mark.integration
+def test_drafted_cohort_is_players_draft_round_in_postgres():
+    """Real Postgres: the cohort is players.draft_round 1-7, and an undrafted player stays out."""
+    import os
+
+    import psycopg
+
+    with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
+        cur = conn.cursor()
+        try:
+            cur.execute("INSERT INTO players (player_name, draft_round, draft_pick) "
+                        "VALUES ('Cohort Drafted', 4, 100) RETURNING id")
+            drafted = cur.fetchone()[0]
+            cur.execute("INSERT INTO players (player_name) VALUES ('Cohort Undrafted') RETURNING id")
+            undrafted = cur.fetchone()[0]
+            ids = C.read_drafted_ids(cur)
+            assert drafted in ids
+            assert undrafted not in ids
+        finally:
+            conn.rollback()
 
 
 def test_extract_marks_a_season_without_weekly_runs():

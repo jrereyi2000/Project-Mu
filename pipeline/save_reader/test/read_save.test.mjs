@@ -7,7 +7,7 @@ import { existsSync, readFileSync, statSync } from 'fs';
 import { createHash } from 'crypto';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
-import { READER_VERSION, readCoaches, readSave, readStaff } from '../pc_save_reader.mjs';
+import { READER_VERSION, draftFacts, readCoaches, readSave, readStaff } from '../pc_save_reader.mjs';
 import { encodeRef, NO_REF } from '../lib.mjs';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
@@ -82,8 +82,28 @@ function syntheticTeams() {
   };
 }
 
+test('draft facts: Madden sentinels become null, PLYR_DRAFTTEAM is a 1-based TeamIndex', () => {
+  // reader_version 9 (§7 decision 10). A 3rd-round pick drafted by TeamIndex 11.
+  assert.deepEqual(draftFacts({ PLYR_DRAFTROUND: 3, PLYR_DRAFTPICK: 77, PLYR_DRAFTTEAM: 12, ContractStatus: 'Signed' }),
+                   { draft_round: 3, draft_pick: 77, draft_team_index: 11 });
+  // undrafted: round 63, pick 511, no draft team
+  assert.deepEqual(draftFacts({ PLYR_DRAFTROUND: 63, PLYR_DRAFTPICK: 511, PLYR_DRAFTTEAM: 0, ContractStatus: 'Signed' }),
+                   { draft_round: null, draft_pick: null, draft_team_index: null });
+  // an undrafted player carries a 257+ UDFA order in PLYR_DRAFTPICK: not a draft pick
+  assert.deepEqual(draftFacts({ PLYR_DRAFTROUND: 63, PLYR_DRAFTPICK: 300, PLYR_DRAFTTEAM: 5, ContractStatus: 'FreeAgent' }),
+                   { draft_round: null, draft_pick: null, draft_team_index: null });
+  // a real draftee whose draft team Madden does not hold (every real-NFL veteran: PLYR_DRAFTTEAM 0)
+  assert.deepEqual(draftFacts({ PLYR_DRAFTROUND: 1, PLYR_DRAFTPICK: 17, PLYR_DRAFTTEAM: 0, ContractStatus: 'Signed' }),
+                   { draft_round: 1, draft_pick: 17, draft_team_index: null });
+  // a status Draft prospect's PLYR_DRAFTTEAM (32) is the free-agent placeholder, not HOU: no draft team
+  assert.deepEqual(draftFacts({ PLYR_DRAFTROUND: 1, PLYR_DRAFTPICK: 1, PLYR_DRAFTTEAM: 32, ContractStatus: 'Draft' }),
+                   { draft_round: 1, draft_pick: 1, draft_team_index: null });
+  // an older save with no field at all
+  assert.deepEqual(draftFacts({}), { draft_round: null, draft_pick: null, draft_team_index: null });
+});
+
 test('coaches: every live Coach record, free agents included, in the reader_version 8 shape', () => {
-  assert.equal(READER_VERSION, 8);
+  assert.equal(READER_VERSION, 9);
   const coaches = readCoaches(syntheticCoaches());
   assert.deepEqual(coaches.map(c => c.row), [0, 1, 2, 3], 'the empty row is skipped');
   assert.deepEqual(coaches.find(c => c.pgid === 86), {
@@ -151,9 +171,19 @@ test('reads a real Madden 27 save without changing it', { skip, timeout: 120_000
     for (const line of lines) assert.ok(gameRows.has(line.game_row), 'every game line points at an exported game');
   }
 
+  // reader_version 9: Madden's draft facts on every player.
+  assert.equal(s.meta.reader_version, 9);
+  for (const p of s.players) {
+    assert.ok('draft_round' in p && 'draft_pick' in p && 'draft_team_index' in p, `draft facts on pgid ${p.pgid}`);
+    assert.ok(p.draft_round === null || (p.draft_round >= 1 && p.draft_round <= 7), `draft round on pgid ${p.pgid}`);
+    assert.ok(p.draft_pick === null || (p.draft_pick >= 1 && p.draft_pick <= 256), `draft pick on pgid ${p.pgid}`);
+    assert.ok(p.draft_team_index === null || (p.draft_team_index >= 0 && p.draft_team_index <= 31),
+              `draft team index on pgid ${p.pgid}`);
+  }
+  assert.ok(s.players.some(p => p.draft_round !== null), 'some players are drafted');
+
   // reader_version 8: every live coach and each real team's HC / OC / DC seats (asserted below); reader_version 7:
   // per-team roster / practice squad and the league free-agent list.
-  assert.equal(s.meta.reader_version, 8);
 
   // reader_version 6: top-level salary_cap and decoded team cap blocks in $10k units
   assert.ok(s.salary_cap, 'salary_cap block present');

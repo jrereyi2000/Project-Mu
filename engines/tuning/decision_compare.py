@@ -17,8 +17,8 @@ a reason; that is a failure of the run's coverage, not a silent pass (the overal
 
 Mu-side sources, per gate:
   A1 career length         player_retirements + player_seasons (years_of_experience, else distinct seasons);
-                           the drafted cohort from draft_prospects.player_id (actual_pick set) or
-                           player_season_transitions DRAFTED
+                           the drafted cohort from players.draft_round 1-7 (Madden's PLYR_DRAFTROUND,
+                           TUNING_ACCEPTANCE_THRESHOLDS.md §7 decision 10), not draft_class/draft_picks
   A2 retirement age        player_retirements + the age on that season's player_seasons row
   A3 head-coach changes    coach_tenures (head coaches only; coordinator_tenures is a different role)
   A4 trades                gm_trade_proposals APPROVED/EXECUTED; the in-season gate also needs the weekly
@@ -284,17 +284,9 @@ def table_exists(cur, name):
 
 
 def read_drafted_ids(cur):
-    """Players Mu knows were drafted: linked actual picks, plus the season ledger's DRAFTED transitions."""
-    ids = set()
-    if table_exists(cur, "draft_prospects"):
-        ids |= {r[0] for r in _fetch(
-            cur, "SELECT DISTINCT player_id FROM draft_prospects "
-                 "WHERE player_id IS NOT NULL AND actual_pick IS NOT NULL")}
-    if table_exists(cur, "player_season_transitions"):
-        ids |= {r[0] for r in _fetch(
-            cur, "SELECT DISTINCT player_id FROM player_season_transitions "
-                 "WHERE status = 'DRAFTED' AND player_id IS NOT NULL")}
-    return ids
+    """Players Madden records as drafted: players.draft_round 1-7 (PLYR_DRAFTROUND, reader v9 / load_save).
+    Veterans get it from the save, so the cohort is not limited to players Mu drafted (§7 decision 10)."""
+    return {r[0] for r in _fetch(cur, "SELECT id FROM players WHERE draft_round BETWEEN 1 AND 7")}
 
 
 def read_season_summary(cur, season):
@@ -514,8 +506,8 @@ def compare_decisions(observed, targets):
     cl = observed["career_length"]
     drafted_cl = cl.get("drafted") or {}
     cohort_n = meta.get("drafted_cohort", 0)
-    missing = ("no drafted players are linked to picks (draft_prospects actual picks / "
-               "player_season_transitions DRAFTED), so the drafted cohort is empty" if not cohort_n
+    missing = ("no player has a Madden draft round (players.draft_round 1-7: reload a save with reader v9 so "
+               "Madden's PLYR_DRAFTROUND reaches the database), so the drafted cohort is empty" if not cohort_n
                else f"no drafted career has ended in this database (cohort n={cohort_n})")
     for grp in D.GROUP_ORDER:
         tgt = ((targets.get("career_length") or {}).get("drafted") or {}).get(grp) or {}

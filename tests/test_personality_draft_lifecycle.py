@@ -194,7 +194,8 @@ def test_load_snapshot_passes_context_and_observes_by_default(monkeypatch):
     calls = []
     for name in ('team_ids', 'load_team_ratings', 'load_player_attributes', 'load_games', 'load_game_lines',
                  'load_team_scores', 'load_season_lines', 'load_contracts', 'load_team_caps', 'load_injuries',
-                 'load_highlights', 'load_depth_charts', 'league_settings_report', 'update_league_state'):
+                 'load_highlights', 'load_depth_charts', 'load_player_draft_facts', 'league_settings_report',
+                 'update_league_state'):
         monkeypatch.setattr(load_save, name, lambda *a, **k: {})
     monkeypatch.setattr(load_save, 'load_players', lambda *a, **k: {})
     monkeypatch.setattr(load_save, 'load_draft_class', lambda *a, **k: None)

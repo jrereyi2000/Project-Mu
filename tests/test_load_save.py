@@ -568,6 +568,40 @@ class LoadTinySnapshotTest(unittest.TestCase):
         self.assertEqual(sum(p["points"] for p in hl if p["team"] == "AZ"), 10)
         self.assertTrue(r["league_state"].startswith("kept"))                   # 2099 isn't the league's season
 
+    def draft_row(self, pgid):
+        self.cur.execute("SELECT draft_round, draft_pick, t.abbreviation FROM players x "
+                         "LEFT JOIN teams t ON t.id = x.draft_team_id WHERE x.madden_pgid = %s", (pgid,))
+        return self.cur.fetchone()
+
+    def test_load_stores_madden_draft_facts_and_fills_nulls_only(self):
+        # reader v9: Madden's PLYR_DRAFTROUND/PICK/TEAM per player (§7 decision 10). 900001 is a 3rd-round pick of
+        # ARI (TeamIndex 1), 900002 is undrafted, 900003 is a 7th-round pick of CHI (TeamIndex 0).
+        snap = tiny_snapshot()
+        snap["players"][0].update(draft_round=3, draft_pick=77, draft_team_index=1)
+        snap["players"][1].update(draft_round=None, draft_pick=None, draft_team_index=None)
+        snap["players"][2].update(draft_round=7, draft_pick=224, draft_team_index=0)
+        r = ls.load_snapshot(self.cur, snap, season=TEST_SEASON)
+        self.assertEqual((r["players_drafted"], r["players_undrafted"], r["players_draft_filled"]), (2, 1, 0))
+        self.assertEqual(self.draft_row(900001), (3, 77, "AZ"))
+        self.assertEqual(self.draft_row(900002), (None, None, None))
+        self.assertEqual(self.draft_row(900003), (7, 224, "CHI"))
+
+        # A row loaded before the reader change (draft facts still NULL) picks them up on the next load...
+        self.cur.execute("UPDATE players SET draft_round = NULL, draft_pick = NULL, draft_team_id = NULL "
+                         "WHERE madden_pgid = 900001")
+        r = ls.load_snapshot(self.cur, snap, season=TEST_SEASON)
+        self.assertEqual(r["players_draft_filled"], 1)
+        self.assertEqual(self.draft_row(900001), (3, 77, "AZ"))
+
+        # ... and a stored value is never overwritten by a later (or different) snapshot.
+        changed = tiny_snapshot()
+        changed["players"][0].update(draft_round=5, draft_pick=12, draft_team_index=0)
+        changed["players"][1].update(draft_round=None, draft_pick=None, draft_team_index=None)
+        changed["players"][2].update(draft_round=7, draft_pick=224, draft_team_index=0)
+        r = ls.load_snapshot(self.cur, changed, season=TEST_SEASON)
+        self.assertEqual(r["players_draft_filled"], 0)
+        self.assertEqual(self.draft_row(900001), (3, 77, "AZ"))
+
     def test_v4_load_stores_madden_depth_charts(self):
         r = ls.load_snapshot(self.cur, v4_snapshot(), season=TEST_SEASON)
         self.assertEqual((r["depth_charts"], r["depth_chart_rows"]), (2, 2))
