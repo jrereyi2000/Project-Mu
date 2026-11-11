@@ -197,9 +197,9 @@ Band **17.9%–26.5%** of players with ≥8 games in both seasons, median **24.9
 - **Gate:** round 1 within ±10 points of 85%; each later round within ±10 points; the monotonic decline must hold.
 - **Mu source:** `draft_selections` + `player_seasons` starts and games. **A started season (JR, 2026-11-10)
   is one with 8 or more games started at the player's own position** (depth 1 in his position's slot on the
-  weekly depth chart for a game he played). The chart in force is resolved per slot and week (JR, then MU_COACH,
-  then MADDEN; no slot without a starter; the newest earlier chart carries forward — §7 decision 12). Return, kick
-  and long-snapper slots never count. The real column is
+  weekly depth chart for a game he played). The chart in force is resolved per slot and week: the newest week
+  that fills the slot, then JR, MU_COACH, MADDEN at that week; the previous offseason's and the preseason's charts
+  count before week 1 (§7 decision 12). Return, kick and long-snapper slots never count. The real column is
   nflverse's `seasons_started`.
 - **Primary suspect:** `engines/scouting_value.py` and the rookie OVR distribution — not the drafting AI.
 
@@ -331,16 +331,18 @@ median (all players retained as reference); A4's gate is the Week 1 → season-e
     the loader is unchanged. **Retirees who were unsigned all season still count** in A1/A2: the endpoint is the
     retirement season, and the position/age snapshot is the last signed or played season (audit-2, M-0394; length,
     age and membership come out the same either way).
-12. **A started season is 8+ games started at the player's own position.**
-    **Clarified by JR, 2026-11-10/11 (board M-0374, M-0381):** the chart in force is resolved **per slot and
-    week**. The order is JR's chart, then MU_COACH's, then MADDEN's, and a slot is never without a starter: when
-    JR's chart leaves a slot empty, the next source fills it. **A chart carries forward:** a week with no chart
-    uses the newest earlier week that has one (the newest week wins), and each slot is resolved at that week.
-    A chart week resolves each slot from that one week; a slot left empty in the newest chart is not filled from
-    older weeks. Only weeks **31–32** (cut day and preseason, stored under the new year) sort before week 1; weeks
-    24–30 are the offseason after Y and never carry into Y's regular season (M-0394/M-0400).
-    *Open for JR:* whether a partial newest chart should fall back slot by slot to older weeks, whether an
-    offseason JR chart counts for the next season, and the 31–32 ordering itself (the auditor's suggestion).
+12. **A started season is 8+ games started at the player's own position.** **Clarified by JR, 2026-11-10/11
+    (board M-0374, M-0381, M-0421):** the chart in force is resolved **per slot and week**. For each completed
+    regular-season team-week and each slot, the candidate charts, oldest first, are `(Y-1, 24–30)` (the previous
+    season's offseason, stored under the old calendar year), then `(Y, 31–32)` (cut day and preseason, stored
+    under the new year), then `(Y, 1..W)` (the season's own weeks). The newest candidate week in which the slot
+    has a depth-1, non-NULL player in any source is the one in force. At that week the slot resolves JR, then
+    MU_COACH, then MADDEN, so a newer MADDEN-only week beats an older JR week. **A slot carries across weeks:** a
+    slot left empty in the newest chart week keeps the starter from the newest earlier week that filled it, so no
+    slot is without a starter. **Offseason charts count for the next season:** `(Y-1, 24–30)` is part of Y's
+    pre-week-1 history, ordered before `(Y, 31–32)` and week 1, and never credits a week in Y-1. Nothing carries
+    across more than one season boundary (weeks 19–23 never reach a regular-season week). Built in
+    `decision_compare.read_started_seasons` (`76a22fa`, M-0437).
 
 ### Still open
 
