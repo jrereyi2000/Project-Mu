@@ -10,7 +10,7 @@ import pytest
 
 from tools.madden_pilot import __main__ as cli
 from tools.madden_pilot import spike, vision
-from tools.madden_pilot.navigate import TITLE
+from tools.madden_pilot.navigate import TITLE, Stuck
 from tools.madden_pilot.screens import Frame, load_catalog, norm
 
 CATALOG = load_catalog()
@@ -500,6 +500,58 @@ def test_start_launch_jr_waits_for_the_window_then_the_menu(tmp_path):
         launch=lambda: calls.append("launch"))
     assert result["ok"] is True
     assert calls == ["window", "menu"]
+
+
+class ClosedPilot(FakePilot):
+    """A pilot whose driver has no Madden window until launch() has run, like a closed game."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.launched = False
+
+    def look(self):
+        if not self.launched:
+            raise Stuck("no window matches Madden NFL 27")
+        return super().look()
+
+
+def test_start_launches_before_the_first_look(tmp_path):
+    pilot = ClosedPilot(screen="FRANCHISE_LIST")
+    calls = []
+
+    def launch():
+        calls.append("launch")
+        pilot.launched = True
+
+    state = tmp_path / "root" / "state.json"
+    guard, result = spike.start(
+        brief_of(tmp_path, launch="pilot"), pilot, state, dry_run=False,
+        watcher=lambda: False, launch=launch)
+    assert calls == ["launch"]
+    assert result["ok"] is True, result
+    assert pilot.looks >= 1
+    assert state.exists()
+
+
+def test_start_launch_runs_before_an_open_wrong_franchise_refusal(tmp_path):
+    folder = tmp_path / "saves"
+    folder.mkdir()
+    (folder / "CAREER-TUNE-SPIKE").write_bytes(b"save")
+    pilot = ClosedPilot(screen="HUB_WEEKLY", loaded_franchise="CAREER-MU2026")
+    calls = []
+
+    def launch():
+        calls.append("launch")
+        pilot.launched = True
+
+    state = tmp_path / "root" / "state.json"
+    guard, result = spike.start(
+        brief_of(tmp_path, save="CAREER-TUNE-SPIKE", start="HUB_WEEKLY"), pilot, state,
+        dry_run=False, watcher=lambda: False, saves_folder=folder, launch=launch)
+    assert calls == ["launch"]
+    assert guard is None
+    assert "TUNE-" in result["refused"]
+    assert not state.exists()
 
 
 # --------------------------------------------------------------------------- clips

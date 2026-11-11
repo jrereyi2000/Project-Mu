@@ -1048,27 +1048,29 @@ def start(brief: Brief, pilot, state_path, *, dry_run=False, watcher=None, saves
 
     guard = SpikeGuard(brief, pilot, state_path, clock=clock, describe_fn=describe_fn)
     guard.reset()
-    looked = guard.look()
-    if not looked["ok"]:
-        return guard, looked
-    tile = jobs.tile_name(brief.save) if brief.save else None
-    if pilot.screen in jobs.HUBS and not (tile and pilot.loaded_franchise
-                                          and norm(pilot.loaded_franchise) == norm(tile)):
-        result = guard._result(ok=False, refused="a franchise is open and is not the brief's "
-                                                 "TUNE-* save (the hub doesn't show the name); "
-                                                 "quit it first")
-        try:
-            guard.state_path.unlink()       # a start that never happened leaves no running state
-        except OSError:
-            pass
-        return None, result
     try:
+        # Launch (or wait for) the game before the first look: win_agent's look raises when no
+        # Madden window exists, so a closed game would otherwise stop the start as Stuck.
         if not dry_run:
             if brief.launch == "jr":
                 (wait_window or (lambda: jobs._wait_window(pilot, 600)))()
                 (wait_menu or (lambda: jobs.wait_menu(pilot, 600)))()
             else:
                 (launch or (lambda: jobs.launch(pilot, pack=brief.pack)))()
+        looked = guard.look()
+        if not looked["ok"]:
+            return guard, looked
+        tile = jobs.tile_name(brief.save) if brief.save else None
+        if pilot.screen in jobs.HUBS and not (tile and pilot.loaded_franchise
+                                              and norm(pilot.loaded_franchise) == norm(tile)):
+            result = guard._result(ok=False, refused="a franchise is open and is not the brief's "
+                                                     "TUNE-* save (the hub doesn't show the name); "
+                                                     "quit it first")
+            try:
+                guard.state_path.unlink()   # a start that never happened leaves no running state
+            except OSError:
+                pass
+            return None, result
         if brief.save:
             (load or (lambda: jobs._load_franchise(pilot, tile, save=brief.save)))()
         (goto or (lambda: pilot.goto(brief.start)))()
