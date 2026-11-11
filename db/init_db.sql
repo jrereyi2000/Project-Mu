@@ -4040,7 +4040,7 @@ FROM coverage c
 LEFT JOIN summed s ON s.season = c.season AND s.player_id = c.player_id;
 
 -- ---------------------------------------------------------------------------
--- NFL weekly mirror (db/migrations/2027_02_26_nfl_mirror.sql,
+-- NFL weekly mirror (db/migrations/2027_02_27_nfl_mirror.sql,
 -- docs/in_progress/NFL_WEEKLY_MIRROR_PLAN.md §2.1, §2.4)
 -- ---------------------------------------------------------------------------
 
@@ -4251,5 +4251,5 @@ INSERT INTO schema_migrations (version, filename, checksum, source) VALUES
     ('2027_02_24_player_draft_facts', '2027_02_24_player_draft_facts.sql', '08c2e353ebc2e27ac4c83ab23aa38eae32a111dd08d8e528b3ad9b0f79f36afa', 'init_db.sql'),
     ('2027_02_25_madden_stat_counters', '2027_02_25_madden_stat_counters.sql', '4947d8696109ff912f6ec9735f9543a31068a3e1ca05e222adbd6a8f7aa92766', 'init_db.sql'),
     ('2027_02_26_league_shape_season', '2027_02_26_league_shape_season.sql', 'c953582968fad1e0de03b4fdde23627ab21d23e7f42e0612a63e7dcd45f45026', 'init_db.sql'),
-    ('2027_02_26_nfl_mirror', '2027_02_26_nfl_mirror.sql', 'e16c70ce2d289c0d163a645373057cc112feeb2fda79c7681b233ade0afc2c87', 'init_db.sql')
+    ('2027_02_27_nfl_mirror', '2027_02_27_nfl_mirror.sql', '7b5d61f3fc3427adaf9c029a5ceb6cfa75b55ba93654d27a52d845624204230c', 'init_db.sql')
 ON CONFLICT (version) DO NOTHING;

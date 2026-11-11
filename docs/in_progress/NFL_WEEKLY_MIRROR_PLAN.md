@@ -1,7 +1,7 @@
 # Project Mu: NFL Weekly Mirror Plan
 
 **Status:** approved by JR (2026-11-11); building, wave 1 of 4 done. Waves 2–4 are handed to a DeepSeek session (JR's /execute-plan rule, 2026-11-11). Spikes A–C (Madden PC, JR) run before wave 2.
-- As built (wave 1): `store.mark_written` takes `(cur, season, week, run_id)` and also flips the week's PLANNED moves to WRITTEN; `record_moves` has `replace=False`; `build_week` takes an optional `sources=`. The migration is `2027_02_26_nfl_mirror.sql`, which shares its date prefix with another session's `2027_02_26_league_shape_season.sql` (filenames still sort uniquely). Neither migration is applied to any franchise DB; only `mu_scratch_*` DBs were used.
+- As built (wave 1): `store.mark_written` takes `(cur, season, week, run_id)` and also flips the week's PLANNED moves to WRITTEN; `record_moves` has `replace=False`; `build_week` takes an optional `sources=`. The migration is `2027_02_27_nfl_mirror.sql`. It was renamed from `2027_02_26_…` after the merge at audit-2's request (M-0444), because builder-8's `2027_02_26_league_shape_season.sql` was already on main. Neither migration is applied to any franchise DB; only `mu_scratch_*` DBs were used.
 - Open from wave 1: (a) `coaching_carousel.staff_in()` and `head_coaches()` order tenures by `start_season DESC` with no `id DESC` tie-break, so after a midseason change in which the outgoing tenure also started that season, they may pick the old man. Add `, ct.id DESC` to both ORDER BYs, with an `offseason_check` run (U6 or a follow-up fix). (b) `staff.py` writes no `staff_moves` or `staff_contracts` rows for mirrored coaching changes, and a coordinator promoted to interim HC keeps his coordinator tenure unless the CSV names his replacement.
 - Orchestrator fix: `tests/test_nfl_history_store.py` now leaves `nfl_mirror_*` out of its nfl_* table check (`346e063`).
 **Builds on:** PROJECT_SPEC §2.21a (League Office), §3.3x (Real NFL history and `nfl_player_links`), §6.0b (save watcher), §2.19 (coaching tenures), [`REAL_NFL_HISTORY_PLAN.md`](../done/REAL_NFL_HISTORY_PLAN.md), [`COACH_SAVE_WRITES_PLAN.md`](../done/COACH_SAVE_WRITES_PLAN.md).
@@ -11,7 +11,7 @@
 **Delivers:**
 - `engines/nfl_mirror/`: `fetch.py`, `real_state.py`, `trades.py`, `store.py`, `staff.py`, `diff.py`, `contracts.py`, `injuries.py`, `depth.py`, `ea_ratings.py`, `create.py`, `__main__.py` (CLI `python3 -m engines.nfl_mirror status|preview|trades|enable|disable`)
 - A pilot job, `catch-up` (`tools/madden_pilot/jobs.py`): it sims the real franchise one week at a time while the mirror is in catch-up, waiting for each week's league office write between weeks
-- Migration `db/migrations/2027_02_26_nfl_mirror.sql`: `nfl_mirror_settings`, `nfl_mirror_weeks`, `nfl_mirror_moves`; `nfl_player_links.method` gains `CREATED`
+- Migration `db/migrations/2027_02_27_nfl_mirror.sql`: `nfl_mirror_settings`, `nfl_mirror_weeks`, `nfl_mirror_moves`; `nfl_player_links.method` gains `CREATED`
 - Hand-kept inputs: `data/history/nfl_trades_2026.csv` and `data/history/nfl_staff_changes_2026.csv`
 - A league office step, `step_nfl_mirror` (`pipeline/league_office.py`), plus its adapter `pipeline/league_office_mirror.py`
 - Watcher gating: in a mirrored week, no GM trade proposals, no articles and no press conferences
@@ -54,7 +54,7 @@
 | S12 | `bootstrap_untracked_players` (`pipeline/league_office.py:2082`) seeds progression state for players Mu has never tracked, before progression plans. | Created players are picked up by progression with no new work. |
 | S13 | `league_setup.mjs` already writes LeagueSetting fields (`Field_44` CoachFiring, `Field_82` career clock; `pipeline/save_reader/league_setup.mjs:29`). The Injuries on/off field is not known. | Spike A finds the field. It is then written with a `records` edit. |
 | S14 | `contracts_engine.minimum_salary(accrued_seasons, cap)` (`engines/contracts_engine.py:126`); pyarrow 26 and pandas 3.1 are installed. | A midseason signing takes the real OTC terms when found, else the minimum for his years of service. |
-| S15 | The latest migration is `2027_02_25_madden_stat_counters.sql`; no plan names `2027_02_26`. | Migration `2027_02_26_nfl_mirror.sql`; re-check at build time. |
+| S15 | The latest migration is `2027_02_25_madden_stat_counters.sql`; no plan names `2027_02_26`. | Migration `2027_02_27_nfl_mirror.sql`; re-check at build time. |
 | S16 | The pilot's `sim_season` job sims only `CAREER-TUNE-*` saves and refuses while the watcher runs (`tools/madden_pilot/jobs.py:18-21`, `:767-771`). It has `_sim_one_week` (`:501`), a save-header week reader (`_save_week`, `:416`), and `quit_franchise` with `allow_quit` (`navigate.py:254`). The league office replaces the save only while the franchise is closed (§2.21a). | D8 needs a separate job, `catch-up`, that does the opposite: the real franchise, with the watcher running. Each week it loads the franchise, sims one week, saves, quits to the main menu, waits for the league office's WRITTEN run for the next week, and reloads. The TUNE-only rule on `sim_season` stays as it is. |
 
 ## 1. Scope
@@ -116,7 +116,7 @@ def build_week(rows_rosters, rows_injuries, rows_depth, rows_games, season, week
 
 ### 2.4 Store (`engines/nfl_mirror/store.py`) and migration
 
-`2027_02_26_nfl_mirror.sql`, mirrored at the end of `db/init_db.sql`:
+`2027_02_27_nfl_mirror.sql`, mirrored at the end of `db/init_db.sql`:
 - `nfl_mirror_settings` as in §2.1 (one row, `id SMALLINT PRIMARY KEY CHECK (id = 1)`).
 - `nfl_mirror_weeks` (`season, week` PK; `real_week INT`, `mode VARCHAR(8)` CATCH_UP/LIVE, `sources JSONB`, `counts JSONB`, `run_id INT REFERENCES league_office_runs(id)`, `status VARCHAR(10)` PLANNED/WRITTEN/FAILED, `report TEXT`, `created_at`).
 - `nfl_mirror_moves` (`id SERIAL`, `season, week`, `kind VARCHAR(10)` CHECK IN `SIGN, RELEASE, TRADE, PS, IR, ACTIVATE, INJURY, HEAL, CREATE, CHART, STAFF, SETTING`, `gsis_id`, `player_id INT REFERENCES players(id) ON DELETE SET NULL`, `pgid INT`, `from_team_id`, `to_team_id`, `detail JSONB`, `status VARCHAR(10)` PLANNED/WRITTEN/SKIPPED/REFUSED, `reason TEXT`).
@@ -258,7 +258,7 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 
 ### U2: Store, migration and coaching
 
-- **Owns:** `db/migrations/2027_02_26_nfl_mirror.sql` (new), `db/init_db.sql`, `engines/nfl_mirror/store.py` (new), `engines/nfl_mirror/staff.py` (new), `data/history/nfl_staff_changes_2026.csv` (new, header only), `tests/test_nfl_mirror_store.py` (new), `tests/test_nfl_mirror_staff.py` (new)
+- **Owns:** `db/migrations/2027_02_27_nfl_mirror.sql` (new), `db/init_db.sql`, `engines/nfl_mirror/store.py` (new), `engines/nfl_mirror/staff.py` (new), `data/history/nfl_staff_changes_2026.csv` (new, header only), `tests/test_nfl_mirror_store.py` (new), `tests/test_nfl_mirror_staff.py` (new)
 - **Reads:** `db/migrations/2027_02_04_nfl_history.sql`, `engines/coach_save_sync.py`, `engines/coach_madden_profile.py`, `engines/coaching_carousel.py`, §2.4, §2.7
 - **Depends on:** none. `staff.py` takes plain `{team: head_coach}` dicts per week, the shape of `RealWeek.head_coach`.
 - **Done when:** the migration applies twice cleanly on a scratch DB; `mirror_active` and the tenure changes behave as §4 says.
@@ -329,7 +329,7 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 | `data/history/nfl_staff_changes_2026.csv` | U2 |
 | `data/history/nfl_trades_2026.csv` | U1 |
 | `db/init_db.sql` | U2 |
-| `db/migrations/2027_02_26_nfl_mirror.sql` | U2 |
+| `db/migrations/2027_02_27_nfl_mirror.sql` | U2 |
 | `docs/reference/MADDEN_PILOT.md` | U8 |
 | `engines/nfl_mirror/__init__.py` | U1 |
 | `engines/nfl_mirror/__main__.py` | U7 |

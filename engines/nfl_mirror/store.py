@@ -11,7 +11,7 @@
     links(cur) -> {gsis_id: pgid}
     add_created_link(cur, player_id, gsis_id, evidence) -> bool
 
-Tables come from db/migrations/2027_02_26_nfl_mirror.sql. Every function works inside the caller's transaction and
+Tables come from db/migrations/2027_02_27_nfl_mirror.sql. Every function works inside the caller's transaction and
 never commits. A database without the migration reads as "mirror off": `read_settings` is None and `mirror_active`
 False.
 """

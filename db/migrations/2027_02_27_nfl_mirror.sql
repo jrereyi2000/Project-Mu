@@ -7,7 +7,7 @@
 -- Mirrored at the end of db/init_db.sql.
 --
 -- Run ./db/backup_db.sh first; apply on madden_test first. Idempotent. Apply with:
---   docker exec -i madden-db psql -U postgres -d <db> -v ON_ERROR_STOP=1 < db/migrations/2027_02_26_nfl_mirror.sql
+--   docker exec -i madden-db psql -U postgres -d <db> -v ON_ERROR_STOP=1 < db/migrations/2027_02_27_nfl_mirror.sql
 
 BEGIN;
 

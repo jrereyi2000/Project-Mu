@@ -13,7 +13,7 @@ from engines.nfl_mirror import store
 from tests.test_inbox_store import FakeCursor, sqlite_ddl
 
 ROOT = os.path.join(os.path.dirname(__file__), "..")
-MIGRATION = os.path.join(ROOT, "db", "migrations", "2027_02_26_nfl_mirror.sql")
+MIGRATION = os.path.join(ROOT, "db", "migrations", "2027_02_27_nfl_mirror.sql")
 INIT_DB = os.path.join(ROOT, "db", "init_db.sql")
 TABLES = ("nfl_mirror_settings", "nfl_mirror_weeks", "nfl_mirror_moves")
 
@@ -208,7 +208,7 @@ def test_migration_and_init_db_define_the_tables_and_created_method():
     # init_db.sql creates nfl_player_links before it re-creates the CHECK, and the ledger lists the migration.
     assert init.index("CREATE TABLE IF NOT EXISTS nfl_player_links") < init.index(
         "ADD CONSTRAINT nfl_player_links_method_check")
-    assert "('2027_02_26_nfl_mirror', '2027_02_26_nfl_mirror.sql'" in init
+    assert "('2027_02_27_nfl_mirror', '2027_02_27_nfl_mirror.sql'" in init
 
 
 def test_store_vocabularies_match_the_migration():
