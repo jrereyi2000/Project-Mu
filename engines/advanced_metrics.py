@@ -530,6 +530,9 @@ WEEKS_UNKNOWN_STATUSES = ("TABLE_CHANGED", "RESET", "CROSS_SEASON")
 # 1.000 for fully tracked teams and 0.49-0.84 for teams missing week 1's pocket data, so 0.9 separates them
 # (audit H3).
 TRACKED_POCKET_RATIO = 0.9
+# The last week a season's games are played (the Super Bowl). A career row loaded outside a playable week
+# (week <= 0: preseason/off-season keys) covers the tail of the previous season through this week.
+LAST_SEASON_WEEK = 23
 
 
 def _fetch_row(cur, columns: tuple[str, ...], sql: str, params: dict) -> dict:
@@ -624,6 +627,17 @@ def _career_inputs(rows: list[dict]) -> dict:
     return values
 
 
+def _row_weeks(row: dict) -> range:
+    """The season weeks a usable Career row's delta covers: after the previous row's last played week, through
+    this row's. A row loaded outside a playable week (week <= 0, a preseason or off-season key) covers the tail
+    of the previous season through the Super Bowl rather than an empty range, so a delta credited to the season
+    just ended still fills that season's team denominators (audit-4 stats suspicion 1).
+    """
+    prev = max(int(row.get("prev_week") or 0), 0)
+    week = int(row.get("week") or 0)
+    return range(prev + 1, (LAST_SEASON_WEEK if week <= 0 else week) + 1)
+
+
 def _line_row(cur, season: int, player_id: int, week: int | None) -> dict:
     if week is None:
         columns = ("team_id", "games_played") + STAT_COLUMNS
@@ -667,6 +681,13 @@ def player_metrics(cur, season: int, player_id: int, week: int | None = None) ->
     """
     line = _line_row(cur, season, player_id, week)
     team_id = line.get("team_id")
+    if team_id is None:
+        # A stat line without a team (a season row written before the team was known, or a week with no line)
+        # still has the player's season team; the denominators need one (audit-4 stats suspicion 1).
+        team_id = _fetch_row(cur, ("team_id",),
+                             "SELECT team_id FROM player_seasons "
+                             "WHERE season = %(season)s AND player_id = %(player_id)s",
+                             {"season": season, "player_id": player_id}).get("team_id")
     rows = _career_rows(cur, season, player_id, week)
     team_tracking = _team_tracking(cur, team_id, season)
 
@@ -701,9 +722,7 @@ def player_metrics(cur, season: int, player_id: int, week: int | None = None) ->
             sources[name] = "career"
 
     if week is None:
-        game_weeks = sorted({w for row in used
-                             for w in range(max(int(row.get("prev_week") or 0), 0) + 1,
-                                            int(row["week"]) + 1) if w >= 1})
+        game_weeks = sorted({w for row in used for w in _row_weeks(row)})
     else:
         game_weeks = [week]
     merged.update(_team_totals(cur, team_id, season, game_weeks))

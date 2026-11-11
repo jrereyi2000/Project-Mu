@@ -3850,8 +3850,9 @@ CREATE TABLE IF NOT EXISTS award_ballots (
 );
 
 -- ---------------------------------------------------------------------------
--- Madden stat counters (db/migrations/2027_02_25_madden_stat_counters.sql and
--- 2027_02_28_stats_loader_weeks.sql, docs/done/MADDEN_STATS_INGEST_PLAN.md U2 §2.2)
+-- Madden stat counters (db/migrations/2027_02_25_madden_stat_counters.sql,
+-- 2027_02_28_stats_loader_weeks.sql and 2027_02_29_stats_counter_season_games.sql,
+-- docs/done/MADDEN_STATS_INGEST_PLAN.md U2 §2.2)
 -- ---------------------------------------------------------------------------
 
 -- Madden's career totals at each weekly load (raw Career*Stats fields). Only differences between rows mean anything.
@@ -3864,6 +3865,7 @@ CREATE TABLE IF NOT EXISTS player_career_counters (
     madden_table VARCHAR(40) NOT NULL,      -- CareerOffensiveStats, CareerDefensiveKPReturnStats, ...
     counters     JSONB NOT NULL,            -- {Madden field: int}, every numeric field on the row
     games_played INT,                       -- counters->GAMESPLAYED, pulled out for the views
+    season_games INT,                       -- the load's own season line games (2027_02_29); NULL = none known
     load_seq     BIGINT NOT NULL DEFAULT nextval('player_career_counters_load_seq'),  -- load order per player
     capture_id   INT REFERENCES captures(id) ON DELETE SET NULL,
     read_at      TIMESTAMPTZ,               -- snapshot meta.read_at
@@ -3886,10 +3888,12 @@ $$;
 --    already has games of its own, so the delta covers both and cannot be split; it is flagged under the
 --    earlier season). `credited_season` is the season the delta belongs to: the row's own season, or the
 --    previous season when a start-of-season load (week <= 0) covers the tail of the season just ended.
+--    `season_games_played` is the row's own load-time season games (`season_games`), never the live
+--    season_stat_general row, so a later load cannot change an earlier row's status (2027_02_29).
 CREATE OR REPLACE VIEW player_week_counters AS
 WITH base AS (
     SELECT c.season, c.week, c.stage, c.player_id, c.madden_table, c.counters, c.games_played, c.load_seq,
-           COALESCE(g.games_played, 0) AS season_games_played,
+           COALESCE(c.season_games, 0) AS season_games_played,
            LAG(c.season)       OVER (PARTITION BY c.player_id ORDER BY c.load_seq) AS prev_season,
            LAG(c.week)         OVER (PARTITION BY c.player_id ORDER BY c.load_seq) AS prev_week,
            LAG(c.stage)        OVER (PARTITION BY c.player_id ORDER BY c.load_seq) AS prev_stage,
@@ -3897,7 +3901,6 @@ WITH base AS (
            LAG(c.counters)     OVER (PARTITION BY c.player_id ORDER BY c.load_seq) AS prev_counters,
            LAG(c.games_played) OVER (PARTITION BY c.player_id ORDER BY c.load_seq) AS prev_games_played
     FROM player_career_counters c
-    LEFT JOIN season_stat_general g ON g.season = c.season AND g.player_id = c.player_id
 ), marked AS (
     SELECT b.*,
            CASE
@@ -4281,5 +4284,6 @@ INSERT INTO schema_migrations (version, filename, checksum, source) VALUES
     ('2027_02_25_madden_stat_counters', '2027_02_25_madden_stat_counters.sql', '4947d8696109ff912f6ec9735f9543a31068a3e1ca05e222adbd6a8f7aa92766', 'init_db.sql'),
     ('2027_02_26_league_shape_season', '2027_02_26_league_shape_season.sql', 'c953582968fad1e0de03b4fdde23627ab21d23e7f42e0612a63e7dcd45f45026', 'init_db.sql'),
     ('2027_02_27_nfl_mirror', '2027_02_27_nfl_mirror.sql', '7b5d61f3fc3427adaf9c029a5ceb6cfa75b55ba93654d27a52d845624204230c', 'init_db.sql'),
-    ('2027_02_28_stats_loader_weeks', '2027_02_28_stats_loader_weeks.sql', '33c2d60765e497dfc353545ed60edba2eca28ddc6d8878ac7e6f2603201a105a', 'init_db.sql')
+    ('2027_02_28_stats_loader_weeks', '2027_02_28_stats_loader_weeks.sql', '33c2d60765e497dfc353545ed60edba2eca28ddc6d8878ac7e6f2603201a105a', 'init_db.sql'),
+    ('2027_02_29_stats_counter_season_games', '2027_02_29_stats_counter_season_games.sql', '7c691106f76a0973cfd18ed5caac38b3ac4aa81b7b2f031247d03a6ff1a4eff5', 'init_db.sql')
 ON CONFLICT (version) DO NOTHING;

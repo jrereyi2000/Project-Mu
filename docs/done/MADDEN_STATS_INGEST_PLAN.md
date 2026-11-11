@@ -226,7 +226,7 @@ These go in `docs/reference/MADDEN_STATS_AND_ADVANCED_METRICS.md`:
 
 Run with `pytest -m "not integration" tests/test_load_save.py tests/test_advanced_metrics.py` and `cd pipeline/save_reader && npm test`.
 
-**Integration tests use a scratch database (audit M2).** Until JR applies `2027_02_25` and `2027_02_28` to `madden_test`, every integration test touching the new columns or views fails there with `UndefinedColumn` (`rec_drops`, `big_hits`, `credited_season`, `stage`), because `tests/conftest.py` forces `DATABASE_URL=TEST_DATABASE_URL` (default `madden_test`). Build a scratch database from `db/init_db.sql` and point the run at it:
+**Integration tests use a scratch database (audit M2; recipe corrected for audit-5 M2).** Until JR applies `2027_02_25`, `2027_02_28` and `2027_02_29` to `madden_test`, every integration test touching the new columns or views fails there with `UndefinedColumn` (`rec_drops`, `big_hits`, `credited_season`, `stage`, `season_games`), because `tests/conftest.py` forces `DATABASE_URL=TEST_DATABASE_URL` (default `madden_test`). Build a scratch database from `db/init_db.sql` and point the run at it. **Both** `MADDEN_TEST_DB_NAME` and `TEST_DATABASE_URL` must name the scratch: conftest picks its provisioning target from `MADDEN_TEST_DB_NAME` independently of the DSN, so setting only `TEST_DATABASE_URL` still checks (and can create or copy) `madden_test`:
 
 ```bash
 docker exec -i madden-db psql -U postgres -c 'DROP DATABASE IF EXISTS mu_scratch_stats' \
@@ -234,8 +234,11 @@ docker exec -i madden-db psql -U postgres -c 'DROP DATABASE IF EXISTS mu_scratch
 docker exec -i madden-db psql -U postgres -d mu_scratch_stats -v ON_ERROR_STOP=1 < db/init_db.sql
 python3 -m db.seed_clean_db --season 2026 --week 1 \
     --db 'host=localhost dbname=mu_scratch_stats user=postgres password=postgres'
+MADDEN_TEST_DB_NAME=mu_scratch_stats \
 TEST_DATABASE_URL='host=localhost dbname=mu_scratch_stats user=postgres password=postgres' \
     python3 -m pytest -m integration tests/test_load_save.py tests/test_stat_counter_views.py
+MADDEN_TEST_DB_NAME=mu_scratch_stats \
+TEST_DATABASE_URL='host=localhost dbname=mu_scratch_stats user=postgres password=postgres' \
 STATS_METRICS_TEST_DSN='host=localhost dbname=mu_scratch_stats user=postgres password=postgres' \
     python3 -m pytest -m integration tests/test_advanced_metrics_coverage.py
 ```
@@ -319,3 +322,4 @@ No path appears twice.
 | U2 | 1 | `worktree-agent-a025a31777ebeacb6` | `.claude/worktrees/agent-a025a31777ebeacb6` | merged; migration + loader + views; 53 offline tests pass, migration applies twice, init_db.sql builds the same schema (`db.migrate diff` empty; the only pg_dump difference is column order on four tables: `season_stat_blocking.pancakes`, `season_stat_defense.catches_allowed`, `season_stat_general.games_started` and `season_stats.rush_20plus` sit before `source` in an init_db build and after it on a migrated database), 2,484 career-counter rows on P2G and non-zero new columns on P2H | `53a48dd` |
 | Fix H1/H2/L2–L4 | 2 | `worktree-builder-8-stats-loader` | `.claude/worktrees/builder-8-stats-loader` | merged; `2027_02_28_stats_loader_weeks.sql` (last-played-week labels, `stage`, `load_seq`, season attribution, `PARTIAL`/`CROSS_SEASON`); 56 offline tests plus 18 passed / 7 skipped integration on a scratch build; new tests fail on the parent; 2026 keeps 24,316 games covered under MU2026→P2G instead of crediting them to 2027 | `d97a041` |
 | Fix H3/M1/L5 | 2 | `worktree-builder-8-stats-metrics` | `.claude/worktrees/builder-9-stats` (reviewed and merged by `builder-9`) | merged; both sides of every metric from the same Career deltas, untracked weeks excluded and flagged, five M1 metrics BLOCKED (37 metrics: 15 OK / 8 BLOCKED / 14 IMPOSSIBLE); 12 offline metrics tests, 7 of them failing on the parent, plus 2 passed integration on MUBASE→P2H and MU2026→P2G with no catch rate above 1 | `c50a159` |
+| Fix S1/L2/M2 | 3 | `builder-9-stats2` | `.claude/worktrees/builder-9-stats2` | merged; `2027_02_29_stats_counter_season_games.sql` stores each load's own season-line games on its Career row and the views stop reading the live `season_stat_general`, so a first row seen before any game stays `BASELINE` and one seen mid-season keeps the games it lost (`PARTIAL`); `player_metrics` derives team denominators from the weeks each delta covers (an off-season row credited to the previous season fills that season through week 23, and a stat line without `team_id` falls back to `player_seasons`); M2 recipe sets `MADDEN_TEST_DB_NAME`; 5 new offline tests fail on the parent, 27 offline failures here are the same pre-existing environment failures (32 on the parent); 7 passed integration on the scratch build | this commit |
