@@ -693,13 +693,19 @@ def step_inbox(season):
         return None
 
 
-def run_weekly_engines(season, mode="weekly", log_fn=log):
-    """Runs the deterministic stats backfill & analytics engines (Step 7) plus weekly/playoff engines."""
+def run_weekly_engines(season, mode="weekly", log_fn=log, gm=True):
+    """Runs the deterministic stats backfill & analytics engines (Step 7) plus weekly/playoff engines.
+
+    `gm=False` skips the GM trade proposals step (`step_gm`); an NFL mirror week uses it, because the real
+    week's roster moves take the place of the GM agents' proposals (NFL_WEEKLY_MIRROR_PLAN §2.10)."""
     log_fn(f"Step 7: backfill + engines (season {season})")
     step_engines(season)
     if mode in ("weekly", "playoff"):
-        log_fn("Step 7b: GM trade proposals")
-        step_gm(season)
+        if gm:
+            log_fn("Step 7b: GM trade proposals")
+            step_gm(season)
+        else:
+            log_fn("Step 7b: GM trade proposals skipped (NFL mirror week)")
         log_fn("Step 7b: front-office inbox")
         step_inbox(season)
         log_fn("Step 7c: scouting")
