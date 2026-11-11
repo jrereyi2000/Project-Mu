@@ -1408,9 +1408,9 @@ def test_the_chart_in_force_carries_forward_in_postgres():
     """R2b on real Postgres, rolled back: the newest week with any stored chart carries forward.
 
     A week-1 chart runs to the next stored chart (newest week wins); a bye week's chart is not a game; 8
-    weeks is the threshold; a chart stored under the season with week 32 (that year's preseason/cutdown)
-    sorts before week 1, while a week-23 row is irrelevant; and a MADDEN read-back at week 5 beats JR's week 3
-    for the weeks after it."""
+    weeks is the threshold; a chart stored under the season with week 31 or 32 (that year's cutdown and
+    preseason) sorts before week 1, while weeks 23 and 26 (postseason and offseason) are not in force; and a
+    MADDEN read-back at week 5 beats JR's week 3 for the weeks after it."""
     import psycopg
     dsn = _scratch_dsn()
     with psycopg.connect(dsn) as conn:
@@ -1479,6 +1479,12 @@ def test_the_chart_in_force_carries_forward_in_postgres():
             chart(teams[6], preseason, 32, "WR", "MU_COACH", 2045)
             chart(teams[0], postseason, 23, "WR", "MU_COACH", 2045)
 
+            # case 9b (F2): a (season, 26) chart is the offseason, not before week 1 -> not in force
+            games(2045, teams[4], teams[5], range(1, 9))
+            offseason = player("R2b Offseason Week Twenty Six")
+            roster(offseason, teams[4], "WR", 2045)
+            chart(teams[4], offseason, 26, "WR", "MU_COACH", 2045)
+
             # case 10: JR week 3, MADDEN week 5 only -> weeks 5-16 use MADDEN's chart
             games(2046, teams[2], teams[3], range(1, 17))
             jr3 = player("R2b JR Week Three")
@@ -1497,7 +1503,51 @@ def test_the_chart_in_force_carries_forward_in_postgres():
             assert got.get(eight) == {2041} and seven not in got  # case 6: the 8-week threshold
             assert got.get(preseason) == {2045}                  # case 9: (season, 32) before week 1
             assert postseason not in got                         # ... (season, 23) is not
+            assert offseason not in got                          # case 9b: (season, 26) is not either
             assert got.get(madden5) == {2046} and jr3 not in got  # case 10: newest week wins
+        finally:
+            conn.rollback()
+
+
+@pytest.mark.integration
+def test_one_call_reads_every_season_through_the_report_season_in_postgres():
+    """F1 on real Postgres, rolled back: one read_started_seasons call covers every season through the
+    report season, which is what A6's "2+ started seasons" share needs.
+
+    A player who started 8+ weeks in both 2035 and 2036 is read by a single call for 2036, so
+    draft_outcomes counts him as a 2+ started-season career; a 2037 season of his stays out of that read."""
+    import psycopg
+    dsn = _scratch_dsn()
+    with psycopg.connect(dsn) as conn:
+        cur = conn.cursor()
+        try:
+            cur.execute("SELECT id FROM teams ORDER BY id LIMIT 2")
+            pair = [r[0] for r in cur.fetchall()]
+            if len(pair) < 2:
+                pytest.skip("the scratch database has fewer than two teams")
+            team, other = pair
+
+            def player(name):
+                cur.execute("INSERT INTO players (player_name) VALUES (%s) RETURNING id", (name,))
+                return cur.fetchone()[0]
+
+            pid = player("F1 Multi Season Starter")
+            for season in (2035, 2036, 2037):
+                cur.execute("INSERT INTO player_seasons (player_id, season, team_id, position) "
+                            "VALUES (%s, %s, %s, 'WR')", (pid, season, team))
+                cur.execute("INSERT INTO depth_charts "
+                            "(team_id, season, week, position_slot, depth, player_id, source) "
+                            "VALUES (%s, %s, 1, 'WR', 1, %s, 'MU_COACH')", (team, season, pid))
+                for week in range(1, 9):
+                    cur.execute("INSERT INTO games (season, week, home_team_id, away_team_id) "
+                                "VALUES (%s, %s, %s, %s)", (season, week, team, other))
+
+            got = C.read_started_seasons(cur, 2036)
+            assert got.get(pid) == {2035, 2036}                  # one call, every season through 2036
+
+            outcomes = C.draft_outcomes([(pid, 2034, "1", "WR", 16)], got, 2036)
+            assert outcomes["1"]["share_started_2plus"] == 1.0
+            assert outcomes["1"]["n"] == 1
         finally:
             conn.rollback()
 

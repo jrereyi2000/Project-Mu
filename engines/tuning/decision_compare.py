@@ -459,10 +459,13 @@ def read_started_seasons(cur, season):
 
     The chart in force carries forward: for each completed regular-season team-week, the newest stored chart
     week at or before it is read, and each slot at that week resolves JR > MU_COACH > MADDEN, so a NULL or
-    absent player at one source falls through to the next and a charted slot always has a starter (JR's
-    ruling, 2026-11-10/11). A chart stored under the season with week 24-32 — that year's preseason/cutdown,
-    which record_written files under the calendar year — sorts before regular-season week 1; a week 19-23
-    row is the postseason/offseason and never reaches a regular-season week. Only depth 1 is read. A week
+    absent player at one source falls through to the next (JR's ruling, 2026-11-10/11). The fallback holds
+    within one chart week: a slot that no source charts at the week in force has no starter that week. Charts
+    stored under the season with week 31 or 32 — that year's cutdown and preseason, which record_written
+    files under the calendar year — sort before regular-season week 1; weeks 19-30 (postseason and
+    offseason) never reach a regular-season week. Every season through the report season is read in one
+    call, because A6 counts started seasons across a career, not only in the report season. Only depth 1 is
+    read. A week
     counts only when his team played a regular-season game that week: a start is a game (nflverse
     seasons_started), so a bye week's chart is not one. The player's own slot comes from his position that
     season (player_seasons), mapped with OWN_SLOT; depth 1 in a situational or returner slot is a week on
@@ -474,12 +477,12 @@ def read_started_seasons(cur, season):
             SELECT DISTINCT g.season, g.week, t.team_id
               FROM games g
               CROSS JOIN LATERAL (VALUES (g.home_team_id), (g.away_team_id)) t(team_id)
-             WHERE g.status = 'COMPLETED' AND g.game_type = 'REGULAR_SEASON' AND g.season = %s
+             WHERE g.status = 'COMPLETED' AND g.game_type = 'REGULAR_SEASON' AND g.season <= %s
         ), chart_weeks AS (
             SELECT DISTINCT team_id, season, week,
-                   CASE WHEN week BETWEEN 24 AND 32 THEN week - 100 ELSE week END AS ord
+                   CASE WHEN week IN (31, 32) THEN week - 100 ELSE week END AS ord
               FROM depth_charts
-             WHERE season = %s AND source IN ('JR', 'MU_COACH', 'MADDEN')
+             WHERE season <= %s AND source IN ('JR', 'MU_COACH', 'MADDEN')
         ), in_force AS (
             SELECT gr.team_id, gr.season, gr.week, cw.week AS chart_week
               FROM grid gr
