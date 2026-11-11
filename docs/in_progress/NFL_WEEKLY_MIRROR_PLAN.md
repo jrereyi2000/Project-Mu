@@ -1,6 +1,6 @@
 # Project Mu: NFL Weekly Mirror Plan
 
-**Status:** approved by JR (2026-11-11); building, wave 4 of 6 done (U1–U9 and U12 merged; U10 and U11 merged as follow-ups; waves 5–6 are the audit follow-ups U13–U18, approved by JR on 2026-11-11; U18 is `builder-9`'s batch of audit-4's U6 findings F1–F5, already in flight, and it delivers U16; U17 is scoped to F3's mechanical half, its policy question stays open with JR (Q2); spikes A–C run with JR on 2026-11-11 — S18–S21). Waves 2–6 are handed to a DeepSeek session (JR's /execute-plan rule, 2026-11-11).
+**Status:** approved by JR (2026-11-11); building, wave 4 of 6 done (U1–U9 and U12 merged; U10 and U11 merged as follow-ups; waves 5–6 are the audit follow-ups U13–U19, approved by JR on 2026-11-11; U18 is `builder-9`'s batch of audit-4's U6 findings F1–F5, already in flight, and it delivers U16; U17 is scoped to F3's mechanical half, its policy question stays open with JR (Q2); spikes A–C run with JR on 2026-11-11 — S18–S21). Waves 2–6 are handed to a DeepSeek session (JR's /execute-plan rule, 2026-11-11).
 - As built (wave 4, U7): `pipeline/watch_save.py` gains `mirror_week_active` (the save's own season/stage/week through `store.mirror_active` on a 5 s connection; a snapshot with no `players` reads "not a mirror week" without connecting, which keeps the untouched `tests/test_watch_save.py` green under conftest's BaseException DB guard), `mirror_week_notice` (N = the week's WRITTEN moves; M = the real week's unconfirmed switches from the cached nflverse files, else the planned unconfirmed RELEASE moves) and the `nfl_mirror_week` result key; `pipeline/weekly_capture.run_weekly_engines` gains `gm=True`, with `gm=False` skipping `step_gm`; `engines/nfl_mirror/__main__.py` is the five-command CLI. Deviation: the press-conference skip lives in `run_ingest` (where the child's result is read), not literally in `watch_loop`. `preview` deliberately stops at the roster diff — it does not plan created players, injuries or staff changes, because those only exist on the league office's write path.
 - As built (wave 3, U6): `pipeline/league_office_mirror.py` holds the adapter (`mirror_week` → `MirrorWeek`, `mirror_restore`, `chart_override`, `bind`, `install`) and `pipeline/league_office.py` runs it in `plan_stage` where the engine-trades step sits, plus `step_nfl_mirror`, `_record_mirror`, `_record_mirror_transactions`, `Plan.switches`, `PRIORITY_MIRROR`, and the merged chart override in `step_coach_charts`. Deviations: (a) `store.mark_written` still flips every PLANNED move of the week to WRITTEN, including a move `Plan._claim` refused, so `nfl_mirror_moves` can call a refused move WRITTEN though the save never got it — store-level, outside U6's files; **open for JR: a follow-up unit or leave it**; (b) a fetch failure fails the whole plan (nothing is written) rather than falling back to the engine-trades step, as the module docstring says; (c) the week's `transactions` rows use `txn_date = '<season> SEASON - WEEK <week>'` and `raw_text` `NFL mirror`, the same shape the other producers write. Merged from a scratch worktree branch and fast-forwarded onto `main` because the shared checkout held another session's staged batch (no conflict, none of U6's files touched).
 - Open from the wave-3 review: `pipeline/league_office_mirror.py`'s `_injuries` in CATCH_UP uses `weeks_until_back` against the later weeks' statuses; a player the save has injured but the real week has healthy gets `HEAL_FIELDS` — checked in `tests/test_league_office_mirror.py`, not against a real save.
@@ -340,7 +340,7 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 | 3 | U6 | U1–U5, U10, U11 | Wires everything into `plan_stage` |
 | 4 | U7, U8 | U2, U6 (U8: U1, U2) | No shared files; U8 is ready after wave 1 but waits so the first real catch-up runs on the finished mirror |
 | follow-up | U10, U11, U12 | merged U3 / the save writer | Audit fixes F1, F2 and P1, plus JR's switch decision (I1), built beside waves 2–4 |
-| 5 | U13, U14, U15 | U8, U10, U5 (all merged) | JR's 2026-11-11 decision: the open audit findings. Disjoint files (pilot jobs, contracts, EA ratings) |
+| 5 | U13, U14, U15, U19 | U8, U10, U5, U7 (all merged) | JR's 2026-11-11 decision: the open audit findings. Disjoint files (pilot jobs, contracts, EA ratings, CLI) |
 | 6 | U17 | U2 (merged) | Wave-1 F3's mechanical half (a named replacement writes cleanly; without one the week refuses loudly). U16 is delivered by U18, so it is not scheduled separately |
 | audit fix (in flight) | U18 | U6, U2 (merged) | `builder-9`'s single batch of audit-4's U6 findings F1–F5 (M-0532, M-0536, M-0541). Owns the league-office files and `store.py`, so it covers U16 |
 
@@ -417,6 +417,14 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 - **Done when:** the five accepted findings are fixed in one pass — F1 a created IR/active player joins the same week's injury and chart reconciliation; F2 a creation is preflighted and claimed before the donor is edited, a refused creation leaves no link or transaction, and a JR-owned player cannot be switched; F3 only applied moves read WRITTEN and refused or skipped ones carry their reason (U16); F4 ordinary and `OVERRIDE` links persist with their method and evidence and the retired-linked donor case is decided explicitly; F5 the week's as-of date comes from the shared `diff._week_as_of` helper, with boundary tests.
 - **Verify:** `pytest -m "not integration" tests/test_league_office_mirror.py tests/test_nfl_mirror_store.py` passes, plus `python3 -m tools.offseason_check` tables (`e2e` on CAREER-MUBASE, `timelines` for any contract change) in the report per §"After every change".
 
+### U19: U7 audit F1–F3 — CLI confirmation, preview identity, status week mapping
+
+- **Owns:** `engines/nfl_mirror/__main__.py`, `tests/test_watch_save_mirror.py`
+- **Reads:** `data/audit_reports/audit-5/u7/report.md` and `repro.py` (M-0551), §2.11
+- **Depends on:** U7 (merged)
+- **Done when:** F1 — `enable` and `disable` compare `--confirm` with the **opened** connection's resolved database (`conn.info.dbname` / `current_database()`) before any mutation and use that same connection, so a repeated or overridden `dbname=`, a URL query override or an environment/service default that disagrees refuses nonzero with no INSERT/UPDATE/commit; F2 — `preview` binds its snapshot to the target database (`league_state.madden_league_id`, with the season/stage checked) and accepts an explicit `--snapshot` only after validating its identity, refusing loudly when the association cannot be established, so one franchise's links are never diffed against another's save; F3 — `status` reports the next supported real-game Mu week (21 → 23, then none), skipping the internal no-game week 22. The auditor's F1–F3 repros become regressions, including its real-scratch-PostgreSQL cases.
+- **Verify:** `pytest -m "not integration" tests/test_watch_save_mirror.py tests/test_watch_save.py` passes; the Postgres cases run against `mu_scratch_*` via `TEST_DATABASE_URL`.
+
 **File ownership check:**
 
 | File | Unit |
@@ -428,7 +436,7 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 | `db/migrations/2027_02_27_nfl_mirror.sql` | U2 |
 | `docs/reference/MADDEN_PILOT.md` | U8 |
 | `engines/nfl_mirror/__init__.py` | U1 |
-| `engines/nfl_mirror/__main__.py` | U7 |
+| `engines/nfl_mirror/__main__.py` | U7, then U19 |
 | `engines/nfl_mirror/contracts.py` | U3, then U10, then U14 |
 | `engines/nfl_mirror/create.py` | U5 |
 | `engines/nfl_mirror/depth.py` | U4 |
@@ -458,7 +466,7 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 | `tests/test_nfl_mirror_staff.py` | U2, then U17 |
 | `tests/test_nfl_mirror_store.py` | U2, then U16 |
 | `tests/test_nfl_mirror_trades.py` | U1 |
-| `tests/test_watch_save_mirror.py` | U7 |
+| `tests/test_watch_save_mirror.py` | U7, then U19 |
 
 No path appears twice.
 
