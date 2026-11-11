@@ -20,15 +20,21 @@ Mu-side sources, per gate:
                            the drafted cohort from draft_prospects.player_id (actual_pick set) or
                            player_season_transitions DRAFTED
   A2 retirement age        player_retirements + the age on that season's player_seasons row
-  A3 head-coach changes    coach_tenures (head coaches only; coordinator_tenures is a different role)
+  A3 head-coach changes    coach_tenures (head coaches only; coordinator_tenures is a different role); the
+                           between-seasons count is measured only when that season's hiring cycle ran
+                           (coach_hot_seat rows exist)
   A4 trades                gm_trade_proposals APPROVED/EXECUTED; the in-season gate also needs the weekly
-                           league office to have run (league_office_runs REGULAR_WEEK), else the engine never
-                           saw weeks 2-18 and the count is not a season's worth of decisions
-  A5 team movement         player_season_transitions MOVED, joined to games played both seasons (>= 8 each);
-                           when the season ledger has not run, the team change is read from player_seasons
+                           league office to have run (league_office_runs REGULAR_WEEK WRITTEN), else the engine
+                           never saw weeks 2-18 and the count is not a season's worth of decisions
+  A5 team movement         player_seasons team_id across two consecutive seasons, with >= 8 games each
+                           (season_stat_general, else player_stats games); the ledger's MOVED rows are not read
   A6 draft by round        draft_prospects actual picks linked to players; "started season" = a week at
                            depth 1 in depth_charts
   A7 rookie usage          first-season games of drafted skill players, excluding linemen (no stat line)
+
+Per-season count gates (A3 between seasons, A4 in-season trades, A5 team movement) are scored on a season's
+three consecutive-season mean, with each of those seasons also inside its band (TUNING_ACCEPTANCE_THRESHOLDS.md
+§1 "3-season average" and §7 decision 4). A season counts only once it has been simulated (MIN_SEASON_GAMES).
 
 Output: decisions_<season>.md + .json beside the stat report (data/tuning/seasons/<run>/ for a run database).
 """
@@ -48,6 +54,10 @@ SEASONS_DIR = os.path.join(ROOT, "data", "tuning", "seasons")
 MIN_COHORT = D.MIN_COHORT                 # a group below this reports nothing rather than a misleading gate
 TRADE_STATUSES = ("APPROVED", "EXECUTED")  # a proposal that became a deal
 REGULAR_WEEKS = 18                        # the in-season window is Week 1 - the last game of the season
+WINDOW_SEASONS = 3                        # §1/§7 decision 4: a season's count is judged on a 3-season mean
+MIN_SEASON_GAMES = 256                    # 32 x 17 / 2 = 272 regular games; 256 proves the season was played
+MIN_MOVEMENT_PLAYERS = 300                # A5: below this an eligibility cohort is noise (the real one is ~780)
+A4_SEASON_LO, A4_SEASON_HI = 3, 25        # §2 A4 / §7 decision 9: a single in-season trade count can wander this far
 MEDIAN_TOL = 1.0                          # §7 decision 3: median +/-1 season
 MEDIAN_TOL_LONG = 1.5                     # ... +/-1.5 for QB/K/P
 AGE_TOL = 1.5                             # A2: median +/-1.5 years
@@ -111,24 +121,38 @@ def coach_changes(tenures, season):
     The first coach of a season is the earliest-starting tenure covering it, the last the latest (the same
     rule the real metric gets from the first and last game's coach). Returns
       between_seasons  teams whose last coach of `season` is not the first coach of `season + 1` — the hires
-                       the season's Black Monday and hiring cycle made
+                       the season's Black Monday and hiring cycle made — plus teams whose coach's tenure ends
+                       in `season` with no successor hired yet (an unfilled vacancy is still a change)
       midseason        teams with two or more distinct head coaches inside `season`
       teams            teams with a head coach in `season`
+      vacancies        teams counted above whose successor had not been hired (a hiring cycle still running)
     """
     def covering(s):
         by_team = {}
         for team, coach, start, end in tenures:
             if start <= s and (end is None or end >= s):
-                by_team.setdefault(team, []).append((start, coach))
-        return {t: (min(v)[1], max(v)[1]) for t, v in by_team.items() if v}
+                by_team.setdefault(team, []).append((start, coach, end))
+        out = {}
+        for t, rows in by_team.items():
+            rows.sort()
+            first, last = rows[0][1], rows[-1][1]
+            out[t] = (first, last, rows[-1][2])
+        return out
 
     cur, nxt = covering(season), covering(season + 1)
-    between = sum(1 for t, (_first, last) in cur.items() if t in nxt and last != nxt[t][0])
-    mid = sum(1 for first, last in cur.values() if first != last)
-    return {"between_seasons": between, "midseason": mid, "teams": len(cur)}
+    between = vacancies = 0
+    for t, (_first, last, last_end) in cur.items():
+        if t in nxt:
+            if last != nxt[t][0]:
+                between += 1
+        elif last_end == season:            # the coach left and no successor has been hired yet
+            between += 1
+            vacancies += 1
+    mid = sum(1 for first, last, _end in cur.values() if first != last)
+    return {"between_seasons": between, "midseason": mid, "teams": len(cur), "vacancies": vacancies}
 
 
-def trade_counts(rows, season, last_week=23):
+def trade_counts(rows, season, last_week=REGULAR_WEEKS):
     """Approved trades in `season` from (season, week, status, trade_window) gm_trade_proposals rows.
 
     in_season is Weeks 1 - the season's last game (the §2 A4 gate, cutdown week excluded); offseason is
@@ -305,7 +329,7 @@ def read_season_summary(cur, season):
     completed = one("SELECT count(*) FROM games WHERE season = %s AND status = 'COMPLETED'", (season,))
     regular_runs = one("SELECT count(DISTINCT week) FROM league_office_runs "
                        "WHERE season = %s AND stage = 'REGULAR_WEEK' "
-                       "AND status IN ('WRITTEN', 'PLANNED')", (season,))
+                       "AND status = 'WRITTEN'", (season,))
     return {
         "completed_games": completed,
         "regular_weeks_run": regular_runs,
@@ -321,6 +345,64 @@ def read_season_summary(cur, season):
                                  "WHERE player_id IS NOT NULL AND actual_pick IS NOT NULL")
                              if table_exists(cur, "draft_prospects") else 0),
     }
+
+
+def read_season_facts(cur, seasons):
+    """{season: {"completed_games", "regular_weeks_run"}} for the seasons asked for.
+
+    A season is *simulated* when it has MIN_SEASON_GAMES completed games; the weekly engine has run a season
+    when it has REGULAR_WEEKS DISTINCT REGULAR_WEEK runs with status WRITTEN (PLANNED is only the pre-write row).
+    """
+    seasons = sorted(set(seasons))
+    if not seasons:
+        return {}
+    games = dict(_fetch(cur, "SELECT season, count(*) FROM games "
+                              "WHERE status = 'COMPLETED' AND season = ANY(%s) GROUP BY 1", (seasons,)))
+    weeks = dict(_fetch(cur, "SELECT season, count(DISTINCT week) FROM league_office_runs "
+                             "WHERE stage = 'REGULAR_WEEK' AND status = 'WRITTEN' "
+                             "AND season = ANY(%s) GROUP BY 1", (seasons,)))
+    return {s: {"completed_games": int(games.get(s) or 0),
+                "regular_weeks_run": int(weeks.get(s) or 0)} for s in seasons}
+
+
+def read_hiring_cycle(cur, seasons):
+    """{season: {"hot_seat_rows", "hc_hires"}} — the evidence that a season's hiring cycle ran.
+
+    `coach_hot_seat` holds one row per team once Black Monday has decided (fired true or false), so any rows
+    for a season prove the cycle ran; `staff_moves` HC HIRED rows are the hires it produced. A season with no
+    hot-seat rows (--no-offseason, or a walk that stopped before the offseason) cannot be scored.
+    """
+    seasons = sorted(set(seasons))
+    out = {s: {"hot_seat_rows": 0, "hc_hires": 0} for s in seasons}
+    if not seasons:
+        return out
+    if table_exists(cur, "coach_hot_seat"):
+        for s, n in _fetch(cur, "SELECT season, count(*) FROM coach_hot_seat "
+                                "WHERE season = ANY(%s) GROUP BY 1", (seasons,)):
+            out.setdefault(s, {"hot_seat_rows": 0, "hc_hires": 0})["hot_seat_rows"] = int(n)
+    if table_exists(cur, "staff_moves"):
+        for s, n in _fetch(cur, "SELECT season, count(*) FROM staff_moves "
+                                "WHERE role = 'HC' AND action = 'HIRED' AND season = ANY(%s) GROUP BY 1",
+                           (seasons,)):
+            out.setdefault(s, {"hot_seat_rows": 0, "hc_hires": 0})["hc_hires"] = int(n)
+    return out
+
+
+def read_trade_rows(cur, seasons):
+    """[(season, week, status, trade_window)] for the seasons given."""
+    if not seasons:
+        return []
+    return _fetch(cur, "SELECT season, week, status, trade_window FROM gm_trade_proposals "
+                       "WHERE season = ANY(%s)", (sorted(seasons),))
+
+
+def read_last_weeks(cur, seasons):
+    """{season: last game week} so a playoff-week trade still counts as in-season."""
+    if not seasons:
+        return {}
+    return {s: int(w or REGULAR_WEEKS) for s, w in
+            _fetch(cur, "SELECT season, max(week) FROM games WHERE season = ANY(%s) GROUP BY 1",
+                   (sorted(seasons),))}
 
 
 def read_games_played(cur, seasons):
@@ -388,31 +470,45 @@ def read_retirement_rows(cur, season):
          WHERE r.season <= %s""", (season,))
 
 
-def _movement_pair(cur, season):
-    """(from_season, to_season) for team movement, or None. Prefers season -> season+1 once the next season
-    has games; otherwise falls back to season-1 -> season (the churn that produced this roster)."""
-    counts = dict(_fetch(cur, "SELECT season, count(*) FROM games "
-                              "WHERE status = 'COMPLETED' AND season IN (%s, %s) GROUP BY 1",
-                         (season - 1, season + 1)))
-    if counts.get(season + 1):
-        return season, season + 1
-    if counts.get(season - 1):
-        return season - 1, season
-    return None
-
-
 def extract(cur, season, league_current_season=None):
-    """Every gate's observed value for `season`, as a plain JSON-able dict. Nothing is written."""
+    """Every gate's observed value for `season`, as a plain JSON-able dict. Nothing is written.
+
+    The per-season count gates read three consecutive seasons: `season - 2 … season` for A3/A4, and the three
+    movement pairs `season - 3 → season - 2 … season - 1 → season` for A5. Each entry carries the facts that
+    say whether that season can be scored at all (completed games, weekly league office runs, hot-seat rows).
+    """
     drafted_ids = read_drafted_ids(cur)
     tenures = _fetch(cur, "SELECT team_id, coach_id, start_season, end_season FROM coach_tenures")
-    proposals = _fetch(cur, "SELECT season, week, status, trade_window FROM gm_trade_proposals "
-                            "WHERE season = %s", (season,))
+    window = [season - WINDOW_SEASONS + 1 + i for i in range(WINDOW_SEASONS)]   # season-2, season-1, season
+    movement_seasons = [season - WINDOW_SEASONS + i for i in range(WINDOW_SEASONS + 1)]
+    facts = read_season_facts(cur, movement_seasons)
+    hiring = read_hiring_cycle(cur, window)
+    proposals = read_trade_rows(cur, window)
+    last_weeks = read_last_weeks(cur, window)
     summary = read_season_summary(cur, season)
     draft_rows = read_draft_rows(cur, season)
     started = read_started_seasons(cur, season) if draft_rows else {}
 
-    pair = _movement_pair(cur, season)
-    movement = movement_counts(read_games_played(cur, pair)) if pair else None
+    cc_by_season = {}
+    for s in window:
+        entry = coach_changes(tenures, s)
+        entry.update(hiring.get(s) or {})
+        entry.update(facts.get(s) or {})
+        cc_by_season[s] = entry
+
+    trades_by_season = {}
+    for s in window:
+        entry = trade_counts(proposals, s, last_week=last_weeks.get(s, REGULAR_WEEKS))
+        entry.update(facts.get(s) or {})
+        trades_by_season[s] = entry
+
+    movement_rows = read_games_played(cur, movement_seasons)
+    movement_pairs = []
+    for lo, hi in zip(movement_seasons, movement_seasons[1:]):
+        mv = movement_counts([r for r in movement_rows if r[1] in (lo, hi)])
+        if mv:
+            movement_pairs.append(mv)
+    movement = movement_pairs[-1] if movement_pairs else None
 
     return {
         "season": season,
@@ -420,22 +516,18 @@ def extract(cur, season, league_current_season=None):
             "extracted_at": dt.datetime.now().astimezone().isoformat(timespec="seconds"),
             "league_current_season": league_current_season,
             "drafted_cohort": len(drafted_ids),
-            "movement_pair": pair,
+            "movement_pair": ((movement["from_season"], movement["to_season"]) if movement else None),
         },
-        "coach_changes": coach_changes(tenures, season),
-        "trades": trade_counts(proposals, season, last_week=_last_week(cur, season)),
+        "coach_changes": dict(cc_by_season[season], by_season=cc_by_season),
+        "trades": dict(trades_by_season[season], by_season=trades_by_season),
         "career_length": career_lengths(read_career_rows(cur, season), drafted_ids),
         "retirement_age": retirement_ages(read_retirement_rows(cur, season), drafted_ids),
         "team_movement": movement,
+        "movement_pairs": movement_pairs,
         "draft_by_round": draft_outcomes(draft_rows, started, season),
         "rookie_usage": rookie_usage([r for r in draft_rows if r[1] <= season]),
         "data": summary,
     }
-
-
-def _last_week(cur, season):
-    rows = _fetch(cur, "SELECT max(week) FROM games WHERE season = %s", (season,))
-    return int(rows[0][0] or REGULAR_WEEKS) if rows else REGULAR_WEEKS
 
 
 # ------------------------------------------------------------------ scoring
@@ -483,13 +575,6 @@ def _median_gate(code, title, obs, target_median, tol, missing_detail):
                 PASS if ok else FAIL, "")
 
 
-def _band_gate(code, title, value, lo, hi, detail="", unit=""):
-    if value is None:
-        return Gate(code, title, "—", f"{lo}–{hi}", NOT_MEASURED, detail)
-    ok = lo <= value <= hi
-    return Gate(code, title, f"{value}{unit}", f"{lo}–{hi}", PASS if ok else FAIL, detail)
-
-
 def _pct(value):
     return "—" if value is None else f"{value:.0%}"
 
@@ -502,8 +587,62 @@ def _share_gate(code, title, obs, target_share, detail=""):
                 PASS if ok else FAIL, detail)
 
 
+def _series_key(key):
+    return "→".join(str(part) for part in key) if isinstance(key, tuple) else str(key)
+
+
+def _series_observed(series, fmt):
+    """'mean (2024 5, 2025 4, 2026 5)', or '<value> (1 of 3 seasons)' for a partial window."""
+    n = len(series)
+    mean = sum(series.values()) / n
+    if n == 1:
+        return f"{fmt(next(iter(series.values())))} (1 of {WINDOW_SEASONS} seasons)"
+    parts = ", ".join(f"{_series_key(k)} {fmt(v)}" for k, v in sorted(series.items()))
+    if n < WINDOW_SEASONS:
+        return f"{fmt(mean)} (mean of {n}; {n} of {WINDOW_SEASONS} seasons: {parts})"
+    return f"{fmt(mean)} (mean of {parts})"
+
+
+def _three_season_gate(code, title, series, per_band, mean_band, target, *,
+                       fmt=lambda v: f"{v:g}", missing_detail="", note=""):
+    """A per-season count gate scored on a 3-season mean with each season inside its band (§1, §7.4).
+
+    series: {season: value} for the seasons that could be measured, oldest first. PASS only when all
+    WINDOW_SEASONS are measured, every one is inside `per_band` and the mean is inside `mean_band`; any
+    measured season or mean outside its band is FAIL; a partially measured window is INCOMPLETE, never a pass.
+    """
+    if not series:
+        return Gate(code, title, "—", target, NOT_MEASURED, missing_detail)
+    values = list(series.values())
+    mean = sum(values) / len(values)
+    bad = [(s, v) for s, v in sorted(series.items())
+           if not (per_band[0] - 1e-9 <= v <= per_band[1] + 1e-9)]
+    if bad:
+        verdict = FAIL
+        detail = "outside the per-season band: " + ", ".join(f"{_series_key(s)} {fmt(v)}" for s, v in bad)
+    elif not (mean_band[0] - 1e-9 <= mean <= mean_band[1] + 1e-9):
+        verdict = FAIL
+        detail = (f"the {len(values)}-season mean {fmt(mean)} is outside "
+                  f"{fmt(mean_band[0])}–{fmt(mean_band[1])}")
+    elif len(values) < WINDOW_SEASONS:
+        verdict = INCOMPLETE
+        detail = (f"{len(values)} of {WINDOW_SEASONS} seasons; the gate needs three consecutive simulated "
+                  "seasons")
+    else:
+        verdict = PASS
+        detail = ""
+    if note:
+        detail = f"{detail}; {note}" if detail else note
+    return Gate(code, title, _series_observed(series, fmt), target, verdict, detail)
+
+
 def compare_decisions(observed, targets):
-    """Score one season's observed decisions against the 2015-2025 targets. Pure."""
+    """Score a season's observed decisions against the 2015-2025 targets. Pure.
+
+    The per-season count gates read `by_season` / `movement_pairs` from extract(): a season is judged on its
+    three consecutive-season mean with each season also inside its band, and a partially measured window is
+    INCOMPLETE rather than a pass.
+    """
     season = observed["season"]
     gates = []
     meta = dict(observed.get("meta") or {})
@@ -535,60 +674,114 @@ def compare_decisions(observed, targets):
         gates.append(_median_gate(f"A2.{grp}", f"Retirement age, {grp}", drafted_ra.get(grp),
                                   tgt["median"], AGE_TOL, missing))
 
-    # A3 head-coach changes
+    # A3 head-coach changes — three consecutive seasons, each inside the band (§1, §7 decision 4)
     cc = observed["coach_changes"]
     tcc = (targets.get("coach_changes") or {})
-    if not cc.get("teams"):
-        for key, title in (("between_seasons", "HC changes between seasons"),
-                           ("midseason", "Teams with a mid-season HC change")):
-            gates.append(Gate(f"A3.{key}", title, "—", "—", NOT_MEASURED, "no head-coach tenures"))
+    b = tcc.get("between_seasons") or {}
+    m = tcc.get("midseason") or {}
+    cc_by = cc.get("by_season") or {}
+    between_series, mid_series = {}, {}
+    for s, entry in cc_by.items():
+        if entry.get("completed_games", 0) < MIN_SEASON_GAMES or not entry.get("teams"):
+            continue
+        mid_series[s] = entry.get("midseason", 0)
+        if entry.get("hot_seat_rows"):
+            between_series[s] = entry.get("between_seasons", 0)
+    no_season = not mid_series
+    if no_season:
+        missing_cc = (f"none of seasons {min(cc_by) if cc_by else season}-{max(cc_by) if cc_by else season} "
+                      f"has a simulated season ({MIN_SEASON_GAMES}+ completed games)")
+    elif not between_series:
+        missing_cc = ("the hiring cycle has not run for the simulated season(s): no coach_hot_seat rows "
+                      "(--no-offseason, or the walk stopped before Black Monday)")
     else:
-        b = tcc.get("between_seasons") or {}
-        gates.append(_band_gate("A3.between_seasons", "HC changes between seasons", cc["between_seasons"],
-                                b.get("lo"), b.get("hi"),
-                                f"hires taking effect in {season + 1} (coach_tenures starting then)"))
-        m = tcc.get("midseason") or {}
-        gates.append(_band_gate("A3.midseason", "Teams with a mid-season HC change", cc["midseason"],
-                                m.get("lo"), m.get("hi"),
-                                "Mu fires at Black Monday / playoff exit, so 0 is expected unless an "
-                                "in-season firing is added"))
+        missing_cc = ""
+    vacancies = sum(entry.get("vacancies", 0) for entry in cc_by.values())
+    vac_note = (f"{vacancies} coach change(s) had no successor hired yet and are counted as changes"
+                if vacancies else "")
+    gates.append(_three_season_gate(
+        "A3.between_seasons", "HC changes between seasons", between_series,
+        (b.get("lo"), b.get("hi")), (b.get("lo"), b.get("hi")),
+        f"{b.get('lo')}–{b.get('hi')} each season and on the 3-season mean",
+        missing_detail=missing_cc, note=vac_note))
+    # A3.midseason is report-only (JR, 2026-11-10): Mu fires at Black Monday / playoff exit, so 0 is expected
+    # until an in-season firing is added; it is shown but never gets a ✓ or ✗.
+    if no_season:
+        gates.append(Gate("A3.midseason", "Teams with a mid-season HC change", "—",
+                          f"{m.get('lo')}–{m.get('hi')} (report only)", REPORT_ONLY,
+                          "no simulated season to measure"))
+    else:
+        gates.append(Gate("A3.midseason", "Teams with a mid-season HC change",
+                          _series_observed(mid_series, lambda v: f"{v:g}"),
+                          f"{m.get('lo')}–{m.get('hi')} (report only)", REPORT_ONLY,
+                          "Mu fires at Black Monday / playoff exit, so 0 is expected unless an in-season "
+                          "firing is added"))
 
-    # A4 trades — gated only when the weekly league office actually ran
+    # A4 trades — gated only when the weekly league office actually ran, on three consecutive seasons
     tr = observed["trades"]
     ttr = (targets.get("trades") or {}).get("in_season") or {}
     weeks = (observed.get("data") or {}).get("regular_weeks_run", 0)
-    rule_out = "no single season above 30 or below 3"
-    if weeks < REGULAR_WEEKS:
+    trade_series, no_weekly = {}, []
+    for s, entry in (tr.get("by_season") or {}).items():
+        if entry.get("completed_games", 0) < MIN_SEASON_GAMES:
+            continue
+        if entry.get("regular_weeks_run", 0) < REGULAR_WEEKS:
+            no_weekly.append(s)
+            continue
+        trade_series[s] = entry.get("in_season", 0)
+    if not trade_series:
         detail = (f"the weekly league office ran {weeks} of {REGULAR_WEEKS} regular-season weeks, so the "
                   "trade engine never saw the whole season (season_loop sims the season offline; a weekly "
                   "shadow season is required)")
         gates.append(Gate("A4.in_season", "In-season trades (Week 1 → season end)", "—",
-                          f"{ttr.get('lo')}–{ttr.get('hi')}", NOT_MEASURED, detail))
+                          f"{A4_SEASON_LO}–{A4_SEASON_HI} each season; mean {ttr.get('lo')}–{ttr.get('hi')}",
+                          NOT_MEASURED, detail))
     else:
-        gates.append(_band_gate("A4.in_season", "In-season trades (Week 1 → season end)", tr["in_season"],
-                                ttr.get("lo"), ttr.get("hi"), f"also {rule_out}"))
+        missing_weekly = (f"seasons without {REGULAR_WEEKS} REGULAR_WEEK runs: "
+                          + ", ".join(str(s) for s in sorted(no_weekly))) if no_weekly else ""
+        gates.append(_three_season_gate(
+            "A4.in_season", "In-season trades (Week 1 → season end)", trade_series,
+            (A4_SEASON_LO, A4_SEASON_HI), (ttr.get("lo"), ttr.get("hi")),
+            f"{A4_SEASON_LO}–{A4_SEASON_HI} each season; mean {ttr.get('lo')}–{ttr.get('hi')}",
+            missing_detail="the weekly league office has not run a full regular season",
+            note=missing_weekly))
     toff = (targets.get("trades") or {}).get("offseason") or {}
     gates.append(Gate("A4.offseason", "Offseason trades (reference)", tr["offseason"],
                       f"{toff.get('lo')}–{toff.get('hi')}", REPORT_ONLY,
-                      "offseason stages only; the A4 gate is the in-season count"))
+                      f"these are season {season}'s OFFSEASON/DRAFT_DAY rows, the trades made after {season}; "
+                      f"the real band applies to the offseason a season follows, so this row belongs beside "
+                      f"the real offseason before {season + 1}"))
 
-    # A5 players changing teams
-    mv = observed.get("team_movement")
+    # A5 players changing teams — three consecutive season pairs, each inside the published band
     tmv = (targets.get("team_movement") or {}).get("rate") or {}
-    if not mv or mv.get("rate") is None:
-        gates.append(Gate("A5", "Established players changing teams", "—", "±20% of the real median",
-                          NOT_MEASURED,
-                          "no consecutive simulated seasons with >= 8 games both sides "
-                          "(player_season_transitions MOVED, else player_seasons)"))
+    median = tmv.get("median") or 0.249
+    mean_lo, mean_hi = median * (1 - RATE_TOL), median * (1 + RATE_TOL)
+    per_lo, per_hi = tmv.get("lo") or mean_lo, tmv.get("hi") or mean_hi
+    movement_series, small_cohorts = {}, []
+    for mv in observed.get("movement_pairs") or []:
+        if not mv or mv.get("rate") is None:
+            continue
+        if mv.get("eligible", 0) < MIN_MOVEMENT_PLAYERS:
+            small_cohorts.append(f"{mv['from_season']}→{mv['to_season']} n={mv['eligible']}")
+            continue
+        movement_series[(mv["from_season"], mv["to_season"])] = mv["rate"]
+    if not movement_series:
+        detail = ("no consecutive simulated seasons with >= 8 games on both sides "
+                  "(player_seasons team per season)")
+        if small_cohorts:
+            detail += (f"; the eligible cohort is below {MIN_MOVEMENT_PLAYERS} players ("
+                       + ", ".join(small_cohorts) + ")")
+        gates.append(Gate("A5", "Established players changing teams", "—",
+                          f"mean ±{RATE_TOL:.0%} of {median:.1%}; each season {per_lo:.1%}–{per_hi:.1%}",
+                          NOT_MEASURED, detail))
     else:
-        median = tmv.get("median") or 0.249
-        lo, hi = median * (1 - RATE_TOL), median * (1 + RATE_TOL)
-        ok = lo <= mv["rate"] <= hi
-        gates.append(Gate("A5", "Established players changing teams",
-                          f"{mv['rate']:.1%} ({mv['moved']}/{mv['eligible']}, {mv['from_season']}→"
-                          f"{mv['to_season']})",
-                          f"{lo:.1%}–{hi:.1%} (±{RATE_TOL:.0%} of {median:.1%})",
-                          PASS if ok else FAIL, ""))
+        gates.append(_three_season_gate(
+            "A5", "Established players changing teams", movement_series,
+            (per_lo, per_hi), (mean_lo, mean_hi),
+            f"mean within ±{RATE_TOL:.0%} of {median:.1%}; each season {per_lo:.1%}–{per_hi:.1%}",
+            fmt=lambda v: f"{v:.1%}",
+            missing_detail=(f"the eligible cohort is below {MIN_MOVEMENT_PLAYERS} players"
+                            + (f" ({', '.join(small_cohorts)})" if small_cohorts else ""))))
 
     # A6 draft by round
     dbr = observed["draft_by_round"]
@@ -674,7 +867,7 @@ def format_report(report):
     lines.append(f"- Real-NFL targets: {band} (`engines/tuning/decision_targets.py`). "
                  f"Gates: `docs/reference/TUNING_ACCEPTANCE_THRESHOLDS.md` §1–§2.")
     lines.append(f"- **Verdict: {report.overall}** — {c[PASS]} pass, {c[FAIL]} fail, "
-                 f"{c[NOT_MEASURED]} not measured.")
+                 f"{c[INCOMPLETE]} incomplete, {c[NOT_MEASURED]} not measured.")
     if report.overall == INCOMPLETE:
         lines.append("- INCOMPLETE is not a pass: a gate with no data in Mu's output is a failure of coverage "
                      "(`TUNING_ACCEPTANCE_THRESHOLDS.md` §1, no silent pass). The reasons are below.")

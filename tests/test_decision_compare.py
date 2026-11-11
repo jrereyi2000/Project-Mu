@@ -28,25 +28,50 @@ def targets():
     }
 
 
+def season_facts(completed_games=285, regular_weeks_run=18):
+    return {"completed_games": completed_games, "regular_weeks_run": regular_weeks_run}
+
+
+def cc_entry(between=5, midseason=0, teams=32, vacancies=0, hot_seat_rows=32, hc_hires=5, **facts):
+    entry = {"between_seasons": between, "midseason": midseason, "teams": teams, "vacancies": vacancies,
+             "hot_seat_rows": hot_seat_rows, "hc_hires": hc_hires}
+    entry.update(season_facts(**facts))
+    return entry
+
+
+def trade_entry(in_season=13, offseason=70, proposed=84, **facts):
+    entry = {"in_season": in_season, "offseason": offseason, "all": in_season + offseason,
+             "proposed": proposed, "by_status": {"APPROVED": in_season + offseason}}
+    entry.update(season_facts(**facts))
+    return entry
+
+
+def movement_pair(lo=2025, hi=2026, eligible=720, moved=180):
+    return {"from_season": lo, "to_season": hi, "eligible": eligible, "moved": moved,
+            "rate": round(moved / eligible, 4) if eligible else None}
+
+
 def observed(**over):
+    cc = {2024: cc_entry(between=5), 2025: cc_entry(between=4), 2026: cc_entry(between=5)}
+    trades = {s: trade_entry() for s in (2024, 2025, 2026)}
+    pairs = [movement_pair(2023, 2024), movement_pair(2024, 2025), movement_pair(2025, 2026)]
     obs = {
         "season": 2026,
         "meta": {"drafted_cohort": 200, "target_seasons": [2015, 2025]},
-        "coach_changes": {"between_seasons": 7, "midseason": 2, "teams": 32},
-        "trades": {"in_season": 13, "offseason": 70, "all": 83, "proposed": 100,
-                   "by_status": {"APPROVED": 83, "EXPIRED": 17}},
+        "coach_changes": dict(cc[2026], by_season=cc),
+        "trades": dict(trades[2026], by_season=trades),
         "career_length": {"drafted": {g: {"n": 20, "median": 5.0} for g in GROUPS},
                           "all_players": {g: {"n": 30, "median": 4.0} for g in GROUPS},
                           "careers": 200},
         "retirement_age": {"drafted": {g: {"n": 20, "median": 28.0} for g in GROUPS},
                            "all_players": {g: {"n": 30, "median": 27.0} for g in GROUPS},
                            "n": 200},
-        "team_movement": {"from_season": 2025, "to_season": 2026, "eligible": 720, "moved": 180,
-                          "rate": 0.25},
+        "team_movement": pairs[-1],
+        "movement_pairs": pairs,
         "draft_by_round": {str(r): {"n": 30, "games_median": 50, "share_started_2plus": v}
                            for r, v in zip(range(1, 8), (0.85, 0.65, 0.48, 0.34, 0.31, 0.15, 0.11))},
         "rookie_usage": {"n": 200, "median_games": 9.0, "share_8plus": 0.56, "share_12plus": 0.36},
-        "data": {"regular_weeks_run": 18, "completed_games": 272},
+        "data": {"regular_weeks_run": 18, "completed_games": 285},
     }
     obs.update(over)
     return obs
@@ -85,6 +110,13 @@ def test_coach_changes_matches_the_p2g_shape():
     tenures += [(t, 200 + t, 2027, None) for t in range(5)]
     out = C.coach_changes(tenures, 2026)
     assert out["between_seasons"] == 5 and out["midseason"] == 0 and out["teams"] == 32
+    assert out["vacancies"] == 0
+
+
+def test_an_unfilled_vacancy_is_still_a_change():
+    # F8: the coach's tenure ends in 2026 and the walk stopped before a successor was hired
+    out = C.coach_changes([(1, 10, 2020, 2026)], 2026)
+    assert out["between_seasons"] == 1 and out["vacancies"] == 1
 
 
 def test_trade_counts_splits_in_season_and_offseason():
@@ -180,12 +212,12 @@ def test_all_pass():
     rep = C.compare_decisions(observed(), targets())
     assert rep.overall == C.PASS
     assert all(g.verdict == C.PASS for g in rep.gates if g.verdict != C.REPORT_ONLY)
-    assert rep.counts()[C.PASS] == len(rep.gates) - 1          # the offseason reference row
+    assert rep.counts()[C.PASS] == len(rep.gates) - 2          # the offseason and mid-season reference rows
 
 
 def test_a_failing_gate_fails_the_report():
-    obs = observed(trades={"in_season": 61, "offseason": 70, "all": 131, "proposed": 200,
-                           "by_status": {}})
+    obs = observed()
+    obs["trades"]["by_season"][2026]["in_season"] = 61         # far outside the 3-25 per-season band
     rep = C.compare_decisions(obs, targets())
     assert _gate(rep, "A4.in_season").verdict == C.FAIL
     assert rep.overall == C.FAIL
@@ -211,10 +243,119 @@ def test_small_cohorts_are_not_measured():
 
 def test_in_season_trades_need_the_weekly_engine():
     obs = observed(data={"regular_weeks_run": 0})
+    for entry in obs["trades"]["by_season"].values():
+        entry["regular_weeks_run"] = 0
     rep = C.compare_decisions(obs, targets())
     g = _gate(rep, "A4.in_season")
     assert g.verdict == C.NOT_MEASURED and "weekly league office" in g.detail
     assert _gate(rep, "A4.offseason").verdict == C.REPORT_ONLY
+
+
+# ------------------------------------------------------------------ the three-season rule (F1)
+
+def test_one_season_is_not_the_gate():
+    """A single in-band season is INCOMPLETE: the gate is a three-consecutive-season mean (§1, §7.4)."""
+    obs = observed()
+    obs["coach_changes"]["by_season"] = {2026: cc_entry(between=5)}
+    rep = C.compare_decisions(obs, targets())
+    g = _gate(rep, "A3.between_seasons")
+    assert g.verdict == C.INCOMPLETE
+    assert g.observed == "5 (1 of 3 seasons)"
+    assert "1 of 3 seasons" in g.detail
+
+
+def test_each_season_must_sit_inside_the_band():
+    """{3, 9, 9} has a mean of 7 (inside 4-10) but 3 is below the per-season band, so the gate fails."""
+    obs = observed()
+    obs["coach_changes"]["by_season"] = {2024: cc_entry(between=3), 2025: cc_entry(between=9),
+                                        2026: cc_entry(between=9)}
+    obs["coach_changes"]["between_seasons"] = 7
+    g = _gate(C.compare_decisions(obs, targets()), "A3.between_seasons")
+    assert g.verdict == C.FAIL and "2024 3" in g.detail
+
+
+def test_three_seasons_in_band_pass_on_the_mean():
+    obs = observed()
+    obs["coach_changes"]["by_season"] = {2024: cc_entry(between=5), 2025: cc_entry(between=6),
+                                        2026: cc_entry(between=7)}
+    obs["coach_changes"]["between_seasons"] = 6
+    g = _gate(C.compare_decisions(obs, targets()), "A3.between_seasons")
+    assert g.verdict == C.PASS
+    assert g.observed == "6 (mean of 2024 5, 2025 6, 2026 7)"
+
+
+def test_a4_mean_is_in_5_21_but_each_season_must_be_in_3_25():
+    """{4, 30, 10} has a mean of 14.7 in 5-21, but 30 is above the per-season band of 3-25."""
+    obs = observed()
+    obs["trades"]["by_season"] = {2024: trade_entry(in_season=4), 2025: trade_entry(in_season=30),
+                                  2026: trade_entry(in_season=10)}
+    obs["trades"]["in_season"] = 14
+    g = _gate(C.compare_decisions(obs, targets()), "A4.in_season")
+    assert g.verdict == C.FAIL and "2025 30" in g.detail
+
+
+def test_a5_scores_the_three_pairs_on_the_mean_and_each_band():
+    obs = observed()
+    obs["movement_pairs"] = [movement_pair(2023, 2024, 720, 180),
+                             movement_pair(2024, 2025, 720, 180),
+                             movement_pair(2025, 2026, 720, 180)]
+    g = _gate(C.compare_decisions(obs, targets()), "A5")
+    assert g.verdict == C.PASS and "mean of 2023→2024" in g.observed
+    obs["movement_pairs"][2] = movement_pair(2025, 2026, 720, 260)   # 36.1%, outside 17.9-26.5%
+    g = _gate(C.compare_decisions(obs, targets()), "A5")
+    assert g.verdict == C.FAIL
+
+
+# ------------------------------------------------------------------ data floors (F3)
+
+def test_a_season_with_no_games_is_not_measured():
+    obs = observed()
+    obs["coach_changes"]["by_season"] = {2024: cc_entry(completed_games=0),
+                                        2025: cc_entry(completed_games=0),
+                                        2026: cc_entry(completed_games=0)}
+    obs["trades"]["by_season"] = {2024: trade_entry(completed_games=0),
+                                  2025: trade_entry(completed_games=0),
+                                  2026: trade_entry(completed_games=0)}
+    obs["movement_pairs"] = []
+    rep = C.compare_decisions(obs, targets())
+    for code in ("A3.between_seasons", "A4.in_season", "A5"):
+        assert _gate(rep, code).verdict == C.NOT_MEASURED, code
+    assert _gate(rep, "A3.midseason").verdict == C.REPORT_ONLY
+    assert rep.overall == C.INCOMPLETE
+
+
+def test_a_hiring_cycle_that_did_not_run_is_not_measured():
+    obs = observed()
+    for entry in obs["coach_changes"]["by_season"].values():
+        entry["hot_seat_rows"] = 0
+    g = _gate(C.compare_decisions(obs, targets()), "A3.between_seasons")
+    assert g.verdict == C.NOT_MEASURED and "hiring cycle" in g.detail
+
+
+def test_midseason_is_report_only():
+    g = _gate(C.compare_decisions(observed(), targets()), "A3.midseason")
+    assert g.verdict == C.REPORT_ONLY and "0–3" in g.target
+
+
+def test_a5_needs_a_minimum_cohort():
+    rows = [(p, s, 1 if p != 1 else 2, 9) for p in (1, 2, 3, 4) for s in (2025, 2026)]
+    tiny = C.movement_counts(rows)
+    assert tiny["eligible"] == 4
+    obs = observed(movement_pairs=[tiny])
+    g = _gate(C.compare_decisions(obs, targets()), "A5")
+    assert g.verdict == C.NOT_MEASURED and "below 300" in g.detail
+
+
+def test_a5_does_not_claim_the_moved_ledger():
+    """F6: the code reads player_seasons team ids, not player_season_transitions MOVED."""
+    g = _gate(C.compare_decisions(observed(movement_pairs=[]), targets()), "A5")
+    assert "MOVED" not in g.detail and "player_seasons" in g.detail
+
+
+def test_offseason_reference_says_which_offseason_it_is():
+    """F9: season S's OFFSEASON rows are the trades after S, not the real offseason before S."""
+    g = _gate(C.compare_decisions(observed(), targets()), "A4.offseason")
+    assert g.verdict == C.REPORT_ONLY and "after 2026" in g.detail
 
 
 def test_median_tolerance_is_wider_for_qb_k_p():
@@ -260,64 +401,109 @@ def test_report_is_json_serializable_and_prints_reasons():
 
 # ------------------------------------------------------------------ extract over a fake database
 
-TABLES = {"draft_prospects", "player_season_transitions", "draft_picks"}
-TENURES = [(t, 100 + t, 2020, None) for t in range(32)]
-TENURES += [(t, 200 + t, 2027, None) for t in range(5)]
-TENURES = [(t, c, s, (2026 if c < 200 and t < 5 else e)) for t, c, s, e in TENURES]
-PROPOSALS = [(2026, 1, "APPROVED", "IN_SEASON"), (2026, 9, "APPROVED", "OFFSEASON"),
-             (2026, 9, "EXPIRED", "IN_SEASON")]
-MOVEMENT_ROWS = [("p1", 2026, 2, 16), ("p1", 2027, 3, 16), ("p2", 2026, 1, 17), ("p2", 2027, 1, 17)]
+TABLES = {"draft_prospects", "player_season_transitions", "draft_picks",
+          "coach_hot_seat", "staff_moves"}
+GAMES = {2023: 285, 2024: 285, 2025: 285, 2026: 285, 2027: 40}
+WEEKS = {2023: 18, 2024: 18, 2025: 18, 2026: 18, 2027: 0}
+LAST_WEEK = {s: 23 for s in GAMES}
+HOT_SEAT = {2023: 32, 2024: 32, 2025: 32, 2026: 32, 2027: 0}
+HC_HIRES = {2023: 5, 2024: 5, 2025: 4, 2026: 5, 2027: 0}
+# five changes after 2026, four after 2025, five after 2024; every other team keeps one coach
+TENURE_ENDS = {**{t: 2026 for t in range(5)}, **{t: 2025 for t in range(5, 9)},
+               **{t: 2024 for t in range(9, 14)}}
+TENURES = [(t, 1000 + t, 2019, TENURE_ENDS.get(t)) for t in range(32)]
+TENURES += [(t, 2000 + t, 2027, None) for t in range(5)]
+TENURES += [(t, 2100 + t, 2026, None) for t in range(5, 9)]
+TENURES += [(t, 2200 + t, 2025, None) for t in range(9, 14)]
+PROPOSALS = []
+for _season in (2024, 2025, 2026):
+    PROPOSALS += [(_season, week, "APPROVED", "IN_SEASON") for week in range(1, 14)]
+    PROPOSALS += [(_season, 9, "APPROVED", "OFFSEASON") for _ in range(70)]
+PROPOSALS += [(2026, 9, "EXPIRED", "IN_SEASON")]
+
+
+def _movement_rows():
+    """400 players in four seasons; exactly 100 change team on each consecutive pair (a 25% rate)."""
+    team = {pid: {s: 1 for s in (2023, 2024, 2025, 2026)} for pid in range(1, 401)}
+    for pid in range(1, 101):
+        team[pid][2024] = team[pid][2025] = team[pid][2026] = 2
+    for pid in range(101, 201):
+        team[pid][2025] = team[pid][2026] = 3
+    for pid in range(201, 301):
+        team[pid][2026] = 4
+    return [(pid, s, team[pid][s], 17) for pid in team for s in (2023, 2024, 2025, 2026)]
+
+
+MOVEMENT_ROWS = _movement_rows()
 DRAFT_ROWS = [(10, 2025, "1", "WR", 15), (11, 2026, "1", "QB", 17), (12, 2027, "2", "HB", 11)]
-CAREER_ROWS = [(21, 2027, 2026, "QB", 8), (21, 2027, 2027, "QB", 9),
-               (22, 2027, 2026, "QB", 4), (22, 2027, 2027, "QB", 5)]
-AGE_ROWS = [(21, 2027, "QB", 32), (22, 2027, "QB", 30)]
+CAREER_ROWS = [(21, 2026, 2025, "QB", 8), (21, 2026, 2026, "QB", 9),
+               (22, 2026, 2025, "QB", 4), (22, 2026, 2026, "QB", 5),
+               (23, 2027, 2027, "QB", 3)]          # a 2027 retirement must not leak into a 2026 report
+AGE_ROWS = [(21, 2026, "QB", 32), (22, 2026, "QB", 30), (23, 2027, "QB", 27)]
+DEPTH_ROWS = [(11, 2025), (11, 2026), (12, 2026)]
 
 
 class FakeCursor:
-    """Answers the queries extract() makes, from the constants above."""
+    """Answers the queries extract() makes, from the constants above, and honours the season params.
+
+    The query params are applied the way Postgres would apply them (a season filter on `= ANY(%s)` or
+    `<= %s`), so a fixture row outside the requested season is not silently counted (audit F7).
+    """
 
     def __init__(self):
         self._rows = []
 
+    @staticmethod
+    def _seasons(params):
+        return params[0] if params and isinstance(params[0], (list, tuple, set)) else ()
+
     def execute(self, sql, params=None):
         s = " ".join(sql.split())
+        p = params or ()
         self._rows = []
         if "to_regclass" in s:
-            self._rows = [(params[0] in TABLES,)]
+            self._rows = [(p[0] in TABLES,)]
         elif "FROM coach_tenures" in s:
             self._rows = TENURES
+        elif "FROM coach_hot_seat" in s:
+            self._rows = [(season, HOT_SEAT[season]) for season in self._seasons(p) if HOT_SEAT.get(season)]
+        elif "FROM staff_moves" in s:
+            self._rows = [(season, HC_HIRES[season]) for season in self._seasons(p) if HC_HIRES.get(season)]
+        elif "count(*) FROM gm_trade_proposals" in s:
+            self._rows = [(sum(1 for r in PROPOSALS if r[0] == p[0]),)]
         elif "FROM gm_trade_proposals" in s:
-            self._rows = PROPOSALS
+            self._rows = [r for r in PROPOSALS if r[0] in self._seasons(p)]
         elif "count(DISTINCT week) FROM league_office_runs" in s:
-            self._rows = [(18,)]
+            if "ANY" in s:
+                self._rows = [(season, WEEKS[season]) for season in self._seasons(p) if WEEKS.get(season)]
+            else:
+                self._rows = [(WEEKS.get(p[0], 0),)]
         elif "FROM player_retirements r JOIN player_seasons ps" in s:
-            self._rows = CAREER_ROWS
+            self._rows = [r for r in CAREER_ROWS if r[1] <= p[0]]
         elif "FROM player_retirements r LEFT JOIN" in s:
-            self._rows = AGE_ROWS
-        elif "FROM games WHERE status = 'COMPLETED' AND season IN" in s:
-            self._rows = [(2026, 285), (2027, 40)]
-        elif "SELECT max(week) FROM games" in s:
-            self._rows = [(23,)]
-        elif "FROM player_seasons ps LEFT JOIN season_stat_general" in s:
-            self._rows = MOVEMENT_ROWS
-        elif "FROM draft_prospects dp" in s:
-            self._rows = [r for r in DRAFT_ROWS if r[1] <= params[0]]
-        elif "FROM depth_charts" in s:
-            self._rows = [(11, 2026), (11, 2027), (12, 2027)]
+            self._rows = [r for r in AGE_ROWS if r[1] <= p[0]]
+        elif "FROM games WHERE status = 'COMPLETED' AND season = ANY" in s:
+            self._rows = [(season, GAMES[season]) for season in self._seasons(p) if season in GAMES]
+        elif "max(week) FROM games" in s:
+            self._rows = [(season, LAST_WEEK[season]) for season in self._seasons(p) if season in LAST_WEEK]
         elif "count(*) FROM games WHERE season" in s:
-            self._rows = [(285,)]
+            self._rows = [(GAMES.get(p[0], 0),)]
+        elif "FROM player_seasons ps LEFT JOIN season_stat_general" in s:
+            self._rows = [r for r in MOVEMENT_ROWS if r[1] in self._seasons(p)]
+        elif "FROM draft_prospects dp" in s:
+            self._rows = [r for r in DRAFT_ROWS if r[1] <= p[0]]
+        elif "FROM depth_charts" in s:
+            self._rows = [(pid, season) for pid, season in DEPTH_ROWS if season <= p[0]]
         elif "count(*) FROM player_seasons WHERE season" in s:
             self._rows = [(3236,)]
         elif "count(*) FROM player_retirements WHERE season <=" in s:
             self._rows = [(44,)]
         elif "count(*) FROM player_season_transitions WHERE to_season" in s:
             self._rows = [(4,)]
-        elif "count(*) FROM gm_trade_proposals WHERE season" in s:
-            self._rows = [(3,)]
         elif "count(*) FROM draft_picks" in s:
             self._rows = [(10,)]
         elif "SELECT DISTINCT player_id FROM draft_prospects" in s:
-            self._rows = [(21,), (22,)]
+            self._rows = [(21,), (22,), (23,)]
         elif "FROM draft_prospects WHERE player_id IS NOT NULL" in s:
             self._rows = [(1,)]
         elif "SELECT DISTINCT player_id FROM player_season_transitions" in s:
@@ -331,15 +517,28 @@ class FakeCursor:
 
 def test_extract_reads_every_gate():
     obs = C.extract(FakeCursor(), 2026, league_current_season=2027)
-    assert obs["coach_changes"] == {"between_seasons": 5, "midseason": 0, "teams": 32}
-    assert obs["trades"]["in_season"] == 1 and obs["trades"]["offseason"] == 1
-    assert obs["meta"]["drafted_cohort"] == 2
-    assert obs["career_length"]["drafted"]["QB"]["n"] == 2             # max YoE 9 + 1 and 5 + 1
+    assert obs["coach_changes"]["between_seasons"] == 5
+    assert obs["coach_changes"]["midseason"] == 0 and obs["coach_changes"]["teams"] == 32
+    assert {s: e["between_seasons"] for s, e in obs["coach_changes"]["by_season"].items()} == \
+        {2024: 5, 2025: 4, 2026: 5}
+    assert obs["coach_changes"]["by_season"][2026]["hot_seat_rows"] == 32
+    assert obs["trades"]["in_season"] == 13 and obs["trades"]["offseason"] == 70
+    assert obs["meta"]["drafted_cohort"] == 3
+    assert obs["career_length"]["drafted"]["QB"]["n"] == 2             # the 2027 retirement is filtered out
     assert obs["retirement_age"]["drafted"]["QB"]["n"] == 2
-    assert obs["team_movement"]["rate"] == 0.5                        # 2026 -> 2027, one of two moved
+    assert obs["team_movement"]["from_season"] == 2025
+    assert [p["rate"] for p in obs["movement_pairs"]] == [0.25, 0.25, 0.25]
     assert obs["draft_by_round"]["1"]["n"] == 1                       # the 2026 and 2027 classes are too recent
     assert obs["rookie_usage"]["n"] == 2                              # the 2025 WR and the 2026 QB
     assert obs["data"]["regular_weeks_run"] == 18
+
+
+def test_extract_runs_the_three_season_gate_from_the_real_readers():
+    obs = C.extract(FakeCursor(), 2026, league_current_season=2027)
+    rep = C.compare_decisions(obs, targets())
+    assert _gate(rep, "A3.between_seasons").verdict == C.PASS       # 5, 4, 5 -> mean 4.7, each in 4-10
+    assert _gate(rep, "A4.in_season").verdict == C.PASS             # 13 each, mean 13
+    assert _gate(rep, "A5").verdict == C.PASS                       # 25.0% each
 
 
 def test_extract_marks_a_season_without_weekly_runs():
@@ -347,7 +546,10 @@ def test_extract_marks_a_season_without_weekly_runs():
         def execute(self, sql, params=None):
             super().execute(sql, params)
             if "count(DISTINCT week) FROM league_office_runs" in " ".join(sql.split()):
-                self._rows = [(0,)]
+                if "ANY" in " ".join(sql.split()):
+                    self._rows = [(season, 0) for season in self._seasons(params or ())]
+                else:
+                    self._rows = [(0,)]
 
     obs = C.extract(NoWeekly(), 2026, league_current_season=2027)
     rep = C.compare_decisions(obs, targets())
@@ -407,3 +609,43 @@ def test_run_refuses_without_targets(tmp_path):
         C.run("host=localhost dbname=x user=postgres password=postgres", 2026,
               targets_path=str(tmp_path / "missing.json"), out_dir=str(tmp_path),
               connect=lambda dsn: FakeConn(FakeCursor()))
+
+
+# ------------------------------------------------------------------ real Postgres (F7)
+
+@pytest.mark.integration
+def test_extract_on_real_postgres_reads_the_p2g_season():
+    """Every reader runs on real Postgres, not a fake. The scratch database is a copy of `madden_tune_p2g`,
+    where 2026 has 285 completed games, five head-coach changes between seasons and no mid-season change.
+
+    The fake cursor cannot catch a typo'd column or a renamed status; this test does. It skips on any database
+    that is not the p2g 2026 shape, so it never asserts another database's numbers.
+    """
+    import os
+    import psycopg
+    dsn = os.environ.get("MU_PROGRESSION_STATE_TEST_DSN")
+    if not dsn:
+        pytest.skip("explicit scratch DSN not supplied")
+    database = psycopg.conninfo.conninfo_to_dict(dsn).get("dbname", "")
+    if "test" not in database or database == "madden_2036":
+        pytest.fail("decision_compare integration tests require an explicitly named test database")
+    if not os.path.exists(C.TARGETS_DEFAULT):
+        pytest.skip("the decision targets file is not present")
+    with C.connect_read_only(dsn) as conn:
+        cur = conn.cursor()
+        if not cur.execute("SELECT to_regclass('public.coach_tenures') IS NOT NULL "
+                           "AND to_regclass('public.games') IS NOT NULL").fetchone()[0]:
+            pytest.skip("the scratch database does not have the tuning schema")
+        cur.execute("SHOW default_transaction_read_only")
+        assert cur.fetchone()[0] == "on"
+        obs = C.extract(cur, 2026, league_current_season=2027)
+    if obs["data"]["completed_games"] != 285:
+        pytest.skip("this test asserts the madden_tune_p2g 2026 shape (285 completed games)")
+    assert obs["coach_changes"]["between_seasons"] == 5
+    assert obs["coach_changes"]["midseason"] == 0
+    assert obs["coach_changes"]["by_season"][2026]["hot_seat_rows"] > 0
+    with open(C.TARGETS_DEFAULT, encoding="utf-8") as fh:
+        rep = C.compare_decisions(obs, json.load(fh))
+    gate = _gate(rep, "A3.between_seasons")
+    assert gate.observed == "5 (1 of 3 seasons)"
+    assert gate.verdict == C.INCOMPLETE          # one simulated season is not a 3-season mean
