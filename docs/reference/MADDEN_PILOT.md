@@ -6,7 +6,8 @@ The pilot drives Madden 27 on JR's PC so Madden can run experiments while JR is 
 
 | Layer | File | Runs in | Does |
 |---|---|---|---|
-| Driver | `tools/madden_pilot/win_agent.py` | Windows Python (`C:\Madden27Modding\MuPilot\venv`, `MU_WIN_PYTHON`) | `windows`, `focus`, `look --ocr` (captures Madden's client area with mss and reads it with Windows OCR), `key` (hardware scan codes through SendInput), `run`, `kill` (Madden27.exe and MMCModManager.exe only). One JSON line per command. |
+| Driver | `tools/madden_pilot/win_agent.py` | Windows Python (`C:\Madden27Modding\MuPilot\venv`, `MU_WIN_PYTHON`) | `windows`, `focus`, `look --ocr` (captures Madden's client area with mss and reads it with Windows OCR), `key` (hardware scan codes through SendInput), `record` (a frame burst, below), `run`, `kill` (Madden27.exe and MMCModManager.exe only). One JSON line per command. |
+| Record | `tools/madden_pilot/win_agent.py record` | Windows Python (`C:\Madden27Modding\MuPilot\venv`, `MU_WIN_PYTHON`) | A burst of client-area JPEGs with mss into `--dir` (`frame_0000.jpg`…): `--seconds` 1–30, `--fps` 1–10 (`MAX_RECORD_FPS`), `--width` downscale. It returns `frames`, `fps_actual` and `size`, and checks the abort gesture on every frame, so a corner hit stops the burst and keeps the frames written so far. Used through `spike-record`; no `/madden` job records yet. |
 | Wrapper | `tools/madden_pilot/win.py` | WSL | `call(cmd)` runs the driver and converts paths with `wslpath -w`. |
 | Catalog | `tools/madden_pilot/catalog.json` | WSL | Every screen seen so far: its OCR test, its exits, which labels Space may accept, and its safety flags. The `doc` array at the top explains each field. |
 | Classifier | `tools/madden_pilot/screens.py` | WSL | `classify(frame)` returns the first screen in catalog order whose words match, else `UNKNOWN`. `border_highlight` finds Madden's white selection outline in the screenshot. |
@@ -165,3 +166,7 @@ Next screens to catalogue:
 - the settings screens for `set-setting`.
 
 G0 presentation research uses a separate local g0/research_catalog.json permitting Play Season Game only after loaded CAREER-TUNE-* identity is verified. The normal pilot catalog retains its Advance Week-only guard. JR confirmed TUNE-PRESENTATION-G0 during the live run. This does not authorize playing production franchises.
+
+## 8. Spikes
+
+For a screen you need explored that the catalog doesn't know, request a spike rather than widening the pilot: one fresh session runs one written brief under a code guard (`tools/madden_pilot/spike.py`) — `spike-start`, `spike-look`, `spike-key`, `spike-confirm`, `spike-goto`, `spike-record`, `spike-check`, `spike-end` and the after-run `spike-analyze` — captures frames and clips, runs fixed asset checks, and posts a report for the requester to catalogue. The guard is above the pilot, not in the agent's judgement: caps, hard-stop words, key and confirm allow-lists, and TUNE-only saves. The brief format, the report format, the guard rules, the vision backends, the asset-check specs and a worked example are in [`MADDEN_SPIKE_AGENT.md`](MADDEN_SPIKE_AGENT.md); the skill is `/madden-spike <brief.json>`. The rules above still hold inside a spike: no roster cards, no online, no purchases, no deletes, and JR's yes before the PC.

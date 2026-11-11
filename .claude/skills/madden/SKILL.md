@@ -62,6 +62,8 @@ Read `docs/reference/MADDEN_PILOT.md` first. It has the keys, every catalogued s
 
 ## Growing the catalog (on UNKNOWN)
 
+**For an unknown screen you need explored, request a spike** (`/madden-spike <brief.json>`, `docs/reference/MADDEN_SPIKE_AGENT.md`): a fresh session explores it under a code guard and reports the frames, the route and a proposed catalog entry. Grow the catalog here yourself only for a screen a job must get through.
+
 1. View the step PNG and read its OCR JSON. Decide what the screen is, and whether it is safe (an interrupt with a harmless Continue) or something never to confirm (a decision, a purchase, online, delete).
 2. Add it to `tools/madden_pilot/catalog.json`. The `doc` array at the top explains every field.
    - `all` / `any` / `none` words taken from the OCR lines (labels, not numbers: OCR garbles numbers). Put it **before** any screen whose words it shares (classification takes the first match).
