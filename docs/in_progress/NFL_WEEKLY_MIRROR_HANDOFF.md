@@ -53,9 +53,8 @@ real-PG regressions (5 new, rollback-only, scratch `u9` DBs), `timelines` 39 PAS
   interim on an A→B→A same-season return. It needs the same `(end_season IS NULL) DESC`
   clause before `id DESC`. Small enough for an orchestrator fix with two integration tests,
   or give it to the unit that owns that file next.
-- Its worktree `.claude/worktrees/agent-ade8f1b34cbd6b018` and branch
-  `worktree-agent-ade8f1b34cbd6b018` are merged but not yet removed; remove them with the
-  other merged worktrees (`git worktree remove`, then `git branch -d`; never force).
+- Its worktree and branch were removed after the merge. U3's and U4's were removed the same
+  way, so no merged unit worktree of this plan is left on disk.
 
 ## Next steps, in order
 
@@ -75,9 +74,8 @@ real-PG regressions (5 new, rollback-only, scratch `u9` DBs), `timelines` 39 PAS
    over the touched tests, status `built and on main`, `git mv` to `docs/done/`, fix links,
    spec layout line, commit, then a `to: audit, all` HANDOFF with the plan path, commit
    range, per-unit lines, deviations, open items and which DBs the migration was applied to
-   (none, unless JR applied it). Remove merged worktrees you created (U3's
-   `agent-ab477134fdc19c085` and U4's `agent-a3473b7f0b3d4ce3d` are merged but still
-   present) — only ones you own; never force.
+   (none, unless JR applied it). U1–U4 and U9's worktrees are already removed; remove only
+   the ones you create, and never force.
 6. Continue the DeepSeek session-start routine: `NOTICE` with the label, the model inbox
    listener under Monitor (`python3 -m tools.agent_board_inbox deepseek --label <label>
    --watch`, 30-minute expiry, re-arm), sign off with a `NOTICE` when JR ends the session.
