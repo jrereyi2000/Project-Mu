@@ -14,6 +14,7 @@ import types
 from pathlib import Path
 
 import pytest
+from PIL import Image
 
 PILOT = Path(__file__).resolve().parents[1] / "tools" / "madden_pilot"
 
@@ -86,6 +87,14 @@ def test_windows_paths_pass_through(win):
     assert win.convert_args(["run", "--exe", r"C:\Games\Madden27.exe"]) == ["run", "--exe", r"C:\Games\Madden27.exe"]
 
 
+def test_convert_args_converts_dir(win, tmp_path):
+    out = tmp_path / "clips" / "001"
+    args = win.convert_args(["record", "--title", "Madden", "--dir", str(out),
+                             "--seconds", "5", "--fps", "2"])
+    assert args == ["record", "--title", "Madden", "--dir",
+                    "C:\\fake" + str(out).replace("/", "\\"), "--seconds", "5", "--fps", "2"]
+
+
 def test_ok_false_raises_with_result(win):
     with pytest.raises(win.WinError, match="nope") as e:
         win.call(["fail"])
@@ -146,6 +155,14 @@ def _window(foreground=True, elevated=False):
 def _run(agent, capsys, argv):
     code = agent.main(argv)
     return code, json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+
+
+def _fast_wait(agent, monkeypatch):
+    """Fake agent clock: each sleep jumps 10 s, so ensure_foreground's 20 s wait ends at once."""
+    clock = {"now": 0.0}
+    monkeypatch.setattr(agent, "time", types.SimpleNamespace(
+        sleep=lambda s: clock.__setitem__("now", clock["now"] + 10.0),
+        monotonic=lambda: clock["now"]))
 
 
 def test_keys_map(agent):
@@ -223,13 +240,14 @@ def test_key_refocuses_then_sends(agent, capsys, keyrig):
     assert keyrig["focus_calls"] == 1 and keyrig["sent"] == [("space", 0.08)]
 
 
-def test_key_refuses_when_still_not_foreground(agent, capsys, keyrig):
+def test_key_refuses_when_still_not_foreground(agent, capsys, keyrig, monkeypatch):
     keyrig["foreground"] = False
     keyrig["refocus_works"] = False
+    _fast_wait(agent, monkeypatch)
     code, res = _run(agent, capsys, ["key", "--name", "space"])
     assert code == 1 and res["ok"] is False and "foreground" in res["error"]
     assert res["sent"] == 0
-    assert keyrig["focus_calls"] == 1 and keyrig["sent"] == []
+    assert keyrig["focus_calls"] >= 2 and keyrig["sent"] == []  # retries until the wait is over
 
 
 def test_key_refuses_in_abort_corner(agent, capsys, keyrig):
@@ -279,9 +297,10 @@ def test_find_window_prefers_madden_exe(agent, monkeypatch):
 def test_look_refuses_when_not_foreground(agent, capsys, keyrig, monkeypatch, tmp_path):
     keyrig["foreground"] = False
     keyrig["refocus_works"] = False
+    _fast_wait(agent, monkeypatch)
     monkeypatch.setattr(agent, "capture", lambda *a: (_ for _ in ()).throw(AssertionError("no capture")))
     code, res = _run(agent, capsys, ["look", "--title", "Madden", "--out", str(tmp_path / "x.png")])
-    assert code == 1 and res["ok"] is False and keyrig["focus_calls"] == 1
+    assert code == 1 and res["ok"] is False and keyrig["focus_calls"] >= 2
 
 
 @pytest.mark.parametrize("pos,virtual,expected", [
@@ -292,3 +311,85 @@ def test_abort_corner(agent, monkeypatch, pos, virtual, expected):
     monkeypatch.setattr(agent.win32api, "GetCursorPos", lambda: pos)
     monkeypatch.setattr(agent.win32api, "GetSystemMetrics", lambda i: {76: virtual[0], 77: virtual[1]}[i])
     assert agent.in_abort_corner() is expected
+
+
+# ---------------------------------------------------------------- win_agent record
+
+def _fake_mss(monkeypatch, size=(1600, 900), on_grab=None):
+    """Install a fake ``mss`` module. Returns the grab regions; ``on_grab(n)`` runs after each."""
+    grabs = []
+
+    class Session:
+        def grab(self, region):
+            grabs.append(region)
+            if on_grab:
+                on_grab(len(grabs))
+            im = Image.new("RGB", size, (10, 80, 140))
+            return types.SimpleNamespace(size=size, bgra=im.tobytes("raw", "BGRX"))
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    mod = types.ModuleType("mss")
+    mod.mss = Session
+    monkeypatch.setitem(sys.modules, "mss", mod)
+    return grabs
+
+
+@pytest.mark.parametrize("value", ["0", "31"])
+def test_record_refuses_bad_seconds(agent, capsys, keyrig, value):
+    code, res = _run(agent, capsys, ["record", "--title", "Madden", "--dir", "D",
+                                     "--seconds", value, "--fps", "5"])
+    assert code == 1 and res["ok"] is False and "--seconds" in res["error"]
+
+
+def test_record_refuses_non_numeric_seconds(agent, capsys):
+    code, res = _run(agent, capsys, ["record", "--title", "Madden", "--dir", "D",
+                                     "--seconds", "soon", "--fps", "5"])
+    assert code == 2 and res["ok"] is False
+
+
+@pytest.mark.parametrize("value", ["0", "11"])
+def test_record_refuses_bad_fps(agent, capsys, keyrig, value):
+    code, res = _run(agent, capsys, ["record", "--title", "Madden", "--dir", "D",
+                                     "--seconds", "1", "--fps", value])
+    assert code == 1 and res["ok"] is False and "--fps" in res["error"]
+
+
+def test_record_writes_expected_jpegs(agent, capsys, keyrig, monkeypatch, tmp_path):
+    grabs = _fake_mss(monkeypatch)
+    out = tmp_path / "clip"
+    code, res = _run(agent, capsys, ["record", "--title", "Madden", "--dir", str(out),
+                                     "--seconds", "1", "--fps", "3", "--width", "320"])
+    assert code == 0 and res["ok"] is True
+    assert res["dir"] == str(out) and res["frames"] == 3
+    assert res["size"] == [320, 180]
+    assert isinstance(res["fps_actual"], float) and res["fps_actual"] > 0
+    files = sorted(out.glob("frame_*.jpg"))
+    assert [f.name for f in files] == ["frame_0000.jpg", "frame_0001.jpg", "frame_0002.jpg"]
+    for f in files:
+        with Image.open(f) as im:
+            assert im.format == "JPEG" and im.size == (320, 180)
+    assert grabs == [{"left": 0, "top": 0, "width": 2560, "height": 1440}] * 3
+
+
+def test_record_refocuses_before_grabbing(agent, capsys, keyrig, monkeypatch, tmp_path):
+    keyrig["foreground"] = False
+    _fake_mss(monkeypatch)
+    code, res = _run(agent, capsys, ["record", "--title", "Madden", "--dir", str(tmp_path / "clip"),
+                                     "--seconds", "1", "--fps", "1"])
+    assert code == 0 and res["frames"] == 1 and keyrig["focus_calls"] == 1
+
+
+def test_record_aborts_partway(agent, capsys, keyrig, monkeypatch, tmp_path):
+    grabs = _fake_mss(monkeypatch, on_grab=lambda n: keyrig.__setitem__("corner", n >= 2))
+    out = tmp_path / "clip"
+    code, res = _run(agent, capsys, ["record", "--title", "Madden", "--dir", str(out),
+                                     "--seconds", "2", "--fps", "5"])
+    assert code == 1 and res["ok"] is False and res.get("aborted") is True
+    assert res["frames"] == 2 and res["dir"] == str(out)
+    assert [f.name for f in sorted(out.glob("frame_*.jpg"))] == ["frame_0000.jpg", "frame_0001.jpg"]
+    assert len(grabs) == 2

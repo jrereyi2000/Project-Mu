@@ -8,6 +8,7 @@ one JSON line and exits 0 when ``"ok": true``, 1 otherwise:
     focus   --title RE                                    bring a matching window to the front
     look    --title RE --out PNG [--ocr] [--small PNG]    capture the client area (+ Windows OCR)
     key     --name NAME [--hold S] [--times N] [--gap S] [--title RE]   scan-code SendInput
+    record  --title RE --dir D --seconds S --fps F [--width 960]        JPEG frames of the client area
     run     --exe PATH [--args ...]                       start a process (never elevated)
     kill    --name EXE                                    end Madden27.exe / MMCModManager.exe only
 
@@ -52,6 +53,9 @@ FOCUS_SETTLE_S = 1.5
 MAX_TIMES = 100
 MAX_HOLD_S = 10.0
 SMALL_WIDTH = 960
+MAX_RECORD_S = 30
+MAX_RECORD_FPS = 10
+RECORD_QUALITY = 80
 
 # name -> (hardware scan code, extended). Games read raw input, so virtual-key-only events are ignored.
 KEYS: dict[str, tuple[int, bool]] = {
@@ -279,18 +283,24 @@ def abort_requested() -> bool:
 
 # ---------------------------------------------------------------- capture and OCR
 
+def _grab_rgb(session, rect: list[int]):
+    """Grab ``rect`` with an mss session and rebind its BGRA buffer as RGB (raw BGRX)."""
+    x, y, w, h = rect
+    if w <= 0 or h <= 0:
+        raise AgentError(f"window client area is empty ({rect}); is it minimized?")
+    from PIL import Image
+
+    shot = session.grab({"left": x, "top": y, "width": w, "height": h})
+    return Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")
+
+
 def capture(rect: list[int], path: str) -> dict:
     if abort_requested():
         raise AgentError("abort: top-left corner or right mouse button held", aborted=True)
     import mss
-    from PIL import Image
 
-    x, y, w, h = rect
-    if w <= 0 or h <= 0:
-        raise AgentError(f"window client area is empty ({rect}); is it minimized?")
     with mss.mss() as s:
-        shot = s.grab({"left": x, "top": y, "width": w, "height": h})
-    im = Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")
+        im = _grab_rgb(s, rect)
     im.save(path)
     lo, hi = im.convert("L").getextrema()
     return {"image": im, "size": list(im.size), "luma_range": [lo, hi]}
@@ -374,6 +384,45 @@ def cmd_key(a) -> dict:
     return {"ok": True, "name": name, "sent": sent}
 
 
+def cmd_record(a) -> dict:
+    """Grab a short burst of JPEG frames from the client area, refocusing once first."""
+    if not 1 <= a.seconds <= MAX_RECORD_S:
+        raise AgentError(f"--seconds must be 1..{MAX_RECORD_S}")
+    if not 1 <= a.fps <= MAX_RECORD_FPS:
+        raise AgentError(f"--fps must be 1..{MAX_RECORD_FPS}")
+    if a.width < 1:
+        raise AgentError("--width must be >= 1")
+    os.makedirs(a.dir, exist_ok=True)
+
+    w = ensure_foreground(a.title)
+    rect = w["rect"]
+    want = max(1, round(a.seconds * a.fps))
+    interval = 1.0 / a.fps
+    import mss
+
+    start = time.monotonic()
+    frames = 0
+    size: list[int] | None = None
+    with mss.mss() as s:
+        for i in range(want):
+            if abort_requested():
+                raise AgentError("abort: top-left corner or right mouse button held",
+                                 dir=a.dir, frames=frames, aborted=True)
+            im = _grab_rgb(s, rect)
+            if im.width != a.width:
+                im = im.resize((a.width, max(1, round(im.height * a.width / im.width))))
+            im.save(os.path.join(a.dir, f"frame_{i:04d}.jpg"), quality=RECORD_QUALITY)
+            frames += 1
+            size = list(im.size)
+            delay = start + (i + 1) * interval - time.monotonic()
+            if delay > 0:
+                time.sleep(delay)
+    elapsed = time.monotonic() - start
+    return {"ok": True, "dir": a.dir, "frames": frames,
+            "fps_actual": round(frames / elapsed, 1) if elapsed > 0 else float(frames),
+            "size": size}
+
+
 def cmd_run(a) -> dict:
     flags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
     try:
@@ -440,6 +489,13 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--gap", type=float, default=0.4)
     s.add_argument("--title", default=MADDEN_TITLE)
     s.set_defaults(fn=cmd_key)
+    s = sub.add_parser("record")
+    s.add_argument("--title", default=MADDEN_TITLE)
+    s.add_argument("--dir", required=True)
+    s.add_argument("--seconds", type=float, required=True)
+    s.add_argument("--fps", type=int, required=True)
+    s.add_argument("--width", type=int, default=SMALL_WIDTH)
+    s.set_defaults(fn=cmd_record)
     s = sub.add_parser("run")
     s.add_argument("--exe", required=True)
     s.add_argument("--args", nargs=argparse.REMAINDER, default=[])
