@@ -199,19 +199,68 @@ The live league gets the same rule: its first rookie class would otherwise fail 
 stage runs, so the league office has picks to write. Without it the run logs "no draft order … no picks
 planned" and files nothing.
 
-The whole season is one command (`engines/tuning/season_loop.py`, P2-05): clone, regular season, postseason,
-ingest, the stage loop above one stop at a time through the eight offseason stops **and the preseason weeks and
-cut day**, then a season report scored against the real-NFL targets. The loop ends when an advance lands on the
-next regular-season week. The preseason hub header reads like a regular-season one (`2027. WEEK 1`), so the stop
-comes from the save (`PRESEASON_<n>`) and the cut day is the week the league office detects as CUTDOWN.
+The whole season is one command (`engines/tuning/season_loop.py`, P2-05): clone, the **week-by-week season** below,
+the stage loop above one stop at a time through the eight offseason stops **and the preseason weeks and
+cut day**, then a season report scored against the real-NFL targets. The offseason loop ends when an advance
+lands on the next regular-season week. The preseason hub header reads like a regular-season one
+(`2027. WEEK 1`), so the stop comes from the save (`PRESEASON_<n>`) and the cut day is the week the league
+office detects as CUTDOWN.
 
 ```
 .venv/bin/python3 -m engines.tuning.season_loop --run p2c
 ```
 
-It writes `data/tuning/seasons/p2c/` (pilot run dirs, `stop_NN/` per offseason stop, `snapshot.json`,
-`season_<year>.md|.json`, `run.json`). Use `--no-offseason` to stop after the postseason while the offseason
-screens are still being catalogued.
+It writes `data/tuning/seasons/p2c/` (pilot run dirs, `week_NN/` per in-season stop, `stop_NN/` per offseason
+stop, `snapshot.json`, `season_<year>.md|.json`, `decisions_<year>.md|.json`, `progress.json`, `run.json`).
+Use `--no-offseason` to stop after the postseason while the offseason screens are still being catalogued.
+
+### 6a. The week-by-week season (P2-10)
+
+**The regular season and the playoffs are walked one stop at a time, the same way the offseason is** (JR,
+2026-11-10). Simming the season in one `sim-season` meant the weekly league office never ran — `madden_tune_p2g`
+had 0 of 18 `REGULAR_WEEK` runs — so in-season trades, mid-season coach changes, depth charts, the agent loops
+and the in-season progression checkpoints (~30% of annual growth) never happened, and the A3/A4 decision gates
+could not be measured. Each stop is now:
+
+1. `tools.madden_pilot advance --save CAREER-TUNE-<run>` — exactly one stop (a regular-season week or a playoff
+   round), the autosave copied over the named save, then a quit to the franchise list;
+2. `pipeline.watch_save --once --dsn madden_tune_<run> --no-articles --no-freeze` with
+   `LEAGUE_OFFICE_FRANCHISE_CLOSED=1` — the weekly engines **and the league office, writing that week's
+   decisions into the save** (the same write a live week gets: trades, injuries, depth charts, the progression
+   checkpoint);
+3. the next week.
+
+The walk ends after the advance that leaves the season: it lands on the offseason's first stop (`STAFF`), and
+that stop is ingested **after** the season snapshot, because Sunday's games still have to be read for the
+report and Madden rolls the per-game tables over at the new league year. That ingest is Mu's `OFFSEASON_START`
+write. The postseason is walked round by round too: each playoff save carries `week_index` 19–22, so the league
+office plans one `PLAYOFF_WEEK` run per round (`league_week` is the round's week; the Pro Bowl, which has no
+week, is week 23). A clean run therefore writes 17 `REGULAR_WEEK` runs and 4 `PLAYOFF_WEEK` runs.
+
+**Week 1 is not planned.** The `--auto-init` load that seeds the database cannot run the league office — it
+happens before the neutral progression bootstrap the league office needs — and a second ingest of the same
+week is a no-op ("same_week"), so the first planned week is 2. Closing that needs `watch_save` or the
+`league_office` CLI, not `season_loop`; it is on the board as a follow-up.
+
+**No model calls.** The watcher sets `MU_NO_LLM=1` in the ingest child for any `madden_tune_*` destination, and
+every weekly model seam (`gm_rationale`, `gm_talks` in `pipeline/weekly_capture.py`, the scouting notes) falls
+back to its template under it, so a week-by-week season spends no API budget and writes no `llm_usage` row.
+
+**`--fast-season`** keeps the old one-shot path — `sim-season --to regular-season-end`, then `--to
+playoffs-end` — and is for stat-only supersim work (P4) where the in-season league office is not wanted.
+
+**Resuming.** `data/tuning/seasons/<run>/progress.json` records every step, every in-season stop with its own
+`advance_s` and `ingest_s`, and whether the season reached its end. `--resume` restarts the walk from wherever
+the save is, which is what the record is for: the database cannot say, because `league_state.current_week` is
+games-week only and an offseason ingest keeps the stored week. A `--resume` without a progress record, or
+without its database, is refused rather than guessed. The step times are there to cost a full season: expect an
+advance (a franchise load, one week, a quit) plus a full weekly ingest per stop.
+
+```
+.venv/bin/python3 -m engines.tuning.season_loop --run p2h                   # week by week (the default)
+.venv/bin/python3 -m engines.tuning.season_loop --run p2h --resume          # on from the last stop
+.venv/bin/python3 -m engines.tuning.season_loop --run p2h --fast-season     # one-shot sims, stat-only
+```
 
 Two places still belong to Madden inside that loop: the free-agency-week and UDFA live events must be skipped, and
 the draft screen only advances by simming the draft. The pilot sims the draft **after** Mu has written the picks,
