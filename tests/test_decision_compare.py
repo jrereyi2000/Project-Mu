@@ -179,6 +179,23 @@ def test_movement_counts_needs_eight_games_both_seasons():
     assert C.movement_counts(rows[:1]) is None
 
 
+def test_a_started_season_is_eight_weeks_at_the_players_own_position():
+    rows = []
+    for week in range(1, 9):                      # 8 weeks at QB: a started season
+        rows.append((1, 2026, week, "QB", "QB", "MU_COACH"))
+    for week in range(1, 8):                      # 7 weeks: not enough
+        rows.append((2, 2026, week, "QB", "QB", "MU_COACH"))
+    for week in range(1, 19):                     # depth 1 only at KR: a returner, never a start
+        rows.append((3, 2026, week, "KR", "WR", "MU_COACH"))
+    for week in range(1, 19):                     # depth 1 in another position's slot
+        rows.append((4, 2026, week, "HB", "WR", "MU_COACH"))
+    for week in range(1, 19):                     # MADDEN is the chart read back, not Mu's plan
+        rows.append((5, 2026, week, "QB", "QB", "MADDEN"))
+    for week in range(1, 9):                      # JR's chart counts
+        rows.append((6, 2026, week, "WR", "WR", "JR"))
+    assert C.started_seasons(rows) == {1: {2026}, 6: {2026}}
+
+
 def test_draft_outcomes_by_round_and_started_seasons():
     rows = [
         (1, 2025, "1", "QB", 17), (2, 2025, "1", "WR", 14), (3, 2025, "1", "TE", 3),
@@ -436,11 +453,21 @@ def _movement_rows():
 
 MOVEMENT_ROWS = _movement_rows()
 DRAFT_ROWS = [(10, 2025, "1", "WR", 15), (11, 2026, "1", "QB", 17), (12, 2027, "2", "HB", 11)]
-CAREER_ROWS = [(21, 2026, 2025, "QB", 8), (21, 2026, 2026, "QB", 9),
-               (22, 2026, 2025, "QB", 4), (22, 2026, 2026, "QB", 5),
-               (23, 2027, 2027, "QB", 3)]          # a 2027 retirement must not leak into a 2026 report
-AGE_ROWS = [(21, 2026, "QB", 32), (22, 2026, "QB", 30), (23, 2027, "QB", 27)]
-DEPTH_ROWS = [(11, 2025), (11, 2026), (12, 2026)]
+# (player_id, season, position, age, years_of_experience): the roster rows the ended-career readers see
+PLAYER_SEASONS = [(21, 2025, "QB", 31, 8), (21, 2026, "QB", 32, 9),
+                  (22, 2025, "QB", 29, 4), (22, 2026, "QB", 30, 5),
+                  (23, 2027, "QB", 27, 3)]        # a 2027 retirement must not leak into a 2026 report
+RETIREMENTS = [(21, 2026), (22, 2026), (23, 2027)]
+DEPTH_ROWS = [(11, 2025, week, "WR", "WR", "MU_COACH") for week in range(1, 9)]
+DEPTH_ROWS += [(11, 2026, week, "WR", "WR", "MU_COACH") for week in range(1, 9)]
+DEPTH_ROWS += [(12, 2026, week, "WR", "WR", "MU_COACH") for week in range(1, 8)]    # 7 weeks: not a start
+DEPTH_ROWS += [(13, 2026, week, "KR", "WR", "MU_COACH") for week in range(1, 19)]   # returner only
+DEPTH_ROWS += [(14, 2026, week, "QB", "QB", "MU_COACH") for week in range(1, 10)]   # 9 weeks, one a bye
+DEPTH_ROWS += [(15, 2026, week, "QB", "QB", "MU_COACH") for week in range(1, 9)]    # 8 weeks, one a bye
+DEPTH_TEAMS = {11: 1, 12: 1, 13: 1, 14: 2, 15: 3}                                   # each player's team
+DEPTH_GAMES = {(2025, week, team) for week in range(1, 19) for team in (1, 2, 3)}
+DEPTH_GAMES |= {(2026, week, team) for week in range(1, 19) for team in (1, 2, 3)}
+DEPTH_GAMES -= {(2026, 5, 2), (2026, 3, 3)}        # team 2's and team 3's bye weeks in 2026
 
 
 class FakeCursor:
@@ -456,6 +483,32 @@ class FakeCursor:
     @staticmethod
     def _seasons(params):
         return params[0] if params and isinstance(params[0], (list, tuple, set)) else ()
+
+    @staticmethod
+    def _ended_career_rows(params, career):
+        """The _ENDED_CAREERS CTE over PLAYER_SEASONS / RETIREMENTS: a retirement up to params[0] counts while
+        no roster row follows it, and a last roster row at or before params[1] is two unsigned seasons."""
+        season, unsigned_cutoff = params
+        last_active = {}
+        for pid, s, *_ in PLAYER_SEASONS:
+            last_active[pid] = max(last_active.get(pid, s), s)
+        retired = {}
+        for pid, s in RETIREMENTS:
+            if s <= season:
+                retired[pid] = max(retired.get(pid, s), s)
+        ended = {pid: end for pid, end in retired.items() if last_active.get(pid, 0) <= end}
+        for pid, last in last_active.items():
+            if last <= unsigned_cutoff:
+                ended.setdefault(pid, last)
+        if career:
+            rows = [(pid, end, r[1], r[2], r[4]) for pid, end in ended.items()
+                    for r in PLAYER_SEASONS if r[0] == pid and r[1] <= end]
+            return sorted(rows, key=lambda r: (r[0], r[2]))
+        rows = []
+        for pid, end in ended.items():
+            row = next((r for r in PLAYER_SEASONS if r[0] == pid and r[1] == end), None)
+            rows.append((pid, end, row[2] if row else None, row[3] if row else None))
+        return rows
 
     def execute(self, sql, params=None):
         s = " ".join(sql.split())
@@ -478,10 +531,8 @@ class FakeCursor:
                 self._rows = [(season, WEEKS[season]) for season in self._seasons(p) if WEEKS.get(season)]
             else:
                 self._rows = [(WEEKS.get(p[0], 0),)]
-        elif "FROM player_retirements r JOIN player_seasons ps" in s:
-            self._rows = [r for r in CAREER_ROWS if r[1] <= p[0]]
-        elif "FROM player_retirements r LEFT JOIN" in s:
-            self._rows = [r for r in AGE_ROWS if r[1] <= p[0]]
+        elif "WITH last_active AS" in s:
+            self._rows = self._ended_career_rows(p, career="ps.years_of_experience" in s)
         elif "FROM games WHERE status = 'COMPLETED' AND season = ANY" in s:
             self._rows = [(season, GAMES[season]) for season in self._seasons(p) if season in GAMES]
         elif "max(week) FROM games" in s:
@@ -493,7 +544,8 @@ class FakeCursor:
         elif "FROM draft_prospects dp" in s:
             self._rows = [r for r in DRAFT_ROWS if r[1] <= p[0]]
         elif "FROM depth_charts" in s:
-            self._rows = [(pid, season) for pid, season in DEPTH_ROWS if season <= p[0]]
+            self._rows = [r for r in DEPTH_ROWS
+                          if r[1] <= p[0] and (r[1], r[2], DEPTH_TEAMS.get(r[0])) in DEPTH_GAMES]
         elif "count(*) FROM player_seasons WHERE season" in s:
             self._rows = [(3236,)]
         elif "count(*) FROM player_retirements WHERE season <=" in s:
@@ -541,6 +593,15 @@ def test_extract_runs_the_three_season_gate_from_the_real_readers():
     assert _gate(rep, "A3.between_seasons").verdict == C.PASS       # 5, 4, 5 -> mean 4.7, each in 4-10
     assert _gate(rep, "A4.in_season").verdict == C.PASS             # 13 each, mean 13
     assert _gate(rep, "A5").verdict == C.PASS                       # 25.0% each
+
+
+def test_extract_counts_a_started_season_only_at_his_own_position():
+    """F4: player 11 has 8 own-slot weeks in 2025 and 2026; 12 has 7 weeks and 13 is a returner only.
+
+    Player 14 has 9 own-slot weeks with one bye (8 games) and counts; 15 has 8 with one bye (7 games) and
+    does not — a start is a game (THRESHOLDS §7 decision 12), so a bye week's chart is not one.
+    """
+    assert C.read_started_seasons(FakeCursor(), 2026) == {11: {2025, 2026}, 14: {2026}}
 
 class CohortCursor:
     """Answers the three cohort queries with different answers, so a test can tell which one the code used:
@@ -700,3 +761,147 @@ def test_extract_on_real_postgres_reads_the_p2g_season():
     gate = _gate(rep, "A3.between_seasons")
     assert gate.observed == "5 (1 of 3 seasons)"
     assert gate.verdict == C.INCOMPLETE          # one simulated season is not a 3-season mean
+
+
+def _scratch_dsn():
+    """The explicitly named scratch test database, or a skip; a real database is refused."""
+    import os
+
+    import psycopg
+    dsn = os.environ.get("MU_PROGRESSION_STATE_TEST_DSN")
+    if not dsn:
+        pytest.skip("explicit scratch DSN not supplied")
+    database = psycopg.conninfo.conninfo_to_dict(dsn).get("dbname", "")
+    if "test" not in database or database == "madden_2036":
+        pytest.fail("decision_compare integration tests require an explicitly named test database")
+    return dsn
+
+
+@pytest.mark.integration
+def test_a_started_season_is_eight_weeks_at_his_own_position_in_postgres():
+    """F4/§7 decision 12 on real Postgres, rolled back: a start is depth 1 in the player's own slot in 8+
+    games of a chart Mu's coaches or JR set. A returner, another position's slot, MADDEN's read-back chart
+    and a bye week's chart never make a started season."""
+    import psycopg
+    dsn = _scratch_dsn()
+    with psycopg.connect(dsn) as conn:
+        cur = conn.cursor()
+        try:
+            cur.execute("SELECT id FROM teams ORDER BY id LIMIT 6")
+            teams = [r[0] for r in cur.fetchall()]
+            if len(teams) < 6:
+                pytest.skip("the scratch database has fewer than six teams")
+            # one team per player: depth_charts' key holds one player per team/week/source/slot/depth
+
+            def player(name):
+                cur.execute("INSERT INTO players (player_name) VALUES (%s) RETURNING id", (name,))
+                return cur.fetchone()[0]
+
+            def roster(pid, position):
+                cur.execute("INSERT INTO player_seasons (player_id, season, position) VALUES (%s, 2030, %s)",
+                            (pid, position))
+
+            def chart(team_id, pid, week, slot, source):
+                cur.execute("INSERT INTO depth_charts "
+                            "(team_id, season, week, position_slot, depth, player_id, source) "
+                            "VALUES (%s, 2030, %s, %s, 1, %s, %s)",
+                            (team_id, week, slot, pid, source))
+
+            def game(home, away, week):
+                cur.execute("INSERT INTO games (season, week, home_team_id, away_team_id) "
+                            "VALUES (2030, %s, %s, %s)", (week, home, away))
+
+            for week in range(1, 19):                    # every team plays every week...
+                game(teams[0], teams[1], week)
+                game(teams[2], teams[3], week)
+                game(teams[4], teams[5], week)
+            cur.execute("UPDATE games SET away_team_id = %s "      # ...except team 5's week-4 bye
+                        "WHERE season = 2030 AND week = 4 AND home_team_id = %s AND away_team_id = %s",
+                        (teams[0], teams[4], teams[5]))            # team 4 still plays that week
+
+            started = player("Started Eight Weeks")
+            short = player("Started Seven Weeks")
+            bye = player("Eight Weeks One Bye")
+            returner = player("Returner Only")
+            read_back = player("Madden Chart")
+            jr = player("JR Chart")
+            for pid in (started, short, bye, returner, read_back, jr):
+                roster(pid, "WR")
+            for week in range(1, 9):
+                chart(teams[0], started, week, "WR", "MU_COACH")
+                chart(teams[4], jr, week, "WR", "JR")
+            for week in range(1, 8):
+                chart(teams[1], short, week, "WR", "MU_COACH")
+            for week in range(1, 9):
+                chart(teams[5], bye, week, "WR", "MU_COACH")       # 8 charts, but week 4 is a bye: 7 games
+            for week in range(1, 19):
+                chart(teams[2], returner, week, "KR", "MU_COACH")   # his own position is WR, the slot is KR
+                chart(teams[3], read_back, week, "WR", "MADDEN")    # what played, not Mu's plan
+            got = C.read_started_seasons(cur, 2030)
+            assert got.get(started) == {2030}
+            assert got.get(jr) == {2030}
+            assert short not in got
+            assert bye not in got
+            assert returner not in got
+            assert read_back not in got
+        finally:
+            conn.rollback()
+
+
+@pytest.mark.integration
+def test_an_unsigned_free_agent_ends_a_career_after_two_empty_seasons_in_postgres():
+    """F5/§7 decision 11 on real Postgres, rolled back: a career ends at a retirement or after two
+    consecutive seasons with no roster row; one empty season is not enough and a later signing reopens it.
+    A1 length and A2 age both use this population."""
+    import psycopg
+    dsn = _scratch_dsn()
+    with psycopg.connect(dsn) as conn:
+        cur = conn.cursor()
+        try:
+            def player(name):
+                cur.execute("INSERT INTO players (player_name) VALUES (%s) RETURNING id", (name,))
+                return cur.fetchone()[0]
+
+            def season(pid, season, position, age, yoe):
+                cur.execute("INSERT INTO player_seasons "
+                            "(player_id, season, position, age, years_of_experience) "
+                            "VALUES (%s, %s, %s, %s, %s)", (pid, season, position, age, yoe))
+
+            unsigned = player("Unsigned Free Agent")
+            season(unsigned, 2027, "WR", 24, 0)
+            season(unsigned, 2028, "WR", 25, 1)              # then 2029 and 2030 empty -> ended at 2028
+            one_empty = player("One Empty Season")
+            season(one_empty, 2029, "QB", 30, 5)             # only 2030 is empty by the 2030 report
+            comeback = player("Signed Again")
+            season(comeback, 2027, "CB", 24, 0)
+            season(comeback, 2028, "CB", 25, 1)
+            season(comeback, 2031, "CB", 28, 4)              # the gap did not end the career
+            retired = player("Announced Retirement")
+            season(retired, 2028, "HB", 28, 6)
+            cur.execute("INSERT INTO player_retirements (season, player_id, player_name, position) "
+                        "VALUES (2028, %s, 'Announced Retirement', 'HB')", (retired,))
+
+            careers = C.read_career_rows(cur, 2030)
+            ages = C.read_retirement_rows(cur, 2030)
+            by_pid = {}
+            for pid, end_season, row_season, position, yoe in careers:
+                by_pid.setdefault(pid, {"end": end_season, "rows": []})["rows"].append(
+                    (row_season, position, yoe))
+            assert by_pid[unsigned]["end"] == 2028
+            assert [r[0] for r in by_pid[unsigned]["rows"]] == [2027, 2028]
+            assert one_empty not in by_pid                          # one empty season is not two
+            assert comeback not in by_pid                           # a later signing reopens the career
+            assert by_pid[retired]["end"] == 2028
+            assert [r[0] for r in by_pid[retired]["rows"]] == [2028]
+
+            both = [r for r in careers if r[0] in (unsigned, retired)]
+            lengths = C.career_lengths(both, {unsigned, retired})
+            assert lengths["drafted"]["WR"]["n"] == 1        # the unsigned free agent is in the cohort
+            assert lengths["drafted"]["RB"]["n"] == 1        # and so is the announced retirement
+            assert max(r[4] for r in both if r[0] == unsigned) + 1 == 2   # 2027-2028, two seasons
+            ages_by_pid = {r[0]: (r[1], r[2], r[3]) for r in ages}
+            assert ages_by_pid[unsigned] == (2028, "WR", 25)
+            assert ages_by_pid[retired] == (2028, "HB", 28)
+            assert one_empty not in ages_by_pid and comeback not in ages_by_pid
+        finally:
+            conn.rollback()

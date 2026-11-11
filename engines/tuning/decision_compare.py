@@ -16,10 +16,13 @@ Only the gates §2 marks as decided get a PASS/FAIL. A quantity the database can
 a reason; that is a failure of the run's coverage, not a silent pass (the overall verdict is INCOMPLETE).
 
 Mu-side sources, per gate:
-  A1 career length         player_retirements + player_seasons (years_of_experience, else distinct seasons);
-                           the drafted cohort from players.draft_round 1-7 (Madden's PLYR_DRAFTROUND,
-                           TUNING_ACCEPTANCE_THRESHOLDS.md §7 decision 10), not draft_class/draft_picks
-  A2 retirement age        player_retirements + the age on that season's player_seasons row
+  A1 career length         every career that had ended by the season: a retirement (player_retirements), or
+                           two consecutive seasons with no player_seasons row and no later signing, which
+                           reopens it (TUNING_ACCEPTANCE_THRESHOLDS.md §7 decision 11). Length is
+                           years_of_experience + 1, else distinct seasons; the drafted cohort from
+                           players.draft_round 1-7 (Madden's PLYR_DRAFTROUND, §7 decision 10), not
+                           draft_class/draft_picks
+  A2 retirement age        the age on the last season of that same cohort
   A3 head-coach changes    coach_tenures (head coaches only; coordinator_tenures is a different role); the
                            between-seasons count is measured only when that season's hiring cycle ran
                            (coach_hot_seat rows exist)
@@ -28,8 +31,10 @@ Mu-side sources, per gate:
                            never saw weeks 2-18 and the count is not a season's worth of decisions
   A5 team movement         player_seasons team_id across two consecutive seasons, with >= 8 games each
                            (season_stat_general, else player_stats games); the ledger's MOVED rows are not read
-  A6 draft by round        draft_prospects actual picks linked to players; "started season" = a week at
-                           depth 1 in depth_charts
+  A6 draft by round        draft_prospects actual picks linked to players; "started season" = 8+ games
+                           started at the player's own position — depth 1 in his own slot, in a week his team
+                           played, in the depth charts Mu's coaches or JR set (§7 decision 12), not a week in
+                           any slot
   A7 rookie usage          first-season games of drafted skill players, excluding linemen (no stat line)
 
 Per-season count gates (A3 between seasons, A4 in-season trades, A5 team movement) are scored on a season's
@@ -65,6 +70,9 @@ SHARE_TOL = 0.10                          # shares +/-10 points
 RATE_TOL = 0.20                           # rates +/-20% relative
 ROOKIE_MEDIAN_TOL = 2.0                   # A7: median games +/-2
 LONG_MEDIAN_GROUPS = ("QB", "K", "P")
+STARTED_SEASON_WEEKS = 8                  # §7 decision 12: a started season is 8+ games started at his position
+STARTED_SOURCES = ("MU_COACH", "JR")      # the charts Mu's coaches and JR set; MADDEN is what was read back
+UNSIGNED_SEASONS_END_CAREER = 2           # §7 decision 11: two consecutive seasons with no roster row end it
 
 # Madden 27 positions -> decision_targets' position groups (D.group_of handles the nflverse spellings)
 MU_GROUPS = {
@@ -75,6 +83,9 @@ MU_GROUPS = {
     "DB": {"CB", "FS", "SS", "DB", "S"},
     "K": {"K"}, "P": {"P"},
 }
+# Madden's roster position -> the depth-chart slot that is that position. The defensive codes the roster uses
+# (LEDG/REDG/MIKE/WILL/SAM) and RB map to the slot's name; every other position is its own slot name.
+OWN_SLOT = {"LEDG": "LE", "REDG": "RE", "MIKE": "MLB", "WILL": "ROLB", "SAM": "LOLB", "RB": "HB"}
 # the real rookie-usage cohort excludes linemen (they have no stat line)
 
 PASS, FAIL = "PASS", "FAIL"
@@ -256,12 +267,33 @@ def movement_counts(rows):
             "rate": round(moved / eligible, 4) if eligible else None}
 
 
+def started_seasons(rows):
+    """{player_id: set(seasons)} for seasons the player started at his own position.
+
+    rows: (player_id, season, week, position_slot, own_slot, source). A season counts only when he was depth 1
+    at his own slot in STARTED_SEASON_WEEKS (8) distinct weeks of a chart Mu's coaches or JR set
+    (TUNING_ACCEPTANCE_THRESHOLDS.md §7 decision 12). A returner or sub-package slot (KR, PR, 3DRB, SLWR,
+    SUBLB, ...) is not his own position, and MADDEN is the chart read back from the save, what played rather
+    than what was planned, so neither counts.
+    """
+    weeks = {}
+    for pid, season, week, slot, own_slot, source in rows:
+        if source not in STARTED_SOURCES or not own_slot or slot != own_slot:
+            continue
+        weeks.setdefault((pid, season), set()).add(week)
+    out = {}
+    for (pid, season), season_weeks in weeks.items():
+        if len(season_weeks) >= STARTED_SEASON_WEEKS:
+            out.setdefault(pid, set()).add(season)
+    return out
+
+
 def draft_outcomes(rows, started_seasons, through_season):
     """Draft outcomes by round from (player_id, draft_season, round, position, games) rows.
 
     Only classes with at least two seasons to establish are counted (draft_season <= through_season - 1).
-    started_seasons: {player_id: set(seasons)} where a season counts as started when the player held
-    depth 1 at his position in at least one week (depth_charts). Returns
+    started_seasons: {player_id: set(seasons)} from started_seasons(): a season counts as started only when
+    the player held his own position in 8+ weeks (depth_charts). Returns
     {round: {"n", "games_median", "share_started_2plus"}}.
     """
     by_round = {}
@@ -416,12 +448,29 @@ def read_games_played(cur, seasons):
 
 
 def read_started_seasons(cur, season):
-    """{player_id: set(seasons)} for players who held depth 1 at their position in a week."""
-    out = {}
-    for pid, s in _fetch(cur, "SELECT DISTINCT player_id, season FROM depth_charts "
-                              "WHERE depth = 1 AND player_id IS NOT NULL AND season <= %s", (season,)):
-        out.setdefault(pid, set()).add(s)
-    return out
+    """{player_id: set(seasons)} for seasons the player started at his own position (8+ games, MU_COACH/JR).
+
+    The player's own slot comes from his position that season (player_seasons), mapped with OWN_SLOT; the
+    depth chart's position_slot must name that same slot. Depth 1 in a situational or returner slot is a
+    week on that unit, not a start at his position. A week counts only when his team played a regular-season
+    game that week: a start is a game (nflverse seasons_started), so a bye week's chart is not one.
+    """
+    rows = _fetch(cur, """
+        SELECT dc.player_id, dc.season, dc.week, dc.position_slot,
+               CASE UPPER(ps.position) WHEN 'LEDG' THEN 'LE' WHEN 'REDG' THEN 'RE'
+                    WHEN 'MIKE' THEN 'MLB' WHEN 'WILL' THEN 'ROLB' WHEN 'SAM' THEN 'LOLB'
+                    WHEN 'RB' THEN 'HB' ELSE UPPER(ps.position) END AS own_slot,
+               dc.source
+          FROM depth_charts dc
+          JOIN player_seasons ps
+                 ON ps.player_id = dc.player_id AND ps.season = dc.season
+          JOIN games g
+                 ON g.season = dc.season AND g.week = dc.week
+                AND g.status = 'COMPLETED' AND g.game_type = 'REGULAR_SEASON'
+                AND dc.team_id IN (g.home_team_id, g.away_team_id)
+         WHERE dc.depth = 1 AND dc.player_id IS NOT NULL AND dc.season <= %s
+           AND dc.source IN ('MU_COACH', 'JR')""", (season,))
+    return started_seasons(rows)
 
 
 def read_draft_rows(cur, season):
@@ -443,23 +492,55 @@ def read_draft_rows(cur, season):
     return [r for r in rows if str(r[2] or "").strip() in {str(i) for i in range(1, 8)}]
 
 
+# A career ends at a retirement, or after UNSIGNED_SEASONS_END_CAREER consecutive seasons with no roster row
+# (no player_seasons row) and no later signing — a later signing reopens it (TUNING_ACCEPTANCE_THRESHOLDS.md
+# §7 decision 11). The last active season is the end of the unsigned route; a retirement keeps its own season,
+# but only while no roster row follows it. Both readers share this CTE; its second parameter is the cutoff
+# `season - UNSIGNED_SEASONS_END_CAREER`.
+_ENDED_CAREERS = """
+WITH last_active AS (
+    SELECT player_id, max(season) AS last_season
+      FROM player_seasons
+     WHERE player_id IS NOT NULL
+     GROUP BY player_id
+), retired AS (
+    SELECT player_id, max(season) AS end_season
+      FROM player_retirements
+     WHERE season <= %s AND player_id IS NOT NULL
+     GROUP BY player_id
+), ended AS (
+    SELECT la.player_id, r.end_season
+      FROM retired r
+      JOIN last_active la ON la.player_id = r.player_id
+     WHERE la.last_season <= r.end_season
+    UNION
+    SELECT player_id, last_season FROM last_active WHERE last_season <= %s
+)
+"""
+
+
 def read_career_rows(cur, season):
-    """[(player_id, retired_season, row_season, position, yoe)] for retirements up to `season`."""
-    return _fetch(cur, """
-        SELECT r.player_id, r.season, ps.season, ps.position, ps.years_of_experience
-          FROM player_retirements r
-          JOIN player_seasons ps ON ps.player_id = r.player_id
-         WHERE r.season <= %s
-         ORDER BY r.player_id, ps.season""", (season,))
+    """[(player_id, end_season, row_season, position, yoe)] for every career ended by `season`.
+
+    The population is retirements plus unsigned free agents (two consecutive seasons with no roster row),
+    which is what the real A1/A2 cohort is; a signing after the gap reopens the career, so his last active
+    season moves with it.
+    """
+    return _fetch(cur, _ENDED_CAREERS + """
+        SELECT e.player_id, e.end_season, ps.season, ps.position, ps.years_of_experience
+          FROM ended e
+          JOIN player_seasons ps ON ps.player_id = e.player_id AND ps.season <= e.end_season
+         ORDER BY e.player_id, ps.season""",
+                  (season, season - UNSIGNED_SEASONS_END_CAREER))
 
 
 def read_retirement_rows(cur, season):
-    """[(player_id, retired_season, position, age)] for retirements up to `season`."""
-    return _fetch(cur, """
-        SELECT r.player_id, r.season, ps.position, ps.age
-          FROM player_retirements r
-          LEFT JOIN player_seasons ps ON ps.player_id = r.player_id AND ps.season = r.season
-         WHERE r.season <= %s""", (season,))
+    """[(player_id, end_season, position, age)] for every career ended by `season` (the same population)."""
+    return _fetch(cur, _ENDED_CAREERS + """
+        SELECT e.player_id, e.end_season, ps.position, ps.age
+          FROM ended e
+          LEFT JOIN player_seasons ps ON ps.player_id = e.player_id AND ps.season = e.end_season""",
+                  (season, season - UNSIGNED_SEASONS_END_CAREER))
 
 
 def extract(cur, season, league_current_season=None):
@@ -787,7 +868,9 @@ def compare_decisions(observed, targets):
         if "share_started_2plus" not in obs or obs.get("n", 0) < MIN_COHORT:
             gates.append(Gate(f"A6.round{r}", f"Draft round {r}: 2+ started seasons", "—",
                               f"{tgt:.0%} ± {SHARE_TOL:.0%}", NOT_MEASURED,
-                              "no linked drafted class with 2+ seasons in this database"))
+                              "no linked drafted class with 2+ seasons in this database (a started season is "
+                              f"{STARTED_SEASON_WEEKS}+ games started at the player's own position, in a week "
+                              "his team played)"))
             continue
         gate = _share_gate(f"A6.round{r}", f"Draft round {r}: 2+ started seasons",
                            obs["share_started_2plus"], tgt, f"n={obs['n']}")
