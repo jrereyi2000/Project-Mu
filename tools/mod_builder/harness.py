@@ -23,6 +23,7 @@ DEFAULT_EXE = "/mnt/c/Madden27Modding/MuHarness/MmcHarness.exe"
 PATH_ARGS: dict[str, tuple[int, ...]] = {
     "info": (),
     "export-res": (2,),
+    "export-legacy": (2,),
     "find": (),
     "export-texture": (2,),
     "import-texture": (1, 3),

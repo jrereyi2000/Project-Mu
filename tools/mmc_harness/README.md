@@ -20,7 +20,7 @@ bash tools/mmc_harness/build.sh
 - Output: `C:\Madden27Modding\MuHarness\MmcHarness.exe` and `MmcHarness.exe.config` (outside the repo). Nothing is written into the repo.
 - Env: `MU_MMC_EDITOR_DIR` (Windows path, default `C:\Madden27Modding\MMC_Modding_Tools_v1.1.0.7\MMC_Editor_v1.1.0.7`), `MU_MMC_HARNESS_OUT` (output folder).
 
-Run-time env: `MU_MMC_EDITOR_DIR` (same default), `MU_MADDEN_GAME_DIR` (default `C:\Program Files\EA Games\Madden NFL 27`), `MU_MMC_KEY_FILE` (the game key file, default `<editor>\madden27.key`; see Known limits).
+Run-time env: `MU_MMC_LEGACY_MANAGER` (the legacy file manager `export-legacy` and `find --kind legacy` register; default `LegacyFileManagerV2`: checked 2026-11-10 on Madden27, V3 throws in `Initialize` and the original lists nothing; pass it to Windows with `WSLENV=MU_MMC_LEGACY_MANAGER`), `MU_MMC_EDITOR_DIR` (same default), `MU_MADDEN_GAME_DIR` (default `C:\Program Files\EA Games\Madden NFL 27`), `MU_MMC_KEY_FILE` (the game key file, default `<editor>\madden27.key`; see Known limits).
 
 ## Commands
 
@@ -30,7 +30,8 @@ Each command prints exactly one JSON object on stdout (`{"ok": true, ...}` or `{
 |---|---|
 | `info` | Loads the Madden27 profile and the cache. Prints `editor_version`, `game_build` (FileSystem head), `cache_build`, the 20-byte `fingerprint` from the cache header (MOD_REVERSE_ENGINEERING §2.1), `ebx_count`, and `ebx_readable` (whether the game initfs loaded). |
 | `export-res <asset-name-or-hex-rid> <out.bin>` | Reads a vanilla resource through AssetManager.GetRes, by name or hexadecimal resource ID, and writes its decompressed bytes. Does not load a project or modify assets. |
-| `find <pattern> [--kind ebx\|res\|chunk] [--limit N]` | Asset names from the loaded asset manager. A pattern with `*`/`?` is a case-insensitive glob over the whole name; otherwise a substring. Returns `count`, `truncated`, `matches[{name, kind, type}]`. |
+| `export-legacy <legacy/file/path> <out.bin>` | Reads a vanilla legacy file (Lua, XML, JSON, `.ast`, `.ftc`, ...) through MMC's legacy file manager and writes its bytes. Does not load a project or modify assets. Returns `path`, `type` (e.g. `AST`), `size`, `legacy_manager`. |
+| `find <pattern> [--kind ebx\|res\|chunk\|legacy] [--limit N]` | Asset names from the loaded asset manager. A pattern with `*`/`?` is a case-insensitive glob over the whole name; otherwise a substring. Returns `count`, `truncated`, `matches[{name, kind, type}]`. `--kind legacy` searches only legacy file paths (and adds `legacy_manager`); the other kinds never list them. |
 | `export-texture <asset> <out.png\|.dds\|.tga\|.hdr> [--project P]` | Through `TexturePlugin.TextureExporter`. With `--project`, exports the texture as the project has it. |
 | `import-texture <project> <asset> <in.png\|.tga\|.hdr\|.dds> [--raw]` | Loads the `.fbproject` if it exists (a new one otherwise), imports, saves. The texture keeps its own pixel format: PNG/TGA/HDR are encoded with the editor's `dxtex.dll` (`FrostyTextureEditor.ConvertImageToDDS` with `ResolveImportOptions`, mips generated); a DDS in the same format goes in as is; a DDS in another format is decoded to PNG and re-encoded. `--raw` keeps a DDS's own format instead. 2D textures only. |
 | `ebx-dump <asset> <out.json> [--project P]` | The ebx root object as JSON: each object gets `$type` and `$guid`, internal pointers are followed inline (`{"$ref": path}` on repeats), external pointers are `{"$external": name, file_guid, class_guid}`. Also records asset dependencies and bundle IDs, and lists `color_fields` (every Vec3/Vec4, and fields named colour/tint) with their paths. |

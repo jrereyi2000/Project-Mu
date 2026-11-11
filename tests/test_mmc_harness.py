@@ -97,6 +97,10 @@ def test_convert_args_converts_only_path_positions(fake_wslpath):
     out = harness.convert_args(["export-res", "DA6752E4F657A705", "/b/resource.bin"])
     assert out == ["export-res", "DA6752E4F657A705", "W:\\b\\resource.bin"]
 
+    legacy = "common/ui/node_fe/mainmenu/corenode.ast"
+    out = harness.convert_args(["export-legacy", legacy, "/b/corenode.ast"])
+    assert out == ["export-legacy", legacy, "W:\\b\\corenode.ast"]
+
     out = harness.convert_args(["ebx-set", "/b/p.fbproject", "a/b", "Field.x", "#FF69B4"])
     assert out == ["ebx-set", "W:\\b\\p.fbproject", "a/b", "Field.x", "#FF69B4"]
 

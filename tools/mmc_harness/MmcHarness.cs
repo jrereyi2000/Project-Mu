@@ -255,6 +255,9 @@ namespace MuHarness
         internal static string KeyFile;
         internal static string KeySource = "none";
         static bool booted;
+        /// <summary>Set before Start by the legacy commands: registers MMC's legacy file manager.</summary>
+        internal static bool WantLegacy;
+        internal static string LegacyManager;
 
         /// <summary>The game key MMC Editor adds itself: the byte array FrostyProfileTaskWindow's
         /// Window_Loaded state machine builds with RuntimeHelpers.InitializeArray before
@@ -385,9 +388,31 @@ namespace MuHarness
             try { Frosty.Core.App.PluginManager.Initialize(); }
             catch (Exception ex) { Console.Error.WriteLine("harness: PluginManager.Initialize failed (continuing): " + ex.Message); }
 
+            if (WantLegacy) RegisterLegacy();
             Am.Initialize(true, new AssetManagerImportResult());
             Console.Error.WriteLine("harness: asset manager ebx=" + Am.GetEbxCount() + " " + sw.Elapsed);
             booted = true;
+        }
+
+        // MMC Editor registers its legacy file manager (FrostyCore) from the profile window, which the
+        // harness never builds; so the legacy commands register it here, before Am.Initialize.
+        // Madden27 needs LegacyFileManagerV2 (checked 2026-11-10: V3 throws in Initialize, the
+        // original lists nothing); MU_MMC_LEGACY_MANAGER names another. Read-only: nothing is modified.
+        static void RegisterLegacy()
+        {
+            var reg = typeof(AssetManager).GetMethods().FirstOrDefault(m => m.Name == "RegisterCustomAssetManager"
+                && m.GetParameters().Length == 2 && m.GetParameters()[1].ParameterType == typeof(Type));
+            if (reg == null) throw new HarnessException("AssetManager.RegisterCustomAssetManager(string, Type) not found");
+            Type[] types;
+            try { types = typeof(Frosty.Core.App).Assembly.GetTypes(); }
+            catch (ReflectionTypeLoadException ex) { types = ex.Types.Where(t => t != null).ToArray(); }
+            var only = Environment.GetEnvironmentVariable("MU_MMC_LEGACY_MANAGER");
+            var name = string.IsNullOrEmpty(only) ? "LegacyFileManagerV2" : only;
+            var mgr = types.FirstOrDefault(x => x.Name == name && !x.IsAbstract);
+            if (mgr == null) throw new HarnessException("no legacy file manager named " + name + " in FrostyCore");
+            try { reg.Invoke(Am, new object[] { "legacy", mgr }); }
+            catch (TargetInvocationException ex) { throw new HarnessException("registering " + mgr.FullName + " failed: " + ex.InnerException.Message); }
+            LegacyManager = mgr.FullName;
         }
 
         internal static object Member(object o, string name)
@@ -469,7 +494,8 @@ namespace MuHarness
             "usage: MmcHarness <command> ...\n" +
             "  info\n" +
             "  export-res <asset-name-or-hex-rid> <out.bin>\n" +
-            "  find <pattern> [--kind ebx|res|chunk] [--limit N]\n" +
+            "  find <pattern> [--kind ebx|res|chunk|legacy] [--limit N]\n" +
+            "  export-legacy <legacy/file/path> <out.bin>\n" +
             "  export-texture <asset> <out.png|out.dds|out.tga> [--project P]\n" +
             "  import-texture <project.fbproject> <asset> <in.png|in.dds|in.tga> [--raw]\n" +
             "  ebx-dump <asset> <out.json> [--project P]\n" +
@@ -501,6 +527,7 @@ namespace MuHarness
             {
                 case "info": Need(pos, 0, "info"); return Info();
                 case "export-res": Need(pos, 2, "export-res <asset-name-or-hex-rid> <out.bin>"); return ExportRes(pos[0], pos[1]);
+                case "export-legacy": Need(pos, 2, "export-legacy <legacy/file/path> <out.bin>"); return ExportLegacy(pos[0], pos[1]);
                 case "find": Need(pos, 1, "find <pattern>"); return Find(pos[0], Opt(opts, "kind", null), int.Parse(Opt(opts, "limit", "200")));
                 case "export-texture": Need(pos, 2, "export-texture <asset> <out>"); return ExportTexture(pos[0], pos[1], Opt(opts, "project", null));
                 case "import-texture": Need(pos, 3, "import-texture <project> <asset> <in>"); return ImportTexture(pos[0], pos[1], pos[2], flags.Contains("--raw"));
@@ -579,9 +606,10 @@ namespace MuHarness
         // ---- find
         static JObj Find(string pattern, string kind, int limit)
         {
+            if (kind != null && kind != "ebx" && kind != "res" && kind != "chunk" && kind != "legacy")
+                throw new HarnessException("--kind must be ebx, res, chunk or legacy");
+            if (kind == "legacy") return FindLegacy(pattern, limit);
             Boot.Start();
-            if (kind != null && kind != "ebx" && kind != "res" && kind != "chunk")
-                throw new HarnessException("--kind must be ebx, res or chunk");
             Func<string, bool> match = MakeMatcher(pattern);
             var hits = new List<object>();
             int total = 0;
@@ -595,6 +623,39 @@ namespace MuHarness
                 foreach (var e in Boot.Am.EnumerateChunks(false))
                     if (match(e.Id.ToString())) { total++; if (hits.Count < limit) hits.Add(new JObj().Set("name", e.Id.ToString()).Set("kind", "chunk").Set("type", null)); }
             return new JObj().Set("ok", true).Set("pattern", pattern).Set("count", total).Set("truncated", total > hits.Count).Set("matches", hits);
+        }
+
+        // Legacy files only on --kind legacy: registering the legacy manager adds its own load time.
+        static JObj FindLegacy(string pattern, int limit)
+        {
+            Boot.WantLegacy = true;
+            Boot.Start();
+            Func<string, bool> match = MakeMatcher(pattern);
+            var hits = new List<object>();
+            int total = 0;
+            foreach (var e in Boot.Am.EnumerateCustomAssets("legacy", false))
+                if (match(e.Name)) { total++; if (hits.Count < limit) hits.Add(new JObj().Set("name", e.Name).Set("kind", "legacy").Set("type", e.Type)); }
+            return new JObj().Set("ok", true).Set("pattern", pattern).Set("count", total).Set("truncated", total > hits.Count)
+                .Set("legacy_manager", Boot.LegacyManager).Set("matches", hits);
+        }
+
+        // Vanilla legacy file read only (Lua, XML, JSON, .ast, ...); no project loading or asset mutation.
+        static JObj ExportLegacy(string path, string outPath)
+        {
+            Boot.WantLegacy = true;
+            Boot.Start();
+            var entry = Boot.Am.GetCustomAssetEntry("legacy", Norm(path));
+            if (entry == null) throw new HarnessException("legacy file not found: " + path + " (legacy manager " + Boot.LegacyManager + ")");
+            var dir = Path.GetDirectoryName(Path.GetFullPath(outPath));
+            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+            using (var input = Boot.Am.GetCustomAsset("legacy", entry))
+            using (var output = File.Create(outPath))
+            {
+                if (input == null) throw new HarnessException("legacy file has no data: " + entry.Name);
+                input.CopyTo(output);
+            }
+            return new JObj().Set("ok", true).Set("path", entry.Name).Set("type", entry.Type).Set("out", outPath)
+                .Set("size", new FileInfo(outPath).Length).Set("legacy_manager", Boot.LegacyManager);
         }
 
         static Func<string, bool> MakeMatcher(string pattern)
