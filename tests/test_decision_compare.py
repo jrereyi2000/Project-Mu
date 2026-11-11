@@ -1409,8 +1409,9 @@ def test_the_chart_in_force_carries_forward_in_postgres():
 
     A week-1 chart runs to the next stored chart (newest week wins); a bye week's chart is not a game; 8
     weeks is the threshold; a chart stored under the season with week 31 or 32 (that year's cutdown and
-    preseason) sorts before week 1, while weeks 23 and 26 (postseason and offseason) are not in force; and a
-    MADDEN read-back at week 5 beats JR's week 3 for the weeks after it."""
+    preseason) sorts before week 1, while week 23 (postseason) never reaches a regular-season week and a
+    week-26 (offseason) chart belongs to the next season; and a MADDEN read-back at week 5 beats JR's week 3
+    for the weeks after it."""
     import psycopg
     dsn = _scratch_dsn()
     with psycopg.connect(dsn) as conn:
@@ -1505,6 +1506,279 @@ def test_the_chart_in_force_carries_forward_in_postgres():
             assert postseason not in got                         # ... (season, 23) is not
             assert offseason not in got                          # case 9b: (season, 26) is not either
             assert got.get(madden5) == {2046} and jr3 not in got  # case 10: newest week wins
+        finally:
+            conn.rollback()
+
+
+def _read_started_with_rows(cur, season):
+    """read_started_seasons() plus the raw rows it resolved, so a test can assert the credited weeks."""
+    rows = []
+    orig = C.started_seasons
+    C.started_seasons = lambda resolved: (rows.extend(resolved), orig(resolved))[1]
+    try:
+        return C.read_started_seasons(cur, season), rows
+    finally:
+        C.started_seasons = orig
+
+
+@pytest.mark.integration
+def test_the_chart_falls_back_per_slot_across_weeks_in_postgres():
+    """JR's per-slot fallback across weeks, on real Postgres, rolled back (repro j flipped).
+
+    A full MU chart at week 3 followed by a JR chart at week 5 that sets only QB1: the WR slot is empty in
+    the newest chart week, so it keeps week 3's starter for weeks 3-10 (8 games, a started season), while QB1
+    is JR's man from week 5."""
+    import psycopg
+    dsn = _scratch_dsn()
+    with psycopg.connect(dsn) as conn:
+        cur = conn.cursor()
+        try:
+            cur.execute("SELECT id FROM teams ORDER BY id LIMIT 2")
+            pair = [r[0] for r in cur.fetchall()]
+            if len(pair) < 2:
+                pytest.skip("the scratch database has fewer than two teams")
+            team, other = pair
+
+            def player(name):
+                cur.execute("INSERT INTO players (player_name) VALUES (%s) RETURNING id", (name,))
+                return cur.fetchone()[0]
+
+            def roster(pid, position, year=2050):
+                cur.execute("INSERT INTO player_seasons (player_id, season, team_id, position) "
+                            "VALUES (%s, %s, %s, %s)", (pid, year, team, position))
+
+            def chart(pid, week, slot, source, year=2050):
+                cur.execute("INSERT INTO depth_charts "
+                            "(team_id, season, week, position_slot, depth, player_id, source) "
+                            "VALUES (%s, %s, %s, %s, 1, %s, %s)",
+                            (team, year, week, slot, pid, source))
+
+            for week in range(1, 11):
+                cur.execute("INSERT INTO games (season, week, home_team_id, away_team_id) "
+                            "VALUES (2050, %s, %s, %s)", (week, team, other))
+
+            wr = player("A6j MU WR Week Three")
+            qb = player("A6j JR QB Week Five")
+            roster(wr, "WR")
+            roster(qb, "QB")
+            chart(wr, 3, "WR", "MU_COACH")       # a full chart, then a week-5 JR chart that sets only QB
+            chart(qb, 5, "QB", "JR")
+
+            got, rows = _read_started_with_rows(cur, 2050)
+            assert sorted(r[2] for r in rows if r[0] == wr) == list(range(3, 11))
+            assert sorted(r[2] for r in rows if r[0] == qb) == list(range(5, 11))
+            assert got.get(wr) == {2050}         # nine weeks of the ten? no: weeks 3-10 are eight games
+            assert qb not in got                 # six starts are below the eight-week threshold
+        finally:
+            conn.rollback()
+
+
+@pytest.mark.integration
+def test_the_chart_fallback_uses_the_newest_filler_week_in_postgres():
+    """JR's newest-week-wins fallback, on real Postgres, rolled back: WR1 set by MU at week 1 (A) and by
+    MADDEN at week 4 (B), then a JR chart at week 6 that sets only QB. The WR slot keeps the newest week
+    that filled it: A for weeks 1-3, B from week 4 on (a newer MADDEN-only week beats the older MU week)."""
+    import psycopg
+    dsn = _scratch_dsn()
+    with psycopg.connect(dsn) as conn:
+        cur = conn.cursor()
+        try:
+            cur.execute("SELECT id FROM teams ORDER BY id LIMIT 2")
+            pair = [r[0] for r in cur.fetchall()]
+            if len(pair) < 2:
+                pytest.skip("the scratch database has fewer than two teams")
+            team, other = pair
+
+            def player(name):
+                cur.execute("INSERT INTO players (player_name) VALUES (%s) RETURNING id", (name,))
+                return cur.fetchone()[0]
+
+            def roster(pid, position):
+                cur.execute("INSERT INTO player_seasons (player_id, season, team_id, position) "
+                            "VALUES (%s, 2051, %s, %s)", (pid, team, position))
+
+            def chart(pid, week, slot, source):
+                cur.execute("INSERT INTO depth_charts "
+                            "(team_id, season, week, position_slot, depth, player_id, source) "
+                            "VALUES (%s, 2051, %s, %s, 1, %s, %s)", (team, week, slot, pid, source))
+
+            for week in range(1, 11):
+                cur.execute("INSERT INTO games (season, week, home_team_id, away_team_id) "
+                            "VALUES (2051, %s, %s, %s)", (week, team, other))
+
+            old_mu = player("A6k MU WR Week One")
+            newest_madden = player("A6k MADDEN WR Week Four")
+            qb = player("A6k JR QB Week Six")
+            roster(old_mu, "WR")
+            roster(newest_madden, "WR")
+            roster(qb, "QB")
+            chart(old_mu, 1, "WR", "MU_COACH")
+            chart(newest_madden, 4, "WR", "MADDEN")
+            chart(qb, 6, "QB", "JR")
+
+            _got, rows = _read_started_with_rows(cur, 2051)
+            assert sorted(r[2] for r in rows if r[0] == old_mu) == [1, 2, 3]
+            assert sorted(r[2] for r in rows if r[0] == newest_madden) == list(range(4, 11))
+            assert sorted(r[2] for r in rows if r[0] == qb) == list(range(6, 11))
+        finally:
+            conn.rollback()
+
+
+@pytest.mark.integration
+def test_an_offseason_chart_counts_for_the_next_season_in_postgres():
+    """JR's offseason ruling, on real Postgres, rolled back: a chart stored as (2052, 26) is part of 2053's
+    pre-week-1 history. JR's WR1 = C is in force for 2053 weeks 1-2; MU's week-3 chart (D) takes over from
+    week 3. The same chart credits no 2052 week, and C's 2053 weeks are not a started season (2 games)."""
+    import psycopg
+    dsn = _scratch_dsn()
+    with psycopg.connect(dsn) as conn:
+        cur = conn.cursor()
+        try:
+            cur.execute("SELECT id FROM teams ORDER BY id LIMIT 2")
+            pair = [r[0] for r in cur.fetchall()]
+            if len(pair) < 2:
+                pytest.skip("the scratch database has fewer than two teams")
+            team, other = pair
+
+            def player(name):
+                cur.execute("INSERT INTO players (player_name) VALUES (%s) RETURNING id", (name,))
+                return cur.fetchone()[0]
+
+            def roster(pid, year):
+                cur.execute("INSERT INTO player_seasons (player_id, season, team_id, position) "
+                            "VALUES (%s, %s, %s, 'WR')", (pid, year, team))
+
+            def chart(pid, year, week, source):
+                cur.execute("INSERT INTO depth_charts "
+                            "(team_id, season, week, position_slot, depth, player_id, source) "
+                            "VALUES (%s, %s, %s, 'WR', 1, %s, %s)", (team, year, week, pid, source))
+
+            def games(year):
+                for week in range(1, 11):
+                    cur.execute("INSERT INTO games (season, week, home_team_id, away_team_id) "
+                                "VALUES (%s, %s, %s, %s)", (year, week, team, other))
+
+            offseason = player("A6l Offseason WR C")
+            week_three = player("A6l MU WR D Week Three")
+            roster(offseason, 2052)               # rostered in both seasons, so a leak into 2052 would show
+            roster(offseason, 2053)
+            roster(week_three, 2053)
+            games(2052)
+            games(2053)
+            chart(offseason, 2052, 26, "JR")      # (2052, 26) -> 2053's pre-week-1 chart
+            chart(week_three, 2053, 3, "MU_COACH")
+
+            got, rows = _read_started_with_rows(cur, 2053)
+            assert [r[1] for r in rows if r[0] == offseason] == [2053] * 2
+            assert sorted(r[2] for r in rows if r[0] == offseason) == [1, 2]
+            assert sorted(r[2] for r in rows if r[0] == week_three) == list(range(3, 11))
+            assert got.get(week_three) == {2053}  # weeks 3-10: eight games
+            assert offseason not in got          # only two games
+        finally:
+            conn.rollback()
+
+
+@pytest.mark.integration
+def test_offseason_and_cutdown_charts_sort_before_week_one_in_postgres():
+    """JR's pre-week-1 ordering, on real Postgres, rolled back: (Y-1, 26) comes before (Y, 31), so with both
+    in force at week 1 the cutdown chart's man E starts. A team with only the offseason chart (F) still has
+    him in force from week 1: the offseason chart counts, it is not ignored."""
+    import psycopg
+    dsn = _scratch_dsn()
+    with psycopg.connect(dsn) as conn:
+        cur = conn.cursor()
+        try:
+            cur.execute("SELECT id FROM teams ORDER BY id LIMIT 4")
+            teams = [r[0] for r in cur.fetchall()]
+            if len(teams) < 4:
+                pytest.skip("the scratch database has fewer than four teams")
+            team, other, second, other2 = teams
+
+            def player(name):
+                cur.execute("INSERT INTO players (player_name) VALUES (%s) RETURNING id", (name,))
+                return cur.fetchone()[0]
+
+            def roster(pid, team_id):
+                cur.execute("INSERT INTO player_seasons (player_id, season, team_id, position) "
+                            "VALUES (%s, 2055, %s, 'WR')", (pid, team_id))
+
+            def chart(team_id, pid, year, week, source):
+                cur.execute("INSERT INTO depth_charts "
+                            "(team_id, season, week, position_slot, depth, player_id, source) "
+                            "VALUES (%s, %s, %s, 'WR', 1, %s, %s)", (team_id, year, week, pid, source))
+
+            for week in range(1, 11):
+                cur.execute("INSERT INTO games (season, week, home_team_id, away_team_id) "
+                            "VALUES (2055, %s, %s, %s)", (week, team, other))
+                cur.execute("INSERT INTO games (season, week, home_team_id, away_team_id) "
+                            "VALUES (2055, %s, %s, %s)", (week, second, other2))
+
+            offseason_c = player("A6m Offseason WR C")
+            cutdown_e = player("A6m Cutdown WR E")
+            offseason_f = player("A6m Offseason WR F Only")
+            roster(offseason_c, team)
+            roster(cutdown_e, team)
+            roster(offseason_f, second)
+            chart(team, offseason_c, 2054, 26, "MU_COACH")    # (Y-1, 26) is older than (Y, 31)
+            chart(team, cutdown_e, 2055, 31, "MU_COACH")
+            chart(second, offseason_f, 2054, 26, "MU_COACH")
+
+            got, rows = _read_started_with_rows(cur, 2055)
+            week_one = [r[0] for r in rows if r[2] == 1]
+            assert cutdown_e in week_one                # (Y, 31) is newer than (Y-1, 26)
+            assert offseason_c not in week_one
+            assert not [r for r in rows if r[0] == offseason_c]                        # never in force
+            assert sorted(r[2] for r in rows if r[0] == offseason_f) == list(range(1, 11))
+            assert got.get(cutdown_e) == {2055} and got.get(offseason_f) == {2055}
+            assert offseason_c not in got
+        finally:
+            conn.rollback()
+
+
+@pytest.mark.integration
+def test_an_offseason_chart_does_not_cross_two_seasons_in_postgres():
+    """JR's one-boundary ruling, on real Postgres, rolled back: (2055, 26) belongs to 2056, not 2057, so a
+    2057 read takes the newer (2056, 26) chart's man H from week 1 and never the 2055 chart's man G."""
+    import psycopg
+    dsn = _scratch_dsn()
+    with psycopg.connect(dsn) as conn:
+        cur = conn.cursor()
+        try:
+            cur.execute("SELECT id FROM teams ORDER BY id LIMIT 2")
+            pair = [r[0] for r in cur.fetchall()]
+            if len(pair) < 2:
+                pytest.skip("the scratch database has fewer than two teams")
+            team, other = pair
+
+            def player(name):
+                cur.execute("INSERT INTO players (player_name) VALUES (%s) RETURNING id", (name,))
+                return cur.fetchone()[0]
+
+            def roster(pid):
+                cur.execute("INSERT INTO player_seasons (player_id, season, team_id, position) "
+                            "VALUES (%s, 2057, %s, 'WR')", (pid, team))
+
+            def chart(pid, year):
+                cur.execute("INSERT INTO depth_charts "
+                            "(team_id, season, week, position_slot, depth, player_id, source) "
+                            "VALUES (%s, %s, 26, 'WR', 1, %s, 'MU_COACH')", (team, year, pid))
+
+            for week in range(1, 11):
+                cur.execute("INSERT INTO games (season, week, home_team_id, away_team_id) "
+                            "VALUES (2057, %s, %s, %s)", (week, team, other))
+
+            two_back = player("A6n Offseason WR G Two Back")
+            one_back = player("A6n Offseason WR H One Back")
+            roster(two_back)
+            roster(one_back)
+            chart(two_back, 2055)                 # (Y-2, 26): maps to 2056 only, never 2057
+            chart(one_back, 2056)                 # (Y-1, 26): the only chart 2057 can see
+
+            got, rows = _read_started_with_rows(cur, 2057)
+            assert not [r for r in rows if r[0] == two_back]
+            assert sorted(r[2] for r in rows if r[0] == one_back) == list(range(1, 11))
+            assert got.get(one_back) == {2057}
+            assert two_back not in got
         finally:
             conn.rollback()
 
