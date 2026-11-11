@@ -2086,18 +2086,26 @@ def bootstrap_untracked_players(cur, snapshot, stage, season, source_fingerprint
     inside the league office so a plain `pipeline.load_save --commit` (or any other caller) is healed at the
     next plan too. Same gates: only a managed database that already holds state (the setup pass owns the
     first bootstrap), neutral form, `setup_application_season`, and a player with events but no state is left
-    for `prepare_pass` to refuse. Returns the number seeded.
+    for `prepare_pass` to refuse. Returns the number seeded. A failure is a named WARN and the plan proceeds
+    (the next plan retries); a state that really is missing still fails `prepare_pass`, the honest failure.
+    The call runs in a savepoint so the plan's own transaction survives the error.
     """
     from engines import progression as pg
     from engines import progression_checkpoint as pc
+    from engines import progression_state as state
     if not pg.managed_progression_state(cur):
         return 0
     cur.execute("SELECT count(*) FROM progression_player_state")
     if not cur.fetchone()[0]:
         return 0
     application_season = setup_application_season(stage, season)
-    rows, no_ratings = pc.bootstrap_untracked(cur, snapshot, application_season,
-                                              source_fingerprint=source_fingerprint)
+    try:
+        with state._savepoint(cur):
+            rows, no_ratings = pc.bootstrap_untracked(cur, snapshot, application_season,
+                                                      source_fingerprint=source_fingerprint)
+    except Exception as e:      # noqa: BLE001 - a missing heal must not fail the plan
+        log.warning("progression newcomer bootstrap failed: %s (the next plan retries)", e)
+        return 0
     if no_ratings:
         log.warning("progression newcomer bootstrap skipped %s players with no ratings in the save: %s",
                     len(no_ratings), no_ratings[:5])
