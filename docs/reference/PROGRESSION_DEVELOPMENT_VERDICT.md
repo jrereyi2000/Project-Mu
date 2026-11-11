@@ -155,3 +155,11 @@ as the fit does? audit-2 has put both questions to JR.
   `player_progression_history.league_term`. **If the development term rises above +1.5 a year in any season,
   revisit the term.** That would be the 2036 pattern, where rookie classes fall far behind the departing
   veterans.
+- **Open for P3 after the fix (audit-2, M-0455), measured during the P3-02 re-run:**
+  1. **Sample versus full roster.** `calibrate_league_term` fits on a stratified sample. On p2g the full roster
+     gives a star term of +1.5 against the sample's +1.0. Decide whether the live engine should calibrate on
+     the full roster, which is slower but exact.
+  2. **The tripwire.** With the fixed projection, p2g's 2027 development term is **+1.5**, right at this
+     verdict's line ("revisit above +1.5"). It is not over the line yet, but it is no longer the replay's
+     +0.5. Read it across the re-run's five seasons before judging. If it stays at +1.5 or more, the term
+     needs revisiting (a cap or a smaller weight) before P5.
