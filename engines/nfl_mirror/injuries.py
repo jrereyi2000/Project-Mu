@@ -12,19 +12,26 @@ The mirror copies real injuries two ways:
 `injury_fields` builds the save's player edit (`InjuryStatus`, `InjuryType`, `InjurySeverity`, `MinInjuryDuration`,
 `MaxInjuryDuration`) from those weeks and the nflverse body-part text. `HEAL_FIELDS` is the healthy edit.
 
-The enum names are Spike B's real save values (plan §0 S17): InjuryStatus `Uninjured` / `Injured`; InjurySeverity
-`Invalid_`, `Max_`, `SeasonEnding`, `GameEnding`, `CoupleGames`, `SeveralGames`, `CoupleQtrs`; InjuryType `Invalid_`
-plus the real body-part names below. `injury_fields(..., enums=...)` accepts the save's own lists (field name ->
-values, or the short keys `status` / `type` / `severity`) and only emits a value they contain; without them the
-S17 values are used.
+The save's writer validates enum fields against fieldMeta (pipeline/save_reader/lib.mjs:150-193): it drops every
+member whose name ends in `_`, so `Invalid_` and `Max_` can be read from a save but are never writable. A heal
+therefore sets only `InjuryStatus`, MinInjuryDuration and MaxInjuryDuration (Madden ignores the stale diagnosis
+while the player is Uninjured), and an injury with no writable type omits `InjuryType` entirely instead of writing
+`Invalid_`, leaving whatever diagnosis the player had. The same rule applies through `enums=`: a chosen value the
+save does not list, or a `_`-suffixed sentinel, omits the key.
+
+The enum names are Spike B's real save values (plan §0 S17): InjuryStatus `Uninjured` / `Injured` (that save also
+has `EarlyReturn` / `Undiagnosed`); InjurySeverity `Max_`, `SeasonEnding`, `GameEnding`, `CoupleGames`,
+`SeveralGames`, `CoupleQtrs` plus the read-only `Invalid_`; InjuryType `Invalid_` plus the real body-part names
+below. `injury_fields(..., enums=...)` accepts the save's own lists (field name -> values, or the short keys
+`status` / `type` / `severity`) and only emits a writable value they contain; without them the S17 values are used.
 """
 
 REGULAR_WEEKS = 18              # the CATCH_UP cap: weeks left in the regular season
 
 UNINJURED = "Uninjured"         # pipeline/league_office.HEALTHY
 INJURED = "Injured"
-GENERIC_TYPE = "Invalid_"       # S17's injury type 0: no diagnosis known
-GENERIC_SEVERITY = "Invalid_"
+GENERIC_TYPE = "Invalid_"       # S17's injury type 0: read from a save, never written (the writer rejects it)
+GENERIC_SEVERITY = "Invalid_"   # likewise read-only; every real severity band is writable
 
 # S17's real save enums (InjuryType lists the real names the plan's survey printed).
 ENUM_STATUS = ("Uninjured", "Injured")
@@ -42,7 +49,8 @@ ENUM_TYPE = (
 DEFAULT_ENUMS = {"InjuryStatus": ENUM_STATUS, "InjuryType": ENUM_TYPE, "InjurySeverity": ENUM_SEVERITY}
 
 # nflverse report_primary_injury (body part text) -> Madden's real InjuryType. A body part with no honest
-# counterpart (calf, concussion, illness, neck, ...) falls back to GENERIC_TYPE rather than inventing a diagnosis.
+# counterpart (calf, concussion, illness, neck, ...) has no writable type, so injury_fields omits InjuryType
+# rather than inventing a diagnosis (or writing the rejected `Invalid_` sentinel).
 # The longest matching key wins, so "turf toe" beats "toe", "rotator cuff" beats "shoulder" and "achilles" beats
 # "ankle".
 BODY_PART_TO_TYPE = {
@@ -90,12 +98,11 @@ BODY_PART_TO_TYPE = {
 # incident reads as season-ending in the save; the exact weeks stay in Min/MaxInjuryDuration.
 SEVERITY_BANDS = ((0, "CoupleQtrs"), (1, "CoupleGames"), (3, "SeveralGames"))
 
-# pipeline/league_office.HEALTHY = ("Uninjured", None): a healthy player has no injury type. The save's enum 0
-# (Invalid_) is the on-disk spelling of that "none" (pipeline/load_save.injury_values treats it that way).
+# pipeline/league_office.HEALTHY = ("Uninjured", None): a healthy player has no injury type. The writer rejects
+# both `None` and the `_`-suffixed sentinel for the enum fields, and Madden ignores the stale diagnosis and
+# severity while the player is Uninjured, so a heal leaves them alone.
 HEAL_FIELDS = {
     "InjuryStatus": UNINJURED,
-    "InjuryType": None,
-    "InjurySeverity": GENERIC_SEVERITY,
     "MinInjuryDuration": 0,
     "MaxInjuryDuration": 0,
 }
@@ -162,35 +169,38 @@ def estimate_weeks(injury, status, history):
 # ---------- save fields ----------
 
 def injury_fields(weeks, body_part, enums=None):
-    """The save's player-edit fields for an injury of `weeks`: InjuryStatus, InjuryType, InjurySeverity,
-    MinInjuryDuration and MaxInjuryDuration (both = weeks).
+    """The writable save player-edit fields for an injury of `weeks`: InjuryStatus, MinInjuryDuration and
+    MaxInjuryDuration (both = weeks), plus InjuryType and InjurySeverity when a writable value exists.
 
-    `body_part` is nflverse's report text, mapped through BODY_PART_TO_TYPE; an unknown part uses GENERIC_TYPE.
-    `enums` optionally supplies the save's own enum values, as `{field: [values]}` or `{status|type|severity:
-    [values]}`; a chosen value the save doesn't list falls back to `Invalid_` (or the list's first value), so a
-    schema change can't write a name the save rejects.
+    `body_part` is nflverse's report text, mapped through BODY_PART_TO_TYPE; a part with no honest mapping (or an
+    empty one) omits InjuryType, so the player keeps the diagnosis he had instead of getting the unwritable
+    `Invalid_`. `enums` optionally supplies the save's own enum values, as `{field: [values]}` or
+    `{status|type|severity: [values]}`; a value the save doesn't list, or one ending in `_` (the writer drops those
+    members), omits its key rather than writing something save_writer.mjs rejects.
     """
     weeks = max(0, int(weeks or 0))
+    fields = {"MinInjuryDuration": weeks, "MaxInjuryDuration": weeks}
+    status = _enum_value(enums, "InjuryStatus", "status", INJURED)
+    if status:
+        fields["InjuryStatus"] = status
     kind = injury_type(body_part)
+    if _writable(kind, _values(enums, "InjuryType", "type")):
+        fields["InjuryType"] = kind
     severity = severity_for(weeks)
-    return {
-        "InjuryStatus": _allowed(enums, "InjuryStatus", "status", INJURED, UNINJURED),
-        "InjuryType": _allowed(enums, "InjuryType", "type", kind, GENERIC_TYPE),
-        "InjurySeverity": _allowed(enums, "InjurySeverity", "severity", severity, GENERIC_SEVERITY),
-        "MinInjuryDuration": weeks,
-        "MaxInjuryDuration": weeks,
-    }
+    if _writable(severity, _values(enums, "InjurySeverity", "severity")):
+        fields["InjurySeverity"] = severity
+    return fields
 
 
 def injury_type(body_part):
-    """The real InjuryType for nflverse body-part text, else GENERIC_TYPE."""
+    """The real InjuryType for nflverse body-part text, else None (no writable type; the key is omitted)."""
     text = " ".join(str(body_part or "").lower().split())
     if not text:
-        return GENERIC_TYPE
+        return None
     for key in sorted(BODY_PART_TO_TYPE, key=len, reverse=True):
         if key in text:
             return BODY_PART_TO_TYPE[key]
-    return GENERIC_TYPE
+    return None
 
 
 def severity_for(weeks):
@@ -223,11 +233,14 @@ def _values(enums, field, short):
     return ()
 
 
-def _allowed(enums, field, short, wanted, fallback):
-    """`wanted` when the save's enum lists it (or there is no list), else `fallback`, else the list's first value."""
-    values = _values(enums, field, short)
-    if not values or wanted in values:
-        return wanted
-    if fallback in values:
-        return fallback
-    return values[0]
+def _writable(value, values):
+    """True when `value` may be written: not the writer's dropped `_`-suffixed sentinel, and in the save's list
+    when the caller supplied one."""
+    if not value or str(value).endswith("_"):
+        return False
+    return not values or value in values
+
+
+def _enum_value(enums, field, short, wanted):
+    """`wanted` when it may be written, else None (the key is omitted)."""
+    return wanted if _writable(wanted, _values(enums, field, short)) else None

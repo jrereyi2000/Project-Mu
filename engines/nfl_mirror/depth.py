@@ -126,7 +126,12 @@ def _roster_rows(madden_roster):
 
 
 def _out(row):
-    """True when the save player is injured or on IR (a missing row is not hurt)."""
+    """True when the save player is injured or on IR (a missing row is not hurt).
+
+    Two shapes are read: a snapshot player (`injury: {"status", "injured_reserve"}`) and the save field names at
+    the top level. In the latter, `status` is the roster status ("Signed" / "FreeAgent" / "PracticeSquad"), so
+    `InjuryStatus` wins whenever the row carries it.
+    """
     if not isinstance(row, dict):
         return False
     injury = row.get("injury")
@@ -134,6 +139,6 @@ def _out(row):
         injury = row        # the save field names at the top level
     if injury.get("out"):
         return True
-    status = injury.get("status", injury.get("InjuryStatus"))
+    status = injury["InjuryStatus"] if "InjuryStatus" in injury else injury.get("status")
     ir = injury.get("injured_reserve", injury.get("IsInjuredReserve"))
     return status not in HEALTHY_STATUSES or bool(ir)

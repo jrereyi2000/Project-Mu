@@ -87,14 +87,15 @@ def test_estimate_weeks(report, status, history, want):
 
 # ---------- heal fields ----------
 
-def test_heal_fields_are_the_healthy_player_fields():
+def test_heal_fields_are_the_writable_healthy_player_fields():
+    # The writer rejects None and `_`-suffixed enum members, so a heal leaves the stale type and severity alone.
     assert injuries.HEAL_FIELDS == {
         "InjuryStatus": "Uninjured",
-        "InjuryType": None,
-        "InjurySeverity": "Invalid_",
         "MinInjuryDuration": 0,
         "MaxInjuryDuration": 0,
     }
+    assert "InjuryType" not in injuries.HEAL_FIELDS
+    assert "InjurySeverity" not in injuries.HEAL_FIELDS
 
 
 # ---------- injury_fields ----------
@@ -117,12 +118,19 @@ def test_injury_fields_for_a_knee():
     ("Turf toe", "FootTurfToe"),
     ("Rotator cuff", "ShoulderRotatorCuffTear"),
     ("Thumb", "HandThumbBroken"),
-    ("Concussion", "Invalid_"),
-    ("", "Invalid_"),
-    (None, "Invalid_"),
+    ("Concussion", None),
+    ("", None),
+    (None, None),
 ])
 def test_injury_type_body_part_map(body_part, kind):
     assert injuries.injury_type(body_part) == kind
+
+
+def test_injury_fields_omits_the_type_for_an_unmapped_body_part():
+    fields = injuries.injury_fields(2, "Concussion")
+    assert "InjuryType" not in fields
+    assert fields == {"InjuryStatus": "Injured", "InjurySeverity": "SeveralGames",
+                      "MinInjuryDuration": 2, "MaxInjuryDuration": 2}
 
 
 @pytest.mark.parametrize("weeks,severity", [
@@ -139,8 +147,17 @@ def test_injury_fields_uses_the_save_enums_when_given():
              "severity": ["Invalid_", "SeveralGames"]}
     fields = injuries.injury_fields(2, "Knee", enums)
     assert fields["InjuryStatus"] == "Injured"
-    assert fields["InjuryType"] == "Invalid_"          # KneeACLSprain is not in this save's list
+    assert "InjuryType" not in fields                    # KneeACLSprain is not in this save's list: omit it
     assert fields["InjurySeverity"] == "SeveralGames"
+
+
+def test_injury_fields_omits_an_enum_the_save_does_not_list():
+    enums = {"InjuryType": ["Invalid_", "BackStrain"], "InjurySeverity": ["Invalid_", "CoupleGames"],
+             "InjuryStatus": ["Uninjured", "Injured"]}
+    fields = injuries.injury_fields(8, "Knee", enums)
+    assert "InjuryType" not in fields
+    assert "InjurySeverity" not in fields                # SeasonEnding is outside this save's list
+    assert fields["InjuryStatus"] == "Injured"
 
 
 def test_injury_fields_accepts_field_name_enum_keys():
@@ -206,6 +223,14 @@ def test_real_chart_accepts_a_player_list():
     roster = [save_player(1), save_player(2, status="Injured")]
     chart = depth.real_chart({"WR": ["g1", "g2"]}, {"g1": 1, "g2": 2}, roster)
     assert chart == {"WR": [1]}
+
+
+def test_real_chart_reads_top_level_save_field_names():
+    # A top-level row's `status` is the roster status; InjuryStatus is the injury state and must win.
+    roster = [{"pgid": 1, "status": "Signed", "InjuryStatus": "Uninjured", "IsInjuredReserve": False},
+              {"pgid": 2, "status": "Signed", "InjuryStatus": "Injured", "IsInjuredReserve": False}]
+    chart = depth.real_chart({"QB": ["g1", "g2"]}, {"g1": 1, "g2": 2}, roster)
+    assert chart == {"QB": [1]}
 
 
 def test_real_chart_caps_a_slot_at_maddens_depth():
