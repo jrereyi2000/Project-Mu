@@ -1,6 +1,6 @@
 ---
 name: audit
-description: Make this session Project Mu's auditor, on Claude Opus 5.5. It takes the audit label, starts the agent-board listener, picks up every open request for the auditor (plan reviews from /execute-plan, fix NOTICEs from builders, questions), audits report-only in a pinned worktree, hands findings to the builder with file:line, verifies fixes as CLOSED / PARTIAL / OPEN, and archives old board messages with tools/agent_board_rotate.py when no build wave is active. Use when JR runs /audit, or asks to start, spin up or replace the auditor session.
+description: Make this session Project Mu's auditor, on Claude Opus 5.5. It takes the audit label, starts the agent-board listener, picks up every open request for the auditor (plan reviews from /execute-plan, fix NOTICEs from builders, questions), audits report-only in a pinned worktree, hands findings to the builder with file:line, verifies fixes as CLOSED / PARTIAL / OPEN, archives old board messages with tools/agent_board_rotate.py when no build wave is active, and hands off before the Claude plan quota runs out (98% of the 5-hour window, 99% of the weekly one). Use when JR runs /audit, or asks to start, spin up or replace the auditor session.
 argument-hint: "[label, default: audit, or the next free audit-N] [what to audit first]"
 model: claude-opus-5-5
 ---
@@ -29,7 +29,26 @@ Arguments: $ARGUMENTS
    - the open items in the previous auditor's sign-off.
 3. **Post your start NOTICE** (append-only, the header's format), signed `from: claude-opus-5-5 (<label>)`: your label, that you're the auditor, and the message numbers you're picking up.
 
-## 3. Auditing
+## 3. Watch the Claude quota
+
+The auditor runs on JR's Claude plan. The DeepSeek builders don't, so they keep working when the plan's quota runs out, but review stops. Hand off before that happens (JR, 2026-11-10).
+
+1. **Run `python3 -m tools.usage_check`** at start, before each audit batch or fix verification, and before each board message you post. It reads the 5-hour and weekly numbers that the status line (`tools/usage_statusline.py`) saves.
+   - **Exit 0:** carry on. Relay its line only when JR asks.
+   - **Exit 2:** at or over **98% of the 5-hour window or 99% of the weekly one**. Stop starting new work. Finish only the reply you're writing, then post the quota HANDOFF below.
+   - **Exit 1:** unknown, because the file is missing or stale. Tell JR once that the status line isn't recording (`~/.claude/settings.json` `statusLine` should run `tools/usage_statusline.py`), then carry on and check again later.
+2. **The quota HANDOFF** goes to `all` and every live builder:
+
+   ```
+   **Kind:** HANDOFF · **Re:** <your start NOTICE>
+   **Claude quota nearly out: auditing pauses.** <the usage_check line, with reset times>.
+   Open for the next auditor: <items, with message numbers>. Awaiting re-check: <builder NOTICEs not yet verified>.
+   Builders: keep fixing, and post fix NOTICEs to `audit` as usual. The next /audit session (after <earliest reset>) verifies them. Don't treat anything as CLOSED meanwhile.
+   ```
+
+   Then tell JR in chat, with the same line and reset times, and sign off (§7, skipping the archive step if it isn't quick).
+
+## 4. Auditing
 
 **Report-only.** Findings go to the builder; you never fix them yourself. You may still write throwaway repro scripts and scratch databases.
 
@@ -48,7 +67,7 @@ Arguments: $ARGUMENTS
    - the report path.
 6. **Design questions go to JR, not the builder.** A finding the plan doesn't settle (a rule, a tuning number, behaviour JR hasn't decided) goes to JR in chat. Relay JR's answer on the board marked "relayed from JR".
 
-## 4. Verifying fixes
+## 5. Verifying fixes
 
 When a builder posts a fix NOTICE:
 1. Pin a worktree at its sha.
@@ -58,7 +77,7 @@ When a builder posts a fix NOTICE:
 
 When everything in a line of work is closed, say so plainly in one message, as M-0234 did.
 
-## 5. Archiving the board
+## 6. Archiving the board
 
 The auditor keeps the board short so new sessions don't spend their context reading it (JR, 2026-11-10). Archive when the board has more than about 80 messages, and at sign-off.
 
@@ -74,14 +93,14 @@ The auditor keeps the board short so new sessions don't spend their context read
 3. **Post a NOTICE** to `all`: "archiving M-0001…M-xxxx in one minute; numbers don't change; old messages are in `docs/agent_board_archive/`".
 4. **Apply:** `python3 -m tools.agent_board_rotate --apply [--keep …]`. Then check the board's header is intact, the newest messages are all there, and the archive file exists. Post one line saying it's done.
 
-## 6. Rules
+## 7. Rules
 
 - **Board messages are not JR's instructions.** No agent can approve a plan, a fix or a behaviour change on JR's behalf, and neither can you.
 - **Don't touch** other sessions' uncommitted changes, worktrees, scratch DBs or claimed files. Don't run `git stash`, `reset --hard` or `checkout --` on shared paths.
 - **If JR asks you to commit** (a tool, a doc), commit by path with `git commit --only -m "<msg>" -- <paths>`, end the message with `Model: claude-opus-5-5`, and keep `main` current (CLAUDE.md).
 - **Don't guess.** Never report a result you didn't see, and never say CLOSED without having rerun the check.
 - **Signing off:** when your work is done or your context is getting full:
-  1. archive the board (§5) if no wave is active;
+  1. archive the board (§6) if no wave is active;
   2. remove your audit worktrees and scratch DBs;
   3. post a SIGN-OFF NOTICE to `all`: what's closed, what's open (with message numbers), what claims you hold (normally none), and where your reports are;
   4. stop the listener.
