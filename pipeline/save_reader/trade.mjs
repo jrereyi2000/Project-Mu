@@ -4,7 +4,13 @@
 //   {"trade": [{"from_team_index": 3, "to_team_index": 12, "pgids": [123], "picks": [{"tableId": 4540, "row": 17}]}]}
 //
 // One entry moves one direction; a swap is two entries. Each player keeps his status and his PlayerContract record
-// (the reference doesn't change): a Signed player moves from the old team's Roster to the end of the new team's, a
+// (the reference doesn't change) unless the entry names him in its "lists" array: then the trade also moves him
+// between his new team's Roster and PracticeSquad in this one write (audit-5 U18 R4). A promotion (PracticeSquad ->
+// Roster) gives him a new contract from the signing pool and removes him from League.FreeAgents; a demotion (Roster ->
+// PracticeSquad) clears his contract reference (the old row stays unreferenced) and appends him to League.FreeAgents.
+// The lists' roster counts move accordingly. The same-team "lists" block is list_change.mjs.
+//
+// Without a list change: a Signed player moves from the old team's Roster to the end of the new team's, a
 // practice-squad player from PracticeSquad to PracticeSquad (and stays in League.FreeAgents, where practice-squad
 // players are listed). He gets TeamIndex the new team, PrevTeamIndex the old one, WeeksWithTeam 0, not captain,
 // TradeStatus None; leaves the old team's depth chart and its other player lists (release.mjs TEAM_LISTS: drafted,
@@ -17,15 +23,16 @@
 // new team's Team row under record_edits.mjs's reference rule (a Team table, a real row, the field already pointing
 // into that table). The pick must belong to the old team and not have been used (SelectedPlayer empty).
 // Left to Madden (PC checks): cap totals, trade history and news.
-import { decodeRef, encodeRef } from './lib.mjs';
+import { NO_REF, decodeRef, encodeRef, packedRefs } from './lib.mjs';
 import { referenceError } from './record_edits.mjs';
 import { TEAM_LISTS } from './release.mjs';
 import {
-  applyCounts, countDelta, countErrors, fieldErrors, fieldMismatches, leagueContext, ListOps, moveTables, readList,
-  verifyListsAndCounts,
+  allocateContract, applyCounts, contractSlots, countDelta, countErrors, fieldErrors, fieldMismatches,
+  leagueContext, ListOps, moveTables, readList, verifyListsAndCounts,
 } from './sign.mjs';
 
 const TRADABLE = { Signed: 'Roster', PracticeSquad: 'PracticeSquad' };
+const LISTS = new Set(['Roster', 'PracticeSquad']);
 
 // A team's player lists other than Roster and PracticeSquad, its depth-chart positions, and its locked entries.
 export async function teamLists(tables, team) {
@@ -55,17 +62,21 @@ export async function teamLists(tables, team) {
   return { lists, depth, locked, depthChart: dc };
 }
 
-// Plans the trades without changing anything: { plan, errors }.
-export async function planTrade(franchise, items = []) {
+// Plans the trades without changing anything: { plan, errors }. `contractTaken` holds `${table}:${row}` keys another
+// move of this write already assigned, so a promotion never takes the same PlayerContract row.
+export async function planTrade(franchise, items = [], { contractTaken = new Set() } = {}) {
   const errors = [];
   const tables = moveTables(franchise);
   const ctx = await leagueContext(tables);
   const { playerTable, teamTable, PID } = ctx;
+  const league = await tables.byName('League');
+  const freeAgents = await readList(tables, league?.records[0]?.FreeAgents, 'League.FreeAgents');
   const ops = new ListOps();
   const teamEdits = [];
   const moves = [];
   const picks = [];
   const listCache = new Map();
+  let slots = null;      // the contract pool, made once and handed out in order
   const listsOf = async team => {
     if (!listCache.has(team.TeamIndex)) listCache.set(team.TeamIndex, await teamLists(tables, team));
     return listCache.get(team.TeamIndex);
@@ -81,6 +92,15 @@ export async function planTrade(franchise, items = []) {
     if (!from || !to) { errors.push(`${where}: no team ${!from ? item?.from_team_index : item?.to_team_index}`); continue; }
     if (from === to) { errors.push(`${where}: from and to are the same team`); continue; }
     if (!(item.pgids ?? []).length && !(item.picks ?? []).length) { errors.push(`${where}: no players or picks`); continue; }
+    const listChange = new Map();
+    for (const entry of item.lists ?? []) {
+      if (!(item.pgids ?? []).includes(entry?.pgid)) {
+        errors.push(`${where}: list change for pgid ${entry?.pgid}, not in pgids`);
+        continue;
+      }
+      if (listChange.has(entry.pgid)) { errors.push(`${where} pgid ${entry.pgid}: listed twice`); continue; }
+      listChange.set(entry.pgid, entry);
+    }
     const fromLists = await listsOf(from);
     const fromRow = teamTable.records.indexOf(from);
     const toRow = teamTable.records.indexOf(to);
@@ -92,25 +112,64 @@ export async function planTrade(franchise, items = []) {
       const hit = ctx.playerRow(pgid);
       if (hit.error) { errors.push(`trade ${hit.error}`); continue; }
       const { row, record: p } = hit;
-      const key = TRADABLE[p.ContractStatus];
-      if (!key || p.TeamIndex !== from.TeamIndex) {
+      const fromKey = TRADABLE[p.ContractStatus];
+      if (!fromKey || p.TeamIndex !== from.TeamIndex) {
         errors.push(`${w}: ${p.ContractStatus} on team ${p.TeamIndex}, not on ${from.ShortName}'s roster or practice squad`);
         continue;
       }
-      const home = await readList(tables, from[key], `${from.ShortName} ${key}`);
-      const dest = await readList(tables, to[key], `${to.ShortName} ${key}`);
+      const change = listChange.get(pgid);
+      const toKey = change ? change.list : fromKey;
+      if (!LISTS.has(toKey)) { errors.push(`${w}: list must be Roster or PracticeSquad, not ${JSON.stringify(toKey)}`); continue; }
+      const home = await readList(tables, from[fromKey], `${from.ShortName} ${fromKey}`);
+      const dest = await readList(tables, to[toKey], `${to.ShortName} ${toKey}`);
       const hits = home ? home.before.map(decodeRef).filter(r => r && r.table === PID && r.row === row).length : 0;
-      if (hits !== 1) { errors.push(`${w}: in ${from.ShortName} ${key} ${hits} times`); continue; }
-      if (!dest) { errors.push(`${w}: ${to.ShortName} has no ${key} list`); continue; }
+      if (hits !== 1) { errors.push(`${w}: in ${from.ShortName} ${fromKey} ${hits} times`); continue; }
+      if (!dest) { errors.push(`${w}: ${to.ShortName} has no ${toKey} list`); continue; }
       if (decodeRef(from.FranchiseTaggedPlayer)?.row === row) { errors.push(`${w}: franchise-tagged by ${from.ShortName}`); continue; }
       if (fromLists.locked.some(l => l.player?.table === PID && l.player?.row === row)) { errors.push(`${w}: locked in a depth chart`); continue; }
       const set = { TeamIndex: to.TeamIndex, PrevTeamIndex: from.TeamIndex, WeeksWithTeam: 0, PLYR_ISCAPTAIN: false, TradeStatus: 'None' };
+      let contract = null;
+      const promoted = fromKey === 'PracticeSquad' && toKey === 'Roster';
+      const demoted = fromKey === 'Roster' && toKey === 'PracticeSquad';
+      let nextYear = 0;
+      if (promoted) {
+        if (!slots) slots = await contractSlots(franchise, tables, playerTable, { exclude: contractTaken });
+        const alloc = allocateContract(slots, change?.contract);
+        if (alloc.errors.length) { errors.push(...alloc.errors.map(e => `${w}: ${e}`)); continue; }
+        contract = alloc.contract;
+        set.ContractStatus = 'Signed';
+        set.Mindset = 'Content';
+        nextYear = contract.set.Length - contract.set.CurrentYear > 1 ? 1 : 0;
+      } else if (demoted) {
+        if (change?.contract && Object.keys(change.contract).length) {
+          errors.push(`${w}: practice-squad players have no contract record; drop the contract block`);
+          continue;
+        }
+        set.ContractStatus = 'PracticeSquad';
+        set.Mindset = 'Content';
+        const c = decodeRef(p.Contract);
+        if (c) {
+          const cr = (await tables.byId(c.table)).records[c.row];
+          nextYear = cr.Length - cr.CurrentYear > 1 ? 1 : 0;
+        }
+      }
+      // Contract is a reference field, written after the plain-field check (sign.mjs does the same).
       const errs = fieldErrors(p, set, 'Player');
       if (errs.length) { errors.push(...errs.map(e => `${w}: ${e}`)); continue; }
+      if (promoted) set.Contract = encodeRef(contract.table, contract.row);
+      if (demoted) set.Contract = NO_REF;
 
       const ref = { table: PID, row };
       ops.remove(home, ref);
       ops.append(dest, ref);
+      if (freeAgents) {
+        const inFA = packedRefs(freeAgents.before).refs.some(r => r.table === PID && r.row === row);
+        if (promoted && inFA) ops.remove(freeAgents, ref);
+        if (demoted && !inFA) ops.append(freeAgents, ref);
+      } else if (demoted) {
+        errors.push(`${w}: no League.FreeAgents list`);
+        continue;
+      }
       for (const l of fromLists.lists) {
         if (l.key === 'Roster' || l.key === 'PracticeSquad') continue;
         if (l.before.some(v => { const d = decodeRef(v); return d && d.table === PID && d.row === row; })) ops.remove(l, ref);
@@ -118,15 +177,21 @@ export async function planTrade(franchise, items = []) {
       for (const l of fromLists.depth) {
         if (l.before.some(v => { const d = decodeRef(v); return d && d.table === PID && d.row === row; })) ops.remove(l, ref, { packed: false });
       }
-      if (key === 'Roster') {
+      if (promoted) {
+        countDelta(teamEdits, teamTable, to, { ActiveRosterSize: 1, SalCapRosterSize: 1, SalCapNextYearRosterSize: nextYear });
+      } else if (demoted) {
+        countDelta(teamEdits, teamTable, from, { ActiveRosterSize: -1, SalCapRosterSize: -1, SalCapNextYearRosterSize: -nextYear });
+      } else if (fromKey === 'Roster') {
         const c = decodeRef(p.Contract);
         const cr = c ? (await tables.byId(c.table)).records[c.row] : null;
-        const nextYear = cr ? (cr.Length - cr.CurrentYear > 1 ? 1 : 0) : 0;
-        countDelta(teamEdits, teamTable, from, { ActiveRosterSize: -1, SalCapRosterSize: -1, SalCapNextYearRosterSize: -nextYear });
-        countDelta(teamEdits, teamTable, to, { ActiveRosterSize: 1, SalCapRosterSize: 1, SalCapNextYearRosterSize: nextYear });
+        const ny = cr ? (cr.Length - cr.CurrentYear > 1 ? 1 : 0) : 0;
+        countDelta(teamEdits, teamTable, from, { ActiveRosterSize: -1, SalCapRosterSize: -1, SalCapNextYearRosterSize: -ny });
+        countDelta(teamEdits, teamTable, to, { ActiveRosterSize: 1, SalCapRosterSize: 1, SalCapNextYearRosterSize: ny });
       }
-      moves.push({ pgid, row, record: p, status: p.ContractStatus, list: key, from: from.ShortName, to: to.ShortName,
-        fromIndex: from.TeamIndex, toIndex: to.TeamIndex, contract: p.Contract, set });
+      moves.push({ pgid, row, record: p, status: p.ContractStatus, fromList: fromKey, list: toKey,
+        from: from.ShortName, to: to.ShortName, fromIndex: from.TeamIndex, toIndex: to.TeamIndex,
+        contract: p.Contract, contractAfter: set.Contract ?? p.Contract, set, newContract: contract,
+        created: Boolean(contract?.created) });
     }
 
     for (const pk of item.picks ?? []) {
@@ -154,11 +219,22 @@ export async function planTrade(franchise, items = []) {
 
   errors.push(...ops.compute().errors.map(e => `trade: ${e}`));
   errors.push(...countErrors(teamEdits).map(e => `trade: ${e}`));
-  return { plan: { playerTable: PID, teamTable: teamTable.header.tableId, moves, picks, ops, lists: ops.lists, teamEdits }, errors };
+  const contractRecords = slots?.contracts.records ?? null;
+  return {
+    plan: { playerTable: PID, teamTable: teamTable.header.tableId, moves, picks, ops, lists: ops.lists, teamEdits,
+      contractRecords },
+    errors,
+  };
 }
 
 export function applyTrade(plan) {
-  for (const m of plan.moves) for (const [k, v] of Object.entries(m.set)) m.record[k] = v;
+  for (const m of plan.moves) {
+    if (m.newContract) {
+      const c = plan.contractRecords[m.newContract.row];
+      for (const [k, v] of Object.entries(m.newContract.set)) if (c[k] !== v) c[k] = v;
+    }
+    for (const [k, v] of Object.entries(m.set)) m.record[k] = v;
+  }
   for (const pk of plan.picks) pk.record.CurrentTeam = pk.value;
   plan.ops.apply();
   applyCounts(plan.teamEdits);
@@ -169,11 +245,18 @@ export async function verifyTrade(franchise, plan) {
   const tables = moveTables(franchise);
   const bad = [];
   const players = await tables.byId(plan.playerTable);
+  const holders = new Map();
+  for (const r of players.records) if (!r.isEmpty && decodeRef(r.Contract)) holders.set(r.Contract, (holders.get(r.Contract) ?? 0) + 1);
   for (const m of plan.moves) {
     const p = players.records[m.row];
     if (p.PresentationId !== m.pgid) { bad.push(`trade pgid ${m.pgid}: row ${m.row} moved`); continue; }
     bad.push(...fieldMismatches(p, m.set, `trade pgid ${m.pgid}`));
-    if (p.Contract !== m.contract) bad.push(`trade pgid ${m.pgid}: contract reference changed`);
+    if (p.Contract !== m.contractAfter) bad.push(`trade pgid ${m.pgid}: contract reference wrote ${m.contractAfter}, read ${p.Contract}`);
+    if (m.newContract) {
+      const c = (await tables.byId(m.newContract.table)).records[m.newContract.row];
+      bad.push(...fieldMismatches(c, m.newContract.set, `trade pgid ${m.pgid} contract`));
+      if (holders.get(p.Contract) !== 1) bad.push(`trade pgid ${m.pgid}: contract row held by ${holders.get(p.Contract)} players`);
+    }
   }
   for (const pk of plan.picks) {
     const r = (await tables.byId(pk.tableId)).records[pk.row];
@@ -190,6 +273,7 @@ export function tradeSummary(plan) {
     players: plan.moves.length,
     roster: plan.moves.filter(m => m.list === 'Roster').length,
     practice_squad: plan.moves.filter(m => m.list === 'PracticeSquad').length,
+    list_changes: plan.moves.filter(m => m.list !== m.fromList).length,
     picks: plan.picks.length,
     depth_entries_removed: plan.lists.filter(l => l.label.includes(' depth chart ')).reduce((n, l) => n + l.remove.size, 0),
     by_direction: byPair,

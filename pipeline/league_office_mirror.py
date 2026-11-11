@@ -569,7 +569,12 @@ def _moves(real, roster, ps_signs, creates, injuries, staff_moves, setting, team
     for op in roster.ops or []:
         player = players.get(op["pgid"]) or {}
         tag = f"mirror:{op['kind']}:{op.get('gsis_id')}"
+        current = "Roster" if player.get("status") == "Signed" else (
+            "PracticeSquad" if player.get("status") == "PracticeSquad" else None)
         detail = {"why": op.get("why"), "list": op.get("list"), "tag": tag}
+        if current is not None and op.get("list") is not None and op["kind"] in ("list", "trade") \
+                and op.get("list") != current:
+            detail["from_list"] = current
         base = {"gsis_id": op.get("gsis_id"), "pgid": op.get("pgid"), "player_id": player_id(op.get("pgid")),
                 "detail": detail, "reason": op.get("why")}
         if op["kind"] == "release":
@@ -580,6 +585,10 @@ def _moves(real, roster, ps_signs, creates, injuries, staff_moves, setting, team
         elif op["kind"] == "sign":
             detail["switch"] = bool(op.get("switch"))
             out.append(dict(base, kind="SIGN", to_team_id=team_id(op.get("to_index"))))
+        elif op["kind"] == "list":
+            # A same-team Roster/PracticeSquad change: the move ledger's PS kind, so no schema change is needed.
+            out.append(dict(base, kind="PS", from_team_id=team_id(player.get("team_index")),
+                            to_team_id=team_id(player.get("team_index"))))
         elif op["kind"] == "ir":
             out.append(dict(base, kind="IR", to_team_id=team_id(op.get("to_index"))))
         elif op["kind"] == "activate":

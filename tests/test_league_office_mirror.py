@@ -5,8 +5,10 @@ no database), and `PRIORITY_MIRROR` / `step_nfl_mirror` / the plan_stage wiring 
 deps. A `FakeCursor` only records SQL, so `record_written` is exercised without a PostgreSQL connection.
 """
 import json
+import hashlib
 import os
 import shutil
+import subprocess
 import types
 
 import pytest
@@ -16,6 +18,7 @@ from engines.nfl_mirror import diff as mirror_diff
 from engines.nfl_mirror import injuries as mirror_injuries
 from engines.nfl_mirror import real_state
 from engines.nfl_mirror import store as mirror_store
+from engines.nfl_mirror.trades import TradeLeg
 from pipeline import league_office as lo
 from pipeline import league_office_mirror as lom
 from tests.test_league_office import (AZ, CHI, SEASON, FakeCursor, FakeDeps, contract, pid, player,
@@ -359,6 +362,126 @@ def test_step_nfl_mirror_emits_the_switch_only_for_the_pair():
     assert doc["sign"][0]["switch"] is True
     assert [t["kind"] for t in p.db["mirror"]["transactions"]] == ["RELEASE", "SIGN"]
     assert p.results[f"mirror:sign:{RELEASE_GSIS}"][0] is True
+
+
+# ------------------------------------------------ audit-5 U18 R3/R4: same-team list changes ----
+def deal_contract():
+    """A contract with real money (the test `contract()` is already in $10,000 units, so it writes zero)."""
+    return contract(sal=(10_000_000, 12_000_000, 9_000_000, 8_000_000), bon=(5_000_000, 5_000_000, 5_000_000, 0))
+
+
+def list_op(pgid_, gsis, to_index, list_, contract_=None, why="real list"):
+    return {"kind": "list", "gsis_id": gsis, "pgid": pgid_, "to_index": to_index, "list": list_,
+            "contract": contract_, "why": why}
+
+
+def test_r3_a_promotion_is_one_list_change_with_no_release_or_signing():
+    p = new_plan()                                  # pgid 6 is ARI's PracticeSquad player
+    mirror = make_mirror(ops=[list_op(6, "00-r3a", 1, "Roster", deal_contract())])
+
+    lo.step_nfl_mirror(p, mirror)
+
+    doc, _ = p.finalize()
+    assert "release" not in doc and "sign" not in doc
+    assert [entry["pgid"] for entry in doc["lists"]] == [6]
+    assert doc["lists"][0]["list"] == "Roster" and doc["lists"][0]["contract"]["Length"] == 4
+    assert p.roster_status(6) == ("Signed", 1) and 6 in p.rosters()[1]
+    assert p.cap[1][0] < 0 and p.cap[1][1] < 0 and p.cap[1][2] > 0      # the new deal's cap hit
+    assert p.db["mirror"]["transactions"] == []                         # not a signing: no transactions row
+    assert p.db["mirror"]["outcomes"]["mirror:list:00-r3a"] == ["WRITTEN", None]
+
+
+def test_r3_a_demotion_frees_the_old_deal_and_leaves_no_transaction():
+    p = new_plan()                                  # pgid 2 is CHI active
+    old_block = lo.snapshot_block(p.players[2]["contract"])
+    mirror = make_mirror(ops=[list_op(2, "00-r3b", 0, "PracticeSquad",
+                                     why="real practice squad")])
+
+    lo.step_nfl_mirror(p, mirror)
+
+    doc, _ = p.finalize()
+    assert "release" not in doc and "sign" not in doc
+    assert doc["lists"] == [{"pgid": 2, "team_index": 0, "list": "PracticeSquad"}]
+    assert p.roster_status(2) == ("PracticeSquad", 0) and 2 not in p.rosters()[0]
+    room, nxt, base = lo.release_cap(old_block)
+    assert p.cap[0] == [room, nxt, -base]
+    assert p.db["mirror"]["transactions"] == []
+    assert p.db["mirror"]["outcomes"]["mirror:list:00-r3b"] == ["WRITTEN", None]
+
+
+def test_r3_a_jr_claim_or_another_engine_claim_refuses_the_list_change():
+    p = new_plan()
+    assert p.release_player(6, lo.PRIORITY_JR, "JR cuts him")
+    mirror = make_mirror(ops=[list_op(6, "00-r3c", 1, "Roster", deal_contract())])
+
+    lo.step_nfl_mirror(p, mirror)
+
+    doc, _ = p.finalize()
+    assert "lists" not in doc and doc["release"] == [6]
+    assert p.db["mirror"]["outcomes"]["mirror:list:00-r3c"][0] == "REFUSED"
+    assert p.db["mirror"]["outcomes"]["mirror:list:00-r3c"][1]      # JR's release left him no roster to change
+
+    p = new_plan()
+    assert p.trade_player(2, 1, lo.PRIORITY_DRIFT, "the drift engine trades him")
+    mirror = make_mirror(ops=[list_op(2, "00-r3d", 0, "PracticeSquad")])
+    lo.step_nfl_mirror(p, mirror)
+    doc, _ = p.finalize()
+    assert "lists" not in doc
+    assert p.db["mirror"]["outcomes"]["mirror:list:00-r3d"][0] == "REFUSED"
+    assert "already has a trade" in p.db["mirror"]["outcomes"]["mirror:list:00-r3d"][1]
+
+
+def test_r4_a_trade_with_a_list_change_carries_it_in_the_same_trade_entry():
+    p = new_plan()                                  # pgid 2 CHI active -> ARI practice squad
+    mirror = make_mirror(ops=[{"kind": "trade", "gsis_id": "00-r4", "pgid": 2, "to_index": 1,
+                               "list": "PracticeSquad", "contract": None, "why": "trade T7"}])
+
+    lo.step_nfl_mirror(p, mirror)
+
+    doc, _ = p.finalize()
+    assert doc["trade"] == [{"from_team_index": 0, "to_team_index": 1, "pgids": [2], "picks": [],
+                             "lists": [{"pgid": 2, "list": "PracticeSquad", "contract": None}]}]
+    assert doc["trade"][0]["lists"] and "sign" not in doc and "release" not in doc
+    assert p.roster_status(2) == ("PracticeSquad", 1)
+    assert [t["kind"] for t in p.db["mirror"]["transactions"]] == ["TRADE"]   # the authoritative TRADED row stays
+
+
+def test_r4_a_promoting_trade_gets_the_new_deal_and_its_cap_salary():
+    p = new_plan()                                  # pgid 6 ARI practice squad -> CHI active
+    mirror = make_mirror(ops=[{"kind": "trade", "gsis_id": "00-r4b", "pgid": 6, "to_index": 0,
+                               "list": "Roster", "contract": deal_contract(), "why": "trade T8"}])
+
+    lo.step_nfl_mirror(p, mirror)
+
+    doc, _ = p.finalize()
+    promoted = doc["trade"][0]["lists"][0]
+    assert promoted["pgid"] == 6 and promoted["list"] == "Roster"
+    assert promoted["contract"]["Length"] == 4
+    assert next(x for x in doc["players"] if x["pgid"] == 6)["set"]["PLYR_CAPSALARY"] == \
+        lo._clamp(lo.block_hit(promoted["contract"], 0), lo.CAPSALARY_RANGE)
+    assert p.cap[0][0] < 0 and p.cap[0][1] < 0 and p.cap[0][2] > 0
+
+
+def test_a_list_change_conflicts_with_a_players_edit_that_sets_its_fields():
+    p = new_plan()
+    assert p.change_list(2, "PracticeSquad", None, lo.PRIORITY_MIRROR, "bench")
+    p.set_fields(2, {"ContractStatus": "Signed"})
+    with pytest.raises(lo.CompositionError, match="list move sets ContractStatus"):
+        p.finalize()
+
+
+def test_the_move_ledger_records_a_list_change_as_PS_with_both_lists():
+    snap = snapshot()
+    real = types.SimpleNamespace(season=2026, week=3, mode="CATCH_UP", depth={})
+    roster = types.SimpleNamespace(ops=[list_op(2, "00-ledger", 0, "PracticeSquad")])
+    moves = lom._moves(real, roster, [], [], [], [], None, {}, {0: CHI}, {}, snap)
+    assert [(m["kind"], m["pgid"], m["detail"].get("list"), m["detail"].get("from_list")) for m in moves] == [
+        ("PS", 2, "PracticeSquad", "Roster")]
+    trade_roster = types.SimpleNamespace(ops=[{"kind": "trade", "gsis_id": "00-ledger-t", "pgid": 6,
+                                               "to_index": 0, "list": "Roster", "why": "trade"}])
+    moves = lom._moves(real, trade_roster, [], [], [], [], None, {}, {0: CHI}, {}, snap)
+    assert [(m["kind"], m["detail"].get("list"), m["detail"].get("from_list")) for m in moves] == [
+        ("TRADE", "Roster", "PracticeSquad")]
 
 
 # ---------------------------------------------------------------------------------------------- S20 / charts ----
@@ -798,6 +921,250 @@ def test_f1_a_created_real_active_starter_reaches_the_real_slot_on_mubase(mubase
     assert p.edits[c["donor_pgid"]]["set"]["IsInjuredReserve"] is False
 
 
+# ----------------------------------------------------------- audit-5 U18 R3/R4: actual-save acceptance ----
+READER_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "pipeline", "save_reader")
+WRITER = os.path.join(READER_DIR, "save_writer.mjs")
+CAP = 255_400_000
+NO_REF = "0" * 32
+
+INSPECT_JS = r'''
+import Franchise from 'madden-franchise';
+import { decodeRef } from './lib.mjs';
+import { leagueContext, moveTables, readList } from './sign.mjs';
+const save = process.argv[1];
+const want = new Set(process.argv.slice(2).map(Number));
+const f = await Franchise.create(save, { autoParse: true, saveOnChange: false });
+const tables = moveTables(f);
+const ctx = await leagueContext(tables);
+const { playerTable: players, teamTable, PID } = ctx;
+const league = await tables.byName('League');
+const members = async bits => {
+  const list = await readList(tables, bits, 'inspect');
+  return list ? list.before.map(decodeRef).filter(d => d && d.table === PID)
+    .map(d => players.records[d.row].PresentationId) : [];
+};
+const teams = {}, memberships = {};
+for (const t of ctx.teams) {
+  const roster = await members(t.Roster), ps = await members(t.PracticeSquad);
+  teams[t.TeamIndex] = { active: t.ActiveRosterSize, cap: t.SalCapRosterSize, next: t.SalCapNextYearRosterSize,
+    roster, ps };
+  for (const g of roster) (memberships[g] ??= {}).roster = t.TeamIndex;
+  for (const g of ps) (memberships[g] ??= {}).ps = t.TeamIndex;
+}
+const fa = await members(league.records[0]?.FreeAgents);
+const faSet = new Set(fa);
+for (const g of fa) (memberships[g] ??= {}).fa = true;
+const holders = {};
+for (const p of players.records) {
+  if (p.isEmpty || !decodeRef(p.Contract)) continue;
+  holders[String(p.Contract)] = (holders[String(p.Contract)] ?? 0) + 1;
+}
+const out = { teams, players: {}, holders };
+for (const p of players.records) {
+  if (p.isEmpty || !want.has(p.PresentationId)) continue;
+  const c = decodeRef(p.Contract);
+  let contractRow = null;
+  if (c) {
+    const t = await tables.byId(c.table);
+    const rec = t.records[c.row];
+    contractRow = { table: c.table, row: c.row, Length: rec.Length, CurrentYear: rec.CurrentYear,
+      SalaryYear0: rec.SalaryYear0, BonusYear0: rec.BonusYear0 };
+  }
+  out.players[p.PresentationId] = { status: p.ContractStatus, team: p.TeamIndex, contract: String(p.Contract),
+    contractRow, memberships: memberships[p.PresentationId] ?? {}, freeAgent: faSet.has(p.PresentationId) };
+}
+process.stdout.write(JSON.stringify(out));
+'''
+
+
+def _inspect(save, pgids):
+    result = subprocess.run(["node", "--input-type=module", "-e", INSPECT_JS, save, *map(str, pgids)],
+                            cwd=READER_DIR, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr[-2000:]
+    out = json.loads(result.stdout)
+    out["players"] = {int(k): v for k, v in out["players"].items()}
+    return out
+
+
+def _sha256(path):
+    with open(path, "rb") as fh:
+        return hashlib.sha256(fh.read()).hexdigest()
+
+
+def _write_read(base, doc, out):
+    edits = str(out) + ".json"
+    with open(edits, "w") as fh:
+        json.dump(doc, fh)
+    result = subprocess.run(["node", WRITER, base, edits, "--out", str(out), "--overwrite-out"],
+                            capture_output=True, text=True)
+    assert result.returncode == 0, (result.stdout + result.stderr)[-3000:]
+    return lo.Deps().read_snapshot(str(out)), result.stdout + result.stderr
+
+
+def _team_code(codes, index):
+    return next(code for code, idx in codes.items() if idx == index)
+
+
+def _pick(snap, status, preferred):
+    players = {p["pgid"]: p for p in snap["players"]}
+    p = players.get(preferred)
+    if p and p["status"] == status and p["team_index"] < 32:
+        return p
+    return next(x for x in snap["players"] if x["status"] == status and x["team_index"] < 32)
+
+
+def _run_mirror_list_week(snap, player, wanted, to_index, trade, leg=None, label="u18"):
+    gsis = f"00-U18-{label}"
+    codes = lom._team_codes(snap)
+    card = real_state.RealPlayer(gsis_id=gsis, name=f"{player['first_name']} {player['last_name']}",
+                                 position=player["position"], team=_team_code(codes, to_index), status=wanted,
+                                 designation="A01" if wanted == "ACTIVE" else "P01",
+                                 entry_year=2026 - player["years_pro"])
+    real = real_state.RealWeek(season=2026, week=3, mode="CATCH_UP", rosters={card.team: [card]})
+    legs = [TradeLeg("U18", "2026-09-20", 3, _team_code(codes, player["team_index"]), card.team, gsis,
+                     card.name, None)] if trade else []
+    result = mirror_diff.plan_rosters(snap, real, {gsis: player["pgid"]}, legs, codes,
+                                      mirror_contracts.ContractBook({}), CAP)
+    p = lo.Plan(snap, lo.REGULAR_WEEK, 2026, 3, None, "u18", {}, {})
+    mirror = make_mirror(ops=result.ops, real_week=3)
+    p.db["mirror"] = mirror.record()
+    lo.step_nfl_mirror(p, mirror)
+    doc, _ = p.finalize()
+    return result, p, doc, real, legs, {gsis: player["pgid"]}
+
+
+def test_r3_r4_actual_save_lists_and_trades_both_directions(tmp_path, mubase_snapshot):
+    """Production diff + Plan + the real save writer on copies of CAREER-MUBASE, both list directions and trades.
+
+    R3: a same-team PS/Roster change stays on the team, moves the list arrays/counts/contracts in one write and
+    replans empty (no free-agent detour). R4: a CSV trade that changes the list does the same in its one trade write,
+    keeping the TRADED transaction. The source save is only ever read.
+    """
+    snap = mubase_snapshot
+    before_sha = _sha256(MUBASE)
+    base = tmp_path / "CAREER-MUBASE"
+    shutil.copy2(MUBASE, base)
+    promote = _pick(snap, "PracticeSquad", 14668)
+    demote = _pick(snap, "Signed", 10823)
+    control = _pick(snap, "Signed", None)
+    before = _inspect(base, [promote["pgid"], demote["pgid"], control["pgid"]])
+
+    def counts(insp, index):
+        t = insp["teams"][str(index)]
+        return [t["active"], t["cap"], t["next"]]
+
+    def next_year(contract_row):
+        return 1 if contract_row and contract_row["Length"] - contract_row["CurrentYear"] > 1 else 0
+
+    # 1. same-team promotion (audit R3): KC PS WR -> KC active
+    result, p, doc, real, legs, links = _run_mirror_list_week(snap, promote, "ACTIVE", promote["team_index"], False,
+                                                              label="promote")
+    assert [o["kind"] for o in result.ops] == ["list"]
+    assert doc["lists"] == [{"pgid": promote["pgid"], "team_index": promote["team_index"], "list": "Roster",
+                             "contract": p.list_changes[0]["block"]}]
+    assert "release" not in doc and "sign" not in doc
+    out = tmp_path / "promote.save"
+    after_snap, log = _write_read(base, doc, out)
+    assert "list changes: 1 (1 promoted, 0 demoted)" in log
+    row = next(x for x in after_snap["players"] if x["pgid"] == promote["pgid"])
+    assert (row["status"], row["team_index"]) == ("Signed", promote["team_index"])
+    after = _inspect(out, [promote["pgid"]])
+    me, team = after["players"][promote["pgid"]], promote["team_index"]
+    assert me["memberships"].get("roster") == team and "ps" not in me["memberships"] and me["freeAgent"] is False
+    assert me["contractRow"] is not None and after["holders"][me["contract"]] == 1
+    assert counts(after, team) == [counts(before, team)[0] + 1, counts(before, team)[1] + 1,
+                                   counts(before, team)[2] + next_year(me["contractRow"])]
+    assert mirror_diff.plan_rosters(after_snap, real, links, legs, lom._team_codes(after_snap),
+                                    mirror_contracts.ContractBook({}), CAP).ops == []
+
+    # 2. same-team demotion: CHI active -> CHI practice squad (the old deal left unreferenced)
+    result, p, doc, real, legs, links = _run_mirror_list_week(snap, demote, "PS", demote["team_index"], False,
+                                                              label="demote")
+    assert [o["kind"] for o in result.ops] == ["list"]
+    assert doc["lists"] == [{"pgid": demote["pgid"], "team_index": demote["team_index"], "list": "PracticeSquad"}]
+    assert "release" not in doc and "sign" not in doc
+    out = tmp_path / "demote.save"
+    after_snap, log = _write_read(base, doc, out)
+    assert "list changes: 1 (0 promoted, 1 demoted)" in log
+    row = next(x for x in after_snap["players"] if x["pgid"] == demote["pgid"])
+    assert (row["status"], row["team_index"]) == ("PracticeSquad", demote["team_index"])
+    after = _inspect(out, [demote["pgid"]])
+    me, team = after["players"][demote["pgid"]], demote["team_index"]
+    assert me["memberships"].get("ps") == team and "roster" not in me["memberships"] and me["freeAgent"] is True
+    old_ref = before["players"][demote["pgid"]]["contract"]
+    assert me["contract"] == NO_REF and after["holders"].get(old_ref, 0) == 0   # old deal left unreferenced
+    old_row = before["players"][demote["pgid"]]["contractRow"]
+    assert counts(after, team) == [counts(before, team)[0] - 1, counts(before, team)[1] - 1,
+                                   counts(before, team)[2] - next_year(old_row)]
+    assert mirror_diff.plan_rosters(after_snap, real, links, legs, lom._team_codes(after_snap),
+                                    mirror_contracts.ContractBook({}), CAP).ops == []
+
+    # 3. CSV trade, PS -> Roster (audit R4): the team AND the list change in the one trade write
+    destination = 0 if promote["team_index"] != 0 else 1
+    assert before["teams"][str(destination)]["active"] < 100
+    result, p, doc, real, legs, links = _run_mirror_list_week(snap, promote, "ACTIVE", destination, True,
+                                                              label="trade-promote")
+    assert [o["kind"] for o in result.ops] == ["trade"] and result.ops[0]["contract"] is not None
+    assert doc["trade"][0]["lists"] == [{"pgid": promote["pgid"], "list": "Roster",
+                                         "contract": p.trade_lists[promote["pgid"]]["contract"]}]
+    assert [t["kind"] for t in p.db["mirror"]["transactions"]] == ["TRADE"]
+    out = tmp_path / "trade-promote.save"
+    after_snap, _ = _write_read(base, doc, out)
+    row = next(x for x in after_snap["players"] if x["pgid"] == promote["pgid"])
+    assert (row["status"], row["team_index"]) == ("Signed", destination)
+    after = _inspect(out, [promote["pgid"]])
+    me = after["players"][promote["pgid"]]
+    assert me["memberships"].get("roster") == destination and "ps" not in me["memberships"]
+    assert me["contractRow"] is not None and after["holders"][me["contract"]] == 1
+    assert counts(after, destination) == [counts(before, destination)[0] + 1, counts(before, destination)[1] + 1,
+                                          counts(before, destination)[2] + next_year(me["contractRow"])]
+    assert counts(after, promote["team_index"]) == counts(before, promote["team_index"])   # PS side unchanged
+    assert mirror_diff.plan_rosters(after_snap, real, links, legs, lom._team_codes(after_snap),
+                                    mirror_contracts.ContractBook({}), CAP).ops == []
+
+    # 4. CSV trade, Roster -> PracticeSquad
+    destination = next(i for i in range(32) if i != demote["team_index"]
+                       and before["teams"][str(i)]["ps"] and len(before["teams"][str(i)]["ps"]) < 12)
+    result, p, doc, real, legs, links = _run_mirror_list_week(snap, demote, "PS", destination, True,
+                                                              label="trade-demote")
+    assert [o["kind"] for o in result.ops] == ["trade"]
+    assert doc["trade"][0]["lists"] == [{"pgid": demote["pgid"], "list": "PracticeSquad", "contract": None}]
+    out = tmp_path / "trade-demote.save"
+    after_snap, _ = _write_read(base, doc, out)
+    row = next(x for x in after_snap["players"] if x["pgid"] == demote["pgid"])
+    assert (row["status"], row["team_index"]) == ("PracticeSquad", destination)
+    after = _inspect(out, [demote["pgid"]])
+    me = after["players"][demote["pgid"]]
+    assert me["memberships"].get("ps") == destination and "roster" not in me["memberships"] and me["freeAgent"] is True
+    assert me["contract"] == NO_REF
+    assert counts(after, demote["team_index"]) == [counts(before, demote["team_index"])[0] - 1,
+                                                   counts(before, demote["team_index"])[1] - 1,
+                                                   counts(before, demote["team_index"])[2]
+                                                   - next_year(before["players"][demote["pgid"]]["contractRow"])]
+    assert counts(after, destination) == counts(before, destination)
+    assert mirror_diff.plan_rosters(after_snap, real, links, legs, lom._team_codes(after_snap),
+                                    mirror_contracts.ContractBook({}), CAP).ops == []
+
+    # 5. a trade that does not change the list (control): status and contract reference travel unchanged
+    destination = next(i for i in range(32) if i != control["team_index"] and before["teams"][str(i)]["active"] < 100)
+    result, p, doc, real, legs, links = _run_mirror_list_week(snap, control, "ACTIVE", destination, True,
+                                                              label="trade-control")
+    assert [o["kind"] for o in result.ops] == ["trade"] and "lists" not in doc["trade"][0]
+    assert p.trade_lists == {}
+    out = tmp_path / "trade-control.save"
+    after_snap, _ = _write_read(base, doc, out)
+    row = next(x for x in after_snap["players"] if x["pgid"] == control["pgid"])
+    assert (row["status"], row["team_index"]) == ("Signed", destination)
+    after = _inspect(out, [control["pgid"]])
+    me = after["players"][control["pgid"]]
+    assert me["contract"] == before["players"][control["pgid"]]["contract"]      # reference unchanged
+    assert me["memberships"].get("roster") == destination
+    assert mirror_diff.plan_rosters(after_snap, real, links, legs, lom._team_codes(after_snap),
+                                    mirror_contracts.ContractBook({}), CAP).ops == []
+
+    assert _sha256(MUBASE) == before_sha          # the original was only read
+
+
 # ----------------------------------------------------------- audit-4 U6: PostgreSQL acceptance ----
 def _scratch_conn():
     dsn = os.environ.get("MU_U13_TEST_DSN") or os.environ.get("TEST_DATABASE_URL") \
@@ -921,6 +1288,71 @@ def test_f2_postgres_a_refused_creation_persists_no_link_or_transaction():
             assert cur.fetchone()[0] == 0
             assert p.db["mirror"]["outcomes"][f"mirror:create:{gsis}"][0] == "REFUSED"
             assert p.edits.get(5) is None
+    finally:
+        conn.rollback()
+        conn.close()
+
+
+@pytest.mark.integration
+def test_r3_r4_postgres_ledger_and_transactions():
+    """The written ledger and transaction rows for the new moves on a real database (audit-5 U18 R3/R4).
+
+    A same-team list change is one PS ledger kind with its from_list/list detail and NO transaction (a RELEASED row
+    would feed compensatory picks); a trade that also changes the list is one TRADE ledger kind and exactly one
+    TRADED transaction. Both stay WRITTEN and the transaction row is idempotent on a repeated record.
+    """
+    conn = _scratch_conn()
+    season, week = 2099, 5
+    list_gsis, trade_gsis = "00-U18-LIST", "00-U18-TRADE"
+    try:
+        with conn.cursor() as cur:
+            run_id = _run_row(cur, season, week)
+            cur.execute("DELETE FROM nfl_mirror_moves WHERE season = %s AND week = %s", (season, week))
+            cur.execute("""DELETE FROM transactions WHERE season = %s AND week = %s AND raw_text = 'NFL mirror'""",
+                        (season, week))
+            snap = snapshot()
+            p = lo.Plan(snap, "REGULAR_WEEK", season, week, None, "seed", {}, {})
+            p.teams, p.pid_by_pgid = {}, {}       # no players/teams rows needed: player_id and team ids stay null
+            mirror = make_mirror(season=season, week=week, real_week=week,
+                                 real=types.SimpleNamespace(season=season, week=week, mode="CATCH_UP", depth={}),
+                                 ops=[list_op(6, list_gsis, 1, "Roster", deal_contract()),
+                                      {"kind": "trade", "gsis_id": trade_gsis, "pgid": 2, "to_index": 1,
+                                       "list": "PracticeSquad", "contract": None, "why": "trade U18"}])
+            p.db["mirror"] = mirror.record()
+            lo.step_nfl_mirror(p, mirror)
+            assert p.db["mirror"]["outcomes"] == {
+                f"mirror:list:{list_gsis}": ["WRITTEN", None],
+                f"mirror:trade:{trade_gsis}": ["WRITTEN", None],
+            }
+            moves = lom._moves(mirror.real, mirror, [], [], [], [], None, {}, {}, {}, snap)
+            assert [(m["kind"], m["detail"]["tag"]) for m in moves] == [
+                ("PS", f"mirror:list:{list_gsis}"), ("TRADE", f"mirror:trade:{trade_gsis}")]
+            assert moves[0]["detail"]["from_list"] == "PracticeSquad" and moves[0]["detail"]["list"] == "Roster"
+            assert moves[1]["detail"]["from_list"] == "Roster" and moves[1]["detail"]["list"] == "PracticeSquad"
+            assert all(m["player_id"] is None and m["to_team_id"] is None for m in moves)
+            mirror_store.record_week(cur, season, week, status="PLANNED", real_week=week, mode="CATCH_UP")
+            mirror_store.record_moves(cur, season, week, moves, replace=True)
+            plan = {"db": p.db, "team_ids": {}, "pid_by_pgid": {}}
+            lo._record_mirror(cur, plan, run_id)
+            cur.execute("""SELECT detail ->> 'tag', kind, status, detail ->> 'from_list', detail ->> 'list'
+                           FROM nfl_mirror_moves WHERE season = %s AND week = %s
+                           ORDER BY kind""", (season, week))
+            assert cur.fetchall() == [
+                (f"mirror:list:{list_gsis}", "PS", "WRITTEN", "PracticeSquad", "Roster"),
+                (f"mirror:trade:{trade_gsis}", "TRADE", "WRITTEN", "Roster", "PracticeSquad"),
+            ]
+            cur.execute("""SELECT type, player_name, raw_text, row_key FROM transactions
+                           WHERE season = %s AND week = %s AND raw_text = 'NFL mirror'""", (season, week))
+            rows = cur.fetchall()
+            assert [(t, n, r) for t, n, r, _ in rows] == [("TRADED", "P L2", "NFL mirror")]
+            assert rows[0][3] == f"mirror:{season}:{week}:{trade_gsis}:TRADE"     # the list change has no row
+            lo._record_mirror(cur, plan, run_id)                                  # recover is idempotent
+            cur.execute("""SELECT count(*) FROM nfl_mirror_moves WHERE season = %s AND week = %s
+                           AND status = 'WRITTEN'""", (season, week))
+            assert cur.fetchone()[0] == 2
+            cur.execute("""SELECT count(*) FROM transactions WHERE season = %s AND week = %s
+                           AND raw_text = 'NFL mirror'""", (season, week))
+            assert cur.fetchone()[0] == 1
     finally:
         conn.rollback()
         conn.close()

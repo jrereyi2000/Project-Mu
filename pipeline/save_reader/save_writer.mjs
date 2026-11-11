@@ -13,7 +13,10 @@
 //               "profile": {...}, "visuals_template": 9010, "contract": {...}}],
 //    "release": [12345, ...],
 //    "sign":  [{"pgid": 123, "team_index": 3, "list": "Roster", "contract": {"Length": 3, "SalaryYear0": 105, ...}}],
-//    "trade": [{"from_team_index": 3, "to_team_index": 12, "pgids": [123], "picks": [{"tableId": 4540, "row": 17}]}],
+//    "trade": [{"from_team_index": 3, "to_team_index": 12, "pgids": [123], "picks": [{"tableId": 4540, "row": 17}],
+//               "lists": [{"pgid": 456, "list": "Roster", "contract": {...}}]}],
+//    "lists": [{"pgid": 789, "team_index": 3, "list": "PracticeSquad"},
+//              {"pgid": 790, "team_index": 3, "list": "Roster", "contract": {"Length": 2, "SalaryYear0": 80, ...}}],
 //    "depthCharts": [{"team_index": 3, "slots": {"QB": [22686, 9123], ...}}]}
 // (pgid = Player.PresentationId, field names as in the save's Player table; a staff pgid is Coach.PresentationId).
 // * "players" sets Player fields. An edit's optional "contract" block, {"Length": 4, "CurrentYear": 0, "SalaryYear0":
@@ -31,17 +34,22 @@
 //   release in the same write leaves, else filling an empty one: sign.mjs) or a PracticeSquad (sign.mjs). A sign item
 //   with "switch": true declares a mid-season team switch: its pgid is also in "release", and the signing must be to a
 //   different team than the one the release leaves (see below).
-// * "trade" moves players with their contracts, and draft picks, from one team to another (trade.mjs).
+// * "trade" moves players with their contracts, and draft picks, from one team to another (trade.mjs). Its optional
+//   "lists" names, per pgid, the Roster/PracticeSquad list the player joins on the new team when that differs from
+//   his old list, with the new contract block a promotion needs; see list_change.mjs.
+// * "lists" moves a player between his own team's Roster and PracticeSquad without a release (list_change.mjs): a
+//   promotion needs a contract block and takes a free/empty PlayerContract row, a demotion clears his contract
+//   reference. TeamIndex stays; roster counts, League.FreeAgents and depth charts follow.
 // * "depthCharts" replaces depth-chart positions with up to 6 rostered players each (depth_chart.mjs).
-// A player may appear in only one of release / sign / trade, and a signed or traded player's "players" edit may not
-// set a field the move sets (TeamIndex, ContractStatus, ...). One exception is a declared switch: the same pgid in
-// "release" and in a "sign" item with "switch": true, to a different team than the player's current one. The release
-// writes the old deal (its contract row is left unreferenced, the dead cap Madden charges) and the sign writes the new
-// contract to a different team; without the flag the same pgid in both moves is refused, as is a switch sign to the
-// player's current team, a flagged sign with no release, and every other overlap. Moves apply in the order staff,
-// release, sign, trade, depthCharts, each against the lists as the earlier ones left them, so a staff release can free
-// the Coach seat a create fills, a release can free the contract row a signing takes, and a depth chart can list a
-// player signed or traded in the same write.
+// A player may appear in only one of release / sign / trade / lists, and a signed, traded or list-changed player's
+// "players" edit may not set a field the move sets (TeamIndex, ContractStatus, ...). One exception is a declared
+// switch: the same pgid in "release" and in a "sign" item with "switch": true, to a different team than the player's
+// current one. The release writes the old deal (its contract row is left unreferenced, the dead cap Madden charges)
+// and the sign writes the new contract to a different team; without the flag the same pgid in both moves is refused,
+// as is a switch sign to the player's current team, a flagged sign with no release, and every other overlap. Moves
+// apply in the order staff, release, sign, trade, lists, depthCharts, each against the lists as the earlier ones left
+// them, so a staff release can free the Coach seat a create fills, a release can free the contract row a signing
+// takes, and a depth chart can list a player signed, traded or list-changed in the same write.
 //
 // Safety: the input save is never written (it is copied first, and --out may not be the input); --out must not
 // exist unless --overwrite-out. Every edit and move is planned and checked against the fields' schemas before anything
@@ -61,18 +69,21 @@ import { applyRelease, planRelease, releaseSummary, verifyRelease } from './rele
 import { applyStaff, planStaff, staffSummary, verifyStaff } from './staff.mjs';
 import { applySign, planSign, refreshPlan, signSummary, verifySign } from './sign.mjs';
 import { applyTrade, planTrade, tradeSummary, verifyTrade } from './trade.mjs';
+import { applyListChanges, listChangeSummary, planListChanges, verifyListChanges } from './list_change.mjs';
 import { applyDepthCharts, depthChartSummary, planDepthCharts, verifyDepthCharts } from './depth_chart.mjs';
 
 // Player fields each move writes; a "players" edit of the same player may not set them too.
 const MOVE_FIELDS = {
   sign: ['TeamIndex', 'ContractStatus', 'Contract', 'Mindset', 'WeeksWithTeam'],
   trade: ['TeamIndex', 'ContractStatus', 'Contract', 'PrevTeamIndex', 'WeeksWithTeam', 'PLYR_ISCAPTAIN', 'TradeStatus'],
+  list: ['TeamIndex', 'ContractStatus', 'Contract', 'Mindset', 'WeeksWithTeam'],
 };
 
-// Errors for a pgid named by more than one of release / sign / trade, or by a move and a "players" edit that sets a
-// field the move sets (release.mjs itself refuses any "players" edit of a released player). One exception: a release
-// plus a sign of the same player to a DIFFERENT team, when the sign item sets "switch": true. `currentTeams` maps
-// pgid -> the player's TeamIndex in the save, so a switch back to the same team (a promotion, not a switch) is refused.
+// Errors for a pgid named by more than one of release / sign / trade / lists, or by a move and a "players" edit that
+// sets a field the move sets (release.mjs itself refuses any "players" edit of a released player). One exception: a
+// release plus a sign of the same player to a DIFFERENT team, when the sign item sets "switch": true. `currentTeams`
+// maps pgid -> the player's TeamIndex in the save, so a switch back to the same team (a promotion, not a switch) is
+// refused.
 export function moveConflicts(edits, currentTeams = new Map()) {
   const errors = [];
   const where = new Map();
@@ -81,7 +92,15 @@ export function moveConflicts(edits, currentTeams = new Map()) {
   const signs = edits.sign ?? [];
   for (const pgid of release) note(pgid, 'release');
   for (const s of signs) note(s?.pgid, 'sign');
-  for (const t of edits.trade ?? []) for (const pgid of t?.pgids ?? []) note(pgid, 'trade');
+  for (const t of edits.trade ?? []) {
+    for (const pgid of t?.pgids ?? []) note(pgid, 'trade');
+    for (const entry of t?.lists ?? []) {
+      if (!(t?.pgids ?? []).includes(entry?.pgid)) {
+        errors.push(`trade pgid ${entry?.pgid}: list change, not in the trade's pgids`);
+      }
+    }
+  }
+  for (const l of edits.lists ?? []) note(l?.pgid, 'list');
 
   const declared = new Map();
   for (const s of signs) if (s?.switch === true) declared.set(s.pgid, s);
@@ -230,8 +249,28 @@ export async function writeSave(inputPath, edits, outPath, { overwriteOut = fals
       freedContracts: (release?.plan.releases ?? []).map(r => r.contract).filter(Boolean) }) : null;
     errors.push(...(sign?.errors ?? []));
     if (sign) errors.push(...avoidSwitchDealReuse(sign, release, switchPgids));
-    const trade = edits.trade?.length ? await planTrade(franchise, edits.trade) : null;
+    // A trade that also promotes a practice-squad player takes a new contract from the same pool a signing uses, and
+    // the same-team "lists" block after it: never the same row twice, and never a declared switch's old deal (the row
+    // the release must leave unreferenced).
+    const contractTaken = new Set((sign?.plan.signs ?? []).filter(s => s.contract)
+      .map(s => `${s.contract.table}:${s.contract.row}`));
+    for (const r of release?.plan.releases ?? []) {
+      if (r.contract && switchPgids.has(r.pgid)) contractTaken.add(`${r.contract.table}:${r.contract.row}`);
+    }
+    const trade = edits.trade?.length ? await planTrade(franchise, edits.trade, { contractTaken }) : null;
     errors.push(...(trade?.errors ?? []));
+    for (const m of trade?.plan.moves ?? []) {
+      if (m.newContract) contractTaken.add(`${m.newContract.table}:${m.newContract.row}`);
+    }
+    // Earlier moves' resulting lists, so a plan-time capacity check sees them; the apply rechecks the real records.
+    const project = new Map();
+    for (const p of [sign, trade]) {
+      if (!p) continue;
+      for (const [l, after] of p.plan.ops.compute().results) project.set(`${l.table}:${l.row}`, after);
+    }
+    const lists = edits.lists?.length
+      ? await planListChanges(franchise, edits.lists, { contractTaken, project }) : null;
+    errors.push(...(lists?.errors ?? []));
     // Rosters as the other moves leave them, for the depth charts.
     const roster = { added: new Map(), removed: new Set() };
     const add = (team, row) => roster.added.set(team, new Set([...(roster.added.get(team) ?? []), row]));
@@ -240,6 +279,10 @@ export async function writeSave(inputPath, edits, outPath, { overwriteOut = fals
     for (const m of trade?.plan.moves ?? []) {
       roster.removed.add(m.row);
       if (m.list === 'Roster') add(m.toIndex, m.row);
+    }
+    for (const m of lists?.plan.moves ?? []) {
+      roster.removed.add(m.row);
+      if (m.list === 'Roster') add(m.teamIndex, m.row);
     }
     const depth = edits.depthCharts?.length ? await planDepthCharts(franchise, edits.depthCharts, { roster }) : null;
     errors.push(...(depth?.errors ?? []));
@@ -250,9 +293,10 @@ export async function writeSave(inputPath, edits, outPath, { overwriteOut = fals
     if (release && !releasedEarly) applyRelease(release.plan);
     if (sign) applySign(sign.plan);
     if (trade) applyTrade(trade.plan);
+    if (lists) applyListChanges(lists.plan);
     if (depth) applyDepthCharts(depth.plan);
     // Each move's read-back expects the lists and counts as the whole write left them.
-    for (const m of [release, sign, trade, depth]) if (m) refreshPlan(m.plan);
+    for (const m of [release, sign, trade, lists, depth]) if (m) refreshPlan(m.plan);
     // A switch player's release fields are overwritten by his signing: verifySign reads those back, so leave only the
     // fields the release alone wrote to verifyRelease.
     for (const s of sign?.plan.signs ?? []) {
@@ -290,6 +334,7 @@ export async function writeSave(inputPath, edits, outPath, { overwriteOut = fals
     if (release) mismatches.push(...await verifyRelease(check, release.plan));
     if (sign) mismatches.push(...await verifySign(check, sign.plan));
     if (trade) mismatches.push(...await verifyTrade(check, trade.plan));
+    if (lists) mismatches.push(...await verifyListChanges(check, lists.plan));
     if (depth) mismatches.push(...await verifyDepthCharts(check, depth.plan));
     if (mismatches.length) throw new Error(`read-back failed:\n  ${mismatches.join('\n  ')}`);
     const switches = [];
@@ -303,7 +348,8 @@ export async function writeSave(inputPath, edits, outPath, { overwriteOut = fals
       records: new Set(records.targets.map(t => t.where)).size, recordFields: records.targets.length,
       staff: staff ? staffSummary(staff.plan) : null,
       release: release ? releaseSummary(release.plan) : null, sign: sign ? signSummary(sign.plan) : null,
-      trade: trade ? tradeSummary(trade.plan) : null, depthCharts: depth ? depthChartSummary(depth.plan) : null,
+      trade: trade ? tradeSummary(trade.plan) : null, lists: lists ? listChangeSummary(lists.plan) : null,
+      depthCharts: depth ? depthChartSummary(depth.plan) : null,
       switches, verified: true };
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -337,6 +383,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
     if (report.sign) console.error(`signed: ${report.sign.signed} (${report.sign.roster} roster, ${report.sign.practice_squad} practice squad) ${JSON.stringify(report.sign)}`);
     if (report.switches.length) console.error(`switched teams: ${report.switches.length} ${JSON.stringify(report.switches)}`);
     if (report.trade) console.error(`traded: ${report.trade.players} players, ${report.trade.picks} picks ${JSON.stringify(report.trade)}`);
+    if (report.lists) console.error(`list changes: ${report.lists.changed} (${report.lists.promoted} promoted, ${report.lists.demoted} demoted) ${JSON.stringify(report.lists)}`);
     if (report.depthCharts) console.error(`depth charts: ${report.depthCharts.positions} positions on ${report.depthCharts.teams} teams ${JSON.stringify(report.depthCharts)}`);
   } catch (e) {
     console.error(e.message);

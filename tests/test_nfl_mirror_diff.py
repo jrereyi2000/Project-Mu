@@ -52,6 +52,8 @@ def applied(snapshot_, result):
         elif op["kind"] in ("sign", "trade"):
             p["team_index"] = op["to_index"]
             p["status"] = "Signed" if op["list"] == "Roster" else "PracticeSquad"
+        elif op["kind"] == "list":
+            p["status"] = "Signed" if op["list"] == "Roster" else "PracticeSquad"  # same team, other list
         elif op["kind"] == "ir":
             p["injury"] = {**(p.get("injury") or {}), "injured_reserve": True}
         elif op["kind"] == "activate":
@@ -138,12 +140,12 @@ def test_blank_week_leg_does_not_suppress_a_later_cut():
 
 
 def test_blank_week_leg_does_not_suppress_a_later_practice_squad_promotion():
-    """F1b: a stale blank-week leg falls through to release/sign, which ends on the Roster."""
+    """F1b: a stale blank-week leg falls through to one same-team list change, which ends on the Roster."""
     snap = snapshot(madden(111, "Trade", "Man", 1, status="PracticeSquad"))   # BUF PS
     real = real_week({"BUF": [real_player("00-c", "Trade Man", "BUF")]})      # BUF ACTIVE
     leg = trade_leg()
     result = plan(snap, real, {"00-c": 111}, [leg])
-    assert [(o["kind"], o["list"]) for o in result.ops] == [("release", "PracticeSquad"), ("sign", "Roster")]
+    assert [(o["kind"], o["list"]) for o in result.ops] == [("list", "Roster")]
     assert not ops_for(result, kind="trade")
     assert plan(applied(snap, result), real, {"00-c": 111}, [leg]).ops == []
 
@@ -188,7 +190,8 @@ def test_player_already_at_the_destination_still_reconciles_his_list():
     real = real_week({"BUF": [real_player("00-c", "Trade Man", "BUF")]})      # BUF ACTIVE
     result = plan(snap, real, {"00-c": 115}, [trade_leg()])
     assert not ops_for(result, kind="trade")
-    assert [(o["kind"], o["list"]) for o in result.ops] == [("release", "PracticeSquad"), ("sign", "Roster")]
+    assert [(o["kind"], o["list"], o["to_index"]) for o in result.ops] == [("list", "Roster", 1)]
+    assert result.ops[0]["contract"] is not None     # a promotion gets the same new deal a signing would
     assert plan(applied(snap, result), real, {"00-c": 115}, [trade_leg()]).ops == []
 
 
@@ -199,7 +202,32 @@ def test_csv_leg_arriving_on_a_changed_list_is_one_trade():
     result = plan(snap, real, {"00-c": 116}, [leg])
     assert [o["kind"] for o in result.ops] == ["trade"]
     assert (result.ops[0]["to_index"], result.ops[0]["list"]) == (1, "Roster")
+    assert result.ops[0]["contract"] is not None     # the promotion's new deal travels in the trade op
     assert plan(applied(snap, result), real, {"00-c": 116}, [leg]).ops == []
+
+
+def test_same_team_demotion_is_one_list_change():
+    """A practice-squad demotion keeps him on his team instead of releasing him into free agency."""
+    snap = snapshot(madden(120, "Bench", "Man", 1, status="Signed"))           # BUF active
+    real = real_week({"BUF": [real_player("00-h", "Bench Man", "BUF", status="PS", designation="P01")]})
+    result = plan(snap, real, {"00-h": 120})
+    assert [(o["kind"], o["list"], o["to_index"], o["contract"]) for o in result.ops] == [
+        ("list", "PracticeSquad", 1, None)]
+    assert plan(applied(snap, result), real, {"00-h": 120}).ops == []
+
+
+def test_same_team_promotion_and_demotion_are_not_a_release():
+    """Neither direction goes through free agency, and the replan after either is empty."""
+    active = snapshot(madden(121, "Promote", "Man", 0, status="PracticeSquad"),
+                      madden(122, "Demote", "Man", 0, status="Signed"))
+    real = real_week({"KC": [real_player("00-i", "Promote Man", "KC"),
+                             real_player("00-j", "Demote Man", "KC", status="PS", designation="P01")]})
+    links = {"00-i": 121, "00-j": 122}
+    result = plan(active, real, links)
+    assert not ops_for(result, kind="release") and not ops_for(result, kind="sign")
+    assert sorted((o["kind"], o["pgid"], o["list"]) for o in result.ops) == [
+        ("list", 121, "Roster"), ("list", 122, "PracticeSquad")]
+    assert plan(applied(active, result), real, links).ops == []
 
 
 def test_leg_with_a_stale_source_team_falls_through_to_release_and_sign():
@@ -263,13 +291,12 @@ def test_ir_on_and_ir_off():
     assert [o["kind"] for o in ops_for(result, pgid=105)] == ["activate"]
 
 
-def test_roster_to_practice_squad_is_a_release_and_a_ps_signing():
+def test_roster_to_practice_squad_is_one_list_change():
     snap = snapshot(madden(106, "Down", "Man", 0))
     real = real_week({"KC": [real_player("00-j", "Down Man", "KC", status="PS", designation="P01")]})
     result = plan(snap, real, {"00-j": 106})
-    kinds = [o["kind"] for o in ops_for(result, pgid=106)]
-    assert kinds == ["release", "sign"]
-    assert ops_for(result, pgid=106, kind="sign")[0]["list"] == "PracticeSquad"
+    ops = ops_for(result, pgid=106)
+    assert [(o["kind"], o["list"], o["to_index"]) for o in ops] == [("list", "PracticeSquad", 0)]
 
 
 def test_incremental_link_finds_a_free_agent_then_signs_him():
