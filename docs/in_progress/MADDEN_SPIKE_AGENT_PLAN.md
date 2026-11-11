@@ -364,7 +364,7 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 ### U4: vision connector, comparison test and asset checks
 
 - **Owns:** `tools/madden_pilot/vision.py` (new), `tools/madden_pilot/vision_bench.py` (new), `tools/madden_pilot/assets.py` (new), `tools/madden_pilot/checks/asset_probe.py` (new), `tests/test_madden_pilot_vision.py` (new), `tests/test_madden_pilot_assets.py` (new)
-- **Reads:** `newsroom/llm_provider.py` (`call_ollama`), `tools/dossier_pilot.py` (the DeepSeek client set-up), `newsroom/tool_loop/openai_loop.py`, `tools/madden_pilot/screens.py` (`border_highlight`), `tools/madden_pilot/checks/first_down_line.py`, `catalog.json`, the S-A notes, this plan §2.7, §2.8 and §2.10
+- **Reads:** `engines/llm_provider.py` (`call_ollama`; the first draft said `newsroom/`, which does not exist), `tools/dossier_pilot.py` (the DeepSeek client set-up), `newsroom/tool_loop/openai_loop.py`, `tools/madden_pilot/screens.py` (`border_highlight`), `tools/madden_pilot/checks/first_down_line.py`, `catalog.json`, the S-A notes, this plan §2.7, §2.8 and §2.10
 - **Depends on:** none
 - **Done when:** `describe`, `ScreenDescription`, `SCREEN_KINDS` and `VisionUnavailable` exist exactly as in §2.7. `colour_share`, `crop_similarity` and `check_frame` exist as in §2.8, and `vision_bench --help` runs. Every U4 test passes with fake clients and synthetic images.
 - **Verify:**
