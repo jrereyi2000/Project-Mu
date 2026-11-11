@@ -13,7 +13,7 @@ Two Claude Code skills (`.claude/skills/`) take an idea from a sentence to merge
 | 2 | Claude | Reads the spec and code. Asks up to four questions, only ones whose answers change the design, each with a recommendation. |
 | 3 | Claude | Writes `docs/not_started/<NAME>_PLAN.md` from `.claude/skills/propose/plan_template.md`: survey (`file:line` facts), scope and non-goals, design, risks and spikes, tests, **work breakdown**, **waves**, spec changes, decisions for JR. Asks "Approve as written, or change something?" |
 | 4 | JR | Asks for changes, or approves. |
-| 5 | Claude | On approval (JR's own message), runs `/execute-plan`: moves the plan to `docs/in_progress/` and commits that on `main`. |
+| 5 | Claude | On approval (JR's own message), runs `/execute-plan`. A session that isn't DeepSeek-routed writes `approved by JR (<date>)` into the plan's Status line and hands the build to a DeepSeek session: it reuses a free one, or spawns `tools/spawn_agent.sh build-<plan-slug> deepseek "/execute-plan <plan>"` (JR, 2026-11-11, to save quota). That DeepSeek session moves the plan to `docs/in_progress/` and commits the move on `main`. |
 | 6 | Claude | Per wave: one background subagent per unit, each in its own worktree (at most 3 at once). Reviews each finished branch (scope, diff, Verify), merges it into `main`, then applies the units' spec changes to `PROJECT_SPEC.md` and cleans up the worktrees and branches it made. Then the next wave. |
 | 7 | Claude | Marks the plan built, moves it to `docs/done/`, and summarizes. |
 
