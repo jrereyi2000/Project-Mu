@@ -242,7 +242,13 @@ that stop is ingested **after** the season snapshot, because Sunday's games stil
 report and Madden rolls the per-game tables over at the new league year. That ingest is Mu's `OFFSEASON_START`
 write. The postseason is walked round by round too: each playoff save carries `week_index` 19–22, so the league
 office plans one `PLAYOFF_WEEK` run per round (`league_week` is the round's week; the Pro Bowl, which has no
-week, is week 23). A clean run therefore writes 17 `REGULAR_WEEK` runs and 4 `PLAYOFF_WEEK` runs.
+week, is week 23). A clean run therefore writes 17 `REGULAR_WEEK` runs (weeks 2–18) and one `PLAYOFF_WEEK` run
+per playoff round.
+
+**What it costs (measured 2026-11-10, `p2h`, weeks 1–3):** an advance is 65–76 s (a franchise load, the week,
+the quit) and a weekly ingest is 72–83 s, so about **2.4 minutes per in-season stop** — roughly an hour for a
+season's 22 stops, on top of the clone, the season snapshot and the offseason walk. `progress.json` records
+each stop's `advance_s` and `ingest_s`, which is how that number stays current.
 
 **Week 1 is not planned.** The `--auto-init` load that seeds the database cannot run the league office — it
 happens before the neutral progression bootstrap the league office needs — and a second ingest of the same
