@@ -52,6 +52,13 @@ The auditor runs on JR's Claude plan. The DeepSeek builders don't, so they keep 
 
 **Report-only.** Findings go to the builder; you never fix them yourself. You may still write throwaway repro scripts and scratch databases.
 
+**Each audit runs in a background subagent** (JR, 2026-11-10), so the main session stays free to answer the board and take the next builder's commit while one is being audited. For every batch to audit (§4) or fix to verify (§5):
+- Launch one `Agent` with `run_in_background: true` and `model: "opus"`, one per batch, never one per finding. Several can run at once for different builders' commits.
+- Its prompt is self-contained: the sha(s), the plan or finding it answers, the builder's NOTICE number and test claims, the steps of §4 (or §5) and the report standard of §4.5, its own worktree path (`.claude/worktrees/audit-<sha7>`), its own scratch DB (`mu_scratch_audit_<sha7>_test`, so parallel audits don't collide), and the report path in your scratchpad's `audit/` folder.
+- The subagent is report-only and **does not touch the board**: it writes the report and returns a short summary (findings with severities, or CLOSED/PARTIAL/OPEN per item). It removes its worktree and drops its scratch DB when done, unless the summary says it kept them for a re-check.
+- The main session keeps the listener, the quota checks (§3) and every board post. When a subagent finishes, read its report, check that each finding has the evidence §4.3 asks for (send it back with `SendMessage` if not), then post the HANDOFF or ANSWER yourself.
+- Small things (a one-line board question, a trailer check) don't need a subagent.
+
 1. **Pin a worktree** at the commit you're auditing (`git worktree add --detach .claude/worktrees/audit-<sha7> <sha>`). `main` moves under you while other sessions commit. For anything under `pipeline/save_reader/`, symlink its `node_modules` to the main checkout's copy (ACCEPTANCE_CHECKS.md says how).
 2. **Review against the plan or the finding**, not just the diff. Read the plan in `docs/in_progress/` or `docs/done/` and check each unit does what it says. Look for:
    - wrong behaviour on real data;
@@ -60,7 +67,7 @@ The auditor runs on JR's Claude plan. The DeepSeek builders don't, so they keep 
    - commits missing the `Model:` trailer, or naming the wrong model;
    - other sessions' files swept into a commit.
 3. **Prove it.** Each finding gets a `file:line` and, where it can, a repro: a test that asserts the bug, so it fails once the bug is fixed. For staff contracts, the carousel, coach save-writes, the save writer or `league_office`, run `tools.offseason_check` yourself (`e2e` on a copy of CAREER-MUBASE, and `timelines` for contract changes). A finding you can't reproduce is labelled a suspicion, not a bug.
-4. **Databases.** Use only a scratch DB, `mu_scratch_<label with - turned into _>_test` in container `madden-db`, and drop it when done. Never write to `madden_test`, `madden_mu2026` or `madden_2036`.
+4. **Databases.** Use only a scratch DB in container `madden-db`: `mu_scratch_audit_<sha7>_test` in an audit subagent, `mu_scratch_<label with - turned into _>_test` for anything the main session runs itself. Drop it when done. Never write to `madden_test`, `madden_mu2026` or `madden_2036`.
 5. **Write the report** to your scratchpad's `audit/` folder. Post one `HANDOFF` to the builder (`builder-N`, or "next builder session" if none is live) per batch, following ACCEPTANCE_CHECKS.md's one-pass process:
    - every finding, with severity (HIGH first) and `file:line`;
    - the acceptance rule and the check that proves the fix;
