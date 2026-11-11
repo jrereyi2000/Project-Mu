@@ -7,6 +7,10 @@
     python3 -m tools.madden_pilot set-setting --path "Settings>Gameplay>Accel Clamp" --value Off
     python3 -m tools.madden_pilot verify-mods --check first_down_line
     python3 -m tools.madden_pilot quit        [--franchise TUNE-<name>] [--allow-quit]
+  a guarded spike (MADDEN_SPIKE_AGENT_PLAN):
+    python3 -m tools.madden_pilot spike-start --brief BRIEF.json
+    python3 -m tools.madden_pilot spike-look|spike-key|spike-confirm|spike-goto|spike-record|
+        spike-check|spike-end|spike-analyze --brief BRIEF.json ...
   common: [--run-dir DIR] [--dry-run]
 
 Every run writes data/pilot_runs/<YYYY-MM-DD_HHMMSS>_<job>/ (steps/NNNN_<screen>.png/.json,
@@ -21,9 +25,10 @@ import argparse
 import datetime
 import json
 import sys
+import time
 from pathlib import Path
 
-from tools.madden_pilot import jobs, navigate
+from tools.madden_pilot import jobs, navigate, spike, vision
 from tools.madden_pilot.navigate import ROOT, TITLE, Pilot
 from tools.madden_pilot.screens import UNKNOWN, Frame, classify, load_catalog, norm
 
@@ -170,6 +175,15 @@ class ScriptedMadden:
                 on = f" on {hl}" if hl and name == self.keymap.get("select", "space") else ""
                 self.out(f"  key   {name:<9} {before}{on} -> {self.screen}")
             return {"ok": True, "name": name, "sent": times}
+        if op == "record":
+            out_dir = Path(cmd[cmd.index("--dir") + 1])
+            out_dir.mkdir(parents=True, exist_ok=True)
+            from PIL import Image
+            for index in range(3):          # three blank frames stand in for the burst
+                Image.new("RGB", (64, 36), (18, 18, 24)).save(out_dir / f"frame_{index:04d}.jpg", "JPEG")
+            self.out(f"  record -> 3 blank frames in {out_dir.name} (dry run)")
+            return {"ok": True, "dir": str(out_dir), "frames": 3, "fps_actual": 5.0,
+                    "size": [2560, 1440]}
         if op in ("run", "kill"):
             self.out(f"  {op}  {' '.join(map(str, cmd[1:]))} (dry run: not done)")
             return {"ok": True}
@@ -254,7 +268,9 @@ ROUTES = {
 def build_parser():
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--run-dir", help="where steps/, result.json and stop.json go "
-                                          "(default data/pilot_runs/<YYYY-MM-DD_HHMMSS>_<job>/)")
+                                          "(default data/pilot_runs/<YYYY-MM-DD_HHMMSS>_<job>/); "
+                                          "spike jobs use it as the spike root "
+                                          "(default data/spikes/<id>/)")
     common.add_argument("--dry-run", action="store_true", help="walk the route on a scripted fake Madden; touch no PC")
     ap = argparse.ArgumentParser(prog="python3 -m tools.madden_pilot", description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="job", required=True)
@@ -289,6 +305,49 @@ def build_parser():
     s = sub.add_parser("quit", parents=[common], help="quit the loaded franchise to the franchise list")
     s.add_argument("--franchise", help="the loaded franchise, e.g. TUNE-SPIKE (the hub doesn't show it)")
     s.add_argument("--allow-quit", action="store_true", help="quit a non-TUNE franchise (ask JR first)")
+
+    sp = sub.add_parser("spike-start", parents=[common], help="start a guarded spike from a brief")
+    sp.add_argument("--brief", required=True, help="the brief JSON (MADDEN_SPIKE_AGENT_PLAN section 2.2)")
+    sp.add_argument("--id", help="the spike id (default: the brief's id)")
+    sp = sub.add_parser("spike-look", parents=[common], help="capture and classify one frame")
+    sp.add_argument("--brief", required=True)
+    sp.add_argument("--id")
+    sp.add_argument("--describe", action="store_true", help="also describe the frame with the vision model")
+    sp = sub.add_parser("spike-key", parents=[common], help="press a key through the guard")
+    sp.add_argument("--brief", required=True)
+    sp.add_argument("--id")
+    sp.add_argument("--name", required=True, help="a driver key name (arrows, z, c, backspace, ...)")
+    sp.add_argument("--times", type=int, default=1)
+    sp.add_argument("--hold", type=float, default=0.08)
+    sp.add_argument("--describe", action="store_true")
+    sp = sub.add_parser("spike-confirm", parents=[common], help="press Space on an allow-listed label")
+    sp.add_argument("--brief", required=True)
+    sp.add_argument("--id")
+    sp.add_argument("--label", required=True)
+    sp.add_argument("--describe", action="store_true")
+    sp = sub.add_parser("spike-goto", parents=[common], help="walk the catalog routes to a screen")
+    sp.add_argument("--brief", required=True)
+    sp.add_argument("--id")
+    sp.add_argument("--to", "--target", dest="target", required=True, help="the catalogued screen")
+    sp = sub.add_parser("spike-record", parents=[common], help="record a clip and build its GIF and sheet")
+    sp.add_argument("--brief", required=True)
+    sp.add_argument("--id")
+    sp.add_argument("--seconds", type=int, default=5)
+    sp.add_argument("--fps", type=int, default=5)
+    sp.add_argument("--note")
+    sp = sub.add_parser("spike-check", parents=[common], help="run asset checks on a captured frame")
+    sp.add_argument("--brief", required=True)
+    sp.add_argument("--id")
+    sp.add_argument("--check", action="append", help="a named check from the brief (repeatable)")
+    sp.add_argument("--checkpoint", help="a named checkpoint from the brief")
+    sp = sub.add_parser("spike-end", parents=[common], help="check and render the report, then back out")
+    sp.add_argument("--brief", required=True)
+    sp.add_argument("--id")
+    sp.add_argument("--report", required=True, help="the report JSON the agent wrote")
+    sp = sub.add_parser("spike-analyze", parents=[common],
+                        help="the heavy after-run pass once Madden is closed")
+    sp.add_argument("--brief", required=True)
+    sp.add_argument("--id", help="the spike id (default: the brief's id)")
     return ap
 
 
@@ -320,6 +379,8 @@ def dry_pilot(catalog, run_dir, args, out=print):
 
 def main(argv=None, out=print):
     args = build_parser().parse_args(argv)
+    if args.job.startswith("spike"):
+        return _spike_main(args, out)
     run_dir = run_dir_for(args.job, args.run_dir, args.dry_run)
     catalog = load_catalog()
     fmt = {k: v for k, v in vars(args).items() if v is not None}
@@ -391,6 +452,144 @@ def _run(args, run_dir, catalog, fmt, out):
 class _Missing(dict):
     def __missing__(self, key):
         return "{" + key + "}"
+
+
+# --------------------------------------------------------------------------- spike jobs
+def _stderr(message):
+    print(message, file=sys.stderr)
+
+
+def _spike_contract(job, **over):
+    """The section 2.5 JSON shape: every key always present, extras merged in."""
+    data = {"ok": True, "job": job, "step": 0, "steps_left": 0, "minutes_left": 0.0,
+            "screen": None, "lines": [], "highlight": None, "png": None, "refused": None,
+            "stopped": None}
+    data.update(over)
+    return data
+
+
+def _vision_payload(described):
+    return {"kind": described.kind, "title": described.title, "options": list(described.options),
+            "selected": described.selected, "overlays": list(described.overlays),
+            "warning": described.warning, "summary": described.summary,
+            "model": described.model, "seconds": described.seconds}
+
+
+def _with_guard(job, guard, result):
+    data = _spike_contract(job)
+    data.update(result)
+    data["job"] = job
+    if guard.description is not None:
+        data["vision"] = _vision_payload(guard.description)
+    elif guard.describe_error:
+        data["vision"] = None
+        data["vision_error"] = guard.describe_error
+    return data
+
+
+def _spike_exit(data):
+    if not data.get("ok"):
+        return 1
+    stopped = data.get("stopped")
+    if stopped and stopped != "ended":
+        return 1                            # a successful last action that hit a cap
+    if data.get("screen") == UNKNOWN and not data.get("refused"):
+        return 2                            # a look that landed on an uncatalogued screen
+    return 0
+
+
+def _emit(data, out):
+    out(json.dumps(data, indent=1, default=str))
+    return _spike_exit(data)
+
+
+def _fake_describe(png):
+    return vision.ScreenDescription(kind="other", title="scripted frame", options=(), selected=None,
+                                    overlays=(), warning=None, summary="dry run: no vision model",
+                                    model="scripted", seconds=0.0)
+
+
+def _spike_pilot(args, brief, catalog, run_dir):
+    """A live Pilot, or a ScriptedMadden one for --dry-run (whose narration goes to stderr)."""
+    if not args.dry_run:
+        return Pilot(catalog, run_dir), None
+    tiles = ["TUNE-SPIKE"]
+    if brief.save:
+        tile = jobs.tile_name(brief.save).upper()
+        if tile not in tiles:
+            tiles.insert(0, tile)
+    fake = ScriptedMadden(catalog, start="FRANCHISE_LIST", tiles=tiles, out=_stderr)
+    pilot = Pilot(catalog, run_dir, driver=fake, sleep=fake.sleep, clock=fake.clock,
+                  highlight_reader=lambda frame, labels, spec: fake.highlight)
+    pilot.dry_run = True
+    navigate.send_notice = lambda message, title="Madden pilot": _stderr(
+        f"[dry-run] stop notice (not sent): {message}")
+    return pilot, fake
+
+
+def _spike_main(args, out):
+    """Run one spike-* job and print exactly one JSON object (section 2.5)."""
+    real_notice = navigate.send_notice
+    try:
+        return _spike_job(args, out)
+    finally:
+        navigate.send_notice = real_notice
+
+
+def _spike_job(args, out):
+    job = args.job
+    try:
+        brief = spike.load_brief(args.brief)
+    except spike.BriefError as exc:
+        return _emit(_spike_contract(job, ok=False, refused=str(exc)), out)
+    if args.id and args.id != brief.id:
+        return _emit(_spike_contract(job, ok=False,
+                                     refused=f"--id {args.id} does not match the brief ({brief.id})"), out)
+    root = Path(args.run_dir) if args.run_dir else ROOT / "data" / "spikes" / brief.id
+    run_dir = root / "run"
+
+    if job == "spike-analyze":
+        describe_fn = _fake_describe if args.dry_run else (
+            lambda png: vision.describe(png, backend=vision.heavy_backend()))
+        result = spike.analyze(root, brief, run_dir, describe_fn=describe_fn,
+                               running=(lambda: False) if args.dry_run else None)
+        data = _spike_contract(job)
+        data.update(result)
+        return _emit(data, out)
+
+    state_path = root / "state.json"
+    if job != "spike-start" and not state_path.is_file():
+        return _emit(_spike_contract(job, ok=False, refused="no spike state: run spike-start first"), out)
+    catalog = load_catalog()
+    pilot, fake = _spike_pilot(args, brief, catalog, run_dir)
+    clock = fake.clock if fake is not None else time.monotonic
+    describe_fn = _fake_describe if args.dry_run else vision.describe
+
+    if job == "spike-start":
+        guard, result = spike.start(brief, pilot, state_path, dry_run=args.dry_run,
+                                    describe_fn=describe_fn, clock=clock,
+                                    watcher=(lambda: False) if args.dry_run else None)
+        if guard is None:
+            return _emit(_spike_contract(job, **result), out)
+    else:
+        guard = spike.SpikeGuard(brief, pilot, state_path, clock=clock, describe_fn=describe_fn)
+        if job == "spike-look":
+            result = guard.look(describe=args.describe)
+        elif job == "spike-key":
+            result = guard.key(args.name, args.times, args.hold, describe=args.describe)
+        elif job == "spike-confirm":
+            result = guard.confirm(args.label, describe=args.describe)
+        elif job == "spike-goto":
+            result = guard.goto(args.target)
+        elif job == "spike-record":
+            result = guard.record(args.seconds, args.fps, note=args.note)
+        elif job == "spike-check":
+            result = guard.check(checkpoint=args.checkpoint, checks=args.check)
+        else:
+            result = spike.end(brief, guard, args.report, run_dir)
+            (root / "result.json").write_text(json.dumps(result, indent=1, default=str),
+                                              encoding="utf-8")
+    return _emit(_with_guard(job, guard, result), out)
 
 
 if __name__ == "__main__":
