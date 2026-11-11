@@ -214,11 +214,13 @@ CREATE TABLE IF NOT EXISTS player_stats (
             + COALESCE(rec_tds, 0)       * 6.0
             - COALESCE(fumb, 0)          * 2.0
         , 2)
-    ) STORED,
-    -- The team is in the key: two players can share an abbreviated name and position (J. Williams,
-    -- HB, on two teams) and Madden has them in the same game (2027_02_23_player_stats_team_key.sql).
-    UNIQUE (game_id, player_name, position, team_id)
+    ) STORED
 );
+-- The team is in the key: two players can share an abbreviated name and position (J. Williams, HB, on two
+-- teams) and Madden has them in the same game (2027_02_23_player_stats_team_key.sql, whose named index
+-- this mirrors — a fresh database must carry the migrated object name, not a table-level UNIQUE).
+CREATE UNIQUE INDEX IF NOT EXISTS player_stats_game_name_position_team
+    ON player_stats (game_id, player_name, position, team_id);
 
 CREATE TABLE IF NOT EXISTS season_stats (
     id SERIAL PRIMARY KEY,
