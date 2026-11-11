@@ -9,6 +9,7 @@
     mark_written(cur, season, week, run_id, outcomes=None, counts=None, report=None)
     week_status(cur, season, week) -> 'PLANNED' | 'WRITTEN' | 'FAILED' | None
     links(cur) -> {gsis_id: pgid}
+    ensure_person(cur, gsis_id, evidence) -> bool        a minimal nfl_players row when the history lacks the person
     add_created_link(cur, player_id, gsis_id, evidence) -> bool
 
 Tables come from db/migrations/2027_02_27_nfl_mirror.sql. Every function works inside the caller's transaction and
@@ -243,6 +244,25 @@ def links(cur):
     return {gsis: pgid for gsis, pgid in cur.fetchall()}
 
 
+def ensure_person(cur, gsis_id, evidence):
+    """Add the minimal `nfl_players` row a link needs, from the evidence's identity, when the person is missing.
+
+    nflverse's history load stops at 2025, so a current newcomer may be absent while `nfl_player_links.gsis_id`
+    references `nfl_players`. `ON CONFLICT (gsis_id) DO NOTHING` keeps an existing historical row untouched (an old
+    person is never deleted or rewritten to make room). Returns True when the evidence carried a name, False when it
+    did not (the foreign key then decides). Used by `add_created_link` and by an ordinary/OVERRIDE link
+    (audit-5 U18 R2).
+    """
+    evidence = dict(evidence or {})
+    if not evidence.get("name"):
+        return False
+    cur.execute("""INSERT INTO nfl_players (gsis_id, display_name, position, birth_date, college)
+                   VALUES (%s, %s, %s, %s, %s) ON CONFLICT (gsis_id) DO NOTHING""",
+                (gsis_id, evidence["name"], evidence.get("position"), evidence.get("birth_date"),
+                 evidence.get("college")))
+    return True
+
+
 def add_created_link(cur, player_id, gsis_id, evidence):
     """Link a player the mirror created to his real person (method 'CREATED'). Returns True when a link was added,
     False when this exact link already exists; raises ValueError when either side is already linked elsewhere.
@@ -258,11 +278,7 @@ def add_created_link(cur, player_id, gsis_id, evidence):
         if all(int(p) == int(player_id) and g == gsis_id for p, g in existing):
             return False
         raise ValueError(f"player {player_id} or {gsis_id} is already linked: {existing}")
-    if evidence.get("name"):
-        cur.execute("""INSERT INTO nfl_players (gsis_id, display_name, position, birth_date, college)
-                       VALUES (%s, %s, %s, %s, %s) ON CONFLICT (gsis_id) DO NOTHING""",
-                    (gsis_id, evidence["name"], evidence.get("position"), evidence.get("birth_date"),
-                     evidence.get("college")))
+    ensure_person(cur, gsis_id, evidence)
     cur.execute("""INSERT INTO nfl_player_links (player_id, gsis_id, method, score, evidence)
                    VALUES (%s, %s, 'CREATED', NULL, %s)""", (int(player_id), gsis_id, _jsonb(evidence)))
     return True
