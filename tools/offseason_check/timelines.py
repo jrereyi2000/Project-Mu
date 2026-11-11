@@ -225,7 +225,8 @@ def _repro_seed(cur, coach_gm_abbr):
     S = _REPRO_S
     cur.execute("UPDATE league_state SET current_season = %s, current_week = 1 WHERE id = 1", (S,))
     if cur.rowcount == 0:
-        cur.execute("INSERT INTO league_state (id, current_season, current_week) VALUES (1, %s, 1)", (S,))
+        cur.execute("INSERT INTO league_state (id, current_season, current_week, shape_season) "
+                    "VALUES (1, %s, 1, %s)", (S, S))
     ids = {}
     for abbr, city, conf in _REPRO_TEAMS:
         cur.execute("INSERT INTO teams (name, city, abbreviation, conference, division) VALUES (%s,%s,%s,%s,%s) "

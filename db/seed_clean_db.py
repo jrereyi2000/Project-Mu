@@ -207,14 +207,16 @@ def seed_teams(cur) -> dict[str, int]:
 
 
 def seed_league_state(cur, season: int, week: int):
-    """Initializes or updates the single league_state row."""
+    """Initializes or updates the single league_state row. `shape_season` (2027_02_26) is the league's start season
+    when the row is created; an existing value is kept, because a league's shape reference never moves."""
     cur.execute("""
-        INSERT INTO league_state (id, current_season, current_week)
-        VALUES (1, %s, %s)
+        INSERT INTO league_state (id, current_season, current_week, shape_season)
+        VALUES (1, %s, %s, %s)
         ON CONFLICT (id) DO UPDATE SET
             current_season = EXCLUDED.current_season,
-            current_week = EXCLUDED.current_week;
-    """, (season, week))
+            current_week = EXCLUDED.current_week,
+            shape_season = COALESCE(league_state.shape_season, EXCLUDED.shape_season);
+    """, (season, week, season))
 
 
 def seed_gm_team_settings(cur, team_ids: dict[str, int], user_teams: set[str]):

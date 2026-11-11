@@ -1,12 +1,17 @@
 """The stored league shape season and the live projection of leavers and the coming draft (board M-0414).
 
-Real PostgreSQL tests against two scratch copies (never a live database): a 2026-era league templated from
-`madden_tune_p2g` (the first league to reach an offseason) and the frozen 2036 archive templated from `madden_2036`.
-They are skipped unless the scratch databases exist; set the DSNs below to point them elsewhere.
+Real PostgreSQL tests against three scratch copies (never a live database): a 2026-era league templated from
+`madden_tune_p2g` with the pending migrations applied (the first league to reach an offseason), the frozen 2036
+archive templated from `madden_2036` **with `2027_02_26_league_shape_season.sql` applied to the copy only** (the
+real archive stays unmigrated), and a fresh `db/init_db.sql` build that the clean seed fills. They are skipped
+unless the scratch databases exist; set the DSNs below to point them elsewhere.
 
 1. `engines/progression.py` calibrated against the module constant 2036 in a 2026 league: the target was empty, so
    every offseason picked development 0.0 and star -1.00 (HIGH).
 2. The live projection dropped the leavers and the coming rookie class, so `class_size` was always 0 (MEDIUM).
+3. The exit/rookie draw is keyed on (the season being projected or replayed, seed): the live engine passes its
+   target season with seed 0, the fit each replayed season with its own seed (JR, board M-0441/M-0455). A NULL or
+   missing `league_state.shape_season` refuses to run; the clean seed writes the start season.
 """
 import os
 import random
@@ -28,6 +33,9 @@ SCRATCH_DSN = os.environ.get(
 ARCHIVE_DSN = os.environ.get(
     "MADDEN_SHAPE_2036_DSN",
     "host=localhost dbname=mu_scratch_builder_8_shape2036_test user=postgres password=postgres")
+INIT_DSN = os.environ.get(
+    "MADDEN_SHAPE_INIT_DSN",
+    "host=localhost dbname=mu_scratch_builder_8_shapefix_init_test user=postgres password=postgres")
 
 
 def _is_scratch(dsn):
@@ -117,7 +125,7 @@ def _fit_league(conn, season):
                         if len(role["backup"]) >= F.ROLE_MIN_SAMPLE else F.BACKUP_GAMES)}
     by_group = defaultdict(list)
     for p in players:
-        by_group[p["group"]].append(p["ovr"])
+        by_group[P.shape_group(p["engine_position"])].append(p["ovr"])
     rookies = [{k: p[k] for k in ("position", "engine_position", "group", "age", "ovr", "dev")}
                for p in players if p["years_pro"] == 0]
     return {"_league": True, "players": players, "rookies": rookies, "calendar_year": season,
@@ -165,13 +173,18 @@ def test_live_terms_match_the_fit_first_season(conn):
     fit_season = fit["seasons"][0]
     fit_terms = (fit_season["league_term"], fit_season["star_term"])
     # Reproduce the fit number (the verdict's §1 reports +0.5 / 0 for the save snapshot; this DB-built league is
-    # +1.5 / -1.0) and report it: the live development term is within one calibration step (0.5).
-    assert fit_terms == (1.5, -1.0)
+    # +1.0 / -1.0 after the draw was keyed on (season, seed)) and report it: the live development term is within
+    # one calibration step (0.5).
+    assert fit_terms == (1.0, -1.0)
     assert abs(live_terms[0] - fit_terms[0]) <= 0.5
     assert live_terms[1] != -1.0
     new = [row["new_ovr"] for row in live["results"]]
-    n90 = sum(ovr >= 90 for ovr in new)
-    assert abs(n90 - live["league_shape"]["target"]["count_90_plus"]) <= 0.05 * live["league_shape"]["target"]["count_90_plus"]
+    # The calibrated term holds the projected shape (the stride sample the engine calibrates on; F5 now reports it
+    # at league scale) and the full roster's mean. The full roster's own 90+ count (80 here, against a target of
+    # 71) is the sample-vs-full calibration item the audit left to P3, not this term's contract.
+    projected = live["league_shape"]["projected"]["count_90_plus"]
+    assert abs(projected - live["league_shape"]["target"]["count_90_plus"]) <= 0.05 * live["league_shape"]["target"]["count_90_plus"]
+    assert abs(sum(new) / len(new) - live["league_shape"]["target"]["avg_ovr"]) <= 0.25
 
 
 @pytest.mark.integration
@@ -192,9 +205,9 @@ def test_empty_shape_target_never_calibrates(conn):
         conn.rollback()
 
 
-@pytest.mark.integration
-def test_managed_offseason_carries_the_stored_terms(conn):
-    """No monkeypatched progression: the prepared 2028 annual rows carry the calibrated terms."""
+def _managed_snapshot(conn):
+    """A save-shaped snapshot of the players whose progression state the managed pass tracks (for
+    `prepare_offseason_pass`)."""
     with conn.cursor() as cur:
         cur.execute("""
             SELECT s.player_id, p.madden_pgid, ps.position, ps.dev_trait, s.base_ratings
@@ -213,7 +226,13 @@ def test_managed_offseason_carries_the_stored_terms(conn):
                         "archetype_grades": [fields.get(f"OverallGrade{i}", 0) for i in range(5)],
                         "dev_trait": dev or "Normal", "traits": {}, "overall": fields["OverallRating"],
                         "archetype": fields["PlayerType"]})
-    snapshot = {"players": players, "league_settings": {}}
+    return {"players": players, "league_settings": {}}
+
+
+@pytest.mark.integration
+def test_managed_offseason_carries_the_stored_terms(conn):
+    """No monkeypatched progression: the prepared 2028 annual rows carry the calibrated terms."""
+    snapshot = _managed_snapshot(conn)
     try:
         prepared = cp.prepare_offseason_pass(conn.cursor(), snapshot, 2028,
                                              source_fingerprint="builder-8-shape-test")
@@ -247,7 +266,11 @@ def test_managed_offseason_carries_the_stored_terms(conn):
 
 @pytest.mark.integration
 def test_2036_archive_keeps_its_shape(archive):
-    """The 2036 archive still holds 2036; its terms change because leavers and the draft are now modelled."""
+    """The 2036 archive still holds 2036; its terms change because leavers and the draft are now modelled.
+
+    Run against a scratch copy of `madden_2036` with `2027_02_26_league_shape_season.sql` applied (the real archive
+    stays unmigrated, JR's ruling). The draw is keyed on the target season (2037) and seed 0.
+    """
     with archive.cursor() as cur:
         assert P.league_shape_season(cur) == 2036
     logs = []
@@ -262,5 +285,137 @@ def test_2036_archive_keeps_its_shape(archive):
     assert target["avg_ovr"] == pytest.approx(78.13, abs=0.01)
     assert shape["target"]["avg_ovr"] == pytest.approx(target["avg_ovr"])
     assert shape["leavers"] > 0 and shape["class_size"] > 0
-    # Old code: (+1.5, +0.75). The projection now drafts, so the fit's terms move.
-    assert shape["terms"] == (4.0, 1.5)
+    # Old code: (+1.5, +0.75). The draw is now keyed on the target season and 0, so the fit's terms move.
+    assert shape["terms"] == (4.0, 0.75)
+
+
+def _shape_spy(calls):
+    """Replace the shared step with a recorder that keeps each call's leaver pids and rookie (ovr, position) list."""
+    original = P.shape_exits_and_rookies
+
+    def spy(*args, **kwargs):
+        keeping, leaving, rookies = original(*args, **kwargs)
+        calls.append({"leavers": [p["pid"] for p in leaving],
+                      "rookies": [(r["ovr"], r["position"]) for r in rookies]})
+        return keeping, leaving, rookies
+
+    return original, spy
+
+
+@pytest.mark.integration
+def test_the_fit_exit_draw_varies_by_seed(conn):
+    """F1(a): the fit's year-1 exits are keyed on its seed, so seeds 0 and 1 draw different leavers.
+
+    Before the fix both seeds keyed the draw on the same season and drew an identical 398-player set.
+    """
+    league = _fit_league(conn, 2026)
+    calls = []
+    original, spy = _shape_spy(calls)
+    try:
+        P.shape_exits_and_rookies = spy
+        F.replay(league, seasons=1, seed=0)
+        F.replay(league, seasons=1, seed=1)
+    finally:
+        P.shape_exits_and_rookies = original
+    assert len(calls) == 2
+    first, second = (set(c["leavers"]) for c in calls)
+    assert first != second
+    assert len(first) > 0 and len(second) > 0
+    # Two independent draws from the same roster overlap, but are not the same set.
+    assert 0 < len(first & second) < len(first | second)
+
+
+@pytest.mark.integration
+def test_the_exit_draw_varies_by_projected_season(conn):
+    """F1(b): one fixed roster through the shared step draws different leavers for 2027 and 2028 at seed 0."""
+    league = _fit_league(conn, 2026)
+    compact = [{"pid": p["pid"], "position": p["engine_position"], "age": p["age"], "ovr": p["ovr"],
+                "years_pro": p["years_pro"]} for p in league["players"]]
+    _, first, _ = P.shape_exits_and_rookies(compact, league["rookies"], 2027, seed=0)
+    _, second, _ = P.shape_exits_and_rookies(compact, league["rookies"], 2028, seed=0)
+    assert {p["pid"] for p in first} != {p["pid"] for p in second}
+    assert first and second
+
+
+@pytest.mark.integration
+def test_live_and_fit_draw_the_same_first_class(conn):
+    """F1(c)/F3: live 2027 at seed 0 draws the fit's first replay year exactly: same leaver pids and the same
+    rookie (OVR, position) list.
+
+    The shared step derives both groups with `shape_group` and sorts the reference class by (position, ovr, age),
+    so live's (`league_turnover`, OVR DESC) and the fit's (snapshot pid order) classes pool the same way.
+    """
+    league = _fit_league(conn, 2026)
+    calls = []
+    original, spy = _shape_spy(calls)
+    try:
+        P.shape_exits_and_rookies = spy
+        try:
+            live = P.run_progression(conn, 2027, commit=False, dry_run=True, log=lambda *_: None)
+        finally:
+            conn.rollback()
+        live_call = calls[-1]
+        F.replay(league, seasons=1, seed=0)
+        fit_call = calls[-1]
+    finally:
+        P.shape_exits_and_rookies = original
+    assert len(live_call["leavers"]) == live["league_shape"]["leavers"]
+    assert live_call["leavers"] == fit_call["leavers"]
+    assert live_call["rookies"] == fit_call["rookies"]
+
+
+@pytest.mark.integration
+def test_null_shape_season_refuses_progression(conn):
+    """F2: a NULL shape season is a setup error, named with its fix, for both the live pass and the managed pass."""
+    snapshot = _managed_snapshot(conn)
+    with conn.cursor() as cur:
+        cur.execute("UPDATE league_state SET shape_season = NULL")
+    try:
+        with pytest.raises(ValueError, match="shape_season is NULL"):
+            P.run_progression(conn, 2027, commit=False, dry_run=True, log=lambda *_: None)
+        with pytest.raises(ValueError, match="shape_season is NULL"):
+            cp.prepare_offseason_pass(conn.cursor(), snapshot, 2028,
+                                      source_fingerprint="builder-8-null-shape-test")
+    finally:
+        conn.rollback()
+
+
+@pytest.mark.integration
+def test_missing_shape_season_column_refuses_progression(conn):
+    """F2: a database without the column refuses too, and the error names 2027_02_26_league_shape_season.sql."""
+    with conn.cursor() as cur:
+        cur.execute("ALTER TABLE league_state DROP COLUMN shape_season")
+    try:
+        with pytest.raises(ValueError, match="2027_02_26_league_shape_season"):
+            P.run_progression(conn, 2027, commit=False, dry_run=True, log=lambda *_: None)
+    finally:
+        conn.rollback()
+
+
+@pytest.mark.integration
+def test_a_fresh_clean_seed_stores_its_start_shape_season():
+    """F2: `seed_clean_db --season 2026` writes shape_season 2026, and it stays 2026 once 2027 is rated and
+    current_season moves to 2027 (the old fallback returned the current season)."""
+    from db.seed_clean_db import run_clean_seed
+
+    if not _is_scratch(INIT_DSN):
+        pytest.skip("the clean-seed test only runs against a mu_scratch_* database")
+    try:
+        run_clean_seed(INIT_DSN, season=2026, week=1, skip_records=True, skip_coaches=True, skip_gms=True,
+                       skip_writers=True, skip_napper=True, log=lambda *_: None)
+        conn = psycopg.connect(INIT_DSN)
+    except psycopg.OperationalError as exc:
+        pytest.skip(f"scratch database not available ({exc})")
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT shape_season FROM league_state ORDER BY id LIMIT 1")
+            assert cur.fetchone()[0] == 2026
+            cur.execute("INSERT INTO players (player_name) VALUES ('Shape Fix Rated 2027') RETURNING id")
+            player_id = cur.fetchone()[0]
+            cur.execute("INSERT INTO player_seasons (player_id, season, team_id, position, overall_rating) "
+                        "VALUES (%s, 2027, NULL, 'QB', 75)", (player_id,))
+            cur.execute("UPDATE league_state SET current_season = 2027")
+            assert P.league_shape_season(cur) == 2026
+    finally:
+        conn.rollback()
+        conn.close()
