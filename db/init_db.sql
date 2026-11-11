@@ -218,7 +218,10 @@ CREATE TABLE IF NOT EXISTS player_stats (
             + COALESCE(rec_tds, 0)       * 6.0
             - COALESCE(fumb, 0)          * 2.0
         , 2)
-    ) STORED
+    ) STORED,
+    -- Madden stat counters (2027_02_25_madden_stat_counters.sql): the fields the save reader copied and the
+    -- loader used to drop. NULL = the row's table doesn't carry it.
+    rec_drops INT, rush_20plus INT
 );
 -- The team is in the key: two players can share an abbreviated name and position (J. Williams, HB, on two
 -- teams) and Madden has them in the same game (2027_02_23_player_stats_team_key.sql, whose named index
@@ -251,6 +254,8 @@ CREATE TABLE IF NOT EXISTS season_stats (
     pass_comp_pct NUMERIC(5, 1), pass_ypg NUMERIC(6, 1), pass_rating NUMERIC(5, 1), pass_ypa NUMERIC(5, 1), pass_long INT, pass_sacks INT,
     rush_avg NUMERIC(5, 1), rush_ypg NUMERIC(6, 1), rush_btk INT, rush_yac INT, rush_long INT,
     rec_avg NUMERIC(5, 1), rec_ypg NUMERIC(6, 1), rec_rac INT, rec_rac_avg NUMERIC(5, 1), rec_long INT,
+    -- Madden stat counters (2027_02_25_madden_stat_counters.sql): see player_stats.
+    rec_drops INT, rush_20plus INT,
     UNIQUE (season, player_name, team_id, position)
 );
 
@@ -266,11 +271,13 @@ CREATE TABLE IF NOT EXISTS season_stat_defense (       -- SOLO,ASSISTS,TAK,TFL,S
     season INT NOT NULL, player_id INT NOT NULL REFERENCES players(id), team_id INT REFERENCES teams(id), position VARCHAR(10),
     solo INT, assists INT, tackles INT, tfl INT, sacks NUMERIC(5, 1), ints INT, int_yds INT, int_avg NUMERIC(5, 1),
     int_long INT, deflections INT, forced_fumbles INT, fumble_recoveries INT, fumble_yds INT, blocks INT, safeties INT, tds INT,
+    big_hits INT, catches_allowed INT,        -- 2027_02_25_madden_stat_counters.sql
     PRIMARY KEY (season, player_id));
 CREATE TABLE IF NOT EXISTS game_stat_defense (
     game_id INT NOT NULL REFERENCES games(id) ON DELETE CASCADE, player_id INT NOT NULL REFERENCES players(id), team_id INT REFERENCES teams(id), position VARCHAR(10),
     solo INT, assists INT, tackles INT, tfl INT, sacks NUMERIC(5, 1), ints INT, int_yds INT, int_avg NUMERIC(5, 1),
     int_long INT, deflections INT, forced_fumbles INT, fumble_recoveries INT, fumble_yds INT, blocks INT, safeties INT, tds INT,
+    big_hits INT, catches_allowed INT,        -- 2027_02_25_madden_stat_counters.sql
     PRIMARY KEY (game_id, player_id));
 
 CREATE TABLE IF NOT EXISTS season_stat_kicking (       -- FGM,FGA,FG%,FG LNG,FG BLK,XPM,XPA,XP%,XPB,FGM29..FGA50,KO,TB
@@ -314,20 +321,24 @@ CREATE TABLE IF NOT EXISTS game_stat_puntreturn (
 CREATE TABLE IF NOT EXISTS season_stat_blocking (      -- SACK (sacks allowed)
     season INT NOT NULL, player_id INT NOT NULL REFERENCES players(id), team_id INT REFERENCES teams(id), position VARCHAR(10),
     sacks_allowed INT,
+    pancakes INT,                             -- 2027_02_25_madden_stat_counters.sql
     PRIMARY KEY (season, player_id));
 CREATE TABLE IF NOT EXISTS game_stat_blocking (
     game_id INT NOT NULL REFERENCES games(id) ON DELETE CASCADE, player_id INT NOT NULL REFERENCES players(id), team_id INT REFERENCES teams(id), position VARCHAR(10),
     sacks_allowed INT,
+    pancakes INT,                             -- 2027_02_25_madden_stat_counters.sql
     PRIMARY KEY (game_id, player_id));
 
 -- GP / DP: every Season Stats category repeats them (stored once per player); a game has DP only (General tab).
 CREATE TABLE IF NOT EXISTS season_stat_general (
     season INT NOT NULL, player_id INT NOT NULL REFERENCES players(id), team_id INT REFERENCES teams(id), position VARCHAR(10),
     games_played INT, downs_played INT,
+    games_started INT,                        -- 2027_02_25_madden_stat_counters.sql
     PRIMARY KEY (season, player_id));
 CREATE TABLE IF NOT EXISTS game_stat_general (
     game_id INT NOT NULL REFERENCES games(id) ON DELETE CASCADE, player_id INT NOT NULL REFERENCES players(id), team_id INT REFERENCES teams(id), position VARCHAR(10),
     downs_played INT,
+    games_started INT,                        -- 2027_02_25_madden_stat_counters.sql
     PRIMARY KEY (game_id, player_id));
 
 -- 5b. Weekly injuries ledger (Manage Roster > Injury Report, 32 teams via Apple Vision OCR).
@@ -2707,7 +2718,9 @@ SELECT ps.season, ps.player_id, pl.player_name, pl.full_name, ps.team_id, ps.pos
        p.touchbacks AS punt_touchbacks, p.longest AS punt_longest,
        kr.returns AS kr_returns, kr.yards AS kr_yards, kr.average AS kr_average, kr.tds AS kr_tds, kr.longest AS kr_longest,
        pr.returns AS pr_returns, pr.yards AS pr_yards, pr.average AS pr_average, pr.tds AS pr_tds, pr.longest AS pr_longest,
-       ps.source
+       ps.source,
+       ss.rec_drops, ss.rush_20plus, d.big_hits AS def_big_hits, d.catches_allowed AS def_catches_allowed,
+       b.pancakes AS blk_pancakes, g.games_started
 FROM player_seasons ps
 JOIN players pl ON pl.id = ps.player_id
 LEFT JOIN season_stats ss            ON ss.season = ps.season AND ss.player_id = ps.player_id
@@ -2750,7 +2763,9 @@ SELECT ids.game_id, gm.season, gm.week, ids.player_id, pl.player_name, pl.full_n
        p.net_average AS punt_net_average, p.blocked AS punt_blocked, p.inside_20 AS punt_inside_20,
        p.touchbacks AS punt_touchbacks, p.longest AS punt_longest,
        kr.returns AS kr_returns, kr.yards AS kr_yards, kr.average AS kr_average, kr.tds AS kr_tds, kr.longest AS kr_longest,
-       pr.returns AS pr_returns, pr.yards AS pr_yards, pr.average AS pr_average, pr.tds AS pr_tds, pr.longest AS pr_longest
+       pr.returns AS pr_returns, pr.yards AS pr_yards, pr.average AS pr_average, pr.tds AS pr_tds, pr.longest AS pr_longest,
+       s.rec_drops, s.rush_20plus, d.big_hits AS def_big_hits, d.catches_allowed AS def_catches_allowed,
+       b.pancakes AS blk_pancakes, g.games_started
 FROM ids
 JOIN games gm ON gm.id = ids.game_id
 JOIN players pl ON pl.id = ids.player_id
@@ -3834,6 +3849,196 @@ CREATE TABLE IF NOT EXISTS award_ballots (
 );
 
 -- ---------------------------------------------------------------------------
+-- Madden stat counters (db/migrations/2027_02_25_madden_stat_counters.sql,
+-- docs/in_progress/MADDEN_STATS_INGEST_PLAN.md U2 §2.2)
+-- ---------------------------------------------------------------------------
+
+-- Madden's career totals at each weekly load (raw Career*Stats fields). Only differences between rows mean anything.
+CREATE TABLE IF NOT EXISTS player_career_counters (
+    season       INT NOT NULL,
+    week         INT NOT NULL,              -- current_week(snapshot); 0 = any load outside the regular season/playoffs
+    player_id    INT NOT NULL REFERENCES players(id),
+    madden_table VARCHAR(40) NOT NULL,      -- CareerOffensiveStats, CareerDefensiveKPReturnStats, ...
+    counters     JSONB NOT NULL,            -- {Madden field: int}, every numeric field on the row
+    games_played INT,                       -- counters->GAMESPLAYED, pulled out for the views
+    capture_id   INT REFERENCES captures(id) ON DELETE SET NULL,
+    read_at      TIMESTAMPTZ,               -- snapshot meta.read_at
+    PRIMARY KEY (season, week, player_id));
+CREATE INDEX IF NOT EXISTS player_career_counters_player ON player_career_counters (player_id, season, week);
+
+-- Per-key difference: every key in cur minus the previous row's value (0 when the previous row lacks the key).
+-- Negative values are kept: a legitimately shrinking counter is not a reset.
+CREATE OR REPLACE FUNCTION counter_delta(cur jsonb, prev jsonb) RETURNS jsonb
+LANGUAGE sql IMMUTABLE AS $$
+    SELECT COALESCE(jsonb_object_agg(k, (cur ->> k)::int - COALESCE((prev ->> k)::int, 0)), '{}'::jsonb)
+    FROM jsonb_object_keys(cur) AS k
+$$;
+
+-- One row per career-counter row: the previous position and a status (BASELINE, TABLE_CHANGED, RESET, NO_GAMES, OK).
+-- `delta` exists only for OK and NO_GAMES. Typed columns are NULL when the field is absent from the row's table.
+CREATE OR REPLACE VIEW player_week_counters AS
+WITH base AS (
+    SELECT c.season, c.week, c.player_id, c.madden_table, c.counters, c.games_played,
+           LAG(c.season)       OVER (PARTITION BY c.player_id ORDER BY c.season, c.week) AS prev_season,
+           LAG(c.week)         OVER (PARTITION BY c.player_id ORDER BY c.season, c.week) AS prev_week,
+           LAG(c.madden_table) OVER (PARTITION BY c.player_id ORDER BY c.season, c.week) AS prev_madden_table,
+           LAG(c.counters)     OVER (PARTITION BY c.player_id ORDER BY c.season, c.week) AS prev_counters,
+           LAG(c.games_played) OVER (PARTITION BY c.player_id ORDER BY c.season, c.week) AS prev_games_played
+    FROM player_career_counters c
+), marked AS (
+    SELECT b.*,
+           CASE
+               WHEN b.prev_season IS NULL THEN 'BASELINE'
+               WHEN b.madden_table IS DISTINCT FROM b.prev_madden_table THEN 'TABLE_CHANGED'
+               WHEN b.games_played - b.prev_games_played < 0 THEN 'RESET'
+               WHEN b.games_played - b.prev_games_played = 0 THEN 'NO_GAMES'
+               ELSE 'OK'
+           END AS status,
+           b.games_played - b.prev_games_played AS games_covered
+    FROM base b
+), deltas AS (
+    SELECT m.*,
+           CASE WHEN m.status IN ('OK', 'NO_GAMES') THEN counter_delta(m.counters, m.prev_counters) END AS delta
+    FROM marked m
+)
+SELECT season, week, player_id, madden_table, prev_season, prev_week, games_covered, status, delta,
+       (delta ->> 'TARGETS')::int                AS targets,
+       (delta ->> 'ROUTESRUN')::int              AS madden_routes,
+       (delta ->> 'AIRYARDS')::int               AS air_yards,
+       (delta ->> 'PRESSURES')::int              AS pressures_faced,
+       (delta ->> 'SEPARATION_TIGHT')::int       AS sep_tight,
+       (delta ->> 'SEPARATION_NORMAL')::int      AS sep_normal,
+       (delta ->> 'SEPARATION_OPEN')::int        AS sep_open,
+       (delta ->> 'SEPARATION_WIDEOPEN')::int    AS sep_wide_open,
+       (delta ->> 'SHORTPASS_ATTEMPTS')::int     AS short_att,
+       (delta ->> 'SHORTPASS_COMPLETIONS')::int  AS short_cmp,
+       (delta ->> 'SHORTPASS_YARDS')::int        AS short_yds,
+       (delta ->> 'SHORTPASS_TD')::int           AS short_td,
+       (delta ->> 'SHORTPASS_INTERCEPTIONS')::int AS short_int,
+       (delta ->> 'MEDIUMPASS_ATTEMPTS')::int    AS medium_att,
+       (delta ->> 'MEDIUMPASS_COMPLETIONS')::int AS medium_cmp,
+       (delta ->> 'MEDIUMPASS_YARDS')::int       AS medium_yds,
+       (delta ->> 'MEDIUMPASS_TD')::int          AS medium_td,
+       (delta ->> 'MEDIUMPASS_INTERCEPTIONS')::int AS medium_int,
+       (delta ->> 'DEEPPASS_ATTEMPTS')::int      AS deep_att,
+       (delta ->> 'DEEPPASS_COMPLETIONS')::int   AS deep_cmp,
+       (delta ->> 'DEEPPASS_YARDS')::int         AS deep_yds,
+       (delta ->> 'DEEPPASS_TD')::int            AS deep_td,
+       (delta ->> 'DEEPPASS_INTERCEPTIONS')::int AS deep_int,
+       (delta ->> 'INSIDEPOCKETTHROW_ATTEMPTS')::int    AS pocket_in_att,
+       (delta ->> 'INSIDEPOCKETTHROW_COMPLETIONS')::int AS pocket_in_cmp,
+       (delta ->> 'INSIDEPOCKETTHROW_YARDS')::int       AS pocket_in_yds,
+       (delta ->> 'INSIDEPOCKETTHROW_TD')::int          AS pocket_in_td,
+       (delta ->> 'INSIDEPOCKETTHROW_INTERCEPTIONS')::int AS pocket_in_int,
+       (delta ->> 'OUTSIDEPOCKETTHROW_ATTEMPTS')::int    AS pocket_out_att,
+       (delta ->> 'OUTSIDEPOCKETTHROW_COMPLETIONS')::int AS pocket_out_cmp,
+       (delta ->> 'OUTSIDEPOCKETTHROW_YARDS')::int       AS pocket_out_yds,
+       (delta ->> 'OUTSIDEPOCKETTHROW_TD')::int          AS pocket_out_td,
+       (delta ->> 'OUTSIDEPOCKETTHROW_INTERCEPTIONS')::int AS pocket_out_int,
+       (delta ->> 'BLITZ_PLAYS')::int            AS blitz_plays,
+       (delta ->> 'BLITZ_COMPLETIONS')::int      AS blitz_cmp,
+       (delta ->> 'BLITZ_YARDS')::int            AS blitz_yds,
+       (delta ->> 'BLITZ_TD')::int               AS blitz_td,
+       (delta ->> 'BLITZ_INTERCEPTIONS')::int    AS blitz_int,
+       (delta ->> 'QBSCRAMBLE_CARRIES')::int     AS scramble_att,
+       (delta ->> 'QBSCRAMBLE_YARDS')::int       AS scramble_yds,
+       (delta ->> 'QBSCRAMBLE_TD')::int          AS scramble_td,
+       (delta ->> 'THROWLOCATION_LEFT')::int     AS throw_left,
+       (delta ->> 'THROWLOCATION_MIDDLE')::int   AS throw_middle,
+       (delta ->> 'THROWLOCATION_RIGHT')::int    AS throw_right,
+       (delta ->> 'RUSHSUCCESS')::int            AS rush_success,
+       (delta ->> 'RUSH10YARDRUNS')::int         AS rush_10plus,
+       (delta ->> 'LIGHTBOX')::int               AS light_box,
+       (delta ->> 'LOADEDBOX')::int              AS loaded_box,
+       (delta ->> 'DEFTARGETS')::int             AS def_targets,
+       (delta ->> 'CTHALLOWED')::int             AS def_catches_allowed,
+       (delta ->> 'DEFPRESSURES')::int           AS def_pressures,
+       (delta ->> 'STOPS')::int                  AS stops,
+       (delta ->> 'STUFFS')::int                 AS stuffs,
+       (delta ->> 'DOWNSPLAYED')::int            AS downs_played
+FROM deltas;
+
+-- One row per (season, player): the OK week deltas summed key by key, the games those weeks covered, and how many
+-- weeks of the season had an unknown delta (a table change or a reset).
+CREATE OR REPLACE VIEW player_season_counters AS
+WITH ok_deltas AS (
+    SELECT season, player_id, delta
+    FROM player_week_counters
+    WHERE status = 'OK' AND delta IS NOT NULL
+), summed AS (
+    SELECT season, player_id, jsonb_object_agg(k, total) AS delta
+    FROM (
+        SELECT season, player_id, e.key AS k, SUM(e.value::int) AS total
+        FROM ok_deltas, LATERAL jsonb_each_text(ok_deltas.delta) AS e(key, value)
+        GROUP BY season, player_id, e.key
+    ) parts
+    GROUP BY season, player_id
+), coverage AS (
+    SELECT season, player_id,
+           COALESCE(SUM(games_covered) FILTER (WHERE status = 'OK'), 0) AS games_covered,
+           COUNT(*) FILTER (WHERE status IN ('TABLE_CHANGED', 'RESET')) AS weeks_unknown
+    FROM player_week_counters
+    GROUP BY season, player_id
+)
+SELECT c.season, c.player_id, s.delta, c.games_covered, c.weeks_unknown,
+       (s.delta ->> 'TARGETS')::int                AS targets,
+       (s.delta ->> 'ROUTESRUN')::int              AS madden_routes,
+       (s.delta ->> 'AIRYARDS')::int               AS air_yards,
+       (s.delta ->> 'PRESSURES')::int              AS pressures_faced,
+       (s.delta ->> 'SEPARATION_TIGHT')::int       AS sep_tight,
+       (s.delta ->> 'SEPARATION_NORMAL')::int      AS sep_normal,
+       (s.delta ->> 'SEPARATION_OPEN')::int        AS sep_open,
+       (s.delta ->> 'SEPARATION_WIDEOPEN')::int    AS sep_wide_open,
+       (s.delta ->> 'SHORTPASS_ATTEMPTS')::int     AS short_att,
+       (s.delta ->> 'SHORTPASS_COMPLETIONS')::int  AS short_cmp,
+       (s.delta ->> 'SHORTPASS_YARDS')::int        AS short_yds,
+       (s.delta ->> 'SHORTPASS_TD')::int           AS short_td,
+       (s.delta ->> 'SHORTPASS_INTERCEPTIONS')::int AS short_int,
+       (s.delta ->> 'MEDIUMPASS_ATTEMPTS')::int    AS medium_att,
+       (s.delta ->> 'MEDIUMPASS_COMPLETIONS')::int AS medium_cmp,
+       (s.delta ->> 'MEDIUMPASS_YARDS')::int       AS medium_yds,
+       (s.delta ->> 'MEDIUMPASS_TD')::int          AS medium_td,
+       (s.delta ->> 'MEDIUMPASS_INTERCEPTIONS')::int AS medium_int,
+       (s.delta ->> 'DEEPPASS_ATTEMPTS')::int      AS deep_att,
+       (s.delta ->> 'DEEPPASS_COMPLETIONS')::int   AS deep_cmp,
+       (s.delta ->> 'DEEPPASS_YARDS')::int         AS deep_yds,
+       (s.delta ->> 'DEEPPASS_TD')::int            AS deep_td,
+       (s.delta ->> 'DEEPPASS_INTERCEPTIONS')::int AS deep_int,
+       (s.delta ->> 'INSIDEPOCKETTHROW_ATTEMPTS')::int    AS pocket_in_att,
+       (s.delta ->> 'INSIDEPOCKETTHROW_COMPLETIONS')::int AS pocket_in_cmp,
+       (s.delta ->> 'INSIDEPOCKETTHROW_YARDS')::int       AS pocket_in_yds,
+       (s.delta ->> 'INSIDEPOCKETTHROW_TD')::int          AS pocket_in_td,
+       (s.delta ->> 'INSIDEPOCKETTHROW_INTERCEPTIONS')::int AS pocket_in_int,
+       (s.delta ->> 'OUTSIDEPOCKETTHROW_ATTEMPTS')::int    AS pocket_out_att,
+       (s.delta ->> 'OUTSIDEPOCKETTHROW_COMPLETIONS')::int AS pocket_out_cmp,
+       (s.delta ->> 'OUTSIDEPOCKETTHROW_YARDS')::int       AS pocket_out_yds,
+       (s.delta ->> 'OUTSIDEPOCKETTHROW_TD')::int          AS pocket_out_td,
+       (s.delta ->> 'OUTSIDEPOCKETTHROW_INTERCEPTIONS')::int AS pocket_out_int,
+       (s.delta ->> 'BLITZ_PLAYS')::int            AS blitz_plays,
+       (s.delta ->> 'BLITZ_COMPLETIONS')::int      AS blitz_cmp,
+       (s.delta ->> 'BLITZ_YARDS')::int            AS blitz_yds,
+       (s.delta ->> 'BLITZ_TD')::int               AS blitz_td,
+       (s.delta ->> 'BLITZ_INTERCEPTIONS')::int    AS blitz_int,
+       (s.delta ->> 'QBSCRAMBLE_CARRIES')::int     AS scramble_att,
+       (s.delta ->> 'QBSCRAMBLE_YARDS')::int       AS scramble_yds,
+       (s.delta ->> 'QBSCRAMBLE_TD')::int          AS scramble_td,
+       (s.delta ->> 'THROWLOCATION_LEFT')::int     AS throw_left,
+       (s.delta ->> 'THROWLOCATION_MIDDLE')::int   AS throw_middle,
+       (s.delta ->> 'THROWLOCATION_RIGHT')::int    AS throw_right,
+       (s.delta ->> 'RUSHSUCCESS')::int            AS rush_success,
+       (s.delta ->> 'RUSH10YARDRUNS')::int         AS rush_10plus,
+       (s.delta ->> 'LIGHTBOX')::int               AS light_box,
+       (s.delta ->> 'LOADEDBOX')::int              AS loaded_box,
+       (s.delta ->> 'DEFTARGETS')::int             AS def_targets,
+       (s.delta ->> 'CTHALLOWED')::int             AS def_catches_allowed,
+       (s.delta ->> 'DEFPRESSURES')::int           AS def_pressures,
+       (s.delta ->> 'STOPS')::int                  AS stops,
+       (s.delta ->> 'STUFFS')::int                 AS stuffs,
+       (s.delta ->> 'DOWNSPLAYED')::int            AS downs_played
+FROM coverage c
+LEFT JOIN summed s ON s.season = c.season AND s.player_id = c.player_id;
+
+-- ---------------------------------------------------------------------------
 -- Migration ledger (schema_migrations; db/migrate.py)
 -- ---------------------------------------------------------------------------
 
@@ -3990,5 +4195,6 @@ INSERT INTO schema_migrations (version, filename, checksum, source) VALUES
     ('2027_02_21_coach_madden_profiles', '2027_02_21_coach_madden_profiles.sql', '57c19dbbd71734bbf240a9831018a4447e6985c037f5b55240c5bd21c3f5b8f7', 'init_db.sql'),
     ('2027_02_22_relationship_applied_refs', '2027_02_22_relationship_applied_refs.sql', '6d24a303ad4affdca5645e264d82220864fd357916c874e97849d3bfc08d9e39', 'init_db.sql'),
     ('2027_02_23_player_stats_team_key', '2027_02_23_player_stats_team_key.sql', '7f5e8241f0e83d35385a272e5c8d7f34ddd3f0f7a68d99f0d51ad635a84fdeab', 'init_db.sql'),
-    ('2027_02_24_player_draft_facts', '2027_02_24_player_draft_facts.sql', '08c2e353ebc2e27ac4c83ab23aa38eae32a111dd08d8e528b3ad9b0f79f36afa', 'init_db.sql')
+    ('2027_02_24_player_draft_facts', '2027_02_24_player_draft_facts.sql', '08c2e353ebc2e27ac4c83ab23aa38eae32a111dd08d8e528b3ad9b0f79f36afa', 'init_db.sql'),
+    ('2027_02_25_madden_stat_counters', '2027_02_25_madden_stat_counters.sql', '9692dae24b3df49c04a10f77fd7f9616eb9ca094fc1ca889d727eb484bf3b081', 'init_db.sql')
 ON CONFLICT (version) DO NOTHING;
