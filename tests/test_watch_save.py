@@ -1693,3 +1693,73 @@ class BootstrapNewPlayersRealDbTest(unittest.TestCase):
             cur.execute("DELETE FROM players WHERE madden_pgid = 990001")
             self.conn.commit()
 
+
+
+class LockTuningDraftOrderTest(unittest.TestCase):
+    """A tuning draft's order must be locked even when its compensatory picks are already numbered.
+
+    `compensatory_picks_run` inserts the comp picks numbered at the free-agency waves, before the draft.
+    Counting any numbered row read madden_tune_p2g's 2027 class as "already locked" (10 comps numbered,
+    224 standard rows NULL), so the league office signed only the 10 comps (2026-11-10, M-0272)."""
+
+    def fake_connection(self, season, locked, total):
+        cur = mock.MagicMock()
+        cur.execute.return_value = cur
+        cur.fetchone.side_effect = [(season,), (locked,), (total,)]
+        connect = mock.patch("psycopg.connect").start()
+        connect.return_value.__enter__.return_value.cursor.return_value.__enter__.return_value = cur
+        self.addCleanup(mock.patch.stopall)
+        return cur
+
+    def test_a_fully_comped_class_is_not_already_locked(self):
+        cur = self.fake_connection(2026, 0, 234)          # 0 standard picks numbered, 10 comps only
+        lock = mock.patch("engines.draft_room.lock_order").start()
+        n = ws.lock_tuning_draft_order("host=localhost dbname=madden_tune_x user=postgres", "madden_tune_x",
+                                       log_fn=lambda *_: None)
+        lock.assert_called_once()
+        self.assertEqual(n, 234)
+        guard = str(cur.execute.call_args_list[1][0][0])
+        self.assertIn("pick_suffix", guard, "the lock guard must count standard picks, not comps")
+
+    def test_an_already_locked_class_is_left_alone(self):
+        cur = self.fake_connection(2026, 224, None)
+        lock = mock.patch("engines.draft_room.lock_order").start()
+        self.assertEqual(ws.lock_tuning_draft_order("host=localhost dbname=madden_tune_x user=postgres",
+                                                    "madden_tune_x", log_fn=lambda *_: None), 0)
+        lock.assert_not_called()
+
+
+@pytest.mark.integration
+class StandardPicksLockedRealDbTest(unittest.TestCase):
+    """The guard's SQL on real Postgres: numbered comp rows never count as a locked order."""
+
+    def setUp(self):
+        import psycopg
+        dsn = os.environ.get("MU_PROGRESSION_STATE_TEST_DSN")
+        if not dsn:
+            self.skipTest("explicit scratch DSN not supplied")
+        self.dsn = dsn
+        self.conn = psycopg.connect(dsn)
+        self.cur = self.conn.cursor()
+        if not self.cur.execute("SELECT to_regclass('public.draft_picks') IS NOT NULL "
+                                "AND to_regclass('public.teams') IS NOT NULL").fetchone()[0]:
+            self.skipTest("the scratch database lacks draft_picks or teams")
+        self.cur.execute("INSERT INTO teams (id, name, abbreviation) VALUES "
+                         "(901, 'Alpha', 'AAA'), (902, 'Beta', 'BBB') ON CONFLICT DO NOTHING")
+
+    def tearDown(self):
+        self.conn.rollback()
+        self.conn.close()
+
+    def add(self, round_no, team, overall, source, suffix):
+        self.cur.execute("INSERT INTO draft_picks (draft_season, round, original_team_id, owner_team_id, "
+                         "overall_pick, source, pick_suffix) VALUES (2099, %s, %s, %s, %s, %s, %s) "
+                         "ON CONFLICT DO NOTHING", (round_no, team, team, overall, source, suffix))
+
+    def test_comps_alone_do_not_read_as_locked(self):
+        self.add(1, 901, None, "SEED", "")
+        self.add(1, 902, None, "SEED", "")
+        self.add(5, 901, 161, "COMP", "01")
+        self.assertEqual(ws.standard_picks_locked(self.cur, 2099), 0)
+        self.cur.execute("UPDATE draft_picks SET overall_pick = 1 WHERE draft_season = 2099 AND pick_suffix = ''")
+        self.assertEqual(ws.standard_picks_locked(self.cur, 2099), 2)

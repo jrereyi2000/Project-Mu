@@ -1650,6 +1650,21 @@ def bootstrap_tuning_progression(dsn, db, snapshot, season, source_fingerprint=N
         return 0
 
 
+def standard_picks_locked(cur, draft_season):
+    """How many of the draft's standard (non-compensatory) picks already carry an overall number.
+
+    A compensatory pick row is inserted *numbered* by `compensatory_picks_run` at the free-agency waves, before
+    the draft, and a standard slot carries an empty `pick_suffix` (a comp's is '01'..'09'). Counting any
+    numbered row therefore reads a fully comped class as "already locked" and skips the lock: madden_tune_p2g's
+    2027 draft had the 10 comps numbered and all 224 standard picks NULL, so its DRAFT stage signed only those
+    10 (2026-11-10, M-0272).
+    """
+    cur.execute("""SELECT count(*) FROM draft_picks
+                   WHERE draft_season = %s AND overall_pick IS NOT NULL AND COALESCE(pick_suffix, '') = ''""",
+                (draft_season,))
+    return int(cur.fetchone()[0])
+
+
 def lock_tuning_draft_order(dsn, db, log_fn=log):
     """Lock the coming draft's order in a tuning database before the DRAFT stage runs (P2-03).
 
@@ -1659,8 +1674,10 @@ def lock_tuning_draft_order(dsn, db, log_fn=log):
     order (draft_picks.overall_pick) ... no picks planned") and still marks its run WRITTEN.
 
     Only a `madden_tune_*` destination is locked automatically, so the live franchise keeps its
-    manual step. Returns the number of picks ordered (0 when it was already locked or this is
-    not a tuning database) and never raises: a failure is a warning on the ingest.
+    manual step. "Already locked" counts standard picks only (`standard_picks_locked`): the comp picks are
+    inserted numbered before the draft, and a class of them must never pass for a locked order. Returns the
+    number of picks ordered (0 when it was already locked or this is not a tuning database) and never
+    raises: a failure is a warning on the ingest.
     """
     if not is_tuning_db(db):
         return 0
@@ -1670,9 +1687,7 @@ def lock_tuning_draft_order(dsn, db, log_fn=log):
         with psycopg.connect(dsn) as conn, conn.cursor() as cur:
             row = cur.execute("SELECT current_season FROM league_state WHERE id = 1").fetchone()
             draft_season = (row[0] if row else 0) + 1
-            locked = cur.execute(
-                "SELECT count(*) FROM draft_picks WHERE draft_season = %s AND overall_pick IS NOT NULL",
-                (draft_season,)).fetchone()[0]
+            locked = standard_picks_locked(cur, draft_season)
             if locked:
                 log_fn(f"Draft order for {draft_season} is already locked ({locked} picks).")
                 return 0

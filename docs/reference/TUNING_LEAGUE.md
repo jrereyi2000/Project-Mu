@@ -199,6 +199,13 @@ The live league gets the same rule: its first rookie class would otherwise fail 
 stage runs, so the league office has picks to write. Without it the run logs "no draft order … no picks
 planned" and files nothing.
 
+**The "already locked" guard counts standard picks only.** `compensatory_picks_run` inserts the comp picks
+*numbered* at the free-agency waves, before the draft, so a guard that counts any numbered row reads a fully
+comped class as locked and skips the lock. That happened to `madden_tune_p2g` (2026-11-10): its 10 comps were
+numbered, all 224 standard picks were NULL, `lock_tuning_draft_order` returned early and the league office's
+DRAFT stage signed only those 10. `standard_picks_locked` (numbered rows with an empty `pick_suffix`) is the
+guard now.
+
 The whole season is one command (`engines/tuning/season_loop.py`, P2-05): clone, the **week-by-week season** below,
 the stage loop above one stop at a time through the eight offseason stops **and the preseason weeks and
 cut day**, then a season report scored against the real-NFL targets. The offseason loop ends when an advance
