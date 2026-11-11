@@ -309,6 +309,130 @@ def test_snapshot_college_reference_counts_as_linking_evidence():
     assert diff._mu_player(801, madden(801, "No", "College", 0), TEAMS, 2026).college is None
 
 
+# ---------- review candidates (S5a / P1) ----------
+
+def test_cross_position_candidate_with_agreeing_entry_season():
+    """A unique same-name save player at another position is reported, never auto-linked or created."""
+    snap = snapshot(madden(900, "Travis", "Hunter", 0, position="CB", years_pro=0))
+    real = real_week({"BUF": [real_player("00-hunter", "Travis Hunter", "BUF", position="WR",
+                                          entry_year=2026)]})
+    result = plan(snap, real, {})
+    assert result.unlinked_new == []
+    assert result.creates == []
+    assert len(result.review) == 1
+    entry = result.review[0]
+    assert entry["status"] == "candidate"
+    assert (entry["gsis_id"], entry["pgid"]) == ("00-hunter", 900)
+    assert (entry["position"], entry["save_position"]) == ("WR", "CB")
+    assert entry["evidence"] == {"entry": True}
+    assert "position group" in entry["why"]
+    assert [(c["pgid"], c["position"]) for c in entry["candidates"]] == [(900, "CB")]
+
+
+def test_cross_position_candidate_with_agreeing_2026_team():
+    snap = snapshot(madden(901, "Connor", "Heyward", 1, position="TE", years_pro=3))
+    real = real_week({"BUF": [real_player("00-heyward", "Connor Heyward", "BUF", position="RB",
+                                          entry_year=2020)]})
+    result = plan(snap, real, {})
+    assert result.unlinked_new == [] and result.creates == []
+    entry = result.review[0]
+    assert entry["status"] == "candidate"
+    assert (entry["pgid"], entry["save_position"], entry["position"]) == (901, "TE", "RB")
+    assert entry["evidence"] == {"team": True}
+
+
+def test_same_name_player_without_agreeing_evidence_is_still_a_create():
+    """Entry season and 2026 team both disagree: no review candidate, the normal create path runs."""
+    snap = snapshot(madden(902, "Sam", "Same", 0, position="WR", years_pro=3))
+    real = real_week({"BUF": [real_player("00-same", "Sam Same", "BUF", position="WR", entry_year=2026)]})
+    result = plan(snap, real, {})
+    assert result.review == []
+    assert [p.gsis_id for p in result.creates] == ["00-same"]
+
+
+def test_cross_position_without_agreeing_evidence_is_still_a_create():
+    snap = snapshot(madden(907, "Sam", "Same", 0, position="CB", years_pro=3))
+    real = real_week({"BUF": [real_player("00-same", "Sam Same", "BUF", position="WR", entry_year=2026)]})
+    result = plan(snap, real, {})
+    assert result.review == []
+    assert [p.gsis_id for p in result.creates] == ["00-same"]
+
+
+def test_two_same_name_save_players_are_ambiguous_and_create_nothing():
+    snap = snapshot(madden(903, "Same", "Name", 0, position="CB", years_pro=0),
+                    madden(904, "Same", "Name", 0, position="FS", years_pro=0))
+    real = real_week({"KC": [real_player("00-same", "Same Name", "KC", position="WR", entry_year=2026)]})
+    result = plan(snap, real, {})
+    assert result.unlinked_new == []
+    assert result.creates == []
+    assert len(result.review) == 1
+    entry = result.review[0]
+    assert entry["status"] == "ambiguous"
+    assert entry["gsis_id"] == "00-same"
+    assert sorted((c["pgid"], c["position"]) for c in entry["candidates"]) == [(903, "CB"), (904, "FS")]
+
+
+def test_the_audit_repro_surfaces_the_signed_cb_as_a_review_candidate():
+    """P1 repro: an unlinked BUF CB with the real BUF WR's name is reviewed, not created and not released."""
+    snap = snapshot(madden(909, "Travis", "Hunter", 1, position="CB", years_pro=0))
+    real = real_week({"BUF": [real_player("00-hunter", "Travis Hunter", "BUF", position="WR",
+                                          entry_year=2026)]})
+    result = plan(snap, real, {})
+    assert result.unlinked_new == [] and result.creates == [] and result.ops == []
+    entry = result.review[0]
+    assert entry["status"] == "candidate"
+    assert (entry["gsis_id"], entry["pgid"], entry["position"], entry["save_position"]) == \
+        ("00-hunter", 909, "WR", "CB")
+    assert entry["evidence"] == {"entry": True, "team": True}
+
+
+def test_an_already_linked_save_pgid_is_reviewed_but_not_auto_linked():
+    snap = snapshot(madden(905, "Travis", "Hunter", 1, position="CB", years_pro=0))
+    real = real_week({"BUF": [real_player("00-other", "Other Guy", "BUF"),
+                              real_player("00-hunter", "Travis Hunter", "BUF", position="WR",
+                                          entry_year=2026)]})
+    result = plan(snap, real, {"00-other": 905})
+    assert result.unlinked_new == []
+    assert result.ops == []
+    assert result.creates == []
+    entry = result.review[0]
+    assert entry["status"] == "candidate"
+    assert (entry["gsis_id"], entry["pgid"]) == ("00-hunter", 905)
+    assert entry["candidates"][0]["linked_gsis"] == "00-other"
+    assert "already linked to 00-other" in entry["why"]
+
+
+def test_an_already_linked_real_person_is_not_reviewed():
+    snap = snapshot(madden(908, "Travis", "Hunter", 1, position="CB", years_pro=0))
+    real = real_week({"BUF": [real_player("00-hunter", "Travis Hunter", "BUF", position="WR",
+                                          entry_year=2026)]})
+    result = plan(snap, real, {"00-hunter": 908})
+    assert result.review == []
+    assert result.creates == [] and result.ops == []
+
+
+def test_accepting_a_candidate_through_the_overrides_csv_links_once(monkeypatch):
+    """An accepted override links in the new-link phase; the candidate is gone and no create follows."""
+    snap = snapshot(madden(906, "Travis", "Hunter", 1, position="CB", years_pro=0))
+    real = real_week({"BUF": [real_player("00-hunter", "Travis Hunter", "BUF", position="WR",
+                                          entry_year=2026)]})
+    monkeypatch.setattr(diff.link_engine, "read_overrides", lambda *a, **k: [])
+    before = plan(snap, real, {})
+    assert [e["status"] for e in before.review] == ["candidate"]
+    assert before.creates == []
+
+    row = {"madden_pgid": "906", "full_name": "Travis Hunter", "position": "CB",
+           "gsis_id": "00-hunter", "note": "position change accepted"}
+    monkeypatch.setattr(diff.link_engine, "read_overrides", lambda *a, **k: [row])
+    accepted = plan(snap, real, {})
+    assert accepted.unlinked_new == [("00-hunter", 906)]
+    assert accepted.review == [] and accepted.creates == [] and accepted.ops == []
+
+    linked = {gsis: pgid for gsis, pgid in accepted.unlinked_new}
+    again = plan(snap, real, linked)
+    assert again.unlinked_new == [] and again.review == [] and again.creates == [] and again.ops == []
+
+
 # ---------- contracts ----------
 
 def _write_parquet(path, **columns):
