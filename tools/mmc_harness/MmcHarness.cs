@@ -397,7 +397,8 @@ namespace MuHarness
         // MMC Editor registers its legacy file manager (FrostyCore) from the profile window, which the
         // harness never builds; so the legacy commands register it here, before Am.Initialize.
         // Madden27 needs LegacyFileManagerV2 (checked 2026-11-10: V3 throws in Initialize, the
-        // original lists nothing); MU_MMC_LEGACY_MANAGER names another. Read-only: nothing is modified.
+        // original lists nothing); MU_MMC_LEGACY_MANAGER names another. Registering modifies nothing;
+        // only import-legacy writes, and only into its project.
         static void RegisterLegacy()
         {
             var reg = typeof(AssetManager).GetMethods().FirstOrDefault(m => m.Name == "RegisterCustomAssetManager"
@@ -668,11 +669,12 @@ namespace MuHarness
             if (!File.Exists(inPath)) throw new HarnessException("input not found: " + inPath);
             Boot.WantLegacy = true;
             Boot.Start();
-            var project = Projects.Open(projectPath);
+            // vanilla size first: once the project loads, GetCustomAsset returns the project's copy
             var entry = Boot.Am.GetCustomAssetEntry("legacy", Norm(path));
             if (entry == null) throw new HarnessException("legacy file not found: " + path + " (legacy manager " + Boot.LegacyManager + ")");
             long vanilla;
             using (var input = Boot.Am.GetCustomAsset("legacy", entry)) { vanilla = input == null ? -1 : input.Length; }
+            var project = Projects.Open(projectPath);
             var data = File.ReadAllBytes(inPath);
             Boot.Am.ModifyCustomAsset("legacy", entry.Name, data);
             Projects.Save(project, projectPath);

@@ -60,6 +60,9 @@ def plan_build(rcp, route, p, force=False):
     "src", "dst", ...} or {"kind": "gui", "text": ...}."""
     project, work = p["project"], p["work"]
     harness_ops = [op for op in rcp.ops if _route(op, route, force) == "harness"]
+    # Legacy edits last: the other harness commands save the project without the legacy file manager
+    # registered, which would drop an import-legacy edit made before them.
+    harness_ops.sort(key=lambda op: op.kind == "legacy-replace")
     gui_ops = [op for op in rcp.ops if _route(op, route, force) == "gui"]
     steps = []
     if harness_ops:

@@ -1,4 +1,5 @@
 """tools/mod_builder/apt_ast.py on a synthetic BGFA scene laid out like corenode.ast."""
+import os
 import zlib
 
 import pytest
@@ -84,3 +85,21 @@ def test_replace_const_rejects_longer_missing_and_duplicate():
 def test_not_bgfa_is_refused():
     with pytest.raises(apt_ast.AstError):
         apt_ast.read_blocks(b"NOTBGFA0" + b"\x00" * 200)
+
+
+REAL = os.path.join(os.path.dirname(__file__), "..", "data", "mod_builds", "franchise_menu", "work",
+                    "corenode_vanilla.ast")
+
+
+@pytest.mark.skipif(not os.path.exists(REAL), reason="vanilla corenode.ast export not present (git-ignored)")
+def test_franchise_menu_on_the_real_vanilla_scene():
+    import hashlib
+    data = open(REAL, "rb").read()
+    assert hashlib.sha256(data).hexdigest() == "4cf0a1c6f23e0c9d4aa9fc317f164f602c179eb056913aaea2c2f8dac6848de1"
+    assert int.from_bytes(data[0x54:0x56], "little") == 20375
+    assert int.from_bytes(data[0x65:0x67], "little") == 33762
+    out, report = apt_ast.franchise_menu(data)
+    assert report["sha256_out"] == "e71053dd07835c880c54ba43fe8d1ed9e05da67b05cb2c6a4afbc9efc9d80e30"
+    assert (report["rail_offset"], report["focus_offset"]) == ("0x16bb8", "0x16e48")
+    assert len(out) == len(data) == 54255
+    assert out[:0x8458] == data[:0x8458]

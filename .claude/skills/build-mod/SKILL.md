@@ -29,10 +29,10 @@ Read `docs/reference/MOD_BUILDING.md` first. It has the routes, the harness comm
 
 4. **Pick the route.** Run `/mnt/c/Madden27Modding/MuHarness/MmcHarness.exe info`. It takes about 30 s and prints one JSON line.
    - If it is missing or `ok` is false, the harness isn't built. Run `bash tools/mmc_harness/build.sh` once, then `info` again.
-   - **Harness route**, the default: use it when every op has a harness command (`texture-recolor`, `texture-replace`, `ebx-set`) and `info` is ok.
+   - **Harness route**, the default: use it when every op has a harness command (`texture-recolor`, `texture-replace`, `ebx-set`, `legacy-replace` → `import-legacy`) and `info` is ok. A `.ast` UI scene for `legacy-replace` is made first with `tools/mod_builder/apt_ast.py` (MOD_REVERSE_ENGINEERING §2.6).
    - **ebx ops** (`ebx-set`, `ebx-dump`): `info` should show `"ebx_readable": true` (the harness loads MMC's built-in game key the way the editor does, since 2026-10-31). If it's false, stop and tell JR the MMC build may have moved its key. Never search for keys. Jersey colours are `ebx-set`s on `ItemPalette.<Primary|Secondary>Color.ColorChannels` (linear RGB; MOD_BUILDING §7).
    - To find field paths or texture pointers, dump the asset: `python3 -c "from tools.mod_builder.harness import run; print(run(['ebx-dump', '<asset>', 'data/mod_builds/<slug>/work/<stem>.json']))"`. Then read the JSON (`color_fields`, `$external` names).
-   - **Window route**: use it only for ops with no harness command (`legacy-replace`), non-2D textures, or a failed harness. Follow MOD_BUILDING §6, and only after JR says yes in this conversation.
+   - **Window route**: use it only for non-2D textures, an edit the harness can't make, or a failed harness. Follow MOD_BUILDING §6, and only after JR says yes in this conversation.
 
 5. **Look at the texture before you build** a texture op you haven't seen yet. Export it with `python3 -c "from tools.mod_builder.harness import run; print(run(['export-texture', '<asset>', 'data/mod_builds/<slug>/work/<stem>.png']))"`. Preview the recolour into the scratchpad with `python3 -c "from tools.mod_builder.recolor import recolor_png; recolor_png('<in.png>', '<scratch>/preview.png', <recolor spec>)"`. View both PNGs with the Read tool. If the change looks wrong (wrong regions, a mask instead of a painted texture, lost shading), fix the recipe first.
 

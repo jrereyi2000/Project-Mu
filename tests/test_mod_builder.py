@@ -507,6 +507,15 @@ class CliTest(TempDirTest):
         self.assertTrue(export.endswith("--legacy"))
         self.assertNotIn("gui:", out)
 
+    def test_dry_run_puts_legacy_ops_after_the_others(self):
+        self.new_recipe([{"op": "legacy-replace", "path": "common/ui/node_fe/mainmenu/corenode.ast",
+                          "file": "work/corenode.ast"},
+                         {"op": "ebx-set", "asset": JERSEY, "path": "Colors.Primary", "value": "#FF69B4"}])
+        code, out = self.run_cli("build", "yellow_first_down", "--dry-run")
+        self.assertEqual(code, 0)
+        cmds = [l.strip().split()[2] for l in out.splitlines()[1:] if l.strip().startswith("harness:")]
+        self.assertEqual(cmds, ["info", "ebx-set", "import-legacy", "export-mod"])
+
     def test_new_refuses_twice_and_empty_recipe_fails(self):
         self.run_cli("new", "yellow_first_down")
         code, out = self.run_cli("new", "yellow_first_down")

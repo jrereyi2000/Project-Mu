@@ -108,7 +108,7 @@ A Frostbite texture is *not* a DDS. It is a 184-byte Texture res (format, size, 
 ### 2.6 Legacy UI scenes (`.ast`): BGFA / EA Apt **[verified 2026-11-10 on `corenode.ast`, build 3464873]**
 
 Exported read-only with `MmcHarness export-legacy common/ui/node_fe/mainmenu/corenode.ast <out>` (54,255 bytes). Layout:
-- **Header:** magic `BGFA1.05`, then u32 `3`, u32 `2` (two blocks), u32 `0x40`, then bit-packed fields up to `0x70` **[not decoded]**.
+- **Header:** magic `BGFA1.05`, then u32 `3`, u32 `2` (two blocks), u32 `0x40`, then fields up to `0x70`, including each block's u16 compressed size (see **Header** below; the rest **[not decoded]**).
 - **Payload:** two zlib streams (`78 DA`): at `0x70` (33,762 → 118,877 bytes), then 6 zero bytes, then at `0x8458` (20,375 → 105,526 bytes). They end flush with the file.
 - **Decompressed data:** EA's **Apt** (Flash/ActionScript 2 style UI). Each block starts with the text `Apt Data:1:7:8` / `Apt1`, with the classes listed as `__Packages.<pkg>.<Class>` and a constant pool of **null-terminated strings padded to 8 bytes**.
 
