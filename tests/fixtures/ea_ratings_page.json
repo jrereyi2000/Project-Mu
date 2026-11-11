@@ -1,0 +1,1063 @@
+{
+ "props": {
+  "pageProps": {
+   "ratingDetails": {
+    "items": [
+     {
+      "id": 1001,
+      "firstName": "Avery",
+      "lastName": "Stone",
+      "birthdate": "1999-05-04 00:00:00",
+      "height": 72,
+      "weight": 205,
+      "overallRating": 84,
+      "college": "Fixture College",
+      "handedness": 1,
+      "age": 27,
+      "jerseyNum": 11,
+      "yearsPro": 5,
+      "playerAbilities": [],
+      "avatarUrl": "",
+      "archetype": {
+       "id": "WR_DeepThreat",
+       "label": "WR_DeepThreat"
+      },
+      "team": {
+       "id": 10,
+       "label": "Fixture Team",
+       "imageUrl": "",
+       "isPopular": false
+      },
+      "position": {
+       "id": "WR",
+       "shortLabel": "WR",
+       "label": "WR"
+      },
+      "iteration": {
+       "id": "madden-ratings-week-8",
+       "label": "Week 8 Ratings"
+      },
+      "availableIterations": [
+       {
+        "id": "madden-ratings-week-8",
+        "label": "Week 8 Ratings"
+       }
+      ],
+      "stats": {
+       "acceleration": {
+        "value": 49,
+        "diff": 0
+       },
+       "agility": {
+        "value": 56,
+        "diff": 0
+       },
+       "awareness": {
+        "value": 63,
+        "diff": 0
+       },
+       "bCVision": {
+        "value": 70,
+        "diff": 0
+       },
+       "blockShedding": {
+        "value": 77,
+        "diff": 0
+       },
+       "breakSack": {
+        "value": 84,
+        "diff": 0
+       },
+       "breakTackle": {
+        "value": 91,
+        "diff": 0
+       },
+       "carrying": {
+        "value": 98,
+        "diff": 0
+       },
+       "catchInTraffic": {
+        "value": 45,
+        "diff": 0
+       },
+       "catching": {
+        "value": 52,
+        "diff": 0
+       },
+       "changeOfDirection": {
+        "value": 59,
+        "diff": 0
+       },
+       "deepRouteRunning": {
+        "value": 66,
+        "diff": 0
+       },
+       "finesseMoves": {
+        "value": 73,
+        "diff": 0
+       },
+       "hitPower": {
+        "value": 80,
+        "diff": 0
+       },
+       "impactBlocking": {
+        "value": 87,
+        "diff": 0
+       },
+       "injury": {
+        "value": 94,
+        "diff": 0
+       },
+       "jukeMove": {
+        "value": 41,
+        "diff": 0
+       },
+       "jumping": {
+        "value": 48,
+        "diff": 0
+       },
+       "kickAccuracy": {
+        "value": 55,
+        "diff": 0
+       },
+       "kickPower": {
+        "value": 62,
+        "diff": 0
+       },
+       "kickReturn": {
+        "value": 69,
+        "diff": 0
+       },
+       "leadBlock": {
+        "value": 76,
+        "diff": 0
+       },
+       "manCoverage": {
+        "value": 83,
+        "diff": 0
+       },
+       "mediumRouteRunning": {
+        "value": 90,
+        "diff": 0
+       },
+       "overall": {
+        "value": 84,
+        "diff": 0
+       },
+       "passBlock": {
+        "value": 44,
+        "diff": 0
+       },
+       "passBlockFinesse": {
+        "value": 51,
+        "diff": 0
+       },
+       "passBlockPower": {
+        "value": 58,
+        "diff": 0
+       },
+       "playAction": {
+        "value": 65,
+        "diff": 0
+       },
+       "playRecognition": {
+        "value": 72,
+        "diff": 0
+       },
+       "powerMoves": {
+        "value": 79,
+        "diff": 0
+       },
+       "press": {
+        "value": 86,
+        "diff": 0
+       },
+       "pursuit": {
+        "value": 93,
+        "diff": 0
+       },
+       "release": {
+        "value": 40,
+        "diff": 0
+       },
+       "runBlock": {
+        "value": 47,
+        "diff": 0
+       },
+       "runBlockFinesse": {
+        "value": 54,
+        "diff": 0
+       },
+       "runBlockPower": {
+        "value": 61,
+        "diff": 0
+       },
+       "runningStyle": {
+        "value": "Default",
+        "diff": 0
+       },
+       "shortRouteRunning": {
+        "value": 75,
+        "diff": 0
+       },
+       "spectacularCatch": {
+        "value": 82,
+        "diff": 0
+       },
+       "speed": {
+        "value": 89,
+        "diff": 0
+       },
+       "spinMove": {
+        "value": 96,
+        "diff": 0
+       },
+       "stamina": {
+        "value": 43,
+        "diff": 0
+       },
+       "stiffArm": {
+        "value": 50,
+        "diff": 0
+       },
+       "strength": {
+        "value": 57,
+        "diff": 0
+       },
+       "tackle": {
+        "value": 64,
+        "diff": 0
+       },
+       "throwAccuracyDeep": {
+        "value": 71,
+        "diff": 0
+       },
+       "throwAccuracyMid": {
+        "value": 78,
+        "diff": 0
+       },
+       "throwAccuracyShort": {
+        "value": 85,
+        "diff": 0
+       },
+       "throwOnTheRun": {
+        "value": 92,
+        "diff": 0
+       },
+       "throwPower": {
+        "value": 99,
+        "diff": 0
+       },
+       "throwUnderPressure": {
+        "value": 46,
+        "diff": 0
+       },
+       "toughness": {
+        "value": 53,
+        "diff": 0
+       },
+       "trucking": {
+        "value": 60,
+        "diff": 0
+       },
+       "zoneCoverage": {
+        "value": 67,
+        "diff": 0
+       }
+      }
+     },
+     {
+      "id": 1002,
+      "firstName": "Blake",
+      "lastName": "Rivers",
+      "birthdate": null,
+      "height": 76,
+      "weight": 265,
+      "overallRating": 78,
+      "college": "Fixture State",
+      "handedness": 1,
+      "age": 27,
+      "jerseyNum": 91,
+      "yearsPro": 3,
+      "playerAbilities": [],
+      "avatarUrl": "",
+      "archetype": {
+       "id": "DE_PowerRusher",
+       "label": "DE_PowerRusher"
+      },
+      "team": {
+       "id": 11,
+       "label": "Fixture Team",
+       "imageUrl": "",
+       "isPopular": false
+      },
+      "position": {
+       "id": "LEDG",
+       "shortLabel": "LEDG",
+       "label": "LEDG"
+      },
+      "iteration": {
+       "id": "madden-ratings-week-8",
+       "label": "Week 8 Ratings"
+      },
+      "availableIterations": [
+       {
+        "id": "madden-ratings-week-8",
+        "label": "Week 8 Ratings"
+       }
+      ],
+      "stats": {
+       "acceleration": {
+        "value": 61,
+        "diff": 0
+       },
+       "agility": {
+        "value": 68,
+        "diff": 0
+       },
+       "awareness": {
+        "value": 75,
+        "diff": 0
+       },
+       "bCVision": {
+        "value": 82,
+        "diff": 0
+       },
+       "blockShedding": {
+        "value": 89,
+        "diff": 0
+       },
+       "breakSack": {
+        "value": 96,
+        "diff": 0
+       },
+       "breakTackle": {
+        "value": 43,
+        "diff": 0
+       },
+       "carrying": {
+        "value": 50,
+        "diff": 0
+       },
+       "catchInTraffic": {
+        "value": 57,
+        "diff": 0
+       },
+       "catching": {
+        "value": 64,
+        "diff": 0
+       },
+       "changeOfDirection": {
+        "value": 71,
+        "diff": 0
+       },
+       "deepRouteRunning": {
+        "value": 78,
+        "diff": 0
+       },
+       "finesseMoves": {
+        "value": 85,
+        "diff": 0
+       },
+       "hitPower": {
+        "value": 92,
+        "diff": 0
+       },
+       "impactBlocking": {
+        "value": 99,
+        "diff": 0
+       },
+       "injury": {
+        "value": 46,
+        "diff": 0
+       },
+       "jukeMove": {
+        "value": 53,
+        "diff": 0
+       },
+       "jumping": {
+        "value": 60,
+        "diff": 0
+       },
+       "kickAccuracy": {
+        "value": 67,
+        "diff": 0
+       },
+       "kickPower": {
+        "value": 74,
+        "diff": 0
+       },
+       "kickReturn": {
+        "value": 81,
+        "diff": 0
+       },
+       "leadBlock": {
+        "value": 88,
+        "diff": 0
+       },
+       "manCoverage": {
+        "value": 95,
+        "diff": 0
+       },
+       "mediumRouteRunning": {
+        "value": 42,
+        "diff": 0
+       },
+       "overall": {
+        "value": 78,
+        "diff": 0
+       },
+       "passBlock": {
+        "value": 56,
+        "diff": 0
+       },
+       "passBlockFinesse": {
+        "value": 63,
+        "diff": 0
+       },
+       "passBlockPower": {
+        "value": 70,
+        "diff": 0
+       },
+       "playAction": {
+        "value": 77,
+        "diff": 0
+       },
+       "playRecognition": {
+        "value": 84,
+        "diff": 0
+       },
+       "powerMoves": {
+        "value": 91,
+        "diff": 0
+       },
+       "press": {
+        "value": 98,
+        "diff": 0
+       },
+       "pursuit": {
+        "value": 45,
+        "diff": 0
+       },
+       "release": {
+        "value": 52,
+        "diff": 0
+       },
+       "runBlock": {
+        "value": 59,
+        "diff": 0
+       },
+       "runBlockFinesse": {
+        "value": 66,
+        "diff": 0
+       },
+       "runBlockPower": {
+        "value": 73,
+        "diff": 0
+       },
+       "runningStyle": {
+        "value": "Default",
+        "diff": 0
+       },
+       "shortRouteRunning": {
+        "value": 87,
+        "diff": 0
+       },
+       "spectacularCatch": {
+        "value": 94,
+        "diff": 0
+       },
+       "speed": {
+        "value": 41,
+        "diff": 0
+       },
+       "spinMove": {
+        "value": 48,
+        "diff": 0
+       },
+       "stamina": {
+        "value": 55,
+        "diff": 0
+       },
+       "stiffArm": {
+        "value": 62,
+        "diff": 0
+       },
+       "strength": {
+        "value": 69,
+        "diff": 0
+       },
+       "tackle": {
+        "value": 76,
+        "diff": 0
+       },
+       "throwAccuracyDeep": {
+        "value": 83,
+        "diff": 0
+       },
+       "throwAccuracyMid": {
+        "value": 90,
+        "diff": 0
+       },
+       "throwAccuracyShort": {
+        "value": 97,
+        "diff": 0
+       },
+       "throwOnTheRun": {
+        "value": 44,
+        "diff": 0
+       },
+       "throwPower": {
+        "value": 51,
+        "diff": 0
+       },
+       "throwUnderPressure": {
+        "value": 58,
+        "diff": 0
+       },
+       "toughness": {
+        "value": 65,
+        "diff": 0
+       },
+       "trucking": {
+        "value": 72,
+        "diff": 0
+       },
+       "zoneCoverage": {
+        "value": 79,
+        "diff": 0
+       }
+      }
+     },
+     {
+      "id": 1003,
+      "firstName": "Casey",
+      "lastName": "Wills",
+      "birthdate": "1997-01-20 00:00:00",
+      "height": 74,
+      "weight": 240,
+      "overallRating": 72,
+      "college": "Fixture Tech",
+      "handedness": 1,
+      "age": 27,
+      "jerseyNum": 54,
+      "yearsPro": 6,
+      "playerAbilities": [],
+      "avatarUrl": "",
+      "archetype": {
+       "id": "LB_FieldGeneral",
+       "label": "LB_FieldGeneral"
+      },
+      "team": {
+       "id": 12,
+       "label": "Fixture Team",
+       "imageUrl": "",
+       "isPopular": false
+      },
+      "position": {
+       "id": "MIKE",
+       "shortLabel": "MIKE",
+       "label": "MIKE"
+      },
+      "iteration": {
+       "id": "madden-ratings-week-8",
+       "label": "Week 8 Ratings"
+      },
+      "availableIterations": [
+       {
+        "id": "madden-ratings-week-8",
+        "label": "Week 8 Ratings"
+       }
+      ],
+      "stats": {
+       "acceleration": {
+        "value": 73,
+        "diff": 0
+       },
+       "agility": {
+        "value": 80,
+        "diff": 0
+       },
+       "awareness": {
+        "value": 87,
+        "diff": 0
+       },
+       "bCVision": {
+        "value": 94,
+        "diff": 0
+       },
+       "blockShedding": {
+        "value": 41,
+        "diff": 0
+       },
+       "breakSack": {
+        "value": 48,
+        "diff": 0
+       },
+       "breakTackle": {
+        "value": 55,
+        "diff": 0
+       },
+       "carrying": {
+        "value": 62,
+        "diff": 0
+       },
+       "catchInTraffic": {
+        "value": 69,
+        "diff": 0
+       },
+       "catching": {
+        "value": 76,
+        "diff": 0
+       },
+       "changeOfDirection": {
+        "value": 83,
+        "diff": 0
+       },
+       "deepRouteRunning": {
+        "value": 90,
+        "diff": 0
+       },
+       "finesseMoves": {
+        "value": 97,
+        "diff": 0
+       },
+       "hitPower": {
+        "value": 44,
+        "diff": 0
+       },
+       "impactBlocking": {
+        "value": 51,
+        "diff": 0
+       },
+       "injury": {
+        "value": 58,
+        "diff": 0
+       },
+       "jukeMove": {
+        "value": 65,
+        "diff": 0
+       },
+       "jumping": {
+        "value": 72,
+        "diff": 0
+       },
+       "kickAccuracy": {
+        "value": 79,
+        "diff": 0
+       },
+       "kickPower": {
+        "value": 86,
+        "diff": 0
+       },
+       "kickReturn": {
+        "value": 93,
+        "diff": 0
+       },
+       "leadBlock": {
+        "value": 40,
+        "diff": 0
+       },
+       "manCoverage": {
+        "value": 47,
+        "diff": 0
+       },
+       "mediumRouteRunning": {
+        "value": 54,
+        "diff": 0
+       },
+       "overall": {
+        "value": 72,
+        "diff": 0
+       },
+       "passBlock": {
+        "value": 68,
+        "diff": 0
+       },
+       "passBlockFinesse": {
+        "value": 75,
+        "diff": 0
+       },
+       "passBlockPower": {
+        "value": 82,
+        "diff": 0
+       },
+       "playAction": {
+        "value": 89,
+        "diff": 0
+       },
+       "playRecognition": {
+        "value": 96,
+        "diff": 0
+       },
+       "powerMoves": {
+        "value": 43,
+        "diff": 0
+       },
+       "press": {
+        "value": 50,
+        "diff": 0
+       },
+       "pursuit": {
+        "value": 57,
+        "diff": 0
+       },
+       "release": {
+        "value": 64,
+        "diff": 0
+       },
+       "runBlock": {
+        "value": 71,
+        "diff": 0
+       },
+       "runBlockFinesse": {
+        "value": 78,
+        "diff": 0
+       },
+       "runBlockPower": {
+        "value": 85,
+        "diff": 0
+       },
+       "runningStyle": {
+        "value": "Default",
+        "diff": 0
+       },
+       "shortRouteRunning": {
+        "value": 99,
+        "diff": 0
+       },
+       "spectacularCatch": {
+        "value": 46,
+        "diff": 0
+       },
+       "speed": {
+        "value": 53,
+        "diff": 0
+       },
+       "spinMove": {
+        "value": 60,
+        "diff": 0
+       },
+       "stamina": {
+        "value": 67,
+        "diff": 0
+       },
+       "stiffArm": {
+        "value": 74,
+        "diff": 0
+       },
+       "strength": {
+        "value": 81,
+        "diff": 0
+       },
+       "tackle": {
+        "value": 88,
+        "diff": 0
+       },
+       "throwAccuracyDeep": {
+        "value": 95,
+        "diff": 0
+       },
+       "throwAccuracyMid": {
+        "value": 42,
+        "diff": 0
+       },
+       "throwAccuracyShort": {
+        "value": 49,
+        "diff": 0
+       },
+       "throwOnTheRun": {
+        "value": 56,
+        "diff": 0
+       },
+       "throwPower": {
+        "value": 63,
+        "diff": 0
+       },
+       "throwUnderPressure": {
+        "value": 70,
+        "diff": 0
+       },
+       "toughness": {
+        "value": 77,
+        "diff": 0
+       },
+       "trucking": {
+        "value": 84,
+        "diff": 0
+       },
+       "zoneCoverage": {
+        "value": 91,
+        "diff": 0
+       }
+      }
+     },
+     {
+      "id": 1004,
+      "firstName": "Drew",
+      "lastName": "Hart",
+      "birthdate": null,
+      "height": 75,
+      "weight": 220,
+      "overallRating": 69,
+      "college": "Fixture A&M",
+      "handedness": 1,
+      "age": 27,
+      "jerseyNum": 7,
+      "yearsPro": 2,
+      "playerAbilities": [],
+      "avatarUrl": "",
+      "archetype": {
+       "id": "QB_StrongArm",
+       "label": "QB_StrongArm"
+      },
+      "team": {
+       "id": 13,
+       "label": "Fixture Team",
+       "imageUrl": "",
+       "isPopular": false
+      },
+      "position": {
+       "id": "QB",
+       "shortLabel": "QB",
+       "label": "QB"
+      },
+      "iteration": {
+       "id": "madden-ratings-week-8",
+       "label": "Week 8 Ratings"
+      },
+      "availableIterations": [
+       {
+        "id": "madden-ratings-week-8",
+        "label": "Week 8 Ratings"
+       }
+      ],
+      "stats": {
+       "acceleration": {
+        "value": 91,
+        "diff": 0
+       },
+       "agility": {
+        "value": 98,
+        "diff": 0
+       },
+       "awareness": {
+        "value": 45,
+        "diff": 0
+       },
+       "bCVision": {
+        "value": 52,
+        "diff": 0
+       },
+       "blockShedding": {
+        "value": 59,
+        "diff": 0
+       },
+       "breakSack": {
+        "value": 66,
+        "diff": 0
+       },
+       "breakTackle": {
+        "value": 73,
+        "diff": 0
+       },
+       "carrying": {
+        "value": 80,
+        "diff": 0
+       },
+       "catchInTraffic": {
+        "value": 87,
+        "diff": 0
+       },
+       "catching": {
+        "value": 94,
+        "diff": 0
+       },
+       "changeOfDirection": {
+        "value": 41,
+        "diff": 0
+       },
+       "deepRouteRunning": {
+        "value": 48,
+        "diff": 0
+       },
+       "finesseMoves": {
+        "value": 55,
+        "diff": 0
+       },
+       "hitPower": {
+        "value": 62,
+        "diff": 0
+       },
+       "impactBlocking": {
+        "value": 69,
+        "diff": 0
+       },
+       "injury": {
+        "value": 76,
+        "diff": 0
+       },
+       "jukeMove": {
+        "value": 83,
+        "diff": 0
+       },
+       "jumping": {
+        "value": 90,
+        "diff": 0
+       },
+       "kickAccuracy": {
+        "value": 97,
+        "diff": 0
+       },
+       "kickPower": {
+        "value": 44,
+        "diff": 0
+       },
+       "kickReturn": {
+        "value": 51,
+        "diff": 0
+       },
+       "leadBlock": {
+        "value": 58,
+        "diff": 0
+       },
+       "manCoverage": {
+        "value": 65,
+        "diff": 0
+       },
+       "mediumRouteRunning": {
+        "value": 72,
+        "diff": 0
+       },
+       "overall": {
+        "value": 69,
+        "diff": 0
+       },
+       "passBlock": {
+        "value": 86,
+        "diff": 0
+       },
+       "passBlockFinesse": {
+        "value": 93,
+        "diff": 0
+       },
+       "passBlockPower": {
+        "value": 40,
+        "diff": 0
+       },
+       "playAction": {
+        "value": 47,
+        "diff": 0
+       },
+       "playRecognition": {
+        "value": 54,
+        "diff": 0
+       },
+       "powerMoves": {
+        "value": 61,
+        "diff": 0
+       },
+       "press": {
+        "value": 68,
+        "diff": 0
+       },
+       "pursuit": {
+        "value": 75,
+        "diff": 0
+       },
+       "release": {
+        "value": 82,
+        "diff": 0
+       },
+       "runBlock": {
+        "value": 89,
+        "diff": 0
+       },
+       "runBlockFinesse": {
+        "value": 96,
+        "diff": 0
+       },
+       "runBlockPower": {
+        "value": 43,
+        "diff": 0
+       },
+       "runningStyle": {
+        "value": "Default",
+        "diff": 0
+       },
+       "shortRouteRunning": {
+        "value": 57,
+        "diff": 0
+       },
+       "spectacularCatch": {
+        "value": 64,
+        "diff": 0
+       },
+       "speed": {
+        "value": 71,
+        "diff": 0
+       },
+       "spinMove": {
+        "value": 78,
+        "diff": 0
+       },
+       "stamina": {
+        "value": 85,
+        "diff": 0
+       },
+       "stiffArm": {
+        "value": 92,
+        "diff": 0
+       },
+       "strength": {
+        "value": 99,
+        "diff": 0
+       },
+       "tackle": {
+        "value": 46,
+        "diff": 0
+       },
+       "throwAccuracyDeep": {
+        "value": 53,
+        "diff": 0
+       },
+       "throwAccuracyMid": {
+        "value": 60,
+        "diff": 0
+       },
+       "throwAccuracyShort": {
+        "value": 67,
+        "diff": 0
+       },
+       "throwOnTheRun": {
+        "value": 74,
+        "diff": 0
+       },
+       "throwPower": {
+        "value": 81,
+        "diff": 0
+       },
+       "throwUnderPressure": {
+        "value": 88,
+        "diff": 0
+       },
+       "toughness": {
+        "value": 95,
+        "diff": 0
+       },
+       "trucking": {
+        "value": 42,
+        "diff": 0
+       },
+       "zoneCoverage": {
+        "value": 49,
+        "diff": 0
+       }
+      }
+     }
+    ],
+    "totalItems": 4
+   }
+  }
+ }
+}
