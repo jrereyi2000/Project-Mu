@@ -54,12 +54,22 @@ class CounterTimelineTest(unittest.TestCase):
         self.cur.execute("INSERT INTO players (player_name, full_name) VALUES (%s, %s) RETURNING id", (name, name))
         return self.cur.fetchone()[0]
 
-    def counter(self, pid, season, week, stage, games, targets, seq):
+    def counter(self, pid, season, week, stage, games, targets, seq, season_games=None):
+        """One career-counter row. season_games is the games this load's own season line reported (2027_02_29);
+        left out, the row is written on a 2027_02_28 schema too."""
+        column = "" if season_games is None else ", season_games"
+        value = "" if season_games is None else ", %s"
+        args = (season, week, stage, pid, CAREER_TABLE,
+                json.dumps({"GAMESPLAYED": games, "TARGETS": targets}), games, seq)
+        if season_games is not None:
+            args += (season_games,)
         self.cur.execute(
             "INSERT INTO player_career_counters (season, week, stage, player_id, madden_table, counters, "
-            "games_played, load_seq) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
-            (season, week, stage, pid, CAREER_TABLE,
-             json.dumps({"GAMESPLAYED": games, "TARGETS": targets}), games, seq))
+            "games_played, load_seq" + column + ") VALUES (%s, %s, %s, %s, %s, %s, %s, %s" + value + ") "
+            "ON CONFLICT (season, week, player_id, stage) DO UPDATE SET counters = EXCLUDED.counters, "
+            "games_played = EXCLUDED.games_played, load_seq = EXCLUDED.load_seq"
+            + (", season_games = EXCLUDED.season_games" if season_games is not None else ""),
+            args)
 
     def test_load_order_keeps_every_week_after_an_off_season_load(self):
         # H2: the Super Bowl and the off-season load stay in 2026; a 2027 preseason load covers the tail of 2026
@@ -114,14 +124,61 @@ class CounterTimelineTest(unittest.TestCase):
                                     "WHERE player_id = %s ORDER BY season", tail), [(2026, 27)])
 
     def test_the_first_career_row_reports_the_games_it_loses(self):
-        # L2: the first row is PARTIAL (not BASELINE) when the player's season row says games were played.
+        # L2: the first row is PARTIAL (not BASELINE) when the load's own season line says games were played.
         pid = self.new_player("T. Partial")
         self.cur.execute("INSERT INTO season_stat_general (season, player_id, games_played) VALUES (2026, %s, 5)", (pid,))
-        self.counter(pid, 2026, 4, "WEEK", 5, 40, 1)
+        self.counter(pid, 2026, 4, "WEEK", 5, 40, 1, season_games=5)
         self.assertEqual(self.one("SELECT status, games_covered, delta FROM player_week_counters "
                                   "WHERE player_id = %s", pid), ("PARTIAL", 5, None))
         self.assertEqual(self.one("SELECT weeks_partial, games_lost FROM player_season_counters "
                                   "WHERE player_id = %s AND season = 2026", pid), (1, 5))
+
+    def test_a_later_season_line_does_not_retroactively_make_a_baseline_partial(self):
+        # Audit-4 stats suspicion 2 / audit-5 L2: the first load happened before any game was played, so its
+        # row is a BASELINE that loses nothing. A later load writes the season line; the earlier row's verdict,
+        # and the season's lost games, must not change.
+        pid = self.new_player("T. Retro")
+        self.counter(pid, 2026, 0, "PRESEASON", 0, 0, 1)      # no games yet: nothing to lose
+        self.assertEqual(self.one("SELECT status, games_covered, delta FROM player_week_counters "
+                                  "WHERE player_id = %s", pid), ("BASELINE", 0, None))
+        self.cur.execute("INSERT INTO season_stat_general (season, player_id, games_played) VALUES (2026, %s, 5)", (pid,))
+        self.counter(pid, 2026, 5, "WEEK", 5, 40, 2, season_games=5)
+        self.assertEqual(self.one("SELECT status, games_covered, delta FROM player_week_counters "
+                                  "WHERE player_id = %s AND stage = 'PRESEASON'", pid), ("BASELINE", 0, None))
+        self.assertEqual(self.one("SELECT weeks_partial, games_lost, games_covered FROM player_season_counters "
+                                  "WHERE player_id = %s AND season = 2026", pid), (0, 0, 5))
+
+    def test_the_view_does_not_read_the_live_season_line(self):
+        # Same property on a 2027_02_28-only schema, where no row can carry season_games: the first row stays
+        # BASELINE after the season line appears. This is the test that fails on the pre-fix view.
+        pid = self.new_player("T. Retro2")
+        self.counter(pid, 2026, 0, "PRESEASON", 0, 0, 1)
+        self.cur.execute("INSERT INTO season_stat_general (season, player_id, games_played) VALUES (2026, %s, 5)", (pid,))
+        self.counter(pid, 2026, 5, "WEEK", 5, 40, 2)
+        self.assertEqual(self.one("SELECT status, games_covered FROM player_week_counters "
+                                  "WHERE player_id = %s AND stage = 'PRESEASON'", pid), ("BASELINE", 0))
+        self.assertEqual(self.one("SELECT weeks_partial, games_lost FROM player_season_counters "
+                                  "WHERE player_id = %s AND season = 2026", pid), (0, 0))
+
+    def test_a_midseason_first_row_keeps_the_games_it_lost_and_a_later_load_keeps_its_own(self):
+        # Audit-5 L2's second acceptance: a first row seen mid-season stays PARTIAL with its own games after a
+        # later load grows the season line, and a reload updates only its own load observation.
+        pid = self.new_player("T. Midseason")
+        self.counter(pid, 2026, 4, "WEEK", 5, 40, 1, season_games=5)   # first sight: five games already lost
+        self.cur.execute("INSERT INTO season_stat_general (season, player_id, games_played) VALUES (2026, %s, 8)", (pid,))
+        self.counter(pid, 2026, 8, "WEEK", 8, 60, 2, season_games=8)
+        self.assertEqual(self.one("SELECT status, games_covered FROM player_week_counters "
+                                  "WHERE player_id = %s AND week = 4", pid), ("PARTIAL", 5))
+        self.assertEqual(self.one("SELECT weeks_partial, games_lost, games_covered FROM player_season_counters "
+                                  "WHERE player_id = %s AND season = 2026", pid), (1, 5, 3))
+        # A reload of week 8 replaces that load's observation (counters, season_games, load sequence); the first
+        # row is untouched.
+        self.counter(pid, 2026, 8, "WEEK", 8, 65, 3, season_games=8)
+        self.assertEqual(self.one("SELECT week, status, games_covered, delta ->> 'TARGETS' "
+                                  "FROM player_week_counters WHERE player_id = %s AND week = 8", pid),
+                         (8, "OK", 3, "25"))
+        self.assertEqual(self.one("SELECT status, games_covered FROM player_week_counters "
+                                  "WHERE player_id = %s AND week = 4", pid), ("PARTIAL", 5))
 
     def test_no_games_growth_stays_in_the_season_total(self):
         # L4: a NO_GAMES row whose tracked counters grew is kept in the season sum and counted.

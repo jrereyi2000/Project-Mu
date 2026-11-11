@@ -287,6 +287,38 @@ def test_player_metrics_suppresses_a_metric_that_mixes_sources_over_different_ga
     assert result["coverage"]["stat_line_games"] == 5
 
 
+def test_a_rollover_row_fills_the_team_denominator_of_the_season_it_is_credited_to():
+    # audit-4 stats suspicion 1: a load taken before the next season's week 1 (2027 preseason week 0) carries
+    # the 2026 playoffs and Super Bowl in its delta and is credited to 2026. The team denominators must cover
+    # 2026 weeks 19-23, not an empty range.
+    line = _blank(am.STAT_COLUMNS)
+    line.update({"team_id": 7, "games_played": 5})
+    career = _career(week=0, prev_week=18, games=5, TARGETS=20)
+    cur = StubCursor([line, [career], [], {"team_pass_attempts": 75, "team_total_plays": 180}])
+
+    result = am.player_metrics(cur, 2026, 42)
+
+    assert cur.calls[3][1]["weeks"] == [19, 20, 21, 22, 23]
+    assert result["inputs"]["team_pass_attempts"] == 75
+    assert result["metrics"]["target_share"] == pytest.approx(20 / 75)
+
+
+def test_the_season_team_supplies_the_denominator_when_the_stat_line_has_none():
+    # audit-4 stats suspicion 1: the 2026 line of a player first seen in the next save may carry no team, so
+    # the denominators read the player's season team instead of going None.
+    line = _blank(am.STAT_COLUMNS)
+    line.update({"team_id": None, "games_played": 3})
+    career = _career(week=3, prev_week=0, games=3, TARGETS=15)
+    cur = StubCursor([line, {"team_id": 9}, [career], [],
+                      {"team_pass_attempts": 120, "team_total_plays": 300}])
+
+    result = am.player_metrics(cur, 2026, 42)
+
+    assert "player_seasons" in cur.calls[1][0]
+    assert cur.calls[4][1]["team_id"] == 9
+    assert result["metrics"]["target_share"] == pytest.approx(15 / 120)
+
+
 def test_player_metrics_accepts_positional_rows():
     """Ordinary psycopg cursors return tuples, not dicts."""
     line = _tuple_row(("team_id", "games_played") + am.STAT_COLUMNS,

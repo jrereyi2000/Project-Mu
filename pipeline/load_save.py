@@ -822,14 +822,26 @@ def career_counter_values(career):
     return career["table"], counters, counters.get("GAMESPLAYED")
 
 
+def season_games_played(player, franchise_year):
+    """The games the save's own season line gives this player (the number load_season_lines stores in
+    season_stat_general), or None when the save carries no season line for it. A career-counter row records it
+    so player_week_counters judges the row by what its load knew, not by a season line a later load grew
+    (db/migrations/2027_02_29_stats_counter_season_games.sql)."""
+    rows = [r for r in player.get("season_stats") or []
+            if (r.get("stats") or {}).get("SEAS_YEAR") == franchise_year]
+    general = group_lines(rows).get("general") if rows else None
+    return (general or {}).get("games_played")
+
+
 def load_career_counters(cur, snapshot, season, players, capture_id, report):
     """One player_career_counters row per matched player per weekly load. Madden's career totals include real-NFL
     history, so each row is a high-water mark the player_week_counters view differences against the previous load
     (docs/done/MADDEN_STATS_INGEST_PLAN.md §2.3). A row's week is the last played week its delta covers, so a
     reload of the same week replaces its row; a load outside a playable week takes a stage/sentinel key
-    (PRESEASON week 0, OFFSEASON week -1, PROBOWL week -2) that cannot collide with a real week. A database
-    without the migration reports `table missing` (or `stage column missing`) and writes nothing, so a load
-    against an older schema still succeeds."""
+    (PRESEASON week 0, OFFSEASON week -1, PROBOWL week -2) that cannot collide with a real week. A row also records
+    the season games this load's own season line gave the player (`season_games`, 2027_02_29) when the column
+    exists. A database without the migration reports `table missing` (or `stage column missing`) and writes
+    nothing, so a load against an older schema still succeeds."""
     if snapshot.get("meta", {}).get("reader_version", 0) < CAREER_COUNTERS_READER_VERSION:
         report["career_counters"] = f"reader_version < {CAREER_COUNTERS_READER_VERSION}"
         return
@@ -837,12 +849,24 @@ def load_career_counters(cur, snapshot, season, players, capture_id, report):
     if cur.fetchone()[0] is None:
         report["career_counters"] = "table missing"
         return
-    cur.execute("SELECT count(*) FROM information_schema.columns WHERE table_schema = 'public' "
-                "AND table_name = 'player_career_counters' AND column_name IN ('stage', 'load_seq')")
-    if cur.fetchone()[0] != 2:
+    cur.execute("SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' "
+                "AND table_name = 'player_career_counters' "
+                "AND column_name IN ('stage', 'load_seq', 'season_games')")
+    have = {row[0] for row in cur.fetchall()}
+    if not {"stage", "load_seq"} <= have:
         report["career_counters"] = "stage column missing (apply 2027_02_28_stats_loader_weeks)"
         return
+    has_season_games = "season_games" in have
+    sql = ("INSERT INTO player_career_counters (season, week, stage, player_id, madden_table, counters, "
+           "games_played, capture_id, read_at" + (", season_games" if has_season_games else "") +
+           ") VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s" + (", %s" if has_season_games else "") + ") "
+           "ON CONFLICT (season, week, player_id, stage) DO UPDATE SET madden_table = EXCLUDED.madden_table, "
+           "counters = EXCLUDED.counters, games_played = EXCLUDED.games_played, "
+           "capture_id = EXCLUDED.capture_id, read_at = EXCLUDED.read_at" +
+           (", season_games = EXCLUDED.season_games" if has_season_games else "") +
+           ", load_seq = nextval('player_career_counters_load_seq')")
     stage, week = counter_position(snapshot)
+    year = snapshot["season"]["franchise_year"]
     read_at = snapshot.get("meta", {}).get("read_at")
     n = 0
     for p in snapshot["players"]:
@@ -853,13 +877,10 @@ def load_career_counters(cur, snapshot, season, players, capture_id, report):
         if vals is None:
             continue
         table, counters, games_played = vals
-        cur.execute("INSERT INTO player_career_counters (season, week, stage, player_id, madden_table, counters, "
-                    "games_played, capture_id, read_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
-                    "ON CONFLICT (season, week, player_id, stage) DO UPDATE SET madden_table = EXCLUDED.madden_table, "
-                    "counters = EXCLUDED.counters, games_played = EXCLUDED.games_played, "
-                    "capture_id = EXCLUDED.capture_id, read_at = EXCLUDED.read_at, "
-                    "load_seq = nextval('player_career_counters_load_seq')",
-                    (season, week, stage, who[0], table, json.dumps(counters), games_played, capture_id, read_at))
+        params = (season, week, stage, who[0], table, json.dumps(counters), games_played, capture_id, read_at)
+        if has_season_games:
+            params += (season_games_played(p, year),)
+        cur.execute(sql, params)
         n += 1
     report["career_counter_rows"] = n
     report["career_counters"] = f"{n} rows (season {season} week {week} {stage})"

@@ -79,6 +79,35 @@ class SameGamesMetricsTest(unittest.TestCase):
         self.cur.execute(sql, args)
         return self.cur.fetchone()
 
+    def test_a_credited_previous_season_row_fills_the_complete_team_denominator(self):
+        # audit-5 S1's complete fixture: two completed 2098 games with 50 + 50 team pass attempts, a season line
+        # with 2 games, and career rows 2098 PRESEASON -> 2099 PRESEASON whose delta is credited to 2098. The
+        # 2098 denominator must be both games (100) and target_share 20/100, not an empty window.
+        self.cur.execute("INSERT INTO teams (name) VALUES ('SCRATCH-S1') RETURNING id")
+        team = self.cur.fetchone()[0]
+        self.cur.execute("INSERT INTO players (player_name, full_name) VALUES ('S. One', 'Scratch One') RETURNING id")
+        pid = self.cur.fetchone()[0]
+        self.cur.execute("INSERT INTO player_seasons (player_id, team_id, season) VALUES (%s, %s, 2098)", (pid, team))
+        self.cur.execute("INSERT INTO season_stat_general (season, player_id, games_played) VALUES (2098, %s, 2)", (pid,))
+        for week in (18, 23):
+            self.cur.execute("INSERT INTO games (season, week, home_team_id) VALUES (2098, %s, %s) RETURNING id",
+                             (week, team))
+            gid = self.cur.fetchone()[0]
+            self.cur.execute("INSERT INTO team_stats (game_id, team_name, passing_attempts, total_plays) "
+                             "VALUES (%s, 'SCRATCH-S1', 50, 120)", (gid,))
+        for week, games, targets, seq in ((0, 0, 0, 1), (0, 2, 20, 2)):
+            self.cur.execute(
+                "INSERT INTO player_career_counters (season, week, stage, player_id, madden_table, counters, "
+                "games_played, load_seq) VALUES (%s, %s, 'PRESEASON', %s, 'CareerOffensiveStats', %s, %s, %s)",
+                (2098 if seq == 1 else 2099, week, pid,
+                 json.dumps({"GAMESPLAYED": games, "TARGETS": targets, "RECEIVECATCHES": targets // 2}), games, seq))
+
+        metrics = am.player_metrics(self.cur, 2098, pid)
+
+        self.assertEqual(metrics["inputs"]["team_pass_attempts"], 100)
+        self.assertEqual(metrics["metrics"]["target_share"], pytest.approx(0.2))
+        self.assertTrue(metrics["coverage"]["same_games"])
+
     def test_p2h_has_no_catch_rate_above_one_and_flags_the_untracked_week(self):
         # H3's reproduction. MUBASE then P2H; the audit measured Rice at 27 receptions / 20 targets = 1.35
         # and 123 of 272 receivers above 1.
