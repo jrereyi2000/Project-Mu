@@ -175,7 +175,7 @@ Derived from `home_coach`/`away_coach` on every regular-season game, so it is ex
 Band **17.9%–26.5%** of players with ≥8 games in both seasons, median **24.9%**, about **194 players a season**.
 
 - **Gate:** Mu's rate within ±20% relative of 24.9% over a 3-season mean.
-- **Mu source:** `player_season_transitions` where `status = 'MOVED'`.
+- **Mu source:** `player_seasons` team ids for players with ≥8 games in both seasons (what `decision_compare` reads; the `player_season_transitions` MOVED ledger is not used).
 - **Primary suspect:** `free_agency_engine` acceptance bar and counter steps; `contracts_engine` market values;
   cap growth.
 - **Note:** total churn, not free agency alone; break down by `transactions.type` if the total is right but the split is not.
