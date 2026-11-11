@@ -15,11 +15,15 @@ roster snapshot with the real week and plans, in this order:
    ambiguous with every candidate; nothing is created for that person;
 3. CSV trades — a hand-kept `nfl_trades_2026.csv` leg (`from_team` to `to_team`, its week or any week) moves the
    linked player in one `trade` op only when the save has him on the leg's source team and the real week puts him
-   on the leg's destination. A blank week is a wildcard for the week of the move, not a lifetime exemption: a
-   stale leg falls through to the normal release/sign reconciliation, and a player already at the destination
-   still has his list and IR state reconciled;
-4. releases — a linked player the real week does not place on his save team and list (a team change with no CSV leg
-   is released and then signed; the report calls it an unconfirmed switch);
+   on the leg's destination. The op carries the real list too, so a trade that also changes the list (a practice
+   squad promotion or a demotion) is reconciled by the same write. A blank week is a wildcard for the week of the
+   move, not a lifetime exemption: a stale leg falls through to the normal release/sign reconciliation, and a
+   player already at the destination still has his list and IR state reconciled;
+4. releases and same-team list changes — a linked player the real week does not place on his save team is released
+   (a team change with no CSV leg is released and then signed; the report calls it an unconfirmed switch), while a
+   linked player whose team is unchanged but whose real list differs gets one `list` op: the player stays with his
+   team and the save writer moves him between its Roster and PracticeSquad (audit-5 U18 R3), with the contract and
+   roster-count consequences of the promotion/demotion;
 5. signings — a linked player the real week places on a team he is not on, signed to the Roster with an OTC or
    minimum contract (`contracts.ContractBook.contract_for`, for that team and the week's as-of date); then
    practice-squad signings;
@@ -30,7 +34,7 @@ IR, not the practice squad), and a `ps_fill` slot when his only real place is a 
 fills that slot from `Deps.free_agent_pool` (best OVR at the position).
 
 The plan's shapes:
-  ops          [{"kind": "release"|"sign"|"trade"|"ir"|"activate", "pgid", "gsis_id", "to_index",
+  ops          [{"kind": "release"|"sign"|"trade"|"list"|"ir"|"activate", "pgid", "gsis_id", "to_index",
                  "list": "Roster"|"PracticeSquad", "contract": dict|None, "why"}]
   creates      [RealPlayer]
   ps_fill      [{"team_index", "position"}]
@@ -352,13 +356,19 @@ def plan_rosters(snapshot, real, links, trades, team_index, contracts, cap):
             continue          # stale source or another destination: release + sign, reported as unconfirmed
         if current["team_index"] == to_index:
             continue          # already at the destination: reconcile his list and IR instead of marking a move
+        contract = None
+        if want["list"] == ROSTER and current["list"] == PRACTICE_SQUAD:
+            # The trade also promotes him: the new Roster deal is the same one an ordinary signing would get.
+            contract = contracts.contract_for(
+                gsis, signed_as_of, cap, years_exp=_years_exp(want["player"], season), team=want["player"].team)
         plan.ops.append({"kind": "trade", "pgid": links[gsis], "gsis_id": gsis, "to_index": to_index,
-                         "list": want["list"], "contract": None,
+                         "list": want["list"], "contract": contract,
                          "why": f"trade {leg.trade_id}".strip() + (f": {leg.note}" if leg.note else "")})
         placed[gsis] = {"team_index": to_index, "list": want["list"]}
         traded.add(gsis)
 
-    # 4. releases: a linked player the real week does not place on his save team and list
+    # 4. releases and same-team list changes: a linked player the real week does not place on his save team and
+    #    list. A team change is a release (a signing follows); the same team on another list is one list op.
     for gsis in sorted(placed):
         if gsis in traded:
             continue
@@ -369,7 +379,18 @@ def plan_rosters(snapshot, real, links, trades, team_index, contracts, cap):
             reason = (f"moved to {want['player'].team} with no CSV trade "
                       f"(release and sign; unconfirmed trade or claim)")
         elif want["list"] != current["list"]:
-            reason = f"{current['list']} to {want['list']} on {want['player'].team}"
+            # Direct list reconciliation: the player stays on his team, so the writer moves him between its Roster
+            # and PracticeSquad instead of releasing him into free agency and refusing the same-team signing.
+            contract = None
+            if want["list"] == ROSTER:
+                contract = contracts.contract_for(
+                    gsis, signed_as_of, cap, years_exp=_years_exp(want["player"], season),
+                    team=want["player"].team)
+            plan.ops.append({"kind": "list", "pgid": links[gsis], "gsis_id": gsis,
+                             "to_index": want["team_index"], "list": want["list"], "contract": contract,
+                             "why": f"{current['list']} to {want['list']} on {want['player'].team}"})
+            placed[gsis] = {"team_index": want["team_index"], "list": want["list"]}
+            continue
         else:
             continue
         plan.ops.append({"kind": "release", "pgid": links[gsis], "gsis_id": gsis, "to_index": None,

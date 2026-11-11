@@ -235,11 +235,13 @@ CAP_ROOM_RANGE = (-40_000, 484_287)
 CAPSALARY_RANGE = (0, 32_766)
 DEFAULT_CONTRACT_SLOTS = 7
 
-# Player fields a sign / trade move sets (save_writer.mjs MOVE_FIELDS); a players edit of a moved player drops them.
+# Player fields a sign / trade / list move sets (save_writer.mjs MOVE_FIELDS); a players edit of a moved player drops
+# them.
 MOVE_FIELDS = {
     "sign": ("TeamIndex", "ContractStatus", "Contract", "Mindset", "WeeksWithTeam"),
     "trade": ("TeamIndex", "ContractStatus", "Contract", "PrevTeamIndex", "WeeksWithTeam", "PLYR_ISCAPTAIN",
               "TradeStatus"),
+    "list": ("TeamIndex", "ContractStatus", "Contract", "Mindset", "WeeksWithTeam"),
 }
 FREE_AGENT_TEAM = ls.FREE_AGENT_TEAM_INDEX
 FRANCHISE_CLOSED_ENV = "LEAGUE_OFFICE_FRANCHISE_CLOSED"
@@ -533,6 +535,8 @@ class Plan:
         self.ir = {g: bool((p.get("injury") or {}).get("injured_reserve")) for g, p in self.players.items()}
         self.edits = {}            # pgid -> {"set": {field: value}, "contract": block or None}
         self.release, self.trades, self.signs = [], [], []
+        self.list_changes = []     # same-team Roster/PracticeSquad changes (audit-5 U18 R3)
+        self.trade_lists = {}      # pgid -> {"list", "contract"} for a trade that also changes the player's list (R4)
         self.records = []
         self.depth = {}            # team_index -> {"slots": {...}, "source", "priority"}
         self.claimed = {}          # pgid -> (move, team_index, priority)
@@ -652,6 +656,19 @@ class Plan:
         self.counts["release"] += 1
         return self.note(tag, True, reason)
 
+    def _deal_block(self, pgid, contract, block=None, offset=None):
+        """The writer's contract block for a new Roster deal (`block` when the caller built one, else `contract`)."""
+        if block is not None or not contract:
+            return block
+        block, dropped, bonus_dropped = contract_block(
+            contract, None, self.offset if offset is None else offset, self.slots, self.bonus_slots)
+        if dropped:
+            self.warn(f"{self.name(pgid)}: {dropped} contract years past the save's {self.slots} slots dropped")
+        if bonus_dropped:
+            self.warn(f"{self.name(pgid)}: {bonus_dropped} bonus years past the save's {self.bonus_slots} "
+                      f"BonusYear fields are left unset")
+        return block
+
     def sign_player(self, pgid, team_index, lst, contract, priority, reason, tag=None, offset=None, block=None):
         """Queues a signing (resolved in finalize, after every release freed its contract row). `contract` is a
         contracts_engine dict for the league year (`offset` defaults to the stage's), `block` a ready writer block."""
@@ -664,16 +681,10 @@ class Plan:
             return self.note(tag, False, f"{self.name(pgid)} is {status}, not a free agent or draft prospect")
         if lst not in ("Roster", "PracticeSquad"):
             return self.note(tag, False, f"list must be Roster or PracticeSquad, not {lst}")
-        if lst == "Roster" and block is None:
-            if not contract:
+        if lst == "Roster":
+            block = self._deal_block(pgid, contract, block, offset)
+            if block is None:
                 return self.note(tag, False, f"a Roster signing of {self.name(pgid)} needs a contract")
-            block, dropped, bonus_dropped = contract_block(
-                contract, None, self.offset if offset is None else offset, self.slots, self.bonus_slots)
-            if dropped:
-                self.warn(f"{self.name(pgid)}: {dropped} contract years past the save's {self.slots} slots dropped")
-            if bonus_dropped:
-                self.warn(f"{self.name(pgid)}: {bonus_dropped} bonus years past the save's {self.bonus_slots} "
-                          f"BonusYear fields are left unset")
         if not self._claim(pgid, "sign", team_index, priority, tag):
             return False
         self.signs.append({"pgid": pgid, "team_index": team_index, "list": lst,
@@ -682,7 +693,46 @@ class Plan:
         self.view[pgid] = ("Signed" if lst == "Roster" else "PracticeSquad", team_index)
         return True
 
-    def trade_player(self, pgid, to_index, priority, reason, tag=None, db_executed=False):
+    def change_list(self, pgid, lst, contract, priority, reason, tag=None, offset=None, block=None):
+        """Moves a rostered player between his own team's Roster and PracticeSquad (audit-5 U18 R3).
+
+        The player keeps his team: a promotion to Roster gets a new deal (`contract`/`block`, resolved in finalize like
+        a signing), a demotion to PracticeSquad leaves his old deal unreferenced (the dead money a release charges) and
+        writes the contract reference away. Nothing goes through free agency.
+        """
+        if pgid not in self.players:
+            return self.note(tag, False, f"pgid {pgid} not in the save")
+        status, team = self.roster_status(pgid)
+        if status not in ("Signed", "PracticeSquad") or team is None or team >= FREE_AGENT_TEAM:
+            return self.note(tag, False, f"{self.name(pgid)} is {status}, not on a roster")
+        if lst not in ("Roster", "PracticeSquad"):
+            return self.note(tag, False, f"list must be Roster or PracticeSquad, not {lst}")
+        current = "Roster" if status == "Signed" else "PracticeSquad"
+        if lst == current:
+            return self.note(tag, True, f"already on {lst}")
+        if lst == "Roster":
+            block = self._deal_block(pgid, contract, block, offset)
+            if block is None:
+                return self.note(tag, False, f"a Roster promotion of {self.name(pgid)} needs a contract")
+        if not self._claim(pgid, "list", team, priority, tag):
+            return False
+        if lst == "PracticeSquad":
+            old = snapshot_block(self.players[pgid].get("contract")) if status == "Signed" else None
+            if old:
+                room, nxt, base = release_cap(old)
+                self._cap(team, room, nxt, -base)
+        self.list_changes.append({"pgid": pgid, "team_index": team, "list": lst,
+                                  "block": block if lst == "Roster" else None, "priority": priority,
+                                  "reason": reason, "tag": tag})
+        self.view[pgid] = ("Signed" if lst == "Roster" else "PracticeSquad", team)
+        self.counts["list_to_roster" if lst == "Roster" else "list_to_practice_squad"] += 1
+        return self.note(tag, True, reason)
+
+    def trade_player(self, pgid, to_index, priority, reason, tag=None, db_executed=False, lst=None, contract=None,
+                     block=None):
+        """Moves a player to another team's roster. `lst` (when the trade also changes his list, audit-5 U18 R4) is the
+        destination list; a promotion needs a new deal (`contract`/`block`), a demotion leaves the old deal
+        unreferenced. Without it his current list travels with him."""
         if pgid not in self.players:
             return self.note(tag, False, f"pgid {pgid} not in the save")
         status, team = self.roster_status(pgid)
@@ -692,10 +742,29 @@ class Plan:
             return self.note(tag, True, "already on that team")
         if not 0 <= to_index < FREE_AGENT_TEAM:
             return self.note(tag, False, f"no team {to_index}")
+        current = "Roster" if status == "Signed" else "PracticeSquad"
+        if lst is not None and lst not in ("Roster", "PracticeSquad"):
+            return self.note(tag, False, f"list must be Roster or PracticeSquad, not {lst}")
+        if lst is not None and lst == current:
+            lst = None
+        if lst == "Roster":
+            block = self._deal_block(pgid, contract, block)
+            if block is None:
+                return self.note(tag, False, f"a Roster promotion of {self.name(pgid)} needs a contract")
         if not self._claim(pgid, "trade", to_index, priority, tag):
             return False
-        self.trades.append((team, to_index, pgid))
-        if status == "Signed":
+        if lst == "Roster":           # practice squad to active: a new deal, like a signing
+            hit, nxt, base = cap_change(block)
+            self._cap(to_index, -hit, -nxt, base)
+            self.contracts_written[pgid] = block
+            self.trade_lists[pgid] = {"list": "Roster", "contract": block}
+        elif lst == "PracticeSquad":  # active to practice squad: the old deal is left unreferenced, like a release
+            old = snapshot_block(self.players[pgid].get("contract"))
+            if old:
+                room, nxt, base = release_cap(old)
+                self._cap(team, room, nxt, -base)
+            self.trade_lists[pgid] = {"list": "PracticeSquad", "contract": None}
+        elif status == "Signed":
             hit, nxt, base = cap_change(snapshot_block(self.players[pgid].get("contract")))
             self._cap(team, hit, nxt, -base)
             self._cap(to_index, -hit, -nxt, base)
@@ -703,7 +772,9 @@ class Plan:
                 for idx, delta in ((team, (hit, nxt, -base)), (to_index, (-hit, -nxt, base))):
                     for i, v in enumerate(delta):
                         self.trade_cap_db[idx][i] += v
-        self.view[pgid] = (status, to_index)
+        self.trades.append((team, to_index, pgid))
+        self.view[pgid] = ("Roster" if lst == "Roster" else "PracticeSquad" if lst == "PracticeSquad" else status,
+                           to_index)
         self.counts["trade"] += 1
         return self.note(tag, True, reason)
 
@@ -810,6 +881,21 @@ class Plan:
             if s.get("switch"):
                 sign_out[-1]["switch"] = True
             self.note(s["tag"], True, s["reason"])
+        # Same-team list changes resolve like signings: a promotion takes a new deal (a free row first, an empty one
+        # otherwise), a demotion already freed its old row's cap room when it was planned.
+        list_out = []
+        for c in self.list_changes:
+            g = c["pgid"]
+            if c["list"] == "Roster":
+                if self.free_rows > 0:
+                    self.free_rows -= 1
+                hit, nxt, base = cap_change(c["block"])
+                self._cap(c["team_index"], -hit, -nxt, base)
+                self.contracts_written[g] = c["block"]
+                list_out.append({"pgid": g, "team_index": c["team_index"], "list": "Roster", "contract": c["block"]})
+            else:
+                list_out.append({"pgid": g, "team_index": c["team_index"], "list": "PracticeSquad"})
+            self.note(c["tag"], True, c["reason"])
         # A declared switch is the one release whose players edit may still ride the same write: the writer applies
         # the release first and the signing after the fields (save_writer.mjs; a switch is not a real departure).
         released = set(self.release) - set(self.switches)
@@ -834,6 +920,13 @@ class Plan:
             if s["list"] == "Roster" and not any(p["pgid"] == s["pgid"] for p in players):
                 players.append({"pgid": s["pgid"],
                                 "set": {"PLYR_CAPSALARY": _clamp(block_hit(s["contract"], 0), CAPSALARY_RANGE)}})
+        # A promotion (same-team list change or in a trade) writes a new deal, so its cap salary rides along too.
+        promoted = [(c["pgid"], c["block"]) for c in self.list_changes if c["list"] == "Roster"]
+        promoted += [(g, d["contract"]) for g, d in self.trade_lists.items() if d["list"] == "Roster"]
+        for g, block in promoted:
+            if block is not None and not any(p["pgid"] == g for p in players):
+                players.append({"pgid": g,
+                                "set": {"PLYR_CAPSALARY": _clamp(block_hit(block, 0), CAPSALARY_RANGE)}})
         doc = {}
         if players:
             doc["players"] = players
@@ -844,12 +937,22 @@ class Plan:
             doc["release"] = list(self.release)
         if sign_out:
             doc["sign"] = sign_out
+        if list_out:
+            doc["lists"] = list_out
         trades = defaultdict(list)
         for frm, to, g in self.trades:
             trades[(frm, to)].append(g)
         if trades:
-            doc["trade"] = [{"from_team_index": f, "to_team_index": t, "pgids": gs, "picks": []}
-                            for (f, t), gs in sorted(trades.items())]
+            entries = []
+            for (f, t), gs in sorted(trades.items()):
+                entry = {"from_team_index": f, "to_team_index": t, "pgids": gs, "picks": []}
+                lists = [{"pgid": g, "list": self.trade_lists[g]["list"],
+                          "contract": self.trade_lists[g]["contract"]}
+                         for g in gs if g in self.trade_lists]
+                if lists:
+                    entry["lists"] = lists
+                entries.append(entry)
+            doc["trade"] = entries
         charts = self._charts()
         if charts:
             doc["depthCharts"] = charts
@@ -1513,7 +1616,8 @@ def step_nfl_mirror(plan, mirror):
             else:
                 outcomes[tag] = ["REFUSED", reason_of(tag, "the signing was refused")]
         elif kind == "trade":
-            ok = plan.trade_player(pgid, op.get("to_index"), PRIORITY_MIRROR, reason, tag=tag)
+            ok = plan.trade_player(pgid, op.get("to_index"), PRIORITY_MIRROR, reason, tag=tag,
+                                   lst=op.get("list"), contract=op.get("contract"))
             if ok and before[1] != op.get("to_index"):
                 transactions.append(move_row("TRADE", gsis, pgid, from_index=before[1], to_index=op.get("to_index")))
                 outcomes[tag] = ["WRITTEN", None]
@@ -1521,6 +1625,11 @@ def step_nfl_mirror(plan, mirror):
                 outcomes[tag] = ["SKIPPED", "already on that team"]
             else:
                 outcomes[tag] = ["REFUSED", reason_of(tag, "the trade was refused")]
+        elif kind == "list":
+            # Same team, other list: directly reconciled (audit-5 U18 R3). Not a transaction: he is not signed,
+            # released or traded, and a RELEASED row would feed compensatory picks and relationship producers.
+            ok = plan.change_list(pgid, op.get("list") or "Roster", op.get("contract"), PRIORITY_MIRROR, reason, tag=tag)
+            outcomes[tag] = ["WRITTEN", None] if ok else ["REFUSED", reason_of(tag, "the list change was refused")]
         elif kind == "ir":
             ok = plan.set_fields(pgid, {"IsInjuredReserve": True}, tag=tag)
             outcomes[tag] = ["WRITTEN", None] if ok else ["REFUSED", reason_of(tag, "the IR move was refused")]

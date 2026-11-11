@@ -279,6 +279,51 @@ async function contractTable(tables, players) {
   return t?.name === CONTRACT_TABLE ? t : null;
 }
 
+// The shareable contract pool of a write: the spare rows nothing references, the rows a release in the same write
+// left unreferenced, and the never-used rows a Roster signing may fill (P1-08). `exclude` holds `${table}:${row}` keys
+// another move of the same write already took, so two signings never point at one row. Mutating `free`/`empty` with
+// `allocateContract` hands the rows out in order.
+export async function contractSlots(franchise, tables, playerTable, { freedContracts = [], exclude = new Set(),
+  contracts = null } = {}) {
+  const table = contracts ?? await contractTable(tables, playerTable);
+  if (!table) return { contracts: null, free: [], empty: [] };
+  const id = table.header.tableId;
+  const taken = row => exclude.has(`${id}:${row}`);
+  const used = await referencedContracts(franchise, tables);
+  const freed = (freedContracts ?? []).filter(c => c && c.table === id).map(c => c.row).filter(row => !taken(row));
+  const spare = table.records.map((r, row) => row).filter(row => !table.records[row].isEmpty
+    && !used.has(`${id}:${row}`) && !taken(row));
+  const free = [...spare.filter(row => !freed.includes(row)), ...freed];
+  const empty = table.records.map((r, row) => row).filter(row => table.records[row].isEmpty && !taken(row));
+  return { contracts: table, free, empty };
+}
+
+// A new contract row from a pool: an unused PlayerContract row, else an empty one, initialised from CONTRACT_BASELINE
+// and the writer's contract block. Returns { contract, errors }; `contract` is {table, row, set, created?}.
+export function allocateContract(slots, block) {
+  if (!slots?.contracts) return { contract: null, errors: [`no ${CONTRACT_TABLE} table`] };
+  if (!block || typeof block !== 'object' || !Number.isInteger(block.Length)) {
+    return { contract: null, errors: ['a Roster contract needs a contract block with Length'] };
+  }
+  const contracts = slots.contracts;
+  const sample = contracts.records.find(r => !r.isEmpty);
+  const terms = { ...CONTRACT_BASELINE };
+  for (const k of Object.keys(sample.fields)) if (/^(Salary|Bonus)Year\d+$/.test(k)) terms[k] = 0;
+  Object.assign(terms, block);
+  const errors = fieldErrors(sample, block, CONTRACT_TABLE).map(e => `contract ${e}`);
+  if (!(terms.Length >= 1 && terms.CurrentYear >= 0 && terms.CurrentYear < terms.Length)) {
+    errors.push(`contract: CurrentYear ${terms.CurrentYear} outside Length ${terms.Length}`);
+  }
+  if (errors.length) return { contract: null, errors };
+  if (slots.free.length) {
+    return { contract: { table: contracts.header.tableId, row: slots.free.shift(), set: terms }, errors };
+  }
+  if (slots.empty.length) {
+    return { contract: { table: contracts.header.tableId, row: slots.empty.shift(), set: terms, created: true }, errors };
+  }
+  return { contract: null, errors: [`no free or empty ${CONTRACT_TABLE} row (a release in the same write frees one)`] };
+}
+
 // Plans the signings without changing anything: { plan, errors }. `freedContracts`: PlayerContract references a
 // release in the same write leaves unreferenced (release plan's releases[].contract), usable as free rows.
 export async function planSign(franchise, items = [], { freedContracts = [] } = {}) {
@@ -293,16 +338,8 @@ export async function planSign(franchise, items = [], { freedContracts = [] } = 
   const signs = [];
 
   const contracts = items.some(i => i?.list === 'Roster') ? await contractTable(tables, playerTable) : null;
-  let free = [];
-  let empty = [];        // never-used PlayerContract rows: a Roster signing fills one when no free row exists
-  if (contracts) {
-    const used = await referencedContracts(franchise, tables);
-    const freed = freedContracts.filter(c => c && c.table === contracts.header.tableId).map(c => c.row);
-    const spare = contracts.records.map((r, row) => row).filter(row => !contracts.records[row].isEmpty
-      && !used.has(`${contracts.header.tableId}:${row}`) && !freed.includes(row));
-    free = [...spare, ...freed];
-    empty = contracts.records.map((r, row) => row).filter(row => contracts.records[row].isEmpty);
-  }
+  // Never-used PlayerContract rows: a Roster signing fills one when no free row exists.
+  const slots = contracts ? await contractSlots(franchise, tables, playerTable, { freedContracts, contracts }) : null;
 
   // Draft-class lists, read only when a prospect is signed.
   let draft = null;
@@ -349,20 +386,9 @@ export async function planSign(franchise, items = [], { freedContracts = [] } = 
       } else if (!contracts) {
         errs.push(`no ${CONTRACT_TABLE} table`);
       } else {
-        const sample = contracts.records.find(r => !r.isEmpty);
-        const terms = { ...CONTRACT_BASELINE };
-        for (const k of Object.keys(sample.fields)) if (/^(Salary|Bonus)Year\d+$/.test(k)) terms[k] = 0;
-        Object.assign(terms, block);
-        errs.push(...fieldErrors(sample, block, CONTRACT_TABLE).map(e => `contract ${e}`));
-        if (!(terms.Length >= 1 && terms.CurrentYear >= 0 && terms.CurrentYear < terms.Length)) {
-          errs.push(`contract: CurrentYear ${terms.CurrentYear} outside Length ${terms.Length}`);
-        }
-        if (!errs.length) {
-          if (free.length) contract = { table: contracts.header.tableId, row: free.shift(), set: terms };
-          else if (empty.length) contract = { table: contracts.header.tableId, row: empty.shift(), set: terms,
-                                              created: true };
-          else errs.push(`no free or empty ${CONTRACT_TABLE} row (a release in the same write frees one)`);
-        }
+        const alloc = allocateContract(slots, block);
+        errs.push(...alloc.errors);
+        contract = alloc.contract;
       }
     } else if (item.contract && Object.keys(item.contract).length) {
       errs.push('practice-squad players have no contract record; drop the contract block');
