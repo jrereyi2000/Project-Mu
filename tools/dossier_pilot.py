@@ -2,6 +2,9 @@
 
 Use an explicit scratch DATABASE_URL whose name begins madden_v3_eval_.
 No publication, memory updates, or database usage logging. Results are local files.
+--provider gemini (default) keeps the matched Gemini ReAct/dossier arms;
+--provider deepseek runs both arms on deepseek-flash through the OpenAI-compatible
+tool loop, priced at DeepSeek's peak or off-peak rate by each call's UTC time.
 """
 import argparse
 import csv
@@ -30,14 +33,48 @@ Keep analysis and predictions distinguishable from canonical outcomes.
 '''
 PRICES = dict(input=0.75, cached=0.075, output=3.75)
 PRICE_SOURCE = 'https://ai.google.dev/gemini-api/docs/pricing'
+GEMINI_MODEL = 'gemini-3.8-flash:low'
+DEEPSEEK_MODEL = 'deepseek-flash'
+# DeepSeek list prices per 1M tokens, checked 2026-11-11 against the API docs'
+# Models & Pricing table. Off-peak is 50% of peak.
+DEEPSEEK_PEAK = dict(uncached=0.30, cached=0.006, output=1.20)
+DEEPSEEK_OFF_PEAK = dict(uncached=0.15, cached=0.003, output=0.60)
+DEEPSEEK_PRICE_SOURCE = 'https://api-docs.deepseek.com/quick_start/pricing'
+DEEPSEEK_PRICE_CHECKED = '2026-11-11'
+DEEPSEEK_INPUT_LIMIT = 1_000_000
+TEMPERATURE = 0.7
 
 
 def dump(path, value):
     path.write_text(json.dumps(value, indent=2, sort_keys=True, default=str))
 
 
-def cost(usage):
+def deepseek_rates(at=None):
+    """Return (rate table, period label) for a call at ``at`` (UTC).
+
+    Peak is Monday-Friday 01:00-04:00 and 06:00-10:00 UTC. DeepSeek also makes
+    Chinese public holidays off-peak all day; no holiday calendar is kept here,
+    so those weekdays are conservatively priced as peak.
+    """
+    when = at or dt.datetime.now(dt.timezone.utc)
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=dt.timezone.utc)
+    when = when.astimezone(dt.timezone.utc)
+    peak = when.weekday() < 5 and (1 <= when.hour < 4 or 6 <= when.hour < 10)
+    return (DEEPSEEK_PEAK if peak else DEEPSEEK_OFF_PEAK), ('peak' if peak else 'off-peak')
+
+
+def cost(usage, provider='gemini', at=None, rates=None):
     cached = min(usage['cached_tokens'], usage['input_tokens'])
+    if provider == 'deepseek':
+        # DeepSeek's completion_tokens already include reasoning tokens, so
+        # thinking is reported separately but billed once at the output rate.
+        table = rates or deepseek_rates(at)[0]
+        uncached = usage.get('uncached_tokens')
+        if uncached is None:
+            uncached = usage['input_tokens'] - cached
+        return (uncached * table['uncached'] + cached * table['cached']
+                + usage['output_tokens'] * table['output']) / 1e6
     return ((usage['input_tokens'] - cached) * PRICES['input'] + cached * PRICES['cached']
             + (usage['output_tokens'] + usage['thinking_tokens']) * PRICES['output']) / 1e6
 
@@ -147,29 +184,60 @@ def prepare(dsn, database, week, opponent):
 
 
 class Budget:
-    """Reserve full model-limit cost per request; retain reservation on uncertain failure."""
-    def __init__(self, limit, path, max_output):
+    """Reserve full model-limit cost per request; retain reservation on uncertain failure.
+
+    The same reservation/settlement applies to Gemini and DeepSeek. DeepSeek's
+    rate is chosen by each call's UTC time (peak or off-peak).
+    """
+    def __init__(self, limit, path, max_output, provider='gemini', input_limit=None):
         self.limit, self.path, self.max_output = limit, path, max_output
+        self.provider = provider
+        self.input_limit = input_limit or (DEEPSEEK_INPUT_LIMIT if provider == 'deepseek' else 1048576)
         self.rows = []
 
-    def reserve(self):
+    def document(self):
+        if self.provider == 'deepseek':
+            return dict(limit=self.limit, provider=self.provider, timezone='UTC',
+                        prices=dict(peak=DEEPSEEK_PEAK, off_peak=DEEPSEEK_OFF_PEAK),
+                        peak_periods='Mon-Fri 01:00-04:00 and 06:00-10:00 UTC',
+                        holiday_note='Chinese public holidays are off-peak on the provider price list; no holiday calendar is kept, so those weekdays are priced as peak',
+                        source=DEEPSEEK_PRICE_SOURCE, checked=DEEPSEEK_PRICE_CHECKED, calls=self.rows)
+        return dict(limit=self.limit, provider=self.provider, prices=PRICES, source=PRICE_SOURCE, calls=self.rows)
+
+    def reserve(self, at=None):
         # Entire model input context, no cache discount; double output reservation
         # conservatively covers thought/output reporting differences.
-        bound = (1048576 * PRICES['input'] + 2 * self.max_output * PRICES['output']) / 1e6
+        row = dict(status='reserved', provider=self.provider)
+        if self.provider == 'deepseek':
+            when = at or dt.datetime.now(dt.timezone.utc)
+            rates, period = deepseek_rates(when)
+            bound = (self.input_limit * rates['uncached'] + 2 * self.max_output * rates['output']) / 1e6
+            row.update(priced_at=when.isoformat(), price_period=period, prices=rates)
+        else:
+            bound = (self.input_limit * PRICES['input'] + 2 * self.max_output * PRICES['output']) / 1e6
         if sum(r['charged_or_reserved'] for r in self.rows) + bound > self.limit:
             raise RuntimeError('Spend ceiling: insufficient remaining budget for another request')
-        row = dict(status='reserved', charged_or_reserved=bound)
+        row['charged_or_reserved'] = bound
         self.rows.append(row)
-        dump(self.path, dict(limit=self.limit, prices=PRICES, source=PRICE_SOURCE, calls=self.rows))
+        dump(self.path, self.document())
         return row
 
     def complete(self, row, response):
-        from db.llm_usage import _usage
-        usage = _usage(response)
-        if response.usage_metadata is None:
-            raise RuntimeError('Missing usage: reserved cost retained; stopping')
-        row.update(status='completed', usage=usage, charged_or_reserved=cost(usage))
-        dump(self.path, dict(limit=self.limit, prices=PRICES, source=PRICE_SOURCE, calls=self.rows))
+        if self.provider == 'deepseek':
+            from newsroom.tool_loop.openai_loop import extract_openai_usage
+            usage_obj = getattr(response, 'usage', None)
+            if usage_obj is None:
+                raise RuntimeError('Missing usage: reserved cost retained; stopping')
+            usage = extract_openai_usage(usage_obj)
+            row.update(status='completed', usage=usage,
+                       charged_or_reserved=cost(usage, provider='deepseek', rates=row.get('prices')))
+        else:
+            from db.llm_usage import _usage
+            usage = _usage(response)
+            if response.usage_metadata is None:
+                raise RuntimeError('Missing usage: reserved cost retained; stopping')
+            row.update(status='completed', usage=usage, charged_or_reserved=cost(usage))
+        dump(self.path, self.document())
 
 
 def run_arm(packet, arm, tools, model, budget, directory):
@@ -217,7 +285,7 @@ def run_arm(packet, arm, tools, model, budget, directory):
         budget.complete(row, response)
         row['latency_s'] = time.perf_counter() - started
         row['arm'] = arm
-        dump(budget.path, dict(limit=budget.limit, prices=PRICES, source=PRICE_SOURCE, calls=budget.rows))
+        dump(budget.path, budget.document())
         dump(directory / f'{arm}_last_response.json', response.model_dump(mode='json'))
         return response
     client.models._generate_content = metered
@@ -246,6 +314,113 @@ def run_arm(packet, arm, tools, model, budget, directory):
     return result
 
 
+def resolve_budget(provider, budget_usd):
+    """Explicit ceiling wins; DeepSeek defaults to $1.00, Gemini needs one for live."""
+    if budget_usd is not None:
+        return budget_usd
+    return 1.0 if provider == 'deepseek' else 0
+
+
+def deepseek_client():
+    """Build the DeepSeek OpenAI-compatible client with the pilot's retry policy."""
+    from newsroom.tool_loop.openai_loop import build_default_client
+    return build_default_client('deepseek', max_retries=0)
+
+
+def run_deepseek_arm(packet, arm, tools, model, budget, directory, client=None):
+    """DeepSeek arm: ReAct through the OpenAI-compatible tool loop, or one dossier call.
+
+    Settings match the Gemini arm: same writer/system prompt, cutoff, packet,
+    temperature 0.7 and 8,192 output cap. DeepSeek runs in thinking mode by
+    default and its docs say temperature has no effect there, so the recording
+    keeps the value for parity but notes that the provider may ignore it.
+    """
+    from newsroom.tool_loop.openai_loop import run_openai_tool_loop
+    from newsroom.run_context import article_run_context
+    from tools.dossier_ab_compare import audit_article_quality
+    if client is None:
+        client = deepseek_client()
+    first_call = len(budget.rows)
+    trace = []
+    exposed = []
+    for tool in tools if arm == 'a' else []:
+        fn = getattr(tool, 'func', tool)
+        def wrap(fn):
+            @functools.wraps(fn)
+            def call(*args, **kwargs):
+                try:
+                    value = fn(*args, **kwargs)
+                except Exception as exc:
+                    value = f'Tool Error: {exc}'
+                trace.append(dict(name=fn.__name__, args=args, kwargs=kwargs, result=value))
+                dump(directory / f'{arm}_tool_trace.json', trace)
+                return value if isinstance(value, str) else json.dumps(value, default=str)
+            return call
+        exposed.append(wrap(fn))
+    completions = client.chat.completions
+    original = completions.create
+    def metered(**kwargs):
+        row = budget.reserve()
+        row['arm'] = arm
+        started = time.perf_counter()
+        response = original(**kwargs)
+        choices = getattr(response, 'choices', None) or []
+        row['finish_reason'] = getattr(choices[0], 'finish_reason', None) if choices else None
+        budget.complete(row, response)
+        row['latency_s'] = time.perf_counter() - started
+        row['arm'] = arm
+        dump(budget.path, budget.document())
+        dump(directory / f'{arm}_last_response.json',
+             response.model_dump(mode='json') if hasattr(response, 'model_dump') else str(response))
+        return response
+    completions.create = metered
+    started = time.perf_counter()
+    result = dict(arm=arm, provider='deepseek', model=model, status='failed', text='', factual_status='unreviewed')
+    try:
+        with article_run_context(packet['season'], packet['week']):
+            if arm == 'a':
+                loop = run_openai_tool_loop(client, model, packet['a']['system_instruction'],
+                    packet['a']['task_instruction'], exposed, max_steps=25, temperature=TEMPERATURE,
+                    provider='deepseek', max_tokens=budget.max_output)
+                result['iterations'] = loop.iterations
+                result['tool_calls_by_name'] = dict(loop.tool_calls_count)
+                if loop.error and not loop.text.strip():
+                    raise RuntimeError(loop.error)
+                text = loop.text
+                # The last metered call produced the article: the final turn, or
+                # the synthesis follow-up when the research turn returned no text.
+                finish = loop.usage_calls[-1].get('finish_reason') if loop.usage_calls else None
+            else:
+                response = completions.create(model=model, messages=[
+                    dict(role='system', content=packet['b']['system_instruction']),
+                    dict(role='user', content=packet['b']['task_instruction'])],
+                    temperature=TEMPERATURE, max_tokens=budget.max_output)
+                result['iterations'] = 1
+                text = response.choices[0].message.content or ''
+                finish = getattr(response.choices[0], 'finish_reason', None)
+            result['finish_reason'] = finish
+            if not text.strip():
+                raise RuntimeError('Empty final article')
+            if finish == 'length':
+                # Thinking mode shares max_tokens with the article, so a long think
+                # can return a cut-off article that still passes the non-empty check.
+                result.update(status='truncated', text=text, format_audit=audit_article_quality(text))
+                raise RuntimeError('Truncated article: finish_reason=length, the model hit the output-token cap')
+            result.update(status='generated', text=text, format_audit=audit_article_quality(text))
+    except Exception as exc:
+        result['error'] = str(exc)
+    finally:
+        result['latency_s'] = time.perf_counter() - started
+        result['tool_calls'] = len(trace)
+        result['usage_calls'] = [r for r in budget.rows[first_call:] if r.get('arm') == arm]
+        result['estimated_cost_usd'] = sum(r['charged_or_reserved'] for r in result['usage_calls'])
+        result['settings_note'] = 'temperature 0.7 requested; DeepSeek runs thinking mode by default and its docs say temperature has no effect there'
+        dump(directory / f'{arm}_result.json', result)
+    if result['status'] != 'generated':
+        raise RuntimeError(result.get('error', 'Generation failed'))
+    return result
+
+
 def review_sheet(directory, articles):
     with (directory / 'factual_review.csv').open('w', newline='') as f:
         writer = csv.writer(f)
@@ -262,13 +437,28 @@ def review_sheet(directory, articles):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--live', action='store_true')
-    parser.add_argument('--budget-usd', type=float, default=0)
-    parser.add_argument('--model', default='gemini-3.8-flash:low')
+    parser.add_argument('--provider', choices=['gemini', 'deepseek'], default='gemini')
+    parser.add_argument('--budget-usd', type=float, default=None,
+                        help='Spend ceiling for live calls (DeepSeek default: $1.00)')
+    parser.add_argument('--model', default=None)
     parser.add_argument('--week', type=int, choices=[2, 12, 21], default=12)
     parser.add_argument('--repeats', type=int, default=1)
     args = parser.parse_args()
-    if args.live and (args.budget_usd <= 0 or args.model != 'gemini-3.8-flash:low' or dt.date.today() > dt.date(2026, 12, 31)):
-        parser.error('Live requires positive budget and the verified model/rate period')
+    model = args.model or (DEEPSEEK_MODEL if args.provider == 'deepseek' else GEMINI_MODEL)
+    budget_usd = resolve_budget(args.provider, args.budget_usd)
+    if args.live:
+        if args.provider == 'gemini' and (budget_usd <= 0 or model != GEMINI_MODEL or dt.date.today() > dt.date(2026, 12, 31)):
+            parser.error('Live requires positive budget and the verified model/rate period')
+        if args.provider == 'deepseek':
+            if budget_usd <= 0:
+                parser.error('Live requires a positive budget')
+            if model != DEEPSEEK_MODEL:
+                parser.error('DeepSeek live runs are pinned to deepseek-flash')
+            try:
+                from newsroom.tool_loop.openai_loop import resolve_endpoint
+                resolve_endpoint('deepseek')
+            except ValueError as exc:
+                parser.error(f'DeepSeek live requires DEEPSEEK_API_KEY: {exc}')
     if args.repeats < 1:
         parser.error('repeats must be positive')
     dsn, database = configure_database()
@@ -277,7 +467,19 @@ def main():
     start = time.perf_counter()
     packet, tools = prepare(dsn, database, args.week, {2:'PIT', 12:'MIN', 21:'AZ'}[args.week])
     packet['compiler_seconds'] = time.perf_counter() - start
-    packet['model'] = args.model
+    packet['provider'] = args.provider
+    packet['model'] = model
+    packet['requested_temperature'] = TEMPERATURE
+    packet['output_token_cap'] = 8192
+    if args.provider == 'deepseek':
+        packet['settings_note'] = ('DeepSeek deepseek-flash runs in thinking mode by default; its API docs state '
+            'temperature has no effect in thinking mode, so 0.7 is recorded for parity but may be ignored. '
+            'Both arms share the writer prompt, cutoff and 8,192 output cap.')
+        packet['pricing'] = dict(source=DEEPSEEK_PRICE_SOURCE, checked=DEEPSEEK_PRICE_CHECKED,
+            peak=DEEPSEEK_PEAK, off_peak=DEEPSEEK_OFF_PEAK,
+            peak_periods='Mon-Fri 01:00-04:00 and 06:00-10:00 UTC',
+            holiday_note='Chinese public holidays are off-peak on the provider price list; no holiday calendar is kept, so those weekdays are priced as peak',
+            input_token_limit=DEEPSEEK_INPUT_LIMIT)
     packet['harness_sha256'] = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
     packet['editorial_adjustments'] = 'Original creative-texture directives retained in both arms; shared policy permits invention that does not contradict canonical data. Production configuration unchanged.'
     correction = Path('verify_output/v3_pilot/evaluation_corrections.json')
@@ -289,14 +491,15 @@ def main():
     print(f'Prepared {directory}: {len(packet["evidence"])} evidence sections', flush=True)
     if not args.live:
         return
-    budget = Budget(args.budget_usd, directory / 'usage.json', 8192)
+    budget = Budget(budget_usd, directory / 'usage.json', 8192, provider=args.provider)
+    run = run_deepseek_arm if args.provider == 'deepseek' else run_arm
     for repeat in range(args.repeats):
         pair_dir = directory / f'pair_{repeat+1}'
         pair_dir.mkdir()
         articles = []
         for arm in ('a', 'b') if repeat % 2 == 0 else ('b', 'a'):
             print(f'Generating pair {repeat+1}, arm {arm}', flush=True)
-            articles.append(run_arm(packet, arm, tools, args.model, budget, pair_dir))
+            articles.append(run(packet, arm, tools, model, budget, pair_dir))
         review_sheet(pair_dir, articles)
     print(f'Pilot generated; factual review required: {directory}', flush=True)
 

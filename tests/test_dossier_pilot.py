@@ -1,7 +1,10 @@
+import datetime as dt
 import json
 from types import SimpleNamespace
 import pytest
-from tools.dossier_pilot import Budget, configure_database, cost, dossier_instructions
+from tools.dossier_pilot import (Budget, configure_database, cost, deepseek_rates,
+                                 dossier_instructions, resolve_budget, run_deepseek_arm,
+                                 DEEPSEEK_MODEL, DEEPSEEK_OFF_PEAK, DEEPSEEK_PEAK)
 
 
 def test_cost_includes_thinking_and_cache():
@@ -90,6 +93,198 @@ def test_live_arm_uses_same_explicit_settings_and_meter(monkeypatch, tmp_path):
         assert call['config'].temperature == .7
         assert call['config'].max_output_tokens == 8192
         assert call['config'].thinking_config.thinking_level == 'LOW'
+
+def test_deepseek_rates_follow_utc_peak_windows():
+    def at(year, month, day, hour, minute=0):
+        return dt.datetime(year, month, day, hour, minute, tzinfo=dt.timezone.utc)
+    # Wednesday 2026-11-11
+    assert deepseek_rates(at(2026, 11, 11, 1, 0)) == (DEEPSEEK_PEAK, 'peak')
+    assert deepseek_rates(at(2026, 11, 11, 3, 59)) == (DEEPSEEK_PEAK, 'peak')
+    assert deepseek_rates(at(2026, 11, 11, 4, 0)) == (DEEPSEEK_OFF_PEAK, 'off-peak')
+    assert deepseek_rates(at(2026, 11, 11, 5, 59)) == (DEEPSEEK_OFF_PEAK, 'off-peak')
+    assert deepseek_rates(at(2026, 11, 11, 6, 0)) == (DEEPSEEK_PEAK, 'peak')
+    assert deepseek_rates(at(2026, 11, 11, 9, 59)) == (DEEPSEEK_PEAK, 'peak')
+    assert deepseek_rates(at(2026, 11, 11, 10, 0)) == (DEEPSEEK_OFF_PEAK, 'off-peak')
+    # Saturday is off-peak all day.
+    assert deepseek_rates(at(2026, 11, 14, 2, 0)) == (DEEPSEEK_OFF_PEAK, 'off-peak')
+
+
+def test_deepseek_cost_prices_cache_miss_and_hit_separately():
+    usage = dict(input_tokens=1000, cached_tokens=400, uncached_tokens=600,
+                 output_tokens=200, thinking_tokens=100)
+    expected = (600 * .30 + 400 * .006 + 200 * 1.20) / 1e6
+    assert cost(usage, provider='deepseek', rates=DEEPSEEK_PEAK) == pytest.approx(expected)
+    assert cost(usage, provider='deepseek', rates=DEEPSEEK_OFF_PEAK) == pytest.approx(expected / 2)
+
+
+def test_deepseek_reasoning_tokens_are_not_billed_twice():
+    base = dict(input_tokens=1000, cached_tokens=0, uncached_tokens=1000, output_tokens=200)
+    with_thinking = dict(base, thinking_tokens=150)
+    assert cost(with_thinking, provider='deepseek', rates=DEEPSEEK_PEAK) == \
+        pytest.approx(cost(base, provider='deepseek', rates=DEEPSEEK_PEAK))
+
+
+def test_deepseek_budget_reserves_peak_or_offpeak_by_call_time(tmp_path):
+    peak_at = dt.datetime(2026, 11, 11, 2, 0, tzinfo=dt.timezone.utc)
+    weekend_at = dt.datetime(2026, 11, 14, 2, 0, tzinfo=dt.timezone.utc)
+    budget = Budget(5, tmp_path / 'usage.json', 8192, provider='deepseek')
+    peak_row = budget.reserve(at=peak_at)
+    weekend_row = budget.reserve(at=weekend_at)
+    assert peak_row['price_period'] == 'peak'
+    assert weekend_row['price_period'] == 'off-peak'
+    assert peak_row['charged_or_reserved'] == pytest.approx((1_000_000 * .30 + 2 * 8192 * 1.20) / 1e6)
+    assert weekend_row['charged_or_reserved'] == pytest.approx(peak_row['charged_or_reserved'] / 2)
+    document = json.loads((tmp_path / 'usage.json').read_text())
+    assert document['source'] == 'https://api-docs.deepseek.com/quick_start/pricing'
+    assert document['checked'] == '2026-11-11'
+
+
+def test_deepseek_budget_settles_openai_usage(tmp_path):
+    peak_at = dt.datetime(2026, 11, 11, 2, 0, tzinfo=dt.timezone.utc)
+    budget = Budget(1, tmp_path / 'usage.json', 8192, provider='deepseek')
+    row = budget.reserve(at=peak_at)
+    response = SimpleNamespace(usage={
+        'prompt_tokens': 1000, 'prompt_cache_hit_tokens': 600,
+        'prompt_cache_miss_tokens': 400, 'completion_tokens': 200,
+        'completion_tokens_details': {'reasoning_tokens': 80}})
+    budget.complete(row, response)
+    assert row['status'] == 'completed'
+    assert row['usage'] == dict(input_tokens=1000, cached_tokens=600, uncached_tokens=400,
+                                output_tokens=200, thinking_tokens=80)
+    assert row['charged_or_reserved'] == pytest.approx(
+        cost(row['usage'], provider='deepseek', rates=DEEPSEEK_PEAK))
+
+
+def test_deepseek_missing_usage_retains_reservation(tmp_path):
+    budget = Budget(1, tmp_path / 'usage.json', 8192, provider='deepseek')
+    row = budget.reserve()
+    bound = row['charged_or_reserved']
+    with pytest.raises(RuntimeError, match='Missing usage'):
+        budget.complete(row, SimpleNamespace(usage=None))
+    assert row['charged_or_reserved'] == bound
+    assert row['status'] == 'reserved'
+
+
+def test_deepseek_budget_defaults_to_one_dollar():
+    assert resolve_budget('deepseek', None) == 1.0
+    assert resolve_budget('gemini', None) == 0
+    assert resolve_budget('deepseek', 2.5) == 2.5
+
+
+class _FakeCompletions:
+    def __init__(self, responses):
+        self.responses = list(responses)
+        self.calls = []
+
+    def create(self, **kwargs):
+        self.calls.append(kwargs)
+        return self.responses.pop(0)
+
+
+class _FakeClient:
+    def __init__(self, responses):
+        self.completions = _FakeCompletions(responses)
+        self.chat = SimpleNamespace(completions=self.completions)
+
+
+def _deepseek_response(content=None, tool_calls=None, reasoning='research plan', usage=None,
+                       finish_reason='stop'):
+    message = SimpleNamespace(content=content, tool_calls=tool_calls or [])
+    if reasoning is not None:
+        message.reasoning_content = reasoning
+    return SimpleNamespace(
+        choices=[SimpleNamespace(message=message, finish_reason=finish_reason)],
+        usage=usage or {'prompt_tokens': 1000, 'prompt_cache_hit_tokens': 600,
+                        'prompt_cache_miss_tokens': 400, 'completion_tokens': 200,
+                        'completion_tokens_details': {'reasoning_tokens': 50}},
+        model_dump=lambda **kwargs: {'id': 'fake'})
+
+
+def _get_matchup_edges(team_identifier: str = 'CAR') -> str:
+    """Fetch matchup edges."""
+    return 'edges: CAR +2.1'
+
+
+def test_deepseek_react_arm_uses_openai_loop_and_meters_each_call(tmp_path):
+    tool_call = SimpleNamespace(id='call_1', type='function',
+                                function=SimpleNamespace(name='_get_matchup_edges', arguments='{}'))
+    client = _FakeClient([_deepseek_response(tool_calls=[tool_call]),
+                          _deepseek_response(content='# Game\n\n> **EXCERPT:** Both teams.\n\nBody.')])
+    budget = Budget(5, tmp_path / 'usage.json', 8192, provider='deepseek')
+    packet = {'season': 2036, 'week': 21,
+              'a': {'system_instruction': 'writer', 'task_instruction': 'article'},
+              'b': {'system_instruction': 'writer', 'task_instruction': 'dossier'}}
+    result = run_deepseek_arm(packet, 'a', [_get_matchup_edges], DEEPSEEK_MODEL,
+                              budget, tmp_path, client=client)
+    calls = client.completions.calls
+    assert result['status'] == 'generated'
+    assert result['provider'] == 'deepseek'
+    assert len(calls) == 2
+    assert calls[0]['model'] == 'deepseek-flash'
+    assert calls[0]['temperature'] == .7
+    assert calls[0]['max_tokens'] == 8192
+    assert calls[0]['tools']
+    assert calls[1]['messages'][2]['reasoning_content'] == 'research plan'
+    assert len(result['usage_calls']) == 2
+    assert result['usage_calls'][0]['usage']['uncached_tokens'] == 400
+    assert budget.rows[0]['status'] == 'completed'
+    assert (tmp_path / 'a_result.json').exists()
+    assert (tmp_path / 'a_tool_trace.json').exists()
+
+
+def test_deepseek_dossier_arm_is_one_call_without_tools(tmp_path):
+    client = _FakeClient([_deepseek_response(
+        content='# Game\n\n> **EXCERPT:** Both teams.\n\nBody.')])
+    budget = Budget(5, tmp_path / 'usage.json', 8192, provider='deepseek')
+    packet = {'season': 2036, 'week': 21,
+              'a': {'system_instruction': 'writer', 'task_instruction': 'article'},
+              'b': {'system_instruction': 'writer', 'task_instruction': 'dossier'}}
+    result = run_deepseek_arm(packet, 'b', [_get_matchup_edges], DEEPSEEK_MODEL,
+                              budget, tmp_path, client=client)
+    call = client.completions.calls[0]
+    assert 'tools' not in call
+    assert call['max_tokens'] == 8192
+    assert [m['role'] for m in call['messages']] == ['system', 'user']
+    assert result['tool_calls'] == 0
+    assert result['iterations'] == 1
+    assert result['status'] == 'generated'
+    assert result['usage_calls'][0]['price_period'] in ('peak', 'off-peak')
+
+
+def _packet():
+    return {'season': 2036, 'week': 21,
+            'a': {'system_instruction': 'writer', 'task_instruction': 'article'},
+            'b': {'system_instruction': 'writer', 'task_instruction': 'dossier'}}
+
+
+def test_deepseek_react_arm_flags_truncated_article(tmp_path):
+    client = _FakeClient([_deepseek_response(content='# Game\n\n> **EXCERPT:** Cut off mid-senten',
+                                             finish_reason='length')])
+    budget = Budget(5, tmp_path / 'usage.json', 8192, provider='deepseek')
+    with pytest.raises(RuntimeError, match='Truncated article'):
+        run_deepseek_arm(_packet(), 'a', [_get_matchup_edges], DEEPSEEK_MODEL,
+                         budget, tmp_path, client=client)
+    result = json.loads((tmp_path / 'a_result.json').read_text())
+    assert result['status'] == 'truncated'
+    assert result['finish_reason'] == 'length'
+    assert result['usage_calls'][0]['finish_reason'] == 'length'
+    assert result['estimated_cost_usd'] > 0
+
+
+def test_deepseek_dossier_arm_flags_truncated_article(tmp_path):
+    client = _FakeClient([_deepseek_response(content='# Game\n\n> **EXCERPT:** Cut off mid-senten',
+                                             finish_reason='length')])
+    budget = Budget(5, tmp_path / 'usage.json', 8192, provider='deepseek')
+    with pytest.raises(RuntimeError, match='Truncated article'):
+        run_deepseek_arm(_packet(), 'b', [_get_matchup_edges], DEEPSEEK_MODEL,
+                         budget, tmp_path, client=client)
+    result = json.loads((tmp_path / 'b_result.json').read_text())
+    assert result['status'] == 'truncated'
+    assert result['finish_reason'] == 'length'
+    document = json.loads((tmp_path / 'usage.json').read_text())
+    assert document['calls'][0]['finish_reason'] == 'length'
+    assert budget.rows[0]['status'] == 'completed'
+
 
 def test_creative_texture_is_allowed_without_canonical_contradictions():
     from tools.dossier_pilot import POLICY

@@ -2,9 +2,19 @@
 
 Offline: an in-memory SQLite league behind the shared psycopg-like FakeCursor. The tenure reads are checked with
 engines/coach_save_sync._wanted, the reader the league office's staff write uses.
+
+Real PostgreSQL: `ExistingIdentityWithoutProfile` (audit F1) builds `mu_scratch_u9_*` from db/init_db.sql, runs
+apply_staff_changes then coach_save_sync.plan_staff_edits, and drops the database; every test rolls its transaction
+back. It skips when PostgreSQL is unavailable.
 """
 import csv
+import os
+import pathlib
 import sqlite3
+import unittest
+import uuid
+
+import pytest
 
 from engines import coach_save_sync as cs
 from engines.nfl_mirror import staff
@@ -12,6 +22,34 @@ from engines.nfl_mirror.staff import StaffChange
 from tests.test_inbox_store import FakeCursor
 
 SEASON = 2026
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+ADMIN_DSN = os.environ.get("ADMIN_DATABASE_URL",
+                           "host=localhost dbname=postgres user=postgres password=postgres")
+
+
+def _scratch_dsn(name):
+    return f"host=localhost dbname={name} user=postgres password=postgres"
+
+
+def _drop_scratch(name):
+    import psycopg
+    with psycopg.connect(ADMIN_DSN, autocommit=True, connect_timeout=3) as admin:
+        admin.execute(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)')
+
+
+def _make_scratch():
+    """A fresh `mu_scratch_u9_*` database built from db/init_db.sql; dropped by the caller."""
+    import psycopg
+    name = f"mu_scratch_u9_{uuid.uuid4().hex[:12]}"
+    with psycopg.connect(ADMIN_DSN, autocommit=True, connect_timeout=3) as admin:
+        admin.execute(f'CREATE DATABASE "{name}"')
+    try:
+        with psycopg.connect(_scratch_dsn(name), autocommit=True) as conn:
+            conn.execute((ROOT / "db" / "init_db.sql").read_text())
+    except Exception:
+        _drop_scratch(name)
+        raise
+    return name
 
 DDL = """
 CREATE TABLE teams (id INTEGER PRIMARY KEY, abbreviation TEXT);
@@ -164,15 +202,36 @@ def test_name_only_coach_gets_a_created_profile_once():
     assert _snapshot(conn) == before                 # idempotent: nothing written the second time
 
 
-def test_existing_coach_matched_by_name_not_duplicated():
+def test_existing_coach_matched_by_name_gets_a_profile_not_a_second_row():
+    """Audit F1: an existing identity with no profile gets a CREATED one, so the staff write can use him."""
     conn, cur = _league()
     conn.execute("INSERT INTO coaches (id, coach_name) VALUES (30, 'Mike McDaniel')")
     conn.execute("INSERT INTO coach_tenures (coach_id, team_id, start_season, end_season) VALUES (30, 1, 2022, 2025)")
-    (move,) = staff.apply_staff_changes(cur, SEASON, [_hc("BUF", "Sean McDermott", "mike mcdaniel jr.")])
+    change = _hc("BUF", "Sean McDermott", "mike mcdaniel jr.")
+    (move,) = staff.apply_staff_changes(cur, SEASON, [change])
     assert _count(conn, "coaches") == 3
     assert move["detail"]["person_id"] == 30 and move["detail"]["created"] is False
-    assert move["detail"]["profile"] is None         # no save record known: left for review, nothing invented
+    assert move["detail"]["profile"] == "CREATED"
+    assert conn.execute("SELECT source, position FROM coach_madden_profiles "
+                        "WHERE person_kind = 'COACH' AND person_id = 30").fetchone() == ("CREATED", "HeadCoach")
     assert cs._wanted(cur, SEASON)[(2, "HC")]["person_id"] == 30
+    assert staff.apply_staff_changes(cur, SEASON, [change]) == []      # idempotent
+
+
+def test_existing_coordinator_matched_by_name_gets_a_profile_not_a_second_row():
+    """Audit F1 for a coordinator: no duplicate `coordinators` row, one CREATED profile for the matched id."""
+    conn, cur = _league()
+    conn.execute("INSERT INTO coordinators (id, coordinator_name, side, scheme, playbook) "
+                 "VALUES (210, 'Leslie Frazier', 'DEFENSIVE', '4-3', 'Buffalo Defense')")
+    change = StaffChange(team="BUF", role="DC", out_name="Bobby Babich", in_name="Leslie Frazier", week=9)
+    (move,) = staff.apply_staff_changes(cur, SEASON, [change])
+    assert _count(conn, "coordinators") == 5
+    assert move["detail"]["person_id"] == 210 and move["detail"]["created"] is False
+    assert move["detail"]["profile"] == "CREATED"
+    assert conn.execute("SELECT source, position FROM coach_madden_profiles WHERE person_kind = 'COORD' "
+                        "AND person_id = 210").fetchone() == ("CREATED", "DefensiveCoordinator")
+    assert cs._wanted(cur, SEASON)[(2, "DC")]["person_id"] == 210
+    assert staff.apply_staff_changes(cur, SEASON, [change]) == []
 
 
 def test_coordinator_promoted_to_head_coach_keeps_his_madden_record():
@@ -240,3 +299,158 @@ def test_out_name_mismatch_is_reported_but_real_life_wins():
     (move,) = staff.apply_staff_changes(cur, SEASON, [_hc("KC", "Someone Else", "Eric Bieniemy")])
     assert move["detail"]["mu_out_name"] == "Andy Reid"
     assert cs._wanted(cur, SEASON)[(1, "HC")]["name"] == "Eric Bieniemy"
+
+
+# ---------- audit F1 against real PostgreSQL ----------
+
+@pytest.mark.integration
+class ExistingIdentityWithoutProfile(unittest.TestCase):
+    """Audit F1 required regression: an existing HC and an existing OC/DC with no `coach_madden_profiles` row are
+    mirrored in (one CREATED profile for the same person id, no second person row), then apply + the real downstream
+    `coach_save_sync.plan_staff_edits` produce one assign/create per changed seat and no skipped profile. A second
+    apply emits no moves, and an existing SAVE profile keeps its presentation id and source.
+
+    Real PostgreSQL in a `mu_scratch_u9_*` database built from db/init_db.sql; each test's transaction is rolled back
+    and the database is dropped in tearDownClass.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.db_name = None
+        try:
+            import psycopg
+        except Exception as exc:                                  # pragma: no cover
+            raise unittest.SkipTest(f"psycopg unavailable: {exc!r}")
+        try:
+            cls.db_name = _make_scratch()
+            cls.conn = psycopg.connect(_scratch_dsn(cls.db_name))
+            cls.cur = cls.conn.cursor()
+        except Exception as exc:                                  # pragma: no cover
+            if cls.db_name:
+                _drop_scratch(cls.db_name)
+            raise unittest.SkipTest(f"no PostgreSQL: {exc!r}")
+
+    @classmethod
+    def tearDownClass(cls):
+        if getattr(cls, "conn", None) is not None:
+            cls.conn.rollback()
+            cls.conn.close()
+        if cls.db_name:
+            _drop_scratch(cls.db_name)
+
+    def tearDown(self):
+        self.conn.rollback()
+
+    # -- fixtures --
+    def _team(self, abbr="BUF"):
+        self.cur.execute("INSERT INTO teams (abbreviation, name, city) VALUES (%s, %s, %s) RETURNING id",
+                         (abbr, f"{abbr} Team", "City"))
+        return self.cur.fetchone()[0]
+
+    def _coach_row(self, name):
+        self.cur.execute("INSERT INTO coaches (coach_name) VALUES (%s) RETURNING id", (name,))
+        return self.cur.fetchone()[0]
+
+    def _coach(self, name, team_id, start, end=None):
+        pid = self._coach_row(name)
+        self.cur.execute("INSERT INTO coach_tenures (coach_id, team_id, start_season, end_season) "
+                         "VALUES (%s, %s, %s, %s)", (pid, team_id, start, end))
+        return pid
+
+    def _coord_row(self, name, role):
+        side = "OFFENSIVE" if role == "OC" else "DEFENSIVE"
+        scheme = "West Coast" if side == "OFFENSIVE" else "4-3"
+        self.cur.execute("INSERT INTO coordinators (coordinator_name, side, scheme) VALUES (%s, %s, %s) "
+                         "RETURNING id", (name, side, scheme))
+        return self.cur.fetchone()[0]
+
+    def _coord(self, name, team_id, role, start, end=None):
+        pid = self._coord_row(name, role)
+        self.cur.execute("INSERT INTO coordinator_tenures (coordinator_id, team_id, role, start_season, end_season) "
+                         "VALUES (%s, %s, %s, %s, %s)", (pid, team_id, role, start, end))
+        return pid
+
+    def _profile_row(self, kind, person_id, position, source="CREATED", presentation_id=None):
+        self.cur.execute("""INSERT INTO coach_madden_profiles
+                            (person_kind, person_id, source, presentation_id, first_name, last_name, age, position,
+                             archetype, seed)
+                            VALUES (%s, %s, %s, %s, 'A', 'B', 50, %s, 'OffensiveGuru', %s)""",
+                         (kind, person_id, source, presentation_id, position, f"seed-{kind}-{person_id}"))
+
+    def _count(self, table):
+        self.cur.execute(f"SELECT count(*) FROM {table}")
+        return self.cur.fetchone()[0]
+
+    def _profile(self, kind, person_id):
+        self.cur.execute("SELECT source, position, presentation_id FROM coach_madden_profiles "
+                         "WHERE person_kind = %s AND person_id = %s", (kind, person_id))
+        return self.cur.fetchone()
+
+    def _snapshot(self, abbr, hc=None, oc=None, dc=None):
+        return {"meta": {"reader_version": 8},
+                "teams": [{"team_index": 0, "short_name": abbr}],
+                "staff": [{"team_index": 0, "hc": hc, "oc": oc, "dc": dc}],
+                "coaches": [{"pgid": pgid, "first_name": "Old", "last_name": "Coach", "team_index": 0,
+                             "contract_status": "Signed", "position": "HeadCoach"}
+                            for pgid in (hc, oc, dc) if pgid is not None]}
+
+    def _changes(self, team, out, incoming, week=9):
+        return [StaffChange(team=team, role="HC", out_name=out[0], in_name=incoming[0], week=week),
+                StaffChange(team=team, role="OC", out_name=out[1], in_name=incoming[1], week=week),
+                StaffChange(team=team, role="DC", out_name=out[2], in_name=incoming[2], week=week)]
+
+    # -- tests --
+    def test_existing_hc_and_coordinators_without_profiles_are_mirrored_and_planned(self):
+        tid = self._team("BUF")
+        self._coach("Old Head Coach", tid, 2025)
+        self._coord("Old OC", tid, "OC", 2025)
+        self._coord("Old DC", tid, "DC", 2025)
+        historical = (self._coach_row("Historical Coach"), self._coord_row("Historical OC", "OC"),
+                      self._coord_row("Historical DC", "DC"))
+        identity_counts = (self._count("coaches"), self._count("coordinators"))
+        profiles_before = self._count("coach_madden_profiles")
+        changes = self._changes("BUF", ("Old Head Coach", "Old OC", "Old DC"),
+                                ("Historical Coach", "Historical OC", "Historical DC"))
+        moves = staff.apply_staff_changes(self.cur, SEASON, changes)
+
+        assert [m["detail"]["person_id"] for m in moves] == list(historical)
+        assert all(m["detail"]["created"] is False and m["detail"]["profile"] == "CREATED" for m in moves)
+        # No second person row: the same identities now carry one CREATED profile each.
+        assert (self._count("coaches"), self._count("coordinators")) == identity_counts
+        assert self._count("coach_madden_profiles") == profiles_before + 3
+        assert self._profile("COACH", historical[0]) == ("CREATED", "HeadCoach", None)
+        assert self._profile("COORD", historical[1]) == ("CREATED", "OffensiveCoordinator", None)
+        assert self._profile("COORD", historical[2]) == ("CREATED", "DefensiveCoordinator", None)
+
+        plan = cs.plan_staff_edits(self.cur, self._snapshot("BUF", hc=100, oc=101, dc=102), SEASON)
+        assert plan["skipped"] == []
+        creates = [a for a in plan["staff"] if a["action"] == "create"]
+        assert sorted(a["position"] for a in creates) == ["DefensiveCoordinator", "HeadCoach",
+                                                          "OffensiveCoordinator"]
+        assert sorted(a["key"] for a in creates) == sorted(
+            f"{'coach' if kind == 'COACH' else 'coord'}-{pid}"
+            for kind, pid in zip(("COACH", "COORD", "COORD"), historical))
+        # exactly one create per changed seat (no duplicate action and no release of a wanted man)
+        assert staff.apply_staff_changes(self.cur, SEASON, changes) == []
+
+    def test_existing_save_profile_keeps_its_presentation_id_and_source(self):
+        tid = self._team("KC")
+        self._coach("Old Head Coach", tid, 2025)
+        oc = self._coord("Kept OC", tid, "OC", 2025)
+        dc = self._coord("Kept DC", tid, "DC", 2025)
+        self._profile_row("COORD", oc, "OffensiveCoordinator", source="SAVE", presentation_id=501)
+        self._profile_row("COORD", dc, "DefensiveCoordinator", source="SAVE", presentation_id=502)
+        save_coach = self._coach_row("Save Coach")
+        self._profile_row("COACH", save_coach, "HeadCoach", source="SAVE", presentation_id=777)
+
+        (move,) = staff.apply_staff_changes(
+            self.cur, SEASON, [StaffChange(team="KC", role="HC", out_name="Old Head Coach",
+                                           in_name="Save Coach", week=9)])
+        assert move["detail"]["profile"] == "SAVE" and move["detail"]["created"] is False
+        assert self._profile("COACH", save_coach) == ("SAVE", "HeadCoach", 777)
+
+        plan = cs.plan_staff_edits(self.cur, self._snapshot("KC", hc=100, oc=501, dc=502), SEASON)
+        assert plan["skipped"] == []
+        assigns = [a for a in plan["staff"] if a["action"] == "assign"]
+        assert assigns == [{"action": "assign", "pgid": 777, "team_index": 0, "position": "HeadCoach"}]
+        assert [a for a in plan["staff"] if a["action"] == "create"] == []

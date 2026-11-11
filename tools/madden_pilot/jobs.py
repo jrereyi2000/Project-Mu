@@ -11,6 +11,7 @@ result dict. `status` is one of:
     launch(pilot, pack="Mu Base")
     clone_save(pilot, src="CAREER-MU2026", dst="CAREER-TUNE-<name>")
     sim_season(pilot, save="CAREER-TUNE-<name>", to="week N" | "regular-season-end" | "playoffs-end")
+    catch_up(pilot, save="CAREER-<name>", to_week=None, dsn=None)
     set_setting(pilot, path="A>B>C", value="V")
     verify_mods(pilot, check="first_down_line")
     quit_franchise(pilot, allow_quit=False)
@@ -20,6 +21,12 @@ the clone never overwrites a file that isn't CAREER-TUNE-*; sim_season refuses w
 pipeline.watch_save runs (a clone keeps the original's LeagueID, so the watcher would ingest it
 into the real franchise database); quitting a franchise that isn't TUNE-* is refused unless
 allow_quit (quitting writes <save>-AUTOSAVE).
+
+catch_up is the opposite of sim_season (NFL_WEEKLY_MIRROR_PLAN.md section 2.12): the real
+CAREER-* franchise, with pipeline.watch_save running. It sims one week, saves, quits to the main
+menu so the franchise is closed, waits for the league office to write that week's mirror, and
+repeats until the first LIVE week (or --to-week). It refuses a CAREER-TUNE-* clone, a stopped
+watcher, a disabled mirror and a next week that is not CATCH_UP.
 """
 import contextlib
 import datetime
@@ -62,6 +69,10 @@ ADVANCE_STOP_TIMEOUT = 90          # seconds an `advance` waits for a catalogued
 SIM_TIMEOUT = 240                  # seconds for one NEXT WEEK (spike: under 20 s)
 LOAD_TIMEOUT = 120                 # seconds for a franchise to load (spike: about 25 s)
 LAUNCH_TIMEOUT = 300               # seconds for Madden's window and first menu
+CATCH_UP_WRITE_TIMEOUT = 15 * 60   # seconds to wait for the league office's WRITTEN mirror week
+CATCH_UP_POLL = 5.0                # seconds between nfl_mirror_weeks reads while waiting
+MAX_CATCH_UP_WEEKS = 30            # safety cap on one catch-up run (NFL_WEEKLY_MIRROR_PLAN §2.12)
+CATCH_UP_SEASON = 2026             # fallback mirror season when the settings row has none
 # Header words that mean the season moved past the playoffs (todo: not seen yet; guesses).
 OFFSEASON_WORDS = ("OFFSEASON", "STAFF", "RE-SIGN", "RESIGN", "FREE AGENCY", "COMBINE", "PRO DAY",
                    "DRAFT", "UDFA", "CUTDOWN", "PRESEASON")
@@ -195,7 +206,8 @@ def _send(pilot, message, ok):
 def _summary(name, result):
     st = result.get("status")
     bits = [f"{name}: {st}"]
-    for k in ("why", "reason", "save", "weeks_simmed", "end_week", "pack", "dst", "check", "minutes"):
+    for k in ("why", "reason", "save", "season", "weeks_simmed", "end_week", "stopped_because", "pack", "dst",
+              "check", "minutes"):
         if result.get(k) not in (None, "", []):
             bits.append(f"{k} {result[k]}")
     if result.get("screenshot"):
@@ -956,6 +968,222 @@ def advance(pilot, save=None, franchise=None, quit=True, watcher=None, folder=No
             "written": written, "saved": "autosave"}
 
 
+# ------------------------------------------------------------------------------- catch_up
+class _MirrorStore:
+    """Reads nfl_mirror_settings and nfl_mirror_weeks for the catch-up job; it never writes.
+
+    One connection with autocommit on, so every SELECT sees the league office's latest commit
+    (the watcher writes the mirror rows from another process)."""
+
+    def __init__(self, dsn):
+        self.dsn = dsn
+        self._conn = None
+
+    def _cur(self):
+        if self._conn is None:
+            import psycopg
+            self._conn = psycopg.connect(self.dsn, autocommit=True)
+        return self._conn.cursor()
+
+    def settings(self):
+        from engines.nfl_mirror import store
+        with self._cur() as cur:
+            return store.read_settings(cur)
+
+    def week_status(self, season, week):
+        from engines.nfl_mirror import store
+        with self._cur() as cur:
+            return store.week_status(cur, season, week)
+
+    def close(self):
+        if self._conn is not None:
+            self._conn.close()
+            self._conn = None
+
+
+def _mirror_dsn(dsn=None):
+    """--dsn, else DATABASE_URL (what the watcher and league office use), else the active franchise."""
+    target = dsn or os.environ.get("DATABASE_URL")
+    if not target:
+        from db import franchises
+        target = franchises.active_dsn()
+    if not target:
+        return None
+    from engines.nfl_history.store import dsn_for
+    return dsn_for(target)
+
+
+def _fetch_games(season):
+    from engines.nfl_mirror import fetch
+    files = fetch.fetch_week(season=season)
+    return list(fetch.read_rows(files["games"]))
+
+
+def _mode_reader(season, games_rows=None):
+    """mode_for(mu_week) -> real_state.CATCH_UP | LIVE, reading games.csv once for the run.
+
+    A Mu week with no real NFL week (the Pro Bowl, week 22) reads as LIVE so the catch-up stops
+    rather than guess."""
+    cache = {}
+    rows_for = games_rows or (lambda: _fetch_games(season))
+
+    def mode_for(mu_week):
+        from engines.nfl_mirror import real_state
+        if "games" not in cache:
+            cache["games"] = list(rows_for())
+        try:
+            real_week = real_state.real_week_for(mu_week)
+        except ValueError:
+            return real_state.LIVE
+        return real_state.week_mode(cache["games"], season, real_week)
+
+    return mode_for
+
+
+def _save_copy(save_path, auto_path):
+    """Copy Madden's autosave over the named save after the franchise is closed (as sim_season
+    does; never Tab). False when there is nothing newer to copy (or a dry run has no files)."""
+    if not save_path.is_file() or not auto_path.is_file():
+        return False
+    if (_mtime(auto_path) or 0) <= (_mtime(save_path) or 0):
+        return False
+    shutil.copy2(auto_path, save_path)
+    return True
+
+
+def _wait_written(pilot, mirror, season, week, timeout=CATCH_UP_WRITE_TIMEOUT, poll=CATCH_UP_POLL):
+    """Wait for nfl_mirror_weeks to read WRITTEN for `week`; FAILED or the timeout is a stop."""
+    end = pilot.clock() + timeout
+    while True:
+        status = mirror.week_status(season, week)
+        if status == "WRITTEN":
+            return status
+        if status == "FAILED":
+            pilot.stop(f"the league office's mirror week {season} week {week} FAILED; it is not written", Stuck)
+        if pilot.clock() >= end:
+            pilot.stop(f"the league office didn't write mirror {season} week {week} within {timeout}s "
+                       f"(status {status or 'no row'}); is pipeline.watch_save still running?", Stuck)
+        pilot.sleep(poll)
+
+
+def _quit_to_menu(pilot, franchise=None):
+    """Quit the loaded franchise and back out to the main menu, so the league office's save
+    replacement can run and the next load starts from the menu (CURRENT FRANCHISES rebuilds
+    only on a fresh entry from there)."""
+    _quit_now(pilot, franchise=franchise, allow_quit=True)
+    return _leave_to_main_menu(pilot)
+
+
+@job("catch-up")
+def catch_up(pilot, save=None, to_week=None, dsn=None, progress=None, *, watcher=None, folder=None,
+             store=None, mode_for=None, week_reader=None, load=None, sim=None, quit_to_menu=None):
+    """One week at a time on the real franchise, waiting for the NFL mirror between weeks
+    (NFL_WEEKLY_MIRROR_PLAN.md section 2.12).
+
+    Before touching the PC it refuses a CAREER-TUNE-* save, a watcher that isn't running, a
+    disabled nfl_mirror_settings and a save whose next week is not CATCH_UP for the real NFL.
+    Each loop loads the franchise, sims exactly one week, checks that the save's own week moved
+    by exactly one (R4c), quits to the main menu, copies the autosave over the named save, and
+    waits for nfl_mirror_weeks to read WRITTEN for the save's new week. It stops at the first
+    LIVE week or --to-week, and on a FAILED or never-written mirror week."""
+    if not save or not str(save).upper().startswith(CAREER_PREFIX) or \
+            str(save).upper().startswith(TUNE_SAVE_PREFIX) or not _valid_save_name(save):
+        return _refuse(f"catch-up mirrors the real CAREER-* franchise, never a {TUNE_SAVE_PREFIX}* clone, "
+                       f"not {save!r}", save=save)
+    if to_week is not None:
+        try:
+            to_week = int(to_week)
+        except (TypeError, ValueError):
+            return _refuse(f"--to-week must be a week number, not {to_week!r}", save=save)
+        if not 1 <= to_week <= 23:
+            return _refuse(f"--to-week {to_week} isn't a Mu week (1-23)", save=save)
+    if not (watcher or watcher_running)():
+        return _refuse("pipeline.watch_save isn't running: the catch-up waits for its league-office write "
+                       "after every week, so start the watcher first (the reverse of sim_season)", save=save)
+    # The catalog lets CURRENT FRANCHISES confirm only TUNE-* tiles; the catch-up is the one job
+    # allowed the real franchise, so it allows exactly this tile's name for this run (and nothing
+    # else: _walk_to_tile still stops on any other tile's border).
+    tile = tile_name(save)
+    pilot.policy.setdefault("FRANCHISE_LIST", [])
+    if tile not in pilot.policy["FRANCHISE_LIST"]:
+        pilot.policy["FRANCHISE_LIST"].append(tile)
+    folder = Path(folder) if folder else saves_dir()
+    save_path, auto_path = folder / save, folder / f"{save}-AUTOSAVE"
+    if folder.is_dir() and not save_path.is_file() and not getattr(pilot, "dry_run", False):
+        return _refuse(f"no save {save} in {folder}", save=save)
+    mirror, own = store, False
+    if mirror is None:
+        target = _mirror_dsn(dsn)
+        if not target:
+            return _refuse("no database to read nfl_mirror_settings: pass --dsn, set DATABASE_URL, "
+                           "or register the active franchise", save=save)
+        mirror, own = _MirrorStore(target), True
+    try:
+        try:
+            settings = mirror.settings()
+        except Exception as e:  # noqa: BLE001 - a database that can't answer is a refusal, not a crash
+            return _refuse(f"couldn't read nfl_mirror_settings: {e}", save=save)
+        if not settings or not settings.get("enabled"):
+            return _refuse("nfl_mirror_settings.enabled is false: enable the NFL weekly mirror before a catch-up",
+                           save=save)
+        season = int(settings.get("season") or CATCH_UP_SEASON)
+        reader = week_reader or _save_week
+        mode_of = mode_for or _mode_reader(season)
+        try:
+            week = reader(_latest_save(save_path, auto_path))
+        except Exception as e:  # noqa: BLE001
+            return _refuse(f"couldn't read {save}'s week: {e}", save=save)
+        if week is None:
+            return _refuse(f"couldn't read {save}'s week from the save file; the catch-up needs a "
+                           f"regular-season or playoff save", save=save)
+        try:
+            mode = mode_of(week)
+        except Exception as e:  # noqa: BLE001 - nflverse down: refuse before the PC
+            return _refuse(f"couldn't read the real games for {season} week {week}: {e}", save=save)
+        if mode != "CATCH_UP":
+            return _refuse(f"{season} week {week} is {mode or 'unknown'}, not CATCH_UP for the real NFL: the "
+                           f"catch-up starts at the first week whose games are all final", save=save, week=week)
+        load = load or (lambda: _load_franchise(pilot, tile, save=save, folder=folder))
+        sim = sim or (lambda: _sim_one_week(pilot))
+        quit_to_menu = quit_to_menu or (lambda: _quit_to_menu(pilot, franchise=save))
+        weeks, stopped = 0, None
+        progress.update(save=save, season=season, start_week=week, end_week=week, weeks_simmed=0)
+        while True:
+            if to_week is not None and week >= to_week:
+                stopped = "to-week"
+                break
+            if weeks >= MAX_CATCH_UP_WEEKS:
+                pilot.stop(f"simmed {weeks} weeks without reaching a LIVE week or --to-week", Stuck)
+            load()
+            before = reader(_latest_save(save_path, auto_path))
+            if before != week:
+                pilot.stop(f"the save reads week {before}, expected week {week}: refusing to sim the "
+                           f"wrong save", Stuck)
+            sim()
+            after = reader(_latest_save(save_path, auto_path))
+            if after != before + 1:
+                pilot.stop(f"one sim moved the save from week {before} to week {after}, not exactly one "
+                           f"week; stopping before the league office sees it", Stuck)
+            quit_to_menu()
+            _save_copy(save_path, auto_path)
+            _wait_written(pilot, mirror, season, after)
+            weeks += 1
+            week = after
+            progress.update(weeks_simmed=weeks, end_week=week)
+            _send(pilot, f"catch-up: {season} week {before} simmed, mirror week {after} written "
+                         f"({weeks} this run)", True)
+            mode = mode_of(week)
+            if mode != "CATCH_UP":
+                stopped = "live"
+                break
+        progress.update(stopped_because=stopped)
+        return {"status": "ok", "save": save, "season": season, "start_week": progress.get("start_week"),
+                "end_week": week, "weeks_simmed": weeks, "stopped_because": stopped, "to_week": to_week}
+    finally:
+        if own:
+            mirror.close()
+
+
 # ------------------------------------------------------------------------------- set_setting
 def _row_value(frame, label, value):
     """True when `value` reads on the same row as `label` (one OCR line, or a box whose
@@ -1045,19 +1273,24 @@ def verify_mods(pilot, check=None, progress=None):
 
 
 # ------------------------------------------------------------------------------- quit
+def _quit_now(pilot, franchise=None, allow_quit=False):
+    """The quit itself, without the job decorator: back out to FRANCHISE_LIST (Back > YES)."""
+    if franchise:
+        pilot.loaded_franchise = norm(tile_name(franchise))
+    _, screen = pilot.look()
+    if screen == "FRANCHISE_LIST":
+        return {"screen": screen, "quit": False, "why": "already on the franchise list"}
+    pilot.goto("FRANCHISE_LIST", allow_quit=allow_quit)
+    return {"screen": "FRANCHISE_LIST", "quit": True, "franchise": pilot.loaded_franchise}
+
+
 @job("quit")
 def quit_franchise(pilot, franchise=None, allow_quit=False, progress=None):
     """Back out of the loaded franchise to the franchise list (Back > YES). The hub never shows
     the save name, so a fresh pilot doesn't know what is loaded: pass franchise="TUNE-x" when you
     know, or allow_quit=True after JR says yes (quitting writes <save>-AUTOSAVE)."""
-    if franchise:
-        pilot.loaded_franchise = norm(tile_name(franchise))
-    _, screen = pilot.look()
-    if screen == "FRANCHISE_LIST":
-        return {"status": "ok", "screen": screen, "quit": False, "why": "already on the franchise list"}
-    pilot.goto("FRANCHISE_LIST", allow_quit=allow_quit)
-    return {"status": "ok", "screen": "FRANCHISE_LIST", "quit": True, "franchise": pilot.loaded_franchise}
+    return {"status": "ok", **_quit_now(pilot, franchise=franchise, allow_quit=allow_quit)}
 
 
 JOBS = {"launch": launch, "clone-save": clone_save, "sim-season": sim_season, "advance": advance,
-        "set-setting": set_setting, "verify-mods": verify_mods, "quit": quit_franchise}
+        "catch-up": catch_up, "set-setting": set_setting, "verify-mods": verify_mods, "quit": quit_franchise}

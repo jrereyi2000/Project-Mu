@@ -111,13 +111,15 @@ def _wanted(cur, target_season):
     cur.execute("""SELECT ct.team_id, c.id, c.coach_name
                    FROM coach_tenures ct JOIN coaches c ON c.id = ct.coach_id
                    WHERE ct.start_season <= %s AND (ct.end_season IS NULL OR ct.end_season >= %s)
-                   ORDER BY ct.team_id, ct.start_season DESC, ct.id DESC""", (target_season, target_season))
+                   ORDER BY ct.team_id, ct.start_season DESC, (ct.end_season IS NULL) DESC, ct.id DESC""",
+                (target_season, target_season))
     for team_id, coach_id, name in cur.fetchall():
         add(team_id, "HC", "COACH", coach_id, name)
     cur.execute("""SELECT ct.team_id, ct.role, c.id, c.coordinator_name
                    FROM coordinator_tenures ct JOIN coordinators c ON c.id = ct.coordinator_id
                    WHERE ct.start_season <= %s AND (ct.end_season IS NULL OR ct.end_season >= %s)
-                   ORDER BY ct.team_id, ct.role, ct.start_season DESC, ct.id DESC""", (target_season, target_season))
+                   ORDER BY ct.team_id, ct.role, ct.start_season DESC, (ct.end_season IS NULL) DESC, ct.id DESC""",
+                (target_season, target_season))
     for team_id, role, coordinator_id, name in cur.fetchall():
         add(team_id, role, "COORD", coordinator_id, name)
     return wanted

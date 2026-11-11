@@ -1,8 +1,14 @@
 # Project Mu: NFL Weekly Mirror Plan
 
-**Status:** approved by JR (2026-11-11); building, wave 1 of 4 done. Waves 2–4 are handed to a DeepSeek session (JR's /execute-plan rule, 2026-11-11). Spikes A–C (Madden PC, JR) run before wave 2.
+**Status:** approved by JR (2026-11-11); building, wave 2 of 4 (U1–U4, U8 and U9 merged; U5 building; spikes A–C run with JR on 2026-11-11 — S18–S21). Waves 2–4 are handed to a DeepSeek session (JR's /execute-plan rule, 2026-11-11).
+- As built (wave 4, U8, merged early at `7f007cd`): `catch_up(pilot, save=None, to_week=None, dsn=None, progress=None, *, watcher=None, folder=None, store=None, mode_for=None, week_reader=None, load=None, sim=None, quit_to_menu=None)` in `tools/madden_pilot/jobs.py`, its `catch-up` CLI subcommand and `DryMirrorStore` dry-run, with `quit_franchise` split into `_quit_now` plus a wrapper so the loop shares the quit body. Refuses the four §2.12 cases before the PC is touched; stops at the first LIVE week or `--to-week`, as Stuck on a FAILED week, a two-week jump, a wrong loaded week or the week cap.
 - As built (wave 1): `store.mark_written` takes `(cur, season, week, run_id)` and also flips the week's PLANNED moves to WRITTEN; `record_moves` has `replace=False`; `build_week` takes an optional `sources=`. The migration is `2027_02_27_nfl_mirror.sql`. It was renamed from `2027_02_26_…` after the merge at audit-2's request (M-0444), because builder-8's `2027_02_26_league_shape_season.sql` was already on main. Neither migration is applied to any franchise DB; only `mu_scratch_*` DBs were used.
-- Open from wave 1: (a) `coaching_carousel.staff_in()` and `head_coaches()` order tenures by `start_season DESC` with no `id DESC` tie-break, so after a midseason change in which the outgoing tenure also started that season, they may pick the old man. Add `, ct.id DESC` to both ORDER BYs, with an `offseason_check` run (U6 or a follow-up fix). (b) `staff.py` writes no `staff_moves` or `staff_contracts` rows for mirrored coaching changes, and a coordinator promoted to interim HC keeps his coordinator tenure unless the CSV names his replacement.
+- As built (wave 2, U3): `plan_rosters` and `ContractBook` as §2.5. `contract_for` takes an extra optional `years_exp=` kwarg (diff passes the real player's entry year, so the minimum scales on real experience rather than the OTC draft year). A snapshot's `college` is a `{table, row}` reference, so the new-link phase resolves it through `pipeline.colleges.college_name` before `link.match`. The S5a cross-position name-only fallback was left to `link.match`; a same-name unlinked player at another position falls through to `creates` / `ps_fill`.
+- As built (wave 2, U4): `weeks_until_back`, `estimate_weeks`, `injury_fields` / `HEAL_FIELDS`, `real_chart` and `merge` as §2.6. Deviation: the plan's `HEAL_FIELDS` used `HEALTHY = ("Uninjured", None)`, but `pipeline/save_reader/lib.mjs:168-172` refuses `None` and every `_`-suffixed enum member (`Invalid_`, `Max_`), so a heal writes only `InjuryStatus` `Uninjured` plus zero durations, and an unmapped body part (concussion, calf, illness, neck) leaves `InjuryType` alone instead of writing `Invalid_`. Verified against the real save's `fieldMeta` on CAREER-2026SB.
+- Open from wave 1: (b) `staff.py` writes no `staff_moves` or `staff_contracts` rows for mirrored coaching changes, and a coordinator promoted to interim HC keeps his coordinator tenure unless the CSV names his replacement.
+- Wave 1 audit (M-0473, audit-3): PARTIAL. F1 (a matched existing HC/OC/DC with no Madden profile is booked but skipped downstream) and F2 (a same-season A→B→A return loses to the interim in every reader) are fixed as a follow-up unit U9 (`9425923`); F3 (promotion with no named replacement) is an open policy question for JR and is not being implemented. Left over from F2, now fixed: `engines/staff_contracts_run.current_staff` ordered its three tenure reads (HC, OC/DC, GM) by `start_season DESC, id DESC` only, so it would pick the interim on an A→B→A return; all three now put `(end_season IS NULL) DESC` first (`caa3766`, two real-PG tests that fail on the parent, timelines 39 PASS).
+- Wave 2 audit (M-0497, audit-3; `data/audit_reports/nfl_mirror_wave2/report.md`): U3 PARTIAL, U4's pure/schema checks PASS. F1 (a CSV trade leg matched on gsis and week only, so a stale or wrong-destination leg suppressed later cuts, promotions and switches) and F2 (the OTC lookup ignored the recipient team and accepted a deal dated after the signing) are follow-up unit U10. P1 (S5a's cross-position review stage was left to `link.match`, which cannot supply it) is U12. I1 (a real team switch needs release + sign in one week, which both `Plan._claim` and `save_writer.moveConflicts` refuse) is JR's 2026-11-11 decision: extend the save writer with a declared `switch`, follow-up unit U11, and U6 then allows the pair in `Plan`.
+- Orchestrator fix: (a) `coaching_carousel.staff_in()` and `head_coaches()` now break same-season tenure ties with `ct.id DESC` (`7d83d14`, two integration tests, `timelines` 39 PASS, `e2e` 41 PASS).
 - Orchestrator fix: `tests/test_nfl_history_store.py` now leaves `nfl_mirror_*` out of its nfl_* table check (`346e063`).
 **Builds on:** PROJECT_SPEC §2.21a (League Office), §3.3x (Real NFL history and `nfl_player_links`), §6.0b (save watcher), §2.19 (coaching tenures), [`REAL_NFL_HISTORY_PLAN.md`](../done/REAL_NFL_HISTORY_PLAN.md), [`COACH_SAVE_WRITES_PLAN.md`](../done/COACH_SAVE_WRITES_PLAN.md).
 
@@ -57,6 +63,10 @@
 | S15 | The latest migration is `2027_02_25_madden_stat_counters.sql`; no plan names `2027_02_26`. | Migration `2027_02_27_nfl_mirror.sql`; re-check at build time. |
 | S16 | The pilot's `sim_season` job sims only `CAREER-TUNE-*` saves and refuses while the watcher runs (`tools/madden_pilot/jobs.py:18-21`, `:767-771`). It has `_sim_one_week` (`:501`), a save-header week reader (`_save_week`, `:416`), and `quit_franchise` with `allow_quit` (`navigate.py:254`). The league office replaces the save only while the franchise is closed (§2.21a). | D8 needs a separate job, `catch-up`, that does the opposite: the real franchise, with the watcher running. Each week it loads the franchise, sims one week, saves, quits to the main menu, waits for the league office's WRITTEN run for the next week, and reloads. The TUNE-only rule on `sim_season` stays as it is. |
 | S17 | `pc_save_reader.mjs` run on `CAREER-DEBUGWEEK12` (2026-11-11, no PC use: the reader opens a temp copy) gives the injury enums Spike B was to dump. `InjuryStatus`: `Uninjured`, `Injured`. `InjurySeverity`: `Invalid_`, `Max_`, `SeasonEnding`, `GameEnding`, `CoupleGames`, `SeveralGames`, `CoupleQtrs`. `InjuryType`: `Invalid_` plus 45 real values, e.g. `KneeACLCompleteTear`, `AnkleDislocated`, `BackRupturedDisk`, `KneeKneecapFracture`, `HandFingerBroken`, `AnkleAchillesTear`, `AnkleBroken`, `RibPectoralTear`, `KneeMCLCompleteTear`, `HandWristDislocated`, `LegQuadStrain`, `KneePCLSprain`, `LegGroinTear`, `LegTibiaBroken`, `AnkleHighSprain`, `ArmTornTricep`, `HipPointer`, `KneeACLSprain`, `ArmTornBicep`, `HipFracture`, `HandThumbBroken`, `BackStrain`, `ShoulderDislocation`, `ShoulderRotatorCuffTear`, `FootStressFracture`, `HandBroken`, `LegHamstringTear`, `LegFibulaBroken`, `FootFracture`, `ElbowDislocate`, `FootTurfToe`, `KneeDislocated`, `ShoulderStrain`, `FootBrokenToe`, `LegBrokenFemur`, `ArmUpperFracture`, `LegGroinPull`, `HipDislocation`, `ElbowFracture`. `InjurySide` is `NA` on every player in that save. `CAREER-MUBASE` has no injured players at all. | U4's `BODY_PART_TO_TYPE` and its fallback are written against these names; Spike B only has to settle whether a written injury is honoured while injuries are off (R2). |
+| S18 | Spike A (2026-11-11, `CAREER-TUNE-P2H`, JR at the PC): toggling League Settings' two injury switches and diffing `league_settings_dump.mjs` snapshots names them — **`Injuries` = `LeagueSetting#4290` row 0 `Field_100`**, **`Practice Injuries` = `Field_110`**, each `1` = on, `0` = off. Practice injuries can add injuries during the week, so a mirrored week turns both off (D3) and the first LIVE week turns both on (D10). | `madden_injuries_field` stores both fields: `{"table": "LeagueSetting", "tableId": 4290, "row": 0, "fields": {"Injuries": {"field": "Field_100", "off": 0, "on": 1}, "PracticeInjuries": {"field": "Field_110", "off": 0, "on": 1}}}`. |
+| S19 | Spike B (2026-11-11, `CAREER-TUNE-SPIKEB` cloned from `CAREER-TUNE-P2H` with both injury switches off, JR at the PC): a written 3-week `LegHamstringTear` on Josh Allen (pgid 13197) is honoured with Madden's injuries off — he sat out week 5, the save reads `Injured`, and `Min/MaxInjuryDuration` fell 3 → 2 after week 5's sim and 2 → 1 after week 6's, so Madden runs the return clock itself. A heal on Khalil Shakir (22074) cleared `InjuryStatus` and the durations but he still did not play: the heal left `IsInjuredReserve` true and his WR slot off the depth chart. | R2's fallback (what to do if Madden ignored written injuries with injuries off) is unnecessary — the injury fields alone are honoured. A heal is not sufficient on its own; see S20. |
+| S20 | Spike B2 (2026-11-11, `CAREER-TUNE-SPIKEB2` from `CAREER-TUNE-SPIKEB`, JR at the PC): with Shakir's `IsInjuredReserve` set false and his WR slot restored, one more sim gave him 4 receptions for 62 yards and a TD, `GAMESPLAYED` 4 → 5 and `RECEIVEYARDS` 217 → 279. | A healed player takes the field only when the save also clears his IR flag **and** puts him back on the depth chart. `diff.plan_rosters` already emits the `activate` op and `depth.real_chart` drops IR players, so U6 must write the heal and the activation in the same week's write and build the depth chart from the post-heal roster, not the raw snapshot. |
+| S21 | Spike C (2026-11-11, `CAREER-TUNE-SPIKEC` from `CAREER-TUNE-P2H`, JR at the PC): a free-agent donor (pgid 21710, Shane Buechele) rewritten through `player_edit` as "Marcus Vance", QB, age 23, 6'3" / 220 lb, jersey 7, signed to CHI for 1 year at $1.05M, survived a simmed week with every written field intact — name, position, jersey, height/weight, college link, `overall` 78, ratings and contract — with no crash and no Madden rewrite of his ratings. He took no snaps (second QB), so the week proves the save tolerates a created player rather than that he plays. His `appearance.asset_name` and `commentary_id` stay the donor's (`BuecheleShane_21710`, 5129). | U5's create path is sound: the writer, `player_edit` and a sim week all accept a created player, so §2.8's donor rewrite needs no fallback. U5 records the donor's asset/commentary IDs as a known cosmetic limitation. |
 
 ## 1. Scope
 
@@ -85,7 +95,7 @@
 
 ### 2.1 When a week is mirrored
 
-`nfl_mirror_settings` holds one row: `enabled BOOLEAN`, `season INT` (2026), `last_week INT NULL` (NULL = through the Super Bowl), `madden_injuries_field JSONB NULL` (Spike A's `{"table": "LeagueSetting", "tableId": …, "row": 0, "field": "Field_N", "off": v, "on": v}`), `injuries_state VARCHAR(8)` (`ON` / `OFF`, which the league office last wrote).
+`nfl_mirror_settings` holds one row: `enabled BOOLEAN`, `season INT` (2026), `last_week INT NULL` (NULL = through the Super Bowl), `madden_injuries_field JSONB NULL` (Spike A's `{"table": "LeagueSetting", "tableId": 4290, "row": 0, "fields": {"Injuries": {"field": "Field_100", "off": 0, "on": 1}, "PracticeInjuries": {"field": "Field_110", "off": 0, "on": 1}}}`, S18), `injuries_state VARCHAR(8)` (`ON` / `OFF`, which the league office last wrote).
 
 `store.mirror_active(cur, season, stage, week) -> bool` is true when `enabled`, `season` matches, the stage is REGULAR_WEEK or PLAYOFF_WEEK, and `week <= last_week` (if set). Mu's week numbers are used (`league_week`, playoffs 19/20/21/23 as in `PRO_BOWL_WEEK`, `pipeline/league_office.py:217`). `real_week_for(mu_week)` maps 19→WC, 20→DIV, 21→CON, 23→SB, which in nflverse are weeks 19–22.
 
@@ -167,14 +177,14 @@ EA's newest iteration (week 8 on 2026-11-11) lags the real week, so a player sig
 ### 2.9 League office wiring (`pipeline/league_office.py`, `pipeline/league_office_mirror.py`)
 
 `PRIORITY_MIRROR = PRIORITY_ENGINE_TRADE`. In `plan_stage`, when `deps.mirror_week(cur, season, stage, week)` returns a `MirrorWeek` (not None):
-- The "engine trades" step is replaced by `step_nfl_mirror(plan, mirror)`. It applies `creates` (players edits), then `ops` through `plan.release_player / sign_player / trade_player / set_fields` at `PRIORITY_MIRROR` with tag `mirror:<kind>:<gsis_id>`. Next come the injury and heal fields and IR flags, then `ps_fill`, and finally the setting record (injuries OFF on the first mirrored write).
+- The "engine trades" step is replaced by `step_nfl_mirror(plan, mirror)`. It applies `creates` (players edits), then `ops` through `plan.release_player / sign_player / trade_player / set_fields` at `PRIORITY_MIRROR` with tag `mirror:<kind>:<gsis_id>`. Next come the injury and heal fields and IR flags, then `ps_fill`, and finally the setting record (both injury switches, `Injuries` and `Practice Injuries`, OFF on the first mirrored write).
 - Waivers are skipped in every mirrored week, and `step_injuries` in CATCH_UP weeks. Drift still runs, and players the mirror has claimed are protected by first-claim-stands.
 - `step_coach_charts` gets `deps.chart_override(team_index)` = `depth.merge(...)`. Source `MU_COACH` stays.
 - `step_staff(plan, cur, snapshot)` also runs in a mirrored REGULAR_WEEK when `mirror.staff_changed`.
 - `step_legality` still runs. Mirror releases normally leave each team at 53 + IR, under 63.
 - `record_written` calls `store.mark_written(cur, run_id)` and writes one `transactions` row per SIGN / RELEASE / TRADE move (`raw_text = 'NFL mirror'`, `parse_ok = true`, `row_key = 'mirror:<season>:<week>:<gsis_id>:<kind>'`).
 
-At the first run whose mirror week is LIVE, or whose `mirror_active` is false, while `injuries_state = 'OFF'`, a records edit writes the field's `on` value and sets `injuries_state = 'ON'` (D10). In LIVE weeks `step_injuries` runs again as normal for Madden's own injuries. The mirror then copies only what Q1 decides.
+At the first run whose mirror week is LIVE, or whose `mirror_active` is false, while `injuries_state = 'OFF'`, a records edit writes both fields' `on` values and sets `injuries_state = 'ON'` (D10). In LIVE weeks `step_injuries` runs again as normal for Madden's own injuries. The mirror then copies only what Q1 decides.
 
 `pipeline/league_office_mirror.py`: `mirror_week(cur, snapshot, season, stage, week) -> MirrorWeek | None` does the fetch, build, diff, estimate and staff work, and records PLANNED rows. `Deps.mirror_week` returns None by default; `default_deps` wires the real adapter. A fetch failure in LIVE mode is a plan error, so nothing is written. JR re-runs once nflverse answers.
 
@@ -295,6 +305,7 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 - **Reads:** §2.9, the U1–U5 modules
 - **Depends on:** U1, U2, U3, U4, U5
 - **Done when:** a mirrored week plans as §2.9 says, and a non-mirrored week's plan is unchanged.
+- **Spike note (S20):** a heal only takes effect when the same week's write also clears `IsInjuredReserve` and puts the player back on the chart, so `step_nfl_mirror` must build the depth chart from the roster as it stands after this week's heal and activation ops, not from the raw snapshot, or a returning player sits a week and plays from the bench.
 - **Verify:** `pytest -m "not integration" tests/test_league_office_mirror.py tests/test_league_office.py tests/test_league_office_personality.py tests/test_league_office_staff.py` passes.
 
 ### U7: Watcher gating and CLI
@@ -319,8 +330,32 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 |---|---|---|---|
 | 1 | U1, U2 | — | No shared files; U2's staff code takes plain dicts |
 | 2 | U3, U4, U5 | U1 (U5 also U2); Spikes A–C done | All pure modules on `RealWeek`; no shared files |
-| 3 | U6 | U1–U5 | Wires everything into `plan_stage` |
+| 3 | U6 | U1–U5, U10, U11 | Wires everything into `plan_stage` |
 | 4 | U7, U8 | U2, U6 (U8: U1, U2) | No shared files; U8 is ready after wave 1 but waits so the first real catch-up runs on the finished mirror |
+| follow-up | U10, U11, U12 | merged U3 / the save writer | Audit fixes F1, F2 and P1, plus JR's switch decision (I1), built beside waves 2–4 |
+
+### U10: Audit fixes F1 and F2 (wave-2 review)
+
+- **Owns:** `engines/nfl_mirror/diff.py`, `engines/nfl_mirror/contracts.py`, `tests/test_nfl_mirror_diff.py`
+- **Reads:** `data/audit_reports/nfl_mirror_wave2/report.md` (F1, F2), §2.3, §2.5
+- **Depends on:** U3
+- **Done when:** an inapplicable or stale CSV trade leg no longer suppresses a later cut, promotion or wrong-destination move, and an OTC deal is used only for its own team and never before its date; the auditor's repros and regression matrix pass.
+- **Verify:** `pytest -m "not integration" tests/test_nfl_mirror_diff.py` passes.
+
+### U11: Switch write — release and sign in one week (I1)
+- **Owns:** `pipeline/save_reader/save_writer.mjs`, `pipeline/save_reader/test/write_save.test.mjs`
+- **Reads:** `data/audit_reports/nfl_mirror_wave2/report.md` (I1), `pipeline/save_reader/release.mjs`, `sign.mjs`, `pipeline/league_office.py` (`Plan.release_player`, `Plan.sign_player`)
+- **Depends on:** nothing (the save writer only)
+- **Done when (JR's decision, 2026-11-11):** one deliberate release + sign of the same player to a **different** team is accepted as one weekly move — the old deal's dead cap and the new contract both applied — while every other same-player double move is still refused. The sign names the pairing (a `switch` flag), so the writer never infers intent.
+- **Verify:** `node --test test/write_save.test.mjs` in `pipeline/save_reader` passes (a real-save readback where a sample save is present), plus `pytest -m "not integration" tests/test_franchise_api.py tests/test_watch_save.py`.
+
+### U12: Cross-position review candidates (P1)
+
+- **Owns:** `engines/nfl_mirror/diff.py`, `tests/test_nfl_mirror_diff.py`
+- **Reads:** S5a, §2.5, `data/audit_reports/nfl_mirror_wave2/report.md` (P1), `engines/nfl_history/link.py` (`match`, read-only)
+- **Depends on:** U10 (same files)
+- **Done when:** S5a's promise is kept without weakening `link.match`: an unlinked real player whose normalized name uniquely matches a save player in a **different** position group becomes a review candidate on the plan (pgid, both positions, the agreeing evidence — entry season or 2026 team — and why it was not auto-linked), never an auto-link, and he is not also planned as a `create`. An ambiguous name (two or more save players) is reported as ambiguous with every candidate and creates nothing. A candidate accepted through `data/history/nfl_link_overrides.csv` links once and stops being a candidate.
+- **Verify:** `pytest -m "not integration" tests/test_nfl_mirror_diff.py` passes.
 
 **File ownership check:**
 
@@ -334,10 +369,10 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 | `docs/reference/MADDEN_PILOT.md` | U8 |
 | `engines/nfl_mirror/__init__.py` | U1 |
 | `engines/nfl_mirror/__main__.py` | U7 |
-| `engines/nfl_mirror/contracts.py` | U3 |
+| `engines/nfl_mirror/contracts.py` | U3, then U10 |
 | `engines/nfl_mirror/create.py` | U5 |
 | `engines/nfl_mirror/depth.py` | U4 |
-| `engines/nfl_mirror/diff.py` | U3 |
+| `engines/nfl_mirror/diff.py` | U3, then U10, then U12 |
 | `engines/nfl_mirror/ea_ratings.py` | U5 |
 | `engines/nfl_mirror/fetch.py` | U1 |
 | `engines/nfl_mirror/injuries.py` | U4 |
@@ -346,6 +381,8 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 | `engines/nfl_mirror/store.py` | U2 |
 | `engines/nfl_mirror/trades.py` | U1 |
 | `pipeline/league_office.py` | U6 |
+| `pipeline/save_reader/save_writer.mjs` | U11 |
+| `pipeline/save_reader/test/write_save.test.mjs` | U11 |
 | `pipeline/league_office_mirror.py` | U6 |
 | `pipeline/watch_save.py` | U7 |
 | `pipeline/weekly_capture.py` | U7 |
@@ -355,7 +392,7 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 | `tests/test_league_office_mirror.py` | U6 |
 | `tests/test_madden_pilot_catch_up.py` | U8 |
 | `tests/test_nfl_mirror_create.py` | U5 |
-| `tests/test_nfl_mirror_diff.py` | U3 |
+| `tests/test_nfl_mirror_diff.py` | U3, then U10, then U12 |
 | `tests/test_nfl_mirror_injuries.py` | U4 |
 | `tests/test_nfl_mirror_real_state.py` | U1 |
 | `tests/test_nfl_mirror_staff.py` | U2 |
@@ -389,3 +426,8 @@ Settled on 2026-11-11 (D7–D12): real return dates in catch-up; the pilot sims 
 |---|---|---|---|---|---|
 | U1 | 1 | worktree-agent-a4c4046ed309775c0 | .claude/worktrees/agent-a4c4046ed309775c0 | merged (42 tests) | 534fb66 |
 | U2 | 1 | worktree-agent-a113b2696c3f27a19 | .claude/worktrees/agent-a113b2696c3f27a19 | merged (38 tests + integration on mu_scratch) | 6953da6 |
+| U3 | 2 | worktree-agent-ab477134fdc19c085 | .claude/worktrees/agent-ab477134fdc19c085 | merged (18 tests; review fix: snapshot college references resolved before linking) | 67f8850 |
+| U4 | 2 | worktree-agent-a3473b7f0b3d4ce3d | .claude/worktrees/agent-a3473b7f0b3d4ce3d | merged (55 tests; review fix: only save-writable injury enums) | 14db099 |
+| U9 | 2 | worktree-agent-ade8f1b34cbd6b018 | .claude/worktrees/agent-ade8f1b34cbd6b018 | merged (26 offline + 5 new real-PG regressions; timelines 39 PASS, e2e 41 PASS; F1/F2 fixes) | 9425923 |
+| pickup | — | — | — | orchestrator handoff `NFL_WEEKLY_MIRROR_HANDOFF.md` read by `build-nfl-mirror-2` and deleted | — |
+| U8 | 4 | worktree-agent-a673f6f388263a232 | .claude/worktrees/agent-a673f6f388263a232 | merged (23 tests; CLI help exits 0; unit commit `742961a`) | 7f007cd |
