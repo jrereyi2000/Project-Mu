@@ -189,11 +189,11 @@ def test_a_started_season_is_eight_weeks_at_the_players_own_position():
         rows.append((3, 2026, week, "KR", "WR", "MU_COACH"))
     for week in range(1, 19):                     # depth 1 in another position's slot
         rows.append((4, 2026, week, "HB", "WR", "MU_COACH"))
-    for week in range(1, 19):                     # MADDEN is the chart read back, not Mu's plan
+    for week in range(1, 19):                     # MADDEN is the read-back fallback and counts (R2b)
         rows.append((5, 2026, week, "QB", "QB", "MADDEN"))
     for week in range(1, 9):                      # JR's chart counts
         rows.append((6, 2026, week, "WR", "WR", "JR"))
-    assert C.started_seasons(rows) == {1: {2026}, 6: {2026}}
+    assert C.started_seasons(rows) == {1: {2026}, 5: {2026}, 6: {2026}}
 
 
 def test_draft_outcomes_by_round_and_started_seasons():
@@ -531,7 +531,7 @@ class FakeCursor:
                 self._rows = [(season, WEEKS[season]) for season in self._seasons(p) if WEEKS.get(season)]
             else:
                 self._rows = [(WEEKS.get(p[0], 0),)]
-        elif "WITH last_active AS" in s:
+        elif "WITH signed_seasons AS" in s:
             self._rows = self._ended_career_rows(p, career="ps.years_of_experience" in s)
         elif "FROM games WHERE status = 'COMPLETED' AND season = ANY" in s:
             self._rows = [(season, GAMES[season]) for season in self._seasons(p) if season in GAMES]
@@ -780,17 +780,17 @@ def _scratch_dsn():
 @pytest.mark.integration
 def test_a_started_season_is_eight_weeks_at_his_own_position_in_postgres():
     """F4/§7 decision 12 on real Postgres, rolled back: a start is depth 1 in the player's own slot in 8+
-    games of a chart Mu's coaches or JR set. A returner, another position's slot, MADDEN's read-back chart
-    and a bye week's chart never make a started season."""
+    games of the chart in force. A returner, another position's slot and a bye week's chart never make a
+    started season; MADDEN's read-back chart is the fallback and does (R2b)."""
     import psycopg
     dsn = _scratch_dsn()
     with psycopg.connect(dsn) as conn:
         cur = conn.cursor()
         try:
-            cur.execute("SELECT id FROM teams ORDER BY id LIMIT 6")
+            cur.execute("SELECT id FROM teams ORDER BY id LIMIT 8")
             teams = [r[0] for r in cur.fetchall()]
-            if len(teams) < 6:
-                pytest.skip("the scratch database has fewer than six teams")
+            if len(teams) < 8:
+                pytest.skip("the scratch database has fewer than eight teams")
             # one team per player: depth_charts' key holds one player per team/week/source/slot/depth
 
             def player(name):
@@ -815,9 +815,9 @@ def test_a_started_season_is_eight_weeks_at_his_own_position_in_postgres():
                 game(teams[0], teams[1], week)
                 game(teams[2], teams[3], week)
                 game(teams[4], teams[5], week)
-            cur.execute("UPDATE games SET away_team_id = %s "      # ...except team 5's week-4 bye
-                        "WHERE season = 2030 AND week = 4 AND home_team_id = %s AND away_team_id = %s",
-                        (teams[0], teams[4], teams[5]))            # team 4 still plays that week
+            for week in range(1, 9):                     # ...except teams 6 and 7's shared week-4 bye
+                if week != 4:
+                    game(teams[6], teams[7], week)
 
             started = player("Started Eight Weeks")
             short = player("Started Seven Weeks")
@@ -831,19 +831,19 @@ def test_a_started_season_is_eight_weeks_at_his_own_position_in_postgres():
                 chart(teams[0], started, week, "WR", "MU_COACH")
                 chart(teams[4], jr, week, "WR", "JR")
             for week in range(1, 8):
-                chart(teams[1], short, week, "WR", "MU_COACH")
+                chart(teams[6], short, week, "WR", "MU_COACH")     # 7 games (teams 6/7: weeks 1-8, week 4 bye)
             for week in range(1, 9):
-                chart(teams[5], bye, week, "WR", "MU_COACH")       # 8 charts, but week 4 is a bye: 7 games
+                chart(teams[7], bye, week, "WR", "MU_COACH")       # 8 charts, but week 4 is a bye: 7 games
             for week in range(1, 19):
                 chart(teams[2], returner, week, "KR", "MU_COACH")   # his own position is WR, the slot is KR
-                chart(teams[3], read_back, week, "WR", "MADDEN")    # what played, not Mu's plan
+                chart(teams[3], read_back, week, "WR", "MADDEN")    # the read-back fallback (R2b)
             got = C.read_started_seasons(cur, 2030)
             assert got.get(started) == {2030}
             assert got.get(jr) == {2030}
             assert short not in got
             assert bye not in got
             assert returner not in got
-            assert read_back not in got
+            assert got.get(read_back) == {2030}
         finally:
             conn.rollback()
 
@@ -1014,8 +1014,8 @@ def test_the_chart_in_force_decides_one_starter_per_slot_in_postgres():
     """R2/§7 decision 12 on real Postgres, rolled back: the chart in force is chosen first (JR's chart for a
     team/week beats MU_COACH's), then depth 1 in the player's own slot counts. A JR override of Mu's starter
     gives only the JR man the start; switching JR's starter away after seven weeks gives nobody an eighth; a
-    mapped defensive slot behaves the same; and a slot JR cleared has no starter even though Mu's chart
-    still names one. MADDEN is not read back here (the open M-0347 question)."""
+    mapped defensive slot behaves the same; and a slot JR leaves empty falls through to MU_COACH's man (R2b's
+    per-slot precedence), so the slot still has a starter."""
     import psycopg
     dsn = _scratch_dsn()
     with psycopg.connect(dsn) as conn:
@@ -1077,7 +1077,7 @@ def test_the_chart_in_force_decides_one_starter_per_slot_in_postgres():
                 chart(teams[0], mu_edge, week, "LE", "MU_COACH")
                 chart(teams[0], jr_edge, week, "LE", "JR")
 
-            # team 2: JR's chart is in force but has no WR depth 1 (cleared); Mu's chart still names one
+            # team 2: JR's chart is in force but has no WR depth 1; Mu's chart names one (R2b fallback)
             mu_cleared = player("R2 MU WR Cleared Slot")
             jr_te = player("R2 JR TE In Force")
             roster(mu_cleared, teams[2], "WR")
@@ -1094,7 +1094,7 @@ def test_the_chart_in_force_decides_one_starter_per_slot_in_postgres():
             assert got.get(jr_edge) == {2033}           # the mapped defensive slot
             assert mu_edge not in got
             assert got.get(jr_te) == {2033}             # JR's chart is in force for team 2
-            assert mu_cleared not in got                # ... and the slot JR cleared has no starter
+            assert got.get(mu_cleared) == {2033}        # ... and the WR slot JR left empty falls through to Mu
         finally:
             conn.rollback()
 
@@ -1165,5 +1165,405 @@ def test_one_ended_row_per_player_when_retirement_follows_the_last_signed_season
                 [(back, 2041, 2038, "WR", 5), (back, 2041, 2041, "WR", 7)]
             assert [r for r in C.read_retirement_rows(cur, 2043) if r[0] == back] == \
                 [(back, 2041, "WR", 30)]
+        finally:
+            conn.rollback()
+
+
+# ------------------------------------------------------------------ P3-07 audit R1b/R2b/R4
+
+@pytest.mark.integration
+def test_a_played_season_survives_a_free_agent_overwrite_in_postgres():
+    """R1b on real Postgres, rolled back: a season counts as signed when its player_seasons row has a team OR
+    the player has games that season (season_stat_general, else player_stats). The offseason ingests carry the
+    same season number, so a FreeAgent capture overwrites a played season's team with NULL; that season must
+    stay in the career. Written through load_players, as the ingest writes it."""
+    import psycopg
+
+    from pipeline import load_save
+
+    dsn = _scratch_dsn()
+    with psycopg.connect(dsn) as conn:
+        cur = conn.cursor()
+        try:
+            cur.execute("SELECT id FROM teams ORDER BY id LIMIT 2")
+            teams = [r[0] for r in cur.fetchall()]
+            if len(teams) < 2:
+                pytest.skip("the scratch database has fewer than two teams")
+
+            def snapshot(pgid, first, last, status, age, yoe):
+                return {"players": [{
+                    "pgid": pgid, "status": status, "first_name": first, "last_name": last,
+                    "team_index": 0 if status != "FreeAgent" else load_save.FREE_AGENT_TEAM_INDEX,
+                    "position": "WR", "age": age, "overall": 70, "years_pro": yoe,
+                    "height_in": 72, "weight_lbs": 205, "jersey": 11,
+                    "dev_trait": "Normal", "archetype": "WR_DeepThreat"}]}
+
+            def load(pgid, first, last, status, season, age, yoe):
+                load_save.load_players(cur, snapshot(pgid, first, last, status, age, yoe), season,
+                                       {0: teams[0]}, {})
+
+            def pid_of(pgid):
+                cur.execute("SELECT id FROM players WHERE madden_pgid = %s", (pgid,))
+                return cur.fetchone()[0]
+
+            def played(pid, season, games=16):
+                cur.execute("INSERT INTO season_stat_general "
+                            "(season, player_id, team_id, position, games_played) "
+                            "VALUES (%s, %s, %s, 'WR', %s)", (season, pid, teams[0], games))
+
+            def career(pid, report):
+                return [tuple(r) for r in C.read_career_rows(cur, report) if r[0] == pid]
+
+            def ages(pid, report):
+                return [tuple(r) for r in C.read_retirement_rows(cur, report) if r[0] == pid]
+
+            # case 1: Signed 2035, Signed 2036, a later FreeAgent capture of the same 2036 (team NULL), and
+            # 16 games in 2036. Only 2037 is unsigned, so report 2037 does not end him; report 2038 does, at
+            # the 2036 played season (career rows include it; the age comes from its row).
+            load(9_720_001, "R1b", "Played", "Signed", 2035, 24, 0)
+            load(9_720_001, "R1b", "Played", "Signed", 2036, 25, 1)
+            load(9_720_001, "R1b", "Played", "FreeAgent", 2036, 25, 1)
+            one = pid_of(9_720_001)
+            played(one, 2036)
+            load(9_720_001, "R1b", "Played", "FreeAgent", 2037, 26, 2)
+            assert career(one, 2037) == [] and ages(one, 2037) == []
+            load(9_720_001, "R1b", "Played", "FreeAgent", 2038, 27, 3)
+            assert career(one, 2038) == [(one, 2036, 2035, "WR", 0), (one, 2036, 2036, "WR", 1)]
+            assert ages(one, 2038) == [(one, 2036, "WR", 25)]
+
+            # case 2: the same shape with Signed 2037 instead of FreeAgent: the career never ends by 2038
+            load(9_720_002, "R1b", "Signed On", "Signed", 2035, 24, 0)
+            load(9_720_002, "R1b", "Signed On", "Signed", 2036, 25, 1)
+            load(9_720_002, "R1b", "Signed On", "FreeAgent", 2036, 25, 1)
+            two = pid_of(9_720_002)
+            played(two, 2036)
+            load(9_720_002, "R1b", "Signed On", "Signed", 2037, 26, 2)
+            assert career(two, 2038) == [] and ages(two, 2038) == []
+
+            # case 3: R1's original case still ends at the last signed season: 2037/2038 are NULL-team rows
+            # with no games, so they are not signings.
+            load(9_720_003, "R1b", "No Games", "Signed", 2035, 24, 0)
+            load(9_720_003, "R1b", "No Games", "Signed", 2036, 25, 1)
+            load(9_720_003, "R1b", "No Games", "FreeAgent", 2037, 26, 2)
+            load(9_720_003, "R1b", "No Games", "FreeAgent", 2038, 27, 3)
+            three = pid_of(9_720_003)
+            assert career(three, 2038) == [(three, 2036, 2035, "WR", 0), (three, 2036, 2036, "WR", 1)]
+            assert ages(three, 2038) == [(three, 2036, "WR", 25)]
+
+            # case 4: a FreeAgent row with no games does not count as signed: the career still ends at 2035
+            load(9_720_004, "R1b", "FA No Games", "Signed", 2035, 24, 0)
+            load(9_720_004, "R1b", "FA No Games", "FreeAgent", 2036, 25, 1)
+            four = pid_of(9_720_004)
+            assert career(four, 2037) == [(four, 2035, 2035, "WR", 0)]
+            assert ages(four, 2037) == [(four, 2035, "WR", 24)]
+
+            # ...and the player_stats fallback: a NULL-team season with a stat line counts as played
+            load(9_720_005, "R1b", "Stats Fallback", "Signed", 2040, 24, 0)
+            load(9_720_005, "R1b", "Stats Fallback", "FreeAgent", 2041, 25, 1)
+            five = pid_of(9_720_005)
+            cur.execute("INSERT INTO games (season, week, home_team_id, away_team_id) "
+                        "VALUES (2041, 1, %s, %s) RETURNING id", (teams[0], teams[1]))
+            game_id = cur.fetchone()[0]
+            cur.execute("INSERT INTO player_stats (game_id, player_name, player_id, team_id, position) "
+                        "VALUES (%s, 'R1b Stats Fallback', %s, %s, 'WR')", (game_id, five, teams[0]))
+            assert career(five, 2042) == [] and ages(five, 2042) == []
+            assert career(five, 2043) == [(five, 2041, 2040, "WR", 0), (five, 2041, 2041, "WR", 1)]
+            assert ages(five, 2043) == [(five, 2041, "WR", 25)]
+        finally:
+            conn.rollback()
+
+
+@pytest.mark.integration
+def test_the_chart_in_force_falls_back_per_slot_in_postgres():
+    """R2b on real Postgres, rolled back: the chart in force resolves each slot by JR > MU_COACH > MADDEN.
+
+    A MADDEN-only team's starter counts; a cleared JR slot (NULL player row, and separately no row at all)
+    falls through to MU_COACH, and a slot Mu did not set falls through to MADDEN; a JR slot still beats Mu's
+    man in the same slot; and KR/PR/SLWR never count even through the MADDEN fallback."""
+    import psycopg
+    dsn = _scratch_dsn()
+    with psycopg.connect(dsn) as conn:
+        cur = conn.cursor()
+        try:
+            cur.execute("SELECT id FROM teams ORDER BY id LIMIT 12")
+            teams = [r[0] for r in cur.fetchall()]
+            if len(teams) < 12:
+                pytest.skip("the scratch database has fewer than twelve teams")
+
+            def player(name):
+                cur.execute("INSERT INTO players (player_name) VALUES (%s) RETURNING id", (name,))
+                return cur.fetchone()[0]
+
+            def roster(pid, team_id, position, season):
+                cur.execute("INSERT INTO player_seasons (player_id, season, team_id, position) "
+                            "VALUES (%s, %s, %s, %s)", (pid, season, team_id, position))
+
+            def chart(team_id, pid, week, slot, source, season):
+                cur.execute("INSERT INTO depth_charts "
+                            "(team_id, season, week, position_slot, depth, player_id, source) "
+                            "VALUES (%s, %s, %s, %s, 1, %s, %s)",
+                            (team_id, season, week, slot, pid, source))
+
+            def games(season, home, away, weeks):
+                for week in weeks:
+                    cur.execute("INSERT INTO games (season, week, home_team_id, away_team_id) "
+                                "VALUES (%s, %s, %s, %s)", (season, week, home, away))
+
+            # case 1: a MADDEN-only team, WR1 = M for weeks 1-8 -> M has a started season
+            games(2034, teams[0], teams[1], range(1, 9))
+            madden_wr = player("R2b MADDEN WR")
+            roster(madden_wr, teams[0], "WR", 2034)
+            for week in range(1, 9):
+                chart(teams[0], madden_wr, week, "WR", "MADDEN", 2034)
+
+            # case 2a: JR's chart sets QB1 and leaves WR1 with a NULL player; MU_COACH's WR1 = W.
+            games(2035, teams[2], teams[3], range(1, 9))
+            jr_qb = player("R2b JR QB")
+            mu_wr = player("R2b MU WR Behind NULL JR")
+            roster(jr_qb, teams[2], "QB", 2035)
+            roster(mu_wr, teams[2], "WR", 2035)
+            for week in range(1, 9):
+                chart(teams[2], jr_qb, week, "QB", "JR", 2035)
+                chart(teams[2], None, week, "WR", "JR", 2035)
+                chart(teams[2], mu_wr, week, "WR", "MU_COACH", 2035)
+
+            # case 2b: JR's chart has no WR row at all; MU_COACH's WR1 = W.
+            games(2036, teams[4], teams[5], range(1, 9))
+            jr_qb2 = player("R2b JR QB Absent Slot")
+            mu_wr2 = player("R2b MU WR Behind Absent JR")
+            roster(jr_qb2, teams[4], "QB", 2036)
+            roster(mu_wr2, teams[4], "WR", 2036)
+            for week in range(1, 9):
+                chart(teams[4], jr_qb2, week, "QB", "JR", 2036)
+                chart(teams[4], mu_wr2, week, "WR", "MU_COACH", 2036)
+
+            # case 2c: no MU row either; MADDEN's WR1 = X is the last fallback.
+            games(2037, teams[6], teams[7], range(1, 9))
+            jr_qb3 = player("R2b JR QB MADDEN WR")
+            madden_wr2 = player("R2b MADDEN WR Fallback")
+            roster(jr_qb3, teams[6], "QB", 2037)
+            roster(madden_wr2, teams[6], "WR", 2037)
+            for week in range(1, 9):
+                chart(teams[6], jr_qb3, week, "QB", "JR", 2037)
+                chart(teams[6], madden_wr2, week, "WR", "MADDEN", 2037)
+
+            # case 3: MU WR1 = A, JR WR1 = B -> only B
+            games(2038, teams[8], teams[9], range(1, 9))
+            mu_a = player("R2b MU WR A")
+            jr_b = player("R2b JR WR B")
+            for pid in (mu_a, jr_b):
+                roster(pid, teams[8], "WR", 2038)
+            for week in range(1, 9):
+                chart(teams[8], mu_a, week, "WR", "MU_COACH", 2038)
+                chart(teams[8], jr_b, week, "WR", "JR", 2038)
+
+            # case 7: a returner/personal-protector slot never counts, even as MADDEN's fallback
+            games(2043, teams[10], teams[11], range(1, 9))
+            kr = player("R2b MADDEN KR")
+            pr = player("R2b MADDEN PR")
+            slwr = player("R2b MADDEN SLWR")
+            slot_wr = player("R2b MADDEN Slot WR")
+            for pid in (kr, pr, slwr, slot_wr):
+                roster(pid, teams[10], "WR", 2043)
+            for week in range(1, 9):
+                chart(teams[10], kr, week, "KR", "MADDEN", 2043)
+                chart(teams[10], pr, week, "PR", "MADDEN", 2043)
+                chart(teams[10], slwr, week, "SLWR", "MADDEN", 2043)
+                chart(teams[10], slot_wr, week, "WR", "MADDEN", 2043)
+
+            # case 8: a second team credited from MU_COACH in the same weeks another team has a JR chart
+            games(2044, teams[2], teams[3], range(1, 9))
+            games(2044, teams[4], teams[5], range(1, 9))
+            jr8 = player("R2b JR Chart Team")
+            mu8 = player("R2b MU Chart Team")
+            roster(jr8, teams[2], "WR", 2044)
+            roster(mu8, teams[4], "WR", 2044)
+            for week in range(1, 9):
+                chart(teams[2], jr8, week, "WR", "JR", 2044)
+                chart(teams[4], mu8, week, "WR", "MU_COACH", 2044)
+
+            got = {}
+            for season in (2034, 2035, 2036, 2037, 2038, 2043, 2044):
+                got.update(C.read_started_seasons(cur, season))
+
+            assert got.get(madden_wr) == {2034}          # case 1: MADDEN is the fallback chart
+            assert got.get(mu_wr) == {2035}              # case 2a: NULL JR player falls through
+            assert got.get(jr_qb) == {2035}
+            assert got.get(mu_wr2) == {2036}             # case 2b: absent JR slot falls through
+            assert got.get(jr_qb2) == {2036}
+            assert got.get(madden_wr2) == {2037}         # case 2c: no MU row, MADDEN's man starts
+            assert got.get(jr_qb3) == {2037}
+            assert got.get(jr_b) == {2038}               # case 3: JR beats MU in the same slot
+            assert mu_a not in got
+            assert got.get(slot_wr) == {2043}            # case 7: a real WR slot still counts
+            assert kr not in got and pr not in got and slwr not in got
+            assert got.get(jr8) == {2044}                # case 8: both teams, same weeks
+            assert got.get(mu8) == {2044}
+        finally:
+            conn.rollback()
+
+
+@pytest.mark.integration
+def test_the_chart_in_force_carries_forward_in_postgres():
+    """R2b on real Postgres, rolled back: the newest week with any stored chart carries forward.
+
+    A week-1 chart runs to the next stored chart (newest week wins); a bye week's chart is not a game; 8
+    weeks is the threshold; a chart stored under the season with week 32 (that year's preseason/cutdown)
+    sorts before week 1, while a week-23 row is irrelevant; and a MADDEN read-back at week 5 beats JR's week 3
+    for the weeks after it."""
+    import psycopg
+    dsn = _scratch_dsn()
+    with psycopg.connect(dsn) as conn:
+        cur = conn.cursor()
+        try:
+            cur.execute("SELECT id FROM teams ORDER BY id LIMIT 8")
+            teams = [r[0] for r in cur.fetchall()]
+            if len(teams) < 8:
+                pytest.skip("the scratch database has fewer than eight teams")
+
+            def player(name):
+                cur.execute("INSERT INTO players (player_name) VALUES (%s) RETURNING id", (name,))
+                return cur.fetchone()[0]
+
+            def roster(pid, team_id, position, season):
+                cur.execute("INSERT INTO player_seasons (player_id, season, team_id, position) "
+                            "VALUES (%s, %s, %s, %s)", (pid, season, team_id, position))
+
+            def chart(team_id, pid, week, slot, source, season):
+                cur.execute("INSERT INTO depth_charts "
+                            "(team_id, season, week, position_slot, depth, player_id, source) "
+                            "VALUES (%s, %s, %s, %s, 1, %s, %s)",
+                            (team_id, season, week, slot, pid, source))
+
+            def games(season, home, away, weeks):
+                for week in weeks:
+                    cur.execute("INSERT INTO games (season, week, home_team_id, away_team_id) "
+                                "VALUES (%s, %s, %s, %s)", (season, week, home, away))
+
+            # case 4: MU chart week 1 (C), then week 5 (D) over 16 games: C 4 weeks, D 12 -> only D
+            games(2039, teams[0], teams[1], range(1, 17))
+            c = player("R2b Carried C")
+            d = player("R2b Carry Newest D")
+            for pid in (c, d):
+                roster(pid, teams[0], "WR", 2039)
+            chart(teams[0], c, 1, "WR", "MU_COACH", 2039)
+            chart(teams[0], d, 5, "WR", "MU_COACH", 2039)
+
+            # case 5: a week-1 chart carried over 7 games and a bye is not a started season
+            games(2040, teams[2], teams[3], range(1, 9))
+            games(2040, teams[0], teams[1], range(1, 8))       # teams[0]'s week 8 is a bye
+            bye = player("R2b Bye Seven Games")
+            control = player("R2b Bye Control Eight")
+            roster(bye, teams[0], "WR", 2040)
+            roster(control, teams[2], "WR", 2040)
+            chart(teams[0], bye, 1, "WR", "MU_COACH", 2040)
+            chart(teams[2], control, 1, "WR", "MU_COACH", 2040)
+
+            # case 6: 7 weeks is not a started season, 8 is (separate teams: a later chart replaces the slot)
+            games(2041, teams[4], teams[5], range(1, 9))
+            games(2041, teams[6], teams[7], range(1, 9))
+            seven = player("R2b Seven From Week Two")
+            eight = player("R2b Eight From Week One")
+            roster(seven, teams[6], "WR", 2041)
+            roster(eight, teams[4], "WR", 2041)
+            chart(teams[6], seven, 2, "WR", "MU_COACH", 2041)
+            chart(teams[4], eight, 1, "WR", "MU_COACH", 2041)
+
+            # case 9: a (season, 32) chart sorts before week 1; a (season, 23) chart is irrelevant
+            games(2045, teams[6], teams[7], range(1, 9))
+            games(2045, teams[0], teams[1], range(1, 9))
+            preseason = player("R2b Preseason Chart")
+            postseason = player("R2b Postseason Chart")
+            roster(preseason, teams[6], "WR", 2045)
+            roster(postseason, teams[0], "WR", 2045)
+            chart(teams[6], preseason, 32, "WR", "MU_COACH", 2045)
+            chart(teams[0], postseason, 23, "WR", "MU_COACH", 2045)
+
+            # case 10: JR week 3, MADDEN week 5 only -> weeks 5-16 use MADDEN's chart
+            games(2046, teams[2], teams[3], range(1, 17))
+            jr3 = player("R2b JR Week Three")
+            madden5 = player("R2b MADDEN Week Five")
+            roster(jr3, teams[2], "WR", 2046)
+            roster(madden5, teams[2], "WR", 2046)
+            chart(teams[2], jr3, 3, "WR", "JR", 2046)
+            chart(teams[2], madden5, 5, "WR", "MADDEN", 2046)
+
+            got = {}
+            for season in (2039, 2040, 2041, 2045, 2046):
+                got.update(C.read_started_seasons(cur, season))
+
+            assert got.get(d) == {2039} and c not in got        # case 4: newest week wins
+            assert got.get(control) == {2040} and bye not in got  # case 5: a bye is not a game
+            assert got.get(eight) == {2041} and seven not in got  # case 6: the 8-week threshold
+            assert got.get(preseason) == {2045}                  # case 9: (season, 32) before week 1
+            assert postseason not in got                         # ... (season, 23) is not
+            assert got.get(madden5) == {2046} and jr3 not in got  # case 10: newest week wins
+        finally:
+            conn.rollback()
+
+
+@pytest.mark.integration
+def test_free_agent_retirees_are_counted_in_postgres():
+    """R4 on real Postgres, rolled back: a retiree with no signed-or-played season is still an ended career.
+
+    The endpoint stays the retirement season, and the row it reports comes from the retirement-season
+    player_seasons row; a retiree with a signed 2035 and a FreeAgent 2036 with no games reports the 2035
+    snapshot; and a later comeback still supersedes the old retirement."""
+    import psycopg
+    dsn = _scratch_dsn()
+    with psycopg.connect(dsn) as conn:
+        cur = conn.cursor()
+        try:
+            cur.execute("SELECT id FROM teams ORDER BY id LIMIT 1")
+            pair = cur.fetchone()
+            if not pair:
+                pytest.skip("the scratch database has no teams")
+            team = pair[0]
+
+            def player(name):
+                cur.execute("INSERT INTO players (player_name) VALUES (%s) RETURNING id", (name,))
+                return cur.fetchone()[0]
+
+            def season(pid, year, position, age, yoe, team_id=team):
+                cur.execute("INSERT INTO player_seasons "
+                            "(player_id, season, team_id, position, age, years_of_experience) "
+                            "VALUES (%s, %s, %s, %s, %s, %s)", (pid, year, team_id, position, age, yoe))
+
+            def retire(pid, year, name, position="WR"):
+                cur.execute("INSERT INTO player_retirements (season, player_id, player_name, position) "
+                            "VALUES (%s, %s, %s, %s)", (year, pid, name, position))
+
+            def career(pid, report):
+                return [tuple(r) for r in C.read_career_rows(cur, report) if r[0] == pid]
+
+            def ages(pid, report):
+                return [tuple(r) for r in C.read_retirement_rows(cur, report) if r[0] == pid]
+
+            # case (g): only Mu rows are FreeAgent, then he retires: one ended row, snapshot from that row
+            fa_only = player("R4 FA All Season")
+            season(fa_only, 2036, "WR", 33, 10, team_id=None)
+            retire(fa_only, 2036, "R4 FA All Season")
+            assert career(fa_only, 2036) == [(fa_only, 2036, 2036, "WR", 10)]
+            assert ages(fa_only, 2036) == [(fa_only, 2036, "WR", 33)]
+            lengths = C.career_lengths(career(fa_only, 2036), {fa_only})
+            assert lengths["drafted"]["WR"]["n"] == 1
+            assert C.retirement_ages(ages(fa_only, 2036), {fa_only})["drafted"]["WR"]["n"] == 1
+
+            # a signed 2035 and a FreeAgent 2036 with no games: the snapshot is the 2035 row
+            signed = player("R4 Signed Then FA")
+            season(signed, 2035, "WR", 27, 5)
+            season(signed, 2036, "WR", 28, 6, team_id=None)
+            retire(signed, 2036, "R4 Signed Then FA")
+            assert career(signed, 2036) == [(signed, 2036, 2035, "WR", 5)]
+            assert ages(signed, 2036) == [(signed, 2036, "WR", 27)]
+
+            # the R3 comeback still supersedes the old retirement: endpoint and snapshot move to 2038
+            back = player("R4 Retired Then Came Back")
+            season(back, 2035, "WR", 26, 4)
+            retire(back, 2036, "R4 Retired Then Came Back")
+            season(back, 2038, "WR", 29, 7)
+            retire(back, 2039, "R4 Retired Then Came Back")
+            assert career(back, 2041) == [(back, 2039, 2035, "WR", 4), (back, 2039, 2038, "WR", 7)]
+            assert ages(back, 2041) == [(back, 2039, "WR", 29)]
         finally:
             conn.rollback()
