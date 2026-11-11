@@ -29,6 +29,12 @@ import logging
 
 from engines.nfl_history import link as link_engine
 
+try:        # a snapshot's college is a reference into Madden's static college tables, not a name
+    from pipeline.colleges import college_name
+except Exception:       # pragma: no cover - lens without the scouting list
+    def college_name(ref):
+        return None
+
 log = logging.getLogger(__name__)
 
 FREE_AGENT_TEAM = 32       # pipeline.load_save.FREE_AGENT_TEAM_INDEX: snapshot free agents
@@ -94,6 +100,15 @@ def _years_exp(player, season):
     return None if player.entry_year is None else max(0, int(season) - int(player.entry_year))
 
 
+def _college(value):
+    """A snapshot college (a {table, row} reference, or already a name) as a name the linker can compare."""
+    if not value:
+        return None
+    if isinstance(value, str):          # a snapshot that already carries the name, or a test fixture
+        return value
+    return college_name(value)
+
+
 # ---------- new links ----------
 
 def _mu_player(pgid, player, codes, season):
@@ -111,7 +126,7 @@ def _mu_player(pgid, player, codes, season):
         player_id=int(pgid), pgid=int(pgid), first_name=first, last_name=last,
         position=player.get("position"), team=codes.get(int(index)) if index is not None else None,
         years_of_experience=player.get("years_pro"), age=player.get("age"), overall=player.get("overall"),
-        draft_year=draft_year, college=player.get("college"), height_in=player.get("height_in"),
+        draft_year=draft_year, college=_college(player.get("college")), height_in=player.get("height_in"),
         weight=player.get("weight_lbs"), espn_id=str(espn) if espn else None, season=int(season))
 
 

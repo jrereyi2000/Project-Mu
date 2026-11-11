@@ -3,6 +3,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from engines import contracts_engine as ce
+from engines.nfl_history import link
 from engines.nfl_mirror import contracts, diff
 from engines.nfl_mirror.contracts import ContractBook
 from engines.nfl_mirror.real_state import RealPlayer, RealWeek
@@ -15,9 +16,10 @@ CAP = ce.CBA["REFERENCE_CAP"]
 # ---------- fixtures ----------
 
 def real_player(gid, name, team, position="WR", status="ACTIVE", designation="A01", entry_year=2020,
-                draft_number=None):
+                draft_number=None, college=None):
     return RealPlayer(gsis_id=gid, name=name, position=position, team=team, status=status,
-                      designation=designation, entry_year=entry_year, draft_number=draft_number)
+                      designation=designation, entry_year=entry_year, draft_number=draft_number,
+                      college=college)
 
 
 def real_week(rosters, week=10):
@@ -25,11 +27,11 @@ def real_week(rosters, week=10):
 
 
 def madden(pgid, first, last, team_index, status="Signed", position="WR", years_pro=0,
-           injured_reserve=False, year_drafted=None):
+           injured_reserve=False, year_drafted=None, college=None):
     return {"pgid": pgid, "first_name": first, "last_name": last, "position": position, "status": status,
             "team_index": team_index, "years_pro": years_pro, "overall": 70, "age": 26,
             "injury": {"injured_reserve": injured_reserve}, "year_drafted": year_drafted,
-            "college": None, "height_in": None, "weight_lbs": None}
+            "college": college, "height_in": None, "weight_lbs": None}
 
 
 def snapshot(*players):
@@ -163,6 +165,25 @@ def test_unlinked_new_player_on_a_save_team_is_found_before_release():
     result = plan(snap, real, {})
     assert result.unlinked_new == [("00-rp", 701)]
     assert result.ops == []          # already on the right team and list
+
+
+def test_snapshot_college_reference_is_converted_before_linking():
+    """A snapshot's college is a {table, row} reference, not a string: the linker must get the name."""
+    snap = snapshot(madden(800, "Col", "Lege", diff.FREE_AGENT_TEAM, status="FreeAgent", years_pro=0,
+                           college={"table": 16384, "row": 1968}))
+    real = real_week({"KC": [real_player("00-col", "Col Lege", "KC", entry_year=2026, college="Pittsburgh")]})
+    result = plan(snap, real, {})          # raised AttributeError before the college conversion
+    assert result.unlinked_new == [("00-col", 800)]
+    assert [o["kind"] for o in ops_for(result, pgid=800)] == ["sign"]
+
+
+def test_snapshot_college_reference_counts_as_linking_evidence():
+    mu = diff._mu_player(800, madden(800, "Col", "Lege", diff.FREE_AGENT_TEAM, status="FreeAgent",
+                                     college={"table": 16384, "row": 1968}), TEAMS, 2026)
+    person = diff._real_person(real_player("00-col", "Col Lege", "KC", entry_year=2026, college="Pittsburgh"))
+    assert mu.college == "PITTSBURGH"       # the reference resolved to the school name
+    assert link.evidence(mu, person)["college"] is True
+    assert diff._mu_player(801, madden(801, "No", "College", 0), TEAMS, 2026).college is None
 
 
 # ---------- contracts ----------
