@@ -5,6 +5,8 @@ notification carries ``mirror: N moves (M unconfirmed switches)``. A normal week
 commands run through ``main(argv)`` against a fake cursor: no database and no network.
 """
 import json
+import os
+import subprocess
 import types
 from unittest import mock
 
@@ -51,15 +53,20 @@ class ScriptedCursor:
 
 
 class FakeConn:
-    def __init__(self, cursor):
+    def __init__(self, cursor, dbname="madden_x"):
         self._cursor = cursor
+        self.info = types.SimpleNamespace(dbname=dbname)
         self.committed = False
+        self.closed = False
 
     def cursor(self):
         return self._cursor
 
     def commit(self):
         self.committed = True
+
+    def close(self):
+        self.closed = True
 
     def __enter__(self):
         return self
@@ -68,17 +75,22 @@ class FakeConn:
         return False
 
 
-def signed(*runs, tables=True):
-    """A records-free fake cursor whose to_regclass answers are `tables` and whose other queries return `runs`."""
+def signed(*runs, tables=True, league_state=None, links=()):
+    """A records-free fake cursor whose to_regclass answers are `tables` and whose other queries return `runs`.
+
+    `league_state` answers the preview's identity query and `links` the nfl_player_links join, so the CLI's new
+    database-bound paths can run offline without consuming a scripted row."""
     class SignedCursor(ScriptedCursor):
         def execute(self, sql, args=None):
             norm = " ".join(sql.split())
             self.sql.append((norm, args))
             if norm.startswith("SELECT to_regclass"):
                 self._ret = (tables,)
+            elif "FROM league_state" in norm:
+                self._ret = league_state
             elif "nfl_player_links l JOIN players" in norm:
                 self._ret = None
-                self._all = []
+                self._all = list(links)
             else:
                 self._ret = self.returns.pop(0) if self.returns else None
 
@@ -281,6 +293,68 @@ def fake_real_week(week, rosters=None, mode=real_state.CATCH_UP):
     return real_state.RealWeek(season=SEASON, week=week, mode=mode, rosters=rosters or {}, depth={})
 
 
+def linked_real_week():
+    """Real week 6: the linked gsis 00-X is active for KC, which is team_index 0 in the capture fixtures."""
+    return real_state.RealWeek(
+        season=SEASON, week=6, mode=real_state.CATCH_UP,
+        rosters={"KC": [real_state.RealPlayer("00-X", "Linked Man", "WR", "KC", "ACTIVE", "A01")]})
+
+
+def fetched_files():
+    return {name: types.SimpleNamespace(path=f"/fake/{name}", sha256="x")
+            for name in ("rosters", "injuries", "depth", "games")}
+
+
+def save_capture(root, folder, league_id, *, season=SEASON, week_type="RegularSeason", week_index=6,
+                 player_team=0, mtime=1, identity=True):
+    """A capture save.json with a franchise identity, season/stage and one linked player (pgid 100)."""
+    path = root / folder / "save.json"
+    path.parent.mkdir(parents=True)
+    snapshot = {
+        "season": {"calendar_year": season, "week_type": week_type, "week_index": week_index},
+        "teams": [{"team_index": 0, "short_name": "KC"}, {"team_index": 1, "short_name": "BUF"}],
+        "players": [{"pgid": 100, "first_name": "Linked", "last_name": "Man", "position": "WR",
+                     "status": "Signed", "team_index": player_team, "years_pro": 0, "overall": 70, "age": 26,
+                     "injury": {"injured_reserve": False}, "year_drafted": None, "college": None,
+                     "height_in": None, "weight_lbs": None}],
+    }
+    if identity:
+        snapshot["franchise"] = {"league_id": league_id}
+    path.write_text(json.dumps(snapshot))
+    os.utime(path, (mtime, mtime))
+    return path
+
+
+def preview_environment(monkeypatch, captures, *, db_league=9001, db_season=SEASON, db_week=6,
+                        settings_season=SEASON, links=(("00-X", 100),)):
+    """Patch the preview's DB identity, fetch and build; the real roster diff runs against the fixture links."""
+    monkeypatch.setattr(mirror_main, "CAPTURES", str(captures))
+    conn = signed((True, settings_season, None, None, "ON", None),
+                  league_state=(db_league, db_season, db_week), links=links)
+    monkeypatch.setattr(mirror_main, "_connect", lambda dsn: conn)
+    built = []
+
+    def build(*args, **kwargs):
+        week = kwargs.get("week", args[5])
+        built.append(week)
+        return linked_real_week()
+
+    fetch = mock.Mock(side_effect=lambda season, refresh=True: fetched_files())
+    monkeypatch.setattr(mirror_main, "_build_week", build)
+    monkeypatch.setattr(mirror_main, "_fetch_week", fetch)
+    monkeypatch.setattr(mirror_main, "_read_rows", lambda fetched: [])
+    monkeypatch.setattr(mirror_main, "_read_trades", lambda: [])
+    monkeypatch.setattr(mirror_main, "league_cap", lambda snapshot: 255_400_000)
+    return types.SimpleNamespace(conn=conn, built=built, fetch=fetch)
+
+
+def run_preview(*, snapshot=None):
+    argv = ["preview", "--week", "6", "--dsn", "host=localhost dbname=mu_scratch_u19_test"]
+    if snapshot is not None:
+        argv += ["--snapshot", str(snapshot)]
+    return mirror_main.main(argv)
+
+
 def test_cli_help_exits_zero_and_lists_all_five_commands(capsys):
     with pytest.raises(SystemExit) as exc:
         mirror_main.main(["--help"])
@@ -326,7 +400,8 @@ def test_cli_preview_runs_fetch_build_and_diff_and_writes_nothing(monkeypatch, t
         built.append(kwargs.get("week", args[5]))
         return fake_real_week(int(kwargs.get("week", args[5])))
 
-    monkeypatch.setattr(mirror_main, "_newest_snapshot", lambda: str(snap))
+    monkeypatch.setattr(mirror_main, "_snapshot_for_database",
+                        lambda identity, explicit=None: (str(snap), {"teams": [], "players": []}))
     monkeypatch.setattr(mirror_main, "_fetch_week", lambda season, refresh=True: dict(files))
     monkeypatch.setattr(mirror_main, "_read_rows", lambda fetched: [])
     monkeypatch.setattr(mirror_main, "_build_week", build)
@@ -334,7 +409,8 @@ def test_cli_preview_runs_fetch_build_and_diff_and_writes_nothing(monkeypatch, t
     monkeypatch.setattr(mirror_main, "_read_trades", lambda: [])
     monkeypatch.setattr(mirror_main, "team_codes", lambda snapshot, season: {})
     monkeypatch.setattr(mirror_main, "league_cap", lambda snapshot: 255_400_000)
-    conn = signed((True, SEASON, None, None, "ON", None))      # read_settings in settings_season
+    conn = signed((True, SEASON, None, None, "ON", None),          # read_settings in settings_season
+                  league_state=(9001, SEASON, 6))
     monkeypatch.setattr(mirror_main, "_connect", lambda dsn: conn)
 
     assert mirror_main.main(["preview", "--week", "6", "--dsn", "host=localhost dbname=madden_x"]) == 0
@@ -411,9 +487,408 @@ def test_cli_commands_are_wired_to_their_functions():
     assert args.func is mirror_main.cmd_status
     args = parser.parse_args(["preview", "--week", "3", "--dsn", "x"])
     assert args.func is mirror_main.cmd_preview and args.week == 3
+    args = parser.parse_args(["preview", "--week", "3", "--snapshot", "captures/x/save.json", "--dsn", "x"])
+    assert args.func is mirror_main.cmd_preview and args.snapshot == "captures/x/save.json"
     args = parser.parse_args(["trades", "--week", "3", "--dsn", "x"])
     assert args.func is mirror_main.cmd_trades and args.week == 3
     args = parser.parse_args(["enable", "--last-week", "9", "--confirm", "db", "--dsn", "x"])
     assert args.func is mirror_main.cmd_enable and args.last_week == 9
     args = parser.parse_args(["disable", "--confirm", "db", "--dsn", "x"])
     assert args.func is mirror_main.cmd_disable
+
+
+# ---------------------------------------------------------------------------- F1: --confirm identity ---
+# Audit-5 U7 F1: the first hand-split dbname= must never authorize a write to a database libpq reads as the last.
+
+def test_f1_enable_refuses_when_the_first_dbname_is_not_the_opened_database(monkeypatch, capsys):
+    cur = ScriptedCursor()
+    conn = FakeConn(cur, dbname="mu_scratch_u19_test")
+    monkeypatch.setattr(mirror_main, "_connect", lambda dsn: conn)
+    dsn = ("host=localhost dbname=confirmed_name dbname=mu_scratch_u19_test "
+           "user=postgres password=postgres")
+
+    assert mirror_main.main(["enable", "--dsn", dsn, "--confirm", "confirmed_name"]) == 2
+    assert "refused" in capsys.readouterr().err
+    assert conn.committed is False and cur.sql == [], "a refused confirmation must write nothing"
+    assert conn.closed is True
+    assert mirror_main._db_name(dsn) == "mu_scratch_u19_test"      # the message helper is libpq-aware now
+
+
+def test_f1_enable_accepts_the_last_repeated_dbname_the_connection_opened(monkeypatch, capsys):
+    cur = ScriptedCursor()
+    conn = FakeConn(cur, dbname="mu_scratch_u19_test")
+    monkeypatch.setattr(mirror_main, "_connect", lambda dsn: conn)
+    dsn = ("host=localhost dbname=confirmed_name dbname=mu_scratch_u19_test "
+           "user=postgres password=postgres")
+
+    assert mirror_main.main(["enable", "--last-week", "10", "--dsn", dsn,
+                             "--confirm", "mu_scratch_u19_test"]) == 0
+    assert conn.committed is True
+    assert "NFL mirror enabled on mu_scratch_u19_test" in capsys.readouterr().out
+    update = next(args for sql, args in cur.sql if sql.startswith("UPDATE nfl_mirror_settings"))
+    assert update[0] is True and update[2] == 10
+
+
+def test_f1_disable_refuses_a_mismatch_and_writes_nothing(monkeypatch, capsys):
+    cur = ScriptedCursor()
+    conn = FakeConn(cur, dbname="mu_scratch_u19_test")
+    monkeypatch.setattr(mirror_main, "_connect", lambda dsn: conn)
+
+    assert mirror_main.main(["disable", "--dsn", "host=localhost dbname=confirmed_name",
+                             "--confirm", "confirmed_name"]) == 2
+    assert "refused" in capsys.readouterr().err
+    assert conn.committed is False and cur.sql == []
+
+
+@pytest.mark.parametrize("dsn,opened", [
+    ("postgresql://postgres:postgres@localhost/wrong?dbname=mu_scratch_u19_test", "mu_scratch_u19_test"),
+    ("host=localhost dbname='mu_scratch_u19_test' user=postgres password=postgres", "mu_scratch_u19_test"),
+    ("host=localhost user=postgres password=postgres dbname='mu_scratch_u19_test'", "mu_scratch_u19_test"),
+    ("postgresql://postgres:postgres@localhost/mu_scratch_u19_test?dbname=wrong", "wrong"),
+])
+def test_f1_url_and_quoted_names_are_judged_by_the_opened_connection(monkeypatch, capsys, dsn, opened):
+    cur = ScriptedCursor()
+    conn = FakeConn(cur, dbname=opened)
+    monkeypatch.setattr(mirror_main, "_connect", lambda dsn_: conn)
+
+    assert mirror_main.main(["enable", "--dsn", dsn, "--confirm", "mu_scratch_u19_test"]) == \
+        (0 if opened == "mu_scratch_u19_test" else 2)
+    if opened == "mu_scratch_u19_test":
+        assert conn.committed is True and "enabled on mu_scratch_u19_test" in capsys.readouterr().out
+    else:
+        assert conn.committed is False and cur.sql == [] and "refused" in capsys.readouterr().err
+
+
+def test_f1_confirmation_falls_back_to_current_database(monkeypatch, capsys):
+    cur = ScriptedCursor(returns=[("actual_db",)])
+    conn = FakeConn(cur, dbname=None)                # a connection object that reports no .info.dbname
+    monkeypatch.setattr(mirror_main, "_connect", lambda dsn: conn)
+
+    assert mirror_main.main(["enable", "--confirm", "actual_db", "--dsn", "host=localhost"]) == 0
+    assert conn.committed is True
+    assert cur.statements()[0] == "SELECT current_database()"
+    assert "enabled on actual_db" in capsys.readouterr().out
+
+    refused_cur = ScriptedCursor(returns=[("actual_db",)])
+    refused = FakeConn(refused_cur, dbname=None)
+    monkeypatch.setattr(mirror_main, "_connect", lambda dsn: refused)
+    assert mirror_main.main(["enable", "--confirm", "wrong", "--dsn", "host=localhost"]) == 2
+    assert refused.committed is False
+    assert not any(sql.startswith(("INSERT", "UPDATE", "DELETE")) for sql in refused_cur.statements())
+
+
+# ------------------------------------------------------------------- F2: preview snapshot identity ---
+# Audit-5 U7 F2: the newest capture globally can belong to another franchise; preview must bind it to this DB.
+
+def test_f2_preview_uses_the_databases_franchise_capture_not_the_newest(monkeypatch, tmp_path, capsys):
+    root = tmp_path / "captures"
+    a = save_capture(root, "A", 9001, player_team=0, mtime=1)      # league A, 00-X on KC
+    b = save_capture(root, "B", 2002, player_team=1, mtime=2)      # league B, newer, 00-X on BUF
+    preview_environment(monkeypatch, root, db_league=9001)
+
+    assert run_preview() == 0
+    out = capsys.readouterr().out
+    assert f"NFL mirror preview from {a}" in out
+    assert "roster ops: 0" in out
+    assert str(b) not in out
+
+
+def test_f2_a_single_matching_capture_is_the_ordinary_control(monkeypatch, tmp_path, capsys):
+    root = tmp_path / "captures"
+    a = save_capture(root, "A", 9001, player_team=0)
+    preview_environment(monkeypatch, root, db_league=9001)
+
+    assert run_preview() == 0
+    out = capsys.readouterr().out
+    assert f"NFL mirror preview from {a}" in out and "roster ops: 0" in out
+
+
+def test_f2_preview_refuses_when_no_capture_matches_the_database(monkeypatch, tmp_path, capsys):
+    root = tmp_path / "captures"
+    save_capture(root, "B", 2002, player_team=1)
+    env = preview_environment(monkeypatch, root, db_league=9001)
+
+    assert run_preview() == 2
+    err = capsys.readouterr().err
+    assert "refused" in err and "no capture snapshot matches league 9001" in err
+    env.fetch.assert_not_called()
+    assert env.built == []
+
+
+def test_f2_preview_refuses_a_capture_without_a_franchise_identity(monkeypatch, tmp_path, capsys):
+    root = tmp_path / "captures"
+    save_capture(root, "A", None, identity=False)
+    env = preview_environment(monkeypatch, root, db_league=9001)
+
+    assert run_preview() == 2
+    assert "franchise.league_id" in capsys.readouterr().err
+    env.fetch.assert_not_called()
+
+
+def test_f2_preview_refuses_an_unset_database_league_id(monkeypatch, tmp_path, capsys):
+    root = tmp_path / "captures"
+    save_capture(root, "A", 9001)
+    env = preview_environment(monkeypatch, root, db_league=None)
+
+    assert run_preview() == 2
+    assert "madden_league_id is not set" in capsys.readouterr().err
+    env.fetch.assert_not_called()
+
+
+@pytest.mark.parametrize("capture_kwargs,reason", [
+    ({"season": 2027}, "is season 2027"),
+    ({"week_type": "WildcardPlayoff", "week_index": 1}, "PLAYOFF_WEEK"),
+])
+def test_f2_preview_refuses_a_season_or_stage_mismatch(monkeypatch, tmp_path, capsys, capture_kwargs, reason):
+    root = tmp_path / "captures"
+    save_capture(root, "A", 9001, **capture_kwargs)
+    env = preview_environment(monkeypatch, root, db_league=9001, db_week=6)
+
+    assert run_preview() == 2
+    assert reason in capsys.readouterr().err
+    env.fetch.assert_not_called()
+
+
+def test_f2_preview_refuses_a_database_week_with_no_stage(monkeypatch, tmp_path, capsys):
+    root = tmp_path / "captures"
+    save_capture(root, "A", 9001)
+    env = preview_environment(monkeypatch, root, db_league=9001, db_week=0)
+
+    assert run_preview() == 2
+    assert "not a regular-season or playoff week" in capsys.readouterr().err
+    env.fetch.assert_not_called()
+
+
+def test_f2_explicit_snapshot_is_validated_against_the_database(monkeypatch, tmp_path, capsys):
+    root = tmp_path / "captures"
+    a = save_capture(root, "A", 9001, player_team=0, mtime=1)
+    b = save_capture(root, "B", 2002, player_team=1, mtime=2)
+    env = preview_environment(monkeypatch, root, db_league=9001)
+    env.fetch.side_effect = AssertionError("fetch must not run for a refused snapshot")
+
+    assert run_preview(snapshot=b) == 2
+    err = capsys.readouterr().err
+    assert "refused" in err and "league 2002" in err
+
+    env.fetch.side_effect = lambda season, refresh=True: fetched_files()
+    assert run_preview(snapshot=a) == 0
+    assert f"NFL mirror preview from {a}" in capsys.readouterr().out
+
+
+def test_f2_an_unreadable_explicit_snapshot_refuses(monkeypatch, tmp_path, capsys):
+    root = tmp_path / "captures"
+    save_capture(root, "A", 9001)
+    env = preview_environment(monkeypatch, root, db_league=9001)
+    env.fetch.side_effect = AssertionError("fetch must not run for an unreadable snapshot")
+
+    assert run_preview(snapshot=tmp_path / "missing.json") == 2
+    assert "cannot read snapshot" in capsys.readouterr().err
+
+
+# ------------------------------------------------------------------------- F3: next supported game week ---
+@pytest.mark.parametrize("last_week,expected", [
+    (20, "next real week: Mu week 21 -> nflverse week 21, mode CATCH_UP"),
+    (21, "next real week: Mu week 23 -> nflverse week 22, mode CATCH_UP"),
+    (22, "next real week: Mu week 23 -> nflverse week 22, mode CATCH_UP"),
+    (23, "next real week: none (past the Super Bowl; no real NFL game after Mu week 23)"),
+    (10, "next real week: Mu week 11 -> nflverse week 11, mode CATCH_UP"),
+])
+def test_f3_status_skips_the_pro_bowl_internal_week(monkeypatch, last_week, expected):
+    real_week = 22 if last_week == 22 else real_state.real_week_for(last_week)
+    conn = signed((True, SEASON, None, None, "OFF", None),
+                  (SEASON, last_week, real_week, "CATCH_UP", "WRITTEN"))
+    monkeypatch.setattr(mirror_main, "_cached_games_rows",
+                        lambda season: [{"season": str(SEASON), "week": str(week),
+                                         "home_score": "20", "away_score": "17"} for week in (11, 21, 22)])
+    lines, code = mirror_main.status_report(conn.cursor())
+    assert code == 0
+    assert lines[-1] == expected
+    if last_week == 23:
+        assert "Mu week 24" not in lines[-1]
+
+
+def test_f3_a_pending_super_bowl_is_the_next_week_in_live_mode(monkeypatch):
+    conn = signed((True, SEASON, None, None, "OFF", None),
+                  (SEASON, 21, 21, "CATCH_UP", "WRITTEN"))
+    monkeypatch.setattr(mirror_main, "_cached_games_rows",
+                        lambda season: [{"season": str(SEASON), "week": "22", "home_score": "", "away_score": ""}])
+    lines, _ = mirror_main.status_report(conn.cursor())
+    assert lines[-1] == "next real week: Mu week 23 -> nflverse week 22, mode LIVE"
+
+
+# ------------------------------------------------------- F1/F2 scratch PostgreSQL (mu_scratch_u19_test) ---
+SCRATCH_DB = "mu_scratch_u19_test"
+SCRATCH_ADMIN = ["docker", "exec", "madden-db", "psql", "-U", "postgres", "-v", "ON_ERROR_STOP=1", "-c"]
+SCRATCH_SCHEMA = """
+CREATE TABLE league_state (
+    id INT PRIMARY KEY DEFAULT 1,
+    current_season INT NOT NULL DEFAULT 2024,
+    current_week INT NOT NULL DEFAULT 1,
+    madden_league_id BIGINT,
+    shape_season INT
+);
+INSERT INTO league_state (id) VALUES (1);
+CREATE TABLE nfl_mirror_settings (
+    id SMALLINT PRIMARY KEY CHECK (id = 1),
+    enabled BOOLEAN NOT NULL DEFAULT false,
+    season INT NOT NULL DEFAULT 2026,
+    last_week INT,
+    madden_injuries_field JSONB,
+    injuries_state VARCHAR(8) NOT NULL DEFAULT 'ON' CHECK (injuries_state IN ('ON', 'OFF')),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+INSERT INTO nfl_mirror_settings (id) VALUES (1);
+CREATE TABLE players (id SERIAL PRIMARY KEY, player_name VARCHAR(255) NOT NULL, madden_pgid INT);
+CREATE TABLE nfl_players (gsis_id TEXT PRIMARY KEY, display_name TEXT NOT NULL, position TEXT, birth_date TEXT,
+                          college TEXT);
+CREATE TABLE nfl_player_links (
+    player_id INT PRIMARY KEY, gsis_id TEXT NOT NULL UNIQUE,
+    method TEXT NOT NULL CHECK (method IN ('EXACT', 'ESPN', 'ALIAS', 'FUZZY', 'OVERRIDE', 'CREATED')),
+    score NUMERIC, evidence JSONB NOT NULL DEFAULT '{}', linked_at TIMESTAMPTZ DEFAULT now()
+);
+"""
+
+
+def _scratch_psql(sql):
+    subprocess.run(SCRATCH_ADMIN + [sql], check=True, capture_output=True, text=True, timeout=60)
+
+
+@pytest.fixture
+def scratch_connector(monkeypatch):
+    """The real psycopg connect for a DSN whose dbname the test firewall's hand-split parser cannot read (repeated
+    or quoted). It asserts libpq resolves the DSN to the scratch database before bypassing that parser."""
+    from psycopg.conninfo import conninfo_to_dict
+    from tests.conftest import _ORIG_PSYCOPG_CONNECT
+
+    def connect(dsn):
+        target = conninfo_to_dict(dsn).get("dbname")
+        assert target == SCRATCH_DB, f"refusing a non-scratch connection to {target!r}"
+        return _ORIG_PSYCOPG_CONNECT(dsn)
+
+    monkeypatch.setattr(mirror_main, "_connect", connect)
+    return connect
+
+
+@pytest.fixture(scope="module")
+def scratch_pg():
+    """A scratch `mu_scratch_u19_test` built for these cases only and dropped afterwards."""
+    dsn = os.environ.get("TEST_DATABASE_URL")
+    if not dsn:
+        pytest.skip("set TEST_DATABASE_URL='host=localhost dbname=mu_scratch_u19_test "
+                    "user=postgres password=postgres' to run the PostgreSQL cases")
+    from psycopg.conninfo import conninfo_to_dict
+    try:
+        name = conninfo_to_dict(dsn).get("dbname")
+    except Exception as e:      # noqa: BLE001
+        pytest.skip(f"TEST_DATABASE_URL is not a usable conninfo string: {e}")
+    if name != SCRATCH_DB or not name.startswith("mu_scratch_"):
+        pytest.skip(f"TEST_DATABASE_URL must name the scratch database {SCRATCH_DB}, not {name!r}")
+    created = False
+    try:
+        try:
+            _scratch_psql(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)')
+            _scratch_psql(f'CREATE DATABASE "{name}"')
+            created = True
+        except (OSError, subprocess.SubprocessError) as e:
+            pytest.skip(f"no scratch PostgreSQL (docker exec madden-db psql): {e}")
+        import psycopg
+        try:
+            with psycopg.connect(dsn, autocommit=True) as conn:
+                conn.execute(SCRATCH_SCHEMA)
+        except Exception as e:      # noqa: BLE001
+            pytest.skip(f"no scratch PostgreSQL at {dsn}: {e}")
+        yield dsn
+    finally:
+        if created:
+            _scratch_psql(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)')
+
+
+def _pg_reset(dsn, *, league_id=9001, season=SEASON, week=6):
+    import psycopg
+    with psycopg.connect(dsn, autocommit=True) as conn:
+        conn.execute("TRUNCATE nfl_mirror_settings, players, nfl_player_links, nfl_players RESTART IDENTITY")
+        conn.execute("INSERT INTO nfl_mirror_settings (id) VALUES (1)")
+        conn.execute("UPDATE league_state SET current_season = %s, current_week = %s, madden_league_id = %s "
+                     "WHERE id = 1", (season, week, league_id))
+
+
+def _pg_settings(dsn):
+    import psycopg
+    with psycopg.connect(dsn) as conn:
+        return conn.execute("SELECT enabled, last_week, updated_at FROM nfl_mirror_settings WHERE id = 1").fetchone()
+
+
+def _pg_add_link(dsn, gsis="00-X", pgid=100):
+    import psycopg
+    with psycopg.connect(dsn, autocommit=True) as conn:
+        player_id = conn.execute("INSERT INTO players (player_name, madden_pgid) VALUES ('Linked Man', %s) "
+                                 "RETURNING id", (pgid,)).fetchone()[0]
+        conn.execute("INSERT INTO nfl_player_links (player_id, gsis_id, method) VALUES (%s, %s, 'EXACT')",
+                     (player_id, gsis))
+
+
+def test_f1_real_pg_repeated_dbname_refuses_and_the_correct_name_updates(scratch_pg, scratch_connector):
+    _pg_reset(scratch_pg)
+    dsn = (f"host=localhost dbname=confirmed_name dbname={SCRATCH_DB} user=postgres password=postgres")
+    before = _pg_settings(scratch_pg)
+
+    assert mirror_main.main(["enable", "--dsn", dsn, "--confirm", "confirmed_name"]) == 2
+    assert _pg_settings(scratch_pg) == before, "a mismatch must leave enabled, last_week and updated_at untouched"
+
+    assert mirror_main.main(["enable", "--last-week", "10", "--dsn", dsn, "--confirm", SCRATCH_DB]) == 0
+    enabled, last_week, updated = _pg_settings(scratch_pg)
+    assert enabled is True and last_week == 10 and updated != before[2]
+
+    before = _pg_settings(scratch_pg)
+    assert mirror_main.main(["disable", "--dsn", dsn, "--confirm", "confirmed_name"]) == 2
+    assert _pg_settings(scratch_pg) == before
+    assert mirror_main.main(["disable", "--dsn", dsn, "--confirm", SCRATCH_DB]) == 0
+    assert _pg_settings(scratch_pg)[0] is False
+
+
+@pytest.mark.parametrize("dsn", [
+    "postgresql://postgres:postgres@localhost/wrong?dbname=mu_scratch_u19_test",
+    "host=localhost dbname='mu_scratch_u19_test' user=postgres password=postgres",
+    "host=localhost user=postgres password=postgres dbname='mu_scratch_u19_test'",
+    "host=localhost dbname='mu_scratch_u19_test' user=postgres password=postgres options='-c application_name=u19'",
+])
+def test_f1_real_pg_url_and_quoted_dsns_use_the_opened_database(scratch_pg, scratch_connector, dsn):
+    _pg_reset(scratch_pg)
+    assert mirror_main.main(["enable", "--dsn", dsn, "--confirm", SCRATCH_DB]) == 0
+    assert _pg_settings(scratch_pg)[0] is True
+
+
+def test_f1_real_pg_url_query_override_still_needs_the_right_confirm(scratch_pg):
+    _pg_reset(scratch_pg)
+    dsn = f"postgresql://postgres:postgres@localhost/{SCRATCH_DB}?dbname={SCRATCH_DB}"
+    assert mirror_main.main(["enable", "--dsn", dsn, "--confirm", "wrong"]) == 2
+    assert _pg_settings(scratch_pg)[0] is False
+    assert mirror_main.main(["enable", "--dsn", dsn, "--confirm", SCRATCH_DB]) == 0
+    assert _pg_settings(scratch_pg)[0] is True
+
+
+def test_f2_real_pg_binds_the_capture_to_the_league_state_franchise(monkeypatch, tmp_path, scratch_pg, capsys):
+    _pg_reset(scratch_pg, league_id=9001, season=SEASON, week=6)
+    _pg_add_link(scratch_pg)
+    root = tmp_path / "captures"
+    a = save_capture(root, "A", 9001, player_team=0, mtime=1)
+    b = save_capture(root, "B", 2002, player_team=1, mtime=2)
+    monkeypatch.setattr(mirror_main, "CAPTURES", str(root))
+    fetch = mock.Mock(return_value=fetched_files())
+    monkeypatch.setattr(mirror_main, "_fetch_week", fetch)
+    monkeypatch.setattr(mirror_main, "_read_rows", lambda fetched: [])
+    monkeypatch.setattr(mirror_main, "_build_week", lambda *args, **kwargs: linked_real_week())
+    monkeypatch.setattr(mirror_main, "_read_trades", lambda: [])
+    monkeypatch.setattr(mirror_main, "league_cap", lambda snapshot: 255_400_000)
+
+    # Real psycopg connection and real store.links against the scratch database: league A's link is used.
+    assert mirror_main.main(["preview", "--week", "6", "--dsn", scratch_pg]) == 0
+    out = capsys.readouterr().out
+    assert f"NFL mirror preview from {a}" in out and "roster ops: 0" in out
+    assert str(b) not in out
+
+    fetch.reset_mock()
+    assert mirror_main.main(["preview", "--week", "6", "--snapshot", str(b), "--dsn", scratch_pg]) == 2
+    err = capsys.readouterr().err
+    assert "refused" in err and "league 2002" in err
+    fetch.assert_not_called()
