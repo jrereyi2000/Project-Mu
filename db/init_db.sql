@@ -48,7 +48,11 @@ CREATE TABLE IF NOT EXISTS players (
     weight INT,
     player_number INT DEFAULT 0,
     espn_id INT,
-    madden_pgid INT    -- Player.PresentationId on the PC save (2027_01_05_madden_pgid.sql)
+    madden_pgid INT,   -- Player.PresentationId on the PC save (2027_01_05_madden_pgid.sql)
+    -- Madden's own draft facts, the tuning gates' drafted cohort (2027_02_24_player_draft_facts.sql, §7 decision 10)
+    draft_round SMALLINT,
+    draft_pick SMALLINT,
+    draft_team_id INT REFERENCES teams(id) ON DELETE SET NULL
 );
 CREATE UNIQUE INDEX IF NOT EXISTS players_madden_pgid ON players (madden_pgid) WHERE madden_pgid IS NOT NULL;
 
@@ -3985,5 +3989,6 @@ INSERT INTO schema_migrations (version, filename, checksum, source) VALUES
     ('2027_02_20_buyout_schedule', '2027_02_20_buyout_schedule.sql', 'ce290330016361b6a851d0919cd4596d58e24e51feb3703cd36ed590ca84be1d', 'init_db.sql'),
     ('2027_02_21_coach_madden_profiles', '2027_02_21_coach_madden_profiles.sql', '57c19dbbd71734bbf240a9831018a4447e6985c037f5b55240c5bd21c3f5b8f7', 'init_db.sql'),
     ('2027_02_22_relationship_applied_refs', '2027_02_22_relationship_applied_refs.sql', '6d24a303ad4affdca5645e264d82220864fd357916c874e97849d3bfc08d9e39', 'init_db.sql'),
-    ('2027_02_23_player_stats_team_key', '2027_02_23_player_stats_team_key.sql', '7f5e8241f0e83d35385a272e5c8d7f34ddd3f0f7a68d99f0d51ad635a84fdeab', 'init_db.sql')
+    ('2027_02_23_player_stats_team_key', '2027_02_23_player_stats_team_key.sql', '7f5e8241f0e83d35385a272e5c8d7f34ddd3f0f7a68d99f0d51ad635a84fdeab', 'init_db.sql'),
+    ('2027_02_24_player_draft_facts', '2027_02_24_player_draft_facts.sql', '08c2e353ebc2e27ac4c83ab23aa38eae32a111dd08d8e528b3ad9b0f79f36afa', 'init_db.sql')
 ON CONFLICT (version) DO NOTHING;

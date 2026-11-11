@@ -43,6 +43,14 @@
 // It also adds `staff`: one {team_index, hc, oc, dc} per real team, each seat the referenced coach's pgid or null
 // when the Team.HeadCoach / OffensiveCoordinator / DefensiveCoordinator reference is empty. Read only: no Coach field
 // is written by the reader.
+//
+// reader_version 9 adds, per player, Madden's own draft facts (TUNING_ACCEPTANCE_THRESHOLDS.md §7 decision 10):
+// `draft_round` (PLYR_DRAFTROUND 1-7; 63 = undrafted and 0 = unset become null), `draft_pick` (PLYR_DRAFTPICK, the
+// overall slot 1-256; 511 = none and the 257+ UDFA ordering become null) and `draft_team_index` (PLYR_DRAFTTEAM is a
+// 1-BASED TeamIndex: 1-32 -> TeamIndex 0-31; 0 = Madden holds no draft team, which is every real-NFL veteran, and
+// all three become null for a status Draft prospect, whose PLYR_DRAFTTEAM is only the free-agent placeholder).
+// YearDrafted stays as the raw signed offset (0 = the class being drafted this league year, negative = an earlier
+// year). The drafted cohort in the tuning gates is `draft_round` 1-7, not draft_class/draft_picks.
 import { copyFileSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { basename, join, resolve } from 'path';
@@ -54,7 +62,7 @@ import {
   weightLbs,
 } from './lib.mjs';
 
-export const READER_VERSION = 8;
+export const READER_VERSION = 9;
 
 // Real teams are TeamIndex 0..31 (32 = free agents; the Team table has a few more rows).
 const REAL_TEAMS = 32;
@@ -368,6 +376,23 @@ async function readStatRows(tables, bits, gameRowByRef, teamOfRef) {
   return rows;
 }
 
+// Madden's draft facts on a Player record, normalized (reader_version 9). Sentinels seen in CAREER-TUNE-P2G:
+// PLYR_DRAFTROUND 63 = undrafted (978 players) and 0 = unset; PLYR_DRAFTPICK 511 = none (669), while undrafted
+// players carry a 257+ UDFA order in the same field; PLYR_DRAFTTEAM is a 1-based TeamIndex (a 2025 draftee still
+// with his team has PLYR_DRAFTTEAM = TeamIndex + 1 in 228 of 254 cases) and 0 = Madden has no draft team, true for
+// every real-NFL veteran. A status Draft prospect's PLYR_DRAFTTEAM is the free-agent placeholder (32), not a team.
+export function draftFacts(record) {
+  const round = record.PLYR_DRAFTROUND;
+  const pick = record.PLYR_DRAFTPICK;
+  const team = record.PLYR_DRAFTTEAM;
+  const drafted = round >= 1 && round <= 7;
+  return {
+    draft_round: drafted ? round : null,
+    draft_pick: drafted && pick >= 1 && pick <= 256 ? pick : null,
+    draft_team_index: drafted && record.ContractStatus !== 'Draft' && team >= 1 && team <= 32 ? team - 1 : null,
+  };
+}
+
 async function readPlayers(tables, playerTable, gameTableId, teamTableId, teamIndexByRow) {
   const gameRowByRef = bits => {
     const ref = decodeRef(bits);
@@ -393,6 +418,8 @@ async function readPlayers(tables, playerTable, gameTableId, teamTableId, teamIn
       age: p.Age,
       years_pro: p.YearsPro,
       year_drafted: p.YearDrafted,
+      // reader_version 9: Madden's draft facts (see draftFacts)
+      ...draftFacts(p),
       college: decodeRef(p.College),
       jersey: p.JerseyNum,
       height_in: p.Height,

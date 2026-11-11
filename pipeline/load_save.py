@@ -414,20 +414,30 @@ def team_ids(cur, snapshot):
     return ids
 
 
+def draft_values(p, teams):
+    """Madden's per-player draft facts as players columns: (draft_round, draft_pick, draft_team_id). The reader
+    (v9) normalizes PLYR_DRAFTROUND 63 / PLYR_DRAFTPICK 511 / PLYR_DRAFTTEAM 0 to None; a snapshot from an older
+    reader simply has no keys, which is all None. draft_team_index is a 0-31 TeamIndex."""
+    team_index = p.get("draft_team_index")
+    return p.get("draft_round"), p.get("draft_pick"), teams.get(team_index) if team_index is not None else None
+
+
 def load_players(cur, snapshot, season, teams, report):
     cur.execute("SELECT madden_pgid, id FROM players WHERE madden_pgid IS NOT NULL")
     by_pgid = dict(cur.fetchall())
-    ids, created, created_ids = {}, 0, {}
+    ids, created, created_ids, drafted = {}, 0, {}, 0
     for p in snapshot["players"]:
         if p["status"] not in LOADED_STATUSES:
             continue
         pid = by_pgid.get(p["pgid"])
+        draft_round, draft_pick, draft_team = draft_values(p, teams)
         full = f"{p['first_name']} {p['last_name']}".strip()
         if pid is None:
-            cur.execute("INSERT INTO players (player_name, full_name, height, weight, player_number, origin, madden_pgid) "
-                        "VALUES (%s, %s, %s, %s, %s, 'SAVE', %s) RETURNING id",
+            cur.execute("INSERT INTO players (player_name, full_name, height, weight, player_number, origin, "
+                        "madden_pgid, draft_round, draft_pick, draft_team_id) "
+                        "VALUES (%s, %s, %s, %s, %s, 'SAVE', %s, %s, %s, %s) RETURNING id",
                         (db_player_name(p["first_name"], p["last_name"]), full, height_text(p["height_in"]),
-                         p["weight_lbs"], p["jersey"], p["pgid"]))
+                         p["weight_lbs"], p["jersey"], p["pgid"], draft_round, draft_pick, draft_team))
             pid = cur.fetchone()[0]
             created += 1
             created_ids[pid] = p["pgid"]
@@ -435,6 +445,8 @@ def load_players(cur, snapshot, season, teams, report):
             # A roster row clears a captured retirement (SEASON_CONTINUITY_PLAN D8): he is playing again.
             cur.execute("UPDATE players SET height = %s, weight = %s, player_number = %s, retired_season = NULL "
                         "WHERE id = %s", (height_text(p["height_in"]), p["weight_lbs"], p["jersey"], pid))
+        if draft_round is not None:
+            drafted += 1
         team = teams.get(p["team_index"]) if p["status"] != "FreeAgent" else None
         cur.execute("INSERT INTO player_seasons (player_id, team_id, season, position, age, overall_rating, "
                     "years_of_experience, dev_trait, archetype) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
@@ -448,7 +460,34 @@ def load_players(cur, snapshot, season, teams, report):
     report["players"] = len(ids)
     report["players_created"] = created
     report["players_created_ids"] = created_ids
+    report["players_drafted"] = drafted                       # this snapshot's loaded players with a Madden draft round
+    report["players_undrafted"] = len(ids) - drafted
     return ids
+
+
+def load_player_draft_facts(cur, snapshot, teams, report):
+    """Fill players.draft_round / draft_pick / draft_team_id from Madden's per-player fields (reader v9) for EVERY
+    snapshot player that already has a players row, not only the roster statuses load_players writes: the A1/A2
+    drafted cohort is careers that ENDED, and a Retired player never goes through load_players. A NULL column is
+    filled; a stored value is never overwritten (the row may have been loaded before reader v9)."""
+    cur.execute("SELECT madden_pgid, id, draft_round, draft_pick, draft_team_id FROM players "
+                "WHERE madden_pgid IS NOT NULL")
+    stored = {r[0]: r[1:] for r in cur.fetchall()}
+    filled = 0
+    for p in snapshot.get("players") or []:
+        old = stored.get(p["pgid"])
+        if old is None:
+            continue
+        draft_round, draft_pick, draft_team = draft_values(p, teams)
+        if draft_round is None and draft_pick is None and draft_team is None:
+            continue
+        if not any(o is None and n is not None for o, n in zip(old[1:], (draft_round, draft_pick, draft_team))):
+            continue
+        cur.execute("UPDATE players SET draft_round = COALESCE(draft_round, %s), draft_pick = COALESCE(draft_pick, %s), "
+                    "draft_team_id = COALESCE(draft_team_id, %s) WHERE id = %s",
+                    (draft_round, draft_pick, draft_team, old[0]))
+        filled += 1
+    report["players_draft_filled"] = filled
 
 
 def retirement_season(snapshot, season):
@@ -1204,6 +1243,7 @@ def load_snapshot(cur, snapshot, season=None, capture_id=None, capture_folder=No
     players = load_players(cur, snapshot, season, teams, report)
     report["coach_link"] = link_staff(cur, snapshot, season)
     load_retirements(cur, snapshot, season, teams, report, capture_id)
+    load_player_draft_facts(cur, snapshot, teams, report)
     load_player_attributes(cur, snapshot, season, players, report, capture_folder=capture_folder)
     games = load_games(cur, snapshot, season, teams, report)
     load_game_lines(cur, snapshot, games, players, report)
@@ -1225,7 +1265,8 @@ def load_snapshot(cur, snapshot, season=None, capture_id=None, capture_folder=No
     return report
 
 
-REPORT_COUNTS = ("players", "players_created", "retirements", "player_attributes", "player_attributes_unchanged",
+REPORT_COUNTS = ("players", "players_created", "players_drafted", "players_undrafted", "players_draft_filled",
+                 "retirements", "player_attributes", "player_attributes_unchanged",
                  "player_attributes_in_season_changes", "games", "games_completed", "game_line_rows", "team_stat_rows",
                  "season_line_rows", "contracts", "injuries", "games_with_scoring_plays", "depth_charts",
                  "depth_chart_rows", "team_ratings", "draft_prospects", "team_caps", "prospect_ratings")
