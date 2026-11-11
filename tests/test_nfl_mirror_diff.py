@@ -641,3 +641,52 @@ def test_plan_rosters_uses_the_week_as_of_boundary_for_dated_deals(tmp_path):
     real = real_week({"BUF": [real_player("00-otc", "Free Agent", "BUF", entry_year=2020)]})   # week 10
     contract = ops_for(plan(snap, real, {"00-otc": 122}, contracts_=book), kind="sign")[0]["contract"]
     assert contract["contract_type"] == "MINIMUM"      # dated after week 10's as-of boundary (2026-11-17)
+
+
+def test_january_2027_postseason_deal_is_used_for_a_2026_season_signing():
+    """N1: the 2026 season runs through the Super Bowl, so a January 2027 deal is inside the mirror window."""
+    book = ContractBook({"00-otc": [_otc("Bills", "2027-01-10", year_signed=2027, years=2, apy=6.0)]})
+    contract = book.contract_for("00-otc", "2027-01-31", CAP, team="BUF")
+    assert contract["contract_type"] == "STANDARD"
+    assert contract["length"] == 2
+    assert contract["salary_by_year"] == [6_000_000, 6_000_000]
+
+    # The as-of boundary still holds: a deal is never used before its own date, so a later February deal loses.
+    assert book.contract_for("00-otc", "2027-01-09", CAP, team="BUF")["contract_type"] == "MINIMUM"
+    future = ContractBook({"00-otc": [_otc("Bills", "2027-02-10", year_signed=2027, years=5, apy=20.0)]})
+    assert future.contract_for("00-otc", "2027-01-31", CAP, team="BUF")["contract_type"] == "MINIMUM"
+
+
+def test_postseason_parquet_deals_through_plan_rosters(tmp_path):
+    """N1 regressions over a real parquet: December/January/February rows, selected as of a Super Bowl-week mirror."""
+    path = _write_parquet(
+        tmp_path / "contracts.parquet",
+        gsis_id=["00-otc", "00-otc", "00-otc", "00-otc", "00-pre"],
+        team=["Bills", "Bills", "Bills", "Chiefs", "Bills"],
+        year_signed=[2026, 2027, 2027, 2027, 2026],
+        date_signed=["2026-12-01", "2027-01-10", "2027-02-10", "2027-01-10", "2026-07-15"],
+        years=[4, 2, 5, 3, 3],
+        apy=[12.0, 6.0, 20.0, 15.0, 10.0],
+        value=[48.0, 12.0, 100.0, 45.0, 30.0],
+        guaranteed=[0.0, 0.0, 0.0, 0.0, 0.0],
+        draft_year=[2022, 2022, 2022, 2022, 2023],
+    )
+    book = ContractBook.from_otc(path)
+    real = real_week({"BUF": [real_player("00-otc", "Free Agent", "BUF", entry_year=2020),
+                              real_player("00-pre", "Pre Window", "BUF", entry_year=2020)]}, week=22)
+    assert diff._week_as_of(real) == "2027-02-09"      # the Super Bowl week, after the 2026 regular season
+    snap = snapshot(madden(123, "Free", "Agent", diff.FREE_AGENT_TEAM, status="FreeAgent"),
+                    madden(124, "Pre", "Window", diff.FREE_AGENT_TEAM, status="FreeAgent"))
+    signs = {op["gsis_id"]: op["contract"]
+             for op in ops_for(plan(snap, real, {"00-otc": 123, "00-pre": 124}, contracts_=book), kind="sign")}
+
+    # The January deal is the latest known same-team deal; the February future deal and the Chiefs deal lose.
+    assert signs["00-otc"]["contract_type"] == "STANDARD"
+    assert (signs["00-otc"]["length"], signs["00-otc"]["salary_by_year"]) == (2, [6_000_000, 6_000_000])
+    assert (book.contract_for("00-otc", "2027-02-09", CAP, team="KC")["length"],
+            book.contract_for("00-otc", "2027-02-09", CAP, team="KC")["salary_by_year"][0]) == (3, 15_000_000)
+    # A deal dated before the August cutoff is still outside the window.
+    assert signs["00-pre"]["contract_type"] == "MINIMUM" and signs["00-pre"]["length"] == 1
+    # The window closes before the 2027 league year: a March 2027 deal is not a 2026-season deal.
+    march = ContractBook({"00-otc": [_otc("Bills", "2027-03-05", year_signed=2027, years=4, apy=12.0)]})
+    assert march.contract_for("00-otc", "2027-03-10", CAP, team="BUF")["contract_type"] == "MINIMUM"

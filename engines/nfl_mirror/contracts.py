@@ -8,9 +8,10 @@ It has no full signing date in the current release, so a row's date is its `year
 `ContractBook.from_otc(path)` keeps every deal by gsis id. `contract_for(gsis_id, signed_date, cap, team=...)`
 gives a contract dict in the shape `pipeline.league_office.offer_contract` returns:
 
-- OTC's own contract when one was signed in the mirror window (on or after 2026-08-01, the 2026 league year for a
-  file without dates), is for the target team, and was signed no later than the mirrored signing (the `signed_date`
-  as-of boundary): real APY and years, no assumed bonus;
+- OTC's own contract when one was signed in the mirror window (on or after 2026-08-01 and before the 2027 league
+  year, so the whole 2026 season including the postseason is covered; a file without dates uses `year_signed`), is
+  for the target team, and was signed no later than the mirrored signing (the `signed_date` as-of boundary): real
+  APY and years, no assumed bonus;
 - otherwise `contracts_engine.minimum_salary(years_exp, cap)` for one year.
 
 `team` is the target's canonical Mu franchise code ("BUF", "WAS"); OTC's club names ("Bills", "Commanders") are
@@ -28,6 +29,9 @@ from engines.nfl_history.teams import MU_TEAMS
 
 SIGNING_SEASON = 2026
 OTC_CUTOFF = "2026-08-01"                  # a midseason 2026 signing, not the March free-agency window
+# The 2026 league season runs through the Super Bowl in February 2027, so the mirror window must cross the calendar
+# year: a January or February deal is still a 2026-season signing. March 2027 opens the 2027 league year and is out.
+MIRROR_WINDOW_END = "2027-03-01"
 MILLIONS = 1_000_000
 DATE_COLUMNS = ("date_signed", "contract_signed_date", "signed_date", "date")
 CONTRACT_TYPES = {"otc": "STANDARD", "minimum": "MINIMUM"}
@@ -108,7 +112,8 @@ class OtcDeal:
     def qualifies(self, signed_date=None, team=None):
         """True when this is a qualifying deal for `team` that was known by the `signed_date` as-of boundary.
 
-        A dated row is never used before its own date; a year-only row is a 2026-window approximation, so the whole
+        A dated row is never used before its own date and never outside the 2026 mirror window (2026-08-01 through
+        the postseason, before the 2027 league year); a year-only row is a 2026-window approximation, so the whole
         window counts as known. `team` is a canonical Mu code, or None to skip the team check.
         """
         if team is not None:
@@ -119,7 +124,7 @@ class OtcDeal:
         if self.signed:
             if as_of is not None and self.signed > as_of:
                 return False
-            return OTC_CUTOFF <= self.signed < "2027-01-01"
+            return OTC_CUTOFF <= self.signed < MIRROR_WINDOW_END
         if self.year_signed != SIGNING_SEASON:
             return False
         return as_of is None or as_of >= OTC_CUTOFF
