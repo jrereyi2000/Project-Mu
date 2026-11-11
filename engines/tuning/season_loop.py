@@ -267,7 +267,9 @@ def walk_season(run, *, runner=None, python=None, max_weeks=MAX_SEASON_STOPS, wo
 
     Returns the stop records, each with its own step times (`advance_s`, `ingest_s`). The last one says
     whether the season reached its end — `status` "ok" and a `to` outside the season — or the pilot stopped
-    on an uncatalogued screen, whose screenshot is in that stop's run dir."""
+    on an uncatalogued screen, whose screenshot is in that stop's run dir. `max_weeks` is a safety cap and a
+    deliberate partial run (`--max-weeks 3` for a live proof): it ends the walk like a stop, not an error,
+    and `--resume` carries on from the record."""
     runner, python = runner or subprocess.run, python or sys.executable
     stops = []
     for n in range(1, max_weeks + 1):
@@ -291,9 +293,6 @@ def walk_season(run, *, runner=None, python=None, max_weeks=MAX_SEASON_STOPS, wo
         res["ingest_s"] = round(time.time() - t1, 1)
         if progress is not None:
             progress.stop(n, res)
-    else:
-        raise StepFailed(f"the season didn't reach its end in {max_weeks} advances; the last stop was "
-                         f"{(stops[-1].get('to') if stops else None)}")
     return stops
 
 
@@ -430,7 +429,9 @@ def run(name, *, base_save=BASE_SAVE, resume=False, offseason=True, max_stops=14
         ingest(name, runner=runner, python=python, saves_dir=saves_dir, environ=environ)
         progress.add("ingest-clone")
     weeks = []
-    if fast_season:
+    if season_done:
+        season_ok = True
+    elif fast_season:
         if not resume:
             sim(name, "regular-season-end", quit=False, runner=runner, python=python,
                 run_dir=os.path.join(run_dir, "pilot_regular"))
@@ -439,8 +440,6 @@ def run(name, *, base_save=BASE_SAVE, resume=False, offseason=True, max_stops=14
         sim(name, "playoffs-end", in_place=not resume, runner=runner, python=python,
             run_dir=os.path.join(run_dir, "pilot_playoffs"))
         progress.add("playoffs")
-        season_ok = True
-    elif season_done:
         season_ok = True
     else:
         weeks = walk_season(name, runner=runner, python=python, max_weeks=max_weeks, work_dir=run_dir,
@@ -452,12 +451,12 @@ def run(name, *, base_save=BASE_SAVE, resume=False, offseason=True, max_stops=14
             report_fn(f"[WARN] the season stopped before its end: {last.get('reason') or last.get('kind') or last}"
                       f" (screenshot in its week_* run dir); no report, no offseason walk")
     snap = os.path.join(run_dir, "snapshot.json")
-    if season_ok and do_report:
+    if season_ok and do_report and not season_done:
         # taken at the season's end: Madden rolls the per-game tables over at the new league year,
         # so an offseason snapshot has the next season's unplayed schedule and no games
         snapshot(name, snap, runner=runner, saves_dir=saves_dir)
         progress.add("snapshot")
-    if season_ok:
+    if season_ok and not season_done:
         # the walk left the save on the season's last stop (STAFF): Mu's OFFSEASON_START write
         ingest(name, runner=runner, python=python, auto_init=False, saves_dir=saves_dir, environ=environ)
         progress.add("ingest-playoffs")

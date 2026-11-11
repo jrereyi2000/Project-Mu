@@ -183,11 +183,15 @@ def test_a_stopped_advance_ends_the_season_without_a_report_or_an_offseason(tmp_
     assert sum(1 for c in calls if "pipeline.watch_save" in c) == 3      # the seed and weeks 2-3
 
 
-def test_the_season_walk_is_capped(tmp_path):
+def test_the_season_walk_is_capped_and_can_be_resumed(tmp_path):
     calls = []
-    with pytest.raises(L.StepFailed, match="didn't reach its end"):
-        L.run("unit", runner=_runner(calls, [_week(n) for n in range(2, 40)]), python="py",
-              seasons_dir=str(tmp_path / "s"), saves_dir="/saves", do_report=False, max_weeks=3)
+    out = L.run("unit", runner=_runner(calls, [_week(n) for n in range(2, 40)]), python="py",
+                seasons_dir=str(tmp_path / "s"), saves_dir="/saves", do_report=False, max_weeks=3)
+    assert len(out["weeks"]) == 3 and out["season_complete"] is False
+    assert out["steps"] == ["clone", "ingest-clone", "season"]
+    assert sum(1 for c in calls if "pipeline.watch_save" in c) == 4      # the seed and three weeks
+    progress = json.load(open(os.path.join(out["run_dir"], "progress.json")))
+    assert len(progress["stops"]) == 3 and progress["season_complete"] is False
 
 
 # ---------------------------------------------------------------- the one-shot sim
@@ -266,7 +270,19 @@ def test_a_resume_of_a_finished_season_does_not_walk_it_again(tmp_path):
                 saves_dir="/saves", do_report=False, offseason=False, resume=True)
     assert not any("advance" in c for c in calls) and not any("sim-season" in c for c in calls)
     assert not any("clone-save" in c for c in calls)
+    # the season's snapshot and its last write are not repeated either
+    assert not any(c[0] == "node" or "pipeline.watch_save" in c for c in calls)
     assert out["weeks"] == [] and out["season_complete"] is True
+
+
+def test_a_resume_of_a_finished_fast_season_does_not_sim_it_again(tmp_path):
+    L.run("unit", runner=_runner([]), python="py", seasons_dir=str(tmp_path / "s"), saves_dir="/saves",
+          do_report=False, offseason=False, fast_season=True)
+    calls = []
+    out = L.run("unit", runner=_runner(calls), python="py", seasons_dir=str(tmp_path / "s"), saves_dir="/saves",
+                do_report=False, offseason=False, fast_season=True, resume=True)
+    assert not any("sim-season" in c for c in calls) and not any("clone-save" in c for c in calls)
+    assert out["season_complete"] is True and out["weeks"] == []
 
 
 def test_a_resume_without_a_progress_record_is_refused(tmp_path):
