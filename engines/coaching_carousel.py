@@ -99,7 +99,8 @@ def staff_in(cur, season):
                           ct.start_season, c.scheme, c.playbook, c.pass_lean, c.blitz_rate, c.man_coverage
                    FROM coordinator_tenures ct JOIN coordinators c ON c.id = ct.coordinator_id
                    WHERE ct.start_season <= %s AND (ct.end_season IS NULL OR ct.end_season >= %s)
-                   ORDER BY ct.team_id, ct.role, ct.start_season DESC, ct.id DESC""", (season, season))
+                   ORDER BY ct.team_id, ct.role, ct.start_season DESC, (ct.end_season IS NULL) DESC, ct.id DESC""",
+                (season, season))
     keys = ("coordinator_id", "name", "start_season", "scheme", "playbook", "pass_lean", "blitz_rate", "man_coverage")
     return {(r[0], r[1]): dict(zip(keys, r[2:])) for r in cur.fetchall()}
 
@@ -111,7 +112,8 @@ def head_coaches(cur, season):
                           c.offensive_scheme, c.defensive_scheme, c.pass_lean, c.blitz_rate, c.man_coverage
                    FROM coach_tenures ct JOIN coaches c ON c.id = ct.coach_id
                    WHERE ct.start_season <= %s AND (ct.end_season IS NULL OR ct.end_season >= %s)
-                   ORDER BY ct.team_id, ct.start_season DESC, ct.id DESC""", (season, season))
+                   ORDER BY ct.team_id, ct.start_season DESC, (ct.end_season IS NULL) DESC, ct.id DESC""",
+                (season, season))
     keys = ("coach_id", "name", "slant", "start_season", "offensive_scheme", "defensive_scheme", "pass_lean",
             "blitz_rate", "man_coverage")
     return {r[0]: dict(zip(keys, r[1:])) for r in cur.fetchall()}

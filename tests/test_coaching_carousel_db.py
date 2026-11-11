@@ -1,9 +1,15 @@
 """The coaching carousel against the live database, rehearsing the 2035 offseason inside one transaction that is
 always rolled back (nothing is ever committed). Skipped when the database or the carousel migrations are missing.
 
+`SameSeasonReturn` (audit F2) follows the same real-PostgreSQL pattern but builds its own `mu_scratch_u9_*` database
+from db/init_db.sql and drops it; each test rolls its transaction back.
+
 Run: python3 -m unittest tests.test_coaching_carousel_db
 """
+import os
+import pathlib
 import unittest
+import uuid
 
 try:
     import psycopg
@@ -12,11 +18,41 @@ except Exception:          # pragma: no cover
     psycopg = None
 
 import pytest
+from engines import coach_save_sync as cs
 from engines import coach_hot_seat as chs
 from engines import coaching_carousel as cc
 from engines import fire_coordinator as fc
+from engines.nfl_mirror import staff
 
 SEASON = 2035
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+ADMIN_DSN = os.environ.get("ADMIN_DATABASE_URL",
+                           "host=localhost dbname=postgres user=postgres password=postgres")
+
+
+def _scratch_dsn(name):
+    return f"host=localhost dbname={name} user=postgres password=postgres"
+
+
+def _drop_scratch(name):
+    import psycopg
+    with psycopg.connect(ADMIN_DSN, autocommit=True, connect_timeout=3) as admin:
+        admin.execute(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)')
+
+
+def _make_scratch():
+    """A fresh `mu_scratch_u9_*` database built from db/init_db.sql; dropped by the caller."""
+    import psycopg
+    name = f"mu_scratch_u9_{uuid.uuid4().hex[:12]}"
+    with psycopg.connect(ADMIN_DSN, autocommit=True, connect_timeout=3) as admin:
+        admin.execute(f'CREATE DATABASE "{name}"')
+    try:
+        with psycopg.connect(_scratch_dsn(name), autocommit=True) as conn:
+            conn.execute((ROOT / "db" / "init_db.sql").read_text())
+    except Exception:
+        _drop_scratch(name)
+        raise
+    return name
 
 
 @pytest.mark.integration
@@ -275,6 +311,141 @@ class SameSeasonTieBreak(unittest.TestCase):
 
     def test_coordinator_picks_the_newer_tenure_of_the_same_season(self):
         self.assertEqual(cc.staff_in(self.cur, self.SEASON)[(self.team, "OC")]["coordinator_id"], self.new_oc)
+
+
+@pytest.mark.integration
+class SameSeasonReturn(unittest.TestCase):
+    """Audit F2 required regression: a coach returning within the same season must beat the interim.
+
+    A→B→A where A started the mirrored season: `_start_tenure` reopens A's older, lower-id tenure, so every reader
+    must rank an open same-season tenure above a closed one before `id DESC`. The readers checked are
+    `staff._current_hc` / `_current_coord`, `coach_save_sync._wanted`, and
+    `coaching_carousel.head_coaches` / `staff_in`; a repeated final change must emit no moves. Controls:
+    A(start 2024)→B→A and A→B→C.
+
+    Real PostgreSQL in a `mu_scratch_u9_*` database from db/init_db.sql; each transaction is rolled back.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.db_name = None
+        try:
+            import psycopg
+        except Exception as exc:                                  # pragma: no cover
+            raise unittest.SkipTest(f"psycopg unavailable: {exc!r}")
+        try:
+            cls.db_name = _make_scratch()
+            cls.conn = psycopg.connect(_scratch_dsn(cls.db_name))
+            cls.cur = cls.conn.cursor()
+        except Exception as exc:                                  # pragma: no cover
+            if cls.db_name:
+                _drop_scratch(cls.db_name)
+            raise unittest.SkipTest(f"no PostgreSQL: {exc!r}")
+
+    @classmethod
+    def tearDownClass(cls):
+        if getattr(cls, "conn", None) is not None:
+            cls.conn.rollback()
+            cls.conn.close()
+        if cls.db_name:
+            _drop_scratch(cls.db_name)
+
+    def tearDown(self):
+        self.conn.rollback()
+
+    # -- fixtures --
+    def _team(self, abbr="BUF"):
+        self.cur.execute("INSERT INTO teams (abbreviation, name, city) VALUES (%s, %s, %s) RETURNING id",
+                         (abbr, f"{abbr} Team", "City"))
+        return self.cur.fetchone()[0]
+
+    def _coach(self, name, team_id, start, end=None):
+        self.cur.execute("INSERT INTO coaches (coach_name) VALUES (%s) RETURNING id", (name,))
+        pid = self.cur.fetchone()[0]
+        self.cur.execute("INSERT INTO coach_tenures (coach_id, team_id, start_season, end_season) "
+                         "VALUES (%s, %s, %s, %s)", (pid, team_id, start, end))
+        return pid
+
+    def _coord(self, name, team_id, role, start, end=None):
+        side = "OFFENSIVE" if role == "OC" else "DEFENSIVE"
+        self.cur.execute("INSERT INTO coordinators (coordinator_name, side, scheme) VALUES (%s, %s, %s) "
+                         "RETURNING id", (name, side, "West Coast" if side == "OFFENSIVE" else "4-3"))
+        pid = self.cur.fetchone()[0]
+        self.cur.execute("INSERT INTO coordinator_tenures (coordinator_id, team_id, role, start_season, end_season) "
+                         "VALUES (%s, %s, %s, %s, %s)", (pid, team_id, role, start, end))
+        return pid
+
+    def _staff_a(self, team_id, start):
+        return (self._coach("First Coach", team_id, start),
+                self._coord("First OC", team_id, "OC", start),
+                self._coord("First DC", team_id, "DC", start))
+
+    def _apply(self, start_names, incoming_names, week):
+        moves = staff.apply_staff_changes(self.cur, 2026, [
+            staff.StaffChange(team="BUF", role="HC", out_name=start_names[0], in_name=incoming_names[0], week=week),
+            staff.StaffChange(team="BUF", role="OC", out_name=start_names[1], in_name=incoming_names[1], week=week),
+            staff.StaffChange(team="BUF", role="DC", out_name=start_names[2], in_name=incoming_names[2], week=week),
+        ])
+        return moves
+
+    def _assert_reader_agreement(self, team_id, expected):
+        """The four readers must all select `expected` (person ids) for 2026."""
+        assert staff._current_hc(self.cur, team_id, 2026)["person_id"] == expected[0]
+        assert staff._current_coord(self.cur, team_id, "OC", 2026)["person_id"] == expected[1]
+        assert staff._current_coord(self.cur, team_id, "DC", 2026)["person_id"] == expected[2]
+        wanted = cs._wanted(self.cur, 2026)
+        assert wanted[(team_id, "HC")]["person_id"] == expected[0]
+        assert wanted[(team_id, "OC")]["person_id"] == expected[1]
+        assert wanted[(team_id, "DC")]["person_id"] == expected[2]
+        hcs = cc.head_coaches(self.cur, 2026)
+        coords = cc.staff_in(self.cur, 2026)
+        assert hcs[team_id]["coach_id"] == expected[0]
+        assert coords[(team_id, "OC")]["coordinator_id"] == expected[1]
+        assert coords[(team_id, "DC")]["coordinator_id"] == expected[2]
+
+    # -- tests --
+    def test_a_to_b_to_a_where_a_started_the_season_keeps_a_in_every_reader(self):
+        tid = self._team()
+        a = self._staff_a(tid, 2026)
+        self._apply(("First Coach", "First OC", "First DC"),
+                    ("Second Coach", "Second OC", "Second DC"), week=6)
+        self._apply(("Second Coach", "Second OC", "Second DC"),
+                    ("First Coach", "First OC", "First DC"), week=8)
+
+        self._assert_reader_agreement(tid, a)
+        # The return reopened A's lower-id tenure: repeating the final change must be a no-op.
+        assert self._apply(("Second Coach", "Second OC", "Second DC"),
+                           ("First Coach", "First OC", "First DC"), week=8) == []
+
+    def test_a_starting_2024_then_b_then_a_keeps_a(self):
+        tid = self._team()
+        a = self._staff_a(tid, 2024)
+        self._apply(("First Coach", "First OC", "First DC"),
+                    ("Second Coach", "Second OC", "Second DC"), week=6)
+        self._apply(("Second Coach", "Second OC", "Second DC"),
+                    ("First Coach", "First OC", "First DC"), week=8)
+
+        self._assert_reader_agreement(tid, a)
+        assert self._apply(("Second Coach", "Second OC", "Second DC"),
+                           ("First Coach", "First OC", "First DC"), week=8) == []
+
+    def test_a_then_b_then_c_keeps_c(self):
+        tid = self._team()
+        self._staff_a(tid, 2026)
+        self._apply(("First Coach", "First OC", "First DC"),
+                    ("Second Coach", "Second OC", "Second DC"), week=6)
+        self._apply(("Second Coach", "Second OC", "Second DC"),
+                    ("Third Coach", "Third OC", "Third DC"), week=9)
+
+        self.cur.execute("SELECT id FROM coaches WHERE coach_name = 'Third Coach'")
+        third_hc = self.cur.fetchone()[0]
+        self.cur.execute("SELECT id FROM coordinators WHERE coordinator_name = 'Third OC'")
+        third_oc = self.cur.fetchone()[0]
+        self.cur.execute("SELECT id FROM coordinators WHERE coordinator_name = 'Third DC'")
+        third_dc = self.cur.fetchone()[0]
+        self._assert_reader_agreement(tid, (third_hc, third_oc, third_dc))
+        assert self._apply(("Second Coach", "Second OC", "Second DC"),
+                           ("Third Coach", "Third OC", "Third DC"), week=9) == []
 
 
 if __name__ == "__main__":
