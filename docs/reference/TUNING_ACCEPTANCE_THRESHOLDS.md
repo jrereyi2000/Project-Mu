@@ -328,15 +328,19 @@ median (all players retained as reference); A4's gate is the Week 1 → season-e
     **Clarified by JR, 2026-11-11 (board M-0381):** a season counts as *signed* when the player has a team
     that season **or played games in it**. The offseason ingests set a played season's team to NULL once the
     contract expires, so team alone would end careers a year early. This is read in `decision_compare` only, and
-    the loader is unchanged. **Retirees who were unsigned all season still count** in A1/A2. Their endpoint is
-    the last signed or played season, or the retirement row when there is none.
+    the loader is unchanged. **Retirees who were unsigned all season still count** in A1/A2: the endpoint is the
+    retirement season, and the position/age snapshot is the last signed or played season (audit-2, M-0394; length,
+    age and membership come out the same either way).
 12. **A started season is 8+ games started at the player's own position.**
     **Clarified by JR, 2026-11-10/11 (board M-0374, M-0381):** the chart in force is resolved **per slot and
     week**. The order is JR's chart, then MU_COACH's, then MADDEN's, and a slot is never without a starter: when
     JR's chart leaves a slot empty, the next source fills it. **A chart carries forward:** a week with no chart
     uses the newest earlier week that has one (the newest week wins), and each slot is resolved at that week.
-    *Open (the auditor's suggestion, not yet JR's):* offseason charts stored as `(Y, weeks 24–32)` sort before
-    that season's week 1.
+    A chart week resolves each slot from that one week; a slot left empty in the newest chart is not filled from
+    older weeks. Only weeks **31–32** (cut day and preseason, stored under the new year) sort before week 1; weeks
+    24–30 are the offseason after Y and never carry into Y's regular season (M-0394/M-0400).
+    *Open for JR:* whether a partial newest chart should fall back slot by slot to older weeks, whether an
+    offseason JR chart counts for the next season, and the 31–32 ordering itself (the auditor's suggestion).
 
 ### Still open
 

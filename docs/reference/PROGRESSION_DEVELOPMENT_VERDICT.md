@@ -105,27 +105,39 @@ a 68–72 rookie a little below Madden's own development rate.
   including the `AGE_BAND_OFFSET[0]` recommendation, describe the engine *as designed* rather than as it runs
   today. They become the right numbers once the target is fixed.
 
-Handed to audit-2 for a proof and a fix brief (board). This document doesn't fix it.
+**Confirmed by audit-2 (HIGH, board M-0396).** The proof, every caller and a fix brief are in
+`data/audit_reports/league_shape/report.md`, which is git-ignored and lives in the main checkout. Its counts are
+by age at progression: on p2g 2027 all 126 players at 86+ and ≤ 32 are negative, with a mean of −1.29, and the 90+
+count falls from 94 to 65 in one pass. Two more paths reach the bug, `progression_save.pass_edits` (`:291`) and
+the CLI. **`madden_mu2026` (the real franchise) is set up for managed progression, so it would be hit at its first
+OFFSEASON_START. It must not be advanced into an offseason until this is fixed.**
+**A second, older finding (MEDIUM):** `class_size = max(0, target − roster)` (`:1343`) is always 0, because both
+numbers come from the same season and filter. So the live engine never models leavers or the coming rookie class,
+which the spec and the offline fit both assume it does. `madden_2036` is affected by this one. This document
+doesn't fix either finding.
 
 ## 4. Decision for JR
 
 **What shape does a 2026-era league hold?** JR's 2026-10-28 rule ("the league keeps its 2036 shape, same 90+
-count and mean OVR") was written while the live league was 2036. There are three readings:
+count and mean OVR") was written while the live league was 2036. audit-2 measured each reading on the p2g copy at
+2027 (report above):
 
-- **(a) The league's own starting season** (recommended). For example, `madden_mu2026`'s 2026 rows: 96 players at
-  90+, mean OVR 71.30 over 2,847 players. This is what the fit replay already does, and it keeps the term at about
-  +0.5 a year.
-- (b) A fixed reference season stored with the league (the bootstrap season), which is the same as (a) for every
-  league that starts in 2026.
-- (c) Keep 2036, which doesn't exist in a 2026 database. That means turning the term off until such a season
-  exists, and accepting Madden's shrinking league in the meantime.
+| reading | development / star term | 90+ after | mean OVR after |
+|---|---|---:|---:|
+| **(a) the league's own start season** (recommended; what the fit and §1 use) | +1.0 / +1.0 | 74 | 70.28 |
+| (b) the current season S−1 (same as (a) at 2027, but it drifts year by year) | +1.0 / +1.0 | 74 | 70.28 |
+| (c1) 2036 read literally (the term is off) | — | 61 | — |
+| (c2) 2036's proportions (both terms hit their caps) | capped | 95 | — |
+
+**A separate question:** should the live projection model leavers and the coming draft (the MEDIUM finding),
+as the fit does? audit-2 has put both questions to JR.
 
 ## 5. Verdict
 
 - **Accept** the league term's design for the 2026 league. At its fitted size, +0.5 a year and about +1.1 over a
   rookie's first three years, it lifts the development of young players below 80 to roughly Madden's own rate.
   The real-career evidence does not argue against that.
-- **Follow-up (open):** fix the target season (§3, reading (a) unless JR decides otherwise), then re-run the
+- **Follow-up (open, confirmed HIGH, audit-2's brief ready, waiting on JR's §4 ruling):** fix the target season (§3), then re-run the
   P3-02 fit against the fixed engine. In the first P5 shadow season, check the logged
   `player_progression_history.league_term`. **If the development term rises above +1.5 a year in any season,
   revisit the term.** That would be the 2036 pattern, where rookie classes fall far behind the departing
