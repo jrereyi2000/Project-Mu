@@ -38,6 +38,27 @@ def snapshot(*players):
     return {"players": list(players)}
 
 
+def trade_leg(gsis="00-c", week=None, from_team="KC", to_team="BUF", trade_id="T1", note=None):
+    return TradeLeg(trade_id, "2026-10-28", week, from_team, to_team, gsis, "Trade Man", note)
+
+
+def applied(snapshot_, result):
+    """The snapshot after `result`'s roster ops, for replanning the same week (zero further moves)."""
+    players = {p["pgid"]: dict(p) for p in snapshot_["players"]}
+    for op in result.ops:
+        p = players[op["pgid"]]
+        if op["kind"] == "release":
+            p["team_index"], p["status"] = diff.FREE_AGENT_TEAM, "FreeAgent"
+        elif op["kind"] in ("sign", "trade"):
+            p["team_index"] = op["to_index"]
+            p["status"] = "Signed" if op["list"] == "Roster" else "PracticeSquad"
+        elif op["kind"] == "ir":
+            p["injury"] = {**(p.get("injury") or {}), "injured_reserve": True}
+        elif op["kind"] == "activate":
+            p["injury"] = {**(p.get("injury") or {}), "injured_reserve": False}
+    return snapshot(*players.values())
+
+
 def plan(snapshot_, real, links, trades=(), contracts_=None, cap=CAP):
     return diff.plan_rosters(snapshot_, real, links, list(trades), TEAMS,
                              contracts_ if contracts_ is not None else ContractBook({}), cap)
@@ -102,6 +123,108 @@ def test_trade_leg_for_another_week_is_ignored():
     leg = TradeLeg("T1", "2026-10-28", 9, "KC", "BUF", "00-c", "Trade Man", None)
     result = plan(snap, real, {"00-c": 102}, [leg])
     assert [o["kind"] for o in ops_for(result, pgid=102)] == ["release", "sign"]
+
+
+# ---------- trades: an applicable leg, not a lifetime exemption ----------
+
+def test_blank_week_leg_does_not_suppress_a_later_cut():
+    """F1a: a blank-week KC->BUF leg cannot protect a player the real week released (one release)."""
+    snap = snapshot(madden(110, "Trade", "Man", 1))                    # already BUF
+    real = real_week({})
+    result = plan(snap, real, {"00-c": 110}, [trade_leg()])
+    assert [o["kind"] for o in result.ops] == ["release"]
+    assert not ops_for(result, kind="trade") and not ops_for(result, kind="sign")
+    assert plan(applied(snap, result), real, {"00-c": 110}, [trade_leg()]).ops == []
+
+
+def test_blank_week_leg_does_not_suppress_a_later_practice_squad_promotion():
+    """F1b: a stale blank-week leg falls through to release/sign, which ends on the Roster."""
+    snap = snapshot(madden(111, "Trade", "Man", 1, status="PracticeSquad"))   # BUF PS
+    real = real_week({"BUF": [real_player("00-c", "Trade Man", "BUF")]})      # BUF ACTIVE
+    leg = trade_leg()
+    result = plan(snap, real, {"00-c": 111}, [leg])
+    assert [(o["kind"], o["list"]) for o in result.ops] == [("release", "PracticeSquad"), ("sign", "Roster")]
+    assert not ops_for(result, kind="trade")
+    assert plan(applied(snap, result), real, {"00-c": 111}, [leg]).ops == []
+
+
+def test_leg_for_another_destination_is_unconfirmed_release_and_sign():
+    """F1c: a KC->BUF leg cannot authorize a real KC->MIA switch (zero trades, release + sign, unconfirmed)."""
+    snap = snapshot(madden(112, "Trade", "Man", 0))                      # KC
+    real = real_week({"MIA": [real_player("00-c", "Trade Man", "MIA")]})  # MIA
+    leg = trade_leg()                                                    # KC -> BUF
+    result = plan(snap, real, {"00-c": 112}, [leg])
+    moves = [o for o in result.ops if o["pgid"] == 112]
+    assert not ops_for(result, kind="trade")
+    assert [o["kind"] for o in moves] == ["release", "sign"]
+    assert moves[1]["to_index"] == 2 and moves[1]["list"] == "Roster"
+    assert "unconfirmed" in moves[0]["why"]
+    assert plan(applied(snap, result), real, {"00-c": 112}, [leg]).ops == []
+
+
+def test_current_week_leg_moves_the_player_on_canonical_teams():
+    """A matching KC->BUF leg in the real week is one trade and still reads as the CSV row."""
+    snap = snapshot(madden(113, "Trade", "Man", 0))
+    real = real_week({"BUF": [real_player("00-c", "Trade Man", "BUF")]})
+    leg = trade_leg(week=10)
+    result = plan(snap, real, {"00-c": 113}, [leg])
+    assert [o["kind"] for o in result.ops] == ["trade"]
+    op = result.ops[0]
+    assert (op["pgid"], op["to_index"], op["list"]) == (113, 1, "Roster")
+    assert op["why"] == "trade T1"
+    assert plan(applied(snap, result), real, {"00-c": 113}, [leg]).ops == []
+
+
+def test_leg_for_a_player_already_at_the_destination_is_not_a_trade():
+    snap = snapshot(madden(114, "Trade", "Man", 1))                      # BUF, Roster
+    real = real_week({"BUF": [real_player("00-c", "Trade Man", "BUF")]})
+    result = plan(snap, real, {"00-c": 114}, [trade_leg()])
+    assert result.ops == []
+
+
+def test_player_already_at_the_destination_still_reconciles_his_list():
+    """Being at the leg's destination is not 'handled': a list change is still reconciled."""
+    snap = snapshot(madden(115, "Trade", "Man", 1, status="PracticeSquad"))   # BUF PS
+    real = real_week({"BUF": [real_player("00-c", "Trade Man", "BUF")]})      # BUF ACTIVE
+    result = plan(snap, real, {"00-c": 115}, [trade_leg()])
+    assert not ops_for(result, kind="trade")
+    assert [(o["kind"], o["list"]) for o in result.ops] == [("release", "PracticeSquad"), ("sign", "Roster")]
+    assert plan(applied(snap, result), real, {"00-c": 115}, [trade_leg()]).ops == []
+
+
+def test_csv_leg_arriving_on_a_changed_list_is_one_trade():
+    snap = snapshot(madden(116, "Trade", "Man", 0, status="PracticeSquad"))   # KC PS
+    real = real_week({"BUF": [real_player("00-c", "Trade Man", "BUF")]})      # BUF ACTIVE
+    leg = trade_leg(week=10)
+    result = plan(snap, real, {"00-c": 116}, [leg])
+    assert [o["kind"] for o in result.ops] == ["trade"]
+    assert (result.ops[0]["to_index"], result.ops[0]["list"]) == (1, "Roster")
+    assert plan(applied(snap, result), real, {"00-c": 116}, [leg]).ops == []
+
+
+def test_leg_with_a_stale_source_team_falls_through_to_release_and_sign():
+    snap = snapshot(madden(117, "Trade", "Man", 2))                      # MIA, but the leg starts at KC
+    real = real_week({"BUF": [real_player("00-c", "Trade Man", "BUF")]})
+    result = plan(snap, real, {"00-c": 117}, [trade_leg()])
+    assert not ops_for(result, kind="trade")
+    assert [o["kind"] for o in result.ops] == ["release", "sign"]
+
+
+def test_multiple_legs_apply_only_the_one_that_matches_the_real_week():
+    snap = snapshot(madden(119, "Trade", "Man", 0))
+    real = real_week({"BUF": [real_player("00-c", "Trade Man", "BUF")]})
+    legs = [trade_leg(trade_id="T-old", to_team="MIA"), trade_leg(trade_id="T1")]
+    result = plan(snap, real, {"00-c": 119}, legs)
+    assert [o["kind"] for o in result.ops] == ["trade"]
+    assert result.ops[0]["to_index"] == 1 and "T1" in result.ops[0]["why"]
+
+
+def test_leg_for_a_player_not_linked_into_the_snapshot_is_left_to_the_signing_step():
+    snap = snapshot(madden(118, "Some", "One", 0))
+    real = real_week({"BUF": [real_player("00-c", "Trade Man", "BUF")]})
+    result = plan(snap, real, {}, [trade_leg()])
+    assert not ops_for(result, kind="trade")
+    assert [p.gsis_id for p in result.creates] == ["00-c"]
 
 
 def test_practice_squad_signing_and_ps_fill():
@@ -193,6 +316,15 @@ def _write_parquet(path, **columns):
     return str(path)
 
 
+def _otc(team, signed=None, year_signed=2026, years=3, apy=10.0, total=None, guaranteed=0.0,
+         draft_year=2023, active=True, gsis="00-otc"):
+    """One explicit OtcDeal, in OTC's units (money in millions)."""
+    return contracts.OtcDeal(
+        gsis_id=gsis, team=team, year_signed=year_signed, signed=signed, years=years, apy=apy,
+        total=(apy * years if total is None else total), guaranteed=guaranteed, draft_year=draft_year,
+        active=active)
+
+
 def test_from_otc_uses_a_2026_deal_and_falls_back_to_the_minimum(tmp_path):
     path = _write_parquet(
         tmp_path / "contracts.parquet",
@@ -276,3 +408,112 @@ def test_offer_contract_shape_matches_league_office():
         gsis_id="00-a", team="Bengals", year_signed=2026, signed=None, years=3, apy=10.0, total=30.0,
         guaranteed=12.0, draft_year=2023, active=True)]})
     assert book.contract_for("00-a", "2026-10-01", CAP) == offer_contract(offer, 2026)
+
+
+# ---------- OTC: the target team and the as-of date ----------
+
+def test_otc_deal_for_another_team_gets_the_minimum():
+    """F2a: a BUF signing never receives a Chiefs-only deal (through plan_rosters)."""
+    snap = snapshot(madden(120, "Free", "Agent", diff.FREE_AGENT_TEAM, status="FreeAgent"))
+    real = real_week({"BUF": [real_player("00-otc", "Free Agent", "BUF", entry_year=2020)]})
+    book = ContractBook({"00-otc": [_otc("Chiefs", "2026-09-01")]})
+    contract = ops_for(plan(snap, real, {"00-otc": 120}, contracts_=book), kind="sign")[0]["contract"]
+    assert contract["contract_type"] == "MINIMUM"
+    assert contract["salary_by_year"] == [ce.minimum_salary(6, CAP)]
+
+
+def test_dated_deal_after_the_signing_as_of_is_not_used():
+    """F2b: a December deal cannot back a September signing."""
+    book = ContractBook({"00-otc": [_otc("Bills", "2026-12-01", years=4, apy=12.0)]})
+    assert book.contract_for("00-otc", "2026-09-01", CAP)["contract_type"] == "MINIMUM"
+    assert book.contract_for("00-otc", "2026-09-01", CAP, team="BUF")["contract_type"] == "MINIMUM"
+    december = book.contract_for("00-otc", "2026-12-15", CAP, team="BUF")
+    assert december["contract_type"] == "STANDARD" and december["length"] == 4
+
+
+def test_same_team_september_deal_is_selected():
+    book = ContractBook({"00-otc": [_otc("Bills", "2026-09-01", years=2, apy=6.0)]})
+    contract = book.contract_for("00-otc", "2026-10-01", CAP, team="BUF")
+    assert contract["contract_type"] == "STANDARD" and contract["length"] == 2
+    assert contract["salary_by_year"] == [6_000_000, 6_000_000]
+
+
+def test_newest_same_team_deal_known_by_the_as_of_date_is_selected():
+    book = ContractBook({"00-otc": [_otc("Bills", "2026-09-01", years=2, apy=6.0),
+                                   _otc("Bills", "2026-12-01", years=4, apy=12.0)]})
+    october = book.contract_for("00-otc", "2026-10-01", CAP, team="BUF")
+    assert (october["length"], october["salary_by_year"][0]) == (2, 6_000_000)
+    december = book.contract_for("00-otc", "2026-12-15", CAP, team="BUF")
+    assert (december["length"], december["salary_by_year"][0]) == (4, 12_000_000)
+
+
+def test_year_only_2026_row_is_a_window_approximation():
+    book = ContractBook({"00-otc": [_otc("Bills", None, years=3, apy=10.0)]})
+    assert book.contract_for("00-otc", "2026-07-31", CAP, team="BUF")["contract_type"] == "MINIMUM"
+    assert book.contract_for("00-otc", "2026-08-01", CAP, team="BUF")["contract_type"] == "STANDARD"
+    assert book.contract_for("00-otc", "2026-12-31", CAP, team="BUF")["contract_type"] == "STANDARD"
+
+
+def test_pre_cutoff_dated_row_falls_back_to_the_minimum():
+    book = ContractBook({"00-otc": [_otc("Bills", "2026-07-15", years=3, apy=10.0)]})
+    assert book.contract_for("00-otc", "2026-10-01", CAP, team="BUF")["contract_type"] == "MINIMUM"
+
+
+def test_no_row_uses_the_service_based_minimum():
+    contract = ContractBook({}).contract_for("00-nobody", "2026-10-01", CAP, team="BUF", years_exp=2)
+    assert contract["contract_type"] == "MINIMUM" and contract["length"] == 1
+    assert contract["salary_by_year"] == [ce.minimum_salary(2, CAP)]
+
+
+def test_unknown_or_unmappable_otc_team_never_matches_a_franchise():
+    for club in ("SEA/LV", "Redskins", "Los Angeles Rams", ""):
+        book = ContractBook({"00-otc": [_otc(club or None, "2026-09-01")]})
+        assert book.contract_for("00-otc", "2026-10-01", CAP, team="WAS")["contract_type"] == "MINIMUM"
+        assert book.contract_for("00-otc", "2026-10-01", CAP, team="SEA")["contract_type"] == "MINIMUM"
+    known = ContractBook({"00-otc": [_otc("Commanders", "2026-09-01")]})
+    assert known.contract_for("00-otc", "2026-10-01", CAP, team="WAS")["contract_type"] == "STANDARD"
+
+
+def test_from_otc_uses_only_the_target_teams_deal(tmp_path):
+    """Two clubs' 2026 deals for one player, through from_otc and plan_rosters."""
+    path = _write_parquet(
+        tmp_path / "contracts.parquet",
+        gsis_id=["00-otc", "00-otc"],
+        team=["Bills", "Chiefs"],
+        year_signed=[2026, 2026],
+        years=[3, 4],
+        apy=[10.0, 15.0],
+        value=[30.0, 60.0],
+        guaranteed=[0.0, 30.0],
+        draft_year=[2023, 2021],
+        is_active=[True, True],
+    )
+    book = ContractBook.from_otc(path)
+    assert book.contract_for("00-otc", "2026-10-01", CAP, team="BUF")["salary_by_year"] == [10_000_000] * 3
+    assert book.contract_for("00-otc", "2026-10-01", CAP, team="KC")["salary_by_year"] == [15_000_000] * 4
+
+    snap = snapshot(madden(121, "Free", "Agent", diff.FREE_AGENT_TEAM, status="FreeAgent"))
+    real = real_week({"BUF": [real_player("00-otc", "Free Agent", "BUF", entry_year=2020)]})
+    contract = ops_for(plan(snap, real, {"00-otc": 121}, contracts_=book), kind="sign")[0]["contract"]
+    assert contract["contract_type"] == "STANDARD"
+    assert contract["salary_by_year"] == [10_000_000] * 3          # the Bills deal, never the Chiefs'
+
+
+def test_plan_rosters_uses_the_week_as_of_boundary_for_dated_deals(tmp_path):
+    path = _write_parquet(
+        tmp_path / "contracts.parquet",
+        gsis_id=["00-otc"],
+        team=["Bills"],
+        year_signed=[2026],
+        date_signed=["2026-12-01"],
+        years=[4],
+        apy=[12.0],
+        value=[48.0],
+        guaranteed=[0.0],
+        draft_year=[2022],
+    )
+    book = ContractBook.from_otc(path)
+    snap = snapshot(madden(122, "Free", "Agent", diff.FREE_AGENT_TEAM, status="FreeAgent"))
+    real = real_week({"BUF": [real_player("00-otc", "Free Agent", "BUF", entry_year=2020)]})   # week 10
+    contract = ops_for(plan(snap, real, {"00-otc": 122}, contracts_=book), kind="sign")[0]["contract"]
+    assert contract["contract_type"] == "MINIMUM"      # dated after week 10's as-of boundary (2026-11-17)

@@ -5,12 +5,18 @@ nflverse publishes OverTheCap's whole contract history as `historical_contracts.
 It has no full signing date in the current release, so a row's date is its `year_signed`; a file that carries a
 `date_signed` / `contract_signed_date` / `signed_date` / `date` column is read too.
 
-`ContractBook.from_otc(path)` keeps every deal by gsis id. `contract_for(gsis_id, signed_date, cap)` gives a
-contract dict in the shape `pipeline.league_office.offer_contract` returns:
+`ContractBook.from_otc(path)` keeps every deal by gsis id. `contract_for(gsis_id, signed_date, cap, team=...)`
+gives a contract dict in the shape `pipeline.league_office.offer_contract` returns:
 
 - OTC's own contract when one was signed in the mirror window (on or after 2026-08-01, the 2026 league year for a
-  file without dates) and the signing being mirrored is not before it: real APY and years, no assumed bonus;
+  file without dates), is for the target team, and was signed no later than the mirrored signing (the `signed_date`
+  as-of boundary): real APY and years, no assumed bonus;
 - otherwise `contracts_engine.minimum_salary(years_exp, cap)` for one year.
+
+`team` is the target's canonical Mu franchise code ("BUF", "WAS"); OTC's club names ("Bills", "Commanders") are
+normalized to it. A row whose club cannot be mapped, or a target team that cannot be mapped, never matches another
+franchise. `signed_date` is the as-of boundary, not necessarily the signing's calendar date; a dated row is never
+used before its own date, while a year-only row is the plan's accepted 2026-window approximation.
 
 `years_exp` comes from the caller when it knows it (the mirror passes the real player's entry year); without one it
 is derived from the newest OTC row's `draft_year` (SIGNING_SEASON - draft_year), else 0.
@@ -18,12 +24,47 @@ is derived from the newest OTC row's `draft_year` (SIGNING_SEASON - draft_year),
 import dataclasses
 
 from engines import contracts_engine as ce
+from engines.nfl_history.teams import MU_TEAMS
 
 SIGNING_SEASON = 2026
 OTC_CUTOFF = "2026-08-01"                  # a midseason 2026 signing, not the March free-agency window
 MILLIONS = 1_000_000
 DATE_COLUMNS = ("date_signed", "contract_signed_date", "signed_date", "date")
 CONTRACT_TYPES = {"otc": "STANDARD", "minimum": "MINIMUM"}
+
+# OTC's `team` cell is the club nickname ("Bengals", "Bills", "Chiefs"); a contract split between clubs is a
+# combined value ("NYJ/GB", "SEA/LV") that maps to no single franchise. Mu franchise codes come from
+# db/seed_clean_db.py TEAMS_DATA. There is no shared nickname -> code table importable from engines/ (the only
+# full-name map lives in the tools/ coach-library script), so this one is local to the mirror.
+OTC_TEAM_CODES = {
+    "Cardinals": "AZ", "Falcons": "ATL", "Ravens": "BAL", "Bills": "BUF",
+    "Panthers": "CAR", "Bears": "CHI", "Bengals": "CIN", "Browns": "CLE",
+    "Cowboys": "DAL", "Broncos": "DEN", "Lions": "DET", "Packers": "GB",
+    "Texans": "HOU", "Colts": "IND", "Jaguars": "JAX", "Chiefs": "KC",
+    "Raiders": "LV", "Chargers": "LAC", "Rams": "LAR", "Dolphins": "MIA",
+    "Vikings": "MIN", "Patriots": "NE", "Saints": "NO", "Giants": "NYG",
+    "Jets": "NYJ", "Eagles": "PHI", "Steelers": "PIT", "49ers": "SF",
+    "Seahawks": "SEA", "Buccaneers": "TB", "Titans": "TEN", "Commanders": "WAS",
+}
+_OTC_TEAM_CODES_FOLDED = {name.casefold(): code for name, code in OTC_TEAM_CODES.items()}
+
+
+def normalize_team(team):
+    """The Mu franchise code for an OTC club cell or an already-canonical code, or None when unmappable.
+
+    Only an exact OTC nickname (case-insensitive) or a real Mu code is accepted, so an unknown alias and a
+    split club ("SEA/LV") map to None rather than quietly matching some other franchise.
+    """
+    if team is None:
+        return None
+    text = str(team).strip()
+    if not text:
+        return None
+    code = _OTC_TEAM_CODES_FOLDED.get(text.casefold())
+    if code:
+        return code
+    upper = text.upper()
+    return upper if upper in MU_TEAMS else None
 
 
 def _num(value):
@@ -64,13 +105,24 @@ class OtcDeal:
     draft_year: int | None
     active: bool
 
-    def qualifies(self, signed_date=None):
-        """True when this is a deal of the 2026 mirror window (and the mirrored signing is not before it)."""
-        if signed_date and str(signed_date)[:10] < OTC_CUTOFF:
-            return False
+    def qualifies(self, signed_date=None, team=None):
+        """True when this is a qualifying deal for `team` that was known by the `signed_date` as-of boundary.
+
+        A dated row is never used before its own date; a year-only row is a 2026-window approximation, so the whole
+        window counts as known. `team` is a canonical Mu code, or None to skip the team check.
+        """
+        if team is not None:
+            target = normalize_team(team)
+            if target is None or normalize_team(self.team) != target:
+                return False
+        as_of = str(signed_date)[:10] if signed_date else None
         if self.signed:
+            if as_of is not None and self.signed > as_of:
+                return False
             return OTC_CUTOFF <= self.signed < "2027-01-01"
-        return self.year_signed == SIGNING_SEASON
+        if self.year_signed != SIGNING_SEASON:
+            return False
+        return as_of is None or as_of >= OTC_CUTOFF
 
 
 class ContractBook:
@@ -116,16 +168,16 @@ class ContractBook:
                 active=bool(cols["is_active"][i]) if "is_active" in cols else False))
         return cls(deals)
 
-    def contract_for(self, gsis_id, signed_date, cap, years_exp=None):
+    def contract_for(self, gsis_id, signed_date, cap, years_exp=None, team=None):
         """The mirrored signing's contract dict, or None for a blank gsis id.
 
-        OTC terms when a deal of the window exists, else the one-year league minimum.
+        OTC terms when a qualifying deal for `team` exists by `signed_date`, else the one-year league minimum.
         """
         gsis = str(gsis_id or "").strip()
         if not gsis:
             return None
         rows = self._deals.get(gsis) or ()
-        deal = next((d for d in rows if d.qualifies(signed_date)), None)
+        deal = next((d for d in rows if d.qualifies(signed_date, team)), None)
         if deal is None:
             if years_exp is None:
                 years_exp = _implied_years_exp(rows)

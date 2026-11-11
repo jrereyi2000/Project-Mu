@@ -6,11 +6,15 @@ roster snapshot with the real week and plans, in this order:
 1. new links — `engines.nfl_history.link.match` over the real players with no link and the save's players with no
    link (free agents included), so a man who joined the real league or moved can be found before anything else;
 2. CSV trades — a hand-kept `nfl_trades_2026.csv` leg (`from_team` to `to_team`, its week or any week) moves the
-   linked player in one `trade` op, and wins over inference;
+   linked player in one `trade` op only when the save has him on the leg's source team and the real week puts him
+   on the leg's destination. A blank week is a wildcard for the week of the move, not a lifetime exemption: a
+   stale leg falls through to the normal release/sign reconciliation, and a player already at the destination
+   still has his list and IR state reconciled;
 3. releases — a linked player the real week does not place on his save team and list (a team change with no CSV leg
    is released and then signed; the report calls it an unconfirmed switch);
 4. signings — a linked player the real week places on a team he is not on, signed to the Roster with an OTC or
-   minimum contract (`contracts.ContractBook.contract_for`); then practice-squad signings;
+   minimum contract (`contracts.ContractBook.contract_for`, for that team and the week's as-of date); then
+   practice-squad signings;
 5. IR on and IR off — `set_fields` ops for linked players whose `IsInjuredReserve` flag must follow the real status.
 
 An unlinked real player is a `create` when the real week has him on a roster or IR list (D4: the active roster and
@@ -25,6 +29,7 @@ The plan's shapes:
   unlinked_new [(gsis_id, pgid)]
 """
 import dataclasses
+import datetime
 import logging
 
 from engines.nfl_history import link as link_engine
@@ -41,6 +46,13 @@ FREE_AGENT_TEAM = 32       # pipeline.load_save.FREE_AGENT_TEAM_INDEX: snapshot 
 ROSTER = "Roster"
 PRACTICE_SQUAD = "PracticeSquad"
 IR_STATUSES = frozenset({"IR", "PUP", "NFI"})
+
+# The 2026 regular season opener (2026-09-09; personality/coach_profiles.py calls 2026-09-08 its eve). A mirrored
+# week's contract as-of boundary is the last day of that real week: every OTC deal known by then may be used and a
+# later-dated deal may not (the plan only mirrors 2026). RealWeek carries no date and is outside this unit, so the
+# boundary is derived here; U6 can pass an exact week date once the real state carries one.
+SEASON_OPENER = "2026-09-09"
+WEEK_DAYS = 7
 
 
 @dataclasses.dataclass
@@ -98,6 +110,18 @@ def _placement(player):
 
 def _years_exp(player, season):
     return None if player.entry_year is None else max(0, int(season) - int(player.entry_year))
+
+
+def _week_as_of(real):
+    """'YYYY-MM-DD', the last day of `real`'s week: the boundary for OTC deals known by that mirror week.
+
+    The last day of the week is the safe as-of: a deal dated during the week is known by its end, and one dated
+    after the week belongs to the next week's data. None outside 2026, the only season the plan mirrors.
+    """
+    if int(real.season) != 2026:
+        return None
+    opener = datetime.date.fromisoformat(SEASON_OPENER)
+    return (opener + datetime.timedelta(days=WEEK_DAYS * (int(real.week) - 1) + WEEK_DAYS - 1)).isoformat()
 
 
 def _college(value):
@@ -192,30 +216,32 @@ def plan_rosters(snapshot, real, links, trades, team_index, contracts, cap):
         placed[gsis] = {"team_index": current["team_index"], "list": current["list"]}
         in_save_ir[gsis] = current["ir"]
 
-    signed_dates = {leg.gsis_id: leg.date for leg in trades or [] if leg.gsis_id and leg.date}
+    signed_as_of = _week_as_of(real)
 
-    # 2. CSV trades: the hand CSV is the authority, so a leg beats release + sign
+    # 2. CSV trades: the hand CSV is the authority, but only for the move the save actually has to make. A leg
+    #    applies when the save has the player on its source team and the real week puts him on its destination;
+    #    a blank week means "any week this move happened", not "exempt him from every later reconciliation".
     traded = set()
     for leg in trades or []:
         gsis = leg.gsis_id
         if not gsis or (leg.week is not None and int(leg.week) != int(real.week)):
             continue
-        if gsis not in placed:
-            continue          # not in the save on a roster: the signings step places him
-        want = desired.get(gsis)
-        target_code = want["player"].team if want else leg.to_team
-        to_index = (team_index or {}).get(target_code)
-        if to_index is None:
-            continue
-        to_index = int(to_index)
-        if placed[gsis]["team_index"] == to_index:
-            traded.add(gsis)  # already there; no op, and no release either
-            continue
-        want_list = want["list"] if want else placed[gsis]["list"]
+        current, want = placed.get(gsis), desired.get(gsis)
+        if current is None or want is None:
+            continue          # no save placement or no real placement: the release/signing steps handle him
+        from_index = (team_index or {}).get(leg.from_team)
+        to_index = (team_index or {}).get(leg.to_team)
+        if from_index is None or to_index is None:
+            continue          # a leg naming a team the save does not have cannot describe its move
+        from_index, to_index = int(from_index), int(to_index)
+        if current["team_index"] != from_index or want["team_index"] != to_index:
+            continue          # stale source or another destination: release + sign, reported as unconfirmed
+        if current["team_index"] == to_index:
+            continue          # already at the destination: reconcile his list and IR instead of marking a move
         plan.ops.append({"kind": "trade", "pgid": links[gsis], "gsis_id": gsis, "to_index": to_index,
-                         "list": want_list, "contract": None,
+                         "list": want["list"], "contract": None,
                          "why": f"trade {leg.trade_id}".strip() + (f": {leg.note}" if leg.note else "")})
-        placed[gsis] = {"team_index": to_index, "list": want_list}
+        placed[gsis] = {"team_index": to_index, "list": want["list"]}
         traded.add(gsis)
 
     # 3. releases: a linked player the real week does not place on his save team and list
@@ -259,7 +285,8 @@ def plan_rosters(snapshot, real, links, trades, team_index, contracts, cap):
                 continue
             if target_list == ROSTER:
                 contract = contracts.contract_for(
-                    gsis, signed_dates.get(gsis), cap, years_exp=_years_exp(want["player"], season))
+                    gsis, signed_as_of, cap, years_exp=_years_exp(want["player"], season),
+                    team=want["player"].team)
                 plan.ops.append({"kind": "sign", "pgid": pgid, "gsis_id": gsis,
                                  "to_index": want["team_index"], "list": ROSTER, "contract": contract,
                                  "why": f"real {want['player'].status.lower()} for {want['player'].team}"})
