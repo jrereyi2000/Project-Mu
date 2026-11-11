@@ -1,21 +1,29 @@
-"""Plan one mirrored week's roster moves (NFL_WEEKLY_MIRROR_PLAN.md §2.5). Pure: everything is supplied by the caller.
+"""Plan one mirrored week's roster moves (NFL_WEEKLY_MIRROR_PLAN.md §2.5). Pure apart from the committed
+`data/history/nfl_link_overrides.csv` read in the new-link phase: everything else is supplied by the caller.
 
 `plan_rosters(snapshot, real, links, trades, team_index, contracts, cap) -> MirrorRosterPlan` compares the save's
 roster snapshot with the real week and plans, in this order:
 
 1. new links — `engines.nfl_history.link.match` over the real players with no link and the save's players with no
-   link (free agents included), so a man who joined the real league or moved can be found before anything else;
-2. CSV trades — a hand-kept `nfl_trades_2026.csv` leg (`from_team` to `to_team`, its week or any week) moves the
+   link (free agents included), so a man who joined the real league or moved can be found before anything else.
+   `link.match` keeps its position safety; accepted `nfl_link_overrides.csv` rows are passed through here, so an
+   accepted cross-position candidate links once and is no longer a candidate;
+2. review candidates — a real player still unlinked after step 1 whose normalized name matches exactly one save
+   player (linked or not) in a DIFFERENT position group, with agreeing entry season or real 2026 team evidence, is
+   reported in `review`: both positions, the agreeing evidence and why it was not auto-linked. He is never linked
+   across position groups and is not also planned as a `create`. Two or more same-name save players are reported as
+   ambiguous with every candidate; nothing is created for that person;
+3. CSV trades — a hand-kept `nfl_trades_2026.csv` leg (`from_team` to `to_team`, its week or any week) moves the
    linked player in one `trade` op only when the save has him on the leg's source team and the real week puts him
    on the leg's destination. A blank week is a wildcard for the week of the move, not a lifetime exemption: a
    stale leg falls through to the normal release/sign reconciliation, and a player already at the destination
    still has his list and IR state reconciled;
-3. releases — a linked player the real week does not place on his save team and list (a team change with no CSV leg
+4. releases — a linked player the real week does not place on his save team and list (a team change with no CSV leg
    is released and then signed; the report calls it an unconfirmed switch);
-4. signings — a linked player the real week places on a team he is not on, signed to the Roster with an OTC or
+5. signings — a linked player the real week places on a team he is not on, signed to the Roster with an OTC or
    minimum contract (`contracts.ContractBook.contract_for`, for that team and the week's as-of date); then
    practice-squad signings;
-5. IR on and IR off — `set_fields` ops for linked players whose `IsInjuredReserve` flag must follow the real status.
+6. IR on and IR off — `set_fields` ops for linked players whose `IsInjuredReserve` flag must follow the real status.
 
 An unlinked real player is a `create` when the real week has him on a roster or IR list (D4: the active roster and
 IR, not the practice squad), and a `ps_fill` slot when his only real place is a practice squad — the league office
@@ -27,6 +35,11 @@ The plan's shapes:
   creates      [RealPlayer]
   ps_fill      [{"team_index", "position"}]
   unlinked_new [(gsis_id, pgid)]
+  review       [{"status": "candidate"|"ambiguous", "gsis_id", "name", "position", "team_2026",
+                 "candidates": [{"pgid", "name", "position", "team", "entry_season", "linked_gsis",
+                                 "cross_position", "evidence"}],
+                 "evidence": {...}, "why", plus "pgid" / "save_position" / "save_team" /
+                 "save_entry_season" for a unique candidate}]
 """
 import dataclasses
 import datetime
@@ -57,11 +70,18 @@ WEEK_DAYS = 7
 
 @dataclasses.dataclass
 class MirrorRosterPlan:
-    """One week's roster plan: what the league office writes, and what it must create or fill."""
+    """One week's roster plan: what the league office writes, and what it must create or fill.
+
+    `review` holds cross-position name matches that must not be auto-linked: a `candidate` is one real player whose
+    normalized name uniquely matches a save player in a different position group with agreeing evidence (`gsis_id`,
+    `position`, `pgid`, `save_position`, `evidence`, `why`); an `ambiguous` entry lists every same-name save player
+    (`candidates`) and plans nothing for that person. U6 persists/reports it for JR's review.
+    """
     ops: list = dataclasses.field(default_factory=list)
     creates: list = dataclasses.field(default_factory=list)
     ps_fill: list = dataclasses.field(default_factory=list)
     unlinked_new: list = dataclasses.field(default_factory=list)
+    review: list = dataclasses.field(default_factory=list)
 
 
 # ---------- snapshot shapes ----------
@@ -135,11 +155,17 @@ def _college(value):
 
 # ---------- new links ----------
 
-def _mu_player(pgid, player, codes, season):
-    """A link.MuPlayer for a save player (the reader's field names)."""
+def _name_parts(player):
+    """(first, last) for a save player, falling back to splitting `full_name`."""
     first, last = player.get("first_name") or "", player.get("last_name") or ""
     if not (first or last):
         first, _, last = (player.get("full_name") or "").partition(" ")
+    return first, last
+
+
+def _mu_player(pgid, player, codes, season):
+    """A link.MuPlayer for a save player (the reader's field names)."""
+    first, last = _name_parts(player)
     draft_year = None
     drafted = player.get("year_drafted")
     if isinstance(drafted, int):
@@ -165,15 +191,100 @@ def _real_person(player):
 
 
 def _new_links(players, real_by_gsis, links, codes, season):
-    """[(gsis_id, pgid)] from link.match over the unlinked real players and unlinked save players."""
+    """[(gsis_id, pgid)] from link.match over the unlinked real players and unlinked save players.
+
+    Accepted `nfl_link_overrides.csv` rows are handed to `link.match`, so a candidate JR accepts is linked here once
+    and never reaches the review stage. `link.match` is unmodified: it keeps its position safety for every
+    non-override match.
+    """
     linked_pgids = set(links.values())
     people = [_real_person(p) for gsis, p in sorted(real_by_gsis.items()) if gsis not in links]
     mu = [_mu_player(pgid, p, codes, season) for pgid, p in sorted(players.items())
           if pgid not in linked_pgids and p.get("status") not in (None, "Retired", "Draft")]
     if not people or not mu:
         return []
-    result = link_engine.match(mu, people)
+    result = link_engine.match(mu, people, link_engine.read_overrides())
     return sorted((item["gsis_id"], int(item["player_id"])) for item in result.links)
+
+
+# ---------- review candidates ----------
+
+def _normalized_name(player):
+    first, last = _name_parts(player)
+    return link_engine.normalize_name(f"{first} {last}".strip())
+
+
+def _cross_position(save_position, real_position):
+    """True only when both positions are known and their link groups do not overlap (link.position_ok)."""
+    if not save_position or not real_position:
+        return False
+    return not link_engine.position_ok(save_position, real_position)
+
+
+def _review_save(pgid, player, person, codes, season, gsis_by_pgid):
+    """The reviewable facts about one same-name save player, including the agreeing entry/team evidence."""
+    mu = _mu_player(pgid, player, codes, season)
+    ev = link_engine.evidence(mu, person)
+    return {
+        "pgid": int(pgid),
+        "name": mu.full_name,
+        "position": player.get("position"),
+        "team": mu.team,
+        "entry_season": mu.entry_season,
+        "linked_gsis": gsis_by_pgid.get(int(pgid)),
+        "cross_position": _cross_position(player.get("position"), person.position),
+        "evidence": {k: ev[k] for k in ("entry", "team") if ev.get(k)},
+    }
+
+
+def _review_candidates(players, real_by_gsis, links, codes, season):
+    """(review entries, gsis ids to keep out of `creates`) for still-unlinked real players.
+
+    Only a unique same-name save player in a different position group with agreeing entry season or 2026 team is a
+    `candidate`; two or more same-name save players make an `ambiguous` entry listing every one of them. Nothing is
+    ever linked from here.
+    """
+    by_name = {}
+    for pgid, player in players.items():
+        if player.get("status") in (None, "Retired", "Draft"):
+            continue                     # save rows the new-link phase cannot link (and an override cannot accept)
+        name = _normalized_name(player)
+        if name:
+            by_name.setdefault(name, []).append(int(pgid))
+    gsis_by_pgid = {pgid: gsis for gsis, pgid in links.items()}
+    review, reviewed = [], set()
+    for gsis, real in sorted(real_by_gsis.items()):
+        if gsis in links:
+            continue                     # already linked: not a candidate
+        name = link_engine.normalize_name(real.name)
+        pgids = sorted(by_name.get(name, [])) if name else []
+        if not pgids:
+            continue                     # absent from the save: the normal create / ps_fill path
+        person = _real_person(real)
+        candidates = [_review_save(pgid, players[pgid], person, codes, season, gsis_by_pgid)
+                      for pgid in pgids]
+        entry = {"gsis_id": gsis, "name": real.name, "position": real.position, "team_2026": real.team}
+        if len(candidates) > 1:
+            entry.update(status="ambiguous", evidence={}, candidates=candidates,
+                         why=f"{len(candidates)} save players share the normalized name {name!r}; "
+                             "not auto-linked")
+            review.append(entry)
+            reviewed.add(gsis)
+            continue
+        candidate = candidates[0]
+        if not candidate["cross_position"] or not candidate["evidence"]:
+            continue                     # same position group, or evidence disagrees: a normal create
+        why = (f"same normalized name in a different position group ({candidate['position']} in the save, "
+               f"{real.position} in the real week); link.match requires agreeing position groups")
+        if candidate["linked_gsis"]:
+            why += f"; that save player is already linked to {candidate['linked_gsis']}"
+        entry.update(status="candidate", pgid=candidate["pgid"], save_position=candidate["position"],
+                     save_team=candidate["team"], save_entry_season=candidate["entry_season"],
+                     evidence=candidate["evidence"], why=why, candidates=candidates)
+        review.append(entry)
+        reviewed.add(gsis)
+    review.sort(key=lambda item: (item["name"], item["gsis_id"]))
+    return review, reviewed
 
 
 # ---------- the plan ----------
@@ -192,6 +303,9 @@ def plan_rosters(snapshot, real, links, trades, team_index, contracts, cap):
     for gsis, pgid in plan.unlinked_new:
         links[gsis] = pgid
     gsis_by_pgid = {pgid: gsis for gsis, pgid in links.items()}
+
+    # 2. review candidates: a same-name save player in another position group is reported, never auto-linked
+    plan.review, reviewed_gsis = _review_candidates(players, real_by_gsis, links, codes, season)
 
     # where the real week puts each linked person
     desired = {}
@@ -218,7 +332,7 @@ def plan_rosters(snapshot, real, links, trades, team_index, contracts, cap):
 
     signed_as_of = _week_as_of(real)
 
-    # 2. CSV trades: the hand CSV is the authority, but only for the move the save actually has to make. A leg
+    # 3. CSV trades: the hand CSV is the authority, but only for the move the save actually has to make. A leg
     #    applies when the save has the player on its source team and the real week puts him on its destination;
     #    a blank week means "any week this move happened", not "exempt him from every later reconciliation".
     traded = set()
@@ -244,7 +358,7 @@ def plan_rosters(snapshot, real, links, trades, team_index, contracts, cap):
         placed[gsis] = {"team_index": to_index, "list": want["list"]}
         traded.add(gsis)
 
-    # 3. releases: a linked player the real week does not place on his save team and list
+    # 4. releases: a linked player the real week does not place on his save team and list
     for gsis in sorted(placed):
         if gsis in traded:
             continue
@@ -262,7 +376,7 @@ def plan_rosters(snapshot, real, links, trades, team_index, contracts, cap):
                          "list": current["list"], "contract": None, "why": reason})
         del placed[gsis]
 
-    # 4. signings: active roster first, then practice squad
+    # 5. signings: active roster first, then practice squad
     creates, ps_fill = [], []
     for target_list in (ROSTER, PRACTICE_SQUAD):
         for gsis in sorted(desired):
@@ -275,6 +389,8 @@ def plan_rosters(snapshot, real, links, trades, team_index, contracts, cap):
             pgid = links.get(gsis)
             if pgid is None:
                 if target_list == ROSTER:
+                    if gsis in reviewed_gsis:
+                        continue      # a review candidate is not a missing person: never create a duplicate
                     creates.append(want["player"])
                 else:
                     ps_fill.append({"team_index": want["team_index"], "position": want["player"].position})
@@ -299,7 +415,7 @@ def plan_rosters(snapshot, real, links, trades, team_index, contracts, cap):
     plan.creates = sorted(creates, key=lambda p: (p.team, p.position, p.name, p.gsis_id))
     plan.ps_fill = sorted(ps_fill, key=lambda s: (s["team_index"], s["position"]))
 
-    # 5. IR on and IR off, after every roster move
+    # 6. IR on and IR off, after every roster move
     for gsis in sorted(desired):
         want = desired[gsis]
         pgid = links.get(gsis)
