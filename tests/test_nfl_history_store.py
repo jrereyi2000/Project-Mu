@@ -183,7 +183,7 @@ def test_nfl_career_before_sums_and_filters_columns():
 # ---------- schema text ----------
 
 def _objects(text):
-    tables = set(re.findall(r"CREATE TABLE IF NOT EXISTS (nfl_\w+)", text))
+    tables = set(re.findall(r"CREATE TABLE IF NOT EXISTS (nfl_(?!mirror_)\w+)", text))
     views = set(re.findall(r"CREATE OR REPLACE VIEW (nfl_\w+)", text))
     return tables, views
 
