@@ -3850,22 +3850,26 @@ CREATE TABLE IF NOT EXISTS award_ballots (
 );
 
 -- ---------------------------------------------------------------------------
--- Madden stat counters (db/migrations/2027_02_25_madden_stat_counters.sql,
--- docs/done/MADDEN_STATS_INGEST_PLAN.md U2 §2.2)
+-- Madden stat counters (db/migrations/2027_02_25_madden_stat_counters.sql and
+-- 2027_02_28_stats_loader_weeks.sql, docs/done/MADDEN_STATS_INGEST_PLAN.md U2 §2.2)
 -- ---------------------------------------------------------------------------
 
 -- Madden's career totals at each weekly load (raw Career*Stats fields). Only differences between rows mean anything.
+CREATE SEQUENCE IF NOT EXISTS player_career_counters_load_seq;
 CREATE TABLE IF NOT EXISTS player_career_counters (
     season       INT NOT NULL,
-    week         INT NOT NULL,              -- current_week(snapshot); 0 = any load outside the regular season/playoffs
+    week         INT NOT NULL,              -- last played week the delta covers; 0 PRESEASON, -1 OFFSEASON, -2 PROBOWL
+    stage        TEXT NOT NULL DEFAULT 'WEEK',  -- WEEK (regular season/playoffs), PRESEASON, OFFSEASON, PROBOWL
     player_id    INT NOT NULL REFERENCES players(id),
     madden_table VARCHAR(40) NOT NULL,      -- CareerOffensiveStats, CareerDefensiveKPReturnStats, ...
     counters     JSONB NOT NULL,            -- {Madden field: int}, every numeric field on the row
     games_played INT,                       -- counters->GAMESPLAYED, pulled out for the views
+    load_seq     BIGINT NOT NULL DEFAULT nextval('player_career_counters_load_seq'),  -- load order per player
     capture_id   INT REFERENCES captures(id) ON DELETE SET NULL,
     read_at      TIMESTAMPTZ,               -- snapshot meta.read_at
-    PRIMARY KEY (season, week, player_id));
+    PRIMARY KEY (season, week, player_id, stage));
 CREATE INDEX IF NOT EXISTS player_career_counters_player ON player_career_counters (player_id, season, week);
+CREATE INDEX IF NOT EXISTS player_career_counters_load ON player_career_counters (player_id, load_seq);
 
 -- Per-key difference: every key in cur minus the previous row's value (0 when the previous row lacks the key).
 -- Negative values are kept: a legitimately shrinking counter is not a reset.
@@ -3875,27 +3879,45 @@ LANGUAGE sql IMMUTABLE AS $$
     FROM jsonb_object_keys(cur) AS k
 $$;
 
--- One row per career-counter row: the previous position and a status (BASELINE, TABLE_CHANGED, RESET, NO_GAMES, OK).
--- `delta` exists only for OK and NO_GAMES. Typed columns are NULL when the field is absent from the row's table.
+-- One row per career-counter row. The previous row is the player's previous load (`load_seq`). Status:
+--    BASELINE (first row, no games in the season yet), PARTIAL (first row but the season says games were
+--    played: that load's games are lost and reported), TABLE_CHANGED, RESET, NO_GAMES, OK (the delta's games
+--    belong to this row's season) or CROSS_SEASON (the previous load was in an earlier season and this load
+--    already has games of its own, so the delta covers both and cannot be split; it is flagged under the
+--    earlier season). `credited_season` is the season the delta belongs to: the row's own season, or the
+--    previous season when a start-of-season load (week <= 0) covers the tail of the season just ended.
 CREATE OR REPLACE VIEW player_week_counters AS
 WITH base AS (
-    SELECT c.season, c.week, c.player_id, c.madden_table, c.counters, c.games_played,
-           LAG(c.season)       OVER (PARTITION BY c.player_id ORDER BY c.season, c.week) AS prev_season,
-           LAG(c.week)         OVER (PARTITION BY c.player_id ORDER BY c.season, c.week) AS prev_week,
-           LAG(c.madden_table) OVER (PARTITION BY c.player_id ORDER BY c.season, c.week) AS prev_madden_table,
-           LAG(c.counters)     OVER (PARTITION BY c.player_id ORDER BY c.season, c.week) AS prev_counters,
-           LAG(c.games_played) OVER (PARTITION BY c.player_id ORDER BY c.season, c.week) AS prev_games_played
+    SELECT c.season, c.week, c.stage, c.player_id, c.madden_table, c.counters, c.games_played, c.load_seq,
+           COALESCE(g.games_played, 0) AS season_games_played,
+           LAG(c.season)       OVER (PARTITION BY c.player_id ORDER BY c.load_seq) AS prev_season,
+           LAG(c.week)         OVER (PARTITION BY c.player_id ORDER BY c.load_seq) AS prev_week,
+           LAG(c.stage)        OVER (PARTITION BY c.player_id ORDER BY c.load_seq) AS prev_stage,
+           LAG(c.madden_table) OVER (PARTITION BY c.player_id ORDER BY c.load_seq) AS prev_madden_table,
+           LAG(c.counters)     OVER (PARTITION BY c.player_id ORDER BY c.load_seq) AS prev_counters,
+           LAG(c.games_played) OVER (PARTITION BY c.player_id ORDER BY c.load_seq) AS prev_games_played
     FROM player_career_counters c
+    LEFT JOIN season_stat_general g ON g.season = c.season AND g.player_id = c.player_id
 ), marked AS (
     SELECT b.*,
            CASE
+               WHEN b.prev_season IS NULL AND b.season_games_played > 0 THEN 'PARTIAL'
                WHEN b.prev_season IS NULL THEN 'BASELINE'
                WHEN b.madden_table IS DISTINCT FROM b.prev_madden_table THEN 'TABLE_CHANGED'
                WHEN b.games_played - b.prev_games_played < 0 THEN 'RESET'
                WHEN b.games_played - b.prev_games_played = 0 THEN 'NO_GAMES'
-               ELSE 'OK'
+               WHEN b.season = b.prev_season THEN 'OK'
+               WHEN b.season = b.prev_season + 1 AND b.week <= 0 THEN 'OK'
+               ELSE 'CROSS_SEASON'
            END AS status,
-           b.games_played - b.prev_games_played AS games_covered
+           CASE WHEN b.prev_season IS NULL THEN b.season_games_played
+                ELSE b.games_played - b.prev_games_played END AS games_covered,
+           CASE
+               WHEN b.prev_season IS NULL THEN b.season
+               WHEN b.season = b.prev_season THEN b.season
+               WHEN b.season = b.prev_season + 1 AND b.week <= 0 THEN b.prev_season
+               ELSE LEAST(b.season, b.prev_season)
+           END AS credited_season
     FROM base b
 ), deltas AS (
     SELECT m.*,
@@ -3956,30 +3978,36 @@ SELECT season, week, player_id, madden_table, prev_season, prev_week, games_cove
        (delta ->> 'DEFPRESSURES')::int           AS def_pressures,
        (delta ->> 'STOPS')::int                  AS stops,
        (delta ->> 'STUFFS')::int                 AS stuffs,
-       (delta ->> 'DOWNSPLAYED')::int            AS downs_played
+       (delta ->> 'DOWNSPLAYED')::int            AS downs_played,
+       stage, prev_stage, load_seq, credited_season
 FROM deltas;
 
--- One row per (season, player): the OK week deltas summed key by key, the games those weeks covered, and how many
--- weeks of the season had an unknown delta (a table change or a reset).
+-- One row per (credited season, player): the OK and NO_GAMES deltas summed key by key, the games those
+--    rows covered, and the coverage gaps: weeks_unknown (TABLE_CHANGED, RESET or CROSS_SEASON), weeks_partial /
+--    games_lost (a first career row whose games are lost, L2), and weeks_no_games (a NO_GAMES row whose
+--    counters still grew, L4; its growth is kept in the sum).
 CREATE OR REPLACE VIEW player_season_counters AS
-WITH ok_deltas AS (
-    SELECT season, player_id, delta
+WITH delta_rows AS (
+    SELECT credited_season AS season, player_id, delta
     FROM player_week_counters
-    WHERE status = 'OK' AND delta IS NOT NULL
+    WHERE status IN ('OK', 'NO_GAMES') AND delta IS NOT NULL
 ), summed AS (
     SELECT season, player_id, jsonb_object_agg(k, total) AS delta
     FROM (
         SELECT season, player_id, e.key AS k, SUM(e.value::int) AS total
-        FROM ok_deltas, LATERAL jsonb_each_text(ok_deltas.delta) AS e(key, value)
+        FROM delta_rows, LATERAL jsonb_each_text(delta_rows.delta) AS e(key, value)
         GROUP BY season, player_id, e.key
     ) parts
     GROUP BY season, player_id
 ), coverage AS (
-    SELECT season, player_id,
-           COALESCE(SUM(games_covered) FILTER (WHERE status = 'OK'), 0) AS games_covered,
-           COUNT(*) FILTER (WHERE status IN ('TABLE_CHANGED', 'RESET')) AS weeks_unknown
+    SELECT credited_season AS season, player_id,
+           COALESCE(SUM(games_covered) FILTER (WHERE status IN ('OK', 'NO_GAMES')), 0) AS games_covered,
+           COUNT(*) FILTER (WHERE status IN ('TABLE_CHANGED', 'RESET', 'CROSS_SEASON')) AS weeks_unknown,
+           COUNT(*) FILTER (WHERE status = 'PARTIAL') AS weeks_partial,
+           COALESCE(SUM(games_covered) FILTER (WHERE status = 'PARTIAL'), 0) AS games_lost,
+           COUNT(*) FILTER (WHERE status = 'NO_GAMES') AS weeks_no_games
     FROM player_week_counters
-    GROUP BY season, player_id
+    GROUP BY credited_season, player_id
 )
 SELECT c.season, c.player_id, s.delta, c.games_covered, c.weeks_unknown,
        (s.delta ->> 'TARGETS')::int                AS targets,
@@ -4035,7 +4063,8 @@ SELECT c.season, c.player_id, s.delta, c.games_covered, c.weeks_unknown,
        (s.delta ->> 'DEFPRESSURES')::int           AS def_pressures,
        (s.delta ->> 'STOPS')::int                  AS stops,
        (s.delta ->> 'STUFFS')::int                 AS stuffs,
-       (s.delta ->> 'DOWNSPLAYED')::int            AS downs_played
+       (s.delta ->> 'DOWNSPLAYED')::int            AS downs_played,
+       c.weeks_partial, c.games_lost, c.weeks_no_games
 FROM coverage c
 LEFT JOIN summed s ON s.season = c.season AND s.player_id = c.player_id;
 
@@ -4251,5 +4280,6 @@ INSERT INTO schema_migrations (version, filename, checksum, source) VALUES
     ('2027_02_24_player_draft_facts', '2027_02_24_player_draft_facts.sql', '08c2e353ebc2e27ac4c83ab23aa38eae32a111dd08d8e528b3ad9b0f79f36afa', 'init_db.sql'),
     ('2027_02_25_madden_stat_counters', '2027_02_25_madden_stat_counters.sql', '4947d8696109ff912f6ec9735f9543a31068a3e1ca05e222adbd6a8f7aa92766', 'init_db.sql'),
     ('2027_02_26_league_shape_season', '2027_02_26_league_shape_season.sql', 'c953582968fad1e0de03b4fdde23627ab21d23e7f42e0612a63e7dcd45f45026', 'init_db.sql'),
-    ('2027_02_27_nfl_mirror', '2027_02_27_nfl_mirror.sql', '7b5d61f3fc3427adaf9c029a5ceb6cfa75b55ba93654d27a52d845624204230c', 'init_db.sql')
+    ('2027_02_27_nfl_mirror', '2027_02_27_nfl_mirror.sql', '7b5d61f3fc3427adaf9c029a5ceb6cfa75b55ba93654d27a52d845624204230c', 'init_db.sql'),
+    ('2027_02_28_stats_loader_weeks', '2027_02_28_stats_loader_weeks.sql', '33c2d60765e497dfc353545ed60edba2eca28ddc6d8878ac7e6f2603201a105a', 'init_db.sql')
 ON CONFLICT (version) DO NOTHING;

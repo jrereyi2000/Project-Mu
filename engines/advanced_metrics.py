@@ -440,7 +440,7 @@ STAT_COLUMNS = (
 )
 
 TEAM_COLUMNS = ("team_pass_attempts", "team_total_plays")
-WEEKS_UNKNOWN_STATUSES = ("TABLE_CHANGED", "RESET")
+WEEKS_UNKNOWN_STATUSES = ("TABLE_CHANGED", "RESET", "CROSS_SEASON")
 
 
 def _fetch_row(cur, columns: tuple[str, ...], sql: str, params: dict) -> dict:
@@ -463,7 +463,8 @@ def _counter_row(cur, season: int, player_id: int, week: int | None) -> dict:
     else:
         columns = ("status",) + COUNTER_COLUMNS
         sql = (f"SELECT {', '.join(columns)} FROM player_week_counters "
-               "WHERE season = %(season)s AND week = %(week)s AND player_id = %(player_id)s")
+               "WHERE season = %(season)s AND week = %(week)s AND player_id = %(player_id)s "
+               "AND stage = 'WEEK'")
         params = {"season": season, "week": week, "player_id": player_id}
     return _fetch_row(cur, columns, sql, params)
 

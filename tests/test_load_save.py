@@ -95,6 +95,13 @@ class MappingTest(unittest.TestCase):
         rows = [{"stats": {"GAMESSTARTED": 1, "DOWNSPLAYED": 30}}, {"stats": {"GAMESSTARTED": 0}}]
         self.assertEqual(ls.group_lines(rows)["general"], {"downs_played": 30, "games_started": 1})
 
+    def test_group_lines_keeps_a_present_zero(self):
+        # L3: a player who played but did not start gets 0, not NULL, when the row carries another stat group.
+        out = ls.group_lines([{"stats": {"RECEIVECATCHES": 3, "GAMESPLAYED": 1, "GAMESSTARTED": 0, "DOWNSPLAYED": 0}}])
+        self.assertEqual(out["general"], {"games_played": 1, "games_started": 0, "downs_played": 0})
+        # An empty bench row (only zero general fields, no stats) adds nothing to the box score.
+        self.assertEqual(ls.group_lines([{"stats": {"GAMESPLAYED": 0, "GAMESSTARTED": 0, "DOWNSPLAYED": 0}}]), {})
+
     def test_team_box(self):
         box = ls.team_box({"FIRSTDOWNS": 17, "OFFYARDS": 405, "TOTALYARDS": 483, "RUSHATTEMPTS": 30, "PASSATTEMPTS": 38,
                            "SACKSALLOWED": 2, "OFFRUSHYARDS": 118, "OFFPASSYARDS": 287, "THIRDDOWNS": 18,
@@ -313,6 +320,7 @@ class FakeCursor:
     def __init__(self):
         self.calls = []
         self.result = None
+        self.results = []
 
     def execute(self, sql, args=None):
         self.calls.append(("execute", sql, args))
@@ -321,6 +329,8 @@ class FakeCursor:
         self.calls.append(("executemany", sql, list(rows)))
 
     def fetchone(self):
+        if self.results:
+            return self.results.pop(0)
         return self.result
 
     def inserted(self):
@@ -542,30 +552,52 @@ class CareerCountersTest(unittest.TestCase):
         self.assertEqual([sql for kind, sql, _ in cur.calls], ["SELECT to_regclass('public.player_career_counters')"])
         self.assertEqual(report, {"career_counters": "table missing"})
 
+    def test_missing_stage_columns_reports_and_writes_nothing(self):
+        cur, report = FakeCursor(), {}
+        cur.results = [("player_career_counters",), (0,)]   # 2027_02_25 schema, no 2027_02_28 columns
+        ls.load_career_counters(cur, v10_snapshot(), TEST_SEASON, self.PLAYERS, None, report)
+        self.assertEqual(report, {"career_counters": "stage column missing (apply 2027_02_28_stats_loader_weeks)"})
+
     def test_upserts_one_row_per_matched_player(self):
         cur, report = FakeCursor(), {}
-        cur.result = ("player_career_counters",)
+        cur.results = [("player_career_counters",), (2,)]
         ls.load_career_counters(cur, v10_snapshot(), TEST_SEASON, self.PLAYERS, 7, report)
         inserts = [(sql, args) for kind, sql, args in cur.calls if "INSERT INTO player_career_counters" in sql]
         self.assertEqual(len(inserts), 2)        # the free agent and the prospect have no career_stats
         sql, args = inserts[0]
-        self.assertIn("ON CONFLICT (season, week, player_id) DO UPDATE", sql)
-        self.assertEqual(args[:4], (TEST_SEASON, 2, 11, "CareerOffensiveStats"))
-        counts = json.loads(args[4])
+        self.assertIn("ON CONFLICT (season, week, player_id, stage) DO UPDATE", sql)
+        self.assertEqual(args[:5], (TEST_SEASON, 1, "WEEK", 11, "CareerOffensiveStats"))
+        counts = json.loads(args[5])
         self.assertEqual((counts["GAMESPLAYED"], counts["TARGETS"], counts["ROUTESRUN"], counts["SHORTPASS_ATTEMPTS"]),
                          (12, 40, 120, 5))
-        self.assertEqual((args[5], args[6], args[7]), (12, 7, "2026-11-11T01:00:00Z"))
-        self.assertEqual((report["career_counter_rows"], report["career_counters"]), (2, "2 rows (week 2)"))
+        self.assertEqual((args[6], args[7], args[8]), (12, 7, "2026-11-11T01:00:00Z"))
+        self.assertEqual((report["career_counter_rows"], report["career_counters"]),
+                         (2, f"2 rows (season {TEST_SEASON} week 1 WEEK)"))
 
-    def test_off_season_loads_use_week_zero(self):
+    def test_off_season_loads_use_a_sentinel_week(self):
         snap = v10_snapshot()
         snap["season"].update(week_type="OffSeason", week_index=0)
         cur, report = FakeCursor(), {}
-        cur.result = ("player_career_counters",)
+        cur.results = [("player_career_counters",), (2,)]
         ls.load_career_counters(cur, snap, TEST_SEASON, self.PLAYERS, None, report)
         args = [a for kind, sql, a in cur.calls if "INSERT INTO player_career_counters" in sql][0]
-        self.assertEqual((args[0], args[1]), (TEST_SEASON, 0))
-        self.assertEqual(report["career_counters"], "2 rows (week 0)")
+        self.assertEqual(args[:3], (TEST_SEASON, -1, "OFFSEASON"))
+        self.assertEqual(report["career_counters"], f"2 rows (season {TEST_SEASON} week -1 OFFSEASON)")
+
+    def test_counter_position_is_the_last_played_week(self):
+        pos = ls.counter_position
+        snap = lambda kind, idx=0: {"season": {"week_type": kind, "week_index": idx}}
+        self.assertEqual(pos(snap("PreSeason", 2)), ("PRESEASON", 0))
+        self.assertEqual(pos(snap("RegularSeason", 0)), ("PRESEASON", 0))   # no game played yet
+        self.assertEqual(pos(snap("RegularSeason", 1)), ("WEEK", 1))        # the save's current week 2
+        self.assertEqual(pos(snap("RegularSeason", 17)), ("WEEK", 17))      # current week 18
+        self.assertEqual(pos(snap("WildcardPlayoff")), ("WEEK", 18))        # the regular season just ended
+        self.assertEqual(pos(snap("DivisionalPlayoff")), ("WEEK", 19))
+        self.assertEqual(pos(snap("ConferencePlayoff")), ("WEEK", 20))
+        self.assertEqual(pos(snap("SuperBowl")), ("WEEK", 21))              # week 22 is the Pro Bowl, no game
+        self.assertEqual(pos(snap("ProBowl")), ("PROBOWL", -2))
+        self.assertEqual(pos(snap("OffSeason")), ("OFFSEASON", -1))
+        self.assertEqual(pos({"season": {}}), ("PRESEASON", 0))             # never a colliding week
 
 
 @pytest.mark.integration
@@ -849,17 +881,33 @@ class LoadTinySnapshotTest(unittest.TestCase):
                                   "games_started FROM game_stat_lines WHERE game_id = %s AND player_id = %s",
                                   gid, pid), (2, 1, 3, 4, 5, 1))
 
+    def test_a_player_who_did_not_start_writes_zero_games_started(self):
+        # L3: GAMESSTARTED is a count; a non-starter's present zero is stored as 0, not NULL.
+        snap = tiny_snapshot()
+        snap["players"][1]["game_stats"][0]["stats"].update(
+            GAMESPLAYED=1, GAMESSTARTED=0, DOWNSPLAYED=12)
+        snap["players"][1]["season_stats"] = [{"kind": "offense", "stats": {
+            "SEAS_YEAR": 1, "RECEIVECATCHES": 6, "RECEIVEYARDS": 90, "GAMESPLAYED": 1,
+            "GAMESSTARTED": 0, "DOWNSPLAYED": 12}}]
+        ls.load_snapshot(self.cur, snap, season=TEST_SEASON)
+        gid = self.one("SELECT id FROM games WHERE season = %s AND week = 1", TEST_SEASON)[0]
+        pid = self.one("SELECT id FROM players WHERE madden_pgid = 900002")[0]
+        self.assertEqual(self.one("SELECT games_started, downs_played FROM game_stat_general "
+                                  "WHERE game_id = %s AND player_id = %s", gid, pid), (0, 12))
+        self.assertEqual(self.one("SELECT games_started, downs_played FROM season_stat_general "
+                                  "WHERE season = %s AND player_id = %s", TEST_SEASON, pid), (0, 12))
+
     def test_career_counters_load_and_a_reload_replaces_the_week(self):
         r = ls.load_snapshot(self.cur, v10_snapshot(), season=TEST_SEASON)
         self.assertEqual(r["career_counter_rows"], 2)
-        self.assertEqual(r["career_counters"], "2 rows (week 2)")
+        self.assertEqual(r["career_counters"], f"2 rows (season {TEST_SEASON} week 1 WEEK)")
         self.cur.execute("SELECT p.madden_pgid, c.madden_table, c.counters, c.games_played, c.week "
                          "FROM player_career_counters c JOIN players p ON p.id = c.player_id "
                          "WHERE c.season = %s ORDER BY p.madden_pgid", (TEST_SEASON,))
         self.assertEqual(self.cur.fetchall(), [
             (900001, "CareerOffensiveStats", {"GAMESPLAYED": 12, "TARGETS": 40, "ROUTESRUN": 120,
-                                              "SHORTPASS_ATTEMPTS": 5}, 12, 2),
-            (900002, "CareerOffensiveStats", {"GAMESPLAYED": 8, "TARGETS": 25}, 8, 2)])
+                                              "SHORTPASS_ATTEMPTS": 5}, 12, 1),
+            (900002, "CareerOffensiveStats", {"GAMESPLAYED": 8, "TARGETS": 25}, 8, 1)])
 
         again = v10_snapshot()                                 # the same week loaded again: replaced, not duplicated
         again["players"][0]["career_stats"]["stats"].update(GAMESPLAYED=13, TARGETS=44)
@@ -871,13 +919,13 @@ class LoadTinySnapshotTest(unittest.TestCase):
                                   TEST_SEASON)[:2],
                          ({"GAMESPLAYED": 13, "TARGETS": 44, "ROUTESRUN": 120, "SHORTPASS_ATTEMPTS": 5}, 13))
 
-    def test_off_season_career_counters_use_week_zero(self):
+    def test_off_season_career_counters_use_a_sentinel_key(self):
         snap = v10_snapshot()
         snap["season"].update(week_type="OffSeason", week_index=0)
         r = ls.load_snapshot(self.cur, snap, season=TEST_SEASON)
-        self.assertEqual(r["career_counters"], "2 rows (week 0)")
-        self.assertEqual(self.one("SELECT DISTINCT week FROM player_career_counters WHERE season = %s",
-                                  TEST_SEASON), (0,))
+        self.assertEqual(r["career_counters"], f"2 rows (season {TEST_SEASON} week -1 OFFSEASON)")
+        self.assertEqual(self.one("SELECT DISTINCT week, stage FROM player_career_counters WHERE season = %s",
+                                  TEST_SEASON), (-1, "OFFSEASON"))
 
     def test_career_counter_views_report_statuses(self):
         ls.load_snapshot(self.cur, tiny_snapshot(), season=TEST_SEASON)
@@ -895,16 +943,19 @@ class LoadTinySnapshotTest(unittest.TestCase):
         self.cur.execute("SELECT week, status, games_covered, delta ->> 'TARGETS', targets, madden_routes "
                          "FROM player_week_counters WHERE season = %s AND player_id = %s ORDER BY week",
                          (TEST_SEASON, pid))
+        # The first career row is PARTIAL (L2): the player's season row says one game was played, so that load's
+        # game is reported as lost instead of a BASELINE that silently drops it.
         self.assertEqual(self.cur.fetchall(), [
-            (0, "BASELINE", None, None, None, None),
+            (0, "PARTIAL", 1, None, None, None),
             (1, "OK", 1, "2", 2, None),                 # the week's difference, and NULL for an absent field
             (2, "NO_GAMES", 0, "0", 0, None),
             (3, "RESET", -1, None, None, None),         # games_played fell
             (4, "TABLE_CHANGED", 0, None, None, None),  # the career row changed table
             (5, "OK", 1, "3", 3, None)])
-        self.assertEqual(self.one("SELECT games_covered, weeks_unknown, delta ->> 'TARGETS', targets "
+        self.assertEqual(self.one("SELECT games_covered, weeks_unknown, weeks_partial, games_lost, "
+                                  "weeks_no_games, delta ->> 'TARGETS', targets "
                                   "FROM player_season_counters WHERE season = %s AND player_id = %s",
-                                  TEST_SEASON, pid), (2, 2, "5", 5))
+                                  TEST_SEASON, pid), (2, 2, 1, 1, 1, "5", 5))
 
     def test_missing_career_counters_table_reports_and_writes_nothing(self):
         snap = v10_snapshot()

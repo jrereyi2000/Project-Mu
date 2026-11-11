@@ -22,9 +22,11 @@ Writes, for that season:
   player_stats, game_stat_*  per-game lines: a game the save has lines for has its stored lines replaced
                              (Madden purges old weeks, so a game with no lines in this save keeps what it has)
   season_stats, season_stat_* season totals (a player traded mid-season is summed across teams)
-  player_career_counters     reader_version >= 10: Madden's career stat totals at each weekly load (week 0 off-season),
-                             raw JSONB fields plus games_played; player_week_counters / player_season_counters turn
-                             week-to-week differences into the counters the advanced metrics read
+  player_career_counters     reader_version >= 10: Madden's career stat totals at each weekly load, keyed by the
+                             last played week the row's delta covers (stage PRESEASON/OFFSEASON/PROBOWL for loads
+                             with no game week); raw JSONB fields plus games_played; player_week_counters /
+                             player_season_counters turn load-to-load differences into the counters the advanced
+                             metrics read
   player_contracts (+ years)  every rostered player's contract: the season's ACTIVE rows are superseded first
   team_cap_seasons           reader_version >= 5: each real team's Team Salary strip from the save's cap fields (checked
                              against the Panthers' Team Salary screen in CAREER-WEEK1, 2026-11-02; team_cap_values)
@@ -109,6 +111,8 @@ ARCHETYPE_WORDS = {"MantoMan": "Man To Man", "SmallerSpeedRusher": "Speed Rusher
 
 PLAYOFF_WEEKS = {"WildcardPlayoff": (19, "WILD_CARD"), "DivisionalPlayoff": (20, "DIVISIONAL"),
                  "ConferencePlayoff": (21, "CONFERENCE"), "SuperBowl": (23, "SUPER_BOWL")}
+# The last played week before each playoff round (week 22 is the Pro Bowl, which has no stored game).
+PLAYOFF_PREVIOUS = {19: 18, 20: 19, 21: 20, 23: 21}
 FINISHED = ("HomeWon", "AwayWon", "Tie")
 
 # U1's READER_VERSION: the first reader that puts `career_stats` on every player. Older snapshots write no
@@ -300,13 +304,17 @@ def group_lines(rows):
                 merge_into(out.setdefault(name, {}), vals)
         for src, col in (("DOWNSPLAYED", "downs_played"), ("GAMESPLAYED", "games_played"),
                          ("GAMESSTARTED", "games_started")):
-            if s.get(src):
+            # Keep a present zero (a non-starter's GAMESSTARTED = 0), not just a positive count: games_started
+            # and downs_played are counts, and NULL for a player who played reads as unknown (audit L3).
+            if src in s and s[src] is not None:
                 general[col] = max(general.get(col, 0), s[src])
     for name, vals in out.items():
         rates = GROUPS[name][3]
         if rates:
             rates(vals)
-    if general:
+    # Drop an all-zero general group when the row carries no other stat group, so a bench player's empty stat
+    # row does not add a zero box-score line.
+    if general and (any(general.values()) or out):
         out["general"] = general
     return out
 
@@ -817,9 +825,11 @@ def career_counter_values(career):
 def load_career_counters(cur, snapshot, season, players, capture_id, report):
     """One player_career_counters row per matched player per weekly load. Madden's career totals include real-NFL
     history, so each row is a high-water mark the player_week_counters view differences against the previous load
-    (docs/done/MADDEN_STATS_INGEST_PLAN.md §2.3): week 0 off-season (current_week has no week there), and a
-    reload of the same week replaces its row. A database without the migration reports `table missing` and writes
-    nothing, so a load against an older schema still succeeds."""
+    (docs/done/MADDEN_STATS_INGEST_PLAN.md §2.3). A row's week is the last played week its delta covers, so a
+    reload of the same week replaces its row; a load outside a playable week takes a stage/sentinel key
+    (PRESEASON week 0, OFFSEASON week -1, PROBOWL week -2) that cannot collide with a real week. A database
+    without the migration reports `table missing` (or `stage column missing`) and writes nothing, so a load
+    against an older schema still succeeds."""
     if snapshot.get("meta", {}).get("reader_version", 0) < CAREER_COUNTERS_READER_VERSION:
         report["career_counters"] = f"reader_version < {CAREER_COUNTERS_READER_VERSION}"
         return
@@ -827,7 +837,12 @@ def load_career_counters(cur, snapshot, season, players, capture_id, report):
     if cur.fetchone()[0] is None:
         report["career_counters"] = "table missing"
         return
-    week = current_week(snapshot) or 0
+    cur.execute("SELECT count(*) FROM information_schema.columns WHERE table_schema = 'public' "
+                "AND table_name = 'player_career_counters' AND column_name IN ('stage', 'load_seq')")
+    if cur.fetchone()[0] != 2:
+        report["career_counters"] = "stage column missing (apply 2027_02_28_stats_loader_weeks)"
+        return
+    stage, week = counter_position(snapshot)
     read_at = snapshot.get("meta", {}).get("read_at")
     n = 0
     for p in snapshot["players"]:
@@ -838,15 +853,16 @@ def load_career_counters(cur, snapshot, season, players, capture_id, report):
         if vals is None:
             continue
         table, counters, games_played = vals
-        cur.execute("INSERT INTO player_career_counters (season, week, player_id, madden_table, counters, "
-                    "games_played, capture_id, read_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) "
-                    "ON CONFLICT (season, week, player_id) DO UPDATE SET madden_table = EXCLUDED.madden_table, "
+        cur.execute("INSERT INTO player_career_counters (season, week, stage, player_id, madden_table, counters, "
+                    "games_played, capture_id, read_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
+                    "ON CONFLICT (season, week, player_id, stage) DO UPDATE SET madden_table = EXCLUDED.madden_table, "
                     "counters = EXCLUDED.counters, games_played = EXCLUDED.games_played, "
-                    "capture_id = EXCLUDED.capture_id, read_at = EXCLUDED.read_at",
-                    (season, week, who[0], table, json.dumps(counters), games_played, capture_id, read_at))
+                    "capture_id = EXCLUDED.capture_id, read_at = EXCLUDED.read_at, "
+                    "load_seq = nextval('player_career_counters_load_seq')",
+                    (season, week, stage, who[0], table, json.dumps(counters), games_played, capture_id, read_at))
         n += 1
     report["career_counter_rows"] = n
-    report["career_counters"] = f"{n} rows (week {week})"
+    report["career_counters"] = f"{n} rows (season {season} week {week} {stage})"
 
 
 def load_contracts(cur, snapshot, season, players, report, capture_id=None):
@@ -1274,6 +1290,29 @@ def current_week(snapshot):
     """The save's current week in games.week numbering, or None outside the regular season and playoffs."""
     wk = game_week(snapshot["season"]["week_type"], snapshot["season"]["week_index"])
     return wk[0] if wk else None
+
+
+def counter_position(snapshot):
+    """(stage, week) for a career-counter row: the last played week the load's delta covers, not the save's
+    current week. A save at regular-season week_index i has played through week i (0 when the season has not
+    started); a playoff save has played through the previous round (18 before the wild card, 19/20/21 before the
+    next rounds; the Pro Bowl at week 22 has no game). Loads outside a playable week use a sentinel week with a
+    stage, so they cannot overwrite the preseason baseline: PRESEASON week 0, OFFSEASON week -1, PROBOWL week -2."""
+    season = snapshot["season"]
+    kind = season.get("week_type") or ""
+    if kind == "RegularSeason":
+        idx = season.get("week_index")
+        if isinstance(idx, int) and idx > 0:
+            return "WEEK", idx
+        return "PRESEASON", 0
+    if kind in PLAYOFF_WEEKS:
+        return "WEEK", PLAYOFF_PREVIOUS[PLAYOFF_WEEKS[kind][0]]
+    low = kind.lower()
+    if "prob" in low:
+        return "PROBOWL", -2
+    if "off" in low:
+        return "OFFSEASON", -1
+    return "PRESEASON", 0
 
 
 def update_league_state(cur, season, week, report):
