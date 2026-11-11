@@ -215,7 +215,7 @@ These go in `docs/reference/MADDEN_STATS_AND_ADVANCED_METRICS.md`:
   - `offense_cols` / `defense_cols` / `blocking_cols` map `RECEIVEDROPS`, `RUSH20YARDRUNS`, `BIGHITS`, `CTHALLOWED`, `OLINEPANCAKES`.
   - `group_lines` carries `games_started`.
   - `load_career_counters`: upserts one row per player per week; a reload of the same week replaces it; week 0 is used off-season; a v8 snapshot writes nothing and reports why; a missing table reports and doesn't raise.
-  - Run against the scratch Postgres (`madden_test`, as the file's other DB tests do): the `player_week_counters` statuses `BASELINE`, `OK`, `NO_GAMES`, `TABLE_CHANGED` and `RESET` from hand-built rows; negative deltas kept; `player_season_counters` sums only `OK` rows and counts `weeks_unknown`.
+  - Run against a **scratch** Postgres, never `madden_test` until JR applies `2027_02_25` and `2027_02_28` there (audit M2): the `player_week_counters` statuses `BASELINE`, `PARTIAL`, `OK`, `NO_GAMES`, `TABLE_CHANGED`, `RESET` and `CROSS_SEASON` from hand-built rows; negative deltas kept; `player_season_counters` sums only `OK` and `NO_GAMES` rows and counts `weeks_unknown` / `weeks_partial` / `weeks_no_games`.
   - The season-totals-match-game-lines test (`:724`) is extended to cover the new columns.
 - `tests/test_advanced_metrics.py`:
   - Every doc §4 metric has an entry in `METRICS`.
@@ -224,7 +224,23 @@ These go in `docs/reference/MADDEN_STATS_AND_ADVANCED_METRICS.md`:
   - `BLOCKED` / `IMPOSSIBLE` metrics are never computed and have a non-empty reason.
   - `player_metrics` against a stub cursor merges the counter and stat-line rows.
 
-Run with `pytest -m "not integration" tests/test_load_save.py tests/test_advanced_metrics.py` and `cd pipeline/save_reader && npm test`. View tests run against `madden_test` only.
+Run with `pytest -m "not integration" tests/test_load_save.py tests/test_advanced_metrics.py` and `cd pipeline/save_reader && npm test`.
+
+**Integration tests use a scratch database (audit M2).** Until JR applies `2027_02_25` and `2027_02_28` to `madden_test`, every integration test touching the new columns or views fails there with `UndefinedColumn` (`rec_drops`, `big_hits`, `credited_season`, `stage`), because `tests/conftest.py` forces `DATABASE_URL=TEST_DATABASE_URL` (default `madden_test`). Build a scratch database from `db/init_db.sql` and point the run at it:
+
+```bash
+docker exec -i madden-db psql -U postgres -c 'DROP DATABASE IF EXISTS mu_scratch_stats' \
+    -c 'CREATE DATABASE mu_scratch_stats'
+docker exec -i madden-db psql -U postgres -d mu_scratch_stats -v ON_ERROR_STOP=1 < db/init_db.sql
+python3 -m db.seed_clean_db --season 2026 --week 1 \
+    --db 'host=localhost dbname=mu_scratch_stats user=postgres password=postgres'
+TEST_DATABASE_URL='host=localhost dbname=mu_scratch_stats user=postgres password=postgres' \
+    python3 -m pytest -m integration tests/test_load_save.py tests/test_stat_counter_views.py
+STATS_METRICS_TEST_DSN='host=localhost dbname=mu_scratch_stats user=postgres password=postgres' \
+    python3 -m pytest -m integration tests/test_advanced_metrics_coverage.py
+```
+
+`tests/test_stat_counter_views.py` (counter views and real-save attribution, H1/H2/L2/L4) and `tests/test_advanced_metrics_coverage.py` (H3/M1 on MUBASE→P2H and MU2026→P2G) read real saves through `pipeline/save_reader/pc_save_reader.mjs`, so they need `node`, the `saves` folder and the reader's `node_modules`; they skip when any is missing and never write a save. Integration counts at close-out (2026-11-11, scratch build): `tests/test_load_save.py` 18 passed / 7 skipped, `tests/test_stat_counter_views.py` 6 passed, `tests/test_advanced_metrics_coverage.py` 2 passed.
 
 ## 5. Work breakdown
 
@@ -301,3 +317,5 @@ No path appears twice.
 | U1 | 1 | `worktree-agent-afbe62c3f77d9688e` | `.claude/worktrees/agent-afbe62c3f77d9688e` | merged; reader_version 10, 2,484 career rows, snapshot +21.1%; offseason_check e2e 41 PASS / 4 INFO | `b3cb417` |
 | U3 | 1 | `worktree-agent-a818a949e0cdaefa3` | `.claude/worktrees/agent-a818a949e0cdaefa3` | merged; 37 metrics (20 OK / 3 BLOCKED / 14 IMPOSSIBLE), 9 tests pass, doc §1–§5 corrected | `96d6c74` |
 | U2 | 1 | `worktree-agent-a025a31777ebeacb6` | `.claude/worktrees/agent-a025a31777ebeacb6` | merged; migration + loader + views; 53 offline tests pass, migration applies twice, init_db.sql builds the same schema (`db.migrate diff` empty; the only pg_dump difference is column order on four tables: `season_stat_blocking.pancakes`, `season_stat_defense.catches_allowed`, `season_stat_general.games_started` and `season_stats.rush_20plus` sit before `source` in an init_db build and after it on a migrated database), 2,484 career-counter rows on P2G and non-zero new columns on P2H | `53a48dd` |
+| Fix H1/H2/L2–L4 | 2 | `worktree-builder-8-stats-loader` | `.claude/worktrees/builder-8-stats-loader` | merged; `2027_02_28_stats_loader_weeks.sql` (last-played-week labels, `stage`, `load_seq`, season attribution, `PARTIAL`/`CROSS_SEASON`); 56 offline tests plus 18 passed / 7 skipped integration on a scratch build; new tests fail on the parent; 2026 keeps 24,316 games covered under MU2026→P2G instead of crediting them to 2027 | `d97a041` |
+| Fix H3/M1/L5 | 2 | `worktree-builder-8-stats-metrics` | `.claude/worktrees/builder-9-stats` (reviewed and merged by `builder-9`) | merged; both sides of every metric from the same Career deltas, untracked weeks excluded and flagged, five M1 metrics BLOCKED (37 metrics: 15 OK / 8 BLOCKED / 14 IMPOSSIBLE); 12 offline metrics tests, 7 of them failing on the parent, plus 2 passed integration on MUBASE→P2H and MU2026→P2G with no catch rate above 1 | `c50a159` |
