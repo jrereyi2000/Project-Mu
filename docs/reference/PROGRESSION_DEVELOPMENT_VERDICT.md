@@ -123,6 +123,14 @@ live engine's projection **accounts for the players leaving and the coming draft
 fix is built by builder-8, from audit-2's brief. **Each league stores its own shape season, so `madden_2036` keeps
 the 2036 shape** (JR, relayed in board M-0413). The options JR chose from follow.
 
+**After the fix (builder-8, M-0436), JR ruled on two more points, 2026-11-11 (M-0441):**
+- **The projection's leaver draw is keyed on the season and the seed.** The live engine uses seed 0, and the fit
+  uses its `--seed` per replayed season. Different seeds then vary departures, and the 3-seed majority in
+  P3-02 means something again.
+- **`madden_2036` is archival only for now, and the shape-season migration isn't applied to it.** With the
+  projection drafting, its 2037 terms would be development +4.0 and star +1.5. That's the pattern §5 says to
+  revisit (above +1.5 a year), and it stays a P3 question.
+
 **What shape does a 2026-era league hold?** JR's 2026-10-28 rule ("the league keeps its 2036 shape, same 90+
 count and mean OVR") was written while the live league was 2036. audit-2 measured each reading on the p2g copy at
 2027 (report above):
