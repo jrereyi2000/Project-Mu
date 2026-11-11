@@ -26,7 +26,8 @@ CREATE TABLE IF NOT EXISTS league_state (
     id INT NOT NULL DEFAULT 1 PRIMARY KEY,
     current_season INT NOT NULL DEFAULT 2024,
     current_week INT NOT NULL DEFAULT 1,
-    madden_league_id BIGINT                -- the save's Franchise.LeagueID (db/franchises.py)
+    madden_league_id BIGINT,               -- the save's Franchise.LeagueID (db/franchises.py)
+    shape_season INT                       -- the season whose league shape progression holds (2027_02_26_league_shape_season.sql)
 );
 
 CREATE TABLE IF NOT EXISTS teams (
@@ -4196,5 +4197,6 @@ INSERT INTO schema_migrations (version, filename, checksum, source) VALUES
     ('2027_02_22_relationship_applied_refs', '2027_02_22_relationship_applied_refs.sql', '6d24a303ad4affdca5645e264d82220864fd357916c874e97849d3bfc08d9e39', 'init_db.sql'),
     ('2027_02_23_player_stats_team_key', '2027_02_23_player_stats_team_key.sql', '7f5e8241f0e83d35385a272e5c8d7f34ddd3f0f7a68d99f0d51ad635a84fdeab', 'init_db.sql'),
     ('2027_02_24_player_draft_facts', '2027_02_24_player_draft_facts.sql', '08c2e353ebc2e27ac4c83ab23aa38eae32a111dd08d8e528b3ad9b0f79f36afa', 'init_db.sql'),
-    ('2027_02_25_madden_stat_counters', '2027_02_25_madden_stat_counters.sql', '9692dae24b3df49c04a10f77fd7f9616eb9ca094fc1ca889d727eb484bf3b081', 'init_db.sql')
+    ('2027_02_25_madden_stat_counters', '2027_02_25_madden_stat_counters.sql', '4947d8696109ff912f6ec9735f9543a31068a3e1ca05e222adbd6a8f7aa92766', 'init_db.sql'),
+    ('2027_02_26_league_shape_season', '2027_02_26_league_shape_season.sql', 'c953582968fad1e0de03b4fdde23627ab21d23e7f42e0612a63e7dcd45f45026', 'init_db.sql')
 ON CONFLICT (version) DO NOTHING;
