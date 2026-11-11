@@ -94,8 +94,22 @@ def test_convert_args_converts_only_path_positions(fake_wslpath):
     out = harness.convert_args(["export-texture", asset, "/b/out.png", "--project", "/b/p.fbproject"])
     assert out == ["export-texture", asset, "W:\\b\\out.png", "--project", "W:\\b\\p.fbproject"]
 
+    out = harness.convert_args(["export-res", "DA6752E4F657A705", "/b/resource.bin"])
+    assert out == ["export-res", "DA6752E4F657A705", "W:\\b\\resource.bin"]
+
     out = harness.convert_args(["ebx-set", "/b/p.fbproject", "a/b", "Field.x", "#FF69B4"])
     assert out == ["ebx-set", "W:\\b\\p.fbproject", "a/b", "Field.x", "#FF69B4"]
+
+
+@pytest.mark.parametrize("command,rest", [
+    ("ebx-clone", ["UI/Screen/ScoreHud", "mu/research/presentation/ScoreHud"]),
+    ("hud-away-probe", ["mu/research/presentation/ScoreHud", "2,3,4,5,8,9,10,12,17,18,22,23,25,29,30,32"]),
+    ("hud-away-probe", ["mu/research/presentation/ScoreHud", "2,3,4,5,8,9,10,12,17,18,22,23,25,29,30,32", "--rebuild"]),
+])
+def test_research_commands_convert_only_project_path(fake_wslpath, command, rest):
+    args = [command, "/b/probe.fbproject", *rest]
+    assert harness.convert_args(args) == [command, "W:\\b\\probe.fbproject", *rest]
+    assert fake_wslpath == ["/b/probe.fbproject"]
 
 
 def test_convert_args_option_values_are_not_positional(fake_wslpath):

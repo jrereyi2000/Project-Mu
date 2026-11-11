@@ -22,11 +22,14 @@ DEFAULT_EXE = "/mnt/c/Madden27Modding/MuHarness/MmcHarness.exe"
 # Positional arguments (0 = the command itself) that are file paths, per command.
 PATH_ARGS: dict[str, tuple[int, ...]] = {
     "info": (),
+    "export-res": (2,),
     "find": (),
     "export-texture": (2,),
     "import-texture": (1, 3),
     "ebx-dump": (2,),
     "ebx-set": (1,),
+    "ebx-clone": (1,),
+    "hud-away-probe": (1,),
     "export-mod": (1, 2),
 }
 # Options that take a value (so their value isn't counted as a positional argument).

@@ -1,0 +1,243 @@
+{
+  "status": "research_lookup_prepared_not_runtime_selector",
+  "game_build": 3468304,
+  "namespace": "ScoreHudTeamData.TeamId; presentation_id confirmed live for CHI and CAR",
+  "source_snapshot": "g0/source_snapshot.json",
+  "conference_source": "db/seed_clean_db.py TEAMS_DATA (AST read only; not imported or executed)",
+  "runtime_observed_ids": {
+    "CHI": 1,
+    "CAR": 21
+  },
+  "unknown_id_policy": "Retain native standard HUD; no guessed conference.",
+  "limits": [
+    "Remaining 30 IDs derive from the baseline save, not individual live observations.",
+    "Relocated/custom/realigned team semantics remain untested.",
+    "No native selector graph has been added yet."
+  ],
+  "teams": [
+    {
+      "abbr": "CHI",
+      "hud_team_id": 1,
+      "conference": "NFC",
+      "broadcast": "FOX",
+      "runtime_id_observed": true
+    },
+    {
+      "abbr": "CIN",
+      "hud_team_id": 2,
+      "conference": "AFC",
+      "broadcast": "CBS",
+      "runtime_id_observed": false
+    },
+    {
+      "abbr": "BUF",
+      "hud_team_id": 3,
+      "conference": "AFC",
+      "broadcast": "CBS",
+      "runtime_id_observed": false
+    },
+    {
+      "abbr": "DEN",
+      "hud_team_id": 4,
+      "conference": "AFC",
+      "broadcast": "CBS",
+      "runtime_id_observed": false
+    },
+    {
+      "abbr": "CLE",
+      "hud_team_id": 5,
+      "conference": "AFC",
+      "broadcast": "CBS",
+      "runtime_id_observed": false
+    },
+    {
+      "abbr": "TB",
+      "hud_team_id": 6,
+      "conference": "NFC",
+      "broadcast": "FOX",
+      "runtime_id_observed": false
+    },
+    {
+      "abbr": "AZ",
+      "hud_team_id": 7,
+      "conference": "NFC",
+      "broadcast": "FOX",
+      "runtime_id_observed": false
+    },
+    {
+      "abbr": "LAC",
+      "hud_team_id": 8,
+      "conference": "AFC",
+      "broadcast": "CBS",
+      "runtime_id_observed": false
+    },
+    {
+      "abbr": "KC",
+      "hud_team_id": 9,
+      "conference": "AFC",
+      "broadcast": "CBS",
+      "runtime_id_observed": false
+    },
+    {
+      "abbr": "IND",
+      "hud_team_id": 10,
+      "conference": "AFC",
+      "broadcast": "CBS",
+      "runtime_id_observed": false
+    },
+    {
+      "abbr": "DAL",
+      "hud_team_id": 11,
+      "conference": "NFC",
+      "broadcast": "FOX",
+      "runtime_id_observed": false
+    },
+    {
+      "abbr": "MIA",
+      "hud_team_id": 12,
+      "conference": "AFC",
+      "broadcast": "CBS",
+      "runtime_id_observed": false
+    },
+    {
+      "abbr": "PHI",
+      "hud_team_id": 13,
+      "conference": "NFC",
+      "broadcast": "FOX",
+      "runtime_id_observed": false
+    },
+    {
+      "abbr": "ATL",
+      "hud_team_id": 14,
+      "conference": "NFC",
+      "broadcast": "FOX",
+      "runtime_id_observed": false
+    },
+    {
+      "abbr": "SF",
+      "hud_team_id": 15,
+      "conference": "NFC",
+      "broadcast": "FOX",
+      "runtime_id_observed": false
+    },
+    {
+      "abbr": "NYG",
+      "hud_team_id": 16,
+      "conference": "NFC",
+      "broadcast": "FOX",
+      "runtime_id_observed": false
+    },
+    {
+      "abbr": "JAX",
+      "hud_team_id": 17,
+      "conference": "AFC",
+      "broadcast": "CBS",
+      "runtime_id_observed": false
+    },
+    {
+      "abbr": "NYJ",
+      "hud_team_id": 18,
+      "conference": "AFC",
+      "broadcast": "CBS",
+      "runtime_id_observed": false
+    },
+    {
+      "abbr": "DET",
+      "hud_team_id": 19,
+      "conference": "NFC",
+      "broadcast": "FOX",
+      "runtime_id_observed": false
+    },
+    {
+      "abbr": "GB",
+      "hud_team_id": 20,
+      "conference": "NFC",
+      "broadcast": "FOX",
+      "runtime_id_observed": false
+    },
+    {
+      "abbr": "CAR",
+      "hud_team_id": 21,
+      "conference": "NFC",
+      "broadcast": "FOX",
+      "runtime_id_observed": true
+    },
+    {
+      "abbr": "NE",
+      "hud_team_id": 22,
+      "conference": "AFC",
+      "broadcast": "CBS",
+      "runtime_id_observed": false
+    },
+    {
+      "abbr": "LV",
+      "hud_team_id": 23,
+      "conference": "AFC",
+      "broadcast": "CBS",
+      "runtime_id_observed": false
+    },
+    {
+      "abbr": "LAR",
+      "hud_team_id": 24,
+      "conference": "NFC",
+      "broadcast": "FOX",
+      "runtime_id_observed": false
+    },
+    {
+      "abbr": "BAL",
+      "hud_team_id": 25,
+      "conference": "AFC",
+      "broadcast": "CBS",
+      "runtime_id_observed": false
+    },
+    {
+      "abbr": "WAS",
+      "hud_team_id": 26,
+      "conference": "NFC",
+      "broadcast": "FOX",
+      "runtime_id_observed": false
+    },
+    {
+      "abbr": "NO",
+      "hud_team_id": 27,
+      "conference": "NFC",
+      "broadcast": "FOX",
+      "runtime_id_observed": false
+    },
+    {
+      "abbr": "SEA",
+      "hud_team_id": 28,
+      "conference": "NFC",
+      "broadcast": "FOX",
+      "runtime_id_observed": false
+    },
+    {
+      "abbr": "PIT",
+      "hud_team_id": 29,
+      "conference": "AFC",
+      "broadcast": "CBS",
+      "runtime_id_observed": false
+    },
+    {
+      "abbr": "TEN",
+      "hud_team_id": 30,
+      "conference": "AFC",
+      "broadcast": "CBS",
+      "runtime_id_observed": false
+    },
+    {
+      "abbr": "MIN",
+      "hud_team_id": 31,
+      "conference": "NFC",
+      "broadcast": "FOX",
+      "runtime_id_observed": false
+    },
+    {
+      "abbr": "HOU",
+      "hud_team_id": 32,
+      "conference": "AFC",
+      "broadcast": "CBS",
+      "runtime_id_observed": false
+    }
+  ]
+}

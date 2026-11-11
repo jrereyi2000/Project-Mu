@@ -1,0 +1,21 @@
+{
+  "purpose": "Research-only EBX duplication and parent-reference proof; no CBS/FOX selector yet.",
+  "source": "UI/Screen/InGame/ScoreHud/EATheme/CustomHud/MaddenHero/DiamondGridBg_MH",
+  "destination": "mu/research/presentation/afternoon_b/DiamondGridBg",
+  "parent": "UI/Screen/InGame/ScoreHud/EATheme/CustomHud/MaddenHero/ScoreHud_QuarterAndClock_MH",
+  "parent_pointer": "Object.Layers[0].Elements[0].Blueprint",
+  "marker_colour": "#FFCC00",
+  "marker_paths": [
+    "Object.Layers[0].Elements[1].Elements[3].Color",
+    "Object.Layers[0].Elements[1].Elements[3].ColorValue.RawColor",
+    "Object.Layers[0].Elements[1].Elements[4].Color",
+    "Object.Layers[0].Elements[1].Elements[4].ColorValue.RawColor"
+  ],
+  "title": "Mu Research HUD Clone Probe",
+  "version": "0.3",
+  "limits": [
+    "External textures remain shared; no RES/chunk duplication.",
+    "Only standard QuarterAndClock parent redirected; no context-conditional CBS/FOX routing.",
+    "Not installed or live-rendered."
+  ]
+}

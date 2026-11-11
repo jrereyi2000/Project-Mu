@@ -468,10 +468,13 @@ namespace MuHarness
         const string Usage =
             "usage: MmcHarness <command> ...\n" +
             "  info\n" +
+            "  export-res <asset-name-or-hex-rid> <out.bin>\n" +
             "  find <pattern> [--kind ebx|res|chunk] [--limit N]\n" +
             "  export-texture <asset> <out.png|out.dds|out.tga> [--project P]\n" +
             "  import-texture <project.fbproject> <asset> <in.png|in.dds|in.tga> [--raw]\n" +
             "  ebx-dump <asset> <out.json> [--project P]\n" +
+            "  hud-away-probe <project.fbproject> <mu/research/afc-hud> <comma-separated-afc-ids> [--rebuild]\n" +
+            "  ebx-clone <project.fbproject> <source> <mu/research/destination>\n" +
             "  ebx-set <project.fbproject> <asset> <field.path[0].x> <value>\n" +
             "  export-mod <project.fbproject> <out.fbmod> --title T --author A --version V [--category C] [--description D]";
 
@@ -485,7 +488,7 @@ namespace MuHarness
             for (int i = 1; i < args.Length; i++)
             {
                 var a = args[i];
-                if (a == "--raw") { flags.Add(a); continue; }
+                if (a == "--raw" || a == "--rebuild") { flags.Add(a); continue; }
                 if (a.StartsWith("--") && a.Length > 2)
                 {
                     if (i + 1 >= args.Length) throw new HarnessException("missing value for " + a);
@@ -497,10 +500,13 @@ namespace MuHarness
             switch (args[0])
             {
                 case "info": Need(pos, 0, "info"); return Info();
+                case "export-res": Need(pos, 2, "export-res <asset-name-or-hex-rid> <out.bin>"); return ExportRes(pos[0], pos[1]);
                 case "find": Need(pos, 1, "find <pattern>"); return Find(pos[0], Opt(opts, "kind", null), int.Parse(Opt(opts, "limit", "200")));
                 case "export-texture": Need(pos, 2, "export-texture <asset> <out>"); return ExportTexture(pos[0], pos[1], Opt(opts, "project", null));
                 case "import-texture": Need(pos, 3, "import-texture <project> <asset> <in>"); return ImportTexture(pos[0], pos[1], pos[2], flags.Contains("--raw"));
                 case "ebx-dump": Need(pos, 2, "ebx-dump <asset> <out.json>"); return EbxDump(pos[0], pos[1], Opt(opts, "project", null));
+                case "hud-away-probe": Need(pos, 3, "hud-away-probe <project> <mu/research/afc-hud> <afc-ids>"); return HudAwayProbe(pos[0], pos[1], pos[2], flags.Contains("--rebuild"));
+                case "ebx-clone": Need(pos, 3, "ebx-clone <project> <source> <mu/research/destination>"); return EbxClone(pos[0], pos[1], pos[2]);
                 case "ebx-set": Need(pos, 4, "ebx-set <project> <asset> <path> <value>"); return EbxSet(pos[0], pos[1], pos[2], pos[3]);
                 case "export-mod":
                     Need(pos, 2, "export-mod <project> <out.fbmod> --title T --author A --version V");
@@ -668,6 +674,23 @@ namespace MuHarness
                 .Set("modified_assets", Boot.Am.GetModifiedCount());
         }
 
+        // Vanilla resource read only; no project loading or asset mutation.
+        static JObj ExportRes(string asset, string outPath)
+        {
+            Boot.Start();
+            var entry = Boot.Am.GetResEntry(asset);
+            ulong rid;
+            if (entry == null && ulong.TryParse(asset.StartsWith("0x", StringComparison.OrdinalIgnoreCase) ? asset.Substring(2) : asset,
+                NumberStyles.HexNumber, CultureInfo.InvariantCulture, out rid)) entry = Boot.Am.GetResEntry(rid);
+            if (entry == null) throw new HarnessException("resource not found: " + asset);
+            var dir = Path.GetDirectoryName(Path.GetFullPath(outPath));
+            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+            using (var input = Boot.Am.GetRes(entry))
+            using (var output = File.Create(outPath)) input.CopyTo(output);
+            return new JObj().Set("ok", true).Set("asset", entry.Name).Set("res_rid", entry.ResRid.ToString("x16"))
+                .Set("out", outPath).Set("size", new FileInfo(outPath).Length);
+        }
+
         // ---- ebx
         static JObj EbxDump(string asset, string outPath, string projectPath)
         {
@@ -680,6 +703,8 @@ namespace MuHarness
             var root = d.Dump(ebx.RootObject, "");
             var doc = new JObj().Set("asset", entry.Name).Set("type", entry.Type)
                 .Set("file_guid", ebx.FileGuid.ToString()).Set("object_count", ebx.Objects.Count())
+                .Set("dependencies", ebx.Dependencies.Select(g => g.ToString()).ToArray())
+                .Set("bundle_ids", entry.Bundles.Concat(entry.AddedBundles).Except(entry.RemBundles).Distinct().ToArray())
                 .Set("color_fields", d.ColorFields).Set("root", root);
             var dir = Path.GetDirectoryName(Path.GetFullPath(outPath));
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
@@ -687,6 +712,214 @@ namespace MuHarness
             return new JObj().Set("ok", true).Set("asset", entry.Name).Set("type", entry.Type).Set("out", outPath)
                 .Set("fields", d.FieldCount).Set("color_fields", d.ColorFields.Take(50).ToList())
                 .Set("color_field_count", d.ColorFields.Count);
+        }
+
+        static void SdkSet(object obj, string name, object value)
+        {
+            var prop = obj.GetType().GetProperty(name);
+            if (prop == null || !prop.CanWrite) throw new HarnessException("SDK field unavailable: " + name);
+            prop.SetValue(obj, value, null);
+        }
+
+        static object SdkCopy(object template)
+        {
+            var obj = Activator.CreateInstance(template.GetType());
+            foreach (var p in EbxReflect.Fields(template.GetType()).Where(p => p.CanWrite))
+                p.SetValue(obj, p.GetValue(template, null), null);
+            return obj;
+        }
+
+        static int Pin(string name)
+        {
+            uint hash = 5381;
+            foreach (char c in name) hash = unchecked(hash * 33) ^ c;
+            return unchecked((int)hash);
+        }
+
+        // Fixed, build-checked research graph. Only the Standard HUD input is replaced.
+        static JObj HudAwayProbe(string projectPath, string variantName, string afcCsv, bool rebuild)
+        {
+            if (!Norm(variantName).StartsWith("mu/research/", StringComparison.OrdinalIgnoreCase))
+                throw new HarnessException("AFC HUD must be an added research blueprint");
+            var afc = new HashSet<int>(afcCsv.Split(',').Select(x => int.Parse(x, CultureInfo.InvariantCulture)));
+            if (afc.Count != 16 || afc.Any(x => x < 1 || x > 32))
+                throw new HarnessException("research AFC lookup requires 16 unique presentation IDs in 1..32");
+            Boot.Start(); Boot.RequireInitfs();
+            if (Boot.Fs.Head != 3468304) throw new HarnessException("away probe is verified only for game build 3468304");
+            var project = Projects.Open(projectPath);
+            var variantEntry = Ebx(variantName);
+            if (!variantEntry.IsAdded || variantEntry.Type != "RimeWidgetBlueprint")
+                throw new HarnessException("variant must be an added RimeWidgetBlueprint in this project");
+            var variant = Boot.Am.GetEbx(variantEntry, false);
+            var mh = Boot.Am.GetEbx(Ebx("UI/Screen/InGame/ScoreHud/EATheme/CustomHud/MaddenHero/ScoreHud_MH"), false);
+            var variantIface = ((FrostySdk.Ebx.PointerRef)Boot.Member(variant.RootObject, "Interface")).Internal;
+            var mhIface = ((FrostySdk.Ebx.PointerRef)Boot.Member(mh.RootObject, "Interface")).Internal;
+            var variantPins = ((IList)Boot.Member(variantIface, "Fields")).Cast<object>().Select(f => (int)Boot.Member(f, "Id"));
+            var mhPins = ((IList)Boot.Member(mhIface, "Fields")).Cast<object>().Select(f => (int)Boot.Member(f, "Id"));
+            if (!variantPins.SequenceEqual(mhPins)) throw new HarnessException("variant must preserve the full standard HUD interface");
+            var entry = Ebx("UI/Screen/InGame/ScoreHud/ScoreHudWrapper");
+            // Explicitly regenerate only this command's native wrapper in an offline research project.
+            if (rebuild) Boot.Am.RevertAsset(entry);
+            var asset = Boot.Am.GetEbx(entry, false);
+            var root = asset.RootObject;
+            var widget = ((FrostySdk.Ebx.PointerRef)Boot.Member(root, "Object")).Internal;
+            var components = (IList)Boot.Member(widget, "Components");
+            var iface = ((FrostySdk.Ebx.PointerRef)Boot.Member(root, "Interface")).Internal;
+            var fields = (IList)Boot.Member(iface, "Fields");
+            var properties = (IList)Boot.Member(root, "PropertyConnections");
+            var events = (IList)Boot.Member(root, "EventConnections");
+            if (components.Count != 25) throw new HarnessException("unexpected native wrapper shape; research graph refused");
+            var mainSelect = ((FrostySdk.Ebx.PointerRef)components[8]).Internal;
+            var converter = ((FrostySdk.Ebx.PointerRef)components[3]).Internal;
+            var switchTemplate = ((FrostySdk.Ebx.PointerRef)components[13]).Internal;
+            if (mainSelect.GetType().Name != "SelectObjectEntityData" || switchTemplate.GetType().Name != "IntegerSwitchCaseEntityData")
+                throw new HarnessException("unexpected wrapper component types");
+            int standardPin = Pin("ScoreHud_MaddenHero"), afcFieldPin = Pin("MuAfcHud");
+            var nativeBindings = properties.Cast<object>().Where(p =>
+                ReferenceEquals(((FrostySdk.Ebx.PointerRef)Boot.Member(p, "Target")).Internal, mainSelect) &&
+                (int)Boot.Member(p, "TargetFieldId") == standardPin).ToList();
+            if (nativeBindings.Count != 1) throw new HarnessException("native standard binding is ambiguous");
+            var binding = nativeBindings[0];
+            int nativeFieldPin = (int)Boot.Member(binding, "SourceFieldId");
+            var fieldTemplates = fields.Cast<object>().Where(f => (int)Boot.Member(f, "Id") == nativeFieldPin).ToList();
+            if (fieldTemplates.Count != 1 || fields.Cast<object>().Any(f => (int)Boot.Member(f, "Id") == afcFieldPin))
+                throw new HarnessException("unexpected wrapper field layout or probe already present");
+            var nativeField = fieldTemplates[0];
+            var defaultEvents = events.Cast<object>().Where(e =>
+                ReferenceEquals(((FrostySdk.Ebx.PointerRef)Boot.Member(e, "Source")).Internal, switchTemplate) &&
+                (int)Boot.Member(Boot.Member(e, "TargetEvent"), "Id") == Pin("Default")).ToList();
+            if (defaultEvents.Count != 1) throw new HarnessException("native switch default event is ambiguous");
+            int defaultCasePin = (int)Boot.Member(Boot.Member(defaultEvents[0], "SourceEvent"), "Id");
+            var mhWidget = ((FrostySdk.Ebx.PointerRef)Boot.Member(mh.RootObject, "Object")).Internal;
+            var splitterTemplate = ((FrostySdk.Ebx.PointerRef)((IList)Boot.Member(mhWidget, "Components"))[2]).Internal;
+            var hashTemplate = ((IList)Boot.Member(splitterTemplate, "FieldHashes"))[0];
+            if (Convert.ToUInt32(Boot.Member(hashTemplate, "FieldInfoHash")) != 1337071999)
+                throw new HarnessException("TeamId field metadata changed");
+            // FrostyBlueprintEditor EntityNode uses a GUID-derived identity mask plus realm port flags.
+            // Zero flags disable the new nodes' client event/property participation (v0.5 live failure).
+            var usedMasks = new HashSet<uint>(asset.Objects.Where(o => o.GetType().GetProperty("Flags") != null)
+                .Select(o => Convert.ToUInt32(Boot.Member(o, "Flags")) & 0x01ffffffu));
+            Func<object, object> addNode = template => {
+                var node = Activator.CreateInstance(template.GetType());
+                Guid guid; uint mask;
+                do {
+                    guid = Guid.NewGuid(); var bytes = guid.ToByteArray();
+                    mask = (uint)(bytes[0] | (bytes[1] << 8) | (bytes[2] << 16));
+                } while (mask == 0 || !usedMasks.Add(mask));
+                node.GetType().GetMethod("SetInstanceGuid").Invoke(node, new object[] { new FrostySdk.Ebx.AssetClassGuid(guid, -1) });
+                SdkSet(node, "Flags", mask | 0x0a000000u); // ClientEvent (bit25) + ClientProperty (bit27).
+                asset.AddObject(node, false); components.Add(new FrostySdk.Ebx.PointerRef(node)); return node;
+            };
+            var select = addNode(mainSelect);
+            SdkSet(select, "DynamicInputDataTypeInfoRef", Boot.Member(mainSelect, "DynamicInputDataTypeInfoRef"));
+            SdkSet(select, "Realm", Boot.Member(mainSelect, "Realm"));
+            var inputs = (IList)Boot.Member(select, "Inputs");
+            inputs.Add(new FrostySdk.Ebx.CString("Default")); inputs.Add(new FrostySdk.Ebx.CString("Afc"));
+            var splitter = addNode(splitterTemplate);
+            SdkSet(splitter, "DataType", Boot.Member(splitterTemplate, "DataType"));
+            SdkSet(splitter, "Realm", Boot.Member(splitterTemplate, "Realm"));
+            SdkSet(splitter, "RefreshOnPropertyChanged", true); SdkSet(splitter, "RefreshOnInit", true);
+            ((IList)Boot.Member(splitter, "FieldHashes")).Add(SdkCopy(hashTemplate));
+            var sw = addNode(switchTemplate);
+            SdkSet(sw, "Realm", Boot.Member(switchTemplate, "Realm"));
+            SdkSet(sw, "TriggerOnStart", true); SdkSet(sw, "TriggerOnPropertyChange", true);
+            var cases = (IList)Boot.Member(sw, "Cases");
+            // Cases index == case value, avoiding ambiguity in generated case-pin naming.
+            for (int i = 0; i <= 32; i++) cases.Add(i);
+            var afcField = SdkCopy(nativeField);
+            var nativeBox = (FrostySdk.Ebx.BoxedValueRef)Boot.Member(nativeField, "BoxedValue");
+            var variantPointer = new FrostySdk.Ebx.PointerRef(new EbxImportReference { FileGuid = variant.FileGuid, ClassGuid = variant.RootInstanceGuid });
+            SdkSet(afcField, "Id", afcFieldPin);
+            SdkSet(afcField, "BoxedValue", new FrostySdk.Ebx.BoxedValueRef(variantPointer, nativeBox.Type, nativeBox.ArrayType, nativeBox.Category, nativeBox.OriginalTypeRef));
+            fields.Add(afcField);
+            Action<object, int, object, int> property = (source, sourcePin, target, targetPin) => {
+                var p = SdkCopy(binding);
+                SdkSet(p, "Source", new FrostySdk.Ebx.PointerRef(source)); SdkSet(p, "Target", new FrostySdk.Ebx.PointerRef(target));
+                SdkSet(p, "SourceFieldId", sourcePin); SdkSet(p, "TargetFieldId", targetPin); properties.Add(p);
+            };
+            property(iface, nativeFieldPin, select, Pin("Default"));
+            property(iface, afcFieldPin, select, Pin("Afc"));
+            property(converter, unchecked((int)0x6eb96186), splitter, unchecked((int)0x7c7f80f5));
+            property(splitter, unchecked((int)0xbff30255), sw, unchecked((int)0x62da2189));
+            SdkSet(binding, "Source", new FrostySdk.Ebx.PointerRef(select)); SdkSet(binding, "SourceFieldId", Pin("Out"));
+            // PropertyConnection is a struct on some SDKs; replace its list entry explicitly.
+            for (int i = 0; i < properties.Count; i++)
+                if (ReferenceEquals(properties[i], binding) || (int)Boot.Member(properties[i], "TargetFieldId") == standardPin &&
+                    ReferenceEquals(((FrostySdk.Ebx.PointerRef)Boot.Member(properties[i], "Target")).Internal, mainSelect)) { properties[i] = binding; break; }
+            Action<int, string> connectEvent = (casePin, choice) => {
+                var e = SdkCopy(defaultEvents[0]);
+                var sourceSpec = SdkCopy(Boot.Member(e, "SourceEvent")); var targetSpec = SdkCopy(Boot.Member(e, "TargetEvent"));
+                SdkSet(sourceSpec, "Id", casePin); SdkSet(targetSpec, "Id", Pin(choice));
+                SdkSet(e, "SourceEvent", sourceSpec); SdkSet(e, "TargetEvent", targetSpec);
+                SdkSet(e, "Source", new FrostySdk.Ebx.PointerRef(sw)); SdkSet(e, "Target", new FrostySdk.Ebx.PointerRef(select)); events.Add(e);
+            };
+            connectEvent(defaultCasePin, "Default");
+            for (int i = 0; i <= 32; i++) connectEvent(Pin("Case " + i.ToString(CultureInfo.InvariantCulture)), afc.Contains(i) ? "Afc" : "Default");
+            asset.Update(); Boot.Am.ModifyEbx(entry.Name, asset); Projects.Save(project, projectPath);
+            return new JObj().Set("ok", true).Set("project", projectPath).Set("wrapper", entry.Name)
+                .Set("afc_variant", variantEntry.Name).Set("afc_ids", afc.OrderBy(x => x).ToArray())
+                .Set("node_client_flags", "ClientEvent|ClientProperty").Set("wrapper_rebuilt", rebuild)
+                .Set("components", components.Count).Set("property_connections", properties.Count).Set("event_connections", events.Count)
+                .Set("new_field_pin", unchecked((uint)afcFieldPin).ToString("x8")).Set("modified_assets", Boot.Am.GetModifiedCount());
+        }
+
+        // Research-only EBX clone. External dependencies stay shared; RES/chunks are not copied.
+        static JObj EbxClone(string projectPath, string source, string destination)
+        {
+            destination = Norm(destination);
+            if (!destination.StartsWith("mu/research/", StringComparison.OrdinalIgnoreCase) ||
+                destination.Split('/').Any(p => p == "." || p == ".." || p.Length == 0))
+                throw new HarnessException("clone destination must be a new asset under mu/research/");
+            Boot.Start();
+            Boot.RequireInitfs();
+            var project = Projects.Open(projectPath);
+            if (Boot.Am.GetEbxEntry(destination) != null) throw new HarnessException("destination already exists: " + destination);
+            var entry = Ebx(source);
+            var original = Boot.Am.GetEbx(entry, false);
+            var oldFileGuid = original.FileGuid;
+            // Use the SDK's project serializer to preserve internal reference topology.
+            EbxAsset clone;
+            using (var buffer = new MemoryStream())
+            {
+                using (var writer = EbxBaseWriter.CreateProjectWriter(buffer, EbxWriteFlags.IncludeTransient, true))
+                    writer.WriteAsset(original);
+                buffer.Position = 0;
+                bool riff = buffer.Length >= 4 && Encoding.ASCII.GetString(buffer.GetBuffer(), 0, 4) == "RIFF";
+                Console.Error.WriteLine("harness: clone project serialization bytes=" + buffer.Length + " riff=" + riff);
+                using (var reader = EbxReader.CreateProjectReader(buffer, Boot.Fs, true, riff))
+                    clone = reader.ReadAsset<EbxAsset>();
+            }
+            if (!clone.IsValid || clone.Objects.Count() != original.Objects.Count())
+                throw new HarnessException("clone serialization did not preserve the object count");
+            if (clone.Dependencies.Contains(oldFileGuid))
+                throw new HarnessException("self-file external references require explicit remapping; clone refused");
+            var newFileGuid = Guid.NewGuid();
+            clone.SetFileGuid(newFileGuid);
+            var identities = new List<object>();
+            foreach (var obj in clone.Objects)
+            {
+                var get = obj.GetType().GetMethod("GetInstanceGuid", Type.EmptyTypes);
+                var set = obj.GetType().GetMethod("SetInstanceGuid", new[] { typeof(FrostySdk.Ebx.AssetClassGuid) });
+                if (get == null || set == null) throw new HarnessException("object lacks SDK identity methods: " + obj.GetType().Name);
+                var old = (FrostySdk.Ebx.AssetClassGuid)get.Invoke(obj, null);
+                if (!old.IsExported) continue;
+                var next = new FrostySdk.Ebx.AssetClassGuid(Guid.NewGuid(), old.InternalId);
+                set.Invoke(obj, new object[] { next });
+                identities.Add(new JObj().Set("old", old.ExportedGuid.ToString()).Set("new", next.ExportedGuid.ToString()));
+            }
+            object oldName, newName; Type nameType;
+            EbxPath.Set(clone.RootObject, "Name", destination, out oldName, out newName, out nameType);
+            clone.Update();
+            var bundles = entry.Bundles.Concat(entry.AddedBundles).Except(entry.RemBundles).Distinct().ToArray();
+            if (bundles.Length == 0) throw new HarnessException("source has no bundle membership; clone refused");
+            var added = Boot.Am.AddEbx(destination, clone, bundles);
+            Projects.Save(project, projectPath);
+            return new JObj().Set("ok", true).Set("project", projectPath).Set("source", entry.Name)
+                .Set("destination", added.Name).Set("source_file_guid", oldFileGuid.ToString())
+                .Set("file_guid", clone.FileGuid.ToString()).Set("root_guid", clone.RootInstanceGuid.ToString())
+                .Set("object_count", clone.Objects.Count()).Set("exported_identity_map", identities)
+                .Set("bundle_ids", bundles).Set("external_dependencies_shared", clone.Dependencies.Select(g => g.ToString()).ToArray())
+                .Set("is_added", added.IsAdded).Set("modified_assets", Boot.Am.GetModifiedCount());
         }
 
         static JObj EbxSet(string projectPath, string asset, string path, string value)
@@ -698,6 +931,7 @@ namespace MuHarness
             var ebx = Boot.Am.GetEbx(entry, false);
             object oldVal, newVal; Type fieldType;
             EbxPath.Set(ebx.RootObject, path, value, out oldVal, out newVal, out fieldType);
+            if (fieldType == typeof(FrostySdk.Ebx.PointerRef)) ebx.Update();
             Boot.Am.ModifyEbx(entry.Name, ebx);
             Projects.Save(project, projectPath);
             var d = new EbxDumper();
@@ -992,7 +1226,15 @@ namespace MuHarness
             if (depth > MaxDepth) return "<depth limit>";
             if (t.Name == "CString") return v.ToString();
             if (t.Name == "PointerRef") return DumpPointer(v, path, depth);
-            if (t.Name == "ResourceRef" || t.Name == "FileRef" || t.Name == "TypeRef" || t.Name == "BoxedValueRef" || t.Name == "EbxImportReference")
+            if (t.Name == "BoxedValueRef")
+            {
+                // Preserve the old display field while exposing typed values and pointers.
+                var boxed = new JObj().Set("$BoxedValueRef", v.ToString());
+                var value = t.GetProperty("Value");
+                if (value != null) boxed.Set("value", Dump(value.GetValue(v, null), path + ".value", depth + 1));
+                return boxed;
+            }
+            if (t.Name == "ResourceRef" || t.Name == "FileRef" || t.Name == "TypeRef" || t.Name == "EbxImportReference")
                 return new JObj().Set("$" + t.Name, v.ToString());
             var list = v as IList;
             if (list != null)
@@ -1138,6 +1380,29 @@ namespace MuHarness
             var child = Get(cur, segs[i], out t);
             if (i == segs.Count - 1)
             {
+                // Explicit research pointer replacement; normal field editing keeps its old semantics.
+                if (t == typeof(FrostySdk.Ebx.PointerRef) && value.StartsWith("asset:", StringComparison.Ordinal))
+                {
+                    var targetName = value.Substring(6);
+                    if (!targetName.StartsWith("mu/research/", StringComparison.OrdinalIgnoreCase))
+                        throw new HarnessException("pointer replacement target must be under mu/research/");
+                    var previous = (FrostySdk.Ebx.PointerRef)child;
+                    if (previous.Type.ToString() != "External")
+                        throw new HarnessException("pointer replacement requires an existing external pointer");
+                    var target = Boot.Am.GetEbxEntry(targetName);
+                    if (target == null) throw new HarnessException("pointer target not found: " + targetName);
+                    var source = Boot.Am.GetEbxEntry(previous.External.FileGuid);
+                    if (source == null || source.Type != target.Type)
+                        throw new HarnessException("pointer target type must match the original external asset");
+                    if (Boot.Am.GetEbx(source, false).RootInstanceGuid != previous.External.ClassGuid)
+                        throw new HarnessException("pointer replacement supports asset roots only, not exported subobjects");
+                    var asset = Boot.Am.GetEbx(target, false);
+                    var replacement = new FrostySdk.Ebx.PointerRef(new EbxImportReference {
+                        FileGuid = asset.FileGuid, ClassGuid = asset.RootInstanceGuid });
+                    fieldType = t; oldVal = previous; newVal = replacement;
+                    Put(cur, segs[i], replacement);
+                    return cur;
+                }
                 var deref = Deref(child);
                 fieldType = deref != null ? deref.GetType() : t;
                 oldVal = Snapshot(deref);

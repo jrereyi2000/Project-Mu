@@ -1,0 +1,41 @@
+{
+  "slug": "dynamic_presentation_native_probe",
+  "title": "Mu Research Native Theme Probe",
+  "author": "JR (Project Mu)",
+  "version": "0.1",
+  "category": "Cosmetic",
+  "description": "Research only: cyan afternoon score panel and magenta Sunday-night score panel in one static mod. Native theme routing only; no CBS/FOX selector.",
+  "route": "harness",
+  "ops": [
+    {
+      "op": "texture-recolor",
+      "asset": "Presentation/Banners/Screens/MaddenHero/Textures/GameScoreSmall/GSSmall_MH_Low_BG",
+      "recolor": {
+        "mode": "map",
+        "map": [
+          [
+            "#FFFFFF",
+            "#00FFFF",
+            255
+          ]
+        ],
+        "keep_alpha": true
+      }
+    },
+    {
+      "op": "texture-recolor",
+      "asset": "content/ui/Texture/Presentation/Banners/SundayNight/Textures/GameScore/Main_panelGameScore",
+      "recolor": {
+        "mode": "map",
+        "map": [
+          [
+            "#FFFFFF",
+            "#FF00FF",
+            255
+          ]
+        ],
+        "keep_alpha": true
+      }
+    }
+  ]
+}

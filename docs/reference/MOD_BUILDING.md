@@ -12,7 +12,7 @@ bash tools/mmc_harness/build.sh                                     # once: buil
 /mnt/c/Madden27Modding/MuHarness/MmcHarness.exe info                # is the harness working, and can it read ebx?
 ```
 
-Only JR's own mods. Nothing here decrypts or edits another author's `.fbmod`, calls MMC's decrypt or key code, or copies an MMC DLL.
+The standard recipe examples build JR's own changes. The separately authorized [applied-asset reconstruction workflow](MOD_APPLIED_ASSET_RECOVERY.md) can also produce a fresh project from compiled game assets after normal Mod Manager application. Neither route directly decrypts or edits another author's protected `.fbmod` payloads or copies installed MMC DLLs.
 
 ## 1. How the pieces fit
 

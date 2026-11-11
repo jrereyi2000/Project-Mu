@@ -1,0 +1,23 @@
+{
+  "slug": "dynamic_presentation_teamid_probe",
+  "title": "Mu Research HUD Team ID Probe",
+  "author": "JR (Project Mu)",
+  "version": "0.4",
+  "category": "Cosmetic",
+  "description": "Research diagnostic only: standard HUD score numerals display native TeamId values instead of scores. Changes two display connections only; football state is untouched. Not a broadcast package.",
+  "route": "harness",
+  "ops": [
+    {
+      "op": "ebx-set",
+      "asset": "UI/Screen/InGame/ScoreHud/EATheme/CustomHud/MaddenHero/ScoreHud_MH",
+      "path": "PropertyConnections[49].SourceFieldId",
+      "value": -1074593195
+    },
+    {
+      "op": "ebx-set",
+      "asset": "UI/Screen/InGame/ScoreHud/EATheme/CustomHud/MaddenHero/ScoreHud_MH",
+      "path": "PropertyConnections[56].SourceFieldId",
+      "value": -1074593195
+    }
+  ]
+}

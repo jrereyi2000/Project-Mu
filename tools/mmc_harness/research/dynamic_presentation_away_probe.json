@@ -1,0 +1,60 @@
+{
+  "kind": "research_harness_sequence_not_standard_mod_builder_recipe",
+  "title": "Mu Research Away Conference Probe",
+  "version": "0.5.1",
+  "conference_map": "dynamic_presentation_conference_map.json",
+  "source_prefix": "UI/Screen/InGame/ScoreHud/EATheme/CustomHud/MaddenHero/",
+  "destination_prefix": "mu/research/presentation/afc/",
+  "clones": {
+    "ScoreHud_MH": "ScoreHud",
+    "ScoreHud_QuarterAndClock_MH": "QuarterAndClock",
+    "DiamondGridBg_MH": "Background"
+  },
+  "marker": {
+    "asset": "Background",
+    "colour": "#00FFFF",
+    "paths": [
+      "Object.Layers[0].Elements[1].Elements[3].Color",
+      "Object.Layers[0].Elements[1].Elements[3].ColorValue.RawColor",
+      "Object.Layers[0].Elements[1].Elements[4].Color",
+      "Object.Layers[0].Elements[1].Elements[4].ColorValue.RawColor"
+    ]
+  },
+  "links": [
+    {
+      "asset": "ScoreHud",
+      "path": "Object.Layers[0].Elements[0].Elements[1].Elements[6].Blueprint",
+      "target": "QuarterAndClock"
+    },
+    {
+      "asset": "QuarterAndClock",
+      "path": "Object.Layers[0].Elements[0].Blueprint",
+      "target": "Background"
+    }
+  ],
+  "graph_command": "hud-away-probe <project> mu/research/presentation/afc/ScoreHud <AFC IDs from conference map>",
+  "expected_asset_count": 4,
+  "limits": [
+    "Native afternoon rule only; no arbitrary external network override.",
+    "No complete CBS/FOX graphics package.",
+    "AFC-away SNF priority observed; AFC-away TNF/MNF and full mixed-context return matrix remain incomplete.",
+    "Team mapping is the baseline 32-team conference map; custom, relocated and realigned teams remain unverified."
+  ],
+  "node_initialization": {
+    "exported_guid": "new unique GUID for each added node",
+    "identity_mask": "unique GUID-derived 24-bit mask, excluding existing node masks",
+    "client_flags": "0x0a000000 for event/property participation",
+    "rebuild": "--rebuild restores only the native wrapper in an offline project before regenerating its graph"
+  },
+  "live_evidence": {
+    "root": "verify_output/dynamic_presentation/2026-11-01/r3/away_spike/v051",
+    "receipts": [
+      "first_live_result.json",
+      "continued_lifecycle_receipt.json",
+      "quickplay_tnf_comparison_receipt.json",
+      "quickplay_mnf_probe_receipt.json",
+      "quickplay_snf_afc_receipt.json"
+    ],
+    "mod_sha256": "2f752c79a36cf328e781a276247f79dcdb09e47502aa590071f205e289d52eae"
+  }
+}

@@ -15,9 +15,9 @@ python3 -m tools.fbmod_conflicts <dir-or-fbmod>...      # which mods touch the s
 Every one of the 19,579 payloads in the 74 mods starts with the 8 bytes `FMENC001` and is high-entropy (7.999 bits/byte) after it **[verified]**. That includes the mod icons and screenshots. MMC Editor encrypts what it writes, and only the MMC Mod Manager decrypts it when it applies a pack. So:
 
 - **What we can read:** the whole header: title, author, version, description, game build, and every resource record, i.e. *which* assets a mod replaces, their types, original sizes, compressed sizes, texture/chunk links and legacy file paths. That's the recipe.
-- **What we can't read:** the new content itself (the pink pixels, the new jersey colour values, the new Lua). No texture can be turned into a PNG from these mods.
+- **What header inspection cannot read:** the new content inside protected payloads. The header parser does not turn an encrypted texture into a PNG. Separately, normal Mod Manager application can make compiled assets available in game storage; see the recovery workflow below.
 
-We don't try to break this. It protects authors' work, and the community norm is to ask the author for their project or rebuild the change yourself in MMC Editor. The inspector writes encrypted payloads out as `.fmenc` files and says so. Plain (unencrypted) Frosty mods from other tools, or our own future ones, decode fully (§2.5).
+The inspector writes encrypted payloads out as `.fmenc` files and says so; it does not decrypt them. Plain supported Frosty payloads can be decoded (§2.5). **Applied-asset recovery was demonstrated on 2026-11-02:** after normal MMC application, compiled FOX scorebug assets were captured from game archives, reconstructed into a fresh editable project, and rendered with the original mod disabled. This does not recover original authoring layers or directly decrypt the protected mod. The reproducible method, exact evidence, handler limitations and update/repair workflow are in [MOD_APPLIED_ASSET_RECOVERY.md](MOD_APPLIED_ASSET_RECOVERY.md).
 
 What the bytes do show about the encryption **[verified unless marked]**:
 

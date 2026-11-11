@@ -1,0 +1,41 @@
+{
+  "slug": "dynamic_presentation_hud_probe",
+  "title": "Mu Research Theme HUD Probe",
+  "author": "JR (Project Mu)",
+  "version": "0.2",
+  "category": "Cosmetic",
+  "description": "Research only: cyan MaddenHero HUD beveled edge and magenta SundayNight HUD inner frame. Persistent ScoreHud targets; no CBS/FOX selector.",
+  "route": "harness",
+  "ops": [
+    {
+      "op": "texture-recolor",
+      "asset": "UI/Screen/InGame/ScoreHud/EATheme/CustomHud/MaddenHero/BeveledEdge_MH",
+      "recolor": {
+        "mode": "map",
+        "map": [
+          [
+            "#FFFFFF",
+            "#00FFFF",
+            255
+          ]
+        ],
+        "keep_alpha": true
+      }
+    },
+    {
+      "op": "texture-recolor",
+      "asset": "UI/Screen/InGame/ScoreHud/EATheme/CustomHud/SundayNight/Bg_InnerFrame_Sliced_SN_96",
+      "recolor": {
+        "mode": "map",
+        "map": [
+          [
+            "#FFFFFF",
+            "#FF00FF",
+            255
+          ]
+        ],
+        "keep_alpha": true
+      }
+    }
+  ]
+}
