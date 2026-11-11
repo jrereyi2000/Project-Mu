@@ -1,6 +1,7 @@
 # Project Mu: Madden Spike Agent Plan
 
-**Status:** approved by JR (2026-11-11); building, wave 1 of 3 (S-A spike first). Q1–Q4 accepted as recommended.
+**Status:** approved by JR (2026-11-11); building, wave 1 of 3 (U1 merged; U4 next). Q1–Q4 accepted as recommended.
+**As built:** U1 (`7e51183`) also repaired two `tests/test_madden_pilot_win.py` cases that had been failing since `1383874` made `ensure_foreground` retry for 20 s: they expected a single focus attempt; they now use a fake clock and assert the retry contract. No production behaviour changed for this.
 **Builds on:** [`MADDEN_PILOT_AND_TUNING_PLAN.md`](../done/MADDEN_PILOT_AND_TUNING_PLAN.md), [`docs/reference/MADDEN_PILOT.md`](../reference/MADDEN_PILOT.md), CLAUDE.md § "Starting other sessions".
 
 **Goal:** Today any Madden spike that hits a screen the pilot doesn't know comes back to JR, because the pilot stops on UNKNOWN by design. With this plan, a main agent writes a short spike brief. A fresh session, one per spike, then drives Madden past the catalog under guards that live in code. The session is usually DeepSeek, but any model family can run it. A local vision model turns each frame into a text description, so the agent doesn't need image input of its own. The agent takes screenshots and short clips, runs fixed pixel checks that answer whether a mod asset is rendering, and posts a structured report back to the requesting agent on the board. The first real user is the dynamic presentation work: getting through a game's flow (Quick Play or a franchise game, kickoff, pause, Super Sim, postgame) and checking which scorebug, banner or marker renders. JR still says yes before each spike takes the PC. He no longer has to drive.
@@ -461,4 +462,4 @@ No path appears twice.
 
 | Unit | Wave | Branch | Worktree | Result | Merge |
 |---|---|---|---|---|---|
-| U1 driver record | 1 | `worktree-agent-a5156ed21b7c1e65f` | `.claude/worktrees/agent-a5156ed21b7c1e65f` | in flight from `1b70e39`, handed to build-madden-spike-3 for review | — |
+| U1 driver record | 1 | `worktree-agent-a5156ed21b7c1e65f` | `.claude/worktrees/agent-a5156ed21b7c1e65f` | merged; `pytest -m "not integration" tests/test_madden_pilot_win.py` 47 passed in the worktree and on `main` | `7e51183` |
