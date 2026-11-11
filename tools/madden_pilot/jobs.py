@@ -50,6 +50,13 @@ WATCHER_CHECK = 'ps -eo args | grep "[p]ipeline[.]watch_save"'
 # agency frenzy Madden opens the LIVE EVENT tab, not GAMEDAY (2026-11-10).
 HUBS = ("HUB_WEEKLY", "HUB_GAMEDAY", "HUB_OTHER", "HUB_WEEKLY_DRAFT_CARD", "HUB_BYE", "LIVE_EVENT_FRENZY",
         "LIVE_EVENT_FRENZY_MODAL", "FREE_AGENCY_ENDED", "DRAFT_HUB", "DRAFT_LAUNCH")
+# What a launch may land on. The main menu's Franchise panel reads as FRANCHISE_LANDING, and a
+# one-mode menu (Mu Franchise Only) has no other panel, so it reads as FRANCHISE_LANDING too
+# (live 2026-11-11 on Mu Test: Back on it opens EXIT MADDEN). FRANCHISE_LIST is a warm start.
+MENU_SCREENS = ("MAIN_MENU", "FRANCHISE_LANDING", "FRANCHISE_LIST", *HUBS)
+# The catalogued screens a cold boot shows before the menu, in order: the MMC warning, the
+# EA/MADDEN splash and the title. One Space takes each (the warning's OK is its default).
+BOOT_SCREENS = ("BOOT_SPLASH", "TITLE_SCREEN")
 MAX_SIM_WEEKS = 30                 # safety cap on NEXT WEEK presses in one run
 ADVANCE_STOP_TIMEOUT = 90          # seconds an `advance` waits for a catalogued landing screen
 SIM_TIMEOUT = 240                  # seconds for one NEXT WEEK (spike: under 20 s)
@@ -348,6 +355,34 @@ def wait_known(pilot, screens, timeout, poll=2.0, what=None):
             pilot.sleep(poll)
 
 
+def wait_menu(pilot, timeout, poll=2.0):
+    """Look until a menu is up, pressing through the catalogued boot on the way.
+
+    A cold boot is not a passive wait: the MMC ACCOUNT ERROR, the EA/MADDEN splash and the
+    title each need one Space (pressed through confirm_on, the catalogued labels), and until
+    then nothing changes (live 2026-11-11 on Mu Test: BOOT_SPLASH sat for the whole 300 s and
+    a launch job stopped Unknown). The menus are MENU_SCREENS: the vanilla mode menu, the
+    Franchise panel a one-mode menu opens on (Mu Franchise Only), a warm start straight on
+    CURRENT FRANCHISES, or a loaded hub."""
+    end = pilot.clock() + timeout
+    with patience(pilot, timeout + 10 * poll, poll):
+        while True:
+            frame, screen = pilot.look()
+            if screen in MENU_SCREENS:
+                return frame, screen
+            if pilot.clock() >= end:
+                if screen == UNKNOWN:
+                    pilot.stop(f"screen still unrecognised after {timeout}s waiting for a menu", Unknown)
+                pilot.stop(f"waited {timeout}s for a menu, still on {screen}", Stuck)
+            if screen in BOOT_SCREENS:
+                pilot.confirm_on(screen, "PRESS ANY BUTTON", wait=2.0)
+                continue
+            if screen == "ACCOUNT_ERROR":
+                pilot.dismiss("ACCOUNT_ERROR")     # OK is the focused default; the catalog exits on it
+                continue
+            pilot.sleep(poll)
+
+
 def _wait_window(pilot, timeout, poll=3.0):
     end = pilot.clock() + timeout
     while True:
@@ -363,9 +398,10 @@ def _wait_window(pilot, timeout, poll=3.0):
 @job("launch")
 def launch(pilot, pack=DEFAULT_PACK, run=None, madden_running=None, timeout=LAUNCH_TIMEOUT, progress=None):
     """Start Madden through the MMC Mod Manager with `pack` (unless Madden already runs), wait
-    for its window, then for MAIN_MENU or FRANCHISE_LIST. Intro and loading frames are UNKNOWN;
-    a screen that stays unrecognised stops as Unknown with its screenshot (MAIN_MENU is still
-    todo in the catalog)."""
+    for its window, then press through the cold boot (ACCOUNT ERROR, splash, title) to a menu:
+    the vanilla main menu, the Franchise panel a one-mode menu such as Mu Franchise Only opens
+    on (FRANCHISE_LANDING), CURRENT FRANCHISES on a warm start, or a hub. A screen that stays
+    unrecognised stops as Unknown with its screenshot."""
     run = run or (lambda argv: subprocess.run(argv, check=True, cwd="/mnt/c"))
     running = (madden_running or _madden_running)()
     argv = launch_command(pack)
@@ -373,7 +409,7 @@ def launch(pilot, pack=DEFAULT_PACK, run=None, madden_running=None, timeout=LAUN
     if not running:
         run(argv)
     _wait_window(pilot, timeout)
-    _, screen = wait_known(pilot, ["MAIN_MENU", "FRANCHISE_LIST", *HUBS], timeout)
+    _, screen = wait_menu(pilot, timeout)
     return {"status": "ok", "pack": pack, "command": argv, "already_running": bool(running), "screen": screen}
 
 
