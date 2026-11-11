@@ -222,6 +222,7 @@ ROSTER_BUFFER = 2                              # keep room for injury replacemen
 MAX_ACTIVE = ROSTER_LIMIT - ROSTER_BUFFER      # 63 active (non-IR) players a team, in season
 IR_MIN_WEEKS = 4                               # IR placement needs 4+ weeks out (franchise_api's IR_MIN_WEEKS)
 HEALTHY = ("Uninjured", None)
+MIRROR_CATCH_UP = "CATCH_UP"     # engines.nfl_mirror.real_state.CATCH_UP, kept local to avoid a module-load cycle
 
 # Un-retire rule (keep_retired): Madden's retirements are kept unless the player is still good enough to play.
 UNRETIRE_MAX_AGE, UNRETIRE_MIN_OVR = 32, 75    # under 33 with OVR 75+: always kept
@@ -247,6 +248,8 @@ FRANCHISE_CLOSED_ENV = "LEAGUE_OFFICE_FRANCHISE_CLOSED"
 # MU_COACH > DRIFT). ENGINE_TRADE sits below JR's pending moves and above every engine/stage move: an agreed CPU
 # deal neither jumps JR's queue nor loses to the stage's own moves (TRADE_NEGOTIATIONS_PLAN §2.5).
 PRIORITY_JR, PRIORITY_ENGINE_TRADE, PRIORITY_OFFER, PRIORITY_DRIFT, PRIORITY_STAGE = 0, 1, 2, 3, 4
+# The NFL mirror replaces the engine-trades step, so its moves claim at the same priority (NFL_WEEKLY_MIRROR_PLAN §2.9).
+PRIORITY_MIRROR = PRIORITY_ENGINE_TRADE
 
 PREPARED_KEYS = ("document", "event_ids", "source_fingerprint", "edits_hash")
 PHASES = ("PREPARED", "CANDIDATE_VERIFIED", "REPLACED", "ACKNOWLEDGED", "FAILED")
@@ -533,6 +536,11 @@ class Plan:
         self.records = []
         self.depth = {}            # team_index -> {"slots": {...}, "source", "priority"}
         self.claimed = {}          # pgid -> (move, team_index, priority)
+        # pgids whose one release + one sign (to another team) is a declared switch, which the save writer accepts
+        # (NFL_WEEKLY_MIRROR_PLAN U11); every other double move is still refused.
+        self.switches = set()
+        # pgids whose injury fields the mirror decided this week: step_injuries leaves them alone (D12)
+        self.mirror_players = set()
         self.contracts_written = {}  # pgid -> block
         self.free_rows = int((state or {}).get("spare_contract_rows") or 0)
         self.results = {}          # tag -> (ok, reason)
@@ -596,6 +604,12 @@ class Plan:
         if have:
             if have[0] == move and have[1] == team_index:
                 return self.note(tag, True, f"same {move} already planned")
+            # The one declared double move the writer accepts: one release, then one sign of the same player to a
+            # different team (save_writer.mjs moveConflicts; U11). A same-team promotion stays refused.
+            if have[0] == "release" and move == "sign" and team_index is not None and team_index != have[1]:
+                self.switches.add(pgid)
+                self.claimed[pgid] = (move, team_index, priority)
+                return self.note(tag, True, f"switch: released from team {have[1]}, signed by team {team_index}")
             return self.note(tag, False, f"{self.name(pgid)} already has a {have[0]} this write")
         self.claimed[pgid] = (move, team_index, priority)
         return True
@@ -657,7 +671,7 @@ class Plan:
             return False
         self.signs.append({"pgid": pgid, "team_index": team_index, "list": lst,
                            "block": block if lst == "Roster" else None, "priority": priority, "reason": reason,
-                           "tag": tag})
+                           "tag": tag, "switch": pgid in self.switches})
         self.view[pgid] = ("Signed" if lst == "Roster" else "PracticeSquad", team_index)
         return True
 
@@ -786,8 +800,12 @@ class Plan:
             else:
                 sign_out.append({"pgid": g, "team_index": s["team_index"], "list": "PracticeSquad"})
                 self.counts["sign_practice_squad"] += 1
+            if s.get("switch"):
+                sign_out[-1]["switch"] = True
             self.note(s["tag"], True, s["reason"])
-        released = set(self.release)
+        # A declared switch is the one release whose players edit may still ride the same write: the writer applies
+        # the release first and the signing after the fields (save_writer.mjs; a switch is not a real departure).
+        released = set(self.release) - set(self.switches)
         moved = {g: m for g, (m, _, _) in self.claimed.items()}
         players = []
         for g, e in sorted(self.edits.items()):
@@ -904,6 +922,20 @@ class Deps:
     def pgid_map(self, cur):
         cur.execute("SELECT id, madden_pgid FROM players WHERE madden_pgid IS NOT NULL")
         return {int(p): int(g) for p, g in cur.fetchall()}
+
+    # -- the NFL weekly mirror (NFL_WEEKLY_MIRROR_PLAN §2.9). Defaults plan nothing, so every plan without the mirror
+    #    (every test fake, every ordinary run) is unchanged. default_deps installs the real adapter.
+    def mirror_week(self, cur, snapshot, season, stage, week):
+        return None
+
+    def mirror_restore(self, cur, season, stage, week):
+        return None
+
+    def chart_override(self, team_index):
+        return None
+
+    def bind_mirror(self, mirror, plan):
+        pass
 
     def user_team_ids(self, cur):
         try:
@@ -1243,9 +1275,11 @@ class Deps:
 
 # -------------------------------------------------------------- the steps ----
 def default_deps(cur):
-    """The personality switchboard's deps for this league (pipeline/league_office_personality.py)."""
+    """The personality switchboard's deps for this league (pipeline/league_office_personality.py), with the NFL
+    weekly mirror's adapter installed (NFL_WEEKLY_MIRROR_PLAN §2.9)."""
+    from pipeline import league_office_mirror as lom
     from pipeline import league_office_personality as lop
-    return lop.default_deps(cur)
+    return lom.install(lop.default_deps(cur))
 
 
 def _payload_pgids(plan, ids):
@@ -1392,6 +1426,99 @@ def step_engine_trades(plan, proposals):
         plan.note(tag, bad is None, f"trade #{pid}" if bad is None else bad)
 
 
+def step_nfl_mirror(plan, mirror):
+    """One mirrored NFL week (NFL_WEEKLY_MIRROR_PLAN §2.9): created players, then the roster ops, then the injury and
+    heal fields and IR flags, then the practice-squad fills, and finally the injury-switch record.
+
+    Every move claims at PRIORITY_MIRROR with the tag `mirror:<kind>:<gsis_id>`, so first-claim-stands protects JR's
+    pending moves and the drift, and `plan.results` records what was refused. The release + sign pair of one player to
+    another team is a declared switch; `Plan._claim` refuses every other double move (U11).
+    """
+    record = plan.db.setdefault("mirror", {}) if isinstance(plan.db, dict) else {}
+    transactions = []
+    pid_by_pgid = plan.pid_by_pgid
+
+    def move_row(kind, gsis_id, pgid, from_index=None, to_index=None, name=None, position=None):
+        player = plan.players.get(pgid) or {}
+        return {"kind": kind, "gsis_id": gsis_id, "player_id": pid_by_pgid.get(pgid),
+                "player_name": name or f"{player.get('first_name', '')} {player.get('last_name', '')}".strip() or None,
+                "position": position or player.get("position"),
+                "from_team_id": plan.teams.get(from_index) if from_index is not None else None,
+                "to_team_id": plan.teams.get(to_index) if to_index is not None else None}
+
+    # 1. created players: one players edit on the donor record, then his signing
+    for c in mirror.creates or []:
+        pgid = int(c["edit"]["pgid"])
+        gsis = c.get("gsis_id")
+        real = c.get("real")
+        name = getattr(real, "name", None)
+        tag = f"mirror:create:{gsis}"
+        fields = dict(c["edit"].get("set") or {})
+        if not fields:
+            plan.warn(f"NFL mirror: created player {name or gsis} has no fields to write")
+            continue
+        plan.set_fields(pgid, fields, tag=tag)
+        reason = f"created from the real {name or gsis} (real week {mirror.real_week})"
+        if plan.sign_player(pgid, c["team_index"], c.get("list") or "Roster", c.get("contract"), PRIORITY_MIRROR,
+                            reason, tag=tag):
+            transactions.append(move_row("SIGN", gsis, pgid, to_index=c["team_index"], name=name,
+                                         position=c.get("position")))
+
+    # 2. the roster diff's own ops (trade / release / sign), in its order, then IR on and off
+    for op in mirror.ops or []:
+        kind, gsis = op.get("kind"), op.get("gsis_id")
+        pgid = int(op["pgid"])
+        tag = f"mirror:{kind}:{gsis}"
+        reason = op.get("why") or f"real week {mirror.real_week}"
+        before = plan.roster_status(pgid)
+        if kind == "release":
+            if plan.release_player(pgid, PRIORITY_MIRROR, reason, tag=tag):
+                transactions.append(move_row("RELEASE", gsis, pgid, from_index=before[1]))
+        elif kind == "sign":
+            if plan.sign_player(pgid, op.get("to_index"), op.get("list") or "Roster", op.get("contract"),
+                                PRIORITY_MIRROR, reason, tag=tag):
+                transactions.append(move_row("SIGN", gsis, pgid, to_index=op.get("to_index")))
+        elif kind == "trade":
+            if plan.trade_player(pgid, op.get("to_index"), PRIORITY_MIRROR, reason, tag=tag) \
+                    and before[1] != op.get("to_index"):
+                transactions.append(move_row("TRADE", gsis, pgid, from_index=before[1], to_index=op.get("to_index")))
+        elif kind == "ir":
+            plan.set_fields(pgid, {"IsInjuredReserve": True}, tag=tag)
+        elif kind == "activate":
+            plan.set_fields(pgid, {"IsInjuredReserve": False}, tag=tag)
+        else:
+            plan.warn(f"NFL mirror: move kind {kind!r} not handled")
+
+    # 3. injury and heal fields (S20: these ride the same write as an activation from step 2)
+    for entry in mirror.injuries or []:
+        pgid = int(entry["pgid"])
+        tag = f"mirror:{entry['kind'].lower()}:{entry.get('gsis_id')}"
+        fields = dict(entry.get("fields") or {})
+        if not fields:
+            continue
+        if pgid in plan.release and pgid not in plan.switches:
+            plan.warn(f"NFL mirror: {plan.name(pgid)} is released this write; injury fields not written")
+            continue
+        plan.set_fields(pgid, fields, tag=tag)
+
+    # 4. practice-squad fills (resolved at plan time from Deps.free_agent_pool's order)
+    for slot in mirror.ps_signs or []:
+        pgid = int(slot["pgid"])
+        if plan.sign_player(pgid, slot.get("team_index"), "PracticeSquad", None, PRIORITY_MIRROR,
+                            slot.get("why") or "the real practice squad has a player the save lacks",
+                            tag=f"mirror:ps:{pgid}"):
+            plan.counts["mirror_ps"] += 1
+
+    # 5. the two Madden injury switches (off for the catch-up, back on at the first live week; S18/D3/D10)
+    setting = mirror.setting
+    if setting and setting.get("edit"):
+        plan.add_records([setting["edit"]])
+        plan.db["mirror_setting"] = {"state": setting["state"], "season": mirror.season, "week": mirror.week}
+
+    record["transactions"] = transactions
+    plan.counts["mirror_moves"] = len(transactions)
+
+
 def step_accepted_offers(plan, offers):
     """contract_offers JR's targets accepted (from_user)."""
     for o in offers:
@@ -1500,8 +1627,13 @@ def step_drift(plan, report, stored, kept_retirees=frozenset()):
 
 
 def step_injuries(plan, prev, seed):
-    """Injury durations, IR placement and activation (REGULAR_WEEK / PLAYOFF_WEEK)."""
+    """Injury durations, IR placement and activation (REGULAR_WEEK / PLAYOFF_WEEK).
+
+    A mirrored LIVE week leaves the players whose injury fields the mirror decided alone (D12): the mirror's field
+    edit stands, and a second duration from Madden's own clock would be a conflicting value."""
     for g, p in plan.players.items():
+        if g in plan.mirror_players:
+            continue
         status, team = plan.roster_status(g)
         if status != "Signed" or team is None or team >= FREE_AGENT_TEAM:
             continue
@@ -1578,6 +1710,12 @@ def step_coach_charts(plan, deps, cur, user_teams, jr_charts, schemes):
             chart = deps.staff_depth_chart(roster, scheme, injuries)
         else:
             chart = deps.staff_depth_chart(roster, scheme, injuries, score_adjustments=adjustments)
+        # A mirrored week's real chart (already built from the roster as this write's heals and activations leave it,
+        # S20) goes in front of the engine's and the engine fills the rest (NFL_WEEKLY_MIRROR_PLAN §2.9).
+        override = deps.chart_override(team_index) if hasattr(deps, "chart_override") else None
+        if override:
+            from engines.nfl_mirror import depth as mirror_depth
+            chart = mirror_depth.merge(override, chart)
         # MU_COACH outranks drift's restored chart: it is this week's coach decision.
         have = plan.depth.get(team_index)
         if have and have["source"] == "DRIFT":
@@ -2209,7 +2347,35 @@ def plan_stage(cur, snapshot, stage, seed, deps=None, wave=None, state=None, sou
 
     # 1-2. JR, then this week's auto-approved CPU deals (they lose to JR's claims, beat the stage's)
     plan.step("pending moves", lambda: step_pending(plan, deps.pending_moves(cur)))
-    plan.step("engine trades", lambda: step_engine_trades(plan, deps.engine_trades(cur, season)))
+    # A mirrored NFL week replaces the engine-trades step with the whole week (NFL_WEEKLY_MIRROR_PLAN §2.9). The box
+    # tells a failed mirror step (a fetch failure: a plan error, so the run writes nothing) from "not a mirrored week".
+    mirror_box = {}
+    mirror_week = getattr(deps, "mirror_week", None)
+    if mirror_week is not None:
+        def _mirror():
+            mirror_box["mirror"] = mirror_week(cur, snapshot, season, stage, week)
+            return mirror_box["mirror"]
+        mirror = plan.step("nfl mirror", _mirror)
+        if mirror is not None:
+            plan.mirror_players = set(mirror.injury_players or ())
+            plan.db["mirror"] = mirror.record()
+            bind = getattr(deps, "bind_mirror", None)
+            if bind is not None:
+                bind(mirror, plan)
+            plan.step("nfl mirror moves", step_nfl_mirror, plan, mirror)
+    else:
+        mirror = None
+    mirror_failed = mirror_week is not None and "mirror" not in mirror_box   # a fetch failure: a plan error
+    if not mirror_failed and mirror is None:
+        plan.step("engine trades", lambda: step_engine_trades(plan, deps.engine_trades(cur, season)))
+        # D10: the first run with no mirrored week (a LIVE one restores through its own week, see step_nfl_mirror)
+        # turns the save's two injury switches back on if the mirror left them off.
+        restore = getattr(deps, "mirror_restore", None)
+        if restore is not None:
+            rec = plan.step("mirror injuries restore", restore, cur, season, stage, week)
+            if rec:
+                plan.add_records([rec["edit"]])
+                plan.db["mirror_setting"] = {"state": rec["state"], "season": season, "week": week}
     plan.step("accepted offers", lambda: step_accepted_offers(plan, deps.accepted_offers(cur, season)))
     # 3. drift
     stored = plan.step("stored contracts", deps.stored_contracts, cur, calendar) or {}
@@ -2221,11 +2387,14 @@ def plan_stage(cur, snapshot, stage, seed, deps=None, wave=None, state=None, sou
     # 4. the stage
     if stage in IN_SEASON:
         prev = plan.step("previous injuries", deps.previous_injuries, cur, calendar, week) or {}
-        plan.step("injuries", step_injuries, plan, prev, seed)
+        # The mirror owns injuries in a catch-up week; a LIVE mirrored week leaves Madden's own injuries to this
+        # step (it skips the mirror's own players). Waivers never run in a mirrored week (§2.9).
+        if mirror is None or mirror.mode != MIRROR_CATCH_UP:
+            plan.step("injuries", step_injuries, plan, prev, seed)
         released = plan.step("last run's releases", deps.released_last_run, cur) or []
         rel_pids = [plan.pid(g) for g in released if plan.pid(g) is not None
                     and plan.roster_status(g)[0] == "FreeAgent"]
-        if rel_pids:
+        if rel_pids and mirror is None:
             plan.step("waivers", lambda: step_moves(plan, deps.waivers(cur, season, week, rel_pids, seed),
                                                     PRIORITY_STAGE, "waivers"))
     else:
@@ -2281,7 +2450,7 @@ def plan_stage(cur, snapshot, stage, seed, deps=None, wave=None, state=None, sou
                                                      PRIORITY_STAGE, "cutdown"))
     # The coaching staff write: the first offseason stop and every later one while the save still differs
     # (COACH_SAVE_WRITES_PLAN §2.6; plan_staff_edits returns an empty list once the save matches Mu).
-    if stage in STAFF_STAGES:
+    if stage in STAFF_STAGES or (mirror is not None and mirror.staff_changed and stage == REGULAR_WEEK):
         plan.step("staff", step_staff, plan, cur, snapshot)
 
     # 5. rosters and depth charts
@@ -2336,6 +2505,8 @@ def plan_stage(cur, snapshot, stage, seed, deps=None, wave=None, state=None, sou
     if report is not None:
         summary["personality"] = report()
     summary["retirement_window"] = retirement_window_summary(plan)
+    if plan.db.get("mirror"):
+        summary["mirror"] = dict(plan.db["mirror"])
     return {"stage": stage, "wave": plan.wave, "season": season, "week": week, "calendar_year": calendar,
             "seed": seed, "edits": edits, "edits_hash": canonical_hash(edits), "league_edits": league_edits,
             "prepared": prepared, "progression": prog_info, "summary": summary, "drift": drift,
@@ -2552,7 +2723,54 @@ def record_written(cur, plan, run_id, deps=None):
         cur.execute("UPDATE contract_offers SET status = %s WHERE id = %s", (o["status"], o["id"]))
     _record_trades(cur, plan, run_id)
     record_staff_presentation_ids(cur, (db.get("staff") or {}).get("written"))
+    _record_mirror(cur, plan, run_id)
     _apply_db(cur, plan, deps)
+
+
+MIRROR_TXN_TYPES = {"SIGN": "SIGNED", "RELEASE": "RELEASED", "TRADE": "TRADED"}
+
+
+def _record_mirror(cur, plan, run_id):
+    """The NFL mirror's side effects of a successful write (NFL_WEEKLY_MIRROR_PLAN §2.9): the week row WRITTEN with
+    its run, one `transactions` row per SIGN / RELEASE / TRADE move, the CREATED links of players the mirror made,
+    and the injury-switch state it left the save in."""
+    mirror = (plan.get("db") or {}).get("mirror")
+    setting = (plan.get("db") or {}).get("mirror_setting")
+    if not mirror and not setting:
+        return
+    from engines.nfl_mirror import store as mirror_store
+    if mirror:
+        season, week = int(mirror["season"]), int(mirror["week"])
+        mirror_store.mark_written(cur, season, week, run_id)
+        _record_mirror_transactions(cur, mirror)
+        for link in mirror.get("links") or []:
+            if link.get("player_id") is None or not link.get("gsis_id"):
+                continue
+            try:
+                mirror_store.add_created_link(cur, link["player_id"], link["gsis_id"], link.get("evidence") or {})
+            except Exception as e:      # noqa: BLE001 - a link already known must not fail a written save
+                log.warning("NFL mirror: created link %s -> %s not stored (%s)",
+                            link.get("gsis_id"), link["player_id"], e)
+    if setting:
+        mirror_store.set_injuries_state(cur, setting["state"])
+
+
+def _record_mirror_transactions(cur, mirror):
+    """One `transactions` row per mirrored SIGN / RELEASE / TRADE (the plan's row key and 'NFL mirror' raw text)."""
+    season, week = int(mirror["season"]), int(mirror["week"])
+    txn_date = f"{season} SEASON - WEEK {week}"
+    for m in mirror.get("transactions") or []:
+        kind = m.get("kind")
+        if kind not in MIRROR_TXN_TYPES:
+            continue
+        gsis = m.get("gsis_id") or f"pgid{m.get('pgid')}"
+        cur.execute("""INSERT INTO transactions (season, week, txn_date, type, player_id, player_name, position,
+                           from_team_id, to_team_id, raw_text, row_key, seq, parse_ok, applied)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'NFL mirror', %s, 1, true, true)
+                       ON CONFLICT (season, txn_date, row_key, seq) DO NOTHING""",
+                    (season, week, txn_date, MIRROR_TXN_TYPES[kind], m.get("player_id"), m.get("player_name"),
+                     m.get("position"), m.get("from_team_id"), m.get("to_team_id"),
+                     f"mirror:{season}:{week}:{gsis}:{kind}"))
 
 
 def _record_trades(cur, plan, run_id):
