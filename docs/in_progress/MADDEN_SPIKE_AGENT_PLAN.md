@@ -461,3 +461,4 @@ No path appears twice.
 
 | Unit | Wave | Branch | Worktree | Result | Merge |
 |---|---|---|---|---|---|
+| U1 driver record | 1 | `worktree-agent-a5156ed21b7c1e65f` | `.claude/worktrees/agent-a5156ed21b7c1e65f` | in flight from `1b70e39`, handed to build-madden-spike-3 for review | — |
