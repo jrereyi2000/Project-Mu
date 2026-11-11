@@ -7,7 +7,7 @@ import { existsSync, readFileSync, statSync } from 'fs';
 import { createHash } from 'crypto';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
-import { READER_VERSION, draftFacts, readCoaches, readSave, readStaff } from '../pc_save_reader.mjs';
+import { READER_VERSION, draftFacts, readCareerRow, readCoaches, readPlayers, readSave, readStaff } from '../pc_save_reader.mjs';
 import { encodeRef, NO_REF } from '../lib.mjs';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
@@ -102,8 +102,43 @@ test('draft facts: Madden sentinels become null, PLYR_DRAFTTEAM is a 1-based Tea
   assert.deepEqual(draftFacts({}), { draft_round: null, draft_pick: null, draft_team_index: null });
 });
 
+test('career_stats: an empty reference and a degenerate row read as null', async () => {
+  // reader_version 10: Player.CareerStats is one reference into a varying Career*Stats table.
+  const CAREER_TABLE_ID = 3501;
+  const row = { isEmpty: false, fields: { GAMESPLAYED: 17, TARGETS: 136 }, GAMESPLAYED: 17, TARGETS: 136 };
+  const tables = { byId: async id => (id === CAREER_TABLE_ID ? { name: 'CareerOffensiveStats', records: [row] } : null) };
+  const ref = encodeRef(CAREER_TABLE_ID, 0);
+  assert.deepEqual(await readCareerRow(tables, ref),
+                   { table: 'CareerOffensiveStats', stats: { GAMESPLAYED: 17, TARGETS: 136 } });
+  assert.equal(await readCareerRow(tables, NO_REF), null, 'an empty reference is null');
+  assert.equal(await readCareerRow(tables, encodeRef(CAREER_TABLE_ID, 1)), null, 'a missing row is null');
+  const emptyRow = { byId: async () => ({ name: 'CareerOffensiveStats', records: [{ isEmpty: true }] }) };
+  assert.equal(await readCareerRow(emptyRow, ref), null, 'an empty row is null');
+  // A row whose field read throws (the degenerate-row case readStatRows guards) must not fail the save.
+  const degenerate = { isEmpty: false, fields: { TARGETS: 1 } };
+  Object.defineProperty(degenerate, 'TARGETS', { get() { throw new Error('degenerate row'); } });
+  const badRow = { byId: async () => ({ name: 'CareerOffensiveStats', records: [degenerate] }) };
+  assert.equal(await readCareerRow(badRow, ref), null, 'a degenerate row is null');
+});
+
+test('career_stats: a player whose CareerStats reference is empty gets career_stats null', async () => {
+  // A minimal Player table: every reference field empty, so readPlayers needs no other table.
+  const playerTable = {
+    header: { tableId: 5000 },
+    records: [{
+      isEmpty: false, fields: {}, PresentationId: 42, FirstName: 'Empty', LastName: 'Career',
+      ContractStatus: 'Signed', Contract: NO_REF, SeasonStats: NO_REF, GameStats: NO_REF, CareerStats: NO_REF,
+      College: NO_REF, Weight: 0,
+    }],
+  };
+  const tables = { byId: async () => null };
+  const players = await readPlayers(tables, playerTable, 1, 2, new Map());
+  assert.equal(players.length, 1);
+  assert.equal(players[0].career_stats, null);
+});
+
 test('coaches: every live Coach record, free agents included, in the reader_version 8 shape', () => {
-  assert.equal(READER_VERSION, 9);
+  assert.equal(READER_VERSION, 10);
   const coaches = readCoaches(syntheticCoaches());
   assert.deepEqual(coaches.map(c => c.row), [0, 1, 2, 3], 'the empty row is skipped');
   assert.deepEqual(coaches.find(c => c.pgid === 86), {
@@ -171,8 +206,26 @@ test('reads a real Madden 27 save without changing it', { skip, timeout: 120_000
     for (const line of lines) assert.ok(gameRows.has(line.game_row), 'every game line points at an exported game');
   }
 
+  // reader_version 10: Madden's career totals row per player, in a Career*Stats table; most rostered players have one.
+  const careerPlayers = s.players.filter(p => p.career_stats);
+  assert.ok(careerPlayers.length >= 2000, `at least 2,000 players have career_stats (${careerPlayers.length})`);
+  for (const p of careerPlayers) {
+    assert.match(p.career_stats.table, /^Career/, `pgid ${p.pgid} career table`);
+    const values = Object.values(p.career_stats.stats);
+    assert.ok(values.length > 0, `pgid ${p.pgid} career stats are not empty`);
+    // The row is plainFields: numeric counters plus Madden's boolean flags (STAT_KEEP).
+    assert.ok(values.every(v => typeof v === 'number' || typeof v === 'boolean'),
+              `pgid ${p.pgid} career stats are numeric counters and boolean flags`);
+    assert.ok(values.some(v => typeof v === 'number'), `pgid ${p.pgid} career stats have counters`);
+  }
+  const rostered = new Set(s.teams.filter(t => t.team_index < 32).flatMap(t => t.roster ?? []));
+  const careerPgids = new Set(careerPlayers.map(p => p.pgid));
+  const rosteredWithCareer = [...rostered].filter(pgid => careerPgids.has(pgid)).length;
+  assert.ok(rosteredWithCareer / rostered.size > 0.8,
+            `most rostered players have career_stats (${rosteredWithCareer}/${rostered.size})`);
+
   // reader_version 9: Madden's draft facts on every player.
-  assert.equal(s.meta.reader_version, 9);
+  assert.equal(s.meta.reader_version, 10);
   for (const p of s.players) {
     assert.ok('draft_round' in p && 'draft_pick' in p && 'draft_team_index' in p, `draft facts on pgid ${p.pgid}`);
     assert.ok(p.draft_round === null || (p.draft_round >= 1 && p.draft_round <= 7), `draft round on pgid ${p.pgid}`);
