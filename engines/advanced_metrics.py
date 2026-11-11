@@ -4,23 +4,26 @@ Every derived metric in `docs/reference/MADDEN_STATS_AND_ADVANCED_METRICS.md` §
 `METRICS`, with a status copied from the plan's §2.5:
 
 - OK: computable now, and `compute()` returns it.
-- BLOCKED: a counter's meaning is unresolved (`ROUTESRUN` is not routes run; spike S22), so the doc metric
-  stays uncomputed until the question is answered.
+- BLOCKED: a counter's meaning is unresolved (`ROUTESRUN` is not routes run; spike S22) or the measured
+  counters contradict the metric's premise (audit M1: sacks exceed pressures, catches allowed exceed the
+  league's targets, 10+ runs are rarer than 20+ runs, downs played exceed the team's plays), so the doc
+  metric stays uncomputed until the question is answered.
 - IMPOSSIBLE: Madden does not record the inputs (no per-receiver air yards, no pass-rush/run-block snap
   splits, counters that never fill). BLOCKED and IMPOSSIBLE metrics are never computed and carry a reason.
 
-The module holds no numbers of its own. The counters come from `player_season_counters` /
-`player_week_counters` (typed Career deltas, plan §2.2) merged with `season_stat_lines` / `game_stat_lines`
-(box-score counters). Team denominators come from `team_stats` summed over the player's team's games. Rates
-are fractions (0-1), not percentages.
+The module holds no numbers of its own. Both sides of every metric come from the same games (audit H3): the
+career counters are the response's `delta` JSONB on `player_week_counters` (plan §2.2), summed week by week
+for the season, so the full box counters (`RECEIVECATCHES`, `PASSATTEMPTS`, `PASSSACKED`, `RUSHATTEMPTS`,
+`DLINESACKS`, `DSECINTS`, `RECEIVEDROPS`, ...) stay on the Career side. A week Madden did not track is
+detected per team (the tracked inside/outside-pocket pass attempts must account for the team's
+`PASSATTEMPTS` growth) and excluded like an unknown week. `season_stat_lines` / `game_stat_lines` fill in
+only a field the Career row does not carry (kicking and special teams). When a metric would mix the two
+sources over different game counts it returns None and `coverage` says why. Team denominators come from
+`team_stats` summed over the same game weeks as the numerator. Rates are fractions (0-1), not percentages.
 
-`player_metrics(cur, season, player_id, week=None)` merges those sources for one player and returns
-`{"inputs", "metrics", "weeks_unknown"}`. The cursor is ordinary psycopg; tests use a stub. A missing or
-NULL input, or a zero denominator, gives None.
-
-Note on the merge: `def_catches_allowed` and `downs_played` exist on both sides (the Career delta and the
-stat line). A non-NULL Career delta wins, because it is the same counter measured over the same tracked
-weeks; stat-line values fill in when the Career row has no value for that field.
+`player_metrics(cur, season, player_id, week=None)` returns
+`{"inputs", "metrics", "weeks_unknown", "coverage"}`. The cursor is ordinary psycopg; tests use a stub. A
+missing or NULL input, or a zero denominator, gives None.
 
 CLI (read-only; uses DATABASE_URL):
 
@@ -272,6 +275,23 @@ BLOCKED_ROUTES = (
     "Needs real routes run. Madden's ROUTESRUN grows about 0.72 per target and about 5% of DOWNSPLAYED; "
     "it is not routes run (spike S22 / plan R2)."
 )
+BLOCKED_SACKS = (
+    "The counters contradict the premise: DLINESACKS (1,305) exceeds DEFPRESSURES (732) over the 2026 "
+    "season, so the pair cannot be a sack-per-pressure rate (audit M1)."
+)
+BLOCKED_COVERAGE = (
+    "The counters contradict the premise: DEFTARGETS (48,001) is more than triple the league's targets "
+    "(14,117) and receptions (10,124) while CTHALLOWED is 10,003, so their ratio is not a catch rate "
+    "(audit M1)."
+)
+BLOCKED_EXPLOSIVE = (
+    "The counters contradict the premise: RUSH10YARDRUNS (179) is lower than RUSH20YARDRUNS (306), and 34 "
+    "of the 90 backs with a 20+ run have no 10+ run, so the buckets do not nest (audit M1)."
+)
+BLOCKED_SNAP_SHARE = (
+    "The counters contradict the premise: DOWNSPLAYED over the team's total plays exceeds 1 for real "
+    "players (J. Horn 193/172 = 1.12), so they do not share a denominator (audit M1)."
+)
 IMPOSSIBLE_DEPTH = "SHORT/MEDIUM/DEEPPASS_* never grow; they hold real-NFL legacy totals (spike S19)."
 IMPOSSIBLE_NO_SNAP_SPLIT = "Madden does not split snaps by type, so there is no such snap count."
 
@@ -337,7 +357,8 @@ METRICS: dict[str, Metric] = {
     "btk_rate": Metric("btk_rate", "Broken tackle rate (BTK rate)", "rushing",
                        ("rush_btk", "rush_attempts"), _btk_rate, OK),
     "explosive_rate": Metric("explosive_rate", "Explosive run rate", "rushing",
-                             ("rush_10plus", "rush_20plus", "rush_attempts"), _explosive_rate, OK),
+                             ("rush_10plus", "rush_20plus", "rush_attempts"), _explosive_rate,
+                             BLOCKED, BLOCKED_EXPLOSIVE),
     "loaded_box_rate": Metric("loaded_box_rate", "Loaded box rate", "rushing",
                               ("loaded_box", "rush_attempts"), _loaded_box_rate, OK),
     "light_box_rate": Metric("light_box_rate", "Light box rate", "rushing",
@@ -354,14 +375,15 @@ METRICS: dict[str, Metric] = {
                               "be built; coverage_rating_lite uses catches and INTs only."),
     "coverage_rating_lite": Metric("coverage_rating_lite", "Passer rating allowed, catch-and-INT (lite)",
                                    "defense", ("def_catches_allowed", "def_targets", "def_ints"),
-                                   _coverage_rating_lite, OK),
+                                   _coverage_rating_lite, BLOCKED, BLOCKED_COVERAGE),
     "burn_pct": Metric("burn_pct", "Catch rate allowed (burn %)", "defense",
-                       ("def_catches_allowed", "def_targets"), _burn_pct, OK),
+                       ("def_catches_allowed", "def_targets"), _burn_pct, BLOCKED, BLOCKED_COVERAGE),
     "prate": Metric("prate", "Pass rush pressure rate (PRate)", "defense",
                     ("def_pressures", "pass_rush_snaps"), _prate, IMPOSSIBLE,
                     IMPOSSIBLE_NO_SNAP_SPLIT + " There is no pass-rush snap count."),
     "sack_conversion_rate": Metric("sack_conversion_rate", "Sack conversion rate", "defense",
-                                   ("def_sacks", "def_pressures"), _sack_conversion_rate, OK),
+                                   ("def_sacks", "def_pressures"), _sack_conversion_rate,
+                                   BLOCKED, BLOCKED_SACKS),
     "stop_rate": Metric("stop_rate", "Defensive stop rate", "defense",
                         ("stops", "downs_played"), _stop_rate, OK),
     "stuff_rate": Metric("stuff_rate", "Stuff rate per run-defense snap", "defense",
@@ -383,7 +405,8 @@ METRICS: dict[str, Metric] = {
                            ("blk_pancakes", "run_block_snaps"), _pancake_rate, IMPOSSIBLE,
                            IMPOSSIBLE_NO_SNAP_SPLIT + " There is no run-block snap count."),
     "snap_share": Metric("snap_share", "Snap share", "blocking",
-                         ("downs_played", "team_total_plays"), _snap_share, OK),
+                         ("downs_played", "team_total_plays"), _snap_share,
+                         BLOCKED, BLOCKED_SNAP_SHARE),
     "tb_pct": Metric("tb_pct", "Touchback percentage (TB %)", "special",
                      ("kick_touchbacks", "kick_kickoffs"), _tb_pct, OK),
 }
@@ -410,25 +433,86 @@ def compute(row: dict) -> dict[str, float | None]:
 
 
 # ---------------------------------------------------------------- read side ----
-# Typed columns on player_week_counters / player_season_counters (plan §2.2).
-COUNTER_COLUMNS = (
-    "targets", "madden_routes",
-    "air_yards", "pressures_faced",
-    "sep_tight", "sep_normal", "sep_open", "sep_wide_open",
-    "short_att", "short_cmp", "short_yds", "short_td", "short_int",
-    "medium_att", "medium_cmp", "medium_yds", "medium_td", "medium_int",
-    "deep_att", "deep_cmp", "deep_yds", "deep_td", "deep_int",
-    "pocket_in_att", "pocket_in_cmp", "pocket_in_yds", "pocket_in_td", "pocket_in_int",
-    "pocket_out_att", "pocket_out_cmp", "pocket_out_yds", "pocket_out_td", "pocket_out_int",
-    "blitz_plays", "blitz_cmp", "blitz_yds", "blitz_td", "blitz_int",
-    "scramble_att", "scramble_yds", "scramble_td",
-    "throw_left", "throw_middle", "throw_right",
-    "rush_success", "rush_10plus", "light_box", "loaded_box",
-    "def_targets", "def_catches_allowed", "def_pressures", "stops", "stuffs", "downs_played",
-)
+# Madden key names on the career row's `delta` JSONB -> the input names the formulas use (plan §2.2). The
+# views expose only a typed subset, and the full box counters (receptions, attempts, sacks, drops) live in
+# the delta alone, so the engine sums the delta itself instead of reading the typed season view.
+CAREER_KEYS = {
+    "targets": "TARGETS",
+    "receptions": "RECEIVECATCHES",
+    "rec_drops": "RECEIVEDROPS",
+    "rec_yards": "RECEIVEYARDS",
+    "madden_routes": "ROUTESRUN",
+    "air_yards": "AIRYARDS",
+    "pass_attempts": "PASSATTEMPTS",
+    "pass_sacks": "PASSSACKED",
+    "pressures_faced": "PRESSURES",
+    "sep_tight": "SEPARATION_TIGHT",
+    "sep_normal": "SEPARATION_NORMAL",
+    "sep_open": "SEPARATION_OPEN",
+    "sep_wide_open": "SEPARATION_WIDEOPEN",
+    "short_att": "SHORTPASS_ATTEMPTS",
+    "short_cmp": "SHORTPASS_COMPLETIONS",
+    "short_yds": "SHORTPASS_YARDS",
+    "short_td": "SHORTPASS_TD",
+    "short_int": "SHORTPASS_INTERCEPTIONS",
+    "medium_att": "MEDIUMPASS_ATTEMPTS",
+    "medium_cmp": "MEDIUMPASS_COMPLETIONS",
+    "medium_yds": "MEDIUMPASS_YARDS",
+    "medium_td": "MEDIUMPASS_TD",
+    "medium_int": "MEDIUMPASS_INTERCEPTIONS",
+    "deep_att": "DEEPPASS_ATTEMPTS",
+    "deep_cmp": "DEEPPASS_COMPLETIONS",
+    "deep_yds": "DEEPPASS_YARDS",
+    "deep_td": "DEEPPASS_TD",
+    "deep_int": "DEEPPASS_INTERCEPTIONS",
+    "pocket_in_att": "INSIDEPOCKETTHROW_ATTEMPTS",
+    "pocket_in_cmp": "INSIDEPOCKETTHROW_COMPLETIONS",
+    "pocket_in_yds": "INSIDEPOCKETTHROW_YARDS",
+    "pocket_in_td": "INSIDEPOCKETTHROW_TD",
+    "pocket_in_int": "INSIDEPOCKETTHROW_INTERCEPTIONS",
+    "pocket_out_att": "OUTSIDEPOCKETTHROW_ATTEMPTS",
+    "pocket_out_cmp": "OUTSIDEPOCKETTHROW_COMPLETIONS",
+    "pocket_out_yds": "OUTSIDEPOCKETTHROW_YARDS",
+    "pocket_out_td": "OUTSIDEPOCKETTHROW_TD",
+    "pocket_out_int": "OUTSIDEPOCKETTHROW_INTERCEPTIONS",
+    "blitz_plays": "BLITZ_PLAYS",
+    "blitz_cmp": "BLITZ_COMPLETIONS",
+    "blitz_yds": "BLITZ_YARDS",
+    "blitz_td": "BLITZ_TD",
+    "blitz_int": "BLITZ_INTERCEPTIONS",
+    "scramble_att": "QBSCRAMBLE_CARRIES",
+    "scramble_yds": "QBSCRAMBLE_YARDS",
+    "scramble_td": "QBSCRAMBLE_TD",
+    "throw_left": "THROWLOCATION_LEFT",
+    "throw_middle": "THROWLOCATION_MIDDLE",
+    "throw_right": "THROWLOCATION_RIGHT",
+    "rush_attempts": "RUSHATTEMPTS",
+    "rush_success": "RUSHSUCCESS",
+    "rush_10plus": "RUSH10YARDRUNS",
+    "rush_20plus": "RUSH20YARDRUNS",
+    "rush_yac": "RUSHYARDSAFTER1STHIT",
+    "rush_btk": "RUSHBROKENTACKLES",
+    "light_box": "LIGHTBOX",
+    "loaded_box": "LOADEDBOX",
+    "outside_run_carries": "OUTSIDERUN_CARRIES",
+    "outside_run_yards": "OUTSIDERUN_YARDS",
+    "def_targets": "DEFTARGETS",
+    "def_catches_allowed": "CTHALLOWED",
+    "def_pressures": "DEFPRESSURES",
+    "def_ints": "DSECINTS",
+    "def_big_hits": "BIGHITS",
+    "stops": "STOPS",
+    "stuffs": "STUFFS",
+    "downs_played": "DOWNSPLAYED",
+    "kick_kickoffs": "KICKNUMKICKOFFS",
+    "kick_touchbacks": "KICKTOUCHBACKS",
+    "blk_sacks_allowed": "OLINESACKSALLOWED",
+    "blk_pancakes": "OLINEPANCAKES",
+    "coverage_depth_press": "COVERAGEDEPTH_PRESS",
+}
 
 # Box-score columns on season_stat_lines / game_stat_lines (the six new ones are appended by the
-# 2027_02_25 migration; plan §2.2).
+# 2027_02_25 migration; plan §2.2). Used only where the Career delta has no such counter.
 STAT_COLUMNS = (
     "completions", "pass_attempts", "pass_yards", "pass_tds", "interceptions", "pass_sacks",
     "rush_attempts", "rush_yards", "rush_tds", "rush_btk", "rush_yac", "rush_20plus",
@@ -440,7 +524,12 @@ STAT_COLUMNS = (
 )
 
 TEAM_COLUMNS = ("team_pass_attempts", "team_total_plays")
+USABLE_STATUSES = ("OK", "NO_GAMES")
 WEEKS_UNKNOWN_STATUSES = ("TABLE_CHANGED", "RESET", "CROSS_SEASON")
+# A tracked Madden week's inside+outside-pocket attempts account for its PASSATTEMPTS. The audit measured
+# 1.000 for fully tracked teams and 0.49-0.84 for teams missing week 1's pocket data, so 0.9 separates them
+# (audit H3).
+TRACKED_POCKET_RATIO = 0.9
 
 
 def _fetch_row(cur, columns: tuple[str, ...], sql: str, params: dict) -> dict:
@@ -454,36 +543,103 @@ def _fetch_row(cur, columns: tuple[str, ...], sql: str, params: dict) -> dict:
     return dict(zip(columns, row))
 
 
-def _counter_row(cur, season: int, player_id: int, week: int | None) -> dict:
+def _fetch_rows(cur, columns: tuple[str, ...], sql: str, params: dict) -> list[dict]:
+    """Every row as a dict. Accepts mapping rows or positional tuples (ordinary psycopg).
+
+    `delta` is JSONB: psycopg decodes it to a dict; a stub may hand in a dict directly.
+    """
+    cur.execute(sql, params)
+    rows = cur.fetchall()
+    if rows and isinstance(rows[0], Mapping):
+        return [{name: row.get(name) for name in columns} for row in rows]
+    return [dict(zip(columns, row)) for row in rows]
+
+
+def _career_rows(cur, season: int, player_id: int, week: int | None) -> list[dict]:
+    """Every Career-counter row for the player in the season (crediting the season) or the one week.
+
+    Every status is returned so `player_metrics` can count unknown weeks and lost games; only OK and
+    NO_GAMES deltas are ever used.
+    """
+    columns = ("season", "week", "prev_season", "prev_week", "status", "delta", "games_covered")
     if week is None:
-        columns = ("weeks_unknown",) + COUNTER_COLUMNS
-        sql = (f"SELECT {', '.join(columns)} FROM player_season_counters "
-               "WHERE season = %(season)s AND player_id = %(player_id)s")
+        sql = (f"SELECT {', '.join(columns)} FROM player_week_counters "
+               "WHERE credited_season = %(season)s AND player_id = %(player_id)s ORDER BY load_seq")
         params = {"season": season, "player_id": player_id}
     else:
-        columns = ("status",) + COUNTER_COLUMNS
         sql = (f"SELECT {', '.join(columns)} FROM player_week_counters "
                "WHERE season = %(season)s AND week = %(week)s AND player_id = %(player_id)s "
-               "AND stage = 'WEEK'")
+               "AND stage = 'WEEK' ORDER BY load_seq")
         params = {"season": season, "week": week, "player_id": player_id}
-    return _fetch_row(cur, columns, sql, params)
+    return _fetch_rows(cur, columns, sql, params)
+
+
+def _team_tracking(cur, team_id, season: int) -> dict:
+    """The team's tracked pocket attempts per career-row range: {(week, prev_week, prev_season): (att, pocket)}.
+
+    Summed over every usable Career delta of the team's players, so a receiver's row is checked against the
+    team's pass attempts (a receiver's own `PASSATTEMPTS` is zero).
+    """
+    if team_id is None:
+        return {}
+    sql = """
+        SELECT w.week, w.prev_week, w.prev_season,
+               COALESCE(SUM((w.delta ->> 'PASSATTEMPTS')::int), 0) AS pass_att,
+               COALESCE(SUM((w.delta ->> 'INSIDEPOCKETTHROW_ATTEMPTS')::int), 0)
+             + COALESCE(SUM((w.delta ->> 'OUTSIDEPOCKETTHROW_ATTEMPTS')::int), 0) AS pocket_att
+        FROM player_week_counters w
+        JOIN player_seasons ps ON ps.player_id = w.player_id AND ps.season = w.credited_season
+        WHERE ps.team_id = %(team_id)s AND w.credited_season = %(season)s
+          AND w.status IN ('OK', 'NO_GAMES') AND w.delta IS NOT NULL
+        GROUP BY w.week, w.prev_week, w.prev_season"""
+    params = {"team_id": team_id, "season": season}
+    columns = ("week", "prev_week", "prev_season", "pass_att", "pocket_att")
+    return {(row["week"], row["prev_week"], row["prev_season"]): (row["pass_att"], row["pocket_att"])
+            for row in _fetch_rows(cur, columns, sql, params)}
+
+
+def _is_untracked(row: dict, team_tracking: dict) -> bool:
+    """True when Madden did not track this row's games: the team's tracked pocket attempts do not account
+    for its pass attempts."""
+    key = (row.get("week"), row.get("prev_week"), row.get("prev_season"))
+    pass_att, pocket_att = team_tracking.get(key, (0, 0))
+    return pass_att > 0 and pocket_att < TRACKED_POCKET_RATIO * pass_att
+
+
+def _career_inputs(rows: list[dict]) -> dict:
+    """The used Career deltas summed key by key, mapped to the engine's input names.
+
+    A name is present only when at least one Career row carries its Madden key; an absent name falls back
+    to the stat line. `def_sacks` combines Madden's full and half sacks.
+    """
+    totals: dict[str, float] = {}
+    for row in rows:
+        for key, value in (row.get("delta") or {}).items():
+            if value is None:
+                continue
+            totals[key] = totals.get(key, 0) + int(value)
+    values = {name: totals[key] for name, key in CAREER_KEYS.items() if key in totals}
+    if "DLINESACKS" in totals or "DLINEHALFSACK" in totals:
+        values["def_sacks"] = totals.get("DLINESACKS", 0) + 0.5 * totals.get("DLINEHALFSACK", 0)
+    return values
 
 
 def _line_row(cur, season: int, player_id: int, week: int | None) -> dict:
-    columns = ("team_id",) + STAT_COLUMNS
     if week is None:
+        columns = ("team_id", "games_played") + STAT_COLUMNS
         sql = (f"SELECT {', '.join(columns)} FROM season_stat_lines "
                "WHERE season = %(season)s AND player_id = %(player_id)s")
         params = {"season": season, "player_id": player_id}
     else:
+        columns = ("team_id",) + STAT_COLUMNS
         sql = (f"SELECT {', '.join(columns)} FROM game_stat_lines "
                "WHERE season = %(season)s AND week = %(week)s AND player_id = %(player_id)s")
         params = {"season": season, "week": week, "player_id": player_id}
     return _fetch_row(cur, columns, sql, params)
 
 
-def _team_totals(cur, team_id, season: int, week: int | None) -> dict:
-    """Team denominators: the player's team's pass attempts and total plays for the season or week."""
+def _team_totals(cur, team_id, season: int, weeks: list[int]) -> dict:
+    """Team denominators over the same game weeks as the numerator (`weeks`; empty means no games)."""
     if team_id is None:
         return {name: None for name in TEAM_COLUMNS}
     sql = """
@@ -492,36 +648,86 @@ def _team_totals(cur, team_id, season: int, week: int | None) -> dict:
         FROM team_stats ts
         JOIN games g ON g.id = ts.game_id
         JOIN teams t ON t.name = ts.team_name
-        WHERE t.id = %(team_id)s AND g.season = %(season)s"""
-    params = {"team_id": team_id, "season": season}
-    if week is not None:
-        sql += " AND g.week = %(week)s"
-        params["week"] = week
+        WHERE t.id = %(team_id)s AND g.season = %(season)s
+          AND g.week = ANY(%(weeks)s)"""
+    params = {"team_id": team_id, "season": season, "weeks": list(weeks)}
     return _fetch_row(cur, TEAM_COLUMNS, sql, params)
 
 
 def player_metrics(cur, season: int, player_id: int, week: int | None = None) -> dict:
-    """One player's inputs and OK metric values.
+    """One player's inputs, OK metric values and coverage.
 
-    `week` is None: the whole season (`player_season_counters` + `season_stat_lines`). Otherwise one week
-    (`player_week_counters` + `game_stat_lines`). `weeks_unknown` is the season view's count, or 1 for a
-    week whose delta is unknown (the Career table changed or the counters reset).
+    Every value comes from the Career deltas of the games it is meant to describe: the season sums the
+    player's usable `player_week_counters` rows credited to `season`, a week reads its WEEK-stage row. A
+    BASELINE, PARTIAL, TABLE_CHANGED, RESET, CROSS_SEASON or Madden-untracked row is not used; unknown and
+    untracked rows count in `weeks_unknown` the way the season view counts unknown weeks. The stat line
+    supplies only a counter the Career row does not carry, and a metric that would mix the two sources over
+    different game counts is None. `coverage` reports games covered, stat-line games, untracked weeks and
+    lost games, plus `mixed_sources` when such a metric was suppressed.
     """
-    counters = _counter_row(cur, season, player_id, week)
     line = _line_row(cur, season, player_id, week)
+    team_id = line.get("team_id")
+    rows = _career_rows(cur, season, player_id, week)
+    team_tracking = _team_tracking(cur, team_id, season)
+
+    used: list[dict] = []
+    weeks_unknown = 0
+    untracked = 0
+    games_lost = 0
+    for row in rows:
+        status = row.get("status")
+        if status in WEEKS_UNKNOWN_STATUSES:
+            weeks_unknown += 1
+        elif status == "PARTIAL":
+            games_lost += int(row.get("games_covered") or 0)
+        if status in USABLE_STATUSES and row.get("delta"):
+            if _is_untracked(row, team_tracking):
+                untracked += 1
+                weeks_unknown += 1
+            else:
+                used.append(row)
+
+    career = _career_inputs(used)
+    games_covered = sum(int(row.get("games_covered") or 0) for row in used)
 
     merged = dict(line)
-    for name, value in counters.items():
-        if value is not None and name not in ("status", "weeks_unknown"):
+    line_games = merged.pop("games_played", None)
+    if week is not None:
+        line_games = 1 if line else None
+    sources = {name: "line" for name, value in merged.items() if name != "team_id" and value is not None}
+    for name, value in career.items():
+        if value is not None:
             merged[name] = value
-    merged.update(_team_totals(cur, merged.get("team_id"), season, week))
+            sources[name] = "career"
 
     if week is None:
-        weeks_unknown = int(counters.get("weeks_unknown") or 0)
+        game_weeks = sorted({w for row in used
+                             for w in range(max(int(row.get("prev_week") or 0), 0) + 1,
+                                            int(row["week"]) + 1) if w >= 1})
     else:
-        weeks_unknown = 1 if counters.get("status") in WEEKS_UNKNOWN_STATUSES else 0
+        game_weeks = [week]
+    merged.update(_team_totals(cur, team_id, season, game_weeks))
 
-    return {"inputs": merged, "metrics": compute(merged), "weeks_unknown": weeks_unknown}
+    metrics = compute(merged)
+    mixed = False
+    if line_games is not None and games_covered != line_games:
+        for metric in METRICS.values():
+            if metric.status != OK:
+                continue
+            metric_sources = {sources.get(name) for name in metric.inputs}
+            if "career" in metric_sources and "line" in metric_sources:
+                metrics[metric.key] = None
+                mixed = True
+
+    coverage = {
+        "games_covered": games_covered,
+        "stat_line_games": line_games,
+        "same_games": line_games is None or games_covered == line_games,
+        "untracked_weeks": untracked,
+        "games_lost": games_lost,
+        "mixed_sources": mixed,
+    }
+    return {"inputs": merged, "metrics": metrics, "weeks_unknown": weeks_unknown, "coverage": coverage}
 
 
 # ---------------------------------------------------------------- CLI ----
@@ -549,8 +755,12 @@ def _print_player(season: int, player_id: int, week: int | None) -> None:
             result = player_metrics(cur, season, player_id, week)
 
     where = f"season {season}" + (f", week {week}" if week is not None else "")
+    cov = result["coverage"]
+    line_note = "" if cov["stat_line_games"] is None else f", stat-line games: {cov['stat_line_games']}"
+    mixed_note = ", MIXED SOURCES" if cov["mixed_sources"] else ""
     print(f"Advanced metrics for player {player_id}, {where} "
-          f"(weeks unknown: {result['weeks_unknown']})")
+          f"(weeks unknown: {result['weeks_unknown']}, games covered: {cov['games_covered']}"
+          f"{line_note}{mixed_note})")
     print("\nINPUTS")
     for name in sorted(result["inputs"]):
         print(f"  {name:<28} {result['inputs'][name]}")
