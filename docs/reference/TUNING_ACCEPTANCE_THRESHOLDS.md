@@ -111,7 +111,10 @@ Populations as described in §0.2. Careers end 2015–2024.
   The all-players mean (4.36) is reported alongside as the floor, not gated. Re-check the population once
   P3-06a measures Mu's inflow.
 - **Mu source:** `player_seasons` distinct seasons per player, or the lifecycle record; plus a count of players
-  entering per season (drafted + UDFA) for the arithmetic check.
+  entering per season (drafted + UDFA) for the arithmetic check. **Drafted vs undrafted comes from Madden's own
+  player fields (JR, 2026-11-10):** `PLYR_DRAFTROUND` 1–7 is drafted, 63 is undrafted (with `PLYR_DRAFTPICK` and
+  `PLYR_DRAFTTEAM`). Ignore `Background`: on `CAREER-TUNE-P2G` it reads `Undrafted` for the 2027 class Madden had
+  just drafted. A career ends at a retirement, or after **two seasons in a row unsigned**; a later signing reopens it.
 - **Primary suspect on failure:** `engines/progression.py` wear/age curves and `player_durability` seeding;
   `engines/retirement_policy.py` base rate; **and the draft/UDFA inflow**, which sets the ceiling before the
   retirement engine is even consulted.
@@ -147,8 +150,8 @@ Derived from `home_coach`/`away_coach` on every regular-season game, so it is ex
 
 - **Mu source:** `coach_tenures` (`start_season`/`end_season`) and `coaching_carousel` firings.
 - **Primary suspect:** `engines/coach_hot_seat.py` thresholds; `owner_patience` config once shadowing.
-- **Note:** zero mid-season changes across a 3-season run is a **fail** if `coach_hot_seat` claims to support
-  in-season firing.
+- **Mid-season changes are report-only, not a gate (JR, 2026-11-10).** Mu doesn't fire head coaches mid-season
+  yet; that is a follow-up. The between-seasons count stays a gate.
 
 ### A4. Trades
 
@@ -159,7 +162,7 @@ Derived from `home_coach`/`away_coach` on every regular-season game, so it is ex
 | All trades, all year | 50–102 | 90 |
 | Trades involving a player, all year | 49–102 | 81 |
 
-- **Gate:** 3-season mean of in-season trades inside **5–21**; no single season above 30 or below 3.
+- **Gate:** 3-season mean of in-season trades inside **5–21**, and each single season inside **3–25** (JR, 2026-11-10).
 - **Mu source:** `gm_trade_proposals` with `status = 'APPROVED'` (or `EXECUTED`), filtered to the regular season.
   Offseason-stage proposals are compared to the offseason band separately.
 - **Primary suspect:** `gm_trade_engine` weekly volume constants, `MAX_BLOCKBUSTERS`, `--talk-stall`.
@@ -190,7 +193,10 @@ Band **17.9%–26.5%** of players with ≥8 games in both seasons, median **24.9
 | 7 | 252 | 18 | 1 | 11% |
 
 - **Gate:** round 1 within ±10 points of 85%; each later round within ±10 points; the monotonic decline must hold.
-- **Mu source:** `draft_selections` + `player_seasons` starts and games.
+- **Mu source:** `draft_selections` + `player_seasons` starts and games. **A started season (JR, 2026-11-10)
+  is one with 8 or more games started at the player's own position** (depth 1 in his position's slot on the
+  weekly depth chart for a game he played). Return, kick and long-snapper slots never count. The real column is
+  nflverse's `seasons_started`.
 - **Primary suspect:** `engines/scouting_value.py` and the rookie OVR distribution — not the drafting AI.
 
 ### A7. Rookie usage
@@ -300,12 +306,22 @@ Record the failing gate, measured value, engine changed and re-measured value in
    which population Mu can produce.
 3. **Tolerances:** median ±1 season (±1.5 QB/K/P); shares ±10 points; rates ±20% relative.
 4. **Averaging:** per-season counts pass on a 3-season mean, and each season must also sit inside the band.
+   For in-season trades the per-season band is wider, 3–25 (2026-11-10 decision 9).
 5. **§4 scope:** blockbusters, holdouts and the P3-06a inflow measurement are pre-2026; GM and coordinator
    changes are deferred to a post-2034 pass.
 6. **Retirement population:** the drafted median, matching A1.
 
 Consequences applied throughout this document: A1's headline gate is the drafted column; A2 uses the drafted
 median (all players retained as reference); A4's gate is the Week 1 → season-end window.
+
+### Settled by JR, 2026-11-10 (P3-07 audit questions, board M-0299)
+
+8. **Mid-season HC changes are report-only.** Not a gate until Mu can fire a coach mid-season (a follow-up).
+9. **In-season trades, per season: 3–25.** The 3-season mean still sits in 5–21.
+10. **Drafted cohort: Madden's own draft fields.** `PLYR_DRAFTROUND` (1–7 drafted, 63 undrafted),
+    `PLYR_DRAFTPICK`, `PLYR_DRAFTTEAM` on the save's Player records, for veterans and Mu-era rookies alike.
+11. **An unsigned free agent's career ends after two empty seasons;** signing again later reopens it.
+12. **A started season is 8+ games started at the player's own position.**
 
 ### Still open
 
