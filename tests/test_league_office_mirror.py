@@ -5,10 +5,17 @@ no database), and `PRIORITY_MIRROR` / `step_nfl_mirror` / the plan_stage wiring 
 deps. A `FakeCursor` only records SQL, so `record_written` is exercised without a PostgreSQL connection.
 """
 import json
+import os
+import shutil
 import types
 
+import pytest
+
+from engines.nfl_mirror import contracts as mirror_contracts
+from engines.nfl_mirror import diff as mirror_diff
 from engines.nfl_mirror import injuries as mirror_injuries
 from engines.nfl_mirror import real_state
+from engines.nfl_mirror import store as mirror_store
 from pipeline import league_office as lo
 from pipeline import league_office_mirror as lom
 from tests.test_league_office import (AZ, CHI, SEASON, FakeCursor, FakeDeps, contract, pid, player,
@@ -155,7 +162,8 @@ def test_mirrored_week_plans_the_2_9_steps_in_order_with_the_mirror_priority_and
     lo.step_nfl_mirror(p, mirror)
 
     # creates -> roster ops (in the diff's order) -> injury/IR fields -> practice squad -> the switches record
-    assert p.log == [("fields", 5), ("sign", 5), ("release", 1), ("trade", 3), ("fields", 2), ("fields", 6),
+    # (F2: the signing is claimed before the donor's fields are edited)
+    assert p.log == [("sign", 5), ("fields", 5), ("release", 1), ("trade", 3), ("fields", 2), ("fields", 6),
                      ("fields", 3), ("sign", 4), ("records", 1)]
     # every move claims at the mirror priority (the engine-trade level) with `mirror:<kind>:<gsis_id>`
     assert p.claimed[1] == ("release", 0, lo.PRIORITY_MIRROR)
@@ -317,7 +325,7 @@ def test_the_restore_turns_the_switches_on_only_while_the_mirror_is_off_and_they
 # ------------------------------------------------------------------------------------ the declared switch ----
 def test_a_release_then_a_sign_to_another_team_is_a_declared_switch():
     p = new_plan()
-    assert p.release_player(1, lo.PRIORITY_STAGE, "cut by the real team")
+    assert p.release_player(1, lo.PRIORITY_MIRROR, "cut by the real team")
     assert p.sign_player(1, 1, "Roster", contract(), lo.PRIORITY_MIRROR, "claimed by the real ARI")
 
     assert p.switches == {1}
@@ -422,27 +430,30 @@ class FakeMirrorStore:
         self.moves.append((season, week, list(moves), replace))
 
 
-def creation_adapter(snap):
+def creation_adapter(snap, real_card=None, later=None, roster_plan=None, match_links=None, contract_book=None):
     """A real MirrorAdapter with fetch/build/diff fakes: the whole plan_week path runs offline."""
     store = FakeMirrorStore()
-    real_card = real_state.RealPlayer(gsis_id=CREATE_GSIS, name="Nate New", position="WR", team="CHI",
-                                      status="ACTIVE", designation="", college="State U",
-                                      birth_date="2000-04-02", height_in=72, weight_lbs=200, entry_year=2022,
-                                      jersey=12)
+    real_card = real_card or real_state.RealPlayer(
+        gsis_id=CREATE_GSIS, name="Nate New", position="WR", team="CHI", status="ACTIVE", designation="",
+        college="State U", birth_date="2000-04-02", height_in=72, weight_lbs=200, entry_year=2022, jersey=12)
     real = real_state.RealWeek(season=2026, week=3, mode=real_state.CATCH_UP, rosters={"CHI": [real_card]},
-                               depth={"CHI": {"WR": [CREATE_GSIS]}})
-    roster_plan = types.SimpleNamespace(ops=[], creates=[real_card], ps_fill=[],
-                                        review=[{"gsis_id": CREATE_GSIS, "reason": "reviewed"}], unlinked_new=[])
+                               depth={"CHI": {"WR": [real_card.gsis_id]}})
+    roster_plan = roster_plan or types.SimpleNamespace(ops=[], creates=[real_card], ps_fill=[],
+                                                       review=[{"gsis_id": real_card.gsis_id, "reason": "reviewed"}],
+                                                       unlinked_new=[])
     files = {name: types.SimpleNamespace(path=f"/fake/{name}.csv")
              for name in ("rosters", "injuries", "depth", "games", "contracts")}
     adapter = lom.MirrorAdapter(
         store=store, fetch=lambda season, refresh=True: dict(files), read_rows=lambda f: [],
-        sources=lambda f: {"rosters": "sha256"}, build=lambda *a, **k: real, later=lambda *a, **k: {},
+        sources=lambda f: {"rosters": "sha256"}, build=lambda *a, **k: real,
+        later=lambda *a, **k: later or {},
         head_coaches=lambda rows, season, week: {}, plan_rosters=lambda *a: roster_plan,
         read_trades=lambda: [],
-        contract_book=lambda path: types.SimpleNamespace(contract_for=lambda *a, **k: contract()),
+        contract_book=contract_book or (lambda path: types.SimpleNamespace(
+            contract_for=lambda *a, **k: contract())),
         read_staff=lambda: {}, real_staff=lambda *a, **k: [], apply_staff=lambda *a, **k: [],
         ea_iteration=None, ea_items=None, ea_index=None, ea_find=None,
+        match_links=match_links,
         donor_links=lambda cur, links, real_gsis: set(),
         team_codes=lambda snapshot, season=None: {"CHI": 0, "ARI": 1},
         team_ids=lambda cur, snapshot: {0: CHI, 1: AZ},
@@ -468,7 +479,9 @@ def test_a_created_player_gets_a_template_edit_and_a_created_link_with_his_evide
     assert c["edit"]["set"]["FirstName"] == "Nate" and c["edit"]["set"]["LastName"] == "New"
 
     rec = mirror.record()
-    assert rec["links"] == [{"player_id": pid(5), "gsis_id": CREATE_GSIS, "evidence": c["evidence"]}]
+    # F2: a created link is not preloaded; `step_nfl_mirror` appends it only after the signing is accepted
+    assert rec["links"] == []
+    assert mirror.links[CREATE_GSIS] == 5
     assert rec["review"] == [{"gsis_id": CREATE_GSIS, "reason": "reviewed"}]      # U12 shape, surfaced
     json.dumps(rec)                                                               # plan_record / --recover safe
 
@@ -498,6 +511,416 @@ def test_record_written_stores_the_transactions_and_the_created_link(monkeypatch
     assert evidence["name"] == "Nate New"
     txns = [a for s, a in cur.sql if s.startswith("INSERT INTO transactions")]
     assert txns and txns[0][3] == "SIGNED" and txns[0][9] == f"mirror:{SEASON}:3:{CREATE_GSIS}:SIGN"
-    assert any(s.startswith("UPDATE nfl_mirror_moves SET status = 'WRITTEN'") for s, _ in cur.sql)
+    # F3: the move rows take their own outcomes (`detail.tag`), not a blanket WRITTEN
+    updates = [a for s, a in cur.sql if s.startswith("UPDATE nfl_mirror_moves SET status = %s")]
+    assert updates and ("WRITTEN", None, SEASON, 3, f"mirror:create:{CREATE_GSIS}") in updates
     states = [a for s, a in cur.sql if s.startswith("UPDATE nfl_mirror_settings SET injuries_state")]
     assert states == [("OFF", 1)]                                                 # the catch-up turned them off
+
+
+# ------------------------------------------------------------------- audit-4 U6 F1: creation state ----
+def real_card(status="ACTIVE", gsis=CREATE_GSIS, team="CHI", position="WR"):
+    return real_state.RealPlayer(gsis_id=gsis, name="Nate New", position=position, team=team, status=status,
+                                 designation="", college="State U", birth_date="2000-04-02",
+                                 height_in=72, weight_lbs=200, entry_year=2022, jersey=12)
+
+
+@pytest.mark.parametrize("status", ["IR", "PUP", "NFI"])
+def test_f1_a_created_reserve_player_is_reserve_and_injured_in_the_same_edit(status):
+    snap = snapshot()
+    adapter, _ = creation_adapter(
+        snap, real_card=real_card(status=status),
+        later={4: {CREATE_GSIS: {"status": "ACTIVE", "report_status": None}}})
+
+    mirror = adapter.plan_week(FakeCursor(), snap, SEASON, "REGULAR_WEEK", 3)
+
+    c = mirror.creates[0]
+    assert c["list"] == "Roster"
+    assert c["edit"]["set"]["IsInjuredReserve"] is True
+    assert c["edit"]["set"]["InjuryStatus"] == "Injured"
+    assert c["edit"]["set"]["MinInjuryDuration"] == 1          # week 4 is his next healthy week
+    assert mirror.links[CREATE_GSIS] == c["donor_pgid"]        # registered before chart/injury reconciliation
+    assert mirror.injuries == []                               # F1: `_injuries` does not add a duplicate row
+    assert c["donor_pgid"] in mirror.injury_players
+
+
+def test_f1_a_created_active_starter_is_healthy_normalized_and_first_in_the_real_slot():
+    snap = snapshot()
+    for p in snap["players"]:                                  # an injured/IR spare record is fully normalized
+        if p["pgid"] == 5:
+            p["injury"] = {"status": "Injured", "type": "Invalid_", "min_weeks": 3, "max_weeks": 5,
+                           "injured_reserve": True}
+    adapter, _ = creation_adapter(snap, real_card=real_card(status="ACTIVE"))
+
+    mirror = adapter.plan_week(FakeCursor(), snap, SEASON, "REGULAR_WEEK", 3)
+
+    c = mirror.creates[0]
+    assert c["list"] == "Roster"
+    assert c["edit"]["set"]["IsInjuredReserve"] is False
+    assert c["edit"]["set"]["InjuryStatus"] == "Uninjured"
+    assert c["edit"]["set"]["MinInjuryDuration"] == 0 and c["edit"]["set"]["MaxInjuryDuration"] == 0
+
+    p = new_plan(snap)
+    adapter.bind(mirror, p)
+    assert adapter.chart_override(0) == {}                     # not signed yet: no real slot
+    lo.step_nfl_mirror(p, mirror)
+    assert adapter.chart_override(0) == {"WR": [c["donor_pgid"]]}
+
+
+def test_f1_a_created_practice_squad_player_signs_to_the_practice_squad():
+    snap = snapshot()
+    adapter, _ = creation_adapter(snap, real_card=real_card(status="PS"))
+
+    mirror = adapter.plan_week(FakeCursor(), snap, SEASON, "REGULAR_WEEK", 3)
+
+    c = mirror.creates[0]
+    assert c["list"] == "PracticeSquad"
+    p = new_plan(snap)
+    lo.step_nfl_mirror(p, mirror)
+    assert p.signs[0]["list"] == "PracticeSquad" and p.signs[0]["block"] is None
+
+
+# ------------------------------------------------------------------- audit-4 U6 F2: refused creation ----
+def test_f2_a_refused_creation_leaves_no_edit_link_or_transaction():
+    snap = snapshot()
+    mirror = make_mirror(creates=[create_entry()])
+    p = new_plan(snap)
+    assert p.sign_player(5, 1, "Roster", contract(), lo.PRIORITY_JR, "JR signs him first")
+    p.db["mirror"] = mirror.record()
+
+    lo.step_nfl_mirror(p, mirror)
+
+    assert p.edits.get(5) is None                              # no FirstName/LastName edit on JR's player
+    assert p.db["mirror"]["links"] == []
+    assert p.db["mirror"]["transactions"] == []
+    assert p.db["mirror"]["outcomes"][f"mirror:create:{CREATE_GSIS}"][0] == "REFUSED"
+
+
+def test_f2_a_creation_without_a_contract_is_refused_before_the_edit():
+    snap = snapshot()
+    entry = create_entry()
+    entry["contract"] = None
+    mirror = make_mirror(creates=[entry])
+    p = new_plan(snap)
+    p.db["mirror"] = mirror.record()
+
+    lo.step_nfl_mirror(p, mirror)
+
+    assert p.edits.get(5) is None
+    assert p.db["mirror"]["links"] == []
+    outcome = p.db["mirror"]["outcomes"][f"mirror:create:{CREATE_GSIS}"]
+    assert outcome[0] == "REFUSED" and "needs a contract" in outcome[1]
+
+
+def test_f2_a_mirror_sign_cannot_ride_a_release_jr_already_planned():
+    snap = snapshot()
+    p = new_plan(snap)
+    assert p.release_player(1, lo.PRIORITY_JR, "JR cuts him")
+    mirror = make_mirror(ops=[
+        {"kind": "release", "gsis_id": RELEASE_GSIS, "pgid": 1, "why": "off the real roster"},
+        {"kind": "sign", "gsis_id": RELEASE_GSIS, "pgid": 1, "to_index": 1, "list": "Roster",
+         "contract": contract(), "why": "claimed by the real ARI"}])
+    p.db["mirror"] = mirror.record()
+
+    lo.step_nfl_mirror(p, mirror)
+
+    assert p.switches == set()                                 # JR's free-agent outcome stands
+    assert p.roster_status(1) == ("FreeAgent", lo.FREE_AGENT_TEAM)
+    assert p.db["mirror"]["transactions"] == []
+    for kind in ("release", "sign"):
+        assert p.db["mirror"]["outcomes"][f"mirror:{kind}:{RELEASE_GSIS}"][0] == "REFUSED"
+
+
+def test_f2_a_same_owner_release_then_sign_is_still_a_declared_switch():
+    snap = snapshot()
+    p = new_plan(snap)
+    mirror = make_mirror(ops=[
+        {"kind": "release", "gsis_id": RELEASE_GSIS, "pgid": 1, "why": "off the real roster"},
+        {"kind": "sign", "gsis_id": RELEASE_GSIS, "pgid": 1, "to_index": 1, "list": "Roster",
+         "contract": contract(), "why": "claimed by the real ARI"}])
+
+    lo.step_nfl_mirror(p, mirror)
+
+    assert p.switches == {1}
+    assert [t["kind"] for t in p.db["mirror"]["transactions"]] == ["RELEASE", "SIGN"]
+
+
+# ------------------------------------------------------------------- audit-4 U6 F3: move outcomes ----
+def test_f3_a_refused_move_is_recorded_refused_and_only_applied_moves_are_written():
+    snap = snapshot()
+    p = new_plan(snap)
+    assert p.release_player(3, lo.PRIORITY_JR, "JR cuts him first")
+    trade_tag = f"mirror:trade:{TRADE_GSIS}"
+    release_tag = f"mirror:release:{RELEASE_GSIS}"
+    mirror = make_mirror(
+        ops=[{"kind": "trade", "gsis_id": TRADE_GSIS, "pgid": 3, "to_index": 0, "why": "traded"},
+             {"kind": "release", "gsis_id": RELEASE_GSIS, "pgid": 1, "why": "cut by the real team"}],
+        moves=[{"kind": "TRADE", "gsis_id": TRADE_GSIS, "pgid": 3, "detail": {"tag": trade_tag}},
+               {"kind": "RELEASE", "gsis_id": RELEASE_GSIS, "pgid": 1, "detail": {"tag": release_tag}}])
+    p.db["mirror"] = mirror.record()
+
+    lo.step_nfl_mirror(p, mirror)
+
+    assert p.db["mirror"]["outcomes"][trade_tag][0] == "REFUSED"
+    assert p.db["mirror"]["outcomes"][release_tag][0] == "WRITTEN"
+    assert [t["kind"] for t in p.db["mirror"]["transactions"]] == ["RELEASE"]
+
+    rec = {"db": p.db, "season": p.season, "week": p.week, "calendar_year": p.calendar, "edits": {},
+           "team_ids": p.teams, "pid_by_pgid": p.pid_by_pgid, "cap": p.cap,
+           "trade_cap_db": p.trade_cap_db}
+    cur = FakeCursor()
+    lo.record_written(cur, rec, 77)
+    updates = {args[4]: args[0] for s, args in cur.sql
+               if s.startswith("UPDATE nfl_mirror_moves SET status = %s") and args and args[4]}
+    assert updates == {trade_tag: "REFUSED", release_tag: "WRITTEN"}
+    assert not any(s.startswith("UPDATE nfl_mirror_moves SET status = 'WRITTEN'") for s, _ in cur.sql)
+    counts, report = lo._mirror_applied(p.db["mirror"], p.db["mirror"]["outcomes"])
+    assert counts == {"release": 1} and "1 refused" in report
+
+
+def test_f3_every_move_kind_counts_its_own_outcome():
+    kinds = ["CREATE", "SIGN", "RELEASE", "TRADE", "IR", "HEAL", "PS", "CHART", "STAFF", "SETTING"]
+    moves = [{"kind": kind, "detail": {"tag": f"mirror:test:{kind.lower()}"}} for kind in kinds]
+    outcomes = {move["detail"]["tag"]: ["WRITTEN", None] for move in moves}
+    for kind in ("TRADE", "CHART", "SETTING"):
+        outcomes[f"mirror:test:{kind.lower()}"] = ["REFUSED", "refused for the test"]
+    mirror = {"real_week": 3, "mode": real_state.CATCH_UP, "review": [], "moves": moves}
+
+    counts, report = lo._mirror_applied(mirror, outcomes)
+
+    assert counts == {kind.lower(): 1 for kind in kinds if kind not in ("TRADE", "CHART", "SETTING")}
+    assert "3 refused" in report and "5 roster moves written" in report
+
+
+# ------------------------------------------------------------------- audit-4 U6 F4: durable links ----
+def test_f4_an_ordinary_new_link_is_recorded_with_the_linkers_method_and_evidence():
+    snap = snapshot()
+    gsis = "00-U13-MATCH"
+    details = {gsis: {"player_id": pid(4), "gsis_id": gsis, "method": "OVERRIDE", "score": None,
+                      "evidence": {"note": "JR accepted this pair"}}}
+    roster_plan = types.SimpleNamespace(ops=[], creates=[], ps_fill=[], review=[], unlinked_new=[(gsis, 4)])
+    adapter, _ = creation_adapter(snap, roster_plan=roster_plan, match_links=lambda *a: details)
+
+    mirror = adapter.plan_week(FakeCursor(), snap, SEASON, "REGULAR_WEEK", 3)
+
+    assert mirror.record()["links"] == [{"player_id": pid(4), "gsis_id": gsis, "method": "OVERRIDE",
+                                         "score": None, "evidence": {"note": "JR accepted this pair"}}]
+    p = {"db": {"mirror": mirror.record()}, "team_ids": {0: CHI}, "pid_by_pgid": {4: pid(4)}}
+    cur = FakeCursor()
+    lo._record_mirror(cur, p, 77)
+    inserts = [a for s, a in cur.sql if s.startswith("INSERT INTO nfl_player_links")]
+    assert inserts and inserts[0][0] == pid(4) and inserts[0][1] == gsis and inserts[0][2] == "OVERRIDE"
+
+
+def test_f4_every_linked_player_is_excluded_as_a_creation_donor():
+    links = {"00-OLD": 5, "00-NEW": 4}
+    assert lom._donor_links(FakeCursor(), links, {"00-NEW"}) == {5: "00-OLD", 4: "00-NEW"}
+
+
+def test_f4_the_method_comes_from_the_same_linker_call_as_the_diffs_pair():
+    wp = player(7, 0, pos="WR", first="Nate", last="New")
+    wp.update({"college": "State U", "height_in": 72, "weight_lbs": 200, "years_pro": 3})
+    snap = snapshot(players=[wp])
+    card = real_card(status="ACTIVE", gsis="00-9099")
+    real = real_state.RealWeek(season=2026, week=3, mode=real_state.CATCH_UP, rosters={"CHI": [card]})
+
+    details = lom._match_links(snap, real, {}, {"CHI": 0})
+
+    assert (details["00-9099"]["player_id"], details["00-9099"]["method"]) == (7, "EXACT")
+    assert mirror_diff._new_links({7: wp}, {"00-9099": card}, {}, {"CHI": 0}, 2026) == [("00-9099", 7)]
+
+
+# ------------------------------------------------------------------- audit-4 U6 F5: as-of boundary ----
+@pytest.mark.parametrize("week,expected", [(1, "2026-09-15"), (3, "2026-09-29"), (19, "2027-01-19")])
+def test_f5_the_creation_as_of_is_the_diffs_canonical_boundary(week, expected):
+    real = types.SimpleNamespace(season=2026, week=week)
+    assert lom._week_as_of(real) == mirror_diff._week_as_of(real) == expected
+
+
+@pytest.mark.parametrize("deal_date,contract_type", [("2026-09-29", "STANDARD"),
+                                                     ("2026-09-30", "MINIMUM")])
+def test_f5_a_deal_on_the_boundary_is_used_and_the_following_day_is_not(deal_date, contract_type):
+    deal = mirror_contracts.OtcDeal(gsis_id=CREATE_GSIS, team="CHI", year_signed=2026, signed=deal_date,
+                                    years=3, apy=10.0, total=30.0, guaranteed=0.0, draft_year=2022, active=True)
+    book = mirror_contracts.ContractBook({CREATE_GSIS: [deal]})
+    snap = snapshot()
+    adapter, _ = creation_adapter(snap, real_card=real_card(status="ACTIVE"),
+                                  contract_book=lambda path: book)
+
+    mirror = adapter.plan_week(FakeCursor(), snap, SEASON, "REGULAR_WEEK", 3)
+
+    assert mirror.creates[0]["contract"]["contract_type"] == contract_type
+
+
+# ----------------------------------------------------------- audit-4 U6: real-save acceptance ----
+MUBASE = os.path.join(os.environ.get("MU_SAVES_DIR", "/mnt/c/Users/jrere/Documents/Madden NFL 27/saves"),
+                      "CAREER-MUBASE")
+
+
+@pytest.fixture(scope="module")
+def mubase_snapshot():
+    if not shutil.which("node") or not os.path.exists(MUBASE):
+        pytest.skip("node or the CAREER-MUBASE save is not available")
+    return lo.Deps().read_snapshot(MUBASE)
+
+
+def test_f1_a_created_real_reserve_player_is_reserve_and_injured_on_mubase(mubase_snapshot):
+    snap = mubase_snapshot
+    adapter, _ = creation_adapter(snap, real_card=real_card(status="IR"),
+                                  later={4: {CREATE_GSIS: {"status": "ACTIVE", "report_status": None}}})
+    mirror = adapter.plan_week(FakeCursor(), snap, SEASON, "REGULAR_WEEK", 3)
+    if not mirror.creates:
+        pytest.skip("the MUBASE snapshot has no spare free-agent record at WR")
+    c = mirror.creates[0]
+    donor = next(p for p in snap["players"] if p["pgid"] == c["donor_pgid"])
+    assert donor["status"] == "FreeAgent"
+    assert c["edit"]["set"]["IsInjuredReserve"] is True
+    assert c["edit"]["set"]["InjuryStatus"] == "Injured"
+    assert c["edit"]["set"]["MinInjuryDuration"] >= 1
+    assert mirror.links[CREATE_GSIS] == c["donor_pgid"]
+
+
+def test_f1_a_created_real_active_starter_reaches_the_real_slot_on_mubase(mubase_snapshot):
+    snap = mubase_snapshot
+    adapter, _ = creation_adapter(snap, real_card=real_card(status="ACTIVE"))
+    mirror = adapter.plan_week(FakeCursor(), snap, SEASON, "REGULAR_WEEK", 3)
+    if not mirror.creates:
+        pytest.skip("the MUBASE snapshot has no spare free-agent record at WR")
+    c = mirror.creates[0]
+    p = lo.Plan(snap, "REGULAR_WEEK", SEASON, 3, None, "seed", {0: CHI, 1: AZ},
+                {pid(x["pgid"]): x["pgid"] for x in snap["players"]})
+    adapter.bind(mirror, p)
+
+    lo.step_nfl_mirror(p, mirror)
+
+    assert p.roster_status(c["donor_pgid"]) == ("Signed", 0)
+    assert adapter.chart_override(0) == {"WR": [c["donor_pgid"]]}
+    assert p.edits[c["donor_pgid"]]["set"]["IsInjuredReserve"] is False
+
+
+# ----------------------------------------------------------- audit-4 U6: PostgreSQL acceptance ----
+def _scratch_conn():
+    dsn = os.environ.get("MU_U13_TEST_DSN") or os.environ.get("TEST_DATABASE_URL") \
+        or os.environ.get("DATABASE_URL")
+    if not dsn:
+        pytest.skip("no scratch database DSN")
+    import psycopg
+    conn = psycopg.connect(dsn)
+    with conn.cursor() as cur:
+        cur.execute("SELECT to_regclass('public.nfl_mirror_moves') IS NOT NULL")
+        if not cur.fetchone()[0]:
+            conn.close()
+            pytest.skip("the scratch database lacks the nfl_mirror schema")
+    return conn
+
+
+def _run_row(cur, season, week):
+    """A `league_office_runs` row for the week (`nfl_mirror_weeks.run_id` is a foreign key)."""
+    cur.execute("""INSERT INTO league_office_runs (season, week, stage, save_name, status, edits)
+                   VALUES (%s, %s, 'REGULAR_WEEK', 'u13 scratch', 'PLANNED', '{}'::jsonb) RETURNING id""",
+                (season, week))
+    return cur.fetchone()[0]
+
+
+@pytest.mark.integration
+def test_f3_postgres_mark_written_keeps_refused_moves_refused():
+    conn = _scratch_conn()
+    season, week, tags = 2099, 3, {"trade": "mirror:trade:u13-f3a", "release": "mirror:release:u13-f3b",
+                                   "sign": "mirror:sign:u13-f3c"}
+    try:
+        with conn.cursor() as cur:
+            run_id = _run_row(cur, season, week)
+            cur.execute("DELETE FROM nfl_mirror_moves WHERE season = %s AND week = %s", (season, week))
+            mirror_store.record_week(cur, season, week, status="PLANNED", real_week=3, mode="CATCH_UP")
+            mirror_store.record_moves(cur, season, week, [
+                {"kind": "TRADE", "detail": {"tag": tags["trade"]}},
+                {"kind": "RELEASE", "detail": {"tag": tags["release"]}},
+                {"kind": "SIGN", "detail": {"tag": tags["sign"]}}], replace=True)
+            outcomes = {tags["trade"]: ["REFUSED", "P L3 is FreeAgent, not on a roster"],
+                        tags["release"]: ["WRITTEN", None]}
+            mirror_store.mark_written(cur, season, week, run_id, outcomes=outcomes,
+                                      counts={"release": 1}, report="1 roster move written; 1 refused")
+            cur.execute("""SELECT detail ->> 'tag', status, reason FROM nfl_mirror_moves
+                           WHERE season = %s AND week = %s""", (season, week))
+            rows = {tag: (status, reason) for tag, status, reason in cur.fetchall()}
+            assert rows[tags["trade"]][0] == "REFUSED"
+            assert rows[tags["release"]][0] == "WRITTEN"
+            assert rows[tags["sign"]][0] == "SKIPPED" and "no outcome recorded" in rows[tags["sign"]][1]
+            cur.execute("SELECT status, counts, report FROM nfl_mirror_weeks WHERE season = %s AND week = %s",
+                        (season, week))
+            status, counts, report = cur.fetchone()
+            assert (status, counts, report) == ("WRITTEN", {"release": 1}, "1 roster move written; 1 refused")
+            mirror_store.mark_written(cur, season, week, run_id, outcomes=outcomes,
+                                      counts={"release": 1}, report="1 roster move written; 1 refused")
+            cur.execute("""SELECT detail ->> 'tag', status FROM nfl_mirror_moves
+                           WHERE season = %s AND week = %s""", (season, week))
+            assert {tag: status for tag, status in cur.fetchall()} == {
+                tags["trade"]: "REFUSED", tags["release"]: "WRITTEN", tags["sign"]: "SKIPPED"}
+    finally:
+        conn.rollback()
+        conn.close()
+
+
+@pytest.mark.integration
+def test_f4_postgres_a_link_persists_once_with_its_method():
+    conn = _scratch_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM nfl_player_links WHERE gsis_id LIKE '00-U13-%'")
+            cur.execute("DELETE FROM nfl_players WHERE gsis_id LIKE '00-U13-%'")
+            cur.execute("DELETE FROM players WHERE player_name = 'U13 Link'")
+            cur.execute("""INSERT INTO players (player_name, full_name, origin, madden_pgid)
+                           VALUES ('U13 Link', 'U13 Link', 'SAVE', 990013) RETURNING id""")
+            player_id = cur.fetchone()[0]
+            cur.execute("INSERT INTO nfl_players (gsis_id, display_name) VALUES ('00-U13-OVR', 'Override Man')")
+            assert lo._record_link(cur, player_id, "00-U13-OVR", "OVERRIDE", None, {"note": "JR"}) is True
+            assert lo._record_link(cur, player_id, "00-U13-OVR", "OVERRIDE", None, {"note": "JR"}) is False
+            cur.execute("SELECT method, evidence ->> 'note' FROM nfl_player_links WHERE player_id = %s",
+                        (player_id,))
+            assert cur.fetchall() == [("OVERRIDE", "JR")]
+            cur.execute("""INSERT INTO players (player_name, full_name, origin, madden_pgid)
+                           VALUES ('U13 Link', 'U13 Link 2', 'SAVE', 990014) RETURNING id""")
+            other = cur.fetchone()[0]
+            with pytest.raises(ValueError):
+                lo._record_link(cur, other, "00-U13-OVR", "ALIAS", 3, {})
+            with pytest.raises(ValueError):
+                lo._record_link(cur, other, "00-U13-CRE", "CREATED", None, {})
+            assert mirror_store.add_created_link(cur, other, "00-U13-CRE",
+                                                 {"name": "Created Man", "position": "WR"}) is True
+            assert mirror_store.add_created_link(cur, other, "00-U13-CRE",
+                                                 {"name": "Created Man"}) is False
+    finally:
+        conn.rollback()
+        conn.close()
+
+
+@pytest.mark.integration
+def test_f2_postgres_a_refused_creation_persists_no_link_or_transaction():
+    conn = _scratch_conn()
+    season, week, gsis = 2099, 4, "00-U13-REFUSED"
+    snap = snapshot()
+    entry = create_entry()
+    entry["gsis_id"] = gsis
+    mirror = make_mirror(creates=[entry])
+    try:
+        with conn.cursor() as cur:
+            run_id = _run_row(cur, season, week)
+            cur.execute("DELETE FROM nfl_player_links WHERE gsis_id = %s", (gsis,))
+            p = new_plan(snap)
+            assert p.sign_player(5, 1, "Roster", contract(), lo.PRIORITY_JR, "JR signs him first")
+            p.db["mirror"] = mirror.record()
+            lo.step_nfl_mirror(p, mirror)
+            assert p.db["mirror"]["links"] == []
+            plan = {"db": p.db, "team_ids": p.teams, "pid_by_pgid": p.pid_by_pgid}
+            lo._record_mirror(cur, plan, run_id)
+            lo._record_mirror(cur, plan, run_id)                   # recover is idempotent
+            cur.execute("SELECT count(*) FROM nfl_player_links WHERE gsis_id = %s", (gsis,))
+            assert cur.fetchone()[0] == 0
+            cur.execute("""SELECT count(*) FROM transactions
+                           WHERE season = %s AND week = %s AND raw_text = 'NFL mirror'""", (season, week))
+            assert cur.fetchone()[0] == 0
+            assert p.db["mirror"]["outcomes"][f"mirror:create:{gsis}"][0] == "REFUSED"
+            assert p.edits.get(5) is None
+    finally:
+        conn.rollback()
+        conn.close()

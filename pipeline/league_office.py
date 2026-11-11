@@ -605,8 +605,11 @@ class Plan:
             if have[0] == move and have[1] == team_index:
                 return self.note(tag, True, f"same {move} already planned")
             # The one declared double move the writer accepts: one release, then one sign of the same player to a
-            # different team (save_writer.mjs moveConflicts; U11). A same-team promotion stays refused.
-            if have[0] == "release" and move == "sign" and team_index is not None and team_index != have[1]:
+            # different team (save_writer.mjs moveConflicts; U11). A same-team promotion stays refused, and both legs
+            # must be the same owner's (same priority): a mirror sign may not ride a release JR already planned
+            # (audit-4 U6 F2).
+            if (have[0] == "release" and move == "sign" and team_index is not None
+                    and team_index != have[1] and have[2] == priority):
                 self.switches.add(pgid)
                 self.claimed[pgid] = (move, team_index, priority)
                 return self.note(tag, True, f"switch: released from team {have[1]}, signed by team {team_index}")
@@ -622,7 +625,11 @@ class Plan:
         if pgid not in self.players:
             return self.note(tag, False, f"pgid {pgid} not in the save")
         if pgid in self.claimed and self.claimed[pgid][0] == "release":
-            return self.note(tag, True, "already released this write")
+            # Only the same owner may treat its own earlier release as done; another owner's release must not
+            # validate this move (audit-4 U6 F2).
+            if self.claimed[pgid][2] == priority:
+                return self.note(tag, True, "already released this write")
+            return self.note(tag, False, f"{self.name(pgid)} already has a release this write")
         status, team = self.roster_status(pgid)
         if status not in ("Signed", "PracticeSquad") or team is None or team >= FREE_AGENT_TEAM:
             return self.note(tag, False, f"{self.name(pgid)} is {status}, not on a roster")
@@ -1432,11 +1439,17 @@ def step_nfl_mirror(plan, mirror):
 
     Every move claims at PRIORITY_MIRROR with the tag `mirror:<kind>:<gsis_id>`, so first-claim-stands protects JR's
     pending moves and the drift, and `plan.results` records what was refused. The release + sign pair of one player to
-    another team is a declared switch; `Plan._claim` refuses every other double move (U11).
+    another team is a declared switch; `Plan._claim` refuses every other double move (U11). Each move's own outcome
+    is recorded under its tag in the durable operation record, so the ledger can mark a refused move REFUSED instead
+    of WRITTEN (audit-4 U6 F3), and a created player's CREATED link is kept only after his signing is accepted (F2).
     """
     record = plan.db.setdefault("mirror", {}) if isinstance(plan.db, dict) else {}
     transactions = []
+    outcomes = record.setdefault("outcomes", {}) if isinstance(record, dict) else {}
     pid_by_pgid = plan.pid_by_pgid
+
+    def reason_of(tag, fallback):
+        return (plan.results.get(tag) or (False, fallback))[1] or fallback
 
     def move_row(kind, gsis_id, pgid, from_index=None, to_index=None, name=None, position=None):
         player = plan.players.get(pgid) or {}
@@ -1446,7 +1459,8 @@ def step_nfl_mirror(plan, mirror):
                 "from_team_id": plan.teams.get(from_index) if from_index is not None else None,
                 "to_team_id": plan.teams.get(to_index) if to_index is not None else None}
 
-    # 1. created players: one players edit on the donor record, then his signing
+    # 1. created players: the signing is claimed before the donor's fields are edited, and the CREATED link is kept
+    #    only once the signing is accepted (audit-4 U6 F2)
     for c in mirror.creates or []:
         pgid = int(c["edit"]["pgid"])
         gsis = c.get("gsis_id")
@@ -1456,13 +1470,27 @@ def step_nfl_mirror(plan, mirror):
         fields = dict(c["edit"].get("set") or {})
         if not fields:
             plan.warn(f"NFL mirror: created player {name or gsis} has no fields to write")
+            outcomes[tag] = ["SKIPPED", "no fields to write"]
+            continue
+        status, _ = plan.roster_status(pgid)
+        if status not in ("FreeAgent", "Draft"):
+            outcomes[tag] = ["REFUSED", f"{plan.name(pgid)} is {status}, not a free agent or draft prospect"]
+            continue
+        conflict = _planned_field_conflict(plan, pgid, fields)
+        if conflict is not None:
+            outcomes[tag] = ["REFUSED", f"{plan.name(pgid)}: {conflict} is already planned differently this write"]
+            continue
+        reason = f"created from the real {name or gsis} (real week {mirror.real_week})"
+        if not plan.sign_player(pgid, c["team_index"], c.get("list") or "Roster", c.get("contract"),
+                                PRIORITY_MIRROR, reason, tag=tag):
+            outcomes[tag] = ["REFUSED", reason_of(tag, "the signing was refused")]
             continue
         plan.set_fields(pgid, fields, tag=tag)
-        reason = f"created from the real {name or gsis} (real week {mirror.real_week})"
-        if plan.sign_player(pgid, c["team_index"], c.get("list") or "Roster", c.get("contract"), PRIORITY_MIRROR,
-                            reason, tag=tag):
-            transactions.append(move_row("SIGN", gsis, pgid, to_index=c["team_index"], name=name,
-                                         position=c.get("position")))
+        outcomes[tag] = ["WRITTEN", None]
+        transactions.append(move_row("SIGN", gsis, pgid, to_index=c["team_index"], name=name,
+                                     position=c.get("position")))
+        record.setdefault("links", []).append({"player_id": c.get("player_id"), "gsis_id": gsis,
+                                               "method": "CREATED", "evidence": dict(c.get("evidence") or {})})
 
     # 2. the roster diff's own ops (trade / release / sign), in its order, then IR on and off
     for op in mirror.ops or []:
@@ -1474,20 +1502,34 @@ def step_nfl_mirror(plan, mirror):
         if kind == "release":
             if plan.release_player(pgid, PRIORITY_MIRROR, reason, tag=tag):
                 transactions.append(move_row("RELEASE", gsis, pgid, from_index=before[1]))
+                outcomes[tag] = ["WRITTEN", None]
+            else:
+                outcomes[tag] = ["REFUSED", reason_of(tag, "the release was refused")]
         elif kind == "sign":
             if plan.sign_player(pgid, op.get("to_index"), op.get("list") or "Roster", op.get("contract"),
                                 PRIORITY_MIRROR, reason, tag=tag):
                 transactions.append(move_row("SIGN", gsis, pgid, to_index=op.get("to_index")))
+                outcomes[tag] = ["WRITTEN", None]
+            else:
+                outcomes[tag] = ["REFUSED", reason_of(tag, "the signing was refused")]
         elif kind == "trade":
-            if plan.trade_player(pgid, op.get("to_index"), PRIORITY_MIRROR, reason, tag=tag) \
-                    and before[1] != op.get("to_index"):
+            ok = plan.trade_player(pgid, op.get("to_index"), PRIORITY_MIRROR, reason, tag=tag)
+            if ok and before[1] != op.get("to_index"):
                 transactions.append(move_row("TRADE", gsis, pgid, from_index=before[1], to_index=op.get("to_index")))
+                outcomes[tag] = ["WRITTEN", None]
+            elif ok:
+                outcomes[tag] = ["SKIPPED", "already on that team"]
+            else:
+                outcomes[tag] = ["REFUSED", reason_of(tag, "the trade was refused")]
         elif kind == "ir":
-            plan.set_fields(pgid, {"IsInjuredReserve": True}, tag=tag)
+            ok = plan.set_fields(pgid, {"IsInjuredReserve": True}, tag=tag)
+            outcomes[tag] = ["WRITTEN", None] if ok else ["REFUSED", reason_of(tag, "the IR move was refused")]
         elif kind == "activate":
-            plan.set_fields(pgid, {"IsInjuredReserve": False}, tag=tag)
+            ok = plan.set_fields(pgid, {"IsInjuredReserve": False}, tag=tag)
+            outcomes[tag] = ["WRITTEN", None] if ok else ["REFUSED", reason_of(tag, "the activation was refused")]
         else:
             plan.warn(f"NFL mirror: move kind {kind!r} not handled")
+            outcomes[tag] = ["SKIPPED", f"move kind {kind!r} not handled"]
 
     # 3. injury and heal fields (S20: these ride the same write as an activation from step 2)
     for entry in mirror.injuries or []:
@@ -1495,28 +1537,52 @@ def step_nfl_mirror(plan, mirror):
         tag = f"mirror:{entry['kind'].lower()}:{entry.get('gsis_id')}"
         fields = dict(entry.get("fields") or {})
         if not fields:
+            outcomes[tag] = ["SKIPPED", "no injury fields to write"]
             continue
         if pgid in plan.release and pgid not in plan.switches:
             plan.warn(f"NFL mirror: {plan.name(pgid)} is released this write; injury fields not written")
+            outcomes[tag] = ["SKIPPED", "released this write; injury fields not written"]
             continue
-        plan.set_fields(pgid, fields, tag=tag)
+        ok = plan.set_fields(pgid, fields, tag=tag)
+        outcomes[tag] = ["WRITTEN", None] if ok else ["REFUSED", reason_of(tag, "the injury edit was refused")]
 
     # 4. practice-squad fills (resolved at plan time from Deps.free_agent_pool's order)
     for slot in mirror.ps_signs or []:
         pgid = int(slot["pgid"])
+        tag = f"mirror:ps:{pgid}"
         if plan.sign_player(pgid, slot.get("team_index"), "PracticeSquad", None, PRIORITY_MIRROR,
-                            slot.get("why") or "the real practice squad has a player the save lacks",
-                            tag=f"mirror:ps:{pgid}"):
+                            slot.get("why") or "the real practice squad has a player the save lacks", tag=tag):
             plan.counts["mirror_ps"] += 1
+            outcomes[tag] = ["WRITTEN", None]
+        else:
+            outcomes[tag] = ["REFUSED", reason_of(tag, "the practice-squad signing was refused")]
 
     # 5. the two Madden injury switches (off for the catch-up, back on at the first live week; S18/D3/D10)
     setting = mirror.setting
     if setting and setting.get("edit"):
         plan.add_records([setting["edit"]])
         plan.db["mirror_setting"] = {"state": setting["state"], "season": mirror.season, "week": mirror.week}
+        outcomes["mirror:setting"] = ["WRITTEN", None]
+
+    # 6. staff changes were written inside the plan; their own status is the outcome
+    for i, move in enumerate(mirror.staff_moves or []):
+        status = str(move.get("status") or "PLANNED").upper()
+        outcomes[f"mirror:staff:{i}"] = (["WRITTEN", None] if status == "WRITTEN" or status == "PLANNED"
+                                         else [status if status in ("SKIPPED", "REFUSED") else "SKIPPED",
+                                               move.get("reason")])
 
     record["transactions"] = transactions
     plan.counts["mirror_moves"] = len(transactions)
+
+
+def _planned_field_conflict(plan, pgid, fields):
+    """The first field this write already plans with a different value, or None (the preflight before a creation
+    edits its donor; `Plan.set_fields` would raise a CompositionError after the signing was accepted)."""
+    existing = (plan.edits.get(pgid) or {}).get("set") or {}
+    for key, value in fields.items():
+        if key in existing and existing[key] != value:
+            return key
+    return None
 
 
 def step_accepted_offers(plan, offers):
@@ -1697,10 +1763,16 @@ def step_coach_charts(plan, deps, cur, user_teams, jr_charts, schemes):
         for g in rosters.get(team_index, []):
             p = plan.players[g]
             r = p.get("ratings") or {}
-            roster.append({"player_id": g, "position": p.get("position"), "archetype": p.get("archetype"),
+            fields = (plan.edits.get(g) or {}).get("set") or {}
+            # F1: a created player's donor record was just renamed/moved; the engine must chart him at his
+            # post-edit position and injury state, not the spare free agent's.
+            roster.append({"player_id": g, "position": fields.get("Position", p.get("position")),
+                           "archetype": p.get("archetype"),
                            "overall": p.get("overall"), "ratings": r, "age": p.get("age"), "stamina": r.get("Stamina")})
             inj = p.get("injury") or {}
-            out = plan.on_ir(g) or inj.get("status") not in HEALTHY
+            status = fields.get("InjuryStatus", inj.get("status"))
+            ir = fields.get("IsInjuredReserve", plan.on_ir(g))
+            out = bool(ir) or status not in HEALTHY
             injuries[g] = {"out": out, "weeks": 1 if out else 0}
         if not roster:
             continue
@@ -2728,12 +2800,17 @@ def record_written(cur, plan, run_id, deps=None):
 
 
 MIRROR_TXN_TYPES = {"SIGN": "SIGNED", "RELEASE": "RELEASED", "TRADE": "TRADED"}
+LINK_METHODS = ("EXACT", "ESPN", "ALIAS", "FUZZY", "OVERRIDE", "CREATED")
 
 
 def _record_mirror(cur, plan, run_id):
     """The NFL mirror's side effects of a successful write (NFL_WEEKLY_MIRROR_PLAN §2.9): the week row WRITTEN with
-    its run, one `transactions` row per SIGN / RELEASE / TRADE move, the CREATED links of players the mirror made,
-    and the injury-switch state it left the save in."""
+    its run, one `transactions` row per applied SIGN / RELEASE / TRADE, the links of this week's new identities, and
+    the injury-switch state it left the save in.
+
+    The move rows take the outcomes `step_nfl_mirror` recorded (audit-4 U6 F3): a refused move stays REFUSED, a
+    skipped one SKIPPED, and only an applied move is WRITTEN; the week's counts and report describe those applied
+    results. A CHART move is written when `step_coach_charts` actually stored a MU_COACH chart for its team."""
     mirror = (plan.get("db") or {}).get("mirror")
     setting = (plan.get("db") or {}).get("mirror_setting")
     if not mirror and not setting:
@@ -2741,18 +2818,113 @@ def _record_mirror(cur, plan, run_id):
     from engines.nfl_mirror import store as mirror_store
     if mirror:
         season, week = int(mirror["season"]), int(mirror["week"])
-        mirror_store.mark_written(cur, season, week, run_id)
+        outcomes = mirror.get("outcomes") if "moves" in mirror else None
+        if outcomes is None:        # an operation recorded before the per-move outcomes: keep the old marking
+            mirror_store.mark_written(cur, season, week, run_id)
+        else:
+            outcomes = dict(outcomes)
+            _mirror_chart_outcomes(plan, mirror, outcomes)
+            counts, report = _mirror_applied(mirror, outcomes)
+            mirror_store.mark_written(cur, season, week, run_id, outcomes=outcomes, counts=counts, report=report)
         _record_mirror_transactions(cur, mirror)
-        for link in mirror.get("links") or []:
-            if link.get("player_id") is None or not link.get("gsis_id"):
-                continue
-            try:
-                mirror_store.add_created_link(cur, link["player_id"], link["gsis_id"], link.get("evidence") or {})
-            except Exception as e:      # noqa: BLE001 - a link already known must not fail a written save
-                log.warning("NFL mirror: created link %s -> %s not stored (%s)",
-                            link.get("gsis_id"), link["player_id"], e)
+        _record_mirror_links(cur, mirror, mirror_store)
     if setting:
         mirror_store.set_injuries_state(cur, setting["state"])
+
+
+def _mirror_chart_outcomes(plan, mirror, outcomes):
+    """Fill each CHART move's outcome from whether `step_coach_charts` stored a MU_COACH chart for its team."""
+    charts = {int(c["team_index"]) for c in (plan.get("db") or {}).get("charts") or []
+              if c.get("source") == "MU_COACH"}
+    by_team_id = {team_id: int(index) for index, team_id in (plan.get("team_ids") or {}).items()}
+    for move in mirror.get("moves") or []:
+        if move.get("kind") != "CHART":
+            continue
+        tag = (move.get("detail") or {}).get("tag")
+        if not tag or tag in outcomes:
+            continue
+        if by_team_id.get(move.get("to_team_id")) in charts:
+            outcomes[tag] = ["WRITTEN", None]
+        else:
+            outcomes[tag] = ["SKIPPED", "no MU_COACH chart was written for this team"]
+
+
+def _mirror_applied(mirror, outcomes):
+    """(counts, report) for the week row, from the move outcomes: only applied moves are counted by kind."""
+    counts = {}
+    refused = skipped = 0
+    for move in mirror.get("moves") or []:
+        tag = (move.get("detail") or {}).get("tag")
+        outcome = outcomes.get(tag) or [move.get("status") or "SKIPPED"]
+        if isinstance(outcome, (list, tuple)):
+            status = str(outcome[0] if outcome else "SKIPPED")
+        elif isinstance(outcome, dict):
+            status = str(outcome.get("status") or "")
+        else:
+            status = str(outcome or "")
+        status = status.upper()
+        if status == "WRITTEN":
+            kind = str(move.get("kind") or "").lower()
+            counts[kind] = counts.get(kind, 0) + 1
+        elif status == "REFUSED":
+            refused += 1
+        else:
+            skipped += 1
+    counts = {k: v for k, v in sorted(counts.items())}
+    roster_moves = sum(counts.get(k, 0) for k in
+                       ("release", "sign", "trade", "ps", "ir", "activate", "create"))
+    parts = [f"NFL mirror week {mirror.get('real_week')} ({mirror.get('mode')}): "
+             f"{roster_moves} roster moves written",
+             ", ".join(f"{v} {k}" for k, v in sorted(counts.items())) or "none"]
+    review = mirror.get("review") or []
+    candidates = sum(1 for r in review if r.get("status") == "candidate")
+    ambiguous = sum(1 for r in review if r.get("status") == "ambiguous")
+    if candidates or ambiguous:
+        parts.append(f"review: {candidates} cross-position candidate(s), {ambiguous} ambiguous name(s)")
+    staff_written = counts.get("staff", 0)
+    if staff_written:
+        parts.append(f"{staff_written} staff change(s)")
+    if counts.get("setting"):
+        parts.append("injury switches")
+    if refused or skipped:
+        parts.append(f"{refused} refused, {skipped} skipped")
+    return counts, "; ".join(parts)
+
+
+def _record_mirror_links(cur, mirror, mirror_store):
+    """Persist this week's links with the method that decided them (audit-4 U6 F4): a CREATED link through
+    `store.add_created_link`, an ordinary/override one as the linker recorded it."""
+    for link in mirror.get("links") or []:
+        if link.get("player_id") is None or not link.get("gsis_id"):
+            continue
+        method = str(link.get("method") or "CREATED").upper()
+        evidence = dict(link.get("evidence") or {})
+        try:
+            if method == "CREATED":
+                mirror_store.add_created_link(cur, link["player_id"], link["gsis_id"], evidence)
+            else:
+                _record_link(cur, link["player_id"], link["gsis_id"], method, link.get("score"), evidence)
+        except Exception as e:      # noqa: BLE001 - a link already known must not fail a written save
+            log.warning("NFL mirror: link %s -> %s (%s) not stored (%s)",
+                        link.get("gsis_id"), link["player_id"], method, e)
+
+
+def _record_link(cur, player_id, gsis_id, method, score, evidence):
+    """One ordinary `nfl_player_links` row (method EXACT / ESPN / ALIAS / FUZZY / OVERRIDE), idempotently."""
+    if method not in LINK_METHODS or method == "CREATED":
+        raise ValueError(f"unknown link method {method!r}")
+    cur.execute("SELECT player_id, gsis_id FROM nfl_player_links WHERE player_id = %s OR gsis_id = %s",
+                (int(player_id), gsis_id))
+    existing = cur.fetchall() or []
+    if existing:
+        if all(int(p) == int(player_id) and g == gsis_id for p, g in existing):
+            return False
+        raise ValueError(f"player {player_id} or {gsis_id} is already linked: {existing}")
+    from psycopg.types.json import Jsonb
+    cur.execute("""INSERT INTO nfl_player_links (player_id, gsis_id, method, score, evidence)
+                   VALUES (%s, %s, %s, %s, %s)""",
+                (int(player_id), gsis_id, method, score, Jsonb(evidence)))
+    return True
 
 
 def _record_mirror_transactions(cur, mirror):

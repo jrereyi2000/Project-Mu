@@ -6,7 +6,7 @@
     set_injuries_state(cur, state)          set_injuries_field(cur, field_json)
     record_week(cur, season, week, **fields)                     upsert of nfl_mirror_weeks
     record_moves(cur, season, week, moves, replace=False) -> [id]
-    mark_written(cur, season, week, run_id)
+    mark_written(cur, season, week, run_id, outcomes=None, counts=None, report=None)
     week_status(cur, season, week) -> 'PLANNED' | 'WRITTEN' | 'FAILED' | None
     links(cur) -> {gsis_id: pgid}
     add_created_link(cur, player_id, gsis_id, evidence) -> bool
@@ -192,11 +192,45 @@ def record_moves(cur, season, week, moves, replace=False):
     return ids
 
 
-def mark_written(cur, season, week, run_id):
-    """The league office wrote the week: the week row is WRITTEN with its run, and its PLANNED moves are WRITTEN."""
-    record_week(cur, season, week, run_id=run_id, status="WRITTEN")
-    cur.execute("""UPDATE nfl_mirror_moves SET status = 'WRITTEN'
+def mark_written(cur, season, week, run_id, outcomes=None, counts=None, report=None):
+    """The league office wrote the week: the week row is WRITTEN with its run, and its moves take their outcomes.
+
+    Without `outcomes` every PLANNED move becomes WRITTEN (the pre-F3 behaviour). With it, `outcomes` maps each
+    move's `detail.tag` to `[status, reason]` (WRITTEN / SKIPPED / REFUSED), so a refused move stays REFUSED; a
+    PLANNED move with no outcome recorded is SKIPPED rather than claimed as written. `counts` / `report`, when
+    given, describe the applied results on the week row (audit-4 U6 F3)."""
+    fields = {"run_id": run_id, "status": "WRITTEN"}
+    if counts is not None:
+        fields["counts"] = counts
+    if report is not None:
+        fields["report"] = report
+    record_week(cur, season, week, **fields)
+    if outcomes is None:
+        cur.execute("""UPDATE nfl_mirror_moves SET status = 'WRITTEN'
+                       WHERE season = %s AND week = %s AND status = 'PLANNED'""", (int(season), int(week)))
+        return
+    for tag, outcome in outcomes.items():
+        status, reason = _outcome(outcome)
+        cur.execute("""UPDATE nfl_mirror_moves SET status = %s, reason = COALESCE(%s, reason)
+                       WHERE season = %s AND week = %s AND status = 'PLANNED' AND detail ->> 'tag' = %s""",
+                    (status, reason, int(season), int(week), tag))
+    cur.execute("""UPDATE nfl_mirror_moves SET status = 'SKIPPED',
+                       reason = COALESCE(reason, 'no outcome recorded')
                    WHERE season = %s AND week = %s AND status = 'PLANNED'""", (int(season), int(week)))
+
+
+def _outcome(value):
+    """(status, reason) from an operation record's outcome: `[status, reason]` or `{"status", "reason"}`."""
+    if isinstance(value, dict):
+        status, reason = value.get("status"), value.get("reason")
+    elif isinstance(value, (list, tuple)) and value:
+        status, reason = value[0], value[1] if len(value) > 1 else None
+    else:
+        status, reason = value, None
+    status = str(status or "").upper()
+    if status not in ("WRITTEN", "SKIPPED", "REFUSED"):
+        raise ValueError(f"a move outcome must be WRITTEN, SKIPPED or REFUSED, got {value!r}")
+    return status, reason
 
 
 # ------------------------------------------------------------------------------------------------- links ----

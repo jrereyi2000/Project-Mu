@@ -19,7 +19,6 @@ files without saying so.
 """
 import collections
 import dataclasses
-import datetime
 import logging
 
 from engines.nfl_history.teams import UnknownTeam, mu_abbr
@@ -41,12 +40,12 @@ log = logging.getLogger(__name__)
 CATCH_UP = real_state.CATCH_UP
 LIVE = real_state.LIVE
 ROSTER = "Roster"
+PRACTICE_SQUAD = "PracticeSquad"
 HEALTHY = ("Uninjured", None)
 IR_STATUSES = mirror_injuries.IR_STATUSES
 REPORT_STATUSES = ("OUT", "DOUBTFUL")      # a Questionable report plays (D7/D12)
-SEASON_OPENER = "2026-09-09"        # diff.SEASON_OPENER: the 2026 regular-season opener
-WEEK_DAYS = 7
 CREATION_EVIDENCE = "NFL weekly mirror created this player"
+LINK_METHODS = ("EXACT", "ESPN", "ALIAS", "FUZZY", "OVERRIDE")
 
 
 @dataclasses.dataclass
@@ -73,6 +72,7 @@ class MirrorWeek:
     injuries: list = dataclasses.field(default_factory=list)     # INJURY / HEAL dicts
     injury_players: set = dataclasses.field(default_factory=set)  # pgids the mirror decides injury fields for
     review: list = dataclasses.field(default_factory=list)      # diff.plan_rosters review (U12)
+    link_records: list = dataclasses.field(default_factory=list)  # ordinary new links: player_id/gsis/method/evidence
     staff_changes: list = dataclasses.field(default_factory=list)
     staff_moves: list = dataclasses.field(default_factory=list)
     staff_changed: bool = False
@@ -88,13 +88,18 @@ class MirrorWeek:
                 "counts": dict(self.counts), "review": list(self.review), "report": self.report}
 
     def record(self):
-        """`summary` plus what `record_written` needs: created links and the transactions rows to write."""
+        """`summary` plus what `record_written` needs: the links to persist, the move rows and their outcomes.
+
+        A created player's CREATED link is appended by `step_nfl_mirror` only after his signing is accepted, so a
+        refused creation never leaves a link or an edit behind (audit-4 U6 F2). Ordinary new links (`unlinked_new`)
+        are the linker's own decisions and are persisted with their method and evidence (F4)."""
         out = self.summary()
         out["real_week"] = self.real_week
         out["sources"] = dict(self.sources)
         out["transactions"] = []
-        out["links"] = [{"player_id": c.get("player_id"), "gsis_id": c["gsis_id"],
-                         "evidence": dict(c.get("evidence") or {})} for c in self.creates]
+        out["links"] = [dict(link) for link in self.link_records]
+        out["moves"] = [dict(move) for move in self.moves]
+        out["outcomes"] = {}
         return out
 
 
@@ -109,8 +114,8 @@ class MirrorAdapter:
                  read_staff=mirror_staff.read_staff_csv, real_staff=mirror_staff.real_staff_changes,
                  apply_staff=mirror_staff.apply_staff_changes, ea_iteration=ea_ratings.fetch_iteration,
                  ea_items=ea_ratings.read_items, ea_index=ea_ratings.index, ea_find=ea_ratings.find,
-                 donor_links=None, team_codes=None, team_ids=None, user_team_ids=None, pid_by_pgid=None,
-                 free_pool=None, cap=None, refresh=True):
+                 match_links=None, donor_links=None, team_codes=None, team_ids=None, user_team_ids=None,
+                 pid_by_pgid=None, free_pool=None, cap=None, refresh=True):
         self.store = store
         self.fetch = fetch
         self.read_rows = read_rows
@@ -128,6 +133,7 @@ class MirrorAdapter:
         self.ea_items = ea_items
         self.ea_index = ea_index
         self.ea_find = ea_find
+        self.match_links = match_links or _match_links
         self.donor_links = donor_links or _donor_links
         self.team_codes = team_codes or _team_codes
         self.team_ids = team_ids or _team_ids
@@ -168,7 +174,8 @@ class MirrorAdapter:
         """The real chart for `team_index` (depth.real_chart), built from the roster as this write leaves it, or None.
 
         S20: a healed + activated player must be on the chart in the same write, so the injury/IR fields planned for
-        him (`plan.edits`) win over the snapshot's injury."""
+        him (`plan.edits`) win over the snapshot's injury. F1: only a player this write leaves on the team's active
+        roster (a created player who was just signed, not a released or practice-squad man) may take a real slot."""
         mirror, plan = self._mirror, self._plan
         if mirror is None or plan is None:
             return None
@@ -178,7 +185,9 @@ class MirrorAdapter:
         real_depth = (getattr(mirror.real, "depth", None) or {}).get(code) or {}
         if not real_depth:
             return None
-        rows = {}
+        rows, members, gsis_by_pgid = {}, {}, {}
+        for gsis, pgid in (mirror.links or {}).items():
+            gsis_by_pgid.setdefault(pgid, []).append(gsis)
         for pgid, player in plan.players.items():
             inj = dict(player.get("injury") or {})
             fields = (plan.edits.get(pgid) or {}).get("set") or {}
@@ -186,8 +195,11 @@ class MirrorAdapter:
                 inj["status"] = fields["InjuryStatus"]
             if "IsInjuredReserve" in fields:
                 inj["injured_reserve"] = fields["IsInjuredReserve"]
-            rows[pgid] = {"injury": inj}
-        return mirror_depth.real_chart(real_depth, mirror.links, rows)
+            rows[pgid] = {"injury": inj, "position": fields.get("Position", player.get("position"))}
+            if plan.roster_status(pgid) == ("Signed", team_index):
+                for gsis in gsis_by_pgid.get(pgid, ()):
+                    members[gsis] = pgid
+        return mirror_depth.real_chart(real_depth, members, rows)
 
     # -- planning ---------------------------------------------------------------------------------------
     def plan_week(self, cur, snapshot, season, stage, week):
@@ -208,13 +220,20 @@ class MirrorAdapter:
         codes = {index: code for code, index in team_index.items()}
         links = dict(self.store.links(cur) or {})
         roster = self.plan_rosters(snapshot, real, links, self.read_trades(), team_index, book, cap)
+        base_links = dict(links)        # the stored links, before this week's new ones: the linker's own inputs
         for gsis, pgid in roster.unlinked_new or ():
             links.setdefault(gsis, pgid)
 
         pids = self.pid_by_pgid(cur) or {}
-        creates = self._creates(cur, snapshot, real, roster.creates, links, book, cap, team_index, pids)
+        link_records = self._link_records(snapshot, real, base_links, team_index, roster.unlinked_new, pids)
+        creates = self._creates(cur, snapshot, real, later, roster.creates, links, book, cap, team_index, pids)
+        created_gsis = set()
+        for create in creates:      # F1: a created identity is linked before the injury and chart reconciliation
+            links.setdefault(create["gsis_id"], create["donor_pgid"])
+            created_gsis.add(create["gsis_id"])
         ps_signs = self._ps_signs(cur, snapshot, roster.ps_fill, season, stage, week, pids)
-        injuries, injury_players = _injuries(real, later, snapshot, links)
+        injuries, injury_players = _injuries(real, later, snapshot, links, skip=created_gsis)
+        injury_players.update(int(create["donor_pgid"]) for create in creates)
         staff_changes, staff_moves = self._staff(cur, rows["games"], season, real)
         setting = _setting(settings, real.mode)
 
@@ -231,6 +250,7 @@ class MirrorAdapter:
         return MirrorWeek(cur=cur, store=self.store, season=int(season), week=int(week), real_week=real.week,
                           stage=stage, mode=real.mode, real=real, roster=roster, links=links,
                           team_index=team_index, codes=codes, contracts=book, cap=cap, creates=creates,
+                          link_records=link_records,
                           ops=list(roster.ops or []), ps_fill=list(roster.ps_fill or []), ps_signs=ps_signs,
                           injuries=injuries,
                           injury_players=injury_players, review=list(roster.review or []),
@@ -239,7 +259,31 @@ class MirrorAdapter:
                           setting=setting, sources=src, counts=counts, report=report, moves=moves)
 
     # -- created players ---------------------------------------------------------------------------------
-    def _creates(self, cur, snapshot, real, wanted, links, book, cap, team_index, pids):
+    def _link_records(self, snapshot, real, links, team_index, unlinked_new, pids):
+        """The durable `nfl_player_links` rows for this week's ordinary new links, with the linker's own method.
+
+        The diff reports only `(gsis_id, pgid)`; the method/evidence come from the same `link.match` call it made
+        (audit-4 U6 F4), so an accepted override is stored as OVERRIDE and never rewritten as CREATED."""
+        if not unlinked_new:
+            return []
+        details = self.match_links(snapshot, real, links, team_index) or {}
+        out = []
+        for gsis, pgid in unlinked_new:
+            player_id = (pids or {}).get(int(pgid))
+            if player_id is None:
+                log.warning("NFL mirror: no players row for pgid %s; the new link %s is not persisted", pgid, gsis)
+                continue
+            detail = details.get(gsis) or {}
+            method = str(detail.get("method") or "").upper()
+            evidence = dict(detail.get("evidence") or {})
+            if method not in LINK_METHODS:
+                method = "ALIAS"
+                evidence.setdefault("source", "NFL weekly mirror plan_rosters")
+            out.append({"player_id": int(player_id), "gsis_id": gsis, "method": method,
+                        "score": detail.get("score"), "evidence": evidence})
+        return out
+
+    def _creates(self, cur, snapshot, real, later, wanted, links, book, cap, team_index, pids):
         if not wanted:
             return []
         snap_players = _by_pgid(snapshot)
@@ -277,9 +321,11 @@ class MirrorAdapter:
             contract = book.contract_for(real_player.gsis_id, as_of, cap,
                                          years_exp=_years_exp(real_player, real.season),
                                          team=real_player.team)
+            placement, injury_fields = _creation_placement(real_player, real, later)
+            edit["set"].update(injury_fields)
             out.append({"gsis_id": real_player.gsis_id, "real": real_player, "edit": edit,
                         "player_id": (pids or {}).get(int(donor["pgid"])),
-                        "team_index": int(index), "list": ROSTER, "contract": contract,
+                        "team_index": int(index), "list": placement, "contract": contract,
                         "source": edit["source"], "position": position, "donor_pgid": int(donor["pgid"]),
                         "evidence": {"name": real_player.name, "position": position,
                                      "college": real_player.college, "birth_date": real_player.birth_date,
@@ -369,11 +415,32 @@ def _by_pgid(snapshot):
 
 
 def _week_as_of(real):
-    """'YYYY-MM-DD', the last day of `real`'s week (diff._week_as_of's boundary). None outside 2026."""
-    if int(real.season) != 2026:
-        return None
-    opener = datetime.date.fromisoformat(SEASON_OPENER)
-    return (opener + datetime.timedelta(days=WEEK_DAYS * int(real.week))).isoformat()
+    """'YYYY-MM-DD', the last day of `real`'s week. F5: the same canonical boundary the roster diff uses for an
+    ordinary signing's contract (`diff._week_as_of`), so a created player's deal cannot be a day later."""
+    return mirror_diff._week_as_of(real)
+
+
+def _creation_placement(real_player, real, later):
+    """(list, injury fields) the real week places a created player on: PS, IR-family reserve, a weekly injury
+    report, or a healthy active roster (audit-4 U6 F1).
+
+    The donor record may carry an old injury or IR flag, so the fields always say what the real week says; a reserve
+    status is `IsInjuredReserve` True, an active player False."""
+    report = (getattr(real, "injuries", None) or {}).get(real_player.gsis_id)
+    report_status = str(getattr(report, "report_status", None) or "").strip().upper()
+    catch_up = getattr(real, "mode", CATCH_UP) == CATCH_UP
+    reserve = real_player.status in IR_STATUSES
+    hurt = reserve or (catch_up and report_status in REPORT_STATUSES)
+    placement = PRACTICE_SQUAD if real_player.status == "PS" else ROSTER
+    if not hurt:
+        return placement, {"IsInjuredReserve": False, **mirror_injuries.HEAL_FIELDS}
+    if catch_up:
+        weeks = max(1, mirror_injuries.weeks_until_back(real_player.gsis_id, real.week, later))
+    else:
+        weeks = mirror_injuries.estimate_weeks(report, real_player.status, [])
+    fields = dict(mirror_injuries.injury_fields(weeks, getattr(report, "body_part", None)),
+                  IsInjuredReserve=reserve)
+    return placement, fields
 
 
 def _years_exp(player, season):
@@ -407,7 +474,7 @@ def _needs_heal(current):
             or int(current.get("max_weeks") or 0) > 0)
 
 
-def _injuries(real, later, snapshot, links):
+def _injuries(real, later, snapshot, links, skip=()):
     """([INJURY / HEAL dicts], pgids whose injury fields the mirror decides).
 
     CATCH_UP (D7): a linked real player on a roster is hurt now when his status is IR / PUP / NFI or this week's
@@ -415,13 +482,14 @@ def _injuries(real, later, snapshot, links):
     current week). He is healed when the save still has him hurt. LIVE (D12): only IR / PUP / NFI placements are
     copied (`estimate_weeks` gives 4), no weekly report is copied, and Madden's own injuries are never healed. Only
     players whose fields would change carry an edit; every player the mirror decided is claimed so a LIVE week's
-    `step_injuries` leaves his fields alone."""
+    `step_injuries` leaves his fields alone. `skip` names the real players created this week: `_creates` already put
+    the real injury/IR state in their edit, so a second row would clash (F1)."""
     snap = _by_pgid(snapshot)
     out, players, seen = [], set(), set()
     catch_up = real.mode == CATCH_UP
     for code in sorted(real.rosters or {}):
         for player in real.rosters[code]:
-            if player.gsis_id in seen:
+            if player.gsis_id in seen or player.gsis_id in (skip or ()):
                 continue
             seen.add(player.gsis_id)
             pgid = (links or {}).get(player.gsis_id)
@@ -500,7 +568,8 @@ def _moves(real, roster, ps_signs, creates, injuries, staff_moves, setting, team
     out = []
     for op in roster.ops or []:
         player = players.get(op["pgid"]) or {}
-        detail = {"why": op.get("why"), "list": op.get("list")}
+        tag = f"mirror:{op['kind']}:{op.get('gsis_id')}"
+        detail = {"why": op.get("why"), "list": op.get("list"), "tag": tag}
         base = {"gsis_id": op.get("gsis_id"), "pgid": op.get("pgid"), "player_id": player_id(op.get("pgid")),
                 "detail": detail, "reason": op.get("why")}
         if op["kind"] == "release":
@@ -516,28 +585,35 @@ def _moves(real, roster, ps_signs, creates, injuries, staff_moves, setting, team
         elif op["kind"] == "activate":
             out.append(dict(base, kind="ACTIVATE", to_team_id=team_id(op.get("to_index"))))
     for create in creates:
+        tag = f"mirror:create:{create['gsis_id']}"
         out.append({"kind": "CREATE", "gsis_id": create["gsis_id"], "pgid": create["donor_pgid"],
                     "player_id": player_id(create["donor_pgid"]),
-                    "to_team_id": team_id(create["team_index"]), "detail": create["evidence"],
-                    "reason": CREATION_EVIDENCE})
+                    "to_team_id": team_id(create["team_index"]),
+                    "detail": dict(create["evidence"], tag=tag), "reason": CREATION_EVIDENCE})
     for injury in injuries:
+        tag = f"mirror:{injury['kind'].lower()}:{injury['gsis_id']}"
         out.append({"kind": injury["kind"], "gsis_id": injury["gsis_id"], "pgid": injury["pgid"],
                     "player_id": player_id(injury["pgid"]),
-                    "detail": {"weeks": injury["weeks"], "fields": injury["fields"]},
+                    "detail": {"weeks": injury["weeks"], "fields": injury["fields"], "tag": tag},
                     "reason": injury["why"]})
     for slot in ps_signs or []:
+        tag = f"mirror:ps:{int(slot['pgid'])}"
         out.append({"kind": "PS", "pgid": int(slot["pgid"]), "player_id": player_id(int(slot["pgid"])),
                     "to_team_id": team_id(slot.get("team_index")),
-                    "detail": {"position": (players.get(int(slot["pgid"])) or {}).get("position")},
+                    "detail": {"position": (players.get(int(slot["pgid"])) or {}).get("position"), "tag": tag},
                     "reason": slot.get("why") or "real practice squad"})
-    for move in staff_moves or []:
-        out.append(dict(move))
+    for i, move in enumerate(staff_moves or []):
+        tagged = dict(move)
+        tagged["detail"] = dict(move.get("detail") or {}, tag=f"mirror:staff:{i}")
+        out.append(tagged)
     if setting is not None:
-        out.append({"kind": "SETTING", "detail": {"state": setting["state"], "fields": setting["edit"]["set"]},
+        out.append({"kind": "SETTING", "detail": {"state": setting["state"], "fields": setting["edit"]["set"],
+                                                  "tag": "mirror:setting"},
                     "reason": f"mirror {real.mode.lower()} week: injury switches {setting['state'].lower()}"})
     for code in sorted(real.depth or {}):
         out.append({"kind": "CHART", "to_team_id": team_id((team_index or {}).get(code)),
-                    "detail": {"source": "MU_COACH", "real_slots": len(real.depth.get(code) or {})},
+                    "detail": {"source": "MU_COACH", "real_slots": len(real.depth.get(code) or {}),
+                               "tag": f"mirror:chart:{code}"},
                     "reason": "the real chart merged with the engine's"})
     return out
 
@@ -583,27 +659,35 @@ def _league_cap(snapshot):
     return lo.league_cap(None, snapshot)
 
 
-def _donor_links(cur, links, real_gsis):
-    """{pgid: gsis_id} for every linked person with a 2025-2026 roster row (the pgids pick_donors must not reuse).
+def _match_links(snapshot, real, links, team_index):
+    """{gsis_id: link.match item} for this week's ordinary new links (the diff's inputs, re-run for method/evidence).
 
-    This week's real rosters are roster rows; nfl_players.last_season >= 2025 covers the rest. A database without
-    nfl_players blocks every link (no donor is better than overwriting a linked man)."""
-    blocked = {int(pgid): gsis for gsis, pgid in (links or {}).items()
-               if gsis in (real_gsis or ())}
-    if not links:
-        return blocked
-    cur.execute("SELECT to_regclass('nfl_players') IS NOT NULL")
-    row = cur.fetchone()
-    if not row or not row[0]:
-        log.warning("nfl_players missing: every linked player is blocked as a creation donor")
-        return {int(pgid): gsis for gsis, pgid in (links or {}).items()}
-    cur.execute("SELECT gsis_id FROM nfl_players WHERE last_season >= 2025 AND gsis_id = ANY(%s)",
-                (list(links),))
-    for (gsis,) in cur.fetchall() or ():
-        pgid = (links or {}).get(gsis)
-        if pgid is not None:
-            blocked[int(pgid)] = gsis
-    return blocked
+    `diff.plan_rosters` reports only the accepted `(gsis_id, pgid)` pairs; the linker's method (OVERRIDE, ESPN,
+    EXACT, ALIAS, FUZZY) and evidence are needed to persist the link honestly (audit-4 U6 F4). The call is the same
+    one `diff._new_links` makes, so it decides the same pairs."""
+    from engines.nfl_history import link as link_engine
+    players = _by_pgid(snapshot)
+    real_by_gsis = mirror_diff._real_by_gsis(real)
+    linked_pgids = set((links or {}).values())
+    codes = {int(i): code for code, i in (team_index or {}).items()}
+    people = [mirror_diff._real_person(p) for gsis, p in sorted(real_by_gsis.items()) if gsis not in (links or {})]
+    mu = [mirror_diff._mu_player(pgid, p, codes, int(real.season))
+          for pgid, p in sorted(players.items())
+          if pgid not in linked_pgids and p.get("status") not in (None, "Retired", "Draft")]
+    if not people or not mu:
+        return {}
+    result = link_engine.match(mu, people, link_engine.read_overrides())
+    return {item["gsis_id"]: item for item in result.links}
+
+
+def _donor_links(cur, links, real_gsis):
+    """{pgid: gsis_id} for every linked person: a linked record is never reused as a creation donor.
+
+    `store.add_created_link` refuses a player already linked elsewhere, so reusing a retired-linked donor would
+    leave the created person's identity unrecorded (`_record_mirror` used to log the ValueError after the save had
+    already been replaced). Excluding every linked donor is the safe half of audit-4 U6 F4's two options; identity
+    reuse with preserved attribution needs a store change the batch does not make."""
+    return {int(pgid): gsis for gsis, pgid in (links or {}).items() if pgid is not None}
 
 
 def _team_ids(cur, snapshot):
