@@ -1904,6 +1904,35 @@ def test_the_progression_top_up_skips_an_unmanaged_database():
     assert lo.bootstrap_untracked_players(cur, {"players": [{"pgid": 1}]}, "REGULAR_WEEK", 2026, "sha") == 0
 
 
+def test_the_progression_top_up_failure_is_a_warning_not_a_failed_plan(monkeypatch, caplog):
+    """M-0314 F3: the top-up is a heal. An exception inside it is a named WARN and the plan proceeds; the next
+    attempt retries, and a state that really is missing still fails `prepare_pass` (the honest failure). The
+    call runs in a savepoint so the plan's own transaction survives the error."""
+    from engines import progression as pg
+    from engines import progression_checkpoint as pc
+
+    class Cur:
+        def __init__(self):
+            self.sql = []
+
+        def execute(self, sql, args=None):
+            self.sql.append(" ".join(sql.split()))
+
+        def fetchone(self):
+            return (1,)                       # the database already holds progression state
+
+    def boom(*a, **k):
+        raise RuntimeError("bootstrap exploded")
+
+    monkeypatch.setattr(pg, "managed_progression_state", lambda cur: True)
+    monkeypatch.setattr(pc, "bootstrap_untracked", boom)
+    cur = Cur()
+    with caplog.at_level("WARNING"):
+        assert lo.bootstrap_untracked_players(cur, {"players": [{"pgid": 1}]}, "REGULAR_WEEK", 2026, "sha") == 0
+    assert any(r.levelname == "WARNING" and "bootstrap exploded" in str(r.message) for r in caplog.records)
+    assert any(s.startswith("SAVEPOINT") for s in cur.sql), "an error must not abort the plan's transaction"
+
+
 @pytest.mark.integration
 def test_the_progression_top_up_heals_a_never_tracked_player_on_real_postgres():
     """The same top-up on a real scratch database: a loaded player with no state and no event gets state at the

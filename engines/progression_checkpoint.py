@@ -473,18 +473,20 @@ def bootstrap_newcomers(cur, snapshot, season, *, source_fingerprint, pgid_by_pl
 def bootstrap_untracked(cur, snapshot, season, *, source_fingerprint):
     """Seed every player in `snapshot` that Mu has never tracked (JR, 2026-11-10).
 
-    "Never tracked" means no `progression_player_state` row and no `progression_events` row. The rule is
-    durable: a newcomer is healed at any later ingest too, not only on the load that created him, so a
-    player stranded by an older load (or by an unrecognised stage, a missing rating or an exception) is
-    picked up next time instead of failing every progression plan for the whole league. A player with
-    event history but no state is deliberately left alone — `prepare_pass` keeps refusing him.
-    Returns (seeded rows, pgids the snapshot has no ratings for).
+    "Never tracked" means no `progression_player_state` row and no `progression_events` row, and the player
+    is not retired: a row with `players.retired_season` set is not a live newcomer even when the save still
+    lists him, so he is left alone. The rule is durable: a newcomer is healed at any later ingest too, not
+    only on the load that created him, so a player stranded by an older load (or by an unrecognised stage, a
+    missing rating or an exception) is picked up next time instead of failing every progression plan for the
+    whole league. A player with event history but no state is deliberately left alone — `prepare_pass` keeps
+    refusing him. Returns (seeded rows, pgids the snapshot has no ratings for).
     """
     players = {p["pgid"]: p for p in snapshot.get("players", []) if p.get("pgid", 0) > 0}
     if not players:
         return [], []
     cur.execute("""SELECT p.id, p.madden_pgid FROM players p
                    WHERE p.madden_pgid = ANY(%s)
+                     AND p.retired_season IS NULL
                      AND NOT EXISTS (SELECT 1 FROM progression_player_state s WHERE s.player_id = p.id)
                      AND NOT EXISTS (SELECT 1 FROM progression_events e WHERE e.player_id = p.id)""",
                 (list(players),))

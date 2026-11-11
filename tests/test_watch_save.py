@@ -1470,10 +1470,11 @@ def test_a_tuning_clone_is_refused_before_routing(tmp_path, monkeypatch):
     assert called == []                                       # routing never ran
 
 
-class LockTuningDraftOrderTest(unittest.TestCase):
+class LockTuningDraftOrderWiringTest(unittest.TestCase):
     """P2-03: a tuning ingest at the DRAFT stop locks the coming draft's order first, because a
     tuning league has nobody to press the Draft Room's button and the league office has no picks
-    to write without it."""
+    to write without it. (Renamed from LockTuningDraftOrderTest, which a later class of the same name
+    shadowed, so these four wiring tests were never collected.)"""
 
     def setUp(self):
         self.log = []
@@ -1484,12 +1485,13 @@ class LockTuningDraftOrderTest(unittest.TestCase):
         lock = m.patch("engines.draft_room.lock_order").start()
         self.addCleanup(m.patch.stopall)
         cur = m.MagicMock()
-        cur.execute.return_value.fetchone.side_effect = list(fetchone_rows)
+        cur.execute.return_value = cur
+        cur.fetchone.side_effect = list(fetchone_rows)
         connect.return_value.__enter__.return_value.cursor.return_value.__enter__.return_value = cur
         return connect, lock
 
     def test_it_locks_the_coming_draft_in_a_tuning_database(self):
-        _, lock = self._connect((2026,), (0,), (672,))
+        _, lock = self._connect((2026,), (0, 224), (672,))
         n = ws.lock_tuning_draft_order("dbname=madden_tune_a", "madden_tune_a", log_fn=self.log.append)
         self.assertEqual(n, 672)
         lock.assert_called_once()
@@ -1504,7 +1506,7 @@ class LockTuningDraftOrderTest(unittest.TestCase):
         lock.assert_not_called()
 
     def test_an_already_locked_order_is_left_alone(self):
-        _, lock = self._connect((2026,), (672,))
+        _, lock = self._connect((2026,), (224, 224))
         self.assertEqual(ws.lock_tuning_draft_order("dbname=madden_tune_a", "madden_tune_a",
                                                     log_fn=self.log.append), 0)
         lock.assert_not_called()
@@ -1700,19 +1702,20 @@ class LockTuningDraftOrderTest(unittest.TestCase):
 
     `compensatory_picks_run` inserts the comp picks numbered at the free-agency waves, before the draft.
     Counting any numbered row read madden_tune_p2g's 2027 class as "already locked" (10 comps numbered,
-    224 standard rows NULL), so the league office signed only the 10 comps (2026-11-10, M-0272)."""
+    224 standard rows NULL), so the league office signed only the 10 comps (2026-11-10, M-0272). The
+    guard skips only when every standard row of the class is numbered (M-0314 F1)."""
 
-    def fake_connection(self, season, locked, total):
+    def fake_connection(self, season, numbered, total, after=None):
         cur = mock.MagicMock()
         cur.execute.return_value = cur
-        cur.fetchone.side_effect = [(season,), (locked,), (total,)]
+        cur.fetchone.side_effect = [(season,), (numbered, total), (total if after is None else after,)]
         connect = mock.patch("psycopg.connect").start()
         connect.return_value.__enter__.return_value.cursor.return_value.__enter__.return_value = cur
         self.addCleanup(mock.patch.stopall)
         return cur
 
     def test_a_fully_comped_class_is_not_already_locked(self):
-        cur = self.fake_connection(2026, 0, 234)          # 0 standard picks numbered, 10 comps only
+        cur = self.fake_connection(2026, 0, 224, after=234)   # 0 standard picks numbered, 10 comps only
         lock = mock.patch("engines.draft_room.lock_order").start()
         n = ws.lock_tuning_draft_order("host=localhost dbname=madden_tune_x user=postgres", "madden_tune_x",
                                        log_fn=lambda *_: None)
@@ -1721,8 +1724,15 @@ class LockTuningDraftOrderTest(unittest.TestCase):
         guard = str(cur.execute.call_args_list[1][0][0])
         self.assertIn("pick_suffix", guard, "the lock guard must count standard picks, not comps")
 
+    def test_a_partially_numbered_class_is_still_locked(self):
+        self.fake_connection(2026, 1, 2)                  # one numbered standard row of two is not a lock
+        lock = mock.patch("engines.draft_room.lock_order").start()
+        ws.lock_tuning_draft_order("host=localhost dbname=madden_tune_x user=postgres", "madden_tune_x",
+                                   log_fn=lambda *_: None)
+        lock.assert_called_once()
+
     def test_an_already_locked_class_is_left_alone(self):
-        cur = self.fake_connection(2026, 224, None)
+        self.fake_connection(2026, 224, 224)
         lock = mock.patch("engines.draft_room.lock_order").start()
         self.assertEqual(ws.lock_tuning_draft_order("host=localhost dbname=madden_tune_x user=postgres",
                                                     "madden_tune_x", log_fn=lambda *_: None), 0)
@@ -1760,6 +1770,132 @@ class StandardPicksLockedRealDbTest(unittest.TestCase):
         self.add(1, 901, None, "SEED", "")
         self.add(1, 902, None, "SEED", "")
         self.add(5, 901, 161, "COMP", "01")
-        self.assertEqual(ws.standard_picks_locked(self.cur, 2099), 0)
+        self.assertEqual(ws.standard_picks_locked(self.cur, 2099), (0, 2))   # (numbered, total) standard rows
         self.cur.execute("UPDATE draft_picks SET overall_pick = 1 WHERE draft_season = 2099 AND pick_suffix = ''")
-        self.assertEqual(ws.standard_picks_locked(self.cur, 2099), 2)
+        self.assertEqual(ws.standard_picks_locked(self.cur, 2099), (2, 2))
+
+
+@pytest.mark.integration
+class LockTuningDraftOrderRealDbTest(unittest.TestCase):
+    """M-0314 F1/F2: the lock guard on real Postgres, by what it does rather than by the SQL it contains.
+
+    A class with two NULL standard rows and one numbered comp must still be locked, and so must a class whose
+    standard rows are only partly numbered (the F1 bug); only a class whose every standard row is numbered is
+    left alone. On the parent the partial step fails with "already locked (1 picks)"."""
+
+    SEASON, DRAFT = 2199, 2200
+
+    def setUp(self):
+        import psycopg
+        dsn = os.environ.get("MU_PROGRESSION_STATE_TEST_DSN")
+        if not dsn:
+            self.skipTest("explicit scratch DSN not supplied")
+        self.dsn = dsn
+        self.conn = psycopg.connect(dsn)
+        name = self.conn.execute("SELECT current_database()").fetchone()[0]
+        if "test" not in name or name == "madden_2036":
+            self.skipTest("explicitly named scratch database required")
+        self.cur = self.conn.cursor()
+        if not self.cur.execute("SELECT to_regclass('public.draft_picks') IS NOT NULL "
+                                "AND to_regclass('public.teams') IS NOT NULL "
+                                "AND to_regclass('public.league_state') IS NOT NULL").fetchone()[0]:
+            self.skipTest("the scratch database lacks draft_picks, teams or league_state")
+        self.previous = self.cur.execute("SELECT current_season FROM league_state WHERE id = 1").fetchone()
+        self.cur.execute("INSERT INTO teams (id, name, abbreviation) VALUES "
+                         "(901, 'Alpha', 'AAA'), (902, 'Beta', 'BBB') ON CONFLICT DO NOTHING")
+        self.cur.execute("DELETE FROM draft_picks WHERE draft_season = %s", (self.DRAFT,))
+        self.cur.execute("INSERT INTO draft_picks (draft_season, round, original_team_id, owner_team_id, "
+                         "overall_pick, source, pick_suffix) VALUES "
+                         "(%s, 1, 901, 901, NULL, 'SEED', ''), (%s, 1, 902, 902, NULL, 'SEED', ''), "
+                         "(%s, 5, 901, 901, 161, 'COMP', '01')", (self.DRAFT, self.DRAFT, self.DRAFT))
+        self.cur.execute("INSERT INTO league_state (id, current_season) VALUES (1, %s) "
+                         "ON CONFLICT (id) DO UPDATE SET current_season = EXCLUDED.current_season", (self.SEASON,))
+        self.conn.commit()
+
+    def tearDown(self):
+        try:
+            self.cur.execute("DELETE FROM draft_picks WHERE draft_season = %s", (self.DRAFT,))
+            if self.previous:
+                self.cur.execute("UPDATE league_state SET current_season = %s WHERE id = 1", (self.previous[0],))
+            else:
+                self.cur.execute("DELETE FROM league_state WHERE id = 1")
+            self.conn.commit()
+        finally:
+            self.conn.close()
+
+    def test_a_partially_numbered_class_is_locked_and_a_full_one_is_not(self):
+        # Comps numbered and every standard row NULL: not a lock (M-0272's case)
+        with mock.patch("engines.draft_room.lock_order") as lock:
+            n = ws.lock_tuning_draft_order(self.dsn, "madden_tune_scratch", log_fn=lambda *_: None)
+        lock.assert_called_once()
+        self.assertEqual(lock.call_args[0][1], self.DRAFT)
+        self.assertEqual(n, 1)                        # the numbered comp is the only numbered pick (lock mocked)
+
+        # One numbered standard row of two: still not a lock (M-0314 F1)
+        self.cur.execute("UPDATE draft_picks SET overall_pick = 1 WHERE draft_season = %s "
+                         "AND round = 1 AND original_team_id = 901", (self.DRAFT,))
+        self.conn.commit()                            # the guard opens its own connection
+        with mock.patch("engines.draft_room.lock_order") as lock:
+            n = ws.lock_tuning_draft_order(self.dsn, "madden_tune_scratch", log_fn=lambda *_: None)
+        lock.assert_called_once()
+        self.assertEqual(n, 2)                        # the numbered standard row and the comp
+
+        # Every standard row numbered: locked, left alone
+        self.cur.execute("UPDATE draft_picks SET overall_pick = 1 "
+                         "WHERE draft_season = %s AND COALESCE(pick_suffix, '') = ''", (self.DRAFT,))
+        self.conn.commit()
+        with mock.patch("engines.draft_room.lock_order") as lock:
+            self.assertEqual(ws.lock_tuning_draft_order(self.dsn, "madden_tune_scratch",
+                                                        log_fn=lambda *_: None), 0)
+        lock.assert_not_called()
+
+
+@pytest.mark.integration
+class BootstrapUntrackedRetiredRealDbTest(unittest.TestCase):
+    """M-0314 F4: a player the database records as retired (`players.retired_season`) is not a live
+    newcomer, so `bootstrap_untracked` leaves him alone even when the save still lists him."""
+
+    def setUp(self):
+        import psycopg
+        dsn = os.environ.get("MU_PROGRESSION_STATE_TEST_DSN")
+        if not dsn:
+            self.skipTest("explicit scratch DSN not supplied")
+        self.conn = psycopg.connect(dsn)
+        name = self.conn.execute("SELECT current_database()").fetchone()[0]
+        if "test" not in name or name == "madden_2036":
+            self.skipTest("explicitly named scratch database required")
+        self.cur = self.conn.cursor()
+        if not self.cur.execute("SELECT to_regclass('public.players') IS NOT NULL "
+                                "AND to_regclass('public.progression_player_state') IS NOT NULL "
+                                "AND to_regclass('public.progression_events') IS NOT NULL").fetchone()[0]:
+            self.skipTest("the scratch database lacks the players or progression schema")
+        self._clean()
+        self.cur.execute("INSERT INTO players (player_name, full_name, origin, madden_pgid, retired_season) "
+                         "VALUES ('R','Retired','SAVE',990011,2026), ('L','Live','SAVE',990012,NULL) RETURNING id")
+        self.retired_id, self.live_id = [r[0] for r in self.cur.fetchall()]
+
+    def _clean(self):
+        self.cur.execute("DELETE FROM progression_player_state WHERE player_id IN "
+                         "(SELECT id FROM players WHERE madden_pgid IN (990011, 990012))")
+        self.cur.execute("DELETE FROM progression_events WHERE player_id IN "
+                         "(SELECT id FROM players WHERE madden_pgid IN (990011, 990012))")
+        self.cur.execute("DELETE FROM players WHERE madden_pgid IN (990011, 990012)")
+
+    def tearDown(self):
+        try:
+            self.conn.rollback()
+            self._clean()
+            self.conn.commit()
+        finally:
+            self.conn.close()
+
+    def test_a_retired_player_is_not_seeded_as_a_newcomer(self):
+        from engines import progression_checkpoint as pc
+        snapshot = {"players": [
+            {"pgid": 990011, "ratings": {"Speed": 70, "Awareness": 75}, "overall": 72, "age": 33,
+             "dev_trait": "Normal", "years_pro": 12},
+            {"pgid": 990012, "ratings": {"Speed": 88, "Awareness": 68}, "overall": 66, "age": 23,
+             "dev_trait": "College_Impact", "years_pro": 0}]}
+        rows, no_ratings = pc.bootstrap_untracked(self.cur, snapshot, 2027, source_fingerprint="sha-retired")
+        self.assertEqual([r["player_id"] for r in rows], [self.live_id])
+        self.assertEqual(no_ratings, [])
