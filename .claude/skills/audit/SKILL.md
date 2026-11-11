@@ -65,6 +65,17 @@ The auditor runs on JR's Claude plan. The DeepSeek builders don't, so they keep 
    - every finding, with severity (HIGH first) and `file:line`;
    - the acceptance rule and the check that proves the fix;
    - the report path.
+
+   **The report is a complete fix brief, not a list of symptoms** (JR, 2026-11-10). Each round trip with a DeepSeek builder costs a review cycle, so do the research up front: the builder should be able to fix everything from the report alone, in one pass, and the fix should pass your re-check the first time. For each finding the report gives:
+   - **What's wrong and why**, traced to the root cause, not only where it surfaced. Name every caller and code path that shares the fault (grep for them), so the fix covers all of them, not just the one you hit.
+   - **The repro**: the exact commands, scratch DB recipe, save copy and inputs you used, and the output you saw. Put any repro script in the report's folder and give its path.
+   - **The test the builder must add**: what it sets up, what it asserts, and that it must run against real Postgres (and a real save copy where the save is involved), never only fakes. Say which existing tests are fakes that hid the bug.
+   - **The expected values** after the fix: counts, rows, statuses or table lines, so "done" is a number, not a judgement.
+   - **The fix you'd expect**, when the code makes it clear: the function to change, the shape of the change, and the edge cases it must handle (retries, reruns, empty inputs, the other stages or modes that take the same path). Mark it as a suggestion; the builder owns the code.
+   - **What you checked and found fine**, so the builder doesn't re-investigate it and knows the rest of the batch stands.
+   - **Open design questions** you've sent to JR, so the builder knows what not to guess at.
+
+   Before posting, reread the report as the builder: if a fix could pass every test you name and still fail your re-check, add the missing check now. The board `HANDOFF` stays short (findings, severities, the acceptance checks, the report path); the detail lives in the report.
 6. **Design questions go to JR, not the builder.** A finding the plan doesn't settle (a rule, a tuning number, behaviour JR hasn't decided) goes to JR in chat. Relay JR's answer on the board marked "relayed from JR".
 
 ## 5. Verifying fixes
@@ -73,7 +84,7 @@ When a builder posts a fix NOTICE:
 1. Pin a worktree at its sha.
 2. Rerun your repro and the same check tool the builder ran.
 3. Check the new test fails on the parent commit.
-4. Reply with an `ANSWER` giving each item as **CLOSED** (with the evidence), **PARTIAL** or **OPEN** (what's still wrong, at `file:line`).
+4. Reply with an `ANSWER` giving each item as **CLOSED** (with the evidence), **PARTIAL** or **OPEN** (what's still wrong, at `file:line`). A PARTIAL or OPEN item gets the same full fix brief as a new finding (§4.5), updated for what the fix changed.
 
 When everything in a line of work is closed, say so plainly in one message, as M-0234 did.
 
