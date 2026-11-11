@@ -181,16 +181,18 @@ the bootstrap refuses it silently and the whole offseason stops at OFFSEASON_STA
 `madden_tune_p2f` and `p2g`). The clone's week-1 state is still neutral. A `--resume` has no week-1 clone to
 seed from, so it refuses when its database is missing rather than bootstrapping from a played save.
 
-**A newcomer is bootstrapped at the load that first sees him.** The seeding bootstrap covers the clone's
-players, not the ones who join later: a drafted rookie first appears in a later ingest and had no state, so
-`madden_tune_p2g`'s 2027 week 1 failed its whole REGULAR_WEEK plan with "player 2848: explicit neutral
-bootstrap required" (389 rookies; 23 of them already off ConfidenceRating 50). The watcher now gives every
-player a load creates his state at that load (`bootstrap_new_players` → `progression_checkpoint.
-bootstrap_newcomers`), at the league year the stage belongs to (`DRAFT` in 2026 is application season 2027)
-and with form neutral; his save ConfidenceRating is Madden's own and is not the neutrality proof the setup
-pass demands. A missing state for a player the database already knows stays a hard failure, and the seeding
-load itself is left to the gate above (the hook does nothing while a database has no progression state at
-all). The live league gets the same rule: its first rookie class would otherwise fail the same way.
+**A newcomer is healed at any ingest, not only the load that first sees him.** The seeding bootstrap covers
+the clone's players, not the ones who join later: a drafted rookie first appears in a later ingest and had no
+state, so `madden_tune_p2g`'s 2027 week 1 failed its whole REGULAR_WEEK plan with "player 2848: explicit
+neutral bootstrap required" (389 rookies; 23 of them already off ConfidenceRating 50). A player Mu has never
+tracked — no `progression_player_state` row and no `progression_events` row — is now seeded at any ingest
+(`bootstrap_new_players` → `progression_checkpoint.bootstrap_untracked`, and again by the league office before
+it plans a progression stage), at the league year the stage belongs to (`DRAFT` in 2026 is application season
+2027) and with form neutral; his save ConfidenceRating is Madden's own and is not the neutrality proof the
+setup pass demands. A rookie stranded by an older load, an unrecognised stage, a missing rating or an
+exception is healed next time. A player with events but no state stays a hard failure, and the seeding load
+itself is left to the gate above (the hook does nothing while a database has no progression state at all).
+The live league gets the same rule: its first rookie class would otherwise fail the same way.
 
 **The draft order is locked by the watcher.** The live franchise's Draft Room locks it by hand; with a
 `madden_tune_*` destination the ingest calls `engines.draft_room.lock_order(cur, season + 1)` before the DRAFT

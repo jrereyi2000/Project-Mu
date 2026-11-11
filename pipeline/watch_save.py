@@ -1361,13 +1361,10 @@ def ingest_snapshot(snapshot_path, save_season, save_week, dry_run=False, no_art
         return {"status": "success", "dry_run": True, "season": save_season, "week": save_week, "load_report": load_report}
     dsn = os.environ.get("DATABASE_URL")
     lo_result = None
-    # Step: progression state for the players this load created, before any progression stage plans
-    created_ids = load_report.get("players_created_ids") or {}
-    new_players = 0
-    if created_ids:
-        with open(snapshot_path) as fh:
-            new_players = bootstrap_new_players(dsn, json.load(fh), created_ids,
-                                                source_fingerprint=save_sha256, log_fn=log_fn)
+    # Step: progression state for every player Mu has never tracked, before any progression stage plans
+    with open(snapshot_path) as fh:
+        new_players = bootstrap_new_players(dsn, json.load(fh), load_report.get("players_created_ids") or {},
+                                            source_fingerprint=save_sha256, log_fn=log_fn)
 
     # The personality switchboard, read once for this ingest (every feature off by default)
     modes = personality_modes(dsn, log_fn=log_fn)
@@ -1566,21 +1563,26 @@ def freeze_week(db, dsn, save_path, label, season, week, stage=None, extra=None,
         return None
 
 
-def bootstrap_new_players(dsn, snapshot, created_ids, *, source_fingerprint=None, log_fn=log):
-    """Give the players a load just created their neutral progression state (PROGRESSION_PLAN §5.3a).
+def bootstrap_new_players(dsn, snapshot, created_ids=None, *, source_fingerprint=None, log_fn=log):
+    """Give every player Mu has never tracked his neutral progression state (JR, 2026-11-10).
 
     `prepare_pass` treats missing state as a hard failure, and only `league_office setup` and the ingest that
     seeds a tuning database ever bootstrap — so before this hook a drafted rookie failed the whole first
     regular week he was rostered ("player 2848: explicit neutral bootstrap required", 2027 week 1 of
-    madden_tune_p2g) and the live league would hit the same wall at its first rookie class. A newcomer has
-    no Mu history to adopt, so his save ConfidenceRating is Madden's own and is not the setup pass's
-    neutrality proof; form starts neutral. Only the ids this load created are eligible.
+    madden_tune_p2g). A newcomer has no Mu history to adopt, so his save ConfidenceRating is Madden's own
+    and is not the setup pass's neutrality proof; form starts neutral.
+
+    Eligibility is the database's — no `progression_player_state` row and no `progression_events` row — not
+    "the players this load created", so a newcomer stranded by an older load, an unrecognised stage, a
+    missing rating or an exception is healed at the next ingest. A player with event history but no state is
+    left for `prepare_pass` to refuse. `created_ids` is the ingest's creation report, kept for the caller's
+    shape; it no longer decides eligibility.
 
     Skipped while the database has no progression state at all: that is the seeding load, which keeps its
     own neutrality gate (a played save's seed must still refuse, TUNING_LEAGUE.md). Never raises: a failure
-    is a warning and the league office's own plan reports the missing state.
+    is a warning and the next ingest retries.
     """
-    if not dsn or not created_ids or not snapshot:
+    if not dsn or not snapshot or not snapshot.get("players"):
         return 0
     try:
         import psycopg
@@ -1595,20 +1597,24 @@ def bootstrap_new_players(dsn, snapshot, created_ids, *, source_fingerprint=None
                 return 0                                   # the seeding load: its own bootstrap decides
             stage = league_office_stage(snapshot, log_fn=log_fn)
             if stage is None:
-                log_fn(f"[WARN] progression state for {len(created_ids)} new players skipped: "
+                log_fn("[WARN] progression newcomer check deferred to the next ingest: "
                        "the save is not at a league office stage")
                 return 0
             from pipeline import league_office as lo
             application_season = lo.setup_application_season(stage["stage"], stage["season"])
             source = source_fingerprint or pc.fingerprint(snapshot)
-            rows = pc.bootstrap_newcomers(cur, snapshot, application_season, source_fingerprint=source,
-                                          pgid_by_player=created_ids)
+            rows, no_ratings = pc.bootstrap_untracked(cur, snapshot, application_season,
+                                                      source_fingerprint=source)
             conn.commit()
-        log_fn(f"Progression: neutral bootstrap for {len(rows)} new players "
-               f"(application season {application_season}).")
+        if no_ratings:
+            log_fn(f"[WARN] progression newcomer bootstrap skipped {len(no_ratings)} players with no ratings "
+                   f"in the save: {no_ratings[:5]}")
+        if rows:
+            log_fn(f"Progression: neutral bootstrap for {len(rows)} never-tracked players "
+                   f"(application season {application_season}).")
         return len(rows)
     except Exception as e:      # noqa: BLE001 - a missing bootstrap must not fail the ingest
-        log_fn(f"[WARN] could not bootstrap progression for new players: {e}")
+        log_fn(f"[WARN] could not bootstrap progression for never-tracked players: {e} (the next ingest retries)")
         return 0
 
 

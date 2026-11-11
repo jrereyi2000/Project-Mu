@@ -1895,3 +1895,36 @@ def test_the_plan_reads_the_bonus_slot_count_from_the_snapshot():
                                       "bonus_by_year": [1] * 7}
     plan = lo.Plan(snap, "FREE_AGENCY", SEASON, 3, 1, "seed", {0: 100}, {})
     assert (plan.slots, plan.bonus_slots) == (10, 7)
+
+
+def test_the_progression_top_up_skips_an_unmanaged_database():
+    """The league office heals never-tracked players itself, so a plain `pipeline.load_save --commit` is covered at
+    the next plan (JR, 2026-11-10). A database without managed progression is left alone."""
+    cur = FakeCursor()
+    assert lo.bootstrap_untracked_players(cur, {"players": [{"pgid": 1}]}, "REGULAR_WEEK", 2026, "sha") == 0
+
+
+@pytest.mark.integration
+def test_the_progression_top_up_heals_a_never_tracked_player_on_real_postgres():
+    """The same top-up on a real scratch database: a loaded player with no state and no event gets state at the
+    stage's application year before the plan reads it."""
+    dsn = os.environ.get("MU_PROGRESSION_STATE_TEST_DSN")
+    if not dsn:
+        pytest.skip("explicit scratch DSN not supplied")
+    import psycopg
+    from engines import progression_state as ps
+    with psycopg.connect(dsn) as conn, conn.cursor() as cur:
+        if not cur.execute("SELECT to_regclass('public.progression_player_state') IS NOT NULL "
+                           "AND to_regclass('public.players') IS NOT NULL").fetchone()[0]:
+            pytest.skip("the scratch database lacks the progression or players schema")
+        if not cur.execute("SELECT count(*) FROM progression_player_state").fetchone()[0]:
+            pytest.skip("the scratch database has no progression state (the seeding gate would skip)")
+        cur.execute("INSERT INTO players (player_name, full_name, origin, madden_pgid) "
+                    "VALUES ('N','Newcomer','SAVE',990002) RETURNING id")
+        pid_ = cur.fetchone()[0]
+        snapshot = {"players": [{"pgid": 990002, "ratings": {"Speed": 85, "Awareness": 72}, "overall": 66,
+                                 "age": 23, "dev_trait": "College_Impact", "years_pro": 0, "confidence": 57}]}
+        assert lo.bootstrap_untracked_players(cur, snapshot, "REGULAR_WEEK", 2026, "sha-lo") == 1
+        state = ps.load_state(cur, pid_)
+        assert state["application_season"] == 2026 and state["base_ratings"] == {"Speed": 85, "Awareness": 72}
+        conn.rollback()

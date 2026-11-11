@@ -39,23 +39,40 @@ def test_weekly_adapter_forwards_supported_inputs_and_filters_absent_players(mon
 
 
 @pytest.mark.integration
-def test_bootstrap_newcomers_seeds_only_the_players_this_load_created(career):
+def test_bootstrap_untracked_heals_a_stranded_player_but_never_one_with_events(career):
     """A drafted rookie failed 2027 week 1 with "player N: explicit neutral bootstrap required" because nobody
     seeded players who join after setup (madden_tune_p2g; the live league's first rookie class would hit it too).
-    The newcomer path seeds only the created ids, at the league year they join, and leaves existing state alone."""
+    JR's rule (2026-11-10): a player with no state and no event is a newcomer at any ingest, so a stranded one
+    is healed later; a player with event history but no state stays a hard failure."""
     conn, cur, base, _ = career
+    cur.execute("ALTER TABLE players ADD COLUMN madden_pgid INT")
+    cur.execute("UPDATE players SET madden_pgid = 100 + id")
     before = snapshot(base)
-    newcomer = dict(before["players"][0], pgid=102, confidence=61)
-    two = {"players": before["players"] + [newcomer], "league_settings": {}}
+    stranded = dict(before["players"][0], pgid=102, confidence=61)      # player 2: no state, no events
+    history = dict(before["players"][0], pgid=103, confidence=50)       # player 3: an event, no state
+    three = {"players": before["players"] + [stranded, history], "league_settings": {}}
+    # A player with event history but no state: prepare_event refuses to build this without state, so insert the
+    # legacy row directly (a state row deleted out from under its events looks the same).
+    cur.execute("""INSERT INTO progression_events
+                   (event_id, player_id, earned_season, application_season, kind, ordinal, rules_version,
+                    source_fingerprint, base_revision, candidate_base, candidate_band, evidence_purpose)
+                   VALUES ('legacy:3', 3, 2034, 2034, 'CHECKPOINT', '1', 'v1', 'old', 0,
+                           %s::jsonb, %s::jsonb, 'development')""",
+                (json.dumps(base), json.dumps({"technical": 85, "mental": 90})))
     with pytest.raises(state.ProgressionStateError, match="player 2: explicit neutral bootstrap required"):
         cp.prepare_player(cur, player_id=2, pgid=102, earned_season=2034, application_season=2034,
                           as_of_week=4, source_fingerprint="save", player_games=[], team_games=[],
                           position="WR", form_value=0.0, doc=DOC)
-    rows = cp.bootstrap_newcomers(cur, two, 2034, source_fingerprint="save", pgid_by_player={2: 102})
-    assert len(rows) == 1
+    rows, no_ratings = cp.bootstrap_untracked(cur, three, 2034, source_fingerprint="save")
+    assert [r["player_id"] for r in rows] == [2] and no_ratings == []
     assert rows[0]["application_season"] == 2034 and rows[0]["base_ratings"] == base
     assert state.load_state(cur, 1)["source_fingerprint"] == "neutral-start"    # the setup cohort is untouched
-    assert cp.bootstrap_newcomers(cur, two, 2034, source_fingerprint="save", pgid_by_player={2: 102}) == []
+    assert state.load_state(cur, 3) is None                                     # event history: never seeded
+    assert cp.bootstrap_untracked(cur, three, 2034, source_fingerprint="save") == ([], [])
+    # prepare_pass is the caller that must keep refusing him (the whole batch fails, nothing partial survives).
+    with pytest.raises(state.ProgressionStateError, match="player 3: explicit neutral bootstrap required"):
+        cp.prepare_pass(cur, three, 2034, 4, source_fingerprint="save",
+                        player_inputs={3: {"pgid": 103, "player_games": [], "team_games": [], "position": "WR"}})
     event = cp.prepare_player(cur, player_id=2, pgid=102, earned_season=2034, application_season=2034,
                               as_of_week=4, source_fingerprint="save", player_games=[], team_games=[],
                               position="WR", form_value=0.0, doc=DOC)

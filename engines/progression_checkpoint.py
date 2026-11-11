@@ -450,12 +450,11 @@ def bootstrap_pass(cur, snapshot, season, *, source_fingerprint, form_neutral=Fa
 
 
 def bootstrap_newcomers(cur, snapshot, season, *, source_fingerprint, pgid_by_player):
-    """Seed state for the players a save load just created (PROGRESSION_PLAN §5.3a).
+    """Seed state for explicit player ids that have none (PROGRESSION_PLAN §5.3a).
 
     A newcomer has no Mu history to adopt, so the setup pass's confidence-50 neutrality proof does not
-    apply (the ingest that first sees him is not a neutral save) and his form starts neutral. Only the
-    ids this load created are eligible; a missing state for an existing player stays a hard failure in
-    prepare_pass.
+    apply and his form starts neutral. `bootstrap_untracked` is the eligibility rule callers should use;
+    this is the low-level id-driven form.
     """
     players = {p["pgid"]: p for p in snapshot.get("players", []) if p.get("pgid", 0) > 0}
     out = []
@@ -469,6 +468,30 @@ def bootstrap_newcomers(cur, snapshot, season, *, source_fingerprint, pgid_by_pl
             out.append(_bootstrap_player(cur, pid, p, season, source_fingerprint,
                                          form_neutral=True, newcomer=True))
     return out
+
+
+def bootstrap_untracked(cur, snapshot, season, *, source_fingerprint):
+    """Seed every player in `snapshot` that Mu has never tracked (JR, 2026-11-10).
+
+    "Never tracked" means no `progression_player_state` row and no `progression_events` row. The rule is
+    durable: a newcomer is healed at any later ingest too, not only on the load that created him, so a
+    player stranded by an older load (or by an unrecognised stage, a missing rating or an exception) is
+    picked up next time instead of failing every progression plan for the whole league. A player with
+    event history but no state is deliberately left alone — `prepare_pass` keeps refusing him.
+    Returns (seeded rows, pgids the snapshot has no ratings for).
+    """
+    players = {p["pgid"]: p for p in snapshot.get("players", []) if p.get("pgid", 0) > 0}
+    if not players:
+        return [], []
+    cur.execute("""SELECT p.id, p.madden_pgid FROM players p
+                   WHERE p.madden_pgid = ANY(%s)
+                     AND NOT EXISTS (SELECT 1 FROM progression_player_state s WHERE s.player_id = p.id)
+                     AND NOT EXISTS (SELECT 1 FROM progression_events e WHERE e.player_id = p.id)""",
+                (list(players),))
+    untracked = dict(cur.fetchall())
+    no_ratings = sorted(pgid for pid, pgid in untracked.items() if not (players.get(pgid) or {}).get("ratings"))
+    return bootstrap_newcomers(cur, snapshot, season, source_fingerprint=source_fingerprint,
+                               pgid_by_player=untracked), no_ratings
 
 
 def prepare_weekly_pass(cur, snapshot, season, week, *, source_fingerprint, config=None):

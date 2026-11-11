@@ -2079,12 +2079,41 @@ def eligible_snapshot(snapshot, released):
     return out
 
 
+def bootstrap_untracked_players(cur, snapshot, stage, season, source_fingerprint):
+    """Seed progression state for players Mu has never tracked before a progression stage plans (JR, 2026-11-10).
+
+    The ingest hook (`watch_save.bootstrap_new_players`) does this for watched saves; this runs the same rule
+    inside the league office so a plain `pipeline.load_save --commit` (or any other caller) is healed at the
+    next plan too. Same gates: only a managed database that already holds state (the setup pass owns the
+    first bootstrap), neutral form, `setup_application_season`, and a player with events but no state is left
+    for `prepare_pass` to refuse. Returns the number seeded.
+    """
+    from engines import progression as pg
+    from engines import progression_checkpoint as pc
+    if not pg.managed_progression_state(cur):
+        return 0
+    cur.execute("SELECT count(*) FROM progression_player_state")
+    if not cur.fetchone()[0]:
+        return 0
+    application_season = setup_application_season(stage, season)
+    rows, no_ratings = pc.bootstrap_untracked(cur, snapshot, application_season,
+                                              source_fingerprint=source_fingerprint)
+    if no_ratings:
+        log.warning("progression newcomer bootstrap skipped %s players with no ratings in the save: %s",
+                    len(no_ratings), no_ratings[:5])
+    if rows:
+        log.info("progression: neutral bootstrap for %s never-tracked players (application season %s)",
+                 len(rows), application_season)
+    return len(rows)
+
+
 def prepare_progression(cur, deps, snapshot, stage, season, week, source_fingerprint, released):
     """(prepared envelope unchanged, info) for a progression stage, else (None, None). Errors are raised."""
     if stage not in PROGRESSION_STAGES:
         return None, None
     if not source_fingerprint:
         raise ProgressionIntegrationError("progression needs the input save's sha256 (source_fingerprint)")
+    bootstrap_untracked_players(cur, snapshot, stage, season, source_fingerprint)
     snap = eligible_snapshot(snapshot, released)
     try:
         if stage in IN_SEASON:

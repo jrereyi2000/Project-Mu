@@ -686,10 +686,13 @@ class LeagueOfficeIngestTest(unittest.TestCase):
         self.assertEqual(boot.call_args[0][2], {5: 999})
         self.assertEqual(res["new_players"], 1)
 
-    def test_no_new_players_means_no_bootstrap(self):
-        boot = mock.patch("pipeline.watch_save.bootstrap_new_players").start()
-        self.ingest({"status": "written"})
-        boot.assert_not_called()
+    def test_the_newcomer_check_runs_even_when_the_load_creates_nobody(self):
+        """Eligibility is the database's, so a stranded newcomer is healed on any later ingest (JR, 2026-11-10)."""
+        boot = mock.patch("pipeline.watch_save.bootstrap_new_players", return_value=2).start()
+        res = self.ingest({"status": "written"})
+        boot.assert_called_once()
+        self.assertEqual(boot.call_args[0][2], {})
+        self.assertEqual(res["new_players"], 2)
 
     def test_league_office_off(self):
         self.lo = mock.patch("pipeline.watch_save.run_league_office").start()
@@ -1561,9 +1564,9 @@ class BootstrapTuningProgressionTest(unittest.TestCase):
 
 
 class BootstrapNewPlayersTest(unittest.TestCase):
-    """A player the load just created gets neutral progression state at that load (JR, 2026-11-10): the live
-    league's first rookie class and madden_tune_p2g's 389 would otherwise fail the first regular week with
-    "player N: explicit neutral bootstrap required"."""
+    """A player Mu has never tracked (no state, no event) gets neutral progression state at an ingest (JR,
+    2026-11-10): the live league's first rookie class and madden_tune_p2g's 389 would otherwise fail every
+    progression plan with "player N: explicit neutral bootstrap required"."""
 
     def setUp(self):
         self.log = []
@@ -1572,38 +1575,50 @@ class BootstrapNewPlayersTest(unittest.TestCase):
                       "season": {"calendar_year": 2026, "stage": "offseason", "offseason_stage": 9,
                                  "week_index": 11}}
 
-    def run_it(self, created=None, state_rows=1):
+    def run_it(self, state_rows=1, found=None):
         import unittest.mock as m
         connect = m.patch("psycopg.connect").start()
         cur = connect.return_value.__enter__.return_value.cursor.return_value.__enter__.return_value
-        cur.fetchone.side_effect = [(True,), (state_rows,)]
-        boot = m.patch("engines.progression_checkpoint.bootstrap_newcomers", return_value=["s"]).start()
+        cur.fetchone.side_effect = [(True,), (state_rows,), (found or [(5, 999)],)]
+        boot = m.patch("engines.progression_checkpoint.bootstrap_untracked",
+                       return_value=([{"player_id": 5, "application_season": 2027}], [])).start()
         self.addCleanup(m.patch.stopall)
-        n = ws.bootstrap_new_players("dbname=madden_car", self.draft,
-                                     created if created is not None else {5: 999},
+        n = ws.bootstrap_new_players("dbname=madden_car", self.draft, {},
                                      source_fingerprint="sha", log_fn=self.log.append)
         return n, boot, connect
 
-    def test_a_newcomer_is_bootstrapped_at_the_league_year_he_joins(self):
+    def test_an_untracked_player_is_bootstrapped_at_the_league_year_he_joins(self):
         n, boot, _ = self.run_it()
         self.assertEqual(n, 1)
         self.assertEqual(boot.call_args[0][2], 2027)          # the DRAFT stop in 2026 is the 2027 league year
-        self.assertEqual(boot.call_args[1]["pgid_by_player"], {5: 999})
         self.assertEqual(boot.call_args[1]["source_fingerprint"], "sha")
-        self.assertTrue(any("new players" in ln and "2027" in ln for ln in self.log))
+        self.assertTrue(any("never-tracked players" in ln and "2027" in ln for ln in self.log))
 
     def test_the_seeding_load_keeps_its_own_neutrality_gate(self):
         n, boot, _ = self.run_it(state_rows=0)
         self.assertEqual(n, 0)
         boot.assert_not_called()
 
-    def test_nothing_happens_without_created_players_or_a_dsn(self):
+    def test_an_unrecognised_stage_defers_to_the_next_ingest(self):
         import unittest.mock as m
-        boot = m.patch("engines.progression_checkpoint.bootstrap_newcomers").start()
+        connect = m.patch("psycopg.connect").start()
+        cur = connect.return_value.__enter__.return_value.cursor.return_value.__enter__.return_value
+        cur.fetchone.side_effect = [(True,), (1,)]
+        boot = m.patch("engines.progression_checkpoint.bootstrap_untracked").start()
+        self.addCleanup(m.patch.stopall)
+        self.assertEqual(ws.bootstrap_new_players("dbname=madden_car", {"players": [{"pgid": 1}], "season": {}},
+                                                  log_fn=self.log.append), 0)
+        boot.assert_not_called()
+        self.assertTrue(any("deferred to the next ingest" in ln for ln in self.log))
+
+    def test_nothing_happens_without_players_or_a_dsn(self):
+        import unittest.mock as m
+        boot = m.patch("engines.progression_checkpoint.bootstrap_untracked").start()
         connect = m.patch("psycopg.connect").start()
         self.addCleanup(m.patch.stopall)
-        self.assertEqual(ws.bootstrap_new_players("dbname=madden_car", self.draft, {}, log_fn=self.log.append), 0)
-        self.assertEqual(ws.bootstrap_new_players(None, self.draft, {5: 999}, log_fn=self.log.append), 0)
+        self.assertEqual(ws.bootstrap_new_players("dbname=madden_car", {"players": []}, {},
+                                                  log_fn=self.log.append), 0)   # no players in the snapshot
+        self.assertEqual(ws.bootstrap_new_players(None, self.draft, log_fn=self.log.append), 0)
         boot.assert_not_called()
         connect.assert_not_called()
 
@@ -1612,8 +1627,69 @@ class BootstrapNewPlayersTest(unittest.TestCase):
         connect = m.patch("psycopg.connect").start()
         cur = connect.return_value.__enter__.return_value.cursor.return_value.__enter__.return_value
         cur.fetchone.return_value = (None,)
-        boot = m.patch("engines.progression_checkpoint.bootstrap_newcomers").start()
+        boot = m.patch("engines.progression_checkpoint.bootstrap_untracked").start()
         self.addCleanup(m.patch.stopall)
-        self.assertEqual(ws.bootstrap_new_players("dbname=madden_car", self.draft, {5: 999},
+        self.assertEqual(ws.bootstrap_new_players("dbname=madden_car", self.draft, {},
                                                   log_fn=self.log.append), 0)
         boot.assert_not_called()
+
+
+@pytest.mark.integration
+class BootstrapNewPlayersRealDbTest(unittest.TestCase):
+    """F2: the hook's own wiring (its DB checks, its stage -> season decision and its commit) on real Postgres.
+
+    Runs against an explicitly named scratch database only; a database with the full schema is needed
+    (`MU_PROGRESSION_STATE_TEST_DSN`, the same variable the progression integration tests use)."""
+
+    def setUp(self):
+        import psycopg
+        dsn = os.environ.get("MU_PROGRESSION_STATE_TEST_DSN")
+        if not dsn:
+            self.skipTest("explicit scratch DSN not supplied")
+        self.dsn = dsn
+        self.conn = psycopg.connect(dsn)
+        name = self.conn.execute("SELECT current_database()").fetchone()[0]
+        if "test" not in name or name == "madden_2036":
+            self.skipTest("explicitly named scratch database required")
+        self.log = []
+
+    def tearDown(self):
+        if getattr(self, "conn", None) is not None:
+            self.conn.rollback()
+            self.conn.close()
+
+    def _state(self, player_id):
+        from engines import progression_state as ps
+        return ps.load_state(self.conn.cursor(), player_id)
+
+    def test_a_stranded_player_is_seeded_through_the_hook(self):
+        cur = self.conn.cursor()
+        if not cur.execute("SELECT to_regclass('public.progression_player_state') IS NOT NULL "
+                           "AND to_regclass('public.players') IS NOT NULL").fetchone()[0]:
+            self.skipTest("the scratch database lacks the progression or players schema")
+        if not cur.execute("SELECT count(*) FROM progression_player_state").fetchone()[0]:
+            self.skipTest("the scratch database has no progression state (the seeding gate would skip)")
+        # The hook opens its own connection, so the player row must be committed before the call.
+        cur.execute("DELETE FROM players WHERE madden_pgid = 990001")
+        cur.execute("INSERT INTO players (player_name, full_name, origin, madden_pgid) "
+                    "VALUES ('N','Newcomer','SAVE',990001) RETURNING id")
+        pid = cur.fetchone()[0]
+        self.conn.commit()
+        snapshot = {"players": [{"pgid": 990001, "ratings": {"Speed": 85, "Awareness": 72}, "overall": 66,
+                                 "age": 23, "dev_trait": "College_Impact", "years_pro": 0, "confidence": 57}],
+                    "season": {"calendar_year": 2026, "stage": "offseason", "offseason_stage": 9,
+                               "week_index": 11}}
+        try:
+            n = ws.bootstrap_new_players(self.dsn, snapshot, {}, source_fingerprint="sha-hook",
+                                         log_fn=self.log.append)
+            self.assertEqual(n, 1)
+            state = self._state(pid)
+            self.assertEqual((state["application_season"], state["base_ratings"]),
+                             (2027, {"Speed": 85, "Awareness": 72}))
+            self.assertEqual(ws.bootstrap_new_players(self.dsn, snapshot, {}, source_fingerprint="sha-hook",
+                                                      log_fn=self.log.append), 0)
+        finally:
+            self.conn.rollback()
+            cur.execute("DELETE FROM players WHERE madden_pgid = 990001")
+            self.conn.commit()
+
