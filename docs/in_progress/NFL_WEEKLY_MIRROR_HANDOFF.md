@@ -30,28 +30,32 @@ All four merged units passed their Verify commands on `main`. Nothing is applied
 franchise DB: the migration `2027_02_27_nfl_mirror.sql` is only in `db/init_db.sql` and
 scratch DBs; JR applies it (plan §8 note, M-0444).
 
-## In flight when this was written
+## U9 — wave-1 audit fixes F1/F2 (merged at handoff)
 
-**U9 — wave-1 audit fixes F1/F2** (audit-3's PARTIAL, M-0473; answered in M-0482).
-- Launched as a background subagent from the build-nfl-mirror session, worktree
-  `.claude/worktrees/agent-ade8f1b34cbd6b018`, branch `worktree-agent-ade8f1b34cbd6b018`,
-  base `220935e`.
-- Owns `engines/nfl_mirror/staff.py`, `engines/coach_save_sync.py`,
+**Merged** as `9425923` (branch `worktree-agent-ade8f1b34cbd6b018`, worktree
+`.claude/worktrees/agent-ade8f1b34cbd6b018`, base `220935e`, unit commit `094b6f1`).
+Verified in the worktree and on `main`: 26 offline tests passed, plus the unit's own
+real-PG regressions (5 new, rollback-only, scratch `u9` DBs), `timelines` 39 PASS and
+`e2e` 41 PASS on a CAREER-MUBASE copy. The plan's Build log and Status line are updated.
+**Nothing of U9 is left for the successor except the blocker below.**
+
+- Files: `engines/nfl_mirror/staff.py`, `engines/coach_save_sync.py`,
   `engines/coaching_carousel.py`, `tests/test_nfl_mirror_staff.py`,
-  `tests/test_coach_save_sync.py`, `tests/test_coaching_carousel_db.py`.
-- **F1:** a matched existing HC/OC/DC with no `coach_madden_profiles` row gets a CREATED
-  profile for the same person (HC passes `promote_from` so a promoted coordinator keeps
-  his record). **F2:** among equal `start_season`, an open tenure (`end_season IS NULL`)
-  sorts first, then `id DESC` — applied identically to `_current_hc`/`_current_coord`,
-  `coach_save_sync._wanted`, `coaching_carousel.head_coaches`/`staff_in`. **F3 is not
-  implemented** — promotion with no named replacement is JR's policy call.
-- Its report required real-PG regressions (rollback-only), plus `python3 -m
-  tools.offseason_check` `timelines` and `e2e` on a CAREER-MUBASE copy.
-- **If the branch still has commits `main` does not** (`git log --oneline main..worktree-agent-ade8f1b34cbd6b018`),
-  review and merge it exactly like any other unit (Verify in the worktree, merge, Verify on
-  `main`, SPEC CHANGES, Build log row). The previous session may already have merged it and
-  posted a NOTICE; check the board first. If the worktree has no such commits and the plan
-  has no U9 row, ask on the board under `build-nfl-mirror` before redoing the work.
+  `tests/test_coaching_carousel_db.py`. F1: a matched existing HC/OC/DC with no
+  `coach_madden_profiles` row gets a CREATED profile for the same person (HC passes
+  `promote_from` so a promoted coordinator keeps his record). F2: among equal
+  `start_season`, an open tenure (`end_season IS NULL`) sorts first, then `id DESC`, in
+  `_current_hc`/`_current_coord`, `coach_save_sync._wanted` and
+  `coaching_carousel.head_coaches`/`staff_in`. F3 (promotion with no named replacement) is
+  **not** implemented — JR's policy call.
+- **Blocker it reported, still open:** `engines/staff_contracts_run.current_staff` (its two
+  tenure queries) still orders by `start_season DESC, id DESC` only and would pick the
+  interim on an A→B→A same-season return. It needs the same `(end_season IS NULL) DESC`
+  clause before `id DESC`. Small enough for an orchestrator fix with two integration tests,
+  or give it to the unit that owns that file next.
+- Its worktree `.claude/worktrees/agent-ade8f1b34cbd6b018` and branch
+  `worktree-agent-ade8f1b34cbd6b018` are merged but not yet removed; remove them with the
+  other merged worktrees (`git worktree remove`, then `git branch -d`; never force).
 
 ## Next steps, in order
 
