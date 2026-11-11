@@ -835,6 +835,38 @@
         ]
       }
     },
+    "ACCOUNT_ERROR": {
+      "note": "The MMC mod warning Madden draws at launch: 'ACCOUNT ERROR / Mods require being offline. You won't be able to sign in or access modes like Superstar/Online Dynasty while modding. Enjoy!! -MMC/CFMC', with a focused OK button. Space takes OK (JR, 2026-11-10) and the title screen follows. Seen 2026-11-10 (p2-weekly): it held the P2-10 proof's first advance for two minutes while the pilot re-read an uncatalogued frame. Listed before TITLE_SCREEN, whose MADDEN logo shows behind it.",
+      "all": [
+        "ACCOUNT ERROR"
+      ],
+      "any": [
+        "MODS REQUIRE BEING OFFLINE"
+      ],
+      "none": [
+        "CURRENT FRANCHISES",
+        "GAMEDAY"
+      ],
+      "options": [
+        "OK"
+      ],
+      "default": "OK",
+      "confirm_ok": [],
+      "exits": {
+        "TITLE_SCREEN": [
+          [
+            "dismiss",
+            1
+          ]
+        ],
+        "MAIN_MENU": [
+          [
+            "dismiss",
+            1
+          ]
+        ]
+      }
+    },
     "TITLE_SCREEN": {
       "note": "Seen 2026-11-10 in the P2-01 retries: EA SPORTS / MADDEN NFL title with PRESS ANY BUTTON. The button sits below the captured client area (step 0021 of 2026-11-10_014049_sim-season), so OCR only reads the MADDEN logo; the screen is matched on that word with every menu/hub word excluded. One Space continues to the main menu; nothing else on this screen can be chosen.",
       "all": [
