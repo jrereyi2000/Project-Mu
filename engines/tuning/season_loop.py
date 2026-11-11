@@ -41,6 +41,7 @@ import re
 import subprocess
 import sys
 import time
+import traceback
 
 ROOT = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", ".."))
 SEASONS_DIR = os.path.join(ROOT, "data", "tuning", "seasons")
@@ -364,9 +365,10 @@ def report(snapshot_path, out_dir, *, targets_path=None):
 def decision_report(run, season, out_dir, *, targets_path=None, connect=None):
     """Write the P3-07 decision comparison beside the stat report (decision_compare.py).
 
-    Read-only on madden_tune_<run>. A missing, empty, partial or malformed decision-targets file, or a
-    database the report cannot read, is reported as skipped: the season and its stat report are already
-    written, so this step never turns a finished season into a failure."""
+    Read-only on madden_tune_<run>. Anything that goes wrong — a missing, empty, partial or malformed
+    decision-targets file, a database it cannot read, or any other error — is reported as skipped, with
+    the traceback on stderr: the season and its stat report are already written, so this step never turns
+    a finished season into a failure."""
     from engines.tuning import decision_compare as DC
     try:
         out = DC.run(dsn_for(run), season, targets_path=targets_path, out_dir=out_dir, connect=connect)
@@ -379,10 +381,11 @@ def decision_report(run, season, out_dir, *, targets_path=None, connect=None):
         try:
             import psycopg
         except ImportError:
-            raise
-        if isinstance(e, psycopg.Error):
+            psycopg = None
+        if psycopg is not None and isinstance(e, psycopg.Error):
             return {"skipped": f"cannot read {db_for(run)}: {e}"}
-        raise
+        traceback.print_exc(file=sys.stderr)
+        return {"skipped": f"{type(e).__name__}: {e}"}
     rep = out["report"]
     return {"season": rep.season, "verdict": rep.overall, "counts": rep.counts(),
             "report": out["paths"]["md"], "json": out["paths"]["json"]}
@@ -473,7 +476,11 @@ def run(name, *, base_save=BASE_SAVE, resume=False, offseason=True, max_stops=14
         report_fn(json.dumps(out["report"], indent=1))
         season = out["report"].get("season")
         if decision_fn is not None and season:
-            out["decisions"] = decision_fn(name, season, run_dir, targets_path=decision_targets)
+            try:
+                out["decisions"] = decision_fn(name, season, run_dir, targets_path=decision_targets)
+            except Exception as e:                          # noqa: BLE001 - see decision_report
+                traceback.print_exc(file=sys.stderr)
+                out["decisions"] = {"skipped": f"{type(e).__name__}: {e}"}
             report_fn(json.dumps(out["decisions"], indent=1))
     out["minutes"] = round((time.time() - t0) / 60, 1)
     with open(os.path.join(run_dir, "run.json"), "w") as fh:

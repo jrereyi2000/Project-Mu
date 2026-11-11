@@ -408,6 +408,47 @@ def test_decision_report_skips_a_missing_unreadable_or_malformed_targets_file(tm
     monkeypatch.setattr(DC, "run", partial)
     assert "unreadable" in L.decision_report("unit", 2026, str(tmp_path))["skipped"]
 
+    # audit M-0319: anything else is skipped too, never raised out of a finished season
+    for exc in (PermissionError("denied"), OSError("busy"), AttributeError("no attr")):
+        def boom(*a, **k):
+            raise exc
+
+        monkeypatch.setattr(DC, "run", boom)
+        assert type(exc).__name__ in L.decision_report("unit", 2026, str(tmp_path))["skipped"]
+
+
+def test_a_failing_decision_step_still_writes_run_json(tmp_path):
+    tpath = _targets_file(tmp_path)
+
+    def decision_fn(*a, **k):
+        raise PermissionError("denied")
+
+    out = L.run("unit", runner=_runner([], season_stops()), python="py", seasons_dir=str(tmp_path / "s"),
+                saves_dir="/saves", targets_path=tpath, report_fn=lambda s: None,
+                decision_fn=decision_fn)
+    assert out["decisions"] == {"skipped": "PermissionError: denied"}
+    run_json = json.load(open(os.path.join(out["run_dir"], "run.json")))
+    assert run_json["decisions"]["skipped"].startswith("PermissionError")
+
+
+def test_main_returns_zero_when_the_decision_report_fails(tmp_path, monkeypatch):
+    monkeypatch.setattr(L, "SEASONS_DIR", str(tmp_path / "s"))
+
+    def decision_boom(*a, **k):
+        raise PermissionError("denied")
+
+    monkeypatch.setattr(L, "decision_report", decision_boom)
+    monkeypatch.setattr(L, "release", lambda *a, **k: {"status": "ok"})
+    monkeypatch.setattr(L, "clone", lambda *a, **k: None)
+    monkeypatch.setattr(L, "ingest", lambda *a, **k: None)
+    monkeypatch.setattr(L, "snapshot", lambda *a, **k: None)
+    monkeypatch.setattr(L, "walk_season", lambda *a, **k: [STAFF])
+    monkeypatch.setattr(L, "walk_offseason", lambda *a, **k: [])
+    monkeypatch.setattr(L, "report", lambda *a, **k: {"season": 2026, "report": "season_2026.md"})
+    assert L.main(["--run", "unit", "--targets", _targets_file(tmp_path)]) == 0
+    run_json = json.load(open(os.path.join(str(tmp_path / "s"), "unit", "run.json")))
+    assert run_json["decisions"] == {"skipped": "PermissionError: denied"}
+
 
 # ---------------------------------------------------------------- CLI
 def test_main_dry_run_prints_the_plan(capsys):
