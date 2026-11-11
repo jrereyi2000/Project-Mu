@@ -115,6 +115,8 @@ Populations as described in §0.2. Careers end 2015–2024.
   player fields (JR, 2026-11-10):** `PLYR_DRAFTROUND` 1–7 is drafted, 63 is undrafted (with `PLYR_DRAFTPICK` and
   `PLYR_DRAFTTEAM`). Ignore `Background`: on `CAREER-TUNE-P2G` it reads `Undrafted` for the 2027 class Madden had
   just drafted. A career ends at a retirement, or after **two seasons in a row unsigned**; a later signing reopens it.
+  A season is signed when the player has a team **or games** in it, and unsigned retirees still count (§7
+  decision 11).
 - **Primary suspect on failure:** `engines/progression.py` wear/age curves and `player_durability` seeding;
   `engines/retirement_policy.py` base rate; **and the draft/UDFA inflow**, which sets the ceiling before the
   retirement engine is even consulted.
@@ -195,7 +197,9 @@ Band **17.9%–26.5%** of players with ≥8 games in both seasons, median **24.9
 - **Gate:** round 1 within ±10 points of 85%; each later round within ±10 points; the monotonic decline must hold.
 - **Mu source:** `draft_selections` + `player_seasons` starts and games. **A started season (JR, 2026-11-10)
   is one with 8 or more games started at the player's own position** (depth 1 in his position's slot on the
-  weekly depth chart for a game he played). Return, kick and long-snapper slots never count. The real column is
+  weekly depth chart for a game he played). The chart in force is resolved per slot and week (JR, then MU_COACH,
+  then MADDEN; no slot without a starter; the newest earlier chart carries forward — §7 decision 12). Return, kick
+  and long-snapper slots never count. The real column is
   nflverse's `seasons_started`.
 - **Primary suspect:** `engines/scouting_value.py` and the rookie OVR distribution — not the drafting AI.
 
@@ -321,7 +325,18 @@ median (all players retained as reference); A4's gate is the Week 1 → season-e
 10. **Drafted cohort: Madden's own draft fields.** `PLYR_DRAFTROUND` (1–7 drafted, 63 undrafted),
     `PLYR_DRAFTPICK`, `PLYR_DRAFTTEAM` on the save's Player records, for veterans and Mu-era rookies alike.
 11. **An unsigned free agent's career ends after two empty seasons;** signing again later reopens it.
+    **Clarified by JR, 2026-11-11 (board M-0381):** a season counts as *signed* when the player has a team
+    that season **or played games in it**. The offseason ingests set a played season's team to NULL once the
+    contract expires, so team alone would end careers a year early. This is read in `decision_compare` only, and
+    the loader is unchanged. **Retirees who were unsigned all season still count** in A1/A2. Their endpoint is
+    the last signed or played season, or the retirement row when there is none.
 12. **A started season is 8+ games started at the player's own position.**
+    **Clarified by JR, 2026-11-10/11 (board M-0374, M-0381):** the chart in force is resolved **per slot and
+    week**. The order is JR's chart, then MU_COACH's, then MADDEN's, and a slot is never without a starter: when
+    JR's chart leaves a slot empty, the next source fills it. **A chart carries forward:** a week with no chart
+    uses the newest earlier week that has one (the newest week wins), and each slot is resolved at that week.
+    *Open (the auditor's suggestion, not yet JR's):* offseason charts stored as `(Y, weeks 24–32)` sort before
+    that season's week 1.
 
 ### Still open
 
