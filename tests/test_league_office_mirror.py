@@ -4,6 +4,7 @@ Two layers, both offline: `pipeline/league_office_mirror.py`'s adapter with ever
 no database), and `PRIORITY_MIRROR` / `step_nfl_mirror` / the plan_stage wiring against the league office's fake
 deps. A `FakeCursor` only records SQL, so `record_written` is exercised without a PostgreSQL connection.
 """
+import copy
 import json
 import hashlib
 import os
@@ -853,6 +854,173 @@ def test_f4_the_method_comes_from_the_same_linker_call_as_the_diffs_pair():
     assert mirror_diff._new_links({7: wp}, {"00-9099": card}, {}, {"CHI": 0}, 2026) == [("00-9099", 7)]
 
 
+# ------------------------------------------------------------------- audit-5 U18 R2: real-person identity ----
+def test_r2_the_link_evidence_carries_the_real_persons_identity():
+    card = real_state.RealPlayer(gsis_id="00-R2-PERSON", name="Real Person", position="WR", team="CHI",
+                                 status="ACTIVE", designation="A01", college="State U",
+                                 birth_date="2001-02-03", height_in=72, weight_lbs=200, entry_year=2023)
+    real = real_state.RealWeek(season=2026, week=3, mode=real_state.CATCH_UP, rosters={"CHI": [card]})
+    details = {"00-R2-PERSON": {"player_id": pid(4), "gsis_id": "00-R2-PERSON", "method": "EXACT",
+                                "score": 3.0, "evidence": {"position": True, "team": True}}}
+    adapter = lom.MirrorAdapter(match_links=lambda *a: details)
+
+    records = adapter._link_records(snapshot(), real, {}, {"CHI": 0}, [("00-R2-PERSON", 4)], {4: pid(4)})
+
+    assert records[0]["evidence"] == {
+        "position": True, "team": True,
+        "person": {"name": "Real Person", "position": "WR", "college": "State U",
+                   "birth_date": "2001-02-03"}}
+
+
+# ------------------------------------------------------------------- audit-5 U18 R1: donor reservation ----
+def _roster_plan(ops=(), creates=(), ps_fill=(), review=(), unlinked_new=()):
+    return types.SimpleNamespace(ops=list(ops), creates=list(creates), ps_fill=[dict(s) for s in ps_fill],
+                                 review=list(review), unlinked_new=list(unlinked_new))
+
+
+def test_r1_a_created_donor_and_the_ps_fill_choose_distinct_players():
+    """The auditor's two-donor case, offline: the creation takes the lowest-OVR donor and the PS fill the next
+    best remaining free agent, never the same pgid (audit-5 U18 R1)."""
+    snap = snapshot()
+    card = real_card(status="ACTIVE")
+    adapter, _ = creation_adapter(
+        snap, real_card=card,
+        roster_plan=_roster_plan(creates=[card], ps_fill=[{"team_index": 0, "position": "WR"}]))
+    adapter.free_pool = lambda *a: [{"id": pid(5), "pos": "WR", "ovr": 99},
+                                    {"id": pid(4), "pos": "WR", "ovr": 80}]
+
+    mirror = adapter.plan_week(FakeCursor(), snap, SEASON, "REGULAR_WEEK", 3)
+
+    assert mirror.creates[0]["donor_pgid"] == 5          # production donor choice is unchanged
+    assert [s["pgid"] for s in mirror.ps_signs] == [4]    # pre-fix this was 5 and the fill was refused
+    p = new_plan(snap)
+    p.db["mirror"] = mirror.record()
+    lo.step_nfl_mirror(p, mirror)
+    assert p.roster_status(5) == ("Signed", 0)
+    assert p.roster_status(4) == ("PracticeSquad", 0)
+    assert p.db["mirror"]["outcomes"]["mirror:ps:4"] == ["WRITTEN", None]
+    assert p.db["mirror"]["outcomes"][f"mirror:create:{CREATE_GSIS}"][0] == "WRITTEN"
+
+
+def test_r1_an_ordinary_real_signing_consumes_the_top_ps_candidate():
+    snap = snapshot()
+    signing = {"kind": "sign", "gsis_id": "00-R1-SIGNED", "pgid": 4, "to_index": 1, "list": "Roster",
+               "contract": contract(), "why": "real active for ARI"}
+    adapter, _ = creation_adapter(
+        snap, roster_plan=_roster_plan(ops=[signing], ps_fill=[{"team_index": 0, "position": "WR"}]))
+    adapter.free_pool = lambda *a: [{"id": pid(4), "pos": "WR", "ovr": 99},
+                                    {"id": pid(5), "pos": "WR", "ovr": 80}]
+
+    mirror = adapter.plan_week(FakeCursor(), snap, SEASON, "REGULAR_WEEK", 3)
+
+    assert [s["pgid"] for s in mirror.ps_signs] == [5]
+    p = new_plan(snap)
+    p.db["mirror"] = mirror.record()
+    lo.step_nfl_mirror(p, mirror)
+    assert p.roster_status(4) == ("Signed", 1)            # the ordinary signing
+    assert p.roster_status(5) == ("PracticeSquad", 0)     # the PS fill took the next candidate
+    assert p.db["mirror"]["outcomes"]["mirror:ps:5"] == ["WRITTEN", None]
+
+
+def test_r1_multiple_creates_and_fills_never_share_a_pgid():
+    snap = snapshot(players=[
+        player(1, 0, pos="QB", ovr=85), player(2, 0, ovr=75), player(3, 1, ovr=74),
+        player(4, 32, status="FreeAgent", pos="WR", ovr=78),
+        player(5, 32, status="FreeAgent", pos="WR", ovr=60),
+        player(6, 1, status="PracticeSquad", pos="WR", years_pro=1),
+        player(7, 32, status="FreeAgent", pos="QB", ovr=70),
+        player(8, 32, status="FreeAgent", pos="QB", ovr=55)])
+    qb = real_card(status="ACTIVE", gsis="00-R1-QB", position="QB")
+    wr = real_card(status="ACTIVE", gsis="00-R1-WR", position="WR")
+    adapter, _ = creation_adapter(
+        snap, real_card=wr,
+        roster_plan=_roster_plan(creates=[qb, wr],
+                                 ps_fill=[{"team_index": 0, "position": "QB"}, {"team_index": 1, "position": "WR"}]))
+    adapter.free_pool = lambda *a: [{"id": pid(8), "pos": "QB", "ovr": 99},
+                                    {"id": pid(7), "pos": "QB", "ovr": 70},
+                                    {"id": pid(5), "pos": "WR", "ovr": 95},
+                                    {"id": pid(4), "pos": "WR", "ovr": 40}]
+
+    mirror = adapter.plan_week(FakeCursor(), snap, SEASON, "REGULAR_WEEK", 3)
+
+    creates = {c["gsis_id"]: c["donor_pgid"] for c in mirror.creates}
+    fills = [s["pgid"] for s in mirror.ps_signs]
+    assert creates == {"00-R1-QB": 8, "00-R1-WR": 5}
+    assert fills == [7, 4]
+    each = list(creates.values()) + fills
+    assert len(each) == len(set(each))                    # no pgid is written twice in one batch
+
+
+def test_r1_a_jr_preclaim_keeps_its_donor_and_the_ps_fill_uses_another():
+    snap = snapshot()
+    card = real_card(status="ACTIVE")
+    adapter, _ = creation_adapter(
+        snap, real_card=card,
+        roster_plan=_roster_plan(creates=[card], ps_fill=[{"team_index": 0, "position": "WR"}]))
+    adapter.free_pool = lambda *a: [{"id": pid(5), "pos": "WR", "ovr": 99},
+                                    {"id": pid(4), "pos": "WR", "ovr": 80}]
+    mirror = adapter.plan_week(FakeCursor(), snap, SEASON, "REGULAR_WEEK", 3)
+
+    p = new_plan(snap)
+    assert p.sign_player(5, 1, "Roster", contract(), lo.PRIORITY_JR, "JR signs him first")
+    p.db["mirror"] = mirror.record()
+    lo.step_nfl_mirror(p, mirror)
+
+    assert p.roster_status(5) == ("Signed", 1)            # JR's signing is untouched: no silent rename/link
+    assert p.edits.get(5) is None and p.db["mirror"]["links"] == []
+    assert p.db["mirror"]["outcomes"][f"mirror:create:{CREATE_GSIS}"][0] == "REFUSED"
+    assert p.roster_status(4) == ("PracticeSquad", 0)
+
+
+def test_r1_an_exhausted_pool_is_an_explicit_refusal():
+    snap = snapshot()
+    card = real_card(status="ACTIVE")
+    adapter, _ = creation_adapter(
+        snap, real_card=card,
+        roster_plan=_roster_plan(creates=[card], ps_fill=[{"team_index": 1, "position": "WR"}]))
+    adapter.free_pool = lambda *a: [{"id": pid(5), "pos": "WR", "ovr": 99}]   # only the creation donor
+
+    mirror = adapter.plan_week(FakeCursor(), snap, SEASON, "REGULAR_WEEK", 3)
+
+    assert [s["pgid"] for s in mirror.ps_signs] == [None]
+    refusal = mirror.ps_signs[0]
+    assert refusal["tag"] == "mirror:ps:unfilled:1:WR:0" and "no free agent at WR" in refusal["refused"]
+    p = new_plan(snap)
+    p.db["mirror"] = mirror.record()
+    lo.step_nfl_mirror(p, mirror)
+    assert p.db["mirror"]["outcomes"][refusal["tag"]][0] == "REFUSED"
+    assert "no free agent at WR" in p.db["mirror"]["outcomes"][refusal["tag"]][1]
+    moves = lom._moves(mirror.real, mirror, mirror.ps_signs, mirror.creates, [], [], None,
+                       mirror.team_index, {}, {}, snap)
+    ps_move = next(m for m in moves if m["kind"] == "PS")
+    assert ps_move["pgid"] is None and ps_move["detail"]["tag"] == refusal["tag"]
+
+
+def test_r1_a_replan_after_a_successful_batch_fills_nothing():
+    snap = snapshot()
+    card = real_card(status="ACTIVE")
+    plan_slots = _roster_plan(creates=[card], ps_fill=[{"team_index": 0, "position": "WR"}])
+    pool = [{"id": pid(5), "pos": "WR", "ovr": 99}, {"id": pid(4), "pos": "WR", "ovr": 80}]
+    adapter, _ = creation_adapter(snap, real_card=card, roster_plan=plan_slots)
+    adapter.free_pool = lambda *a: pool
+    mirror = adapter.plan_week(FakeCursor(), snap, SEASON, "REGULAR_WEEK", 3)
+    assert mirror.creates[0]["donor_pgid"] == 5 and [s["pgid"] for s in mirror.ps_signs] == [4]
+
+    # The write's result: the donor is signed, the substitute is on the practice squad, and the created person's
+    # link makes the active player matched. Replanning the same week must not fill a slot a second time.
+    after = copy.deepcopy(snap)
+    for row in after["players"]:
+        if row["pgid"] == 5:
+            row["status"], row["team_index"] = "Signed", 0
+        elif row["pgid"] == 4:
+            row["status"], row["team_index"] = "PracticeSquad", 0
+    replan_slots = _roster_plan(ps_fill=[{"team_index": 0, "position": "WR"}])
+    adapter2, _ = creation_adapter(after, real_card=card, roster_plan=replan_slots)
+    adapter2.free_pool = lambda *a: pool
+    mirror2 = adapter2.plan_week(FakeCursor(), after, SEASON, "REGULAR_WEEK", 3)
+    assert [s["pgid"] for s in mirror2.ps_signs if s["pgid"] is not None] == []
+
+
 # ------------------------------------------------------------------- audit-4 U6 F5: as-of boundary ----
 @pytest.mark.parametrize("week,expected", [(1, "2026-09-15"), (3, "2026-09-29"), (19, "2027-01-19")])
 def test_f5_the_creation_as_of_is_the_diffs_canonical_boundary(week, expected):
@@ -1353,6 +1521,235 @@ def test_r3_r4_postgres_ledger_and_transactions():
             cur.execute("""SELECT count(*) FROM transactions WHERE season = %s AND week = %s
                            AND raw_text = 'NFL mirror'""", (season, week))
             assert cur.fetchone()[0] == 1
+    finally:
+        conn.rollback()
+        conn.close()
+
+
+# ----------------------------------------------------------- audit-5 U18 R1: ledger on a real database ----
+@pytest.mark.integration
+def test_r1_postgres_the_ledger_counts_each_fill_once_and_records_only_real_refusals():
+    conn = _scratch_conn()
+    season, week = 2099, 7
+    snap = snapshot()
+    unfilled = "mirror:ps:unfilled:0:WR:1"
+    reason = "no free agent at WR for team 0's practice squad: every candidate is already used by this write"
+    ps_signs = [{"pgid": 4, "team_index": 0, "position": "WR", "tag": "mirror:ps:4",
+                 "why": "real practice squad has a WR the save lacks"},
+                {"pgid": None, "team_index": 0, "position": "WR", "tag": unfilled, "refused": reason}]
+    try:
+        with conn.cursor() as cur:
+            run_id = _run_row(cur, season, week)
+            cur.execute("DELETE FROM nfl_mirror_moves WHERE season = %s AND week = %s", (season, week))
+            mirror = make_mirror(season=season, week=week, real_week=week,
+                                 real=types.SimpleNamespace(season=season, week=week, mode="CATCH_UP", depth={}),
+                                 ps_signs=ps_signs)
+            p = lo.Plan(snap, "REGULAR_WEEK", season, week, None, "u18r1", {}, {})
+            record = mirror.record()
+            p.db["mirror"] = record
+            lo.step_nfl_mirror(p, mirror)
+            assert record["outcomes"]["mirror:ps:4"] == ["WRITTEN", None]
+            assert record["outcomes"][unfilled] == ["REFUSED", reason]
+            moves = lom._moves(mirror.real, mirror, mirror.ps_signs, [], [], [], None, mirror.team_index,
+                               {}, {}, snap)
+            record["moves"] = moves
+            mirror_store.record_week(cur, season, week, status="PLANNED", real_week=week, mode="CATCH_UP")
+            mirror_store.record_moves(cur, season, week, moves, replace=True)
+            plan = {"db": p.db, "team_ids": {}, "pid_by_pgid": {}}
+            lo._record_mirror(cur, plan, run_id)
+            cur.execute("""SELECT detail ->> 'tag', status, reason FROM nfl_mirror_moves
+                           WHERE season = %s AND week = %s ORDER BY id""", (season, week))
+            rows = {tag: (status, why) for tag, status, why in cur.fetchall()}
+            assert rows["mirror:ps:4"][0] == "WRITTEN"
+            assert rows[unfilled][0] == "REFUSED" and rows[unfilled][1] == reason
+            cur.execute("SELECT counts, report FROM nfl_mirror_weeks WHERE season = %s AND week = %s",
+                        (season, week))
+            counts, report = cur.fetchone()
+            assert counts == {"ps": 1} and "1 refused" in report
+            lo._record_mirror(cur, plan, run_id)                            # recover is idempotent
+            cur.execute("""SELECT count(*) FROM nfl_mirror_moves WHERE season = %s AND week = %s
+                           AND status = 'WRITTEN'""", (season, week))
+            assert cur.fetchone()[0] == 1
+            cur.execute("""SELECT count(*) FROM nfl_mirror_moves WHERE season = %s AND week = %s
+                           AND status = 'REFUSED'""", (season, week))
+            assert cur.fetchone()[0] == 1
+    finally:
+        conn.rollback()
+        conn.close()
+
+
+# ----------------------------------------------------------- audit-5 U18 R1: two donors on the real save ----
+def test_r1_the_two_donor_case_reaches_the_save_with_distinct_players(tmp_path, mubase_snapshot):
+    """The auditor's exact reproduction on a copy of CAREER-MUBASE (audit-5 U18 R1).
+
+    Production `plan_rosters` asks for one created active WR and one PS WR slot; the adapter chooses the creation
+    donor (22087, the lowest-OVR free WR) and must fill the slot with the next ranked free agent (505), never the
+    same pgid. The production Plan and save writer apply both, and the readback shows two distinct players.
+    """
+    snap = mubase_snapshot
+    codes = lom._team_codes(snap)
+    create_card = real_state.RealPlayer(gsis_id="00-U18R1-ACTIVE", name="Zzr One Create", position="WR",
+                                        team="CHI", status="ACTIVE", designation="A01", birth_date="2001-01-01",
+                                        entry_year=2023, height_in=72, weight_lbs=200, jersey=12)
+    ps_card = real_state.RealPlayer(gsis_id="00-U18R1-PS", name="Zzr One Squad", position="WR", team="CIN",
+                                    status="PS", designation="P01", entry_year=2026)
+    real = real_state.RealWeek(season=2026, week=3, mode=real_state.CATCH_UP,
+                               rosters={"CHI": [create_card], "CIN": [ps_card]})
+    result = mirror_diff.plan_rosters(snap, real, {}, [], codes, mirror_contracts.ContractBook({}), CAP)
+    assert len(result.creates) == 1 and result.ps_fill == [{"team_index": codes["CIN"], "position": "WR"}]
+    before_sha = _sha256(MUBASE)
+
+    adapter, _ = creation_adapter(snap, real_card=create_card, roster_plan=result)
+    adapter.free_pool = lambda *a: [{"id": pid(22087), "pos": "WR", "ovr": 99},
+                                    {"id": pid(505), "pos": "WR", "ovr": 80}]
+    mirror = adapter.plan_week(FakeCursor(), snap, SEASON, "REGULAR_WEEK", 3)
+
+    assert mirror.creates[0]["donor_pgid"] == 22087        # preserved donor identity
+    assert [s["pgid"] for s in mirror.ps_signs] == [505]    # the best remaining eligible donor
+    mirror.setting = None
+    p = lo.Plan(snap, lo.REGULAR_WEEK, 2026, 3, None, "u18r1", {}, {})
+    p.db["mirror"] = mirror.record()
+    lo.step_nfl_mirror(p, mirror)
+    assert p.db["mirror"]["outcomes"][f"mirror:create:{create_card.gsis_id}"][0] == "WRITTEN"
+    assert p.db["mirror"]["outcomes"]["mirror:ps:505"] == ["WRITTEN", None]
+
+    doc, _ = p.finalize()
+    after, _ = _write_read(MUBASE, doc, tmp_path / "u18-r1-two-donor.save")
+    created = next(x for x in after["players"] if x["pgid"] == 22087)
+    substitute = next(x for x in after["players"] if x["pgid"] == 505)
+    assert (created["status"], created["team_index"]) == ("Signed", 0)
+    assert (substitute["status"], substitute["team_index"]) == ("PracticeSquad", 1)
+    assert _sha256(MUBASE) == before_sha                    # the source save was only read
+
+
+# ----------------------------------------------------------- audit-5 U18 R2: ordinary link persistence ----
+def _u18r2_clean(cur):
+    cur.execute("DELETE FROM nfl_player_links WHERE gsis_id LIKE '00-U18R2-%'")
+    cur.execute("DELETE FROM nfl_players WHERE gsis_id LIKE '00-U18R2-%'")
+    cur.execute("DELETE FROM players WHERE player_name LIKE 'U18R2 %'")
+
+
+def _u18r2_player(cur, tag, pgid):
+    cur.execute("""INSERT INTO players (player_name, full_name, origin, madden_pgid)
+                   VALUES (%s, %s, 'SAVE', %s) RETURNING id""", (f"U18R2 {tag}", f"U18R2 {tag}", pgid))
+    return cur.fetchone()[0]
+
+
+@pytest.mark.integration
+def test_r2_postgres_a_missing_real_person_is_created_for_exact_and_override_links():
+    """An ordinary link to a current newcomer absent from nfl_players persists, with a minimal person row and the
+    acknowledgement transaction still usable; repeating it changes nothing (audit-5 U18 R2)."""
+    conn = _scratch_conn()
+    try:
+        with conn.cursor() as cur:
+            _u18r2_clean(cur)
+            exact_id = _u18r2_player(cur, "Exact", 991201)
+            override_id = _u18r2_player(cur, "Override", 991202)
+            links = [
+                {"player_id": exact_id, "gsis_id": "00-U18R2-EXACT", "method": "EXACT", "score": 4.0,
+                 "evidence": {"position": True,
+                              "person": {"name": "U18R2 Exact", "position": "WR", "college": "State U",
+                                         "birth_date": "2001-01-01"}}},
+                {"player_id": override_id, "gsis_id": "00-U18R2-OVR", "method": "OVERRIDE", "score": None,
+                 "evidence": {"note": "JR accepted this pair",
+                              "person": {"name": "U18R2 Override", "position": "CB", "college": "Tech",
+                                         "birth_date": "2002-02-02"}}},
+            ]
+            lo._record_mirror_links(cur, {"links": links}, mirror_store)
+            cur.execute("""SELECT gsis_id, display_name, position, college FROM nfl_players
+                           WHERE gsis_id LIKE '00-U18R2-%' ORDER BY gsis_id""")
+            assert cur.fetchall() == [("00-U18R2-EXACT", "U18R2 Exact", "WR", "State U"),
+                                      ("00-U18R2-OVR", "U18R2 Override", "CB", "Tech")]
+            cur.execute("""SELECT gsis_id, method, evidence ->> 'note' FROM nfl_player_links
+                           WHERE gsis_id LIKE '00-U18R2-%' ORDER BY gsis_id""")
+            assert cur.fetchall() == [("00-U18R2-EXACT", "EXACT", None),
+                                      ("00-U18R2-OVR", "OVERRIDE", "JR accepted this pair")]
+            cur.execute("SELECT 1")                     # the acknowledgement transaction is still usable
+            assert cur.fetchone() == (1,)
+            lo._record_mirror_links(cur, {"links": links}, mirror_store)     # recover is idempotent
+            cur.execute("SELECT count(*) FROM nfl_players WHERE gsis_id LIKE '00-U18R2-%'")
+            assert cur.fetchone()[0] == 2
+            cur.execute("SELECT count(*) FROM nfl_player_links WHERE gsis_id LIKE '00-U18R2-%'")
+            assert cur.fetchone()[0] == 2
+    finally:
+        conn.rollback()
+        conn.close()
+
+
+@pytest.mark.integration
+def test_r2_postgres_an_existing_dimension_person_is_not_duplicated_or_rewritten():
+    conn = _scratch_conn()
+    try:
+        with conn.cursor() as cur:
+            _u18r2_clean(cur)
+            cur.execute("""INSERT INTO nfl_players (gsis_id, display_name, position)
+                           VALUES ('00-U18R2-EXIST', 'Historical Name', 'WR')""")
+            player_id = _u18r2_player(cur, "Existing", 991211)
+            record = {"player_id": player_id, "gsis_id": "00-U18R2-EXIST", "method": "OVERRIDE", "score": None,
+                      "evidence": {"person": {"name": "Current Name", "position": "CB", "college": "Other",
+                                              "birth_date": "1999-09-09"}}}
+            lo._record_mirror_links(cur, {"links": [record]}, mirror_store)
+            cur.execute("""SELECT display_name, position, college, birth_date FROM nfl_players
+                           WHERE gsis_id = '00-U18R2-EXIST'""")
+            assert cur.fetchall() == [("Historical Name", "WR", None, None)]   # never rewritten or deleted
+            cur.execute("SELECT count(*) FROM nfl_players WHERE gsis_id = '00-U18R2-EXIST'")
+            assert cur.fetchone()[0] == 1
+            cur.execute("SELECT method FROM nfl_player_links WHERE gsis_id = '00-U18R2-EXIST'")
+            assert cur.fetchall() == [("OVERRIDE",)]
+            cur.execute("SELECT 1")
+            assert cur.fetchone() == (1,)
+    finally:
+        conn.rollback()
+        conn.close()
+
+
+@pytest.mark.integration
+def test_r2_postgres_a_linked_person_or_gsis_collision_is_refused_and_keeps_the_transaction():
+    conn = _scratch_conn()
+    try:
+        with conn.cursor() as cur:
+            _u18r2_clean(cur)
+            first = _u18r2_player(cur, "First", 991221)
+            second = _u18r2_player(cur, "Second", 991222)
+            good = {"player_id": first, "gsis_id": "00-U18R2-GOOD", "method": "EXACT", "score": 2.0,
+                    "evidence": {"person": {"name": "U18R2 First", "position": "WR"}}}
+            lo._record_mirror_links(cur, {"links": [good]}, mirror_store)
+            collisions = [
+                {"player_id": second, "gsis_id": "00-U18R2-GOOD", "method": "ALIAS", "score": 1.0,
+                 "evidence": {"person": {"name": "U18R2 Second", "position": "WR"}}},
+                {"player_id": first, "gsis_id": "00-U18R2-OTHER", "method": "ALIAS", "score": 1.0,
+                 "evidence": {"person": {"name": "U18R2 Other", "position": "CB"}}},
+            ]
+            lo._record_mirror_links(cur, {"links": collisions}, mirror_store)   # tolerated, never raised
+            cur.execute("SELECT player_id, gsis_id FROM nfl_player_links WHERE gsis_id LIKE '00-U18R2-%'")
+            assert cur.fetchall() == [(first, "00-U18R2-GOOD")]
+            cur.execute("SELECT count(*) FROM nfl_players WHERE gsis_id LIKE '00-U18R2-%'")
+            assert cur.fetchone()[0] == 1               # a refused link adds no person
+            cur.execute("SELECT 1")                     # every later statement still works
+            assert cur.fetchone() == (1,)
+    finally:
+        conn.rollback()
+        conn.close()
+
+
+@pytest.mark.integration
+def test_r2_postgres_a_rolled_back_acknowledgement_persists_no_link_or_person():
+    conn = _scratch_conn()
+    try:
+        with conn.cursor() as cur:
+            _u18r2_clean(cur)
+            player_id = _u18r2_player(cur, "Rollback", 991231)
+            links = [{"player_id": player_id, "gsis_id": "00-U18R2-ROLLBACK", "method": "ESPN", "score": 1.0,
+                      "evidence": {"person": {"name": "U18R2 Rollback", "position": "FS"}}}]
+            lo._record_mirror_links(cur, {"links": links}, mirror_store)
+            cur.execute("SELECT count(*) FROM nfl_player_links WHERE gsis_id = '00-U18R2-ROLLBACK'")
+            assert cur.fetchone()[0] == 1
+        conn.rollback()                                 # a dry run / failed acknowledgement persists nothing
+        with conn.cursor() as cur:
+            cur.execute("SELECT count(*) FROM nfl_player_links WHERE gsis_id = '00-U18R2-ROLLBACK'")
+            assert cur.fetchone()[0] == 0
+            cur.execute("SELECT count(*) FROM nfl_players WHERE gsis_id = '00-U18R2-ROLLBACK'")
+            assert cur.fetchone()[0] == 0
     finally:
         conn.rollback()
         conn.close()

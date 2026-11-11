@@ -1655,10 +1655,18 @@ def step_nfl_mirror(plan, mirror):
         ok = plan.set_fields(pgid, fields, tag=tag)
         outcomes[tag] = ["WRITTEN", None] if ok else ["REFUSED", reason_of(tag, "the injury edit was refused")]
 
-    # 4. practice-squad fills (resolved at plan time from Deps.free_agent_pool's order)
+    # 4. practice-squad fills (resolved at plan time from Deps.free_agent_pool's order, with this write's identities
+    #    reserved; audit-5 U18 R1)
     for slot in mirror.ps_signs or []:
-        pgid = int(slot["pgid"])
-        tag = f"mirror:ps:{pgid}"
+        pgid = slot.get("pgid")
+        if pgid is None:        # an exhausted position is a recorded refusal, not a silently missing fill
+            tag = slot.get("tag") or "mirror:ps:unfilled"
+            reason = slot.get("refused") or "no free agent for the practice-squad slot"
+            plan.warn(f"NFL mirror: {reason}")
+            outcomes[tag] = ["REFUSED", reason]
+            continue
+        pgid = int(pgid)
+        tag = slot.get("tag") or f"mirror:ps:{pgid}"
         if plan.sign_player(pgid, slot.get("team_index"), "PracticeSquad", None, PRIORITY_MIRROR,
                             slot.get("why") or "the real practice squad has a player the save lacks", tag=tag):
             plan.counts["mirror_ps"] += 1
@@ -3002,24 +3010,39 @@ def _mirror_applied(mirror, outcomes):
 
 def _record_mirror_links(cur, mirror, mirror_store):
     """Persist this week's links with the method that decided them (audit-4 U6 F4): a CREATED link through
-    `store.add_created_link`, an ordinary/override one as the linker recorded it."""
-    for link in mirror.get("links") or []:
+    `store.add_created_link`, an ordinary/override one as the linker recorded it.
+
+    Each link rides its own SAVEPOINT (audit-5 U18 R2): a tolerated failure (a conflicting link, or a person the
+    evidence cannot add) rolls back that one row only, so the acknowledgement transaction stays usable and a later
+    statement never meets `InFailedSqlTransaction`."""
+    for index, link in enumerate(mirror.get("links") or []):
         if link.get("player_id") is None or not link.get("gsis_id"):
             continue
         method = str(link.get("method") or "CREATED").upper()
         evidence = dict(link.get("evidence") or {})
+        savepoint = f"nfl_mirror_link_{index}"
+        cur.execute(f"SAVEPOINT {savepoint}")
         try:
             if method == "CREATED":
                 mirror_store.add_created_link(cur, link["player_id"], link["gsis_id"], evidence)
             else:
                 _record_link(cur, link["player_id"], link["gsis_id"], method, link.get("score"), evidence)
         except Exception as e:      # noqa: BLE001 - a link already known must not fail a written save
+            cur.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+            cur.execute(f"RELEASE SAVEPOINT {savepoint}")
             log.warning("NFL mirror: link %s -> %s (%s) not stored (%s)",
                         link.get("gsis_id"), link["player_id"], method, e)
+        else:
+            cur.execute(f"RELEASE SAVEPOINT {savepoint}")
 
 
 def _record_link(cur, player_id, gsis_id, method, score, evidence):
-    """One ordinary `nfl_player_links` row (method EXACT / ESPN / ALIAS / FUZZY / OVERRIDE), idempotently."""
+    """One ordinary `nfl_player_links` row (method EXACT / ESPN / ALIAS / FUZZY / OVERRIDE), idempotently.
+
+    `nfl_player_links.gsis_id` references `nfl_players`, while the mirror's linker can accept a current newcomer the
+    2025 history load does not have. The evidence's `person` identity adds that minimal row first, with the same
+    `ON CONFLICT (gsis_id) DO NOTHING` shape as `store.add_created_link`; an existing historical person is never
+    changed or deleted. A gsis or player already linked elsewhere is the existing ValueError path (audit-5 U18 R2)."""
     if method not in LINK_METHODS or method == "CREATED":
         raise ValueError(f"unknown link method {method!r}")
     cur.execute("SELECT player_id, gsis_id FROM nfl_player_links WHERE player_id = %s OR gsis_id = %s",
@@ -3029,6 +3052,12 @@ def _record_link(cur, player_id, gsis_id, method, score, evidence):
         if all(int(p) == int(player_id) and g == gsis_id for p, g in existing):
             return False
         raise ValueError(f"player {player_id} or {gsis_id} is already linked: {existing}")
+    evidence = dict(evidence or {})
+    person = evidence.get("person")
+    if not isinstance(person, dict):
+        person = evidence
+    from engines.nfl_mirror import store as mirror_store
+    mirror_store.ensure_person(cur, gsis_id, person)
     from psycopg.types.json import Jsonb
     cur.execute("""INSERT INTO nfl_player_links (player_id, gsis_id, method, score, evidence)
                    VALUES (%s, %s, %s, %s, %s)""",

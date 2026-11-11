@@ -231,7 +231,13 @@ class MirrorAdapter:
         for create in creates:      # F1: a created identity is linked before the injury and chart reconciliation
             links.setdefault(create["gsis_id"], create["donor_pgid"])
             created_gsis.add(create["gsis_id"])
-        ps_signs = self._ps_signs(cur, snapshot, roster.ps_fill, season, stage, week, pids)
+        # audit-5 U18 R1: one reservation set for every identity this write consumes, so the PS fill cannot take a
+        # newly matched person (all `links`), a planned creation donor, or a free agent an ordinary signing takes.
+        reserved = {int(pgid) for pgid in links.values() if pgid is not None}
+        reserved.update(int(create["donor_pgid"]) for create in creates)
+        reserved.update(int(op["pgid"]) for op in roster.ops or []
+                        if op.get("kind") == "sign" and op.get("pgid") is not None)
+        ps_signs = self._ps_signs(cur, snapshot, roster.ps_fill, season, stage, week, pids, reserved)
         injuries, injury_players = _injuries(real, later, snapshot, links, skip=created_gsis)
         injury_players.update(int(create["donor_pgid"]) for create in creates)
         staff_changes, staff_moves = self._staff(cur, rows["games"], season, real)
@@ -263,10 +269,13 @@ class MirrorAdapter:
         """The durable `nfl_player_links` rows for this week's ordinary new links, with the linker's own method.
 
         The diff reports only `(gsis_id, pgid)`; the method/evidence come from the same `link.match` call it made
-        (audit-4 U6 F4), so an accepted override is stored as OVERRIDE and never rewritten as CREATED."""
+        (audit-4 U6 F4), so an accepted override is stored as OVERRIDE and never rewritten as CREATED. The real
+        person's identity travels in the evidence's `person` key, so `_record_link` can add the minimal
+        `nfl_players` row a current newcomer absent from the history load needs (audit-5 U18 R2)."""
         if not unlinked_new:
             return []
         details = self.match_links(snapshot, real, links, team_index) or {}
+        real_by_gsis = mirror_diff._real_by_gsis(real)
         out = []
         for gsis, pgid in unlinked_new:
             player_id = (pids or {}).get(int(pgid))
@@ -276,6 +285,10 @@ class MirrorAdapter:
             detail = details.get(gsis) or {}
             method = str(detail.get("method") or "").upper()
             evidence = dict(detail.get("evidence") or {})
+            person = real_by_gsis.get(gsis)
+            if person is not None:
+                evidence["person"] = {"name": person.name, "position": person.position,
+                                      "college": person.college, "birth_date": person.birth_date}
             if method not in LINK_METHODS:
                 method = "ALIAS"
                 evidence.setdefault("source", "NFL weekly mirror plan_rosters")
@@ -334,9 +347,12 @@ class MirrorAdapter:
         return out
 
     # -- practice-squad fills -------------------------------------------------------------------------------
-    def _ps_signs(self, cur, snapshot, ps_fill, season, stage, week, pids):
-        """The diff's PS-only slots, each filled with the best save free agent at the position from
-        `Deps.free_agent_pool`'s order (plan §2.6). No pool (or a fake) leaves the slot unfilled, with a warning."""
+    def _ps_signs(self, cur, snapshot, ps_fill, season, stage, week, pids, reserved=()):
+        """The diff's PS-only slots, each filled with the best *remaining* free agent at the position from
+        `Deps.free_agent_pool`'s order (plan §2.6). `reserved` carries the pgids this write already consumes: newly
+        matched people, creation donors and ordinary signings (audit-5 U18 R1). A slot with no remaining donor is an
+        explicit REFUSED entry, logged and recorded in the move ledger, never a silent drop. No pool (or a fake)
+        leaves the slot unfilled, with a warning."""
         if not ps_fill:
             return []
         from pipeline import league_office as lo
@@ -355,9 +371,11 @@ class MirrorAdapter:
             pid = (pids or {}).get(pgid)
             if pid is not None:
                 free[pid] = pgid
-        out, used = [], set()
-        for slot in ps_fill:
+        out = []
+        used = {int(pgid) for pgid in (reserved or ()) if pgid is not None}
+        for slot_index, slot in enumerate(ps_fill):
             position = str(slot.get("position") or "").strip().upper()
+            team_index = int(slot["team_index"]) if slot.get("team_index") is not None else None
             best = None
             for entry in pool:
                 pgid = free.get(entry.get("id"))
@@ -369,11 +387,16 @@ class MirrorAdapter:
                 if best is None or key > best[0]:
                     best = (key, pgid)
             if best is None:
-                log.warning("NFL mirror: no free agent at %s for team %s's practice squad", position,
-                            slot.get("team_index"))
+                refused = (f"no free agent at {position} for team {team_index}'s practice squad: "
+                           f"every candidate is already used by this write")
+                log.warning("NFL mirror: %s", refused)
+                out.append({"pgid": None, "team_index": team_index, "position": position,
+                            "tag": f"mirror:ps:unfilled:{team_index}:{position}:{slot_index}",
+                            "refused": refused})
                 continue
-            used.add(best[1])
-            out.append({"pgid": int(best[1]), "team_index": int(slot["team_index"]),
+            used.add(int(best[1]))
+            out.append({"pgid": int(best[1]), "team_index": team_index,
+                        "position": position, "tag": f"mirror:ps:{int(best[1])}",
                         "why": f"real practice squad has a {position} the save lacks"})
         return out
 
@@ -606,10 +629,20 @@ def _moves(real, roster, ps_signs, creates, injuries, staff_moves, setting, team
                     "detail": {"weeks": injury["weeks"], "fields": injury["fields"], "tag": tag},
                     "reason": injury["why"]})
     for slot in ps_signs or []:
-        tag = f"mirror:ps:{int(slot['pgid'])}"
-        out.append({"kind": "PS", "pgid": int(slot["pgid"]), "player_id": player_id(int(slot["pgid"])),
+        pgid = slot.get("pgid")
+        if pgid is None:        # audit-5 U18 R1: an exhausted position is an explicit REFUSED ledger row
+            tag = slot.get("tag") or "mirror:ps:unfilled"
+            out.append({"kind": "PS", "pgid": None, "player_id": None,
+                        "to_team_id": team_id(slot.get("team_index")),
+                        "detail": {"position": slot.get("position"), "tag": tag},
+                        "reason": slot.get("refused") or "no free agent for the practice-squad slot"})
+            continue
+        pgid = int(pgid)
+        tag = slot.get("tag") or f"mirror:ps:{pgid}"
+        out.append({"kind": "PS", "pgid": pgid, "player_id": player_id(pgid),
                     "to_team_id": team_id(slot.get("team_index")),
-                    "detail": {"position": (players.get(int(slot["pgid"])) or {}).get("position"), "tag": tag},
+                    "detail": {"position": (players.get(pgid) or {}).get("position") or slot.get("position"),
+                               "tag": tag},
                     "reason": slot.get("why") or "real practice squad"})
     for i, move in enumerate(staff_moves or []):
         tagged = dict(move)
