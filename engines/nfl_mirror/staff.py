@@ -15,8 +15,16 @@ them: the outgoing tenure ends at `season` (it still covers the season), the inc
 by name in `coaches` (HC) or `coordinators` (OC/DC); otherwise a name-only row is created with a CREATED
 `coach_madden_profiles` row built by `coach_madden_profile.build_profile` through the carousel's own helper, so the
 league office's `step_staff` can create him in the save. A coordinator promoted to head coach keeps his own Madden
-record (the carousel's D2 rule). A team in `user_team_ids` is never touched. Re-applying a change whose incoming
-person already holds the seat does nothing. The function returns the STAFF moves for `store.record_moves`.
+record (the carousel's D2 rule).
+
+A promotion's *source* coordinator seat needs an explicit decision (plan §8 Q2). When `changes` also names a man for
+that team + OC/DC, that change ends the promoted man's coordinator tenure and installs the named replacement, so
+`_wanted` asks for each man once and every seat resolves to its own profile. With no named replacement the source
+seat is returned as a REFUSED STAFF move carrying its reason, and its tenure rows are left untouched: Mu never
+invents a successor, and the week must not read as cleanly written. A team in `user_team_ids` is never touched.
+Re-applying a change whose incoming person already holds the seat does nothing, except that a promotion whose source
+seat is still unresolved keeps returning its REFUSED move. The function returns the STAFF moves for
+`store.record_moves`.
 """
 import csv
 import os
@@ -262,6 +270,68 @@ def _start_tenure(cur, table, column, person_id, team_id, season, role=None):
     return cur.fetchone()[0]
 
 
+def _resolved_team_id(change, team_ids, season):
+    """The Mu team id for `change.team`, or None when the team is unknown (same lookup as the write loop)."""
+    try:
+        return team_ids.get(mu_abbr(change.team, season))
+    except UnknownTeam:
+        return None
+
+
+def _named_seat_targets(changes, team_ids, season, user_team_ids):
+    """{(team_id, role): {normalised incoming name}} for the changes that will actually write a seat.
+
+    A user-team, unknown-team or nameless change writes nothing, so it cannot resolve a seat.
+    """
+    targets = {}
+    for change in changes:
+        team_id = _resolved_team_id(change, team_ids, season)
+        if team_id is None or team_id in user_team_ids or not change.in_name or change.role not in ROLES:
+            continue
+        targets.setdefault((team_id, change.role), set()).add(norm_name(change.in_name))
+    return targets
+
+
+def _current_coordinator_seats(cur, coordinator_id, season):
+    """[(team_id, role)] seats `coordinator_id` is the current holder of for `season` (the man `_wanted` picks)."""
+    cur.execute("""SELECT DISTINCT team_id, role FROM coordinator_tenures
+                   WHERE coordinator_id = %s AND start_season <= %s
+                     AND (end_season IS NULL OR end_season >= %s)
+                   ORDER BY team_id, role""", (coordinator_id, season, season))
+    seats = []
+    for team_id, role in cur.fetchall():
+        current = _current_coord(cur, team_id, role, season)
+        if current and current["person_id"] == coordinator_id:
+            seats.append((team_id, role))
+    return seats
+
+
+def _unresolved_source_seat_moves(cur, season, change, team_ids, targets):
+    """REFUSED moves for each coordinator seat a promoted head coach still holds with no named replacement.
+
+    `change` is the HC change. A change for the same (team, role) naming a different incoming person resolves the
+    seat: that change ends the promoted man's tenure and installs the named person, so nothing is returned. With no
+    such change the seat is refused, its reason recorded, and the tenure rows are left untouched (Q2).
+    """
+    coordinator_id = _find_coordinator(cur, change.in_name)
+    if coordinator_id is None:
+        return []
+    abbr_by_id = {team_id: abbr for abbr, team_id in team_ids.items()}
+    promoted = norm_name(change.in_name)
+    moves = []
+    for team_id, role in _current_coordinator_seats(cur, coordinator_id, season):
+        if any(name != promoted for name in targets.get((team_id, role), ())):
+            continue
+        moves.append({"kind": "STAFF", "to_team_id": team_id, "status": "REFUSED",
+                      "reason": f"promoted to {change.role} with no named {role} replacement",
+                      "detail": {"team": abbr_by_id.get(team_id), "role": role, "out_name": change.in_name,
+                                 "in_name": None, "week": change.week, "source": change.source,
+                                 "date": change.date, "note": change.note, "person_kind": "COORD",
+                                 "person_id": coordinator_id, "promoted_team": change.team,
+                                 "promoted_role": change.role}})
+    return moves
+
+
 def _skip(change, team_id, reason):
     return {"kind": "STAFF", "to_team_id": team_id, "status": "SKIPPED", "reason": reason,
             "detail": {"team": change.team, "role": change.role, "out_name": change.out_name,
@@ -272,16 +342,18 @@ def apply_staff_changes(cur, season, changes, user_team_ids=frozenset()):
     """Write `changes` into the tenure tables for `season` and return their STAFF moves (see the module docs).
 
     A change for a user team, an unknown team or with no incoming name is returned as a SKIPPED move and writes
-    nothing. A change whose incoming person already holds the seat returns nothing."""
+    nothing. A change whose incoming person already holds the seat returns nothing, except that a promotion whose
+    source coordinator seat is still unresolved keeps returning that seat's REFUSED move. A promotion whose old seat
+    is filled by a change in `changes` writes normally; one with no named replacement returns a REFUSED move for the
+    source seat and leaves its tenure rows untouched."""
     season = int(season)
     user_team_ids = frozenset(user_team_ids or ())
+    changes = list(changes or ())
     team_ids = _team_ids(cur)
+    targets = _named_seat_targets(changes, team_ids, season, user_team_ids)
     moves = []
     for change in changes:
-        try:
-            team_id = team_ids.get(mu_abbr(change.team, season))
-        except UnknownTeam:
-            team_id = None
+        team_id = _resolved_team_id(change, team_ids, season)
         if team_id is None:
             moves.append(_skip(change, None, f"unknown team {change.team!r}"))
             continue
@@ -299,7 +371,11 @@ def apply_staff_changes(cur, season, changes, user_team_ids=frozenset()):
             current = _current_coord(cur, team_id, change.role, season)
             table, column, kind = "coordinator_tenures", "coordinator_id", "COORD"
         if current and norm_name(current["name"]) == norm_name(change.in_name):
-            continue                                       # already applied (or already true in Mu)
+            # Already applied (or already true in Mu). A promotion keeps refusing its unresolved source seat so a
+            # re-plan still records the refusal instead of letting the week look clean (Q2).
+            if change.role == "HC":
+                moves.extend(_unresolved_source_seat_moves(cur, season, change, team_ids, targets))
+            continue
 
         if change.role == "HC":
             person_id, created = _incoming_coach(cur, change.in_name, current)
@@ -321,4 +397,6 @@ def apply_staff_changes(cur, season, changes, user_team_ids=frozenset()):
             detail["mu_out_name"] = current["name"]        # Mu had someone else in the seat; real life wins
         moves.append({"kind": "STAFF", "to_team_id": team_id, "status": "PLANNED", "detail": detail,
                       "reason": change.note})
+        if change.role == "HC":
+            moves.extend(_unresolved_source_seat_moves(cur, season, change, team_ids, targets))
     return moves

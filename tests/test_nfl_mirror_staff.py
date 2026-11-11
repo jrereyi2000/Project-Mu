@@ -243,6 +243,129 @@ def test_coordinator_promoted_to_head_coach_keeps_his_madden_record():
     assert _count(conn, "coach_madden_profiles") == 6   # his record moved, no second person invented
 
 
+# ---------- wave-1 audit F3: a promotion's source coordinator seat (plan §8 Q2) ----------
+
+def _promotion(replacement=None, team="KC", out_name="Andy Reid", source_team=None):
+    """The HC change promoting KC's DC Steve Spagnuolo, optionally with the named replacement for his old seat."""
+    changes = [StaffChange(team=team, role="HC", out_name=out_name, in_name="Steve Spagnuolo", week=8)]
+    if replacement:
+        changes.append(StaffChange(team=source_team or team, role="DC", out_name="Steve Spagnuolo",
+                                   in_name=replacement, week=8, source="CSV"))
+    return changes
+
+
+def test_promotion_with_a_named_replacement_resolves_both_seats():
+    """F3 mechanical half: the named OC/DC change ends the promoted man's tenure and installs its own person, so
+    `_wanted` asks for each man once, every seat has a distinct profile, and a repeat apply writes nothing."""
+    conn, cur = _league()
+    changes = _promotion("Dave Aranda")
+    moves = staff.apply_staff_changes(cur, SEASON, changes)
+    assert [m["status"] for m in moves] == ["PLANNED", "PLANNED"]
+
+    # the promotion ended the promoted man's coordinator tenure; the named man holds the seat
+    assert conn.execute("SELECT end_season FROM coordinator_tenures WHERE coordinator_id = 101").fetchone() == (SEASON,)
+    aranda = conn.execute("SELECT id FROM coordinators WHERE coordinator_name = 'Dave Aranda'").fetchone()[0]
+    wanted = cs._wanted(cur, SEASON)
+    assert (wanted[(1, "HC")]["name"], wanted[(1, "HC")]["person_kind"]) == ("Steve Spagnuolo", "COACH")
+    assert (wanted[(1, "DC")]["person_id"], wanted[(1, "DC")]["person_kind"]) == (aranda, "COORD")
+
+    # no man is wanted in two seats, and every wanted seat resolves to its own profile: nothing points at the
+    # COORD identity whose profile the promotion moved to COACH (the "promotion skipped … no row" defect).
+    persons = [(v["person_kind"], v["person_id"]) for v in wanted.values()]
+    assert len(persons) == len(set(persons))
+    profiles = set(conn.execute("SELECT person_kind, person_id FROM coach_madden_profiles").fetchall())
+    assert set(persons) <= profiles
+    assert ("COORD", 101) not in profiles
+
+    before = _snapshot(conn)
+    assert staff.apply_staff_changes(cur, SEASON, changes) == []
+    assert _snapshot(conn) == before
+
+
+def test_promotion_with_the_named_replacement_change_first_still_resolves():
+    """The look-ahead is by change, not by position: a replacement that already wrote its seat leaves nothing to
+    refuse when the promotion is handled afterwards."""
+    conn, cur = _league()
+    changes = list(reversed(_promotion("Dave Aranda")))
+    moves = staff.apply_staff_changes(cur, SEASON, changes)
+    assert [m["status"] for m in moves] == ["PLANNED", "PLANNED"]
+    assert not any(m["status"] == "REFUSED" for m in moves)
+    wanted = cs._wanted(cur, SEASON)
+    assert wanted[(1, "HC")]["name"] == "Steve Spagnuolo" and wanted[(1, "DC")]["name"] == "Dave Aranda"
+    assert conn.execute("SELECT end_season FROM coordinator_tenures WHERE coordinator_id = 101").fetchone() == (SEASON,)
+
+
+def test_promotion_without_a_named_replacement_is_refused():
+    """F3, Q2: with no named replacement the source seat is a REFUSED move with its reason, its tenure rows are
+    untouched, and a re-plan keeps refusing rather than letting the week look cleanly written."""
+    conn, cur = _league()
+    change = _promotion()[0]
+    moves = staff.apply_staff_changes(cur, SEASON, [change])
+    assert [m["status"] for m in moves] == ["PLANNED", "REFUSED"]
+    refused = moves[1]
+    assert refused["kind"] == "STAFF" and refused["to_team_id"] == 1
+    assert refused["reason"] == "promoted to HC with no named DC replacement"
+    assert refused["detail"]["team"] == "KC" and refused["detail"]["role"] == "DC"
+    assert refused["detail"]["out_name"] == "Steve Spagnuolo" and refused["detail"]["in_name"] is None
+    assert refused["detail"]["person_kind"] == "COORD" and refused["detail"]["person_id"] == 101
+
+    # the source seat's tenure tables are untouched: Mu still has him as Kansas City's current DC
+    assert conn.execute("SELECT end_season FROM coordinator_tenures WHERE coordinator_id = 101").fetchone() == (None,)
+    wanted = cs._wanted(cur, SEASON)
+    assert wanted[(1, "HC")]["name"] == "Steve Spagnuolo"
+    assert wanted[(1, "DC")]["name"] == "Steve Spagnuolo"
+    # his one profile moved to the coach identity (the carousel's D2 rule), which is why the seat needs an answer
+    coach_id = conn.execute("SELECT id FROM coaches WHERE coach_name = 'Steve Spagnuolo'").fetchone()[0]
+    assert conn.execute("SELECT person_kind, person_id FROM coach_madden_profiles WHERE presentation_id = 4"
+                        ).fetchone() == ("COACH", coach_id)
+
+    before = _snapshot(conn)
+    again = staff.apply_staff_changes(cur, SEASON, [change])
+    assert [m["status"] for m in again] == ["REFUSED"]
+    assert again[0]["reason"] == "promoted to HC with no named DC replacement"
+    assert _snapshot(conn) == before
+
+
+def test_cross_team_promotion_resolves_the_source_team_seat():
+    """A coordinator promoted to another team's HC leaves his old seat on the team he came from; a named change
+    for that team + role takes the same path."""
+    conn, cur = _league()
+    changes = _promotion("Dave Aranda", team="BUF", out_name="Sean McDermott", source_team="KC")
+    moves = staff.apply_staff_changes(cur, SEASON, changes)
+    assert [m["status"] for m in moves] == ["PLANNED", "PLANNED"]
+    assert conn.execute("SELECT end_season FROM coordinator_tenures WHERE coordinator_id = 101").fetchone() == (SEASON,)
+    wanted = cs._wanted(cur, SEASON)
+    assert (wanted[(2, "HC")]["name"], wanted[(2, "HC")]["person_kind"]) == ("Steve Spagnuolo", "COACH")
+    assert (wanted[(1, "DC")]["name"], wanted[(1, "DC")]["person_kind"]) == ("Dave Aranda", "COORD")
+    persons = [(v["person_kind"], v["person_id"]) for v in wanted.values()]
+    assert len(persons) == len(set(persons))
+    profiles = set(conn.execute("SELECT person_kind, person_id FROM coach_madden_profiles").fetchall())
+    assert set(persons) <= profiles
+
+
+def test_cross_team_promotion_without_a_replacement_refuses_the_source_team():
+    """The refusal names the seat that is actually open (KC's DC), not the team he was promoted to (BUF)."""
+    _conn, cur = _league()
+    moves = staff.apply_staff_changes(cur, SEASON, [
+        StaffChange(team="BUF", role="HC", out_name="Sean McDermott", in_name="Steve Spagnuolo", week=9)])
+    (refused,) = [m for m in moves if m["status"] == "REFUSED"]
+    assert refused["to_team_id"] == 1
+    assert refused["detail"]["team"] == "KC" and refused["detail"]["role"] == "DC"
+    assert refused["reason"] == "promoted to HC with no named DC replacement"
+
+
+def test_normal_head_coach_and_coordinator_changes_are_unchanged():
+    """A non-promotion change is untouched: no source-seat work, no REFUSED move."""
+    conn, cur = _league()
+    moves = staff.apply_staff_changes(cur, SEASON, [
+        _hc("BUF", "Sean McDermott", "Brian Daboll"),
+        StaffChange(team="KC", role="OC", out_name="Matt Nagy", in_name="Mike Kafka", week=8, source="CSV")])
+    assert [m["status"] for m in moves] == ["PLANNED", "PLANNED"]
+    assert not any(m["status"] == "REFUSED" for m in moves)
+    wanted = cs._wanted(cur, SEASON)
+    assert wanted[(2, "HC")]["name"] == "Brian Daboll" and wanted[(1, "OC")]["name"] == "Mike Kafka"
+
+
 def test_oc_and_dc_changes_from_csv():
     conn, cur = _league()
     changes = [StaffChange(team="KC", role="OC", out_name="Matt Nagy", in_name="Mike Kafka", week=8, source="CSV"),
