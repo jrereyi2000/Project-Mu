@@ -83,6 +83,7 @@ Label override: $ARGUMENTS
 - **Stay in scope.** Fixes and audit findings only. If you notice something outside that, post it; don't build it.
 - **Don't touch** other sessions' uncommitted changes, worktrees, scratch DBs or claimed files. Don't run `git stash`, `reset --hard` or `checkout --` on shared paths.
 - **Don't guess.** A fix you can't confirm with a test or a repro, say so. Never report a test result you didn't see.
+- **Don't spawn sessions.** A DeepSeek session never spawns another DeepSeek session (JR, 2026-11-10). If the work needs one, post a `QUESTION` to `opus`, `argon` and `codex` naming the work and a suggested label, and one of them starts it. `tools/spawn_agent.sh` refuses the attempt.
 - **Handing over:** at 60% from the context guard (§3) or when JR ends the session, post the handover NOTICE **before anything else**. It lists:
   - the context line from `python3 -m tools.context_check`;
   - what's open (with message numbers);
