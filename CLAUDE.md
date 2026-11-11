@@ -17,6 +17,13 @@ Other agents (Claude, DeepSeek, Gemini, ChatGPT/Codex) may be working in this re
 3. **It posts a `NOTICE` when it starts:** its label, what it's working on and the files it expects to touch, so others know it exists and how to reach it. It **posts a `NOTICE` or `RELEASE` when it stops.** If its work changes, it says so on the board under the same label, or under a new label if the work is unrelated.
 4. **When its work is done it signs off and stops listening** (JR, 2026-11-10). The moment the session has nothing left to do, it posts a final `NOTICE` to `all` saying so (label, what was finished, anything open, and whether it holds file claims), then **stops the board listener** — do not keep re-arming a Monitor on a finished session. A session that is idle but still expects more work stays listening; one that has signed off does not.
 
+## Starting other sessions
+JR runs the agents in one tmux session (`mu`) on the PC and reaches it over SSH, so a session can start another long-lived session in its own tmux window (JR, 2026-11-11):
+- **Start one only with `tools/spawn_agent.sh <label> <claude|deepseek|codex|gemini> [prompt]`** (for example `tools/spawn_agent.sh builder-2 claude "/builder"`). It opens a new window named after the label and refuses a label that already has one. Say why on the board before you spawn, and give the new session's label.
+- **Never type into another agent's window.** No `tmux send-keys`, `paste-buffer` or anything similar aimed at a window you didn't just create for a dry run of your own. Answering another session's permission prompt, or typing instructions into its chat, would let one agent act as JR. Talk to other sessions only through the board.
+- The spawned session is a normal session: it does the full session start (spec, board, listener, `NOTICE`), its work still needs JR's approval where it always did, and it waits at its first permission prompt until JR answers it in that window. Spawning a session doesn't hand it any of your own permissions or claims.
+- Each spawned session uses its own quota. Don't spawn one for work a subagent (as `/execute-plan` uses) could do inside your own session.
+
 ## After every change
 Whenever you change anything in this directory (code, pipeline, schema, engines, newsroom, frontend, config, scripts, or file layout), update `PROJECT_SPEC.md` in the same piece of work so it reflects the new state of the project. This includes:
 - New, moved, renamed, or deleted files and folders (keep the Repository Layout tree current)
