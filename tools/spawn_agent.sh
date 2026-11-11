@@ -3,9 +3,15 @@
 # Any agent, or JR, may run it. It only ever OPENS a new window; it never types into an existing one
 # (agents must never `tmux send-keys` into another agent's window).
 #
-#   tools/spawn_agent.sh [--dry-run] <label> <claude|deepseek|codex|gemini> [prompt]
-#   e.g. tools/spawn_agent.sh builder-2 claude "/builder"
+#   tools/spawn_agent.sh [--dry-run] <label> <claude|opus|deepseek|codex|gemini> [prompt]
+#   e.g. tools/spawn_agent.sh builder-2 opus "/builder"
 #        tools/spawn_agent.sh gm-hiring codex "Pick up the HANDOFF addressed to gm-hiring on the board."
+#
+# Opus, Codex and Argon sessions may spawn a DeepSeek session for builder or task-implementation work
+# (`... <label> deepseek "/builder"`), coordinating on the board to run the fewest DeepSeek sessions.
+# A DeepSeek-routed session never spawns another DeepSeek session (JR, 2026-11-10): it asks opus,
+# argon and codex on the board to do it. This script refuses the attempt unless
+# MU_ALLOW_DEEPSEEK_SPAWN=1 is set.
 #
 # - The window is named after the label, in tmux session $MU_TMUX_SESSION (default `mu`; created detached
 #   if it doesn't exist). A window with that name already open is refused.
@@ -22,7 +28,7 @@ set -euo pipefail
 
 dry=0
 if [ "${1:-}" = "--dry-run" ]; then dry=1; shift; fi
-usage="usage: spawn_agent.sh [--dry-run] <label> <claude|deepseek|codex|gemini> [prompt]"
+usage="usage: spawn_agent.sh [--dry-run] <label> <claude|opus|deepseek|codex|gemini> [prompt]"
 label="${1:?$usage}"
 agent="${2:?$usage}"
 prompt="${3:-}"
@@ -44,11 +50,19 @@ fi
 
 case "$agent" in
   claude)   cmd=(claude "$prompt") ;;
+  opus)     cmd=(claude --model claude-opus-5-5 --effort medium "$prompt") ;;
   deepseek) cmd=("${MU_DEEPSEEK_CMD:-$HOME/bin/claude-deepseek}" "$prompt") ;;
   codex)    cmd=(codex "$prompt") ;;
   gemini)   cmd=(gemini -i "$prompt") ;;
-  *) echo "spawn_agent: unknown agent '$agent' (claude, deepseek, codex, gemini)" >&2; exit 2 ;;
+  *) echo "spawn_agent: unknown agent '$agent' (claude, opus, deepseek, codex, gemini)" >&2; exit 2 ;;
 esac
+
+if [ "$agent" = "deepseek" ] && [ "${MU_ALLOW_DEEPSEEK_SPAWN:-0}" != "1" ] &&
+   { [[ "${ANTHROPIC_BASE_URL:-}" == *deepseek* ]] || [[ "${ANTHROPIC_MODEL:-}" == deepseek-* ]]; }; then
+  echo "spawn_agent: a DeepSeek-routed session never spawns another DeepSeek session (CLAUDE.md)." >&2
+  echo "Ask opus, argon and codex on the board to spawn it; they coordinate the fewest DeepSeek sessions." >&2
+  exit 3
+fi
 
 inner="$(printf '%q ' "${cmd[@]}")"
 inner="${inner% }; exec bash"
