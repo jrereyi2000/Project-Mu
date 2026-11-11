@@ -3,7 +3,7 @@
 ``call(["look", "--title", "Madden NFL 27", "--out", "/home/.../shot.png", "--ocr"])`` runs
 ``win_agent.py`` under the Windows venv interpreter (``MU_WIN_PYTHON``, default
 ``/mnt/c/Madden27Modding/MuPilot/venv/Scripts/python.exe``), converting the script path and the
-path arguments (``--out``, ``--small``, ``--exe`` values, and any ``os.PathLike``) with
+path arguments (``--out``, ``--small``, ``--dir``, ``--exe`` values, and any ``os.PathLike``) with
 ``wslpath -w``. It parses the last JSON line on stdout and returns it. It raises ``WinError`` when
 the interpreter is missing, the run times out, stdout holds no JSON, the JSON says ``"ok": false``,
 or the exit code is nonzero.
@@ -23,7 +23,7 @@ DEFAULT_PYTHON = "/mnt/c/Madden27Modding/MuPilot/venv/Scripts/python.exe"
 AGENT = Path(__file__).resolve().with_name("win_agent.py")
 
 # Options whose value is a file path (converted to Windows form).
-PATH_OPTIONS = {"--out", "--small", "--exe"}
+PATH_OPTIONS = {"--out", "--small", "--dir", "--exe"}
 
 
 class WinError(Exception):
