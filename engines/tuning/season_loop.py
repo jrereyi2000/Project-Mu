@@ -16,7 +16,9 @@ through a subprocess (`runner` replaces subprocess.run in tests):
      Madden never sims through the offseason (TUNING_LEAGUE.md §6); the loop runs through the preseason
      weeks and the cut day and ends when an advance lands on the next regular-season week.
   5. a season report: a pc_save_reader snapshot of the final save scored against the real-NFL targets
-     (engines/tuning/compare.py), written to data/tuning/seasons/<run>/season_<year>.md and .json.
+     (engines/tuning/compare.py), written to data/tuning/seasons/<run>/season_<year>.md and .json, then the
+     decision comparison (engines/tuning/decision_compare.py, P3-07) beside it as decisions_<year>.md and
+     .json, read-only on madden_tune_<run> (`--no-decisions`, `--decision-targets PATH`).
 
 The tuning database is created on the first ingest (--auto-init) and is disposable; a run name is all the state.
 Madden must be open for steps 2-4: this module asks for the PC through the pilot's own rules (CAREER-TUNE-* only,
@@ -231,13 +233,37 @@ def report(snapshot_path, out_dir, *, targets_path=None):
             "inside": sum(1 for s in rep.stats if s.score == 0), "stats": len(rep.stats)}
 
 
+def decision_report(run, season, out_dir, *, targets_path=None, connect=None):
+    """Write the P3-07 decision comparison beside the stat report (decision_compare.py).
+
+    Read-only on madden_tune_<run>. A missing decision-targets file, or a database the report
+    cannot read, is reported as skipped: the season and its stat report are already written, so
+    this step never turns a finished season into a failure."""
+    from engines.tuning import decision_compare as DC
+    try:
+        out = DC.run(dsn_for(run), season, targets_path=targets_path, out_dir=out_dir, connect=connect)
+    except FileNotFoundError as e:
+        return {"skipped": str(e)}
+    except Exception as e:                                  # noqa: BLE001 - see the docstring
+        try:
+            import psycopg
+        except ImportError:
+            raise
+        if isinstance(e, psycopg.Error):
+            return {"skipped": f"cannot read {db_for(run)}: {e}"}
+        raise
+    rep = out["report"]
+    return {"season": rep.season, "verdict": rep.overall, "counts": rep.counts(),
+            "report": out["paths"]["md"], "json": out["paths"]["json"]}
+
+
 # ---------- the loop ----------
 
 def run(name, *, base_save=BASE_SAVE, resume=False, offseason=True, max_stops=14, targets_path=None,
         runner=None, python=None, report_fn=print, seasons_dir=None, saves_dir=None, do_report=True,
-        environ=None):
+        environ=None, decision_fn=None, decision_targets=None):
     """Clone, sim, walk the offseason and report one season. Returns
-    {"run_dir", "steps", "stops", "report"}."""
+    {"run_dir", "steps", "stops", "report"} and, when `decision_fn` is given, "decisions"."""
     if not NAME_RE.match(name or ""):
         raise Refused(f"bad run name {name!r} (letters, digits, - and _)")
     if base_save.startswith(TUNE_PREFIX) or not base_save.startswith("CAREER-"):
@@ -288,6 +314,10 @@ def run(name, *, base_save=BASE_SAVE, resume=False, offseason=True, max_stops=14
     if do_report:
         out["report"] = report(snap, run_dir, targets_path=targets_path)
         report_fn(json.dumps(out["report"], indent=1))
+        season = out["report"].get("season")
+        if decision_fn is not None and season:
+            out["decisions"] = decision_fn(name, season, run_dir, targets_path=decision_targets)
+            report_fn(json.dumps(out["decisions"], indent=1))
     out["minutes"] = round((time.time() - t0) / 60, 1)
     with open(os.path.join(run_dir, "run.json"), "w") as fh:
         json.dump(out, fh, indent=1, default=str)
@@ -302,6 +332,10 @@ def main(argv=None):
     ap.add_argument("--no-offseason", action="store_true", help="stop after the postseason (no stage loop)")
     ap.add_argument("--max-stops", type=int, default=14)
     ap.add_argument("--targets", help="targets JSON (default data/tuning/targets_2015_2025.json)")
+    ap.add_argument("--decision-targets",
+                    help="decision targets JSON (default data/tuning/decision_targets.json)")
+    ap.add_argument("--no-decisions", action="store_true",
+                    help="skip the P3-07 decision comparison report")
     ap.add_argument("--no-report", action="store_true")
     ap.add_argument("--dry-run", action="store_true", help="print the plan and exit")
     args = ap.parse_args(argv)
@@ -309,13 +343,17 @@ def main(argv=None):
         print(json.dumps({"run": args.run, "save": save_for(args.run), "db": db_for(args.run),
                           "dsn": dsn_for(args.run), "resume": args.resume, "offseason": not args.no_offseason,
                           "from": args.base_save, "pilot": "tools.madden_pilot",
+                          "decisions": not (args.no_decisions or args.no_report),
                           "steps": ["clone", "sim regular-season-end", "sim playoffs-end", "ingest",
-                                    "offseason stage loop" if not args.no_offseason else "no offseason"]}, indent=1))
+                                    "offseason stage loop" if not args.no_offseason else "no offseason",
+                                    "season report", "decision comparison"]}, indent=1))
         return 0
     try:
         out = run(args.run, base_save=args.base_save, resume=args.resume, offseason=not args.no_offseason,
                   max_stops=args.max_stops, targets_path=args.targets,
-                  report_fn=lambda s: print(s), do_report=not args.no_report)
+                  report_fn=lambda s: print(s), do_report=not args.no_report,
+                  decision_fn=None if args.no_decisions else decision_report,
+                  decision_targets=args.decision_targets)
     except Refused as e:
         print(f"refused: {e}", file=sys.stderr)
         return 3

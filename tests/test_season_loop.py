@@ -228,6 +228,65 @@ def test_an_empty_report_never_replaces_a_real_one(tmp_path):
     assert open(first["report"]).read() == before
 
 
+# ---------------------------------------------------------------- the decision report (P3-07)
+def test_the_season_report_is_followed_by_a_decision_report(tmp_path):
+    calls = []
+    tpath = tmp_path / "targets.json"
+    tpath.write_text(json.dumps(TARGETS))
+    seen = {}
+
+    def decision_fn(run, season, out_dir, *, targets_path=None):
+        seen.update(run=run, season=season, out_dir=out_dir, targets=targets_path)
+        return {"season": season, "verdict": "INCOMPLETE", "report": "d.md", "json": "d.json"}
+
+    out = L.run("unit", runner=_runner(calls), python="py", seasons_dir=str(tmp_path / "s"),
+                saves_dir="/saves", targets_path=str(tpath), report_fn=lambda s: None,
+                decision_fn=decision_fn, decision_targets="dt.json")
+    assert seen == {"run": "unit", "season": 2026, "out_dir": out["run_dir"], "targets": "dt.json"}
+    assert out["decisions"]["verdict"] == "INCOMPLETE"
+    run_json = json.load(open(os.path.join(out["run_dir"], "run.json")))
+    assert run_json["decisions"]["verdict"] == "INCOMPLETE"
+
+
+def test_decision_report_summarizes_and_skips_a_missing_targets_file(tmp_path, monkeypatch):
+    from engines.tuning import decision_compare as DC
+
+    class Rep:
+        season = 2026
+        overall = "INCOMPLETE"
+
+        def counts(self):
+            return {"PASS": 2, "FAIL": 0, "NOT MEASURED": 4}
+
+    monkeypatch.setattr(DC, "run", lambda dsn, season, **kw: {
+        "report": Rep(), "paths": {"md": str(tmp_path / "d.md"), "json": str(tmp_path / "d.json")}})
+    out = L.decision_report("unit", 2026, str(tmp_path))
+    assert out["season"] == 2026 and out["verdict"] == "INCOMPLETE"
+    assert out["counts"]["PASS"] == 2 and out["report"].endswith("d.md")
+
+    def missing(*a, **k):
+        raise FileNotFoundError("no decision targets at /nowhere")
+
+    monkeypatch.setattr(DC, "run", missing)
+    assert "no decision targets" in L.decision_report("unit", 2026, str(tmp_path))["skipped"]
+
+
+def test_main_hands_the_decision_report_to_the_run(tmp_path, monkeypatch):
+    captured = {}
+
+    def fake_run(name, **kw):
+        captured.update(kw)
+        return {"run_dir": str(tmp_path), "report": {"season": 2026}, "stops": [], "minutes": 1.0}
+
+    monkeypatch.setattr(L, "run", fake_run)
+    assert L.main(["--run", "unit"]) == 0
+    assert captured["decision_fn"] is L.decision_report and captured["decision_targets"] is None
+    assert L.main(["--run", "unit", "--no-decisions"]) == 0
+    assert captured["decision_fn"] is None
+    assert L.main(["--run", "unit", "--decision-targets", "dt.json"]) == 0
+    assert captured["decision_targets"] == "dt.json"
+
+
 # ---------------------------------------------------------------- CLI
 def test_main_dry_run_prints_the_plan(capsys):
     assert L.main(["--run", "p2c", "--dry-run"]) == 0
