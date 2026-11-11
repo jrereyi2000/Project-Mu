@@ -51,6 +51,11 @@
 // all three become null for a status Draft prospect, whose PLYR_DRAFTTEAM is only the free-agent placeholder).
 // YearDrafted stays as the raw signed offset (0 = the class being drafted this league year, negative = an earlier
 // year). The drafted cohort in the tuning gates is `draft_round` 1-7, not draft_class/draft_picks.
+//
+// reader_version 10 adds, per player, `career_stats`: Madden's all-time totals row (Player.CareerStats, a single
+// reference into whichever Career*Stats table fits the position: CareerOffensiveStats, CareerDefensiveKPReturnStats,
+// ...) as {table, stats}, or null when the player has no row. `stats` holds every non-reference field of the row as
+// Madden stores it, so only differences between two snapshots (or two loads) are meaningful. Read only.
 import { copyFileSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { basename, join, resolve } from 'path';
@@ -62,7 +67,7 @@ import {
   weightLbs,
 } from './lib.mjs';
 
-export const READER_VERSION = 9;
+export const READER_VERSION = 10;
 
 // Real teams are TeamIndex 0..31 (32 = free agents; the Team table has a few more rows).
 const REAL_TEAMS = 32;
@@ -376,6 +381,23 @@ async function readStatRows(tables, bits, gameRowByRef, teamOfRef) {
   return rows;
 }
 
+// Player.CareerStats is one reference (not an array) into the Career*Stats table for the player's position
+// (reader_version 10). The table name varies (CareerOffensiveStats, CareerOffensiveKPReturnStats, ...), so it goes in
+// the result. Same guard as readStatRows: an empty reference, an empty row or a degenerate row is null, never a
+// reason to fail the save.
+export async function readCareerRow(tables, bits) {
+  try {
+    const ref = decodeRef(bits);
+    if (!ref) return null;
+    const t = await tables.byId(ref.table);
+    const s = t?.records[ref.row];
+    if (!s || s.isEmpty) return null;
+    return { table: t.name, stats: plainFields(s, fieldNames(s)) };
+  } catch {
+    return null;
+  }
+}
+
 // Madden's draft facts on a Player record, normalized (reader_version 9). Sentinels seen in CAREER-TUNE-P2G:
 // PLYR_DRAFTROUND 63 = undrafted (978 players) and 0 = unset; PLYR_DRAFTPICK 511 = none (669), while undrafted
 // players carry a 257+ UDFA order in the same field; PLYR_DRAFTTEAM is a 1-based TeamIndex (a 2025 draftee still
@@ -393,7 +415,7 @@ export function draftFacts(record) {
   };
 }
 
-async function readPlayers(tables, playerTable, gameTableId, teamTableId, teamIndexByRow) {
+export async function readPlayers(tables, playerTable, gameTableId, teamTableId, teamIndexByRow) {
   const gameRowByRef = bits => {
     const ref = decodeRef(bits);
     return ref && ref.table === gameTableId ? ref.row : null;
@@ -445,6 +467,8 @@ async function readPlayers(tables, playerTable, gameTableId, teamTableId, teamIn
       },
       season_stats: await readStatRows(tables, p.SeasonStats, gameRowByRef, teamOfRef),
       game_stats: await readStatRows(tables, p.GameStats, gameRowByRef, teamOfRef),
+      // reader_version 10: Madden's all-time totals for this player (a single Career*Stats row, or null).
+      career_stats: await readCareerRow(tables, p.CareerStats),
     });
   }
   return players;

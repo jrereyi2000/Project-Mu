@@ -22,6 +22,9 @@ Writes, for that season:
   player_stats, game_stat_*  per-game lines: a game the save has lines for has its stored lines replaced
                              (Madden purges old weeks, so a game with no lines in this save keeps what it has)
   season_stats, season_stat_* season totals (a player traded mid-season is summed across teams)
+  player_career_counters     reader_version >= 10: Madden's career stat totals at each weekly load (week 0 off-season),
+                             raw JSONB fields plus games_played; player_week_counters / player_season_counters turn
+                             week-to-week differences into the counters the advanced metrics read
   player_contracts (+ years)  every rostered player's contract: the season's ACTIVE rows are superseded first
   team_cap_seasons           reader_version >= 5: each real team's Team Salary strip from the save's cap fields (checked
                              against the Panthers' Team Salary screen in CAREER-WEEK1, 2026-11-02; team_cap_values)
@@ -108,6 +111,10 @@ PLAYOFF_WEEKS = {"WildcardPlayoff": (19, "WILD_CARD"), "DivisionalPlayoff": (20,
                  "ConferencePlayoff": (21, "CONFERENCE"), "SuperBowl": (23, "SUPER_BOWL")}
 FINISHED = ("HomeWon", "AwayWon", "Tie")
 
+# U1's READER_VERSION: the first reader that puts `career_stats` on every player. Older snapshots write no
+# player_career_counters rows (the career totals were never captured).
+CAREER_COUNTERS_READER_VERSION = 10
+
 
 def position(madden_pos):
     return POSITIONS.get(madden_pos, madden_pos)
@@ -171,6 +178,7 @@ def offense_cols(s):
         "rush_yac": s.get("RUSHYARDSAFTER1STHIT", 0), "rush_long": s.get("RUSHLONGEST", 0),
         "receptions": s.get("RECEIVECATCHES", 0), "rec_yards": s.get("RECEIVEYARDS", 0), "rec_tds": s.get("RECEIVETDS", 0),
         "rec_rac": s.get("RECEIVEYARDSAFTER", 0), "rec_long": s.get("RECEIVELONGEST", 0),
+        "rec_drops": s.get("RECEIVEDROPS", 0), "rush_20plus": s.get("RUSH20YARDRUNS", 0),
     }
     return v
 
@@ -197,6 +205,7 @@ def defense_cols(s):
         "fumble_recoveries": s.get("DLINEFUMBLERECOVERIES", 0), "fumble_yds": s.get("DLINEFUMBLERECOVERYYARDS", 0),
         "blocks": s.get("DLINEBLOCKS", 0), "safeties": s.get("DLINESAFETIES", 0),
         "tds": s.get("DSECINTTDS", 0) + s.get("DLINEFUMBLETDS", 0),
+        "big_hits": s.get("BIGHITS", 0), "catches_allowed": s.get("CTHALLOWED", 0),
     }
     return v
 
@@ -251,6 +260,10 @@ def return_rates(v):
     return v
 
 
+def blocking_cols(s):
+    return {"sacks_allowed": s.get("OLINESACKSALLOWED", 0), "pancakes": s.get("OLINEPANCAKES", 0)}
+
+
 # (game table, season table, Madden fields -> columns, rates from the summed columns). Every Madden stat row is
 # run through every group; a group whose columns are all zero for that row adds nothing.
 GROUPS = {
@@ -260,7 +273,7 @@ GROUPS = {
     "punting": ("game_stat_punting", "season_stat_punting", punting_cols, punting_rates),
     "kickreturn": ("game_stat_kickreturn", "season_stat_kickreturn", return_cols("KRET"), return_rates),
     "puntreturn": ("game_stat_puntreturn", "season_stat_puntreturn", return_cols("PRET"), return_rates),
-    "blocking": ("game_stat_blocking", "season_stat_blocking", lambda s: {"sacks_allowed": s.get("OLINESACKSALLOWED", 0)}, None),
+    "blocking": ("game_stat_blocking", "season_stat_blocking", blocking_cols, None),
 }
 LONGS = ("pass_long", "rush_long", "rec_long", "int_long", "fg_long", "longest")
 
@@ -285,7 +298,8 @@ def group_lines(rows):
             vals = cols(s)
             if any(vals.values()):
                 merge_into(out.setdefault(name, {}), vals)
-        for src, col in (("DOWNSPLAYED", "downs_played"), ("GAMESPLAYED", "games_played")):
+        for src, col in (("DOWNSPLAYED", "downs_played"), ("GAMESPLAYED", "games_played"),
+                         ("GAMESSTARTED", "games_started")):
             if s.get(src):
                 general[col] = max(general.get(col, 0), s[src])
     for name, vals in out.items():
@@ -684,8 +698,8 @@ def load_game_lines(cur, snapshot, games, players, report):
         for group, vals in group_lines(rows).items():
             table = "game_stat_general" if group == "general" else GROUPS[group][0]
             if table == "game_stat_general":
-                vals = {"downs_played": vals["downs_played"]} if vals.get("downs_played") else None
-                if vals is None:
+                vals = {k: vals[k] for k in ("downs_played", "games_started") if k in vals}
+                if not vals:
                     continue
             cols = list(vals)
             if table == "player_stats":
@@ -765,7 +779,8 @@ def load_season_lines(cur, snapshot, season, players, report):
         pid, team, pos, name = who
         for group, vals in group_lines(rows).items():
             if group == "general":
-                table, vals = "season_stat_general", {k: vals[k] for k in ("games_played", "downs_played") if k in vals}
+                table, vals = "season_stat_general", {k: vals[k] for k in ("games_played", "downs_played", "games_started")
+                                                      if k in vals}
             else:
                 table = GROUPS[group][1]
             if table == "season_stats":
@@ -786,6 +801,52 @@ def load_season_lines(cur, snapshot, season, players, report):
                             (season, pid, team, pos, *[vals[c] for c in cols]))
             n += 1
     report["season_line_rows"] = n
+
+
+def career_counter_values(career):
+    """A snapshot player's `career_stats` ({table, stats}) -> (madden_table, counters, games_played), or None when
+    it carries no counters. Only ints are stored: the views cast every key back to int, so a bool is not a counter."""
+    career = career or {}
+    counters = career.get("stats") or {}
+    counters = {k: v for k, v in counters.items() if isinstance(v, int) and not isinstance(v, bool)}
+    if not counters or not career.get("table"):
+        return None
+    return career["table"], counters, counters.get("GAMESPLAYED")
+
+
+def load_career_counters(cur, snapshot, season, players, capture_id, report):
+    """One player_career_counters row per matched player per weekly load. Madden's career totals include real-NFL
+    history, so each row is a high-water mark the player_week_counters view differences against the previous load
+    (docs/done/MADDEN_STATS_INGEST_PLAN.md §2.3): week 0 off-season (current_week has no week there), and a
+    reload of the same week replaces its row. A database without the migration reports `table missing` and writes
+    nothing, so a load against an older schema still succeeds."""
+    if snapshot.get("meta", {}).get("reader_version", 0) < CAREER_COUNTERS_READER_VERSION:
+        report["career_counters"] = f"reader_version < {CAREER_COUNTERS_READER_VERSION}"
+        return
+    cur.execute("SELECT to_regclass('public.player_career_counters')")
+    if cur.fetchone()[0] is None:
+        report["career_counters"] = "table missing"
+        return
+    week = current_week(snapshot) or 0
+    read_at = snapshot.get("meta", {}).get("read_at")
+    n = 0
+    for p in snapshot["players"]:
+        who = players.get(p["pgid"])
+        if who is None:
+            continue
+        vals = career_counter_values(p.get("career_stats"))
+        if vals is None:
+            continue
+        table, counters, games_played = vals
+        cur.execute("INSERT INTO player_career_counters (season, week, player_id, madden_table, counters, "
+                    "games_played, capture_id, read_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) "
+                    "ON CONFLICT (season, week, player_id) DO UPDATE SET madden_table = EXCLUDED.madden_table, "
+                    "counters = EXCLUDED.counters, games_played = EXCLUDED.games_played, "
+                    "capture_id = EXCLUDED.capture_id, read_at = EXCLUDED.read_at",
+                    (season, week, who[0], table, json.dumps(counters), games_played, capture_id, read_at))
+        n += 1
+    report["career_counter_rows"] = n
+    report["career_counters"] = f"{n} rows (week {week})"
 
 
 def load_contracts(cur, snapshot, season, players, report, capture_id=None):
@@ -1249,6 +1310,7 @@ def load_snapshot(cur, snapshot, season=None, capture_id=None, capture_folder=No
     load_game_lines(cur, snapshot, games, players, report)
     load_team_scores(cur, games, report)
     load_season_lines(cur, snapshot, season, players, report)
+    load_career_counters(cur, snapshot, season, players, capture_id, report)
     load_contracts(cur, snapshot, season, players, report, capture_id)
     load_team_caps(cur, snapshot, season, teams, report, capture_id)
     week = current_week(snapshot)
@@ -1269,7 +1331,8 @@ REPORT_COUNTS = ("players", "players_created", "players_drafted", "players_undra
                  "retirements", "player_attributes", "player_attributes_unchanged",
                  "player_attributes_in_season_changes", "games", "games_completed", "game_line_rows", "team_stat_rows",
                  "season_line_rows", "contracts", "injuries", "games_with_scoring_plays", "depth_charts",
-                 "depth_chart_rows", "team_ratings", "draft_prospects", "team_caps", "prospect_ratings")
+                 "depth_chart_rows", "team_ratings", "draft_prospects", "team_caps", "prospect_ratings",
+                 "career_counter_rows")
 
 
 def capture_row(cur, path, season, week):
