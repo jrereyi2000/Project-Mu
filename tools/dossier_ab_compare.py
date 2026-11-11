@@ -1,20 +1,12 @@
-"""
-A/B Testing Harness: ReAct Tool Loop (Variant A) vs. Deterministic Python Dossier (Variant B)
-Reference: docs/in_progress/V2_MASTER_PLAN.md §5.3
+"""Legacy dossier compilers and structural audit.
 
-Evaluates token consumption, dollar cost, generation latency, and output quality side by side:
-- Variant A (Control): Multi-turn ReAct loop with autonomous database tool calls (Current Production).
-- Variant B (Treatment): Deterministic Python Dossier compiling micro-evidence in Turn 1 with zero tool calls.
+The original comparison is retained for diagnostic dry runs only; live execution
+is disabled. Use tools.dossier_pilot for the isolated, matched-settings pilot:
+  DATABASE_URL=<scratch DSN> python -m tools.dossier_pilot --week 21
+  DATABASE_URL=<scratch DSN> python -m tools.dossier_pilot --live --budget-usd <remaining ceiling> --week 21
 
-Usage:
-  # Dry-run inspection (compiles prompts & dossier without API spend):
-  python3 -m tools.dossier_ab_compare --dry-run --team CAR --opponent CHI
-
-  # Live A/B test on Gemini 3.8 Flash (Season 2036 Week 12):
-  python3 -m tools.dossier_ab_compare --season 2036 --week 12 --team CAR --opponent CHI
-
-  # Evaluate Variant B on local Ollama against Variant A on Gemini:
-  python3 -m tools.dossier_ab_compare --season 2036 --week 12 --team CAR --opponent CHI --model-b ollama:gemma4:e4b@nothink
+Reference: docs/in_progress/V3_STUDIO_PLAN.md section 4 and V3_DOSSIER_EVALUATION.md.
+Legacy dry runs do not establish historical cutoff or writer-continuity parity.
 """
 import argparse
 import datetime
@@ -49,7 +41,7 @@ DSN = os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=postgres
 # ==============================================================================
 
 def compile_matchup_dossier(team_abbr: str, opponent_abbr: str, season: int, week: int) -> str:
-    """Compiles a targeted micro-dossier for LOCAL_MATCHUP_PRIMER in ~15ms via direct DB queries."""
+    """Compiles legacy matchup evidence; caller must establish article context and database isolation."""
     sections = [
         f"### TARGETED MATCHUP DOSSIER: {team_abbr} vs. {opponent_abbr} (Season {season}, Week {week})",
         "The following tactical data was compiled deterministically from the canonical database.",
@@ -183,6 +175,8 @@ def run_dossier_ab_test(
     model_b: str = "gemini-3.8-flash:low",
     dry_run: bool = False,
 ) -> Dict[str, Any]:
+    if not dry_run:
+        raise RuntimeError('Legacy live comparison disabled: use python -m tools.dossier_pilot --live --budget-usd <ceiling> with a scratch DATABASE_URL')
     dispatcher = SwarmDispatcher(debug_mode=False)
 
     # 1. Resolve Team IDs from database

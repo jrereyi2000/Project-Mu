@@ -306,6 +306,13 @@ class Pilot:
                 q.append(nxt)
         return None
 
+    def dismiss(self, screen=None):
+        """Space on a dialog whose safe default is not OCR'd or not an allow-listed label (the
+        exit prompt's NO, the MMC ACCOUNT ERROR's OK): the default is taken, not picked by name."""
+        if screen and self.screen != screen:
+            self.look()
+        self.press(self.key_name("select"), _confirm=True)
+
     def _run_steps(self, screen, steps):
         for step in steps:
             op, arg = step[0], step[1]
@@ -316,9 +323,7 @@ class Pilot:
             elif op == "hold":
                 self.press(arg, hold=2.0, wait=1.5)
             elif op == "dismiss":
-                # A dialog whose safe default is not OCR'd (the exit prompt's NO): Space takes
-                # the default rather than picking a label, which the allow-list cannot do.
-                self.press(self.key_name("select"), _confirm=True)
+                self.dismiss()
             else:
                 self.press(op, times=int(arg))
 

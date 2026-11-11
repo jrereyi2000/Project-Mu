@@ -897,7 +897,7 @@
       }
     },
     "FRANCHISE_LANDING": {
-      "note": "Seen 2026-11-10 (P2-01, full-screen capture after the driver was made DPI-aware): the Franchise mode page with three cards. CONTINUE is selected on arrival and resumes the last-played save; Right then Space on CREATE / LOAD opens CURRENT FRANCHISES (JR: 'it needs to go right ... hit Create and Load, not Continue'). The border reader picks CONTINUE correctly on arrival. The main menu draws the same three cards behind its mode rail, so it reads as this page too; jobs._leave_to_main_menu tells them apart by the rail's own words (AUTHENTIC, PERSONA ENGINE, ONLINE LEAGUES, TEAM PASS) and stops there rather than pressing Back into EXIT MADDEN (2026-11-10, p2g).",
+      "note": "Seen 2026-11-10 (P2-01, full-screen capture after the driver was made DPI-aware): the Franchise mode page with three cards. CONTINUE is selected on arrival and resumes the last-played save; Right then Space on CREATE / LOAD opens CURRENT FRANCHISES (JR: 'it needs to go right ... hit Create and Load, not Continue'). The border reader picks CONTINUE correctly on arrival. The main menu draws the same three cards behind its mode rail, so it reads as this page too; jobs._leave_to_main_menu tells them apart by the rail's own words (AUTHENTIC, PERSONA ENGINE, ONLINE LEAGUES, TEAM PASS) and stops there rather than pressing Back into EXIT MADDEN (2026-11-10, p2g). Also the WHOLE main menu on a one-mode menu pack: Mu Franchise Only (RAIL_FRANCHISE_ONLY) leaves only FRANCHISE in the rail and draws the panel inline, so there is no MAIN_MENU on that pack (live 2026-11-11, Mu Test, pilot-menu): arrows stay on this screen and wrap, Back opens EXIT MADDEN?, one Back from CURRENT FRANCHISES returns here.",
       "all": [
         "FRANCHISE"
       ],
@@ -965,7 +965,7 @@
       }
     },
     "MAIN_MENU": {
-      "note": "Observed G0 2026-11-01 main-menu Franchise selection; words re-anchored 2026-11-10 after a P2-01 run (parse step 0002 of 2026-11-10_013118_sim-season) where stylised AUTHENTIC read as LUTHENTIC and flipped the screen to UNKNOWN. JR 2026-11-10: the mode rail is vertical and one Down press moves ULTIMATE TEAM -> FRANCHISE, which is how a run starting on another mode can reach this screen (not yet modelled as an exit). Only Franchise may be confirmed; other modes are not authorized.",
+      "note": "Observed G0 2026-11-01 main-menu Franchise selection; words re-anchored 2026-11-10 after a P2-01 run (parse step 0002 of 2026-11-10_013118_sim-season) where stylised AUTHENTIC read as LUTHENTIC and flipped the screen to UNKNOWN. JR 2026-11-10: the mode rail is vertical and one Down press moves ULTIMATE TEAM -> FRANCHISE, which is how a run starting on another mode can reach this screen (not yet modelled as an exit). Only Franchise may be confirmed; other modes are not authorized. Absent on Mu Franchise Only: the one-mode main menu reads as FRANCHISE_LANDING (2026-11-11).",
       "all": [
         "FRANCHISE"
       ],

@@ -224,5 +224,58 @@ class StaffAlreadyNamedForNextSeason(unittest.TestCase):
         self.assertGreater(self.cur.fetchone()[0], 0)
 
 
+@pytest.mark.integration
+class SameSeasonTieBreak(unittest.TestCase):
+    """A midseason change leaves two tenures for one team covering the same season (the outgoing one ends in the
+    season the incoming one starts in). staff_in / head_coaches must pick the newer tenure, by id."""
+
+    SEASON = 2030
+
+    def setUp(self):
+        try:
+            self.conn = psycopg.connect(DSN, connect_timeout=3)
+        except Exception as e:
+            raise unittest.SkipTest(f"no database: {e!r}")
+        cur = self.conn.cursor()
+        if not cc.installed(cur):
+            self.conn.close()
+            raise unittest.SkipTest("coaching carousel migrations not applied")
+        cur.execute("SELECT id FROM teams WHERE abbreviation = 'KC'")
+        row = cur.fetchone()
+        if not row:
+            self.conn.close()
+            raise unittest.SkipTest("no KC team")
+        self.team = row[0]
+        cur.execute("INSERT INTO coaches (coach_name, slant) VALUES ('Tie-break outgoing', 'OFFENSIVE') RETURNING id")
+        self.old_coach = cur.fetchone()[0]
+        cur.execute("INSERT INTO coaches (coach_name, slant) VALUES ('Tie-break incoming', 'OFFENSIVE') RETURNING id")
+        self.new_coach = cur.fetchone()[0]
+        cur.execute("INSERT INTO coach_tenures (coach_id, team_id, start_season, end_season) VALUES (%s, %s, %s, %s)",
+                    (self.old_coach, self.team, self.SEASON, self.SEASON))
+        cur.execute("INSERT INTO coach_tenures (coach_id, team_id, start_season, end_season) VALUES (%s, %s, %s, NULL)",
+                    (self.new_coach, self.team, self.SEASON))
+        cur.execute("""INSERT INTO coordinators (coordinator_name, side, scheme)
+                       VALUES ('Tie-break outgoing OC', 'OFFENSIVE', 'AIR RAID') RETURNING id""")
+        self.old_oc = cur.fetchone()[0]
+        cur.execute("""INSERT INTO coordinators (coordinator_name, side, scheme)
+                       VALUES ('Tie-break incoming OC', 'OFFENSIVE', 'SPREAD') RETURNING id""")
+        self.new_oc = cur.fetchone()[0]
+        cur.execute("""INSERT INTO coordinator_tenures (coordinator_id, team_id, role, start_season, end_season)
+                       VALUES (%s, %s, 'OC', %s, %s)""", (self.old_oc, self.team, self.SEASON, self.SEASON))
+        cur.execute("""INSERT INTO coordinator_tenures (coordinator_id, team_id, role, start_season, end_season)
+                       VALUES (%s, %s, 'OC', %s, NULL)""", (self.new_oc, self.team, self.SEASON))
+        self.cur = cur
+
+    def tearDown(self):
+        self.conn.rollback()
+        self.conn.close()
+
+    def test_head_coach_picks_the_newer_tenure_of_the_same_season(self):
+        self.assertEqual(cc.head_coaches(self.cur, self.SEASON)[self.team]["coach_id"], self.new_coach)
+
+    def test_coordinator_picks_the_newer_tenure_of_the_same_season(self):
+        self.assertEqual(cc.staff_in(self.cur, self.SEASON)[(self.team, "OC")]["coordinator_id"], self.new_oc)
+
+
 if __name__ == "__main__":
     unittest.main()

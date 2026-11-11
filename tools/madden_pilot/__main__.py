@@ -60,8 +60,15 @@ class ScriptedMadden:
                 op, arg = steps[-1][0], steps[-1][1]
                 if op == "confirm":
                     self.moves[(name, "space", norm(arg))] = target
+                    if not spec.get("options"):     # a lone Space screen: BOOT_SPLASH, TITLE_SCREEN
+                        self.moves[(name, "space", None)] = target
                 elif op != "highlight":
-                    self.moves[(name, self.keymap.get(op, op), None)] = target
+                    # 'dismiss' (ACCOUNT_ERROR, EXIT_MADDEN) is Space on the focused button, so it
+                    # fires whatever the highlight reads; other keys land on the screen as a whole
+                    key = "space" if op == "dismiss" else self.keymap.get(op, op)
+                    labels = [None, *(spec.get("options") or [])] if op == "dismiss" else [None]
+                    for lab in labels:
+                        self.moves[(name, key, norm(lab) if lab else None)] = target
         self.screen, self.idx = None, 0
         self.go(start)
 
@@ -214,7 +221,8 @@ ROUTES = {
     "advance": "FRANCHISE_LIST > highlight {tile} > Space > PROGRESSION_WARNING (Proceed) > hub > GAMEDAY > "
                "ADVANCE WEEK > FORCE ADVANCE > SIM AHEAD > (read the stop) > Backspace > QUIT_CONFIRM (YES) > "
                "FRANCHISE_LIST",
-    "launch": "MMCModManager.exe -launch {pack} > wait for the Madden window > MAIN_MENU or FRANCHISE_LIST",
+    "launch": "MMCModManager.exe -launch {pack} > wait for the Madden window > press through ACCOUNT ERROR, "
+              "splash and title > a menu (MAIN_MENU, FRANCHISE_LANDING or FRANCHISE_LIST)",
     "quit": "hub > Backspace > QUIT_CONFIRM (YES, TUNE-* or --allow-quit only) > FRANCHISE_LIST",
     "set-setting": "walk {path} by OCR labels on catalogued screens > Right until the row reads {value} > back",
     "verify-mods": "run checks/{check}.py",
@@ -247,6 +255,9 @@ def build_parser():
     s = sub.add_parser("set-setting", parents=[common], help="walk a menu path and set a value")
     s.add_argument("--path", required=True)
     s.add_argument("--value", required=True)
+    s.epilog = ("Needs a pack whose main menu has a Settings route: vanilla, or Mu Base with Mu Franchise "
+                "Menu 1.1. Mu Test (Mu Franchise Only) has no main-menu Settings (audit-2 L2, M-0447). "
+                "The job walks the game that is already running; launch that pack first.")
     s = sub.add_parser("verify-mods", parents=[common], help="run a check from checks/")
     s.add_argument("--check", required=True)
     s = sub.add_parser("quit", parents=[common], help="quit the loaded franchise to the franchise list")
