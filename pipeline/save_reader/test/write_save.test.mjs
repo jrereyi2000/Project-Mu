@@ -10,13 +10,39 @@ import Franchise from 'madden-franchise';
 import { decodeRef } from '../lib.mjs';
 import { readDraftTables } from '../draft_tables.mjs';
 import { readSave } from '../pc_save_reader.mjs';
-import { writeSave } from '../save_writer.mjs';
+import { moveConflicts, writeSave } from '../save_writer.mjs';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const savePath = process.env.MU_SAMPLE_SAVE || join(repoRoot, 'CAREER-GIANTS-AUTOSAVE');
 const skip = existsSync(savePath) ? false : `no sample save at ${savePath}`;
 const ACHANE = 22692;
 const hash = path => createHash('sha256').update(readFileSync(path)).digest('hex');
+
+// moveConflicts is pure: it decides from the edits and the save's current teams, without opening the save.
+test('moveConflicts accepts exactly a declared switch and refuses every other double move', () => {
+  const current = new Map([[100, 3]]);
+  const contract = { Length: 1, SalaryYear0: 70 };
+  const sign = (team, extra = {}) => [{ pgid: 100, team_index: team, list: 'Roster', contract, ...extra }];
+  // A release plus a flagged sign to a different team is the one allowed pair.
+  assert.deepEqual(moveConflicts({ release: [100], sign: sign(4, { switch: true }) }, current), []);
+  // Without the flag the same pgid in both moves is the existing error.
+  assert.deepEqual(moveConflicts({ release: [100], sign: sign(4) }, current),
+    ['pgid 100: in more than one move (release, sign)']);
+  // The flag never stands alone: a switch sign with no release is refused.
+  assert.match(moveConflicts({ sign: sign(4, { switch: true }) }, current).join('\n'),
+    /pgid 100: switch sign is not in release/);
+  // A flagged sign to the player's current team is a promotion, not a switch.
+  assert.match(moveConflicts({ release: [100], sign: sign(3, { switch: true }) }, current).join('\n'),
+    /pgid 100: switch sign is to the current team \(3\)/);
+  // Every other overlap is still refused.
+  assert.deepEqual(moveConflicts({ release: [100], trade: [{ from_team_index: 3, to_team_index: 4, pgids: [100] }] }, current),
+    ['pgid 100: in more than one move (release, trade)']);
+  assert.deepEqual(moveConflicts({ release: [100], sign: sign(4, { switch: true }),
+    trade: [{ from_team_index: 3, to_team_index: 4, pgids: [100] }] }, current),
+  ['pgid 100: in more than one move (release, sign, trade)']);
+  assert.match(moveConflicts({ release: [100, 100], sign: sign(4, { switch: true }) }, current).join('\n'),
+    /a switch needs exactly one release and one sign \(2 release, 1 sign\)/);
+});
 
 test('edits land on one player, everything else reads back unchanged', { skip, timeout: 300_000 }, async () => {
   const dir = mkdtempSync(join(tmpdir(), 'mu-write-test-'));
@@ -148,6 +174,40 @@ async function lists(path) {
   }
 }
 
+// A PlayerContract row's terms (the fields the writer sets), read from an open franchise.
+async function contractTerms(f, ref) {
+  const t = f.getTableById(ref.table);
+  await t.readRecords();
+  const c = t.records[ref.row];
+  return { table: ref.table, row: ref.row, length: c.Length, current_year: c.CurrentYear,
+    salary_by_year: Array.from({ length: c.Length }, (_, i) => c[`SalaryYear${i}`]),
+    bonus_by_year: Array.from({ length: c.Length }, (_, i) => c[`BonusYear${i}`]) };
+}
+
+// A pgid's contract ref and terms in `path`, plus `old` (the terms at `oldRef`, when given) and how many Player rows
+// point at `oldRef`. Opens a copy; the save itself is never opened by the library.
+async function contractState(path, pgid, oldRef = null) {
+  const dir = mkdtempSync(join(tmpdir(), 'mu-write-test-'));
+  try {
+    copyFileSync(path, join(dir, 'save'));
+    const f = await Franchise.create(join(dir, 'save'), { autoParse: true, saveOnChange: false });
+    const all = f.getAllTablesByName('Player');
+    for (const t of all) await t.readRecords();
+    const players = all.reduce((a, b) => (!a || b.records.length > a.records.length ? b : a), null);
+    const row = players.records.find(r => !r.isEmpty && r.PresentationId === pgid);
+    const ref = row ? decodeRef(row.Contract) : null;
+    const refs = r => { const d = r.isEmpty ? null : decodeRef(r.Contract); return d; };
+    return {
+      ref,
+      terms: ref ? await contractTerms(f, ref) : null,
+      old: oldRef ? await contractTerms(f, oldRef) : null,
+      oldHolders: oldRef ? players.records.filter(r => { const d = refs(r); return d && d.table === oldRef.table && d.row === oldRef.row; }).length : null,
+    };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 test('players, records, release, sign, trade and depthCharts in one write', { skip, timeout: 600_000 }, async () => {
   const dir = mkdtempSync(join(tmpdir(), 'mu-write-test-'));
   try {
@@ -194,6 +254,85 @@ test('players, records, release, sign, trade and depthCharts in one write', { sk
     assert.deepEqual([b.get(incoming).team_index, b.get(incoming).ratings.Awareness], [NYG, 77]);
     assert.deepEqual([b.get(fa).status, b.get(fa).team_index, b.get(fa).contract.salary_by_year.slice(0, 3)], ['Signed', NYG, [90, 95, 0]]);
     for (const g of cut) assert.deepEqual([b.get(g).status, b.get(g).contract], ['FreeAgent', null]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a declared switch writes a release and a signing to a new team in one write', { skip, timeout: 600_000 }, async t => {
+  const dir = mkdtempSync(join(tmpdir(), 'mu-write-test-'));
+  try {
+    const x = await lists(savePath);
+    const a = await readSave(savePath);
+    const roster = x.teams;
+    const teams = Object.keys(roster).map(Number).sort((p, q) => p - q);
+    // A rostered non-starter (bench end) with a contract, not on IR (which would skew the roster counts).
+    const signed = new Map(a.players.filter(p => p.status === 'Signed' && p.team_index < 32 && p.contract &&
+      !p.injury?.injured_reserve).map(p => [p.pgid, p]));
+    let from, pgid;
+    for (const i of teams) {
+      for (const g of [...roster[i].roster].reverse()) if (signed.has(g)) { from = i; pgid = g; break; }
+      if (pgid !== undefined) break;
+    }
+    if (pgid === undefined) { t.skip('sample save has no rostered non-starter with a contract'); return; }
+    const to = teams.find(i => i !== from);
+    const before = hash(savePath);
+    const oldRef = (await contractState(savePath, pgid)).ref;
+    assert.ok(oldRef, 'the chosen player has a PlayerContract row');
+
+    // A league-minimum-like deal: one year, $700k ($10,000 units), small enough for any team.
+    const contract = { Length: 1, SalaryYear0: 70 };
+    // The old deal alone: a release with no signing. Its dead-cap outcome is the row the release leaves behind.
+    const releaseOut = join(dir, 'CAREER-RELEASE-ONLY');
+    const released = await writeSave(savePath, { release: [pgid] }, releaseOut);
+    assert.deepEqual([released.release.released, released.switches.length], [1, 0]);
+
+    const out = join(dir, 'CAREER-SWITCH');
+    const report = await writeSave(savePath,
+      { release: [pgid], sign: [{ pgid, team_index: to, list: 'Roster', contract, switch: true }] }, out);
+    assert.equal(report.verified, true);
+    assert.equal(hash(savePath), before, 'the input save is untouched');
+    assert.deepEqual(report.switches.map(s => [s.pgid, s.from_team_index, s.to_team_index]),
+      [[pgid, from, to]], 'the report names the switch');
+    assert.deepEqual([report.release.released, report.sign.signed], [1, 1]);
+
+    // The same player pair is refused without the flag, and a flagged sign back to his current team is not a switch.
+    // Neither attempt writes anything.
+    const refused = join(dir, 'CAREER-REFUSED-SWITCH');
+    await assert.rejects(writeSave(savePath,
+      { release: [pgid], sign: [{ pgid, team_index: to, list: 'Roster', contract }] }, refused),
+    /in more than one move \(release, sign\)/);
+    await assert.rejects(writeSave(savePath,
+      { release: [pgid], sign: [{ pgid, team_index: from, list: 'Roster', contract, switch: true }] }, refused),
+    /switch sign is to the current team/);
+    await assert.rejects(writeSave(savePath,
+      { sign: [{ pgid, team_index: to, list: 'Roster', contract, switch: true }] }, refused),
+    /switch sign is not in release/);
+    assert.equal(existsSync(refused), false);
+
+    const y = await lists(out);
+    assert.ok(!y.teams[from].roster.includes(pgid), 'the old team roster dropped the switch');
+    assert.ok(y.teams[to].roster.includes(pgid), 'new team roster gained the switch');
+    assert.equal(y.teams[from].roster.length, roster[from].roster.length - 1);
+    assert.equal(y.teams[to].roster.length, roster[to].roster.length + 1);
+    assert.deepEqual(y.teams[from].counts, [roster[from].counts[0] - 1, roster[from].counts[1] - 1],
+      'the old team has one fewer rostered player');
+    assert.deepEqual(y.teams[to].counts, [roster[to].counts[0] + 1, roster[to].counts[1] + 1],
+      'the new team has one more');
+    const b = (await readSave(out)).players.find(p => p.pgid === pgid);
+    assert.deepEqual([b.status, b.team_index], ['Signed', to]);
+    assert.deepEqual([b.contract.length, b.contract.current_year, b.contract.salary_by_year.slice(0, 2)], [1, 0, [70, 0]]);
+
+    // The signing takes its own contract row and the old deal stays exactly as a release alone leaves it
+    // (unreferenced: the save writer leaves cap totals, and so dead money, to Madden).
+    const switched = await contractState(out, pgid, oldRef);
+    const alone = await contractState(releaseOut, pgid, oldRef);
+    assert.notDeepEqual(switched.ref, oldRef, 'the new contract is a different PlayerContract row');
+    assert.deepEqual(switched.terms, { table: oldRef.table, row: switched.ref.row, length: 1, current_year: 0,
+      salary_by_year: [70], bonus_by_year: [0] });
+    assert.deepEqual(switched.old, alone.old, 'the old deal reads the same as in a release-only write');
+    assert.deepEqual(switched.old, (await contractState(savePath, pgid)).terms, 'the old deal keeps its original terms');
+    assert.deepEqual([switched.oldHolders, alone.oldHolders], [0, 0], 'the old deal is left unreferenced');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -350,7 +489,10 @@ test('a 200-move write (timed)', { skip, timeout: 600_000 }, async t => {
     const y = await lists(out);
     for (const i of teams) {
       assert.deepEqual(y.teams[i].roster, roster.get(i), `team ${i} roster`);
-      assert.deepEqual(y.teams[i].counts, [roster.get(i).length, roster.get(i).length]);
+      // Both counts move with the net roster change. Compare the change, not counts == list length: a sample save with
+      // IR players can carry an ActiveRosterSize that does not count every Roster row (CAREER-MUBASE does).
+      const delta = roster.get(i).length - x.teams[i].roster.length;
+      assert.deepEqual(y.teams[i].counts.map((c, k) => c - x.teams[i].counts[k]), [delta, delta], `team ${i} counts`);
       assert.deepEqual(y.teams[i].depth.KR.filter(Boolean), roster.get(i).slice(-3));
     }
   } finally {
