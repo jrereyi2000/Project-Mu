@@ -187,12 +187,13 @@ class _FakeClient:
         self.chat = SimpleNamespace(completions=self.completions)
 
 
-def _deepseek_response(content=None, tool_calls=None, reasoning='research plan', usage=None):
+def _deepseek_response(content=None, tool_calls=None, reasoning='research plan', usage=None,
+                       finish_reason='stop'):
     message = SimpleNamespace(content=content, tool_calls=tool_calls or [])
     if reasoning is not None:
         message.reasoning_content = reasoning
     return SimpleNamespace(
-        choices=[SimpleNamespace(message=message)],
+        choices=[SimpleNamespace(message=message, finish_reason=finish_reason)],
         usage=usage or {'prompt_tokens': 1000, 'prompt_cache_hit_tokens': 600,
                         'prompt_cache_miss_tokens': 400, 'completion_tokens': 200,
                         'completion_tokens_details': {'reasoning_tokens': 50}},
@@ -248,6 +249,41 @@ def test_deepseek_dossier_arm_is_one_call_without_tools(tmp_path):
     assert result['iterations'] == 1
     assert result['status'] == 'generated'
     assert result['usage_calls'][0]['price_period'] in ('peak', 'off-peak')
+
+
+def _packet():
+    return {'season': 2036, 'week': 21,
+            'a': {'system_instruction': 'writer', 'task_instruction': 'article'},
+            'b': {'system_instruction': 'writer', 'task_instruction': 'dossier'}}
+
+
+def test_deepseek_react_arm_flags_truncated_article(tmp_path):
+    client = _FakeClient([_deepseek_response(content='# Game\n\n> **EXCERPT:** Cut off mid-senten',
+                                             finish_reason='length')])
+    budget = Budget(5, tmp_path / 'usage.json', 8192, provider='deepseek')
+    with pytest.raises(RuntimeError, match='Truncated article'):
+        run_deepseek_arm(_packet(), 'a', [_get_matchup_edges], DEEPSEEK_MODEL,
+                         budget, tmp_path, client=client)
+    result = json.loads((tmp_path / 'a_result.json').read_text())
+    assert result['status'] == 'truncated'
+    assert result['finish_reason'] == 'length'
+    assert result['usage_calls'][0]['finish_reason'] == 'length'
+    assert result['estimated_cost_usd'] > 0
+
+
+def test_deepseek_dossier_arm_flags_truncated_article(tmp_path):
+    client = _FakeClient([_deepseek_response(content='# Game\n\n> **EXCERPT:** Cut off mid-senten',
+                                             finish_reason='length')])
+    budget = Budget(5, tmp_path / 'usage.json', 8192, provider='deepseek')
+    with pytest.raises(RuntimeError, match='Truncated article'):
+        run_deepseek_arm(_packet(), 'b', [_get_matchup_edges], DEEPSEEK_MODEL,
+                         budget, tmp_path, client=client)
+    result = json.loads((tmp_path / 'b_result.json').read_text())
+    assert result['status'] == 'truncated'
+    assert result['finish_reason'] == 'length'
+    document = json.loads((tmp_path / 'usage.json').read_text())
+    assert document['calls'][0]['finish_reason'] == 'length'
+    assert budget.rows[0]['status'] == 'completed'
 
 
 def test_creative_texture_is_allowed_without_canonical_contradictions():

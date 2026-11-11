@@ -364,6 +364,8 @@ def run_deepseek_arm(packet, arm, tools, model, budget, directory, client=None):
         row['arm'] = arm
         started = time.perf_counter()
         response = original(**kwargs)
+        choices = getattr(response, 'choices', None) or []
+        row['finish_reason'] = getattr(choices[0], 'finish_reason', None) if choices else None
         budget.complete(row, response)
         row['latency_s'] = time.perf_counter() - started
         row['arm'] = arm
@@ -385,6 +387,9 @@ def run_deepseek_arm(packet, arm, tools, model, budget, directory, client=None):
                 if loop.error and not loop.text.strip():
                     raise RuntimeError(loop.error)
                 text = loop.text
+                # The last metered call produced the article: the final turn, or
+                # the synthesis follow-up when the research turn returned no text.
+                finish = loop.usage_calls[-1].get('finish_reason') if loop.usage_calls else None
             else:
                 response = completions.create(model=model, messages=[
                     dict(role='system', content=packet['b']['system_instruction']),
@@ -392,8 +397,15 @@ def run_deepseek_arm(packet, arm, tools, model, budget, directory, client=None):
                     temperature=TEMPERATURE, max_tokens=budget.max_output)
                 result['iterations'] = 1
                 text = response.choices[0].message.content or ''
+                finish = getattr(response.choices[0], 'finish_reason', None)
+            result['finish_reason'] = finish
             if not text.strip():
                 raise RuntimeError('Empty final article')
+            if finish == 'length':
+                # Thinking mode shares max_tokens with the article, so a long think
+                # can return a cut-off article that still passes the non-empty check.
+                result.update(status='truncated', text=text, format_audit=audit_article_quality(text))
+                raise RuntimeError('Truncated article: finish_reason=length, the model hit the output-token cap')
             result.update(status='generated', text=text, format_audit=audit_article_quality(text))
     except Exception as exc:
         result['error'] = str(exc)

@@ -61,8 +61,9 @@ class MockMessage:
 
 
 class MockChoice:
-    def __init__(self, message: MockMessage):
+    def __init__(self, message: MockMessage, finish_reason: str = "stop"):
         self.message = message
+        self.finish_reason = finish_reason
 
 
 class MockUsageDetails:
@@ -81,8 +82,9 @@ class MockUsage:
 
 
 class MockResponse:
-    def __init__(self, message: MockMessage, usage: Optional[MockUsage] = None):
-        self.choices = [MockChoice(message)]
+    def __init__(self, message: MockMessage, usage: Optional[MockUsage] = None,
+                 finish_reason: str = "stop"):
+        self.choices = [MockChoice(message, finish_reason=finish_reason)]
         self.usage = usage or MockUsage()
 
 
@@ -558,6 +560,22 @@ class TestOpenAIToolLoop(unittest.TestCase):
         self.assertEqual(result.usage_calls[1]["output_tokens"], 80)
         self.assertTrue(all("latency_s" in call for call in result.usage_calls))
         self.assertEqual(result.usage["uncached_tokens"], 140)
+
+    def test_usage_calls_carry_finish_reason(self):
+        resp1 = MockResponse(MockMessage(tool_calls=[MockToolCall("c1", "calc", "{}")]),
+                             finish_reason="tool_calls")
+        resp2 = MockResponse(MockMessage(content="Cut off mid-senten"),
+                             finish_reason="length")
+        client = MockOpenAIClient([resp1, resp2])
+
+        def calc() -> str:
+            """Compute."""
+            return "42"
+
+        result = run_openai_tool_loop(client=client, model="deepseek-flash",
+                                      system_instruction="", prompt="Calculate", tools=[calc])
+        self.assertEqual([c["finish_reason"] for c in result.usage_calls], ["tool_calls", "length"])
+        self.assertEqual(result.text, "Cut off mid-senten")
 
     def test_reasoning_content_replayed_on_tool_turns(self):
         resp1 = MockResponse(MockMessage(

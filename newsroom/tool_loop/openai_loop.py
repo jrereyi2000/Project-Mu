@@ -222,18 +222,22 @@ def run_openai_tool_loop(
 
         # Accumulate usage tokens, retaining each request separately for per-call
         # accounting (uncached/cached input, output and reasoning stay distinct).
+        # finish_reason is kept per call so a `length` stop is not mistaken for a
+        # complete answer (DeepSeek's reasoning shares the max_tokens cap).
+        choice = response.choices[0] if getattr(response, "choices", None) else None
+        finish_reason = getattr(choice, "finish_reason", None) if choice is not None else None
         usage_data = getattr(response, "usage", None)
         if usage_data:
             step_usage = extract_openai_usage(usage_data)
             for k, v in step_usage.items():
                 total_usage[k] += v
-            usage_calls.append(dict(step_usage, latency_s=round(call_latency, 3)))
+            usage_calls.append(dict(step_usage, latency_s=round(call_latency, 3),
+                                    finish_reason=finish_reason))
 
-        if not hasattr(response, "choices") or not response.choices:
+        if choice is None:
             failure_error = "Model returned empty choices."
             break
 
-        choice = response.choices[0]
         message = choice.message
 
         # Check for tool calls
@@ -374,13 +378,16 @@ def run_openai_tool_loop(
             follow_started = time.perf_counter()
             followup = client.chat.completions.create(**followup_kwargs)
             follow_latency = time.perf_counter() - follow_started
+            follow_choice = followup.choices[0] if getattr(followup, "choices", None) else None
+            follow_finish = getattr(follow_choice, "finish_reason", None) if follow_choice is not None else None
             if getattr(followup, "usage", None):
                 follow_usage = extract_openai_usage(followup.usage)
                 for k, v in follow_usage.items():
                     total_usage[k] += v
-                usage_calls.append(dict(follow_usage, latency_s=round(follow_latency, 3)))
-            if hasattr(followup, "choices") and followup.choices:
-                final_text = getattr(followup.choices[0].message, "content", "") or ""
+                usage_calls.append(dict(follow_usage, latency_s=round(follow_latency, 3),
+                                        finish_reason=follow_finish))
+            if follow_choice is not None:
+                final_text = getattr(follow_choice.message, "content", "") or ""
         except Exception as syn_ex:
             print(f"⚠️ [SYNTHESIS FALLBACK FAILED]: {syn_ex}")
 
