@@ -105,6 +105,17 @@ For a mod whose payloads don't start with `FMENC001` (plain Frosty, or ours), `-
 
 A Frostbite texture is *not* a DDS. It is a 184-byte Texture res (format, size, mips) plus a pixel chunk. Turning it into a PNG means reading that header (Frosty's TexturePlugin does this), which isn't possible while it is encrypted.
 
+### 2.6 Legacy UI scenes (`.ast`): BGFA / EA Apt **[verified 2026-11-10 on `corenode.ast`, build 3464873]**
+
+Exported read-only with `MmcHarness export-legacy common/ui/node_fe/mainmenu/corenode.ast <out>` (54,255 bytes). Layout:
+- **Header:** magic `BGFA1.05`, then u32 `3`, u32 `2` (two blocks), u32 `0x40`, then bit-packed fields up to `0x70` **[not decoded]**.
+- **Payload:** two zlib streams (`78 DA`): at `0x70` (33,762 → 118,877 bytes), then 6 zero bytes, then at `0x8458` (20,375 → 105,526 bytes). They end flush with the file.
+- **Decompressed data:** EA's **Apt** (Flash/ActionScript 2 style UI). Each block starts with the text `Apt Data:1:7:8` / `Apt1`, with the classes listed as `__Packages.<pkg>.<Class>` and a constant pool of **null-terminated strings padded to 8 bytes**.
+
+The main menu's mode rail is one string constant (block 2, offset `0x33c15` in the joined output, 276 chars), assigned to `logic_com.enum.Navigation.MENU_MAIN.NestedPanelIds`: `nestedlist_events, nestedlist_ultimateteam, nestedlist_franchise, nestedlist_superstar, nestedlist_online, nestedlist_play, nestedlist_trainingcamp, nestedlist_creationcenter, EXTRAS, SETTINGS, ACCESSIBILITY, nestedlist_debug, FRANCHISE_INFO, SUPERSTAR_INFO, ULTIMATETEAM_INFO`. Next to it, `FocusedRootId` = `nestedlist_ultimateteam`: this is why the menu opens on Ultimate Team. Tiles (`PlayNowMMTile`, `LiveEventsMMTile`, `ContinueMMTile`, `GreetingTile`, `EarlyInstallTile`) and the mode info screens (`FranchiseMainMenuInfo` / `SuperstarMainMenuInfo` / `UltimateTeamMainMenuInfo`) are separate classes in the same file.
+
+**[inferred]** A Franchise-only menu is an in-place edit: shorten `NestedPanelIds` and set `FocusedRootId` to `nestedlist_franchise`, padding with nulls so no offset moves. Then re-zlib the block. **[unknown]** Whether the header's bit-packed fields hold the compressed sizes (if so, they must be rewritten, or the new stream padded to the old length). Also unknown: whether the game checks a hash of the file. MUT Remover 1.7's replacement is 53,033 bytes, which fits a shortened list that compresses better. Not tested in game yet.
+
 ## 3. Teardown: BCA Pink Oct (LarrySznn, v1.01, build 3468304)
 
 *"October Breast Cancer Awareness Pink for Primary accessory colors on all NFL team uniforms."* 597 KB, 72 resources + icon, all encrypted.
