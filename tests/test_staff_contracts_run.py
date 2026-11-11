@@ -3,6 +3,7 @@
 Offline: the producer runs on an in-memory SQLite fake with the tenures and staff_contracts schemas.
 """
 import sqlite3
+import unittest
 
 import pytest
 
@@ -516,3 +517,80 @@ def test_a_starting_coach_takes_his_term_from_the_save():
     assert (by[("HC", 11)]["signed_season"], by[("HC", 11)]["remaining_years"]) == (2035, 3)
     # a GM never reads the map, and his 2030 tenure has run out: a fresh deal from this season
     assert (by[("GM", 101)]["signed_season"], by[("GM", 101)]["remaining_years"]) == (2036, 4)
+
+
+@pytest.mark.integration
+class CurrentStaffPrefersAnOpenTenure(unittest.TestCase):
+    """Real PostgreSQL in a `mu_scratch_u13_*` database from db/init_db.sql (every transaction rolled back).
+
+    Audit F2's leftover: `current_staff` ordered a same-season A→B→A return by start_season and id only, so the
+    higher-id interim beat the man who came back. A reopened A tenure (`end_season` NULL) outranks every closed
+    same-season tenure before `id DESC` — for the head coach, a coordinator and a GM (M-0487/M-0497).
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        try:
+            import psycopg
+        except Exception as exc:                                  # pragma: no cover
+            raise unittest.SkipTest(f"psycopg unavailable: {exc!r}")
+        from tests.test_coaching_carousel_db import _drop_scratch, _make_scratch, _scratch_dsn
+        cls._drop = staticmethod(_drop_scratch)
+        cls.db_name = None
+        try:
+            cls.db_name = _make_scratch()
+            cls.conn = psycopg.connect(_scratch_dsn(cls.db_name))
+            cls.cur = cls.conn.cursor()
+        except Exception as exc:                                  # pragma: no cover
+            if cls.db_name:
+                _drop_scratch(cls.db_name)
+            raise unittest.SkipTest(f"no PostgreSQL: {exc!r}")
+
+    @classmethod
+    def tearDownClass(cls):
+        if getattr(cls, "conn", None) is not None:
+            cls.conn.rollback()
+            cls.conn.close()
+        if cls.db_name:
+            cls._drop(cls.db_name)
+
+    def tearDown(self):
+        self.conn.rollback()
+
+    def _team(self, abbr):
+        self.cur.execute("INSERT INTO teams (abbreviation, name, city) VALUES (%s, %s, %s) RETURNING id",
+                         (abbr, f"{abbr} Team", "City"))
+        return self.cur.fetchone()[0]
+
+    def test_a_head_coach_who_returns_beats_the_interim(self):
+        team = self._team("BUF")
+        self.cur.execute("INSERT INTO coaches (coach_name) VALUES ('Returning Coach') RETURNING id")
+        returning = self.cur.fetchone()[0]
+        self.cur.execute("INSERT INTO coach_tenures (coach_id, team_id, start_season, end_season) "
+                         "VALUES (%s, %s, 2030, 2036)", (returning, team))
+        self.cur.execute("INSERT INTO coaches (coach_name) VALUES ('Interim Coach') RETURNING id")
+        interim = self.cur.fetchone()[0]
+        self.cur.execute("INSERT INTO coach_tenures (coach_id, team_id, start_season, end_season) "
+                         "VALUES (%s, %s, 2036, 2036)", (interim, team))
+        # A comes back inside 2036: the tenure is reopened rather than duplicated, so its id is the older one
+        self.cur.execute("UPDATE coach_tenures SET end_season = NULL WHERE coach_id = %s", (returning,))
+
+        staff = scr.current_staff(self.cur, 2036)
+        assert [(s["team_id"], s["person_kind"], s["person_id"]) for s in staff] == [(team, "HC", returning)]
+
+    def test_a_coordinator_who_returns_beats_the_interim(self):
+        team = self._team("CHI")
+        self.cur.execute("INSERT INTO coordinators (coordinator_name, side, scheme) "
+                         "VALUES ('Returning OC', 'OFFENSIVE', 'West Coast') RETURNING id")
+        returning = self.cur.fetchone()[0]
+        self.cur.execute("INSERT INTO coordinator_tenures (coordinator_id, team_id, role, start_season, end_season) "
+                         "VALUES (%s, %s, 'OC', 2030, 2036)", (returning, team))
+        self.cur.execute("INSERT INTO coordinators (coordinator_name, side, scheme) "
+                         "VALUES ('Interim OC', 'OFFENSIVE', 'West Coast') RETURNING id")
+        interim = self.cur.fetchone()[0]
+        self.cur.execute("INSERT INTO coordinator_tenures (coordinator_id, team_id, role, start_season, end_season) "
+                         "VALUES (%s, %s, 'OC', 2036, 2036)", (interim, team))
+        self.cur.execute("UPDATE coordinator_tenures SET end_season = NULL WHERE coordinator_id = %s", (returning,))
+
+        staff = scr.current_staff(self.cur, 2036)
+        assert [(s["team_id"], s["person_kind"], s["person_id"]) for s in staff] == [(team, "OC", returning)]
