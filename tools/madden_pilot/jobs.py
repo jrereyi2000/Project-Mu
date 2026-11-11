@@ -1179,6 +1179,9 @@ def catch_up(pilot, save=None, to_week=None, dsn=None, progress=None, *, watcher
                            save=save)
         season = int(settings.get("season") or CATCH_UP_SEASON)
         reader = week_reader or _save_week
+        # The production reader must carry a readable calendar year on every header read; an
+        # explicitly injected legacy reader may still return only an int (audit-5 wave-5 R1, M-0565).
+        production_reader = week_reader is None or week_reader is _save_week
         mode_of = mode_for or _mode_reader(season)
         try:
             state = _state_from_reader(reader, _latest_save(save_path, auto_path))
@@ -1191,7 +1194,7 @@ def catch_up(pilot, save=None, to_week=None, dsn=None, progress=None, *, watcher
         # F1: the save's own calendar year, not just its week. A 2027 save under 2026 settings
         # must refuse before the PC, otherwise it advances the wrong season under the mirror's
         # data. An injected reader may carry no year; only the production reader must be complete.
-        if week_reader is None and state.get("year") is None:
+        if production_reader and state.get("year") is None:
             return _refuse(f"couldn't read {save}'s calendar year from the save file; the catch-up needs "
                            f"it to match nfl_mirror_settings.season {season}", save=save, season=season)
         if _year_mismatch(state, season):
@@ -1210,27 +1213,24 @@ def catch_up(pilot, save=None, to_week=None, dsn=None, progress=None, *, watcher
         sim = sim or (lambda: _sim_one_week(pilot))
         quit_to_menu = quit_to_menu or (lambda: _quit_to_menu(pilot, franchise=save))
         weeks, stopped = 0, None
-        progress.update(save=save, season=season, start_week=week, end_week=week, weeks_simmed=0)
-        while True:
-            if to_week is not None and week >= to_week:
-                stopped = "to-week"
-                break
-            if weeks >= MAX_CATCH_UP_WEEKS:
-                pilot.stop(f"simmed {weeks} weeks without reaching a LIVE week or --to-week", Stuck)
-            # F2: re-read the settings and gate this week before touching the PC. An operator's
-            # disable between weeks must stop rather than sim an unmirrored roster, and the week
-            # about to be simmed must already be WRITTEN (the failure/readiness check the old loop
-            # only made for the week after a sim).
+
+        def gate_settings(where=""):
+            """Re-read nfl_mirror_settings and stop when this week is no longer mirrored.
+
+            Called before the readiness wait and again after it resolves, because `_wait_written`
+            can block for minutes: an operator disabling the mirror, moving the season or narrowing
+            `last_week` during the wait must stop before the save is loaded or simmed, not one full
+            sim later (audit-5 wave-5 R2, M-0565)."""
             try:
                 latest = mirror.settings()
             except Exception as e:  # noqa: BLE001
-                pilot.stop(f"couldn't re-read nfl_mirror_settings before {season} week {week}: {e}", Stuck)
+                pilot.stop(f"couldn't re-read nfl_mirror_settings before {season} week {week}{where}: {e}", Stuck)
             if not latest or not latest.get("enabled"):
-                pilot.stop(f"nfl_mirror_settings.enabled went false before {season} week {week}: stopping "
+                pilot.stop(f"nfl_mirror_settings.enabled went false before {season} week {week}{where}: stopping "
                            f"before another unmirrored sim", Stuck)
             latest_season = int(latest.get("season") or CATCH_UP_SEASON)
             if latest_season != season:
-                pilot.stop(f"nfl_mirror_settings.season moved to {latest_season} before {season} week {week}: "
+                pilot.stop(f"nfl_mirror_settings.season moved to {latest_season} before {season} week {week}{where}: "
                            f"stopping rather than mirror the wrong season", Stuck)
             try:
                 last_week = None if latest.get("last_week") is None else int(latest["last_week"])
@@ -1242,8 +1242,23 @@ def catch_up(pilot, save=None, to_week=None, dsn=None, progress=None, *, watcher
             if last_week is not None and week + 1 != PRO_BOWL_WEEK and week + 1 > last_week:
                 pilot.stop(f"nfl_mirror_settings last_week is {last_week}: advancing {season} week {week} to "
                            f"week {week + 1} would wait for a mirror_active row it cannot create", Stuck)
+
+        progress.update(save=save, season=season, start_week=week, end_week=week, weeks_simmed=0)
+        while True:
+            if to_week is not None and week >= to_week:
+                stopped = "to-week"
+                break
+            if weeks >= MAX_CATCH_UP_WEEKS:
+                pilot.stop(f"simmed {weeks} weeks without reaching a LIVE week or --to-week", Stuck)
+            # F2: re-read the settings and gate this week before touching the PC. An operator's
+            # disable between weeks must stop rather than sim an unmirrored roster, and the week
+            # about to be simmed must already be WRITTEN (the failure/readiness check the old loop
+            # only made for the week after a sim).
+            gate_settings()
             if week != PRO_BOWL_WEEK:
                 _wait_written(pilot, mirror, season, week, timeout=CATCH_UP_WRITE_TIMEOUT)
+            # The wait can be long: the settings that authorised it may have changed while it ran.
+            gate_settings(" after the readiness wait")
             load()
             try:
                 before_state = _state_from_reader(reader, _latest_save(save_path, auto_path))
@@ -1253,6 +1268,11 @@ def catch_up(pilot, save=None, to_week=None, dsn=None, progress=None, *, watcher
             if before != week:
                 pilot.stop(f"the save reads week {before}, expected week {week}: refusing to sim the "
                            f"wrong save", Stuck)
+            if production_reader and before_state.get("year") is None:
+                # R1 (audit-5, M-0565): a header that loses its calendar year on reload must not
+                # authorise the sim. The initial read already refuses this; the reload read must too.
+                pilot.stop(f"the save reloaded with no readable calendar year, expected {season}: refusing "
+                           f"to sim a save whose season cannot be read", Stuck)
             if _year_mismatch(before_state, season):
                 pilot.stop(f"the save reloaded as {before_state.get('year')} week {before}, but "
                            f"nfl_mirror_settings.season is {season}: refusing to sim a different season", Stuck)
@@ -1265,6 +1285,11 @@ def catch_up(pilot, save=None, to_week=None, dsn=None, progress=None, *, watcher
             if after != before + 1:
                 pilot.stop(f"one sim moved the save from week {before} to week {after}, not exactly one "
                            f"week; stopping before the league office sees it", Stuck)
+            if production_reader and after_state.get("year") is None:
+                # R1 (audit-5, M-0565): a post-sim header with no calendar year stops before the
+                # quit, the save copy and the acknowledgment, not after them.
+                pilot.stop(f"the save carries no readable calendar year after the sim, expected {season}: "
+                           f"stopping before the league office sees it", Stuck)
             if _year_mismatch(after_state, season):
                 pilot.stop(f"one sim moved the save into the {after_state.get('year')} season, but "
                            f"nfl_mirror_settings.season is {season}: stopping before the league office "

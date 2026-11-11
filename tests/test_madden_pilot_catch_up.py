@@ -374,10 +374,96 @@ def test_last_week_allows_a_sim_whose_write_is_still_covered(tmp_path, notices):
 def test_a_disable_between_iterations_stops_before_another_sim(tmp_path, notices):
     on = {"enabled": True, "season": 2026, "last_week": None}
     off = {"enabled": False, "season": 2026, "last_week": None}
-    run = make_run(tmp_path, week=1, store=FlippingStore([on, on, off]))
+    run = make_run(tmp_path, week=1, store=FlippingStore([on, on, on, off]))
     out = catch(tmp_path, run, to_week=3)
     assert out["status"] == "stopped" and "enabled went false" in out["reason"]
     assert run["state"]["sims"] == 1 and run["state"]["week"] == 2
+
+
+# ------------------------------------------------ R1/R2 (audit-5 wave-5, M-0565)
+def test_a_reload_that_loses_the_calendar_year_stops_before_the_sim(tmp_path, notices, monkeypatch):
+    """R1: a header that had a year may not lose it on reload and still authorise the sim."""
+    run = make_run(tmp_path, week=1)
+    year = {"value": 2026}
+    monkeypatch.setattr(jobs, "_snapshot",
+                        lambda path: snapshot(run["state"]["week"], year=year["value"]))
+    run["kw"]["week_reader"] = jobs._save_week
+
+    def load_and_drop_year():
+        run["state"]["loads"] += 1
+        year["value"] = None
+    run["kw"]["load"] = load_and_drop_year
+    out = catch(tmp_path, run, to_week=2)
+    assert out["status"] == "stopped" and "calendar year" in out["reason"]
+    assert run["state"] == {"week": 1, "loads": 1, "sims": 0, "quits": 0}
+
+
+def test_a_post_sim_header_without_a_year_stops_before_the_quit(tmp_path, notices, monkeypatch):
+    """R1: the year lost after the sim stops before the quit, the copy and the acknowledgment."""
+    run = make_run(tmp_path, week=1)
+    year = {"value": 2026}
+    monkeypatch.setattr(jobs, "_snapshot",
+                        lambda path: snapshot(run["state"]["week"], year=year["value"]))
+    run["kw"]["week_reader"] = jobs._save_week
+
+    def sim_and_drop_year():
+        run["state"]["sims"] += 1
+        run["state"]["week"] += 1
+        year["value"] = None
+    run["kw"]["sim"] = sim_and_drop_year
+    out = catch(tmp_path, run, to_week=2)
+    assert out["status"] == "stopped" and "calendar year" in out["reason"]
+    assert run["state"] == {"week": 2, "loads": 1, "sims": 1, "quits": 0}
+
+
+def test_a_reloaded_header_with_a_non_numeric_year_stops(tmp_path, notices, monkeypatch):
+    run = make_run(tmp_path, week=1)
+    year = {"value": 2026}
+    monkeypatch.setattr(jobs, "_snapshot",
+                        lambda path: snapshot(run["state"]["week"], year=year["value"]))
+    run["kw"]["week_reader"] = jobs._save_week
+
+    def load_and_break_year():
+        run["state"]["loads"] += 1
+        year["value"] = "Twenty26"
+    run["kw"]["load"] = load_and_break_year
+    out = catch(tmp_path, run, to_week=2)
+    assert out["status"] == "stopped" and "different season" in out["reason"]
+    assert run["state"]["sims"] == 0 and run["state"]["quits"] == 0
+
+
+def test_a_disable_during_the_readiness_wait_stops_before_the_sim(tmp_path, notices):
+    """R2: the settings are re-read after a possibly long readiness wait, before any PC work."""
+    on = {"enabled": True, "season": 2026, "last_week": None}
+    off = {"enabled": False, "season": 2026, "last_week": None}
+    answers = ["PLANNED", "WRITTEN"]
+    run = make_run(tmp_path, week=1, statuses={1: lambda: answers.pop(0)},
+                   store=FlippingStore([on, on, off]))
+    out = catch(tmp_path, run, to_week=2)
+    assert out["status"] == "stopped" and "enabled went false" in out["reason"]
+    assert run["state"] == {"week": 1, "loads": 0, "sims": 0, "quits": 0}
+
+
+def test_a_season_change_during_the_readiness_wait_stops_before_the_sim(tmp_path, notices):
+    on = {"enabled": True, "season": 2026, "last_week": None}
+    moved = {"enabled": True, "season": 2027, "last_week": None}
+    answers = ["PLANNED", "WRITTEN"]
+    run = make_run(tmp_path, week=1, statuses={1: lambda: answers.pop(0)},
+                   store=FlippingStore([on, on, moved]))
+    out = catch(tmp_path, run, to_week=2)
+    assert out["status"] == "stopped" and "season moved" in out["reason"]
+    assert run["state"]["sims"] == 0 and run["state"]["loads"] == 0
+
+
+def test_a_last_week_reduction_during_the_readiness_wait_stops_before_the_sim(tmp_path, notices):
+    on = {"enabled": True, "season": 2026, "last_week": None}
+    narrowed = {"enabled": True, "season": 2026, "last_week": 1}
+    answers = ["PLANNED", "WRITTEN"]
+    run = make_run(tmp_path, week=1, statuses={1: lambda: answers.pop(0)},
+                   store=FlippingStore([on, on, narrowed]))
+    out = catch(tmp_path, run, to_week=2)
+    assert out["status"] == "stopped" and "last_week" in out["reason"]
+    assert run["state"]["sims"] == 0 and run["state"]["loads"] == 0
 
 
 # ------------------------------------------------ F3: the Pro Bowl and the Super Bowl
