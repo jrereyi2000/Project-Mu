@@ -21,7 +21,6 @@ import zlib
 from dataclasses import dataclass
 
 MAGIC = b"BGFA1.05"
-FIRST_BLOCK = 0x70
 
 
 class AstError(Exception):
@@ -42,7 +41,7 @@ def first_block(data: bytes) -> int:
 
 
 def read_blocks(data: bytes) -> list[Block]:
-    """Walk the zlib blocks from 0x70 (8-byte aligned starts) to the end of the file."""
+    """Walk the zlib blocks from first_block() (8-byte aligned starts) to the end of the file."""
     if data[:8] != MAGIC:
         raise AstError("not a BGFA1.05 scene")
     blocks, off = [], first_block(data)
