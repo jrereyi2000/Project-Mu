@@ -1,6 +1,6 @@
 # Project Mu: Madden Stats Ingest Plan
 
-**Status:** approved by JR (2026-11-10, opus-queue chat; board M-0375/M-0376). Spike run 2026-11-10 — results in S19–S22. **Build not started:** the first `stats-ingest` session ran the spike and answered JR's metric question, then handed off on JR's request before wave 1. The build session confirms the go-ahead with JR, then runs `/execute-plan` (handoff: `docs/in_progress/MADDEN_STATS_INGEST_HANDOFF.md`).
+**Status:** approved by JR (2026-11-10, opus-queue chat; board M-0375/M-0376; go-ahead confirmed in `stats-ingest-2`, 2026-11-11). Spike run 2026-11-10 — results in S19–S22. Build started 2026-11-11 from the `stats-ingest` handoff (`docs/in_progress/MADDEN_STATS_INGEST_HANDOFF.md`); building, wave 1 of 1.
 **Builds on:** PROJECT_SPEC §3.3 (Games & Statistics), [`PC_MIGRATION_PLAN.md`](../done/PC_MIGRATION_PLAN.md) §5.1–§5.3 (the save reader and loader), [`MADDEN_STATS_AND_ADVANCED_METRICS.md`](../reference/MADDEN_STATS_AND_ADVANCED_METRICS.md) (the metric catalog), board M-0288 (JR's ask).
 
 **Goal:** Store every stat Madden 27 actually records, so the advanced metrics in the reference doc can be tracked week by week and computed whenever they're needed. Two sources are involved. The per-game and season stat rows hold a handful of counters the loader drops today; those become new columns. Targets, pressures, coverage targets, stops, depth and pocket splits exist **only** as career totals on `Player.CareerStats`. The plan stores those totals at every weekly load and gets each week's numbers by subtracting the previous week's totals. Ratios are not stored; they're computed from the counters on demand. The plan also says plainly which metrics in the doc can't be computed and why.
@@ -292,3 +292,8 @@ No path appears twice.
 | Q2 | Should a week-level metric be shown when a difference covers 2+ games (a missed load)? | **Yes, labelled as weeks N–M.** Dropping it loses data the season totals already count. |
 | Q3 | Metrics that can't be computed (receiver aDOT, RACR, separation, concept splits, press coverage): list them as impossible, or approximate them (e.g. a receiver's share of his QB's air yards by target share)? | **List them as impossible.** An approximation would look like a real Madden number to writers and fantasy players. If one is wanted, it belongs in a later plan with its own label. |
 | Q4 | Build wave 1 even if the spike blocks `ROUTESRUN` (TPRR/YPRR)? | **Yes.** Everything else stands on its own; those three metrics just stay `BLOCKED`. |
+
+## 9. Build log
+
+| Unit | Wave | Branch | Worktree | Result | Merge |
+|---|---|---|---|---|---|
