@@ -69,6 +69,24 @@ class FakeStore:
         self.closed = True
 
 
+class FlippingStore(FakeStore):
+    """A store whose settings change between reads (an operator disabling mid-run)."""
+
+    def __init__(self, settings_list):
+        super().__init__()
+        self._settings_list = list(settings_list)
+
+    def settings(self):
+        return self._settings_list.pop(0) if len(self._settings_list) > 1 else self._settings_list[0]
+
+
+def snapshot(week, year=2026, week_type="RegularSeason", week_index=None):
+    """A save snapshot shaped like pc_save_reader's season block."""
+    if week_index is None:
+        week_index = week - 1
+    return {"season": {"calendar_year": year, "week_type": week_type, "week_index": week_index}}
+
+
 def make_run(tmp_path, week=1, store=None, mode_for=None, statuses=None):
     """A pilot/state/store/counters bundle for one catch-up run."""
     pilot = FakePilot(tmp_path / "run")
@@ -167,7 +185,8 @@ def test_one_loop_loads_sims_quits_and_waits_for_written(tmp_path, notices):
     assert (out["start_week"], out["end_week"], out["weeks_simmed"]) == (1, 2, 1)
     assert out["stopped_because"] == "to-week" and out["season"] == 2026
     assert run["state"] == {"week": 2, "loads": 1, "sims": 1, "quits": 1}
-    assert run["store"].asked == [(2026, 2), (2026, 2)]        # the settings' season, the save's new week
+    # the current week must be WRITTEN before the sim (F2), then the save's new week after it
+    assert run["store"].asked == [(2026, 1), (2026, 2), (2026, 2)]
     assert run["store"].closed is False                        # an injected store is the caller's
     assert len(notices) == 2                                   # one per week, then the summary
     assert "2026 week 1 simmed, mirror week 2 written" in notices[0][0]
@@ -225,7 +244,7 @@ def test_one_sim_must_move_the_save_exactly_one_week(tmp_path, notices):
     assert out["status"] == "stopped" and out["kind"] == "Stuck"
     assert "not exactly one week" in out["reason"]
     assert run["state"]["quits"] == 0                    # the bad save never reaches the league office
-    assert run["store"].asked == []                      # and it never waited for a WRITTEN week
+    assert run["store"].asked == [(2026, 1)]             # only the current week's readiness check
 
 
 def test_a_loaded_save_that_is_not_the_expected_week_stops_before_the_sim(tmp_path, notices):
@@ -248,6 +267,163 @@ def test_the_week_cap_is_a_stuck_stop(tmp_path, notices, monkeypatch):
     assert run["state"]["sims"] == 2
 
 
+# ------------------------------------------------ F1: the save's own calendar year
+def test_a_2027_save_refuses_under_2026_settings_before_the_pc(tmp_path, notices, monkeypatch):
+    """Audit F1 (M-0508): a correctly-read week must not carry a 2027 season under 2026 settings."""
+    run = make_run(tmp_path, week=1)
+    monkeypatch.setattr(jobs, "_snapshot", lambda path: snapshot(run["state"]["week"], year=2027))
+    run["kw"]["week_reader"] = jobs._save_week
+    out = catch(tmp_path, run, to_week=2)
+    assert out["status"] == "refused" and out["season"] == 2026
+    assert "2027" in out["why"] and "2026" in out["why"]
+    assert run["state"] == {"week": 1, "loads": 0, "sims": 0, "quits": 0}
+    assert run["store"].asked == [] and run["pilot"].stops == []
+
+
+def test_a_2026_save_matching_the_settings_runs(tmp_path, notices, monkeypatch):
+    run = make_run(tmp_path, week=1)
+    monkeypatch.setattr(jobs, "_snapshot", lambda path: snapshot(run["state"]["week"]))
+    run["kw"]["week_reader"] = jobs._save_week
+    out = catch(tmp_path, run, to_week=2)
+    assert out["status"] == "ok" and out["season"] == 2026 and run["state"]["sims"] == 1
+
+
+def test_an_unreadable_calendar_year_refuses(tmp_path, notices, monkeypatch):
+    run = make_run(tmp_path, week=1)
+    run["kw"].pop("week_reader")                 # the production reader must supply the year
+    monkeypatch.setattr(jobs, "_snapshot", lambda path: {
+        "season": {"week_type": "RegularSeason", "week_index": 0}})
+    out = catch(tmp_path, run, to_week=2)
+    assert out["status"] == "refused" and "calendar year" in out["why"]
+    assert run["state"]["sims"] == 0 and run["state"]["loads"] == 0
+
+
+def test_a_reloaded_save_from_another_season_stops_before_the_sim(tmp_path, notices, monkeypatch):
+    run = make_run(tmp_path, week=1)
+    year = {"value": 2026}
+    monkeypatch.setattr(jobs, "_snapshot",
+                        lambda path: snapshot(run["state"]["week"], year=year["value"]))
+    run["kw"]["week_reader"] = jobs._save_week
+
+    def load_and_change_year():
+        run["state"]["loads"] += 1
+        year["value"] = 2027
+    run["kw"]["load"] = load_and_change_year
+    out = catch(tmp_path, run, to_week=2)
+    assert out["status"] == "stopped" and "different season" in out["reason"]
+    assert run["state"]["sims"] == 0
+
+
+def test_save_week_keeps_the_year_and_names_the_pro_bowl(monkeypatch):
+    monkeypatch.setattr(jobs, "_snapshot", lambda path: snapshot(7, year=2027))
+    week = jobs._save_week("x")
+    assert week == 7 and week.year == 2027 and isinstance(week, int)
+    monkeypatch.setattr(jobs, "_snapshot",
+                        lambda path: snapshot(22, week_type="ProBowl", week_index=0))
+    assert jobs._save_week("x") == jobs.PRO_BOWL_WEEK
+    monkeypatch.setattr(jobs, "_snapshot",
+                        lambda path: snapshot(1, week_type="Preseason", week_index=0))
+    assert jobs._save_week("x") is None
+
+
+# ------------------------------------------------ F2: current-week readiness and last_week
+def test_a_failed_current_week_stops_before_the_sim(tmp_path, notices):
+    """Audit F2 (M-0508): the week about to be simmed must not be FAILED."""
+    run = make_run(tmp_path, week=1, statuses={1: "FAILED", 2: "WRITTEN"})
+    out = catch(tmp_path, run, to_week=2)
+    assert out["status"] == "stopped" and out["kind"] == "Stuck"
+    assert "FAILED" in out["reason"] and "week 1" in out["reason"]
+    assert run["state"] == {"week": 1, "loads": 0, "sims": 0, "quits": 0}
+    assert run["store"].asked == [(2026, 1)]      # it never polled the week after
+
+
+def test_a_planned_current_week_is_not_simmed_until_written(tmp_path, notices):
+    answers = ["PLANNED", "WRITTEN"]
+    run = make_run(tmp_path, week=1, statuses={1: lambda: answers.pop(0)})
+    out = catch(tmp_path, run, to_week=2)
+    assert out["status"] == "ok" and run["state"]["sims"] == 1
+    assert run["store"].asked[:2] == [(2026, 1), (2026, 1)]   # waited for WRITTEN first
+
+
+def test_a_missing_current_week_is_a_bounded_stop(tmp_path, notices, monkeypatch):
+    monkeypatch.setattr(jobs, "CATCH_UP_WRITE_TIMEOUT", 0)
+    run = make_run(tmp_path, week=1, statuses={1: lambda: None})
+    out = catch(tmp_path, run, to_week=2)
+    assert out["status"] == "stopped" and out["kind"] == "Stuck" and "no row" in out["reason"]
+    assert run["state"]["sims"] == 0 and run["state"]["loads"] == 0
+
+
+def test_last_week_stops_before_leaving_supported_coverage(tmp_path, notices):
+    """Audit F2: mirror_active cannot write the week after last_week, so never sim into it."""
+    store = FakeStore(settings={"enabled": True, "season": 2026, "last_week": 1})
+    run = make_run(tmp_path, week=1, store=store)
+    out = catch(tmp_path, run, to_week=2)
+    assert out["status"] == "stopped" and "last_week" in out["reason"]
+    assert run["state"]["sims"] == 0
+    assert (2026, 2) not in store.asked and store.asked == []
+
+
+def test_last_week_allows_a_sim_whose_write_is_still_covered(tmp_path, notices):
+    store = FakeStore(settings={"enabled": True, "season": 2026, "last_week": 2})
+    run = make_run(tmp_path, week=1, store=store)
+    out = catch(tmp_path, run, to_week=2)
+    assert out["status"] == "ok" and run["state"]["sims"] == 1
+    assert store.asked[-1] == (2026, 2)
+
+
+def test_a_disable_between_iterations_stops_before_another_sim(tmp_path, notices):
+    on = {"enabled": True, "season": 2026, "last_week": None}
+    off = {"enabled": False, "season": 2026, "last_week": None}
+    run = make_run(tmp_path, week=1, store=FlippingStore([on, on, off]))
+    out = catch(tmp_path, run, to_week=3)
+    assert out["status"] == "stopped" and "enabled went false" in out["reason"]
+    assert run["state"]["sims"] == 1 and run["state"]["week"] == 2
+
+
+# ------------------------------------------------ F3: the Pro Bowl and the Super Bowl
+def _postseason_snapshot(run):
+    def snap(path):
+        w = run["state"]["week"]
+        week_type = ("ConferencePlayoff" if w == 21 else
+                     "ProBowl" if w == 22 else "SuperBowl")
+        return snapshot(w, week_type=week_type, week_index=0)
+    return snap
+
+
+def test_the_conference_sim_passes_the_pro_bowl_and_stops_at_week_23(tmp_path, notices, monkeypatch):
+    """Audit F3 (M-0508): Conference21 -> Pro Bowl -> Super Bowl23 is two sane one-week steps."""
+    run = make_run(tmp_path, week=21)
+    monkeypatch.setattr(jobs, "_snapshot", _postseason_snapshot(run))
+    run["kw"]["week_reader"] = jobs._save_week
+    run["mode_for"] = lambda w: jobs.PRO_BOWL if w == jobs.PRO_BOWL_WEEK else "CATCH_UP"
+    out = catch(tmp_path, run, to_week=23)
+    assert out["status"] == "ok", out
+    assert out["stopped_because"] == "to-week" and out["end_week"] == 23
+    assert (out["weeks_simmed"], run["state"]["sims"], run["state"]["quits"]) == (2, 2, 2)
+    assert (2026, jobs.PRO_BOWL_WEEK) not in run["store"].asked   # no row to wait for
+    assert "Pro Bowl reached with no mirror row" in notices[0][0]
+
+
+def test_a_pending_super_bowl_stops_before_simming_it(tmp_path, notices, monkeypatch):
+    run = make_run(tmp_path, week=22)
+    monkeypatch.setattr(jobs, "_snapshot", _postseason_snapshot(run))
+    run["kw"]["week_reader"] = jobs._save_week
+    run["mode_for"] = lambda w: jobs.PRO_BOWL if w == jobs.PRO_BOWL_WEEK else "LIVE"
+    out = catch(tmp_path, run, to_week=23)
+    assert out["status"] == "ok" and out["stopped_because"] == "live"
+    assert out["end_week"] == 23 and run["state"]["sims"] == 1     # the Super Bowl was not simmed
+
+
+def test_a_save_already_at_the_pro_bowl_is_not_refused_as_live(tmp_path, notices, monkeypatch):
+    run = make_run(tmp_path, week=22)
+    monkeypatch.setattr(jobs, "_snapshot", _postseason_snapshot(run))
+    run["kw"]["week_reader"] = jobs._save_week
+    run["mode_for"] = lambda w: jobs.PRO_BOWL if w == jobs.PRO_BOWL_WEEK else "CATCH_UP"
+    out = catch(tmp_path, run, to_week=22)
+    assert out["status"] == "ok" and out["weeks_simmed"] == 0
+    assert out["stopped_because"] == "to-week"
+
+
 # ---------------------------------------------------------------- helpers
 def test_mode_reader_uses_the_real_games_and_stops_hostless_weeks():
     final = [{"season": "2026", "week": "1", "home_score": "24", "away_score": "17"},
@@ -255,7 +431,7 @@ def test_mode_reader_uses_the_real_games_and_stops_hostless_weeks():
     reader = jobs._mode_reader(2026, games_rows=lambda: final)
     assert reader(1) == "CATCH_UP"
     assert reader(2) == "LIVE"           # no games that week
-    assert reader(22) == "LIVE"          # the Pro Bowl has no real NFL week
+    assert reader(22) == jobs.PRO_BOWL   # the Pro Bowl is a progression stop, not a live week
     reader_rows = []
     assert reader_rows == []             # the rows are read once, lazily
     reader = jobs._mode_reader(2026, games_rows=lambda: [{"season": "2026", "week": "1",

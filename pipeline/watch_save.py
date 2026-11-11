@@ -1238,6 +1238,106 @@ def league_office_stage_done(dsn, info):
         return True
 
 
+# ------------------------------------------------------------------------------------- NFL weekly mirror ---
+MIRROR_UNCONFIRMED_REASON = "unconfirmed trade or claim"
+
+
+def mirror_connect(dsn):
+    """A read-only connection for the mirror checks (a short timeout so a missing database never stalls an ingest)."""
+    import psycopg
+    return psycopg.connect(dsn, connect_timeout=5)
+
+
+def mirror_week_active(dsn, snapshot, log_fn=log):
+    """(league office stage info, True) when the NFL weekly mirror is active for this save's own (season, stage,
+    week), else (info, False). Never raises: a missing migration, an unknown stage or an unreadable database all
+    mean "not a mirrored week" (NFL_WEEKLY_MIRROR_PLAN §2.10)."""
+    info = league_office_stage(snapshot, log_fn=log_fn)
+    if info is None or not dsn or not snapshot.get("players"):
+        # No loaded franchise (the snapshot carries no players, e.g. a season-only one), no recognised stage or no
+        # database: the mirror cannot be on for this save, and there is no roster to mirror anyway.
+        return info, False
+    try:
+        from engines.nfl_mirror import store as mirror_store
+        with mirror_connect(dsn) as conn, conn.cursor() as cur:
+            return info, bool(mirror_store.mirror_active(cur, info["season"], info["stage"], info["week"]))
+    except Exception as e:      # noqa: BLE001 - the mirror check never fails an ingest
+        log_fn(f"[WARN] NFL mirror check skipped: {e}")
+        return info, False
+
+
+def _cached_mirror_rows(season):
+    """{name: [row]} for the real-week files already in the nflverse cache; FileNotFoundError when one is missing.
+
+    The mirror's league office run fetched these with refresh=True just before this, so a mirrored week reads
+    them offline. The caller falls back rather than downloading from an ingest."""
+    from engines.nfl_history.fetch import cache_path
+    from engines.nfl_mirror import fetch as mirror_fetch
+    names = ("rosters", "injuries", "depth", "games")
+    files = mirror_fetch.file_list(season)
+    paths = {}
+    for name in names:
+        path = cache_path(files[name][1])
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"{path} is not cached")
+        paths[name] = path
+    return {name: list(mirror_fetch.read_rows(paths[name])) for name in names}
+
+
+def mirror_unconfirmed_switches(season, real_week):
+    """The real week's team-to-team switches with no hand-kept trade leg (`engines.nfl_mirror.trades`).
+
+    Reads only the cached nflverse files, so an ingest never waits on the network for it."""
+    from engines.nfl_mirror import real_state
+    from engines.nfl_mirror import trades as mirror_trades
+    rows = _cached_mirror_rows(season)
+
+    def build(week):
+        return real_state.build_week(rows["rosters"], rows["injuries"], rows["depth"], rows["games"], season, week)
+
+    week = int(real_week)
+    switches = mirror_trades.infer_switches(build(week - 1), build(week)) if week > 1 else []
+    return mirror_trades.unconfirmed(switches, mirror_trades.read_trades())
+
+
+def mirror_week_notice(dsn, season, week, log_fn=log):
+    """The week-done notification fragment "mirror: N moves (M unconfirmed switches)" for a mirrored week, or "".
+
+    N is the week's WRITTEN `nfl_mirror_moves` count. M is the real week's unconfirmed switches; when the cached
+    files aren't there, the week's RELEASE moves that were planned as unconfirmed switches are counted instead.
+    Never raises and never fails an ingest."""
+    if season is None or week is None or not dsn:
+        return ""
+    try:
+        from engines.nfl_mirror import store as mirror_store
+        with mirror_connect(dsn) as conn, conn.cursor() as cur:
+            if not mirror_store.installed(cur):
+                return ""
+            cur.execute("SELECT COUNT(*) FROM nfl_mirror_moves WHERE season = %s AND week = %s "
+                        "AND status = 'WRITTEN'", (int(season), int(week)))
+            row = cur.fetchone()
+            moves = int(row[0]) if row and row[0] is not None else 0
+            cur.execute("SELECT real_week FROM nfl_mirror_weeks WHERE season = %s AND week = %s",
+                        (int(season), int(week)))
+            row = cur.fetchone()
+            real_week = int(row[0]) if row and row[0] is not None else None
+            cur.execute("SELECT COUNT(*) FROM nfl_mirror_moves WHERE season = %s AND week = %s "
+                        "AND kind = 'RELEASE' AND reason ILIKE %s",
+                        (int(season), int(week), f"%{MIRROR_UNCONFIRMED_REASON}%"))
+            row = cur.fetchone()
+            planned = int(row[0]) if row and row[0] is not None else 0
+    except Exception as e:      # noqa: BLE001 - a notification never fails an ingest
+        log_fn(f"[WARN] NFL mirror notification skipped: {e}")
+        return ""
+    unconfirmed = planned
+    if real_week is not None:
+        try:
+            unconfirmed = len(mirror_unconfirmed_switches(season, real_week))
+        except Exception as e:      # noqa: BLE001 - fall back to the planned releases
+            log_fn(f"[WARN] NFL mirror unconfirmed switches unavailable ({e}); counted the planned releases")
+    return f"mirror: {moves} moves ({unconfirmed} unconfirmed switches)"
+
+
 def league_office_command(snapshot_path, save_path, dsn):
     """The manual command that runs the league office on this snapshot later."""
     return (f"{FRANCHISE_CLOSED_ENV}=1 python3 -m pipeline.league_office --snapshot {snapshot_path} "
@@ -1363,8 +1463,17 @@ def ingest_snapshot(snapshot_path, save_season, save_week, dry_run=False, no_art
     lo_result = None
     # Step: progression state for every player Mu has never tracked, before any progression stage plans
     with open(snapshot_path) as fh:
-        new_players = bootstrap_new_players(dsn, json.load(fh), load_report.get("players_created_ids") or {},
-                                            source_fingerprint=save_sha256, log_fn=log_fn)
+        snapshot = json.load(fh)
+    new_players = bootstrap_new_players(dsn, snapshot, load_report.get("players_created_ids") or {},
+                                        source_fingerprint=save_sha256, log_fn=log_fn)
+
+    # Step: is this week mirrored? The NFL weekly mirror owns the week's roster moves, so its ingest skips the GM
+    # trade proposals, the newsroom articles and the press conferences (NFL_WEEKLY_MIRROR_PLAN §2.10).
+    mirror_info, mirror_on = (None, False)
+    if save_week is not None:
+        mirror_info, mirror_on = mirror_week_active(dsn, snapshot, log_fn=log_fn)
+        if mirror_on:
+            log_fn(f"NFL mirror week: real week {mirror_info.get('week')} ({mirror_info.get('stage')})")
 
     # The personality switchboard, read once for this ingest (every feature off by default)
     modes = personality_modes(dsn, log_fn=log_fn)
@@ -1395,7 +1504,8 @@ def ingest_snapshot(snapshot_path, save_season, save_week, dry_run=False, no_art
         return {"status": "success", "dry_run": False, "season": save_season, "week": save_week,
                 "load_report": load_report, "league_office": lo_result, "relationship_producers": producers,
                 "coach_promises": coach_promises, "personality_evolution": evolution,
-                "focus_refresh": focus_refresh, "trade_requests": trade_requests, "new_players": new_players}
+                "focus_refresh": focus_refresh, "trade_requests": trade_requests, "new_players": new_players,
+                "nfl_mirror_week": bool(mirror_on)}
 
     if stage_only:
         # An offseason stop: no current week, so no weekly engines, articles or mod pack.
@@ -1421,7 +1531,10 @@ def ingest_snapshot(snapshot_path, save_season, save_week, dry_run=False, no_art
         log_fn(f"Step 7: start-of-season calibration engines (season {save_season})")
         step_preseason_engines(save_season)
     else:
-        run_weekly_engines(save_season, mode="weekly", log_fn=log_fn)
+        if mirror_on:
+            run_weekly_engines(save_season, mode="weekly", log_fn=log_fn, gm=False)
+        else:
+            run_weekly_engines(save_season, mode="weekly", log_fn=log_fn)
         queue_nightly_jobs(save_season, save_week, log_fn=log_fn)
 
     # Step: league office (after the engines, before the articles, so they can report its moves; never fatal)
@@ -1429,12 +1542,20 @@ def ingest_snapshot(snapshot_path, save_season, save_week, dry_run=False, no_art
 
     # Step: articles
     published = None
+    mirror_line = ""
     if not no_articles and save_week is not None:
-        log_fn("Step 8: newsroom articles")
-        res = step_articles(save_season, week=save_week)
-        published = f"slate for Week {res.get('week')}: {res.get('status')}"
-        if res.get("status") not in ("published", "skipped_exists", "season_complete"):
-            raise WeekStopped(f"Articles did not publish ({res})")
+        if mirror_on:
+            log_fn("NFL mirror week: no articles")
+        else:
+            log_fn("Step 8: newsroom articles")
+            res = step_articles(save_season, week=save_week)
+            published = f"slate for Week {res.get('week')}: {res.get('status')}"
+            if res.get("status") not in ("published", "skipped_exists", "season_complete"):
+                raise WeekStopped(f"Articles did not publish ({res})")
+
+    # The mirror week's move count and its unconfirmed switches, read after the league office wrote the week.
+    if mirror_on:
+        mirror_line = mirror_week_notice(dsn, save_season, save_week, log_fn=log_fn)
 
     # Step: the mod pack for the user teams' next game (the save's current week is Madden's next unplayed week)
     if save_week is not None:
@@ -1447,7 +1568,8 @@ def ingest_snapshot(snapshot_path, save_season, save_week, dry_run=False, no_art
         log_fn(rw_line)
     send_notify(
         f"Ingested season {save_season} week {save_week or 'preseason'} from {save_name}. "
-        f"{published or 'Articles skipped.'}" + (f" {lo_line}." if lo_line else "") + (f" {rw_line}" if rw_line else ""),
+        f"{published or 'Articles skipped.'}" + (f" {lo_line}." if lo_line else "") + (f" {rw_line}" if rw_line else "")
+        + (f" {mirror_line}" if mirror_line else ""),
         title="Mu: week done", priority=rw_priority,
         tags=("white_check_mark",) if rw_priority == "default" else ("warning",)
     )
@@ -1519,8 +1641,10 @@ def run_ingest(snapshot_path, dsn, save_season, save_week, dry_run=False, no_art
         result = json.load(fh)
     # Press conferences (PRESS_CONFERENCE_PLAN §2.2): the ingest has loaded, run the engines, written the
     # national slate and the mod pack; now start this week's pressers in a detached process. Never on a dry
-    # run, with the articles or engines skipped, or for a preseason / no-week save.
-    if not dry_run and not no_articles and not no_engines and save_week is not None:
+    # run, with the articles or engines skipped, for a preseason / no-week save, or in an NFL mirror week (§2.10).
+    if result.get("nfl_mirror_week"):
+        log_fn("NFL mirror week: no press conferences")
+    elif not dry_run and not no_articles and not no_engines and save_week is not None:
         try:
             press = press_week(dsn, save_season)
             if press is not None:

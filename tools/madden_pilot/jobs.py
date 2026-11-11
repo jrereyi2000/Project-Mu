@@ -73,6 +73,8 @@ CATCH_UP_WRITE_TIMEOUT = 15 * 60   # seconds to wait for the league office's WRI
 CATCH_UP_POLL = 5.0                # seconds between nfl_mirror_weeks reads while waiting
 MAX_CATCH_UP_WEEKS = 30            # safety cap on one catch-up run (NFL_WEEKLY_MIRROR_PLAN §2.12)
 CATCH_UP_SEASON = 2026             # fallback mirror season when the settings row has none
+PRO_BOWL_WEEK = 22                 # Madden's no-game stop between the conference and the Super Bowl
+PRO_BOWL = "PRO_BOWL"              # a progression stop with no real NFL week and no mirror row
 # Header words that mean the season moved past the playoffs (todo: not seen yet; guesses).
 OFFSEASON_WORDS = ("OFFSEASON", "STAFF", "RE-SIGN", "RESIGN", "FREE AGENCY", "COMBINE", "PRO DAY",
                    "DRAFT", "UDFA", "CUTDOWN", "PRESEASON")
@@ -461,13 +463,59 @@ def _snapshot(save_path):
         shutil.rmtree(folder, ignore_errors=True)
 
 
+class _SaveWeek(int):
+    """A save week that also carries the save's calendar year, so the catch-up can refuse a save
+    whose season disagrees with nfl_mirror_settings. It is still an int for every other caller."""
+
+    year = None
+
+
 def _save_week(save_path):
-    """The save's current week from the save file (the fallback when the hub shows BYE WEEK)."""
-    from pipeline.load_save import current_week
+    """The save's current Mu week from the save file (the fallback when the hub shows BYE WEEK).
+
+    `.year` carries the save's calendar year (a bare int otherwise). The Pro Bowl, Madden's
+    no-game progression stop, reads as Mu week 22 rather than None so the catch-up can advance
+    it by the one step it is; the preseason and offseason still read as None."""
     try:
-        return current_week(_snapshot(save_path))
+        head = _save_header(save_path)
     except Exception:  # noqa: BLE001 - a fallback; the hub header remains the first source
         return None
+    if head is None:
+        return None
+    week = head.get("week")
+    if week is None:
+        if head.get("phase") != "PROBOWL":
+            return None
+        week = PRO_BOWL_WEEK
+    value = _SaveWeek(int(week))
+    value.year = head.get("year")
+    return value
+
+
+def _state_from_reader(reader, save_path):
+    """Normalise a week reader to {"year", "week", "phase"}.
+
+    _save_week returns an int carrying `.year`; a dict from _save_header is used as is; a plain
+    injected int (the older test contract) carries no year, so only the week guard applies."""
+    value = reader(save_path)
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        week = value.get("week")
+        return {"year": value.get("year"), "week": None if week is None else int(week),
+                "phase": value.get("phase")}
+    return {"year": getattr(value, "year", None), "week": int(value), "phase": "WEEK"}
+
+
+def _year_mismatch(state, season):
+    """True when the save names a calendar year other than the mirror's season."""
+    year = (state or {}).get("year")
+    if year is None:
+        return False
+    try:
+        return int(year) != int(season)
+    except (TypeError, ValueError):
+        return True
 
 
 PLAYOFF_PHASES = {"wildcardplayoff": "WILDCARD", "divisionalplayoff": "DIVISIONAL",
@@ -1020,15 +1068,18 @@ def _fetch_games(season):
 
 
 def _mode_reader(season, games_rows=None):
-    """mode_for(mu_week) -> real_state.CATCH_UP | LIVE, reading games.csv once for the run.
+    """mode_for(mu_week) -> real_state.CATCH_UP | LIVE | PRO_BOWL, reading games.csv once.
 
-    A Mu week with no real NFL week (the Pro Bowl, week 22) reads as LIVE so the catch-up stops
-    rather than guess."""
+    The Pro Bowl (Mu week 22) has no real NFL week and no mirror row: it is Madden's own
+    progression stop, so the catch-up advances through it deliberately instead of stopping as
+    if it were a real live week. Any other week with no real game still reads LIVE."""
     cache = {}
     rows_for = games_rows or (lambda: _fetch_games(season))
 
     def mode_for(mu_week):
         from engines.nfl_mirror import real_state
+        if int(mu_week) == PRO_BOWL_WEEK:
+            return PRO_BOWL
         if "games" not in cache:
             cache["games"] = list(rows_for())
         try:
@@ -1130,17 +1181,29 @@ def catch_up(pilot, save=None, to_week=None, dsn=None, progress=None, *, watcher
         reader = week_reader or _save_week
         mode_of = mode_for or _mode_reader(season)
         try:
-            week = reader(_latest_save(save_path, auto_path))
+            state = _state_from_reader(reader, _latest_save(save_path, auto_path))
         except Exception as e:  # noqa: BLE001
             return _refuse(f"couldn't read {save}'s week: {e}", save=save)
+        week = None if state is None else state.get("week")
         if week is None:
             return _refuse(f"couldn't read {save}'s week from the save file; the catch-up needs a "
                            f"regular-season or playoff save", save=save)
+        # F1: the save's own calendar year, not just its week. A 2027 save under 2026 settings
+        # must refuse before the PC, otherwise it advances the wrong season under the mirror's
+        # data. An injected reader may carry no year; only the production reader must be complete.
+        if week_reader is None and state.get("year") is None:
+            return _refuse(f"couldn't read {save}'s calendar year from the save file; the catch-up needs "
+                           f"it to match nfl_mirror_settings.season {season}", save=save, season=season)
+        if _year_mismatch(state, season):
+            return _refuse(f"{save} is the {state.get('year')} season, but nfl_mirror_settings.season is "
+                           f"{season}: the catch-up only mirrors the settings' season", save=save,
+                           week=week, season=season)
+        week = int(week)
         try:
             mode = mode_of(week)
         except Exception as e:  # noqa: BLE001 - nflverse down: refuse before the PC
             return _refuse(f"couldn't read the real games for {season} week {week}: {e}", save=save)
-        if mode != "CATCH_UP":
+        if mode not in ("CATCH_UP", PRO_BOWL):
             return _refuse(f"{season} week {week} is {mode or 'unknown'}, not CATCH_UP for the real NFL: the "
                            f"catch-up starts at the first week whose games are all final", save=save, week=week)
         load = load or (lambda: _load_franchise(pilot, tile, save=save, folder=folder))
@@ -1154,26 +1217,76 @@ def catch_up(pilot, save=None, to_week=None, dsn=None, progress=None, *, watcher
                 break
             if weeks >= MAX_CATCH_UP_WEEKS:
                 pilot.stop(f"simmed {weeks} weeks without reaching a LIVE week or --to-week", Stuck)
+            # F2: re-read the settings and gate this week before touching the PC. An operator's
+            # disable between weeks must stop rather than sim an unmirrored roster, and the week
+            # about to be simmed must already be WRITTEN (the failure/readiness check the old loop
+            # only made for the week after a sim).
+            try:
+                latest = mirror.settings()
+            except Exception as e:  # noqa: BLE001
+                pilot.stop(f"couldn't re-read nfl_mirror_settings before {season} week {week}: {e}", Stuck)
+            if not latest or not latest.get("enabled"):
+                pilot.stop(f"nfl_mirror_settings.enabled went false before {season} week {week}: stopping "
+                           f"before another unmirrored sim", Stuck)
+            latest_season = int(latest.get("season") or CATCH_UP_SEASON)
+            if latest_season != season:
+                pilot.stop(f"nfl_mirror_settings.season moved to {latest_season} before {season} week {week}: "
+                           f"stopping rather than mirror the wrong season", Stuck)
+            try:
+                last_week = None if latest.get("last_week") is None else int(latest["last_week"])
+            except (TypeError, ValueError):
+                pilot.stop(f"nfl_mirror_settings.last_week is {latest.get('last_week')!r}, not a week number",
+                           Stuck)
+            # The week after this sim is the one the league office must write. The Pro Bowl has no
+            # row, so only a real week is held to last_week; the next step (to the Super Bowl) is.
+            if last_week is not None and week + 1 != PRO_BOWL_WEEK and week + 1 > last_week:
+                pilot.stop(f"nfl_mirror_settings last_week is {last_week}: advancing {season} week {week} to "
+                           f"week {week + 1} would wait for a mirror_active row it cannot create", Stuck)
+            if week != PRO_BOWL_WEEK:
+                _wait_written(pilot, mirror, season, week, timeout=CATCH_UP_WRITE_TIMEOUT)
             load()
-            before = reader(_latest_save(save_path, auto_path))
+            try:
+                before_state = _state_from_reader(reader, _latest_save(save_path, auto_path))
+            except Exception as e:  # noqa: BLE001
+                pilot.stop(f"couldn't read {save}'s week before the sim: {e}", Stuck)
+            before = None if before_state is None else before_state.get("week")
             if before != week:
                 pilot.stop(f"the save reads week {before}, expected week {week}: refusing to sim the "
                            f"wrong save", Stuck)
+            if _year_mismatch(before_state, season):
+                pilot.stop(f"the save reloaded as {before_state.get('year')} week {before}, but "
+                           f"nfl_mirror_settings.season is {season}: refusing to sim a different season", Stuck)
             sim()
-            after = reader(_latest_save(save_path, auto_path))
+            try:
+                after_state = _state_from_reader(reader, _latest_save(save_path, auto_path))
+            except Exception as e:  # noqa: BLE001
+                pilot.stop(f"couldn't read {save}'s week after the sim: {e}", Stuck)
+            after = None if after_state is None else after_state.get("week")
             if after != before + 1:
                 pilot.stop(f"one sim moved the save from week {before} to week {after}, not exactly one "
                            f"week; stopping before the league office sees it", Stuck)
+            if _year_mismatch(after_state, season):
+                pilot.stop(f"one sim moved the save into the {after_state.get('year')} season, but "
+                           f"nfl_mirror_settings.season is {season}: stopping before the league office "
+                           f"sees it", Stuck)
             quit_to_menu()
             _save_copy(save_path, auto_path)
-            _wait_written(pilot, mirror, season, after)
+            if after == PRO_BOWL_WEEK:
+                # F3: Madden's Pro Bowl is a progression stop with no real NFL week and no
+                # nfl_mirror_weeks row. Quit/copy above, then advance it deliberately instead of
+                # returning None early or waiting out the 15-minute timeout.
+                message = (f"catch-up: {season} week {before} simmed, Pro Bowl reached with no mirror "
+                           f"row ({weeks + 1} this run)")
+            else:
+                _wait_written(pilot, mirror, season, after, timeout=CATCH_UP_WRITE_TIMEOUT)
+                message = (f"catch-up: {season} week {before} simmed, mirror week {after} written "
+                           f"({weeks + 1} this run)")
             weeks += 1
             week = after
             progress.update(weeks_simmed=weeks, end_week=week)
-            _send(pilot, f"catch-up: {season} week {before} simmed, mirror week {after} written "
-                         f"({weeks} this run)", True)
+            _send(pilot, message, True)
             mode = mode_of(week)
-            if mode != "CATCH_UP":
+            if mode not in ("CATCH_UP", PRO_BOWL):
                 stopped = "live"
                 break
         progress.update(stopped_because=stopped)

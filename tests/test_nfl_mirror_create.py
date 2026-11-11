@@ -96,6 +96,83 @@ def test_fetch_iteration_uses_the_cache_without_fetching(tmp_path, monkeypatch):
     assert ea_ratings.fetch_iteration().sha256 == first.sha256
 
 
+def week9(item):
+    """A fixture item relabelled to the next weekly iteration."""
+    item = copy.deepcopy(item)
+    item["iteration"] = {"id": "madden-ratings-week-9", "label": "Week 9 Ratings"}
+    return item
+
+
+def test_fetch_iteration_refuses_a_later_page_with_another_iteration(tmp_path, monkeypatch):
+    """Audit M-0509 F1's repro: page 1 week 8 and page 2 week 9 never become one mixed cache."""
+    items = ea_items()
+    monkeypatch.setattr(ea_ratings, "CACHE_DIR", str(tmp_path))
+    monkeypatch.setattr(ea_ratings.time, "sleep", lambda seconds: None)
+    pages = {1: copy.deepcopy(items[:1]), 2: [week9(items[1])]}
+    calls = []
+
+    def fake_page(number):
+        calls.append(number)
+        return page_html(pages[number], total=2)
+
+    monkeypatch.setattr(ea_ratings, "_fetch_page", fake_page)
+    with pytest.raises(RuntimeError, match="two iterations"):
+        ea_ratings.fetch_iteration(refresh=True)
+    assert calls == [1, 2]
+    assert list(tmp_path.glob("ea_m27_*")) == []       # no mixed cache published under either id
+
+
+def test_fetch_iteration_refuses_mixed_item_iterations_within_one_page(tmp_path, monkeypatch):
+    monkeypatch.setattr(ea_ratings, "CACHE_DIR", str(tmp_path))
+    monkeypatch.setattr(ea_ratings.time, "sleep", lambda seconds: None)
+    rows = [copy.deepcopy(ea_items()[0]), week9(ea_items()[1])]
+    monkeypatch.setattr(ea_ratings, "_fetch_page", lambda number: page_html(rows, total=2))
+    with pytest.raises(RuntimeError, match="madden-ratings-week-9"):
+        ea_ratings.fetch_iteration(refresh=True)
+    assert list(tmp_path.glob("ea_m27_*")) == []
+
+
+def test_fetch_iteration_keeps_an_existing_cache_when_a_refresh_hits_another_iteration(tmp_path, monkeypatch):
+    """Old-cache preservation: the disagreement is found before anything touches the cached file."""
+    monkeypatch.setattr(ea_ratings, "CACHE_DIR", str(tmp_path))
+    monkeypatch.setattr(ea_ratings.time, "sleep", lambda seconds: None)
+    existing = tmp_path / "ea_m27_madden-ratings-week-8.json"
+    existing.write_text(json.dumps({"iteration": "madden-ratings-week-8", "total_items": 2,
+                                    "items": ea_items()[:2]}, separators=(",", ":")), encoding="utf-8")
+    before = (existing.read_bytes(), existing.stat().st_mtime_ns)
+    pages = {1: copy.deepcopy(ea_items()[:1]), 2: [week9(ea_items()[1])]}
+    monkeypatch.setattr(ea_ratings, "_fetch_page", lambda number: page_html(pages[number], total=2))
+
+    with pytest.raises(RuntimeError, match="two iterations"):
+        ea_ratings.fetch_iteration(refresh=True)
+
+    assert existing.read_bytes() == before[0]
+    assert existing.stat().st_mtime_ns == before[1]
+    assert sorted(path.name for path in tmp_path.glob("ea_m27_*")) == [existing.name]
+
+
+def test_fetch_iteration_keeps_an_existing_cache_when_a_later_page_fails(tmp_path, monkeypatch):
+    monkeypatch.setattr(ea_ratings, "CACHE_DIR", str(tmp_path))
+    monkeypatch.setattr(ea_ratings.time, "sleep", lambda seconds: None)
+    existing = tmp_path / "ea_m27_madden-ratings-week-8.json"
+    existing.write_text(json.dumps({"iteration": "madden-ratings-week-8", "total_items": 2,
+                                    "items": ea_items()[:2]}, separators=(",", ":")), encoding="utf-8")
+    before = (existing.read_bytes(), existing.stat().st_mtime_ns)
+
+    def failing_page(number):
+        if number == 1:
+            return page_html(ea_items()[:1], total=2)
+        raise RuntimeError("EA ratings page 2 fetch failed")
+
+    monkeypatch.setattr(ea_ratings, "_fetch_page", failing_page)
+    with pytest.raises(RuntimeError, match="fetch failed"):
+        ea_ratings.fetch_iteration(refresh=True)
+
+    assert existing.read_bytes() == before[0]
+    assert existing.stat().st_mtime_ns == before[1]
+    assert sorted(path.name for path in tmp_path.glob("ea_m27_*")) == [existing.name]
+
+
 # ---------- EA stat and position mapping ----------
 
 def test_ea_to_save_covers_every_fixture_stat_key():
