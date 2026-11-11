@@ -38,6 +38,20 @@ Label override: $ARGUMENTS
 
 **Context guard (JR, 2026-11-10).** Run `python3 -m tools.context_check` at the start of every batch, after every second board message you act on, and after each full test run. Exit 2 means 60% or more of the model's window is used: that is a hard stop, not advice. Finish nothing new, skip to the hand-over in §4, RELEASE your claims, stop the listener and end the turn. Never start an item you cannot finish before the line.
 
+**Batches run in background subagents (JR, 2026-11-10)**, so the builder can work on several things at once and stays free to answer the board and pick up the next HANDOFF while a fix is being built.
+- **One subagent per batch**, launched with `Agent` and `run_in_background: true`. Leave `model` unset so it inherits this session's routing, and tell it the model string for its trailer (§1.2). Run batches in parallel only when their files don't overlap. Two batches that touch the same file, `db/init_db.sql`, or the same migration date run one after the other. At most 3 at once.
+- **The main session owns the board:** the listener, every CLAIM before a subagent starts, every NOTICE and RELEASE, the context guard and the merge into `main`. Subagents never post on the board.
+- **Each subagent gets a self-contained prompt:**
+  - the findings with their message numbers and the auditor's report path;
+  - its exact file list (only those files are its to edit);
+  - its own git worktree (`.claude/worktrees/builder-<N>-<slug>`, from current `main`; symlink `pipeline/save_reader/node_modules` there when the save reader is involved);
+  - its own scratch DB (`mu_scratch_<label>_<slug>_test`);
+  - steps 3–8 below: confirm, fix, a test that fails on the parent, `tools.offseason_check` where §3.5 asks for it, the spec lines for its change, and a commit on its worktree branch ending `Model: <id>`.
+
+  It returns the sha, what each finding came to, the test counts, any check tables, and anything it couldn't settle. It drops its scratch DB when done.
+- **When a subagent finishes**, review its diff against the findings, rerun its targeted tests and merge its branch into `main`. Stop and tell JR on a same-line conflict; different-line conflicts are combined as `/execute-plan` does. Then post the batch's NOTICE (step 9) and remove the worktree. A design question it raises goes to `audit` for JR, as in step 4.
+- Small fixes, one file or a few lines, can be done directly without a subagent.
+
 1. **Group** related open items into a batch: same files, or one regression and its cause. Do the items an auditor marked HIGH, or "fix first", first.
 2. **CLAIM** the batch's files on the board before editing. Check open CLAIMs first. If another session holds a file you need, ask on the board and work on something else meanwhile.
 3. **Confirm each finding at current `main` before fixing it.** Read the cited lines, run the auditor's repro if one exists (`test_chunkN_confirm.py`-style repros assert the bug, so they FAIL once it's fixed), or write a failing test. If a finding is wrong, don't fix it: say why on the board, with `file:line`, and let the auditor or JR rule.
