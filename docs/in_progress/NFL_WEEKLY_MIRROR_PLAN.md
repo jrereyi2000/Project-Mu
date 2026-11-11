@@ -1,6 +1,9 @@
 # Project Mu: NFL Weekly Mirror Plan
 
-**Status:** approved by JR (2026-11-11); building, wave 1 of 4. Spikes A–C (Madden PC, JR) run before wave 2.
+**Status:** approved by JR (2026-11-11); building, wave 1 of 4 done. Waves 2–4 are handed to a DeepSeek session (JR's /execute-plan rule, 2026-11-11). Spikes A–C (Madden PC, JR) run before wave 2.
+- As built (wave 1): `store.mark_written` takes `(cur, season, week, run_id)` and also flips the week's PLANNED moves to WRITTEN; `record_moves` has `replace=False`; `build_week` takes an optional `sources=`. The migration is `2027_02_26_nfl_mirror.sql`, which shares its date prefix with another session's `2027_02_26_league_shape_season.sql` (filenames still sort uniquely). Neither migration is applied to any franchise DB; only `mu_scratch_*` DBs were used.
+- Open from wave 1: (a) `coaching_carousel.staff_in()` and `head_coaches()` order tenures by `start_season DESC` with no `id DESC` tie-break, so after a midseason change in which the outgoing tenure also started that season, they may pick the old man. Add `, ct.id DESC` to both ORDER BYs, with an `offseason_check` run (U6 or a follow-up fix). (b) `staff.py` writes no `staff_moves` or `staff_contracts` rows for mirrored coaching changes, and a coordinator promoted to interim HC keeps his coordinator tenure unless the CSV names his replacement.
+- Orchestrator fix: `tests/test_nfl_history_store.py` now leaves `nfl_mirror_*` out of its nfl_* table check (`346e063`).
 **Builds on:** PROJECT_SPEC §2.21a (League Office), §3.3x (Real NFL history and `nfl_player_links`), §6.0b (save watcher), §2.19 (coaching tenures), [`REAL_NFL_HISTORY_PLAN.md`](../done/REAL_NFL_HISTORY_PLAN.md), [`COACH_SAVE_WRITES_PLAN.md`](../done/COACH_SAVE_WRITES_PLAN.md).
 
 **Goal:** Before each simulated week of the 2026 season, make the save's rosters match the real NFL's for that week. That covers signings, releases, trades, practice squads, IR, injuries, depth charts and head-coach and coordinator changes. Madden still sims the games. First we catch up on the real weeks already played, one simulated week at a time, with the Madden pilot doing the simming. After that we go live, one simulated week per real week, through the Super Bowl. During catch-up Madden's own injuries are off and the real ones are copied in with their real return dates. Madden's injuries come back on at the first live week. Mirrored weeks get no articles, but their simulated games count in Mu's 2026 history and record book. Real players missing from the save are created with their EA Madden 27 ratings when EA has them, and with position averages by role when it doesn't. From the 2027 offseason on, Mu's engines run the league as they do now.
@@ -383,3 +386,5 @@ Settled on 2026-11-11 (D7–D12): real return dates in catch-up; the pilot sims 
 
 | Unit | Wave | Branch | Worktree | Result | Merge |
 |---|---|---|---|---|---|
+| U1 | 1 | worktree-agent-a4c4046ed309775c0 | .claude/worktrees/agent-a4c4046ed309775c0 | merged (42 tests) | 534fb66 |
+| U2 | 1 | worktree-agent-a113b2696c3f27a19 | .claude/worktrees/agent-a113b2696c3f27a19 | merged (38 tests + integration on mu_scratch) | 6953da6 |
