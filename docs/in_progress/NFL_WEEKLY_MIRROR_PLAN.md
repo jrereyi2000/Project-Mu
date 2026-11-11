@@ -1,8 +1,10 @@
 # Project Mu: NFL Weekly Mirror Plan
 
-**Status:** approved by JR (2026-11-11); building, wave 1 of 4 done. Waves 2–4 are handed to a DeepSeek session (JR's /execute-plan rule, 2026-11-11). Spikes A–C (Madden PC, JR) run before wave 2.
+**Status:** approved by JR (2026-11-11); building, wave 2 of 4 (U3 merged; U4/U5 wait on Spikes A–C). Waves 2–4 are handed to a DeepSeek session (JR's /execute-plan rule, 2026-11-11). Spikes A–C (Madden PC, JR) run before U4/U5; Spike B's enum dump is already done offline (S17).
 - As built (wave 1): `store.mark_written` takes `(cur, season, week, run_id)` and also flips the week's PLANNED moves to WRITTEN; `record_moves` has `replace=False`; `build_week` takes an optional `sources=`. The migration is `2027_02_27_nfl_mirror.sql`. It was renamed from `2027_02_26_…` after the merge at audit-2's request (M-0444), because builder-8's `2027_02_26_league_shape_season.sql` was already on main. Neither migration is applied to any franchise DB; only `mu_scratch_*` DBs were used.
-- Open from wave 1: (a) `coaching_carousel.staff_in()` and `head_coaches()` order tenures by `start_season DESC` with no `id DESC` tie-break, so after a midseason change in which the outgoing tenure also started that season, they may pick the old man. Add `, ct.id DESC` to both ORDER BYs, with an `offseason_check` run (U6 or a follow-up fix). (b) `staff.py` writes no `staff_moves` or `staff_contracts` rows for mirrored coaching changes, and a coordinator promoted to interim HC keeps his coordinator tenure unless the CSV names his replacement.
+- As built (wave 2, U3): `plan_rosters` and `ContractBook` as §2.5. `contract_for` takes an extra optional `years_exp=` kwarg (diff passes the real player's entry year, so the minimum scales on real experience rather than the OTC draft year). A snapshot's `college` is a `{table, row}` reference, so the new-link phase resolves it through `pipeline.colleges.college_name` before `link.match`. The S5a cross-position name-only fallback was left to `link.match`; a same-name unlinked player at another position falls through to `creates` / `ps_fill`.
+- Open from wave 1: (b) `staff.py` writes no `staff_moves` or `staff_contracts` rows for mirrored coaching changes, and a coordinator promoted to interim HC keeps his coordinator tenure unless the CSV names his replacement.
+- Orchestrator fix: (a) `coaching_carousel.staff_in()` and `head_coaches()` now break same-season tenure ties with `ct.id DESC` (`7d83d14`, two integration tests, `timelines` 39 PASS, `e2e` 41 PASS).
 - Orchestrator fix: `tests/test_nfl_history_store.py` now leaves `nfl_mirror_*` out of its nfl_* table check (`346e063`).
 **Builds on:** PROJECT_SPEC §2.21a (League Office), §3.3x (Real NFL history and `nfl_player_links`), §6.0b (save watcher), §2.19 (coaching tenures), [`REAL_NFL_HISTORY_PLAN.md`](../done/REAL_NFL_HISTORY_PLAN.md), [`COACH_SAVE_WRITES_PLAN.md`](../done/COACH_SAVE_WRITES_PLAN.md).
 
@@ -389,3 +391,4 @@ Settled on 2026-11-11 (D7–D12): real return dates in catch-up; the pilot sims 
 |---|---|---|---|---|---|
 | U1 | 1 | worktree-agent-a4c4046ed309775c0 | .claude/worktrees/agent-a4c4046ed309775c0 | merged (42 tests) | 534fb66 |
 | U2 | 1 | worktree-agent-a113b2696c3f27a19 | .claude/worktrees/agent-a113b2696c3f27a19 | merged (38 tests + integration on mu_scratch) | 6953da6 |
+| U3 | 2 | worktree-agent-ab477134fdc19c085 | .claude/worktrees/agent-ab477134fdc19c085 | merged (18 tests; review fix: snapshot college references resolved before linking) | 67f8850 |
