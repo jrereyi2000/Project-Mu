@@ -9,6 +9,7 @@ client.chat.completions.create(model=..., messages=..., tools=...).
 import collections
 import json
 import os
+import time
 from typing import Any, Callable, Dict, List, Optional
 
 from newsroom.tool_loop.models import ToolLoopResult
@@ -16,36 +17,50 @@ from newsroom.tool_loop.schema import python_func_to_openai_tool
 
 
 def extract_openai_usage(usage_obj: Any) -> Dict[str, int]:
-    """Extract token counts (prompt, completion, cached, reasoning) from OpenAI usage."""
+    """Extract token counts (prompt, cached/miss, completion, reasoning) from OpenAI usage.
+
+    DeepSeek reports ``prompt_cache_hit_tokens`` / ``prompt_cache_miss_tokens`` and
+    ``completion_tokens_details.reasoning_tokens``; its schema nests the cache fields
+    under ``prompt_tokens_details`` but its example responses put them at the top
+    level, so both spellings are accepted. ``uncached_tokens`` is the cache-miss
+    count when the provider reports it, otherwise prompt tokens minus cached tokens.
+    """
     if not usage_obj:
-        return {"input_tokens": 0, "output_tokens": 0, "cached_tokens": 0, "thinking_tokens": 0}
+        return {"input_tokens": 0, "output_tokens": 0, "cached_tokens": 0,
+                "uncached_tokens": 0, "thinking_tokens": 0}
 
     if isinstance(usage_obj, dict):
         p_tokens = usage_obj.get("prompt_tokens") or usage_obj.get("input_tokens") or 0
         c_tokens = usage_obj.get("completion_tokens") or usage_obj.get("output_tokens") or 0
         p_details = usage_obj.get("prompt_tokens_details") or {}
         c_details = usage_obj.get("completion_tokens_details") or {}
-        cached = p_details.get("cached_tokens") or usage_obj.get("cached_tokens") or 0
-        thinking = c_details.get("reasoning_tokens") or usage_obj.get("thinking_tokens") or 0
-        return {
-            "input_tokens": int(p_tokens),
-            "output_tokens": int(c_tokens),
-            "cached_tokens": int(cached),
-            "thinking_tokens": int(thinking),
-        }
+        cached = (p_details.get("cached_tokens") or p_details.get("prompt_cache_hit_tokens")
+                  or usage_obj.get("prompt_cache_hit_tokens") or usage_obj.get("cached_tokens") or 0)
+        uncached = (p_details.get("prompt_cache_miss_tokens")
+                    or usage_obj.get("prompt_cache_miss_tokens") or 0)
+        thinking = (c_details.get("reasoning_tokens") or usage_obj.get("reasoning_tokens")
+                    or usage_obj.get("thinking_tokens") or 0)
+    else:
+        # Attribute access on ChatCompletion.usage object
+        p_tokens = getattr(usage_obj, "prompt_tokens", 0) or getattr(usage_obj, "input_tokens", 0) or 0
+        c_tokens = getattr(usage_obj, "completion_tokens", 0) or getattr(usage_obj, "output_tokens", 0) or 0
+        p_details = getattr(usage_obj, "prompt_tokens_details", None)
+        c_details = getattr(usage_obj, "completion_tokens_details", None)
+        cached = (getattr(p_details, "cached_tokens", 0) or getattr(p_details, "prompt_cache_hit_tokens", 0)
+                  if p_details else 0) or getattr(usage_obj, "prompt_cache_hit_tokens", 0) or getattr(usage_obj, "cached_tokens", 0) or 0
+        uncached = (getattr(p_details, "prompt_cache_miss_tokens", 0) if p_details else 0) \
+            or getattr(usage_obj, "prompt_cache_miss_tokens", 0) or 0
+        thinking = (getattr(c_details, "reasoning_tokens", 0) if c_details else 0) \
+            or getattr(usage_obj, "reasoning_tokens", 0) or getattr(usage_obj, "thinking_tokens", 0) or 0
 
-    # Attribute access on ChatCompletion.usage object
-    p_tokens = getattr(usage_obj, "prompt_tokens", 0) or getattr(usage_obj, "input_tokens", 0) or 0
-    c_tokens = getattr(usage_obj, "completion_tokens", 0) or getattr(usage_obj, "output_tokens", 0) or 0
-    p_details = getattr(usage_obj, "prompt_tokens_details", None)
-    c_details = getattr(usage_obj, "completion_tokens_details", None)
-    cached = getattr(p_details, "cached_tokens", 0) if p_details else getattr(usage_obj, "cached_tokens", 0) or 0
-    thinking = getattr(c_details, "reasoning_tokens", 0) if c_details else getattr(usage_obj, "thinking_tokens", 0) or 0
-
+    p_tokens, c_tokens = int(p_tokens), int(c_tokens)
+    cached = min(int(cached), p_tokens)
+    uncached = int(uncached) if uncached else max(p_tokens - cached, 0)
     return {
-        "input_tokens": int(p_tokens),
-        "output_tokens": int(c_tokens),
-        "cached_tokens": int(cached),
+        "input_tokens": p_tokens,
+        "output_tokens": c_tokens,
+        "cached_tokens": cached,
+        "uncached_tokens": uncached,
         "thinking_tokens": int(thinking),
     }
 
@@ -98,11 +113,18 @@ def resolve_endpoint(provider: str) -> tuple:
     return base_url, api_key
 
 
-def build_default_client(provider: str) -> Any:
-    """Create an OpenAI SDK client pointed at the given provider's endpoint."""
+def build_default_client(provider: str, max_retries: Optional[int] = None) -> Any:
+    """Create an OpenAI SDK client pointed at the given provider's endpoint.
+
+    ``max_retries=None`` keeps the SDK default; pass ``0`` for a single attempt,
+    matching the pilot's Gemini retry policy.
+    """
     base_url, api_key = resolve_endpoint(provider)
     import openai
-    return openai.OpenAI(api_key=api_key, base_url=base_url)
+    kwargs: Dict[str, Any] = {"api_key": api_key, "base_url": base_url}
+    if max_retries is not None:
+        kwargs["max_retries"] = max_retries
+    return openai.OpenAI(**kwargs)
 
 
 def run_openai_tool_loop(
@@ -114,6 +136,7 @@ def run_openai_tool_loop(
     max_steps: int = 50,
     temperature: float = 0.7,
     provider: str = "openai",
+    max_tokens: Optional[int] = None,
 ) -> ToolLoopResult:
     """Execute multi-turn autonomous tool calling loop against an OpenAI-compatible endpoint.
 
@@ -127,6 +150,8 @@ def run_openai_tool_loop(
         temperature: Sampling temperature for generation.
         provider: Which endpoint to build a client for when client is None
             ('openai', 'deepseek', 'glm', 'vllm', 'ollama'); see PROVIDER_ENDPOINTS.
+        max_tokens: Optional cap on generated tokens, sent on every request,
+            including the fallback synthesis call.
 
     Returns:
         ToolLoopResult with generated text, token usage, tool counts, and iterations.
@@ -159,7 +184,9 @@ def run_openai_tool_loop(
 
     iterations = 0
     tool_calls_count: Dict[str, int] = collections.defaultdict(int)
-    total_usage = {"input_tokens": 0, "output_tokens": 0, "cached_tokens": 0, "thinking_tokens": 0}
+    total_usage = {"input_tokens": 0, "output_tokens": 0, "cached_tokens": 0,
+                   "uncached_tokens": 0, "thinking_tokens": 0}
+    usage_calls: List[Dict[str, Any]] = []
     final_text = ""
     failure_error: Optional[str] = None
 
@@ -174,9 +201,13 @@ def run_openai_tool_loop(
         if openai_tools:
             call_kwargs["tools"] = openai_tools
             call_kwargs["tool_choice"] = "auto"
+        if max_tokens is not None:
+            call_kwargs["max_tokens"] = max_tokens
 
         try:
+            call_started = time.perf_counter()
             response = client.chat.completions.create(**call_kwargs)
+            call_latency = time.perf_counter() - call_started
         except Exception as ex:
             print(f"\n❌ [OPENAI TOOL LOOP API ERROR]: {ex}")
             failure_error = str(ex)
@@ -186,14 +217,17 @@ def run_openai_tool_loop(
                 tool_calls_count=dict(tool_calls_count),
                 iterations=iterations,
                 error=failure_error,
+                usage_calls=usage_calls,
             )
 
-        # Accumulate usage tokens
+        # Accumulate usage tokens, retaining each request separately for per-call
+        # accounting (uncached/cached input, output and reasoning stay distinct).
         usage_data = getattr(response, "usage", None)
         if usage_data:
             step_usage = extract_openai_usage(usage_data)
             for k, v in step_usage.items():
                 total_usage[k] += v
+            usage_calls.append(dict(step_usage, latency_s=round(call_latency, 3)))
 
         if not hasattr(response, "choices") or not response.choices:
             failure_error = "Model returned empty choices."
@@ -218,6 +252,15 @@ def run_openai_tool_loop(
                 "content": assistant_content,
                 "tool_calls": [],
             }
+
+            # DeepSeek thinking mode requires the previous turns' reasoning_content
+            # to be sent back whenever tools are offered, or the API returns 400.
+            # Other providers do not return the field, so it is omitted for them.
+            reasoning = getattr(message, "reasoning_content", None)
+            if reasoning is None and isinstance(message, dict):
+                reasoning = message.get("reasoning_content")
+            if reasoning is not None:
+                assistant_msg["reasoning_content"] = reasoning
 
             for tc in tool_calls:
                 tc_id = getattr(tc, "id", None) or (tc.get("id") if isinstance(tc, dict) else f"call_{sum(tool_calls_count.values())}")
@@ -321,14 +364,21 @@ def run_openai_tool_loop(
             "content": "Now, using the database research and data you gathered, write your complete final article following your assigned article structure and formatting directives. Do not execute any further tool calls.",
         })
         try:
-            followup = client.chat.completions.create(
-                model=model,
-                messages=messages,
-                temperature=temperature,
-            )
+            followup_kwargs: Dict[str, Any] = {
+                "model": model,
+                "messages": messages,
+                "temperature": temperature,
+            }
+            if max_tokens is not None:
+                followup_kwargs["max_tokens"] = max_tokens
+            follow_started = time.perf_counter()
+            followup = client.chat.completions.create(**followup_kwargs)
+            follow_latency = time.perf_counter() - follow_started
             if getattr(followup, "usage", None):
-                for k, v in extract_openai_usage(followup.usage).items():
+                follow_usage = extract_openai_usage(followup.usage)
+                for k, v in follow_usage.items():
                     total_usage[k] += v
+                usage_calls.append(dict(follow_usage, latency_s=round(follow_latency, 3)))
             if hasattr(followup, "choices") and followup.choices:
                 final_text = getattr(followup.choices[0].message, "content", "") or ""
         except Exception as syn_ex:
@@ -351,4 +401,5 @@ def run_openai_tool_loop(
         tool_calls_count=dict(tool_calls_count),
         iterations=iterations,
         error=failure_error,
+        usage_calls=usage_calls,
     )

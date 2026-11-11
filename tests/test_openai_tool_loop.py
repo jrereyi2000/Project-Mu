@@ -52,9 +52,12 @@ class MockToolCall:
 
 
 class MockMessage:
-    def __init__(self, content: Optional[str] = None, tool_calls: Optional[List[MockToolCall]] = None):
+    def __init__(self, content: Optional[str] = None, tool_calls: Optional[List[MockToolCall]] = None,
+                 reasoning_content: Optional[str] = None):
         self.content = content
         self.tool_calls = tool_calls or []
+        if reasoning_content is not None:
+            self.reasoning_content = reasoning_content
 
 
 class MockChoice:
@@ -502,6 +505,115 @@ class TestOpenAIToolLoop(unittest.TestCase):
         self.assertEqual(result.usage["output_tokens"], 100)
         self.assertEqual(result.usage["cached_tokens"], 110)
         self.assertEqual(result.usage["thinking_tokens"], 40)
+
+    def test_deepseek_cache_hit_miss_and_reasoning_usage(self):
+        from newsroom.tool_loop.openai_loop import extract_openai_usage
+        # DeepSeek's example responses put the cache counters at the top level.
+        usage = extract_openai_usage({
+            "prompt_tokens": 1000,
+            "prompt_cache_hit_tokens": 600,
+            "prompt_cache_miss_tokens": 400,
+            "completion_tokens": 300,
+            "completion_tokens_details": {"reasoning_tokens": 200},
+        })
+        self.assertEqual(usage, {"input_tokens": 1000, "cached_tokens": 600,
+                                 "uncached_tokens": 400, "output_tokens": 300,
+                                 "thinking_tokens": 200})
+        # Its schema also nests them under prompt_tokens_details.
+        nested = extract_openai_usage({
+            "prompt_tokens": 100,
+            "prompt_tokens_details": {"prompt_cache_hit_tokens": 25,
+                                      "prompt_cache_miss_tokens": 75},
+            "completion_tokens": 10,
+            "completion_tokens_details": {"reasoning_tokens": 4},
+        })
+        self.assertEqual((nested["cached_tokens"], nested["uncached_tokens"]), (25, 75))
+        # Without an explicit miss count, uncached is prompt minus cached.
+        derived = extract_openai_usage({"prompt_tokens": 100,
+                                        "prompt_tokens_details": {"cached_tokens": 40},
+                                        "completion_tokens": 5})
+        self.assertEqual(derived["uncached_tokens"], 60)
+
+    def test_usage_calls_expose_each_request(self):
+        resp1 = MockResponse(
+            MockMessage(tool_calls=[MockToolCall("c1", "calc", "{}")]),
+            MockUsage(prompt_tokens=100, completion_tokens=20, cached_tokens=50, reasoning_tokens=10)
+        )
+        resp2 = MockResponse(
+            MockMessage(content="Done"),
+            MockUsage(prompt_tokens=150, completion_tokens=80, cached_tokens=60, reasoning_tokens=30)
+        )
+        client = MockOpenAIClient([resp1, resp2])
+
+        def calc() -> str:
+            """Compute."""
+            return "42"
+
+        result = run_openai_tool_loop(client=client, model="deepseek-flash",
+                                      system_instruction="", prompt="Calculate", tools=[calc])
+        self.assertEqual(len(result.usage_calls), 2)
+        self.assertEqual(result.usage_calls[0]["input_tokens"], 100)
+        self.assertEqual(result.usage_calls[0]["uncached_tokens"], 50)
+        self.assertEqual(result.usage_calls[0]["thinking_tokens"], 10)
+        self.assertEqual(result.usage_calls[1]["output_tokens"], 80)
+        self.assertTrue(all("latency_s" in call for call in result.usage_calls))
+        self.assertEqual(result.usage["uncached_tokens"], 140)
+
+    def test_reasoning_content_replayed_on_tool_turns(self):
+        resp1 = MockResponse(MockMessage(
+            content=None,
+            tool_calls=[MockToolCall("call_1", "lookup", "{}")],
+            reasoning_content="I should look up the record first.",
+        ))
+        resp2 = MockResponse(MockMessage(content="Article."))
+        client = MockOpenAIClient([resp1, resp2])
+
+        def lookup() -> str:
+            """Look up."""
+            return "evidence"
+
+        result = run_openai_tool_loop(client=client, model="deepseek-flash",
+                                      system_instruction="", prompt="Write", tools=[lookup])
+        self.assertEqual(result.text, "Article.")
+        assistant = [m for m in client.call_history[1]["messages"] if m["role"] == "assistant"][0]
+        self.assertEqual(assistant["reasoning_content"],
+                         "I should look up the record first.")
+
+    def test_no_reasoning_content_key_when_provider_omits_it(self):
+        resp1 = MockResponse(MockMessage(
+            content=None, tool_calls=[MockToolCall("call_1", "lookup", "{}")]))
+        resp2 = MockResponse(MockMessage(content="Article."))
+        client = MockOpenAIClient([resp1, resp2])
+
+        def lookup() -> str:
+            """Look up."""
+            return "evidence"
+
+        run_openai_tool_loop(client=client, model="gpt", system_instruction="",
+                             prompt="Write", tools=[lookup])
+        assistant = [m for m in client.call_history[1]["messages"] if m["role"] == "assistant"][0]
+        self.assertNotIn("reasoning_content", assistant)
+
+    def test_max_tokens_forwarded_to_every_request(self):
+        resp1 = MockResponse(MockMessage(
+            tool_calls=[MockToolCall("call_1", "lookup", "{}")]))
+        resp2 = MockResponse(MockMessage(content="Article."))
+        client = MockOpenAIClient([resp1, resp2])
+
+        def lookup() -> str:
+            """Look up."""
+            return "evidence"
+
+        run_openai_tool_loop(client=client, model="deepseek-flash", system_instruction="",
+                             prompt="Write", tools=[lookup], max_tokens=8192)
+        self.assertEqual([c.get("max_tokens") for c in client.call_history], [8192, 8192])
+        self.assertEqual([c["temperature"] for c in client.call_history], [0.7, 0.7])
+
+    def test_max_tokens_omitted_when_not_requested(self):
+        client = MockOpenAIClient([MockResponse(MockMessage(content="Article."))])
+        run_openai_tool_loop(client=client, model="gpt", system_instruction="",
+                             prompt="Write", tools=[])
+        self.assertNotIn("max_tokens", client.call_history[0])
 
     def test_api_network_failure(self):
         client = mock.MagicMock()
