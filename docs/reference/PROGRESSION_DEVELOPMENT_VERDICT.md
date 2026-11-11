@@ -120,7 +120,8 @@ doesn't fix either finding.
 
 **Ruled by JR, 2026-11-11:** a 2026-era league holds **the shape of its own start season** (reading (a)), and the
 live engine's projection **accounts for the players leaving and the coming draft class**, as the fit does. The
-fix is builder-7's, from audit-2's brief. The options JR chose from follow.
+fix is built by builder-8, from audit-2's brief. **Each league stores its own shape season, so `madden_2036` keeps
+the 2036 shape** (JR, relayed in board M-0413). The options JR chose from follow.
 
 **What shape does a 2026-era league hold?** JR's 2026-10-28 rule ("the league keeps its 2036 shape, same 90+
 count and mean OVR") was written while the live league was 2036. audit-2 measured each reading on the p2g copy at
