@@ -371,6 +371,42 @@ def test_launch_skips_start_when_running(tmp_path, notices):
     assert out["status"] == "ok" and out["already_running"] and ran == []
 
 
+def test_launch_presses_through_the_cold_boot_splash(tmp_path, notices):
+    # a cold boot sits on BOOT_SPLASH (PRESS ANY BUTTON) until Space: launch used to only wait,
+    # so a live launch on Mu Test stopped Unknown with the splash on screen (2026-11-11).
+    fake, _ = fake_madden(start="BOOT_SPLASH")
+    out = jobs.launch(make_pilot(tmp_path, fake), run=lambda argv: None, madden_running=lambda: False,
+                      timeout=60)
+    assert out["status"] == "ok" and out["screen"] == "MAIN_MENU", out
+    assert fake.keys[0] == "space"
+
+
+def test_launch_dismisses_the_mmc_account_error(tmp_path, notices):
+    # the MMC mod warning is drawn over the splash; its OK is the focused default
+    fake, _ = fake_madden(start="ACCOUNT_ERROR")
+    out = jobs.launch(make_pilot(tmp_path, fake), run=lambda argv: None, madden_running=lambda: False,
+                      timeout=60)
+    assert out["status"] == "ok" and out["screen"] == "MAIN_MENU", out
+    assert "space" in fake.keys
+
+
+def test_launch_accepts_a_one_mode_menu(tmp_path, notices):
+    # Mu Franchise Only's main menu is the Franchise panel itself and reads as FRANCHISE_LANDING;
+    # there is no MAIN_MENU on that pack, so a launch must accept the landing as its menu.
+    class OneMode(ScriptedMadden):
+        def on_key(self, name):
+            if name == "space" and self.screen in ("BOOT_SPLASH", "TITLE_SCREEN"):
+                self.go("FRANCHISE_LANDING")
+                return
+            super().on_key(name)
+
+    fake = OneMode(CAT, start="BOOT_SPLASH", tiles=["TUNE-X"], out=lambda s: None)
+    out = jobs.launch(make_pilot(tmp_path, fake), pack="Mu Test", run=lambda argv: None,
+                      madden_running=lambda: False, timeout=60)
+    assert out["status"] == "ok" and out["screen"] == "FRANCHISE_LANDING", out
+    assert fake.keys and fake.keys[0] == "space"
+
+
 def test_launch_stops_unknown_on_unrecognised_screen(tmp_path, notices):
     fake, _ = fake_madden(start="EA SPORTS TITLE")    # no catalog words
     out = jobs.launch(make_pilot(tmp_path, fake), run=lambda argv: None, madden_running=lambda: False, timeout=60)

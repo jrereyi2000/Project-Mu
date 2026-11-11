@@ -1738,7 +1738,9 @@ def test_offseason_and_cutdown_charts_sort_before_week_one_in_postgres():
 @pytest.mark.integration
 def test_an_offseason_chart_does_not_cross_two_seasons_in_postgres():
     """JR's one-boundary ruling, on real Postgres, rolled back: (2055, 26) belongs to 2056, not 2057, so a
-    2057 read takes the newer (2056, 26) chart's man H from week 1 and never the 2055 chart's man G."""
+    2057 read takes the newer (2056, 26) chart's man H from week 1 and never the 2055 chart's man G. A second
+    (2055, 26) chart with no newer chart on its team (a lone Y-2 chart) is never credited either, so a leak
+    cannot hide behind the newer chart's row."""
     import psycopg
     dsn = _scratch_dsn()
     with psycopg.connect(dsn) as conn:
@@ -1754,14 +1756,14 @@ def test_an_offseason_chart_does_not_cross_two_seasons_in_postgres():
                 cur.execute("INSERT INTO players (player_name) VALUES (%s) RETURNING id", (name,))
                 return cur.fetchone()[0]
 
-            def roster(pid):
+            def roster(pid, team_id=None):
                 cur.execute("INSERT INTO player_seasons (player_id, season, team_id, position) "
-                            "VALUES (%s, 2057, %s, 'WR')", (pid, team))
+                            "VALUES (%s, 2057, %s, 'WR')", (pid, team_id or team))
 
-            def chart(pid, year):
+            def chart(pid, year, team_id=None):
                 cur.execute("INSERT INTO depth_charts "
                             "(team_id, season, week, position_slot, depth, player_id, source) "
-                            "VALUES (%s, %s, 26, 'WR', 1, %s, 'MU_COACH')", (team, year, pid))
+                            "VALUES (%s, %s, 26, 'WR', 1, %s, 'MU_COACH')", (team_id or team, year, pid))
 
             for week in range(1, 11):
                 cur.execute("INSERT INTO games (season, week, home_team_id, away_team_id) "
@@ -1769,16 +1771,21 @@ def test_an_offseason_chart_does_not_cross_two_seasons_in_postgres():
 
             two_back = player("A6n Offseason WR G Two Back")
             one_back = player("A6n Offseason WR H One Back")
+            lone_two_back = player("A6n Offseason WR I Lone Two Back")
             roster(two_back)
             roster(one_back)
+            roster(lone_two_back, other)
             chart(two_back, 2055)                 # (Y-2, 26): maps to 2056 only, never 2057
             chart(one_back, 2056)                 # (Y-1, 26): the only chart 2057 can see
+            chart(lone_two_back, 2055, other)     # (Y-2, 26) alone: no newer chart can mask a leak
 
             got, rows = _read_started_with_rows(cur, 2057)
             assert not [r for r in rows if r[0] == two_back]
+            assert not [r for r in rows if r[0] == lone_two_back]
             assert sorted(r[2] for r in rows if r[0] == one_back) == list(range(1, 11))
             assert got.get(one_back) == {2057}
             assert two_back not in got
+            assert lone_two_back not in got
         finally:
             conn.rollback()
 

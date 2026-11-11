@@ -1021,3 +1021,68 @@ Adds a separate integer CBS-layout channel in bundles 57462/57717. ScoreHudWrapp
 Saved readback verifies all four source geometry changes, 34 copied conference decisions, standard-only gating, six banner-case mappings, preserved native components/events (apart from added constant fields), typed references and channel bundle coverage. Export is 853 records: five new assets, only wrapper and banner chooser content changes versus v0.28. No native banner widget, replay graph, opening, watermark asset or night package payload was modified. Verify CBS afternoon flag 1/player banner positioning, FOX afternoon flag 0/original layout, and an AFC-away night flag 0/night layout in the same process, then return to CBS. The build does not yet close runtime audit status and does not implement the remaining ticker/postseason/font/variant gaps.
 
 Also completed source GUID-reference closure for the other omitted CBS EBX names. The ticker wrapper references BottomLineTicker_CBS and its supersim observer; ticker references alert/game widgets; game widget references team/time widgets. Source watermark references CBS postseason corner assets. They are referenced source changes, not simply unused leftovers. Dynamic selection and remaining font-style uses require separate integration. Evidence: r5/resource_audit/cbs_omission_reference_closure.json and r5/cbs_banner_layouts/export_receipt.json. Updated the audit follow-up and PROJECT_SPEC.md research status; no live pack changed.
+
+
+## v0.41 return-to-live static trace (2026-11-10, session-start)
+
+JR clarified that the extra CBS graphic after Panthers–Saints halftime was the **CBS replay wipe**, not the CBS halftime outro. This supersedes the unresolved identification above. No new Madden run was performed by this session.
+
+Read-only MMC dumps of the retained v0.41 project (894 modified assets; file-system head 3464873) establish:
+
+- Native `skiphalftime_p` explicitly requests `SkipTransition`; decoding the existing IBX and re-encoding it reproduces the original bytes. The ordinary `skiptransition_p` also requests that name.
+- `SkipTransition/Default_Schematic` contains `MoGraphController` and `common/LogoID_LP`. The latter chooses the theme's LogoID widget; ordinary afternoon selects `LogoID/LogoID_MH_Widget` through `MoGraphWrapper`.
+- That afternoon LogoID widget feeds the constant **`LogoID_MH`** into `MovieQuality_Prefab`. It contains no CBS-layout channel reader or away-team conference selector. None of the three research-stack mod headers lists a LogoID/SkipTransition override. Consequently the existing CBS/FOX replay-widget routing does not cover this native skip graphic. This establishes a coverage gap, not the identity of the observed FOX clip.
+- Separately, the saved ordinary `WipeReplay_Out_MH_Widget` reads `mu/research/cbs-banner-network-channel`; its switch triggers at startup and on property change. Case 0 selects FOX; case 1 selects CBS. This is separate from halftime's one-shot away-team selection. A wrong or unavailable channel value remains a hypothesis, not a measured cause of the full-playback CBS wipe.
+
+The v0.41 export still hashes to `ae58465b5f9dc15d3eb99f37b8b9bdbf84e536416ba62510a36b06d4eb860981`. No build, installation, pack selection, media payload or game/save was changed. Diagnostic dumps: `/tmp/mu-mograph-controller.json`, `/tmp/mu-logoid-v041.json`, `/tmp/mu-logoid-widget-v041.json`, `/tmp/mu-mograph-wrapper-v041.json`, `/tmp/mu-replay-out-v041.json`.
+
+Next discriminating probe: distinguish LogoID playback from ordinary replay-out playback at the halftime close before changing both routes. A scoped marker on one route, with full and skipped halftime plus an ordinary replay control, can establish the caller. A static skip request alone does not prove which graphic appeared at runtime, and the full-playback exit caller remains unresolved.
+
+
+## Prepared v0.42 LogoID marker overlay
+
+`data/mod_builds/halftime_route_marker/` holds a standard one-op recipe, project, exported Mu Halftime Route Marker v0.42, build/check logs, saved readback, verification receipt, an installation helper (dry-run default) and `TEST.md`. It changes only `LogoID_MH_Widget` `Object.Components[3].DefaultString` to `WipeReplay_SN_In`. It is additive above the unchanged v0.41 research stack, not a replacement for that stack. Header inspection finds one non-embedded EBX resource; `check` has no missing/extra/details/encryption errors; normalized saved-root comparison restores the baseline by reverting that one string. No enabled research mod touches the marker asset. The stock high movie table contains `wipereplay_sn_in_high`. Export hash is `6cda54f391a2ad4afdfee3a288d2d44ecdcbefa88ecc3581c1e4f5148df2b375`; game/cache build 3464873, MMC 1.1.0.7, EBX readable. Installed with JR’s explicit approval into HudFranchiseNative above v0.41; both applications were closed. Copied SHA-256 matches, selected pack and all other configuration are preserved, and the configuration backup is recorded in `install_receipt.json`. Runtime result pending. Marker playback on skipped halftime is the positive control; no marker anywhere is inconclusive. Full and skipped Panthers–Saints halftime plus an ordinary replay control distinguish the exits without changing both selectors.
+
+
+## v0.42 runtime observation and corrected symptom (2026-11-11)
+
+JR’s latest correction identifies the unwanted CBS graphic as the halftime report outro, superseding the earlier CBS replay-wipe identification in the historical static-trace section. JR reports the SNF marker appeared during initial game loading, before halftime. This establishes visible marker playback there; it does not establish the full or skipped halftime caller, nor a cause for the wrong report outro. The LogoID overlay affects a shared widget rather than an exclusively halftime caller. No build or installation changed. Next observe full and skipped halftime separately, keeping the loading marker distinct from the closing sequence; investigate the report-outro selector independently.
+
+
+JR confirmed the complete sequence as **FOX report → CBS report outro → FOX wipe → FOX halftime report outro**, and explicitly confirmed halftime played fully (no skip). This establishes the duplicate/mixed outro symptom on the full-playback route. It does not identify the responsible widget or prove selector resampling; separate callers or widget lifetimes remain hypotheses to inspect. The SNF loading marker is a separate observation.
+
+
+## Full-playback saved-graph trace (2026-11-11, codex-ready)
+
+Fresh readback of HalftimeOneShotProbe/HudHalftimeOneShot.fbproject: 64 components, 129 event edges and 76 property edges. The exported baseline SHA-256 remains ae58465b5f9dc15d3eb99f37b8b9bdbf84e536416ba62510a36b06d4eb860981.
+
+Network selection: intro readiness gate 22 → auto-closing gate 63 → away-team switch 58 → network selector 59. Switch 58 has both automatic triggers disabled. Gate 63 has no reopening edge. Network output enters standard-theme selector 62; its output feeds the network segment of all three movie-name builders (32 intro, 31 loop, 30 outro).
+
+Explicit outro request: builder 30 → MovieQuality_Prefab 24 → HalftimeReport_DefaultOutro_Selector 40 → movie element Object.Layers[0].Elements[0].Elements[2]. Gate 25 requests loading prefab 24. Its ready result reaches selector 40. Selector-ready and the ShouldLoop-false event meet at gate 29, which is the sole direct Play edge into that outro element. The element's completion publishes the widget completion event and releases the resolver/fallback resources. There is only one explicit outro player here; no second CBS-only player was found. Static checks are in graph_checks.json.
+
+This establishes one team-selection event per widget instance, not one widget instance per whole halftime. It does not freeze a global network across newly loaded instances, prove frame-by-frame property evaluation, or count runtime Play events.
+
+## Native loading path distinct from SkipTransition
+
+LeagueReplaySelection_LP references Presentation/Transitions/EchoTechWipes. Fresh saved-project reads show EchoTechWipes uses EchoTech_Mograph_Helper plus four MoGraphLoader slots. The helper includes Bumper_HalftimeReport as a selectable presentation name. That selected name feeds all loader inputs; their StringFormat constructs content/broadcastgraphics/mograph/{0}/{1}, and FootballDSubControlEntityData loads the result. The report's Default_Schematic points to Bumper_HalftimeReport_Widget.
+
+This is a concrete native report-loading route alongside the already traced skip/LogoID path. Four loader slots establish capacity, not evidence four report instances actually ran. EchoTech replay context or an additional widget instance could explain different network choices, but neither is proved at runtime.
+
+## Fallback and media boundary
+
+DefaultOutro_Selector accepts the dynamically resolved movie, checks whether it exists, and can resolve the stock MH Day03_Outro high/low fallback. There are no per-instance overrides on v0.41 components 24 or 40. The selector contains no explicit MuCBS/MuFOX choice. An invalid/null input can therefore leave the dynamic route; static topology alone cannot tell whether that happened or what the stock fallback rendered in the active stack.
+
+Decoded all twelve retained day/dusk CBS/FOX halftime source clips with OpenCV. Metadata and first/middle/near-final frame samples are in media_metadata.json and media_contact_sheet.jpg. CBS and FOX samples show their corresponding report branding; the FOX loop is 3.0 s, and FOX outro is about 1.33 s. These samples do not show a CBS ending embedded in FOX media. They are not a frame-by-frame proof of all applied playback. The prior applied receipt separately verifies the four added outro payloads and registry against the source export.
+
+## Conclusion and next discriminator
+
+The static trace does not yet identify the unwanted CBS request. A single unchanged, fixed-token instance playing its selected outro once does not account for both observed outros around a wipe. Remaining candidates include an additional/recreated widget instance, fallback selection, another caller or an unexpected runtime event/property sequence. No candidate is established as the cause.
+
+The earlier v0.42 LogoID marker does not instrument this explicit report-outro player. A more targeted next diagnostic is to make only builder 30 request the selected network's intro instead of its outro: component 16 DefaultString 03→01 and component 18 DefaultString Outro→Intro. These constants are exclusive to builder 30; the normal intro and loop builders stay unchanged. At the close, a replaced CBS or FOX ending identifies a request through this builder; both replaced would support multiple requests through it; an unchanged CBS ending would remain outside that dynamic builder or on its stock fallback. Fallback must be distinguished before inferring a different caller. This diagnostic is proposed only, not built or installed. Runtime evidence is needed to finish attribution.
+
+No game, pack, mod, project or save was changed by this trace.
+
+
+## Built report-outro marker v0.43 (2026-11-11)
+
+**Built next diagnostic:** `data/mod_builds/halftime_outro_marker/halftime_outro_marker.fbmod`, Mu Halftime Outro Marker v0.43, is a one-widget overlay derived from the saved v0.41 widget. It changes only components 16/18 `DefaultString` from `03`/`Outro` to `01`/`Intro`; those constants feed only outro builder 30. The normal closing request therefore repeats the selected network’s intro. Saved-graph comparison passes after normalizing serialization IDs; all routing/events/other values match v0.41, source project SHA is unchanged, standard export check passes (one nonembedded EBX), bundle 58170 is retained. SHA-256 `14273b8e9d1727dadfb747e4c1bb919cd65f5c975eecac5a5a408695391172de`. Installed with JR’s explicit approval: the copied SHA matches, v0.43 is above v0.41 in HudFranchiseNative, v0.42 is disabled, and all other configuration/selection is preserved. Backup and destination are in install_receipt.json. Runtime verification remains pending. Do not use the generic installer. The next test is one full Panthers–Saints halftime: record which baseline ending changes into an opening animation; an unchanged ending could still use the stock fallback. Build recipe, source/readback/check receipts, scratch isolation harness, verification script and `TEST.md` are in that folder.

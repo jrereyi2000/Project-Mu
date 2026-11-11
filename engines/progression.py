@@ -1277,7 +1277,7 @@ def run_progression(
             cur.execute("SELECT EXISTS(SELECT 1 FROM progression_player_state)")
             if cur.fetchone()[0]:
                 raise ValueError("managed progression requires prepare/verified acknowledgement, not direct --commit")
-        shape_season = league_shape_season(cur) or season
+        shape_season = league_shape_season(cur)
         _, aging_pairs, _ = read_fit_rows(cur, season - 1 if season > shape_season else shape_season)
         aging_curves = fit_aging(aging_pairs)
         roster = fetch_progression_roster(cur, season)
@@ -1351,25 +1351,32 @@ def run_progression(
                     f"league shape: no player_seasons rows for shape season {shape_season}; set "
                     f"league_state.shape_season to a season this database has")
             keeping, rookies = league_shape_projection(roster, league_turnover(cur, shape_season)["rookies"],
-                                                       shape_season)
+                                                       season)
             leavers = len(roster) - len(keeping)
             by_pid = {item[0]["player_id"]: item for item in prepared}
             staying = [by_pid[p["pid"]] for p in keeping if p["pid"] in by_pid]
             k = max(1, math.ceil(len(staying) / CALIBRATION_SAMPLE))    # one stride for both, so the mix holds
             sample = _stratified(staying, k, key=lambda item: (-item[4]["ovr"], item[0]["player_id"]))
             rookie_sample = _stratified(rookies, k, key=lambda r: -r["ovr"])
-            frac = (len(sample) + len(rookie_sample)) / max(1, len(staying) + len(rookies))
+            sample_size = len(sample) + len(rookie_sample)
+            frac = sample_size / max(1, len(staying) + len(rookies))
             scaled = {"season": shape_season, "players": target["players"],
                       "count_90_plus": target["count_90_plus"] * frac, "avg_ovr": target["avg_ovr"]}
-            terms, projected = calibrate_league_term(
+            terms, projected_sample = calibrate_league_term(
                 sample, [r["ovr"] for r in rookie_sample], scaled,
                 lambda item, dev, star: compute_player_delta(**item[4], league_adj=dev, star_adj=star)[1])
+            # The target is a league count and the projection is one on the stride sample: rescale the projection
+            # by 1/frac so the log and result compare like with like (P3-04's tripwire reads them).
+            projected = {"count_90_plus": round(projected_sample["count_90_plus"] / frac, 1) if frac else 0.0,
+                         "avg_ovr": projected_sample["avg_ovr"], "sample_size": sample_size,
+                         "frac": round(frac, 4)}
             shape = {"season": shape_season, "target": target, "leavers": leavers, "class_size": len(rookies),
                      "terms": terms, "projected": projected}
             log(f"League shape: holding {target['season']} (90+={target['count_90_plus']}, "
                 f"mean {target['avg_ovr']:.2f}) with development term {terms[0]:+.1f} and star term "
-                f"{terms[1]:+.2f}; leavers={leavers} class_size={len(rookies)}, projected 90+="
-                f"{projected['count_90_plus']}, mean {projected['avg_ovr']:.2f}")
+                f"{terms[1]:+.2f}; leavers={leavers} class_size={len(rookies)}, "
+                f"sample={sample_size} frac={frac:.3f}, projected 90+={projected['count_90_plus']}, "
+                f"mean {projected['avg_ovr']:.2f}")
 
         for p, ceiling, c_source, c2, kwargs in prepared:
             p_id = p["player_id"]
@@ -1746,30 +1753,24 @@ EXIT_BASE, EXIT_PER_YEAR, EXIT_AGE = 0.05, 0.06, 29
 CALIBRATION_SAMPLE = 400
 
 
-def league_shape_season(cur) -> Optional[int]:
+SHAPE_SEASON_FIX = ("apply db/migrations/2027_02_26_league_shape_season.sql or set "
+                    "league_state.shape_season")
+
+
+def league_shape_season(cur) -> int:
     """The reference season whose shape the league keeps: league_state.shape_season (2027_02_26 migration; the
-    league's own start season, 2036 for the 2036 archive and its clones). A database that has not run the migration
-    yet falls back to its current season when that season has ratings (madden_test's 2026 rows carry none, its 2036
-    rows do), else its first season with ratings."""
+    league's own start season, 2036 for the 2036 archive and its clones). A missing column or a NULL value is a
+    setup error, never inferred from the current season (JR, 2026-11-11, board M-0441): the error names the fix
+    (`SHAPE_SEASON_FIX`)."""
     cur.execute("""SELECT 1 FROM information_schema.columns
                    WHERE table_name = 'league_state' AND column_name = 'shape_season'""")
-    if cur.fetchone() is not None:
-        cur.execute("SELECT shape_season FROM league_state ORDER BY id LIMIT 1")
-        row = cur.fetchone()
-        if row and row[0] is not None:
-            return int(row[0])
-    cur.execute("SELECT current_season FROM league_state ORDER BY id LIMIT 1")
+    if cur.fetchone() is None:
+        raise ValueError(f"league shape: league_state.shape_season is missing; {SHAPE_SEASON_FIX}")
+    cur.execute("SELECT shape_season FROM league_state ORDER BY id LIMIT 1")
     row = cur.fetchone()
-    current = int(row[0]) if row and row[0] is not None else None
-    if current is not None:
-        cur.execute("""SELECT 1 FROM player_seasons WHERE season = %s AND overall_rating IS NOT NULL
-                       AND position != 'DEF' LIMIT 1""", (current,))
-        if cur.fetchone() is not None:
-            return current
-    cur.execute("""SELECT min(season) FROM player_seasons
-                   WHERE overall_rating IS NOT NULL AND position != 'DEF'""")
-    first = cur.fetchone()[0]
-    return int(first) if first is not None else current
+    if row is None or row[0] is None:
+        raise ValueError(f"league shape: league_state.shape_season is NULL; {SHAPE_SEASON_FIX}")
+    return int(row[0])
 
 
 def league_shape_target(cur, season: int) -> Dict[str, Any]:
@@ -1831,33 +1832,42 @@ def shape_group(position: str) -> Optional[str]:
 
 
 def shape_exits_and_rookies(players: List[Dict[str, Any]], reference_rookies: List[Dict[str, Any]],
-                            key_season: int) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]],
-                                                      List[Dict[str, Any]]]:
+                            season: int, seed: int = 0,
+                            cut_line: Optional[Dict[Optional[str], float]] = None
+                            ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
     """The shared league-shape step: exit hazards per player sized against the reference rookie class, then one
     rookie per leaver drawn from that class (OVR ±1, his position). `players` are compact
-    ({pid, group, age, ovr, years_pro}); `reference_rookies` are ({position, ovr}, extra keys kept). Returns
-    (keeping, leaving, rookies); rookies are ({source, replaces, ovr, position}). Deterministic for the league's
-    reference season (`key_season`), so the live engine and the fit replay draw the same exits from the same
-    roster. The projection is read-only."""
+    ({pid, position or engine_position, age, ovr, years_pro}); `reference_rookies` are ({position, ovr}, extra keys
+    kept). Returns (keeping, leaving, rookies); rookies are ({source, replaces, ovr, position}). The draw is keyed on
+    f"exits:{season}:{seed}", where `season` is the season being projected or replayed (the live engine passes its
+    target season with seed 0; the fit replay each replayed season with its own seed), so the live engine and the
+    fit replay draw the same exits for the same season and seed, and different seeds or seasons draw differently.
+    Both the leaver and the rookie group come from `shape_group` on the engine position (never from a caller's
+    label), and the reference class is sorted by (position, ovr, age) before pooling, so both callers draw the same
+    rookie class from the same leavers. `cut_line` is {group: OVR} fixed at a snapshot (the fit); None computes it
+    from `players` (the live engine). The projection is read-only."""
     if not reference_rookies:
         raise ValueError("league shape projection needs the reference season's rookie class")
-    players = sorted(players, key=lambda p: p["pid"])      # the draw follows pid order, not query order
+    position = lambda item: item.get("engine_position") or item.get("position")
+    players = sorted(({**p, "group": shape_group(position(p))} for p in players), key=lambda p: p["pid"])
     by_group = defaultdict(list)
     for p in players:
         by_group[p["group"]].append(p["ovr"])
-    league = {"cut_line": {g: _shape_quantile(v, CUT_QUANTILE) for g, v in by_group.items()}}
+    if cut_line is None:
+        cut_line = {g: _shape_quantile(v, CUT_QUANTILE) for g, v in by_group.items()}
+    league = {"cut_line": cut_line}
     hazards = {p["pid"]: exit_hazard(p, league) for p in players}
     forced = sum(1 for h in hazards.values() if h is None)
     factor = _exit_factor([h for h in hazards.values() if h is not None],
                           max(0, min(len(reference_rookies), len(players)) - forced))
-    rng = random.Random(f"exits:{key_season}")
+    rng = random.Random(f"exits:{season}:{seed}")
     keeping, leaving = [], []
     for p in players:
         h = hazards[p["pid"]]
         (leaving if h is None or rng.random() < min(1.0, factor * h) else keeping).append(p)
     pool = defaultdict(list)
-    for r in reference_rookies:
-        pool[shape_group(r["position"])].append(r)
+    for r in sorted(reference_rookies, key=lambda r: (r["position"], r["ovr"], r.get("age") or 0)):
+        pool[shape_group(position(r))].append(r)
     rookies = []
     for p in leaving:
         src = rng.choice(pool.get(p["group"]) or reference_rookies)
@@ -1868,15 +1878,15 @@ def shape_exits_and_rookies(players: List[Dict[str, Any]], reference_rookies: Li
 
 
 def league_shape_projection(roster: List[Dict[str, Any]], reference_rookies: List[Dict[str, Any]],
-                            key_season: int) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+                            season: int, seed: int = 0) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """The league's projected leavers and coming rookie class for calibration (`shape_exits_and_rookies`), the fit
     replay's step 3/5 shape: hazards sized against `league_turnover`'s rookies for the stored shape season, then one
-    rookie per leaver drawn from that class. `key_season` is the league's reference season, which keys the draw.
-    Read-only: the projection never retires, deletes or creates a real player. Returns (keeping, rookies) with
-    rookies as {ovr, position}."""
-    players = [{"pid": p["player_id"], "group": shape_group(p["position"]), "age": p["age"],
+    rookie per leaver drawn from that class. `season` is the season being projected (the live engine's target season,
+    the season after its stored shape season) and `seed` keys the draw with it. Read-only: the projection never
+    retires, deletes or creates a real player. Returns (keeping, rookies) with rookies as {ovr, position}."""
+    players = [{"pid": p["player_id"], "position": p["position"], "age": p["age"],
                 "ovr": p["overall_rating"], "years_pro": p["years_pro"]} for p in roster]
-    keeping, _, rookies = shape_exits_and_rookies(players, reference_rookies, key_season)
+    keeping, _, rookies = shape_exits_and_rookies(players, reference_rookies, season, seed=seed)
     return keeping, [{"ovr": r["ovr"], "position": r["position"]} for r in rookies]
 
 

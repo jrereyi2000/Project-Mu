@@ -24,10 +24,11 @@ replay(snapshot, seasons=5, params=None, seed=0) -> league history
      lines, plus seeded noise) inside each position group where the save has at least PROD_MIN_PLAYERS distinct
      lines; everyone else, and every later season, gets progression.simulated_performance (OVR plus noise, with
      All-Pro bonuses).
-  3. Exits (simple, shared with the engine as progression.exit_hazard). Everyone older than RETIRE_AGE
-     (RETIRE_AGE_KP for K and P) retires. The rest leave by a seeded draw on a hazard of age and OVR:
+  3. Exits (simple, shared with the engine as progression.shape_exits_and_rookies). Everyone older than RETIRE_AGE
+     (RETIRE_AGE_KP for K and P) retires. The rest leave by a draw keyed on the replayed season and the fit's seed
+     on a hazard of age and OVR:
        h = EXIT_BASE + EXIT_PER_YEAR x max(0, age - EXIT_AGE) + CUT_HAZARD if he has 1+ years pro and an OVR below
-           his position group's CUT_QUANTILE at the start (the snapshot; a release),
+           his position group's CUT_QUANTILE at the start (the snapshot; a release; the line is fixed there),
      scaled by one factor a season so the expected exits equal the snapshot's rookie class size (the save's own
      yearly inflow; at least the forced retirements). So how many leave is Madden's, and who leaves (old, or
      overtaken) follows the progression.
@@ -264,9 +265,11 @@ def league_from_snapshot(snapshot):
              else STARTER_GAMES,
              "backup": sum(role["backup"]) / len(role["backup"]) if len(role["backup"]) >= ROLE_MIN_SAMPLE
              else BACKUP_GAMES}
+    # The release cut line's keys are the shared step's groups (shape_group on the engine position; None for
+    # positions outside PERF_GROUPS), so the fit and the live engine read the same line.
     by_group = defaultdict(list)
     for p in players:
-        by_group[p["group"]].append(p["ovr"])
+        by_group[P.shape_group(p["engine_position"])].append(p["ovr"])
     rookies = [{k: p[k] for k in ("position", "engine_position", "group", "age", "ovr", "dev")}
                for p in players if p["years_pro"] == 0]
     s = snapshot.get("season", {})
@@ -380,11 +383,17 @@ def _replay(league, seasons, seed, hold_shape):
             inputs[p["pid"]] = {"starter": starter, "games": games, "missed": missed, "ir": missed >= IR_WEEKS,
                                 "games_missed": (SEASON_GAMES - games) if starter else missed}
 
-        # 3/5. exits and the coming class, shared with the engine so live and fit cannot drift
-        compact = [{"pid": p["pid"], "group": p["group"], "age": p["age"], "ovr": p["ovr"],
-                    "years_pro": p["years_pro"], "team": p.get("team")} for p in roster]
+        # 3/5. exits and the coming class, shared with the engine so live and fit cannot drift. The draw is keyed on
+        # the season being replayed and this replay's seed (the live engine keys its target season with seed 0).
+        # The release cut line stays fixed at the snapshot and the snapshot's own rookie class is used; a snapshot
+        # with no rookies falls back to a roster-shaped class, as the fit always did.
+        reference_rookies = league["rookies"] or [
+            {k: p[k] for k in ("position", "engine_position", "group", "age", "ovr", "dev")} for p in roster]
+        compact = [{"pid": p["pid"], "position": p.get("engine_position") or p["position"],
+                    "age": p["age"], "ovr": p["ovr"], "years_pro": p["years_pro"], "team": p.get("team")}
+                   for p in roster]
         staying_compact, leaving_compact, rookie_sources = P.shape_exits_and_rookies(
-            compact, league["rookies"], league["calendar_year"])
+            compact, reference_rookies, sim_s, seed=seed, cut_line=league["cut_line"])
         staying_by_pid = {p["pid"]: p for p in roster}
         staying = [staying_by_pid[p["pid"]] for p in staying_compact]
         leaving = [staying_by_pid[p["pid"]] for p in leaving_compact]
