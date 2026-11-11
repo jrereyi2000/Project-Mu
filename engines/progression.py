@@ -13,7 +13,7 @@ Two Layers (§5.1):
           + injury(games missed, IR)      # missed time and physical setbacks
           + ε_i                           # deterministic seeded noise: Random(f"prog:{season}:{player_id}").gauss(0, 1.0)
           + offset(age band)              # AGE_BAND_OFFSET, calibration to Madden's 2035->2036 offseason
-          + league                        # league-shape term holding the 2036 shape (calibrate_league_term)
+          + league                        # league-shape term holding the stored shape season (calibrate_league_term)
           + performance                   # last season's production rank + awards (performance_scores)
           + wear + continuity + mentor    # phase C2 (§5.8, §5.13); upkeep above 90 sits inside league (§5.10)
           + persona + coach               # 0 until personalities (§6, §7; V2 core D4)
@@ -95,11 +95,12 @@ MAX_SEASON_CHANGE = 8
 # trade_value.AGE_BANDS: <=23, 24-26, 27-29, 30-31, 32-33, 34+ (34+ had 5 players; it takes 32-33's value).
 AGE_BAND_OFFSET = (-0.86, -0.76, -0.65, -0.28, -0.19, -0.19)
 
-# League shape (JR, 2026-10-28): year over year the league keeps roughly its 2036 shape, the same number of 90+
-# players and the same mean OVR. Madden's own turnover doesn't (its rookie classes come in ~10 OVR below the veterans
-# they replace), so each offseason a league term adds development to young players, sized by projecting the league
-# with the coming rookie class (calibrate_league_term). Weight of the term by age; 0 from 30 on.
-LEAGUE_SHAPE_SEASON = 2036
+# League shape (JR, 2026-10-28; per-league shape season JR, 2026-11-11): year over year the league keeps roughly
+# the shape of a reference season stored once per league in league_state.shape_season (league_shape_season: the
+# league's own first season, 2036 for the 2036 archive and its clones), the same number of 90+ players and the same
+# mean OVR. Madden's own turnover doesn't (its rookie classes come in ~10 OVR below the veterans they replace), so
+# each offseason a league term adds development to young players, sized by projecting the league's leavers and the
+# coming rookie class (calibrate_league_term). Weight of the term by age; 0 from 30 on.
 LEAGUE_TERM_WEIGHT = ((23, 1.0), (26, 0.75), (29, 0.35))
 # ... and by OVR: the term develops the young players below star level (who replace departing starters), not the
 # stars, so the 90+ count is left to ceilings and aging instead of being manufactured
@@ -1261,8 +1262,11 @@ def run_progression(
 ) -> Dict[str, Any]:
     """Runs progression for all players into target season, storing results in
     player_progression_history and updating player_ceilings. With hold_shape (default) the development and star
-    terms are calibrated first so the league after the coming draft keeps the LEAGUE_SHAPE_SEASON shape: the draft
-    class is projected from that season's real class, sized to refill the league (calibrate_league_term).
+    terms are calibrated first so the league after the coming draft keeps the shape of the league's own reference
+    season (`league_state.shape_season`): the league's projected leavers and the coming rookie class are modelled the
+    way engines/tuning/progression_fit.py's replay does (league_shape_projection), and the class is drawn from that
+    season's real class (calibrate_league_term). The projection is for calibration only; it never retires, deletes
+    or creates a real player.
     Phase C2 (§5.8-§5.13): durability (player_durability), mileage and wear (player_mileage), lasting injury damage,
     ceiling bands and breakthroughs (player_ceilings floor / spread / group_ceilings), upkeep above 90 inside the
     league term, scheme continuity, mentors and PT_* behaviour changes (stored, not written to the save) are part
@@ -1273,7 +1277,8 @@ def run_progression(
             cur.execute("SELECT EXISTS(SELECT 1 FROM progression_player_state)")
             if cur.fetchone()[0]:
                 raise ValueError("managed progression requires prepare/verified acknowledgement, not direct --commit")
-        _, aging_pairs, _ = read_fit_rows(cur, season - 1 if season > 2036 else 2036)
+        shape_season = league_shape_season(cur) or season
+        _, aging_pairs, _ = read_fit_rows(cur, season - 1 if season > shape_season else shape_season)
         aging_curves = fit_aging(aging_pairs)
         roster = fetch_progression_roster(cur, season)
         weights_doc = ow.load_weights()
@@ -1338,18 +1343,33 @@ def run_progression(
 
         prepared = [(p, *delta_inputs(p)) for p in roster]
         terms = (0.0, 0.0)
+        shape = None
         if hold_shape and prepared:
-            target = league_shape_target(cur)
-            class_size = max(0, target["players"] - len(prepared))
-            rookies = rookie_class(league_turnover(cur, LEAGUE_SHAPE_SEASON), class_size,
-                                   random.Random(f"draft:{season}"))
+            target = league_shape_target(cur, shape_season)
+            if target["players"] == 0:
+                raise ValueError(
+                    f"league shape: no player_seasons rows for shape season {shape_season}; set "
+                    f"league_state.shape_season to a season this database has")
+            keeping, rookies = league_shape_projection(roster, league_turnover(cur, shape_season)["rookies"],
+                                                       shape_season)
+            leavers = len(roster) - len(keeping)
+            by_pid = {item[0]["player_id"]: item for item in prepared}
+            staying = [by_pid[p["pid"]] for p in keeping if p["pid"] in by_pid]
+            k = max(1, math.ceil(len(staying) / CALIBRATION_SAMPLE))    # one stride for both, so the mix holds
+            sample = _stratified(staying, k, key=lambda item: (-item[4]["ovr"], item[0]["player_id"]))
+            rookie_sample = _stratified(rookies, k, key=lambda r: -r["ovr"])
+            frac = (len(sample) + len(rookie_sample)) / max(1, len(staying) + len(rookies))
+            scaled = {"season": shape_season, "players": target["players"],
+                      "count_90_plus": target["count_90_plus"] * frac, "avg_ovr": target["avg_ovr"]}
             terms, projected = calibrate_league_term(
-                prepared, [r["ovr"] for r in rookies], target,
+                sample, [r["ovr"] for r in rookie_sample], scaled,
                 lambda item, dev, star: compute_player_delta(**item[4], league_adj=dev, star_adj=star)[1])
+            shape = {"season": shape_season, "target": target, "leavers": leavers, "class_size": len(rookies),
+                     "terms": terms, "projected": projected}
             log(f"League shape: holding {target['season']} (90+={target['count_90_plus']}, "
                 f"mean {target['avg_ovr']:.2f}) with development term {terms[0]:+.1f} and star term "
-                f"{terms[1]:+.2f}; projected after a {class_size}-player draft: 90+={projected['count_90_plus']}, "
-                f"mean {projected['avg_ovr']:.2f}")
+                f"{terms[1]:+.2f}; leavers={leavers} class_size={len(rookies)}, projected 90+="
+                f"{projected['count_90_plus']}, mean {projected['avg_ovr']:.2f}")
 
         for p, ceiling, c_source, c2, kwargs in prepared:
             p_id = p["player_id"]
@@ -1483,6 +1503,7 @@ def run_progression(
             "players_count": len(results),
             "mean_delta": round(avg_delta, 3),
             "causes": dict(counts_by_cause),
+            "league_shape": shape,
             "results": results
         }
 
@@ -1715,7 +1736,43 @@ def run_backtest(conn, season: int = 2036, with_performance: bool = False, log=p
 
 
 # ---------------------------------------------------------------- simulation ----
-def league_shape_target(cur, season: int = LEAGUE_SHAPE_SEASON) -> Dict[str, Any]:
+# Exit/rookie projection shared with the offline fit (engines/tuning/progression_fit.py imports these, so the live
+# engine's calibration and the fit's replay cannot drift): older players leave at a rising hazard, a release risk
+# below the position group's CUT_QUANTILE, all scaled by one factor so the expected exits equal the reference
+# rookie class size.
+RETIRE_AGE, RETIRE_AGE_KP = 37, 41
+CUT_QUANTILE, CUT_HAZARD = 0.10, 0.6
+EXIT_BASE, EXIT_PER_YEAR, EXIT_AGE = 0.05, 0.06, 29
+CALIBRATION_SAMPLE = 400
+
+
+def league_shape_season(cur) -> Optional[int]:
+    """The reference season whose shape the league keeps: league_state.shape_season (2027_02_26 migration; the
+    league's own start season, 2036 for the 2036 archive and its clones). A database that has not run the migration
+    yet falls back to its current season when that season has ratings (madden_test's 2026 rows carry none, its 2036
+    rows do), else its first season with ratings."""
+    cur.execute("""SELECT 1 FROM information_schema.columns
+                   WHERE table_name = 'league_state' AND column_name = 'shape_season'""")
+    if cur.fetchone() is not None:
+        cur.execute("SELECT shape_season FROM league_state ORDER BY id LIMIT 1")
+        row = cur.fetchone()
+        if row and row[0] is not None:
+            return int(row[0])
+    cur.execute("SELECT current_season FROM league_state ORDER BY id LIMIT 1")
+    row = cur.fetchone()
+    current = int(row[0]) if row and row[0] is not None else None
+    if current is not None:
+        cur.execute("""SELECT 1 FROM player_seasons WHERE season = %s AND overall_rating IS NOT NULL
+                       AND position != 'DEF' LIMIT 1""", (current,))
+        if cur.fetchone() is not None:
+            return current
+    cur.execute("""SELECT min(season) FROM player_seasons
+                   WHERE overall_rating IS NOT NULL AND position != 'DEF'""")
+    first = cur.fetchone()[0]
+    return int(first) if first is not None else current
+
+
+def league_shape_target(cur, season: int) -> Dict[str, Any]:
     """The shape the league keeps (JR, 2026-10-28): size, 90+ count and mean OVR of `season`'s rosters."""
     cur.execute("""
         SELECT count(*), count(*) FILTER (WHERE overall_rating >= 90), avg(overall_rating)
@@ -1725,12 +1782,113 @@ def league_shape_target(cur, season: int = LEAGUE_SHAPE_SEASON) -> Dict[str, Any
     return {"season": season, "players": n, "count_90_plus": n90, "avg_ovr": float(mean or 0)}
 
 
+def _shape_quantile(values: List[int], q: float) -> Optional[float]:
+    """Linear-interpolated quantile, as engines.tuning.targets.percentile (the fit's cut line)."""
+    s = sorted(values)
+    if not s:
+        return None
+    k = (len(s) - 1) * q
+    lo = math.floor(k)
+    hi = min(lo + 1, len(s) - 1)
+    return s[lo] + (s[hi] - s[lo]) * (k - lo)
+
+
+def _stratified(items: List[Any], k: int, key=None) -> List[Any]:
+    """Every k-th item by `key` (default: by OVR, best first), so the sample keeps the OVR spread."""
+    return sorted(items, key=key or (lambda p: (-p["ovr"], p["pid"])))[::k]
+
+
+def exit_hazard(p: Dict[str, Any], league: Dict[str, Any]) -> Optional[float]:
+    """None: retires for certain (age). Else the unscaled hazard of leaving after this season."""
+    if p["age"] > (RETIRE_AGE_KP if p["group"] in ("K", "P") else RETIRE_AGE):
+        return None
+    cut = league["cut_line"].get(p["group"])
+    released = p["years_pro"] >= 1 and cut is not None and p["ovr"] < cut
+    return EXIT_BASE + EXIT_PER_YEAR * max(0, p["age"] - EXIT_AGE) + (CUT_HAZARD if released else 0.0)
+
+
+def _exit_factor(hazards: List[float], need: int) -> float:
+    """The factor f with sum(min(1, f h)) = need (bisection); 0 when nothing more needs to leave."""
+    if need <= 0 or not hazards:
+        return 0.0
+    if need >= len(hazards):
+        return float("inf")
+    lo, hi = 0.0, 1.0
+    while sum(min(1.0, hi * h) for h in hazards) < need:
+        hi *= 2
+    for _ in range(40):
+        mid = (lo + hi) / 2
+        if sum(min(1.0, mid * h) for h in hazards) < need:
+            lo = mid
+        else:
+            hi = mid
+    return hi
+
+
+def shape_group(position: str) -> Optional[str]:
+    """The PERF_GROUPS group a position belongs to (None: no group, so no cut line)."""
+    return next((g for g, members in PERF_GROUPS.items() if position in members), None)
+
+
+def shape_exits_and_rookies(players: List[Dict[str, Any]], reference_rookies: List[Dict[str, Any]],
+                            key_season: int) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]],
+                                                      List[Dict[str, Any]]]:
+    """The shared league-shape step: exit hazards per player sized against the reference rookie class, then one
+    rookie per leaver drawn from that class (OVR ±1, his position). `players` are compact
+    ({pid, group, age, ovr, years_pro}); `reference_rookies` are ({position, ovr}, extra keys kept). Returns
+    (keeping, leaving, rookies); rookies are ({source, replaces, ovr, position}). Deterministic for the league's
+    reference season (`key_season`), so the live engine and the fit replay draw the same exits from the same
+    roster. The projection is read-only."""
+    if not reference_rookies:
+        raise ValueError("league shape projection needs the reference season's rookie class")
+    players = sorted(players, key=lambda p: p["pid"])      # the draw follows pid order, not query order
+    by_group = defaultdict(list)
+    for p in players:
+        by_group[p["group"]].append(p["ovr"])
+    league = {"cut_line": {g: _shape_quantile(v, CUT_QUANTILE) for g, v in by_group.items()}}
+    hazards = {p["pid"]: exit_hazard(p, league) for p in players}
+    forced = sum(1 for h in hazards.values() if h is None)
+    factor = _exit_factor([h for h in hazards.values() if h is not None],
+                          max(0, min(len(reference_rookies), len(players)) - forced))
+    rng = random.Random(f"exits:{key_season}")
+    keeping, leaving = [], []
+    for p in players:
+        h = hazards[p["pid"]]
+        (leaving if h is None or rng.random() < min(1.0, factor * h) else keeping).append(p)
+    pool = defaultdict(list)
+    for r in reference_rookies:
+        pool[shape_group(r["position"])].append(r)
+    rookies = []
+    for p in leaving:
+        src = rng.choice(pool.get(p["group"]) or reference_rookies)
+        rookies.append({"source": src, "replaces": p,
+                        "ovr": max(OVR_MIN, min(OVR_MAX, src["ovr"] + rng.choice((-1, 0, 0, 1)))),
+                        "position": src["position"]})
+    return keeping, leaving, rookies
+
+
+def league_shape_projection(roster: List[Dict[str, Any]], reference_rookies: List[Dict[str, Any]],
+                            key_season: int) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """The league's projected leavers and coming rookie class for calibration (`shape_exits_and_rookies`), the fit
+    replay's step 3/5 shape: hazards sized against `league_turnover`'s rookies for the stored shape season, then one
+    rookie per leaver drawn from that class. `key_season` is the league's reference season, which keys the draw.
+    Read-only: the projection never retires, deletes or creates a real player. Returns (keeping, rookies) with
+    rookies as {ovr, position}."""
+    players = [{"pid": p["player_id"], "group": shape_group(p["position"]), "age": p["age"],
+                "ovr": p["overall_rating"], "years_pro": p["years_pro"]} for p in roster]
+    keeping, _, rookies = shape_exits_and_rookies(players, reference_rookies, key_season)
+    return keeping, [{"ovr": r["ovr"], "position": r["position"]} for r in rookies]
+
+
 def calibrate_league_term(players: List[Dict[str, Any]], rookie_ovrs: List[int], target: Dict[str, Any],
                           progress) -> Tuple[Tuple[float, float], Dict[str, Any]]:
     """The development and star terms (OVR a year) that bring the projected league (every player in `players`
     progressed by progress(p, dev, star) -> new OVR, plus the coming rookie class) closest to `target`'s 90+ count
     and mean OVR. Errors are scaled by what counts as close (5% of the 90+ count, a quarter point of mean); ties go
-    to the smaller terms. Returns ((dev, star), projected shape)."""
+    to the smaller terms. Returns ((dev, star), projected shape). An empty target (0 players) or an empty pool
+    never calibrates: it raises instead of quietly choosing the smallest terms."""
+    if target.get("players") == 0 or not (players or rookie_ovrs):
+        raise ValueError("league shape: empty target or no players to calibrate against")
     best = None
     for dev in LEAGUE_TERM_STEPS:
         for star in STAR_TERM_STEPS:
@@ -1802,6 +1960,8 @@ def rookie_class(turnover: Dict[str, Any], size: int, rng: random.Random) -> Lis
     """`size` rookies shaped like the real class: pick i takes the real class's OVR at the same quantile (±1),
     with the real class's positions and ages and second-year dev traits."""
     real = turnover["rookies"]
+    if size > 0 and not real:
+        raise ValueError("rookie class: the reference season has no rookies to size a class from")
     devs, weights = zip(*sorted(turnover["devs"].items()))
     out = []
     for i in range(size):

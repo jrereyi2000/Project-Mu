@@ -24,8 +24,8 @@ replay(snapshot, seasons=5, params=None, seed=0) -> league history
      lines, plus seeded noise) inside each position group where the save has at least PROD_MIN_PLAYERS distinct
      lines; everyone else, and every later season, gets progression.simulated_performance (OVR plus noise, with
      All-Pro bonuses).
-  3. Exits (simple, documented here, not part of the engine). Everyone older than RETIRE_AGE (RETIRE_AGE_KP for K
-     and P) retires. The rest leave by a seeded draw on a hazard of age and OVR:
+  3. Exits (simple, shared with the engine as progression.exit_hazard). Everyone older than RETIRE_AGE
+     (RETIRE_AGE_KP for K and P) retires. The rest leave by a seeded draw on a hazard of age and OVR:
        h = EXIT_BASE + EXIT_PER_YEAR x max(0, age - EXIT_AGE) + CUT_HAZARD if he has 1+ years pro and an OVR below
            his position group's CUT_QUANTILE at the start (the snapshot; a release),
      scaled by one factor a season so the expected exits equal the snapshot's rookie class size (the save's own
@@ -75,6 +75,7 @@ import time
 from collections import Counter, defaultdict
 
 from engines import progression as P
+from engines.progression import CALIBRATION_SAMPLE, CUT_QUANTILE, _stratified
 from engines.trade_value import fit_aging
 from engines.tuning import compare as C
 from engines.tuning import targets as T
@@ -98,12 +99,7 @@ MISSED_WEEKS = (1, 10)
 IR_WEEKS = 8
 PROD_MIN_PLAYERS = 8
 
-# exits (this module's rules, not the engine's)
-RETIRE_AGE, RETIRE_AGE_KP = 37, 41
-CUT_QUANTILE, CUT_HAZARD = 0.10, 0.6
-EXIT_BASE, EXIT_PER_YEAR, EXIT_AGE = 0.05, 0.06, 29
-
-CALIBRATION_SAMPLE = 400
+# exits (shared with the engine: engines/progression.py owns the rules and the projection)
 
 # scoring
 SHAPE_GROUPS = ("QB", "RB", "REC", "OL", "FRONT", "DB", "K", "P")
@@ -358,11 +354,6 @@ def _replay(league, seasons, seed, hold_shape):
     roster = [dict(p) for p in league["players"]]
     base = league["shape"]
     size = len(roster)
-    rookie_pool = defaultdict(list)
-    for r in league["rookies"]:
-        rookie_pool[r["group"]].append(r)
-    all_rookies = league["rookies"] or [{k: p[k] for k in ("position", "engine_position", "group", "age", "ovr",
-                                                           "dev")} for p in roster]
     next_pid = 10_000_000 + max([p["pid"] for p in roster] + [0])
     history = []
     for yr in range(1, seasons + 1):
@@ -389,29 +380,27 @@ def _replay(league, seasons, seed, hold_shape):
             inputs[p["pid"]] = {"starter": starter, "games": games, "missed": missed, "ir": missed >= IR_WEEKS,
                                 "games_missed": (SEASON_GAMES - games) if starter else missed}
 
-        # 3. exits
-        hazards = {p["pid"]: exit_hazard(p, league) for p in roster}
-        forced = sum(1 for h in hazards.values() if h is None)
-        factor = _exit_factor([h for h in hazards.values() if h is not None],
-                              max(0, min(len(league["rookies"]), size) - forced))
-        staying, leaving = [], []
+        # 3/5. exits and the coming class, shared with the engine so live and fit cannot drift
+        compact = [{"pid": p["pid"], "group": p["group"], "age": p["age"], "ovr": p["ovr"],
+                    "years_pro": p["years_pro"], "team": p.get("team")} for p in roster]
+        staying_compact, leaving_compact, rookie_sources = P.shape_exits_and_rookies(
+            compact, league["rookies"], league["calendar_year"])
+        staying_by_pid = {p["pid"]: p for p in roster}
+        staying = [staying_by_pid[p["pid"]] for p in staying_compact]
+        leaving = [staying_by_pid[p["pid"]] for p in leaving_compact]
         retention = defaultdict(lambda: [0, 0])
+        staying_pids = {p["pid"] for p in staying}
         for p in roster:
             band = retention[years_band(p["years_pro"])]
             band[1] += 1
-            h = hazards[p["pid"]]
-            gone = h is None or rng.random() < min(1.0, factor * h)
-            (leaving if gone else staying).append(p)
-            band[0] += not gone
+            band[0] += p["pid"] in staying_pids
 
-        # 5. the rookie class, one per leaver (drawn before progression so the league term sees it, as the engine)
         rookies = []
-        for p in leaving:
-            src = rng.choice(rookie_pool.get(p["group"]) or all_rookies)
+        for r in rookie_sources:
+            src = r["source"]
             next_pid += 1
-            rookies.append({**src, "pid": next_pid, "team": p["team"], "years_pro": 0,
-                            "ovr": max(P.OVR_MIN, min(P.OVR_MAX, src["ovr"] + rng.choice((-1, 0, 0, 1)))),
-                            "last_games": None, "last_prod": None})
+            rookies.append({**src, "pid": next_pid, "team": r["replaces"]["team"], "years_pro": 0,
+                            "ovr": r["ovr"], "last_games": None, "last_prod": None})
 
         # 4. progression
         prepared = {}
@@ -452,38 +441,6 @@ def _replay(league, seasons, seed, hold_shape):
     return {"start": base, "seasons": history, "players": size, "calendar_year": league["calendar_year"],
             "seed": seed, "hold_shape": hold_shape, "role_games": league["games"],
             "injury_share": round(league["injury_share"], 4), "last_year": league["last_year"]}
-
-
-def _stratified(players, k):
-    """Every k-th player by OVR (the best first), so the sample keeps the OVR spread."""
-    return sorted(players, key=lambda p: (-p["ovr"], p["pid"]))[::k]
-
-
-def exit_hazard(p, league):
-    """None: retires for certain (age). Else the unscaled hazard of leaving after this season."""
-    if p["age"] > (RETIRE_AGE_KP if p["group"] in ("K", "P") else RETIRE_AGE):
-        return None
-    cut = league["cut_line"].get(p["group"])
-    released = p["years_pro"] >= 1 and cut is not None and p["ovr"] < cut
-    return EXIT_BASE + EXIT_PER_YEAR * max(0, p["age"] - EXIT_AGE) + (CUT_HAZARD if released else 0.0)
-
-
-def _exit_factor(hazards, need):
-    """The factor f with sum(min(1, f h)) = need (bisection); 0 when nothing more needs to leave."""
-    if need <= 0 or not hazards:
-        return 0.0
-    if need >= len(hazards):
-        return float("inf")
-    lo, hi = 0.0, 1.0
-    while sum(min(1.0, hi * h) for h in hazards) < need:
-        hi *= 2
-    for _ in range(40):
-        mid = (lo + hi) / 2
-        if sum(min(1.0, mid * h) for h in hazards) < need:
-            lo = mid
-        else:
-            hi = mid
-    return hi
 
 
 # ---------- targets ----------
