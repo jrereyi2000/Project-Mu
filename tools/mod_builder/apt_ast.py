@@ -1,6 +1,7 @@
 """In-place string edits to a BGFA / EA Apt legacy UI scene (`.ast`), MOD_REVERSE_ENGINEERING §2.6.
 
-A `.ast` is `BGFA1.05` + a header + zlib blocks. Block 1 starts at 0x70; each later block starts at
+A `.ast` is `BGFA1.05` + a header + zlib blocks. Block 1 starts after the header table (`first_block`,
+0x70 on corenode.ast); each later block starts at
 the previous one's end rounded up to 8 bytes; the last ends flush with the file. The header stores
 each block's compressed length as a u16 LE (checked on `corenode.ast`, build 3464873: block 2 at 0x54,
 block 1 at 0x65); no checksum of the blocks is stored.
@@ -9,7 +10,7 @@ An edit here replaces one null-terminated constant in a block with a string no l
 padding with nulls so no offset in the Apt data moves, then re-deflates the block to **exactly** its
 original compressed length, so the header and every block offset stay byte-identical.
 
-    python3 -m tools.mod_builder.apt_ast franchise-menu <vanilla corenode.ast> <out.ast>
+    python3 -m tools.mod_builder.apt_ast franchise-menu|franchise-only <vanilla corenode.ast> <out.ast>
 """
 from __future__ import annotations
 
@@ -34,11 +35,17 @@ class Block:
     raw: bytes
 
 
+def first_block(data: bytes) -> int:
+    """Block 1's offset: the header table after 0x40 is u32@0x18 bytes long, rounded up to 8
+    (0x2a → 0x70 on corenode.ast; 0x28 → 0x68 and 0x130 → 0x170 on other scenes)."""
+    return (0x40 + int.from_bytes(data[0x18:0x1c], "little") + 7) & ~7
+
+
 def read_blocks(data: bytes) -> list[Block]:
     """Walk the zlib blocks from 0x70 (8-byte aligned starts) to the end of the file."""
     if data[:8] != MAGIC:
         raise AstError("not a BGFA1.05 scene")
-    blocks, off = [], FIRST_BLOCK
+    blocks, off = [], first_block(data)
     while off < len(data):
         o = zlib.decompressobj()
         try:
@@ -108,23 +115,26 @@ def edit(data: bytes, block_index: int, edits: list[tuple[bytes, bytes, bytes]])
     return out, offsets
 
 
-# ---- the Franchise-only main menu (JR, 2026-11-11)
+# ---- the Franchise main-menu presets (JR, 2026-11-11)
 
 RAIL_ANCHOR = b"NestedPanelIds\x00\x00"
 RAIL_VANILLA = (b"nestedlist_events, nestedlist_ultimateteam, nestedlist_franchise, nestedlist_superstar, "
                 b"nestedlist_online, nestedlist_play, nestedlist_trainingcamp, nestedlist_creationcenter, "
                 b"EXTRAS, SETTINGS, ACCESSIBILITY, nestedlist_debug, FRANCHISE_INFO, SUPERSTAR_INFO, "
                 b"ULTIMATETEAM_INFO")
-RAIL_FRANCHISE = (b"nestedlist_franchise, nestedlist_play, nestedlist_creationcenter, EXTRAS, SETTINGS, "
-                  b"ACCESSIBILITY, nestedlist_debug, FRANCHISE_INFO")
+# Mu Franchise Menu 1.1: v1.0 (verified in game 2026-11-11) without Extras and Accessibility.
+RAIL_FRANCHISE = b"nestedlist_franchise, nestedlist_play, nestedlist_creationcenter, SETTINGS, nestedlist_debug, FRANCHISE_INFO"
+# Mu Franchise Only: the rail is the Franchise tab and its info panel, nothing else (no Settings).
+RAIL_FRANCHISE_ONLY = b"nestedlist_franchise, FRANCHISE_INFO"
 FOCUS_ANCHOR = b"FocusedRootId\x00\x00\x00"
 FOCUS_VANILLA = b"nestedlist_ultimateteam"
 FOCUS_FRANCHISE = b"nestedlist_franchise"
-FRANCHISE_MENU_EDITS = [(RAIL_ANCHOR, RAIL_VANILLA, RAIL_FRANCHISE), (FOCUS_ANCHOR, FOCUS_VANILLA, FOCUS_FRANCHISE)]
+PRESETS = {"franchise-menu": RAIL_FRANCHISE, "franchise-only": RAIL_FRANCHISE_ONLY}
 
 
-def franchise_menu(data: bytes) -> tuple[bytes, dict]:
-    out, offsets = edit(data, 1, FRANCHISE_MENU_EDITS)
+def franchise_menu(data: bytes, rail: bytes = RAIL_FRANCHISE) -> tuple[bytes, dict]:
+    edits = [(RAIL_ANCHOR, RAIL_VANILLA, rail), (FOCUS_ANCHOR, FOCUS_VANILLA, FOCUS_FRANCHISE)]
+    out, offsets = edit(data, 1, edits)
     return out, {
         "size": len(out), "rail_offset": hex(offsets[0]), "focus_offset": hex(offsets[1]),
         "sha256_vanilla": hashlib.sha256(data).hexdigest(), "sha256_out": hashlib.sha256(out).hexdigest(),
@@ -132,12 +142,12 @@ def franchise_menu(data: bytes) -> tuple[bytes, dict]:
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 3 or argv[0] != "franchise-menu":
+    if len(argv) != 3 or argv[0] not in PRESETS:
         print(__doc__.strip().splitlines()[-1].strip(), file=sys.stderr)
         return 2
     data = open(argv[1], "rb").read()
     try:
-        out, report = franchise_menu(data)
+        out, report = franchise_menu(data, PRESETS[argv[0]])
     except AstError as e:
         print(json.dumps({"ok": False, "error": str(e)}))
         return 1

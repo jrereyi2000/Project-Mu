@@ -18,6 +18,7 @@ def make_scene(block2_raw: bytes) -> bytes:
     s1 = zlib.compress(block1_raw, 9)
     s2 = zlib.compress(block2_raw, 9)
     header = bytearray(apt_ast.MAGIC + b"\x03\x00\x00\x00\x02\x00\x00\x00" + b"\x00" * (0x70 - 16))
+    header[0x18:0x1c] = (0x2a).to_bytes(4, "little")  # header table length, as on corenode.ast
     header[0x54:0x56] = len(s2).to_bytes(2, "little")
     header[0x65:0x67] = len(s1).to_bytes(2, "little")
     off2 = _pad8(0x70 + len(s1))
@@ -99,7 +100,26 @@ def test_franchise_menu_on_the_real_vanilla_scene():
     assert int.from_bytes(data[0x54:0x56], "little") == 20375
     assert int.from_bytes(data[0x65:0x67], "little") == 33762
     out, report = apt_ast.franchise_menu(data)
-    assert report["sha256_out"] == "e71053dd07835c880c54ba43fe8d1ed9e05da67b05cb2c6a4afbc9efc9d80e30"
+    # v1.1 rail (v1.0, e71053dd…, was verified in game 2026-11-11 and then lost Extras/Accessibility)
+    assert report["sha256_out"] == "84739e4996d776f19dd2d6319dd632a534f89a7101b1a91c3548532b32690742"
     assert (report["rail_offset"], report["focus_offset"]) == ("0x16bb8", "0x16e48")
     assert len(out) == len(data) == 54255
     assert out[:0x8458] == data[:0x8458]
+    only, rep2 = apt_ast.franchise_menu(data, apt_ast.RAIL_FRANCHISE_ONLY)
+    assert rep2["sha256_out"] == "11b5488a27c1a4770145989ecccd4f2035c4f4231da12ca6dc6609ba5521aa3c"
+    assert len(only) == len(data) and only[:0x8458] == data[:0x8458]
+
+
+def test_first_block_follows_the_header_table_length():
+    hdr = bytearray(apt_ast.MAGIC + bytes(0x70))
+    for table, start in ((0x2a, 0x70), (0x28, 0x68), (0x130, 0x170)):
+        hdr[0x18:0x1c] = table.to_bytes(4, "little")
+        assert apt_ast.first_block(bytes(hdr)) == start
+
+
+def test_franchise_only_preset_on_synthetic_scene():
+    data = make_scene(block2())
+    out, _ = apt_ast.franchise_menu(data, apt_ast.RAIL_FRANCHISE_ONLY)
+    raw = apt_ast.read_blocks(out)[1].raw
+    at = raw.index(apt_ast.RAIL_ANCHOR) + len(apt_ast.RAIL_ANCHOR)
+    assert raw[at:at + len(apt_ast.RAIL_FRANCHISE_ONLY) + 1] == apt_ast.RAIL_FRANCHISE_ONLY + b"\x00"
