@@ -4,7 +4,7 @@ The Claude Code agents and skills built to speed up work on Project Mu. Each one
 
 Keep this page current when a skill is added, changed or retired. A new skill also gets a line in PROJECT_SPEC.md's Repository Layout under `.claude/skills/` (CLAUDE.md).
 
-Any model class may run `/builder`, `/execute-plan` and `/propose`. `/audit` is restricted to Opus 5.5, Codex and Argon: a DeepSeek-routed session never audits, because review has to come from a different model from the builders (JR, 2026-11-10). An Opus, Codex or Argon session may spawn a DeepSeek session for builder or task-implementation work with `tools/spawn_agent.sh <label> deepseek "/builder"`, after saying why on the board; they coordinate so they run the fewest DeepSeek sessions. A DeepSeek session never spawns another DeepSeek session — it asks `opus`, `argon` and `codex` on the board to spawn one.
+Any model class may run `/builder`, `/execute-plan` and `/propose`. `/audit` is restricted to Opus 5.5, Codex and Argon: a DeepSeek-routed session never audits, because review has to come from a different model from the builders (JR, 2026-11-10). An Opus, Codex or Argon session may spawn a DeepSeek session for builder or task-implementation work with `tools/spawn_agent.sh <label> deepseek "/builder"`, after saying why on the board; they coordinate so they run the fewest DeepSeek sessions. A DeepSeek session spawns another DeepSeek session only when JR explicitly tells it to (JR, 2026-11-11), running the script with `MU_ALLOW_DEEPSEEK_SPAWN=1`; otherwise it asks `opus`, `argon` and `codex` on the board to spawn one.
 
 ## Built
 

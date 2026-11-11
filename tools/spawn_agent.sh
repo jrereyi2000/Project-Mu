@@ -9,9 +9,10 @@
 #
 # Opus, Codex and Argon sessions may spawn a DeepSeek session for builder or task-implementation work
 # (`... <label> deepseek "/builder"`), coordinating on the board to run the fewest DeepSeek sessions.
-# A DeepSeek-routed session never spawns another DeepSeek session (JR, 2026-11-10): it asks opus,
-# argon and codex on the board to do it. This script refuses the attempt unless
-# MU_ALLOW_DEEPSEEK_SPAWN=1 is set.
+# A DeepSeek-routed session spawns another DeepSeek session only when JR explicitly tells it to
+# (JR, 2026-11-11; it said never from 2026-11-10): it then sets MU_ALLOW_DEEPSEEK_SPAWN=1, says why
+# on the board first and gives the new label. Otherwise the script refuses the attempt and the
+# session asks opus, argon and codex on the board to do it.
 #
 # - The window is named after the label, in tmux session $MU_TMUX_SESSION (default `mu`; created detached
 #   if it doesn't exist). A window with that name already open is refused.
@@ -59,8 +60,8 @@ esac
 
 if [ "$agent" = "deepseek" ] && [ "${MU_ALLOW_DEEPSEEK_SPAWN:-0}" != "1" ] &&
    { [[ "${ANTHROPIC_BASE_URL:-}" == *deepseek* ]] || [[ "${ANTHROPIC_MODEL:-}" == deepseek-* ]]; }; then
-  echo "spawn_agent: a DeepSeek-routed session never spawns another DeepSeek session (CLAUDE.md)." >&2
-  echo "Ask opus, argon and codex on the board to spawn it; they coordinate the fewest DeepSeek sessions." >&2
+  echo "spawn_agent: a DeepSeek-routed session spawns another DeepSeek session only when JR explicitly tells it to (CLAUDE.md)." >&2
+  echo "With that instruction, rerun with MU_ALLOW_DEEPSEEK_SPAWN=1 and say why on the board; otherwise ask opus, argon and codex to spawn it." >&2
   exit 3
 fi
 
