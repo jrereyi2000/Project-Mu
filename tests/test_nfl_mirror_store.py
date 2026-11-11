@@ -1,4 +1,4 @@
-"""engines/nfl_mirror/store.py and its migration (docs/in_progress/NFL_WEEKLY_MIRROR_PLAN.md §2.1, §2.4, §4).
+"""engines/nfl_mirror/store.py and its migration (docs/done/NFL_WEEKLY_MIRROR_PLAN.md §2.1, §2.4, §4).
 
 Offline: an in-memory SQLite database built from the migration behind the shared psycopg-like FakeCursor. The
 integration test applies the migration twice on a throwaway mu_scratch_* PostgreSQL database.

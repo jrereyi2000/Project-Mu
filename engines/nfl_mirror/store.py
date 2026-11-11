@@ -1,4 +1,4 @@
-"""The NFL weekly mirror's tables (docs/in_progress/NFL_WEEKLY_MIRROR_PLAN.md §2.1, §2.4).
+"""The NFL weekly mirror's tables (docs/done/NFL_WEEKLY_MIRROR_PLAN.md §2.1, §2.4).
 
     read_settings(cur) -> dict | None
     set_enabled(cur, enabled, season=2026, last_week=None)

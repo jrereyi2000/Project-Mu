@@ -1,4 +1,4 @@
-"""Coaching changes for the NFL weekly mirror (docs/in_progress/NFL_WEEKLY_MIRROR_PLAN.md §2.7).
+"""Coaching changes for the NFL weekly mirror (docs/done/NFL_WEEKLY_MIRROR_PLAN.md §2.7).
 
     real_staff_changes(head_coach_by_week, week, staff_csv_rows) -> [StaffChange]      pure
     read_staff_csv(path=DEFAULT_PATH) -> [dict]
