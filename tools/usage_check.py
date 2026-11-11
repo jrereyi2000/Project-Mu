@@ -1,7 +1,7 @@
 """Claude plan-quota watchdog for auditor sessions (/audit; JR, 2026-11-10).
 
 Reads data/usage/rate_limits.json, which tools/usage_statusline.py writes from Claude Code's status line, and reports
-how much of the 5-hour and weekly Claude limits is used. At 98% of the 5-hour window or 99% of the weekly one the
+how much of the 5-hour and weekly Claude limits is used. At 85% of the 5-hour window or 99% of the weekly one the
 auditor posts a HANDOFF to the builders and signs off before the quota runs out.
 
     python3 -m tools.usage_check [--five-hour PCT] [--weekly PCT] [--max-age SECONDS] [--json]
@@ -10,7 +10,7 @@ Exit 0 under both thresholds, 2 at or over either, 1 when the numbers are unknow
 (default 600 s; the status line hasn't refreshed, e.g. no Claude session has replied lately). A window whose
 resets_at has passed counts as reset (0%).
 
-Env: MU_USAGE_FILE, MU_USAGE_5H_THRESHOLD (default 98), MU_USAGE_WEEKLY_THRESHOLD (default 99).
+Env: MU_USAGE_FILE, MU_USAGE_5H_THRESHOLD (default 85), MU_USAGE_WEEKLY_THRESHOLD (default 99).
 """
 
 import argparse
@@ -21,7 +21,7 @@ import time
 from datetime import datetime
 
 USAGE_FILE = os.environ.get("MU_USAGE_FILE", "/home/jrereyi/Project-Mu/data/usage/rate_limits.json")
-DEFAULT_5H = float(os.environ.get("MU_USAGE_5H_THRESHOLD", 98))
+DEFAULT_5H = float(os.environ.get("MU_USAGE_5H_THRESHOLD", 85))
 DEFAULT_WEEKLY = float(os.environ.get("MU_USAGE_WEEKLY_THRESHOLD", 99))
 DEFAULT_MAX_AGE = 600
 
@@ -57,7 +57,7 @@ def check(data, five_hour, weekly, max_age, now):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--five-hour", type=float, default=DEFAULT_5H, help="5-hour threshold, percent (default 98)")
+    ap.add_argument("--five-hour", type=float, default=DEFAULT_5H, help="5-hour threshold, percent (default 85)")
     ap.add_argument("--weekly", type=float, default=DEFAULT_WEEKLY, help="weekly threshold, percent (default 99)")
     ap.add_argument("--max-age", type=int, default=DEFAULT_MAX_AGE, help="seconds before the file counts as stale")
     ap.add_argument("--file", default=USAGE_FILE)

@@ -1,6 +1,6 @@
 ---
 name: audit
-description: Make this session Project Mu's auditor, on Claude Opus 5.5. It takes the audit label, starts the agent-board listener, picks up every open request for the auditor (plan reviews from /execute-plan, fix NOTICEs from builders, questions), audits report-only in a pinned worktree, hands findings to the builder with file:line, verifies fixes as CLOSED / PARTIAL / OPEN, archives old board messages with tools/agent_board_rotate.py when no build wave is active, and hands off before the Claude plan quota runs out (98% of the 5-hour window, 99% of the weekly one). Use when JR runs /audit, or asks to start, spin up or replace the auditor session.
+description: Make this session Project Mu's auditor, on Claude Opus 5.5. It takes the audit label, starts the agent-board listener, picks up every open request for the auditor (plan reviews from /execute-plan, fix NOTICEs from builders, questions), audits report-only in a pinned worktree, hands findings to the builder with file:line, verifies fixes as CLOSED / PARTIAL / OPEN, archives old board messages with tools/agent_board_rotate.py when no build wave is active, and hands off before the Claude plan quota runs out (85% of the 5-hour window, 99% of the weekly one). Use when JR runs /audit, or asks to start, spin up or replace the auditor session.
 argument-hint: "[label, default: audit, or the next free audit-N] [what to audit first]"
 model: claude-opus-5-5
 ---
@@ -35,7 +35,7 @@ The auditor runs on JR's Claude plan. The DeepSeek builders don't, so they keep 
 
 1. **Run `python3 -m tools.usage_check`** at start, before each audit batch or fix verification, and before each board message you post. It reads the 5-hour and weekly numbers that the status line (`tools/usage_statusline.py`) saves.
    - **Exit 0:** carry on. Relay its line only when JR asks.
-   - **Exit 2:** at or over **98% of the 5-hour window or 99% of the weekly one**. Stop starting new work. Finish only the reply you're writing, then post the quota HANDOFF below.
+   - **Exit 2:** at or over **85% of the 5-hour window or 99% of the weekly one**. Stop starting new work. Finish only the reply you're writing, then post the quota HANDOFF below.
    - **Exit 1:** unknown, because the file is missing or stale. Tell JR once that the status line isn't recording (`~/.claude/settings.json` `statusLine` should run `tools/usage_statusline.py`), then carry on and check again later.
 2. **The quota HANDOFF** goes to `all` and every live builder:
 
