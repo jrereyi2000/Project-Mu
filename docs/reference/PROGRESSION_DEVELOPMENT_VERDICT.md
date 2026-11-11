@@ -118,6 +118,10 @@ doesn't fix either finding.
 
 ## 4. Decision for JR
 
+**Ruled by JR, 2026-11-11:** a 2026-era league holds **the shape of its own start season** (reading (a)), and the
+live engine's projection **accounts for the players leaving and the coming draft class**, as the fit does. The
+fix is builder-7's, from audit-2's brief. The options JR chose from follow.
+
 **What shape does a 2026-era league hold?** JR's 2026-10-28 rule ("the league keeps its 2036 shape, same 90+
 count and mean OVR") was written while the live league was 2036. audit-2 measured each reading on the p2g copy at
 2027 (report above):
@@ -137,7 +141,7 @@ as the fit does? audit-2 has put both questions to JR.
 - **Accept** the league term's design for the 2026 league. At its fitted size, +0.5 a year and about +1.1 over a
   rookie's first three years, it lifts the development of young players below 80 to roughly Madden's own rate.
   The real-career evidence does not argue against that.
-- **Follow-up (open, confirmed HIGH, audit-2's brief ready, waiting on JR's §4 ruling):** fix the target season (§3), then re-run the
+- **Follow-up (open, confirmed HIGH; JR ruled in §4, so the fix is ready to build):** fix the target season and the projected class (§3), then re-run the
   P3-02 fit against the fixed engine. In the first P5 shadow season, check the logged
   `player_progression_history.league_term`. **If the development term rises above +1.5 a year in any season,
   revisit the term.** That would be the 2036 pattern, where rookie classes fall far behind the departing
