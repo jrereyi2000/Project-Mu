@@ -40,8 +40,9 @@ Mu-side sources, per gate:
                            (season_stat_general, else player_stats games); the ledger's MOVED rows are not read
   A6 draft by round        draft_prospects actual picks linked to players; "started season" = 8+ games
                            started at the player's own position — depth 1 in his own slot, in a week his team
-                           played, in the chart in force for that team/week (the newest week <= that week,
-                           each slot JR > MU_COACH > MADDEN, §7 decision 12), not a week in any slot
+                           played, in the chart in force for that team/week (per slot, the newest week <=
+                           that week at which the slot has a player, JR > MU_COACH > MADDEN within it;
+                           (Y-1, 24-30) before (Y, 31-32) before week 1; §7 decision 12), not a week in any slot
   A7 rookie usage          first-season games of drafted skill players, excluding linemen (no stat line)
 
 Per-season count gates (A3 between seasons, A4 in-season trades, A5 team movement) are scored on a season's
@@ -457,20 +458,25 @@ def read_games_played(cur, seasons):
 def read_started_seasons(cur, season):
     """{player_id: set(seasons)} for seasons the player started at his own position (8+ games, chart in force).
 
-    The chart in force carries forward: for each completed regular-season team-week, the newest stored chart
-    week at or before it is read, and each slot at that week resolves JR > MU_COACH > MADDEN, so a NULL or
-    absent player at one source falls through to the next (JR's ruling, 2026-11-10/11). The fallback holds
-    within one chart week: a slot that no source charts at the week in force has no starter that week. Charts
-    stored under the season with week 31 or 32 — that year's cutdown and preseason, which record_written
-    files under the calendar year — sort before regular-season week 1; weeks 19-30 (postseason and
-    offseason) never reach a regular-season week. Every season through the report season is read in one
-    call, because A6 counts started seasons across a career, not only in the report season. Only depth 1 is
-    read. A week
-    counts only when his team played a regular-season game that week: a start is a game (nflverse
-    seasons_started), so a bye week's chart is not one. The player's own slot comes from his position that
-    season (player_seasons), mapped with OWN_SLOT; depth 1 in a situational or returner slot is a week on
-    that unit, not a start at his position. MADDEN is the chart read back from the save, the fallback when Mu
-    has not set the slot.
+    The chart in force is resolved per slot (JR's rulings, 2026-11-10/11). For each completed regular-season
+    team-week and each slot, the candidate charts, oldest first, are the previous season's weeks 24-30
+    (OFFSEASON_START through UDFA, stored under the old calendar year), then this season's weeks 31-32
+    (cutdown and preseason, stored under the new year), then this season's weeks 1-23. The newest candidate
+    week in which the slot has a depth-1, non-NULL player in any of JR / MU_COACH / MADDEN is the one in
+    force, and at that week the slot resolves JR > MU_COACH > MADDEN; a newer MADDEN-only week therefore beats
+    an older JR week. Candidate weeks after the team-week are ignored. The fallback carries across weeks: a
+    slot left empty in the newest chart week keeps the starter from the newest earlier chart week that filled
+    it (weeks 19-23 never reach a regular-season week, because a regular season ends by week 18).
+    Offseason charts count for the next season only: (Y-1, 24-30) is part of Y's pre-week-1 history, ordered
+    before (Y, 31-32) and week 1, and never credits a week in Y-1; there is no carry across more than one
+    season boundary. Charts stored under the season with week 31 or 32 — that year's cutdown and preseason,
+    which record_written files under the calendar year — sort before regular-season week 1. Every season
+    through the report season is read in one call, because A6 counts started seasons across a career, not
+    only in the report season. Only depth 1 is read. A week counts only when his team played a
+    regular-season game that week: a start is a game (nflverse seasons_started), so a bye week's chart is not
+    one. The player's own slot comes from his position that season (player_seasons), mapped with OWN_SLOT;
+    depth 1 in a situational or returner slot is a week on that unit, not a start at his position. MADDEN is
+    the chart read back from the save, the fallback when Mu has not set the slot.
     """
     rows = _fetch(cur, """
         WITH grid AS (
@@ -478,30 +484,28 @@ def read_started_seasons(cur, season):
               FROM games g
               CROSS JOIN LATERAL (VALUES (g.home_team_id), (g.away_team_id)) t(team_id)
              WHERE g.status = 'COMPLETED' AND g.game_type = 'REGULAR_SEASON' AND g.season <= %s
-        ), chart_weeks AS (
-            SELECT DISTINCT team_id, season, week,
-                   CASE WHEN week IN (31, 32) THEN week - 100 ELSE week END AS ord
+        ), chart_slots AS (
+            SELECT team_id,
+                   CASE WHEN week BETWEEN 24 AND 30 THEN season + 1 ELSE season END AS target_season,
+                   CASE WHEN week BETWEEN 24 AND 30 THEN week - 200
+                        WHEN week IN (31, 32) THEN week - 100
+                        ELSE week END AS ord,
+                   source, position_slot, player_id
               FROM depth_charts
-             WHERE season <= %s AND source IN ('JR', 'MU_COACH', 'MADDEN')
-        ), in_force AS (
-            SELECT gr.team_id, gr.season, gr.week, cw.week AS chart_week
-              FROM grid gr
-              JOIN LATERAL (
-                  SELECT c.week
-                    FROM chart_weeks c
-                   WHERE c.team_id = gr.team_id AND c.season = gr.season AND c.ord <= gr.week
-                   ORDER BY c.ord DESC
-                   LIMIT 1
-              ) cw ON true
+             WHERE depth = 1 AND player_id IS NOT NULL
+               AND source IN ('JR', 'MU_COACH', 'MADDEN')
+               AND season <= %s AND week BETWEEN 1 AND 32
         ), slot1 AS (
-            SELECT DISTINCT ON (f.team_id, f.season, f.week, dc.position_slot)
-                   f.team_id, f.season, f.week, dc.position_slot, dc.player_id, dc.source
-              FROM in_force f
-              JOIN depth_charts dc
-                ON dc.team_id = f.team_id AND dc.season = f.season AND dc.week = f.chart_week
-             WHERE dc.depth = 1 AND dc.player_id IS NOT NULL
-             ORDER BY f.team_id, f.season, f.week, dc.position_slot,
-                      CASE dc.source WHEN 'JR' THEN 0 WHEN 'MU_COACH' THEN 1 ELSE 2 END
+            SELECT DISTINCT ON (gr.team_id, gr.season, gr.week, cs.position_slot)
+                   gr.team_id, gr.season, gr.week, cs.position_slot, cs.player_id, cs.source
+              FROM grid gr
+              JOIN chart_slots cs
+                ON cs.team_id = gr.team_id
+               AND cs.target_season = gr.season
+               AND cs.ord <= gr.week
+             ORDER BY gr.team_id, gr.season, gr.week, cs.position_slot,
+                      cs.ord DESC,
+                      CASE cs.source WHEN 'JR' THEN 0 WHEN 'MU_COACH' THEN 1 ELSE 2 END
         )
         SELECT s.player_id, s.season, s.week, s.position_slot,
                CASE UPPER(ps.position) WHEN 'LEDG' THEN 'LE' WHEN 'REDG' THEN 'RE'
