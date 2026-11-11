@@ -17,12 +17,14 @@ a reason; that is a failure of the run's coverage, not a silent pass (the overal
 
 Mu-side sources, per gate:
   A1 career length         every career that had ended by the season: a retirement (player_retirements), or
-                           two consecutive seasons with no player_seasons row and no later signing, which
-                           reopens it (TUNING_ACCEPTANCE_THRESHOLDS.md §7 decision 11). Length is
-                           years_of_experience + 1, else distinct seasons; the drafted cohort from
-                           players.draft_round 1-7 (Madden's PLYR_DRAFTROUND, §7 decision 10), not
-                           draft_class/draft_picks
-  A2 retirement age        the age on the last season of that same cohort
+                           two consecutive seasons with no *signed* player_seasons row and no later signing,
+                           which reopens it (TUNING_ACCEPTANCE_THRESHOLDS.md §7 decision 11). A FreeAgent row
+                           has no team_id and is not a signing; a Signed/PracticeSquad row is. Length is
+                           years_of_experience + 1 over the signed seasons, else their distinct count; the
+                           drafted cohort from players.draft_round 1-7 (Madden's PLYR_DRAFTROUND, §7 decision
+                           10), not draft_class/draft_picks
+  A2 retirement age        the age on the last signed season of that same cohort (a retirement may be recorded
+                           a year after it)
   A3 head-coach changes    coach_tenures (head coaches only; coordinator_tenures is a different role); the
                            between-seasons count is measured only when that season's hiring cycle ran
                            (coach_hot_seat rows exist)
@@ -33,8 +35,8 @@ Mu-side sources, per gate:
                            (season_stat_general, else player_stats games); the ledger's MOVED rows are not read
   A6 draft by round        draft_prospects actual picks linked to players; "started season" = 8+ games
                            started at the player's own position — depth 1 in his own slot, in a week his team
-                           played, in the depth charts Mu's coaches or JR set (§7 decision 12), not a week in
-                           any slot
+                           played, in the chart in force for that team/week (JR's chart beats MU_COACH's,
+                           §7 decision 12), not a week in any slot
   A7 rookie usage          first-season games of drafted skill players, excluding linemen (no stat line)
 
 Per-season count gates (A3 between seasons, A4 in-season trades, A5 team movement) are scored on a season's
@@ -72,7 +74,7 @@ ROOKIE_MEDIAN_TOL = 2.0                   # A7: median games +/-2
 LONG_MEDIAN_GROUPS = ("QB", "K", "P")
 STARTED_SEASON_WEEKS = 8                  # §7 decision 12: a started season is 8+ games started at his position
 STARTED_SOURCES = ("MU_COACH", "JR")      # the charts Mu's coaches and JR set; MADDEN is what was read back
-UNSIGNED_SEASONS_END_CAREER = 2           # §7 decision 11: two consecutive seasons with no roster row end it
+UNSIGNED_SEASONS_END_CAREER = 2           # §7 decision 11: two consecutive seasons with no signed row end it
 
 # Madden 27 positions -> decision_targets' position groups (D.group_of handles the nflverse spellings)
 MU_GROUPS = {
@@ -448,27 +450,44 @@ def read_games_played(cur, seasons):
 
 
 def read_started_seasons(cur, season):
-    """{player_id: set(seasons)} for seasons the player started at his own position (8+ games, MU_COACH/JR).
+    """{player_id: set(seasons)} for seasons the player started at his own position (8+ games, chart in force).
+
+    The chart in force is selected first, per team/season/week: JR's chart beats MU_COACH's for that week
+    (the precedence pipeline/drift_check.py and engines/inbox/kinds/role_talk.py already use), so an
+    overridden starter never earns a start alongside the man who replaced him. Only depth 1 in the chart in
+    force is read; a slot JR cleared in a chart that is in force has no starter, and MU_COACH's chart for
+    that week is not consulted for it. Each week stands alone: a missing weekly write is not carried forward.
 
     The player's own slot comes from his position that season (player_seasons), mapped with OWN_SLOT; the
     depth chart's position_slot must name that same slot. Depth 1 in a situational or returner slot is a
     week on that unit, not a start at his position. A week counts only when his team played a regular-season
-    game that week: a start is a game (nflverse seasons_started), so a bye week's chart is not one.
+    game that week: a start is a game (nflverse seasons_started), so a bye week's chart is not one. MADDEN is
+    the chart read back from the save, what played rather than what was planned, so it is not read here.
     """
     rows = _fetch(cur, """
+        WITH chart_source AS (
+            SELECT team_id, season, week,
+                   CASE WHEN bool_or(source = 'JR') THEN 'JR' ELSE 'MU_COACH' END AS source
+              FROM depth_charts
+             WHERE season <= %s AND source IN ('MU_COACH', 'JR')
+             GROUP BY team_id, season, week
+        )
         SELECT dc.player_id, dc.season, dc.week, dc.position_slot,
                CASE UPPER(ps.position) WHEN 'LEDG' THEN 'LE' WHEN 'REDG' THEN 'RE'
                     WHEN 'MIKE' THEN 'MLB' WHEN 'WILL' THEN 'ROLB' WHEN 'SAM' THEN 'LOLB'
                     WHEN 'RB' THEN 'HB' ELSE UPPER(ps.position) END AS own_slot,
                dc.source
           FROM depth_charts dc
+          JOIN chart_source cs
+                 ON cs.team_id = dc.team_id AND cs.season = dc.season AND cs.week = dc.week
+                AND cs.source = dc.source
           JOIN player_seasons ps
                  ON ps.player_id = dc.player_id AND ps.season = dc.season
           JOIN games g
                  ON g.season = dc.season AND g.week = dc.week
                 AND g.status = 'COMPLETED' AND g.game_type = 'REGULAR_SEASON'
                 AND dc.team_id IN (g.home_team_id, g.away_team_id)
-         WHERE dc.depth = 1 AND dc.player_id IS NOT NULL AND dc.season <= %s
+         WHERE dc.depth = 1 AND dc.player_id IS NOT NULL
            AND dc.source IN ('MU_COACH', 'JR')""", (season,))
     return started_seasons(rows)
 
@@ -492,16 +511,20 @@ def read_draft_rows(cur, season):
     return [r for r in rows if str(r[2] or "").strip() in {str(i) for i in range(1, 8)}]
 
 
-# A career ends at a retirement, or after UNSIGNED_SEASONS_END_CAREER consecutive seasons with no roster row
-# (no player_seasons row) and no later signing — a later signing reopens it (TUNING_ACCEPTANCE_THRESHOLDS.md
-# §7 decision 11). The last active season is the end of the unsigned route; a retirement keeps its own season,
-# but only while no roster row follows it. Both readers share this CTE; its second parameter is the cutoff
-# `season - UNSIGNED_SEASONS_END_CAREER`.
+# A career ends at a retirement, or after UNSIGNED_SEASONS_END_CAREER consecutive seasons with no *signed*
+# player_seasons row and no later signing — a later signing reopens it (TUNING_ACCEPTANCE_THRESHOLDS.md §7
+# decision 11). Only a Signed/PracticeSquad row has a team_id: load_players writes a FreeAgent row with NULL
+# team_id every season (pipeline/load_save.py), and that is not a season on a roster. `ended` holds exactly one
+# row per player: the endpoint is the retirement season when there is one (preferred over the unsigned
+# inference) and the last signed season otherwise, while `last_season` is always the latest signed season at or
+# before that endpoint, the common position/age snapshot both readers share. A retirement keeps its own season
+# only while no signed row follows it, and a signing after it reopens the career. Its second parameter is the
+# cutoff `season - UNSIGNED_SEASONS_END_CAREER`.
 _ENDED_CAREERS = """
 WITH last_active AS (
     SELECT player_id, max(season) AS last_season
       FROM player_seasons
-     WHERE player_id IS NOT NULL
+     WHERE player_id IS NOT NULL AND team_id IS NOT NULL
      GROUP BY player_id
 ), retired AS (
     SELECT player_id, max(season) AS end_season
@@ -509,12 +532,14 @@ WITH last_active AS (
      WHERE season <= %s AND player_id IS NOT NULL
      GROUP BY player_id
 ), ended AS (
-    SELECT la.player_id, r.end_season
-      FROM retired r
-      JOIN last_active la ON la.player_id = r.player_id
-     WHERE la.last_season <= r.end_season
-    UNION
-    SELECT player_id, last_season FROM last_active WHERE last_season <= %s
+    SELECT la.player_id,
+           CASE WHEN r.end_season IS NOT NULL AND la.last_season <= r.end_season
+                THEN r.end_season ELSE la.last_season END AS end_season,
+           la.last_season
+      FROM last_active la
+      LEFT JOIN retired r ON r.player_id = la.player_id
+     WHERE (r.end_season IS NOT NULL AND la.last_season <= r.end_season)
+        OR la.last_season <= %s
 )
 """
 
@@ -522,24 +547,32 @@ WITH last_active AS (
 def read_career_rows(cur, season):
     """[(player_id, end_season, row_season, position, yoe)] for every career ended by `season`.
 
-    The population is retirements plus unsigned free agents (two consecutive seasons with no roster row),
-    which is what the real A1/A2 cohort is; a signing after the gap reopens the career, so his last active
-    season moves with it.
+    The population is retirements plus unsigned free agents (two consecutive seasons with no signed roster
+    row), which is what the real A1/A2 cohort is; a signing after the gap reopens the career, so his last
+    active season moves with it. `end_season` is the endpoint the career ended at (a retirement year can be
+    later than the last signed season); `row_season` is always a signed season at or before it, so a
+    FreeAgent year cannot add years of experience or a position.
     """
     return _fetch(cur, _ENDED_CAREERS + """
         SELECT e.player_id, e.end_season, ps.season, ps.position, ps.years_of_experience
           FROM ended e
           JOIN player_seasons ps ON ps.player_id = e.player_id AND ps.season <= e.end_season
+                                AND ps.team_id IS NOT NULL
          ORDER BY e.player_id, ps.season""",
                   (season, season - UNSIGNED_SEASONS_END_CAREER))
 
 
 def read_retirement_rows(cur, season):
-    """[(player_id, end_season, position, age)] for every career ended by `season` (the same population)."""
+    """[(player_id, end_season, position, age)] for every career ended by `season` (the same population).
+
+    Exactly one row per ended player: position and age come from his latest signed season (the shared
+    `last_season`), not from the endpoint year, so a retirement recorded a year after the last roster
+    snapshot still reports that snapshot's age.
+    """
     return _fetch(cur, _ENDED_CAREERS + """
         SELECT e.player_id, e.end_season, ps.position, ps.age
           FROM ended e
-          LEFT JOIN player_seasons ps ON ps.player_id = e.player_id AND ps.season = e.end_season""",
+          JOIN player_seasons ps ON ps.player_id = e.player_id AND ps.season = e.last_season""",
                   (season, season - UNSIGNED_SEASONS_END_CAREER))
 
 

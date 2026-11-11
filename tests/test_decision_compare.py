@@ -851,21 +851,29 @@ def test_a_started_season_is_eight_weeks_at_his_own_position_in_postgres():
 @pytest.mark.integration
 def test_an_unsigned_free_agent_ends_a_career_after_two_empty_seasons_in_postgres():
     """F5/§7 decision 11 on real Postgres, rolled back: a career ends at a retirement or after two
-    consecutive seasons with no roster row; one empty season is not enough and a later signing reopens it.
-    A1 length and A2 age both use this population."""
+    consecutive seasons with no signed roster row; one empty season is not enough and a later signing
+    reopens it. A1 length and A2 age both use this population."""
     import psycopg
     dsn = _scratch_dsn()
     with psycopg.connect(dsn) as conn:
         cur = conn.cursor()
         try:
+            cur.execute("SELECT id FROM teams ORDER BY id LIMIT 1")
+            pair = cur.fetchone()
+            if not pair:
+                pytest.skip("the scratch database has no teams")
+            team = pair[0]
+
             def player(name):
                 cur.execute("INSERT INTO players (player_name) VALUES (%s) RETURNING id", (name,))
                 return cur.fetchone()[0]
 
             def season(pid, season, position, age, yoe):
+                # a signed season: load_players writes a FreeAgent year with team_id NULL instead
                 cur.execute("INSERT INTO player_seasons "
-                            "(player_id, season, position, age, years_of_experience) "
-                            "VALUES (%s, %s, %s, %s, %s)", (pid, season, position, age, yoe))
+                            "(player_id, season, team_id, position, age, years_of_experience) "
+                            "VALUES (%s, %s, %s, %s, %s, %s)",
+                            (pid, season, team, position, age, yoe))
 
             unsigned = player("Unsigned Free Agent")
             season(unsigned, 2027, "WR", 24, 0)
@@ -903,5 +911,259 @@ def test_an_unsigned_free_agent_ends_a_career_after_two_empty_seasons_in_postgre
             assert ages_by_pid[unsigned] == (2028, "WR", 25)
             assert ages_by_pid[retired] == (2028, "HB", 28)
             assert one_empty not in ages_by_pid and comeback not in ages_by_pid
+        finally:
+            conn.rollback()
+
+
+# ------------------------------------------------------------------ P3-07 audit R1/R2/R3
+
+@pytest.mark.integration
+def test_free_agent_rows_do_not_keep_an_unsigned_career_alive_in_postgres():
+    """R1: load_players writes a FreeAgent player_seasons row with NULL team_id every season, so a season
+    with no team is not a signing. A signed 2037/2038 career with FreeAgent rows in 2039/2040 ends in 2038
+    (A1 length 2, A2 age from the 2038 signed snapshot); one unsigned year is not yet ended; a later
+    Signed or PracticeSquad row reopens it; a retirement followed only by FreeAgent rows stays ended; and
+    NULL-team years of experience never lengthen a career. Every row rolled back."""
+    import psycopg
+
+    from pipeline import load_save
+
+    dsn = _scratch_dsn()
+    with psycopg.connect(dsn) as conn:
+        cur = conn.cursor()
+        try:
+            cur.execute("SELECT id FROM teams ORDER BY id LIMIT 1")
+            pair = cur.fetchone()
+            if not pair:
+                pytest.skip("the scratch database has no teams")
+            team = pair[0]
+
+            def snapshot(pgid, first, last, status, age, yoe):
+                return {"players": [{
+                    "pgid": pgid, "status": status, "first_name": first, "last_name": last,
+                    "team_index": 0 if status != "FreeAgent" else load_save.FREE_AGENT_TEAM_INDEX,
+                    "position": "WR", "age": age, "overall": 70, "years_pro": yoe,
+                    "height_in": 72, "weight_lbs": 205, "jersey": 11,
+                    "dev_trait": "Normal", "archetype": "WR_DeepThreat"}]}
+
+            def load(pgid, first, last, status, season, age, yoe):
+                load_save.load_players(cur, snapshot(pgid, first, last, status, age, yoe), season,
+                                       {0: team}, {})
+
+            def pid_of(pgid):
+                cur.execute("SELECT id FROM players WHERE madden_pgid = %s", (pgid,))
+                return cur.fetchone()[0]
+
+            # the ingestion shape: two Signed seasons, then two FreeAgent rows with no team
+            load(9_700_001, "R1", "Gap", "Signed", 2037, 24, 0)
+            load(9_700_001, "R1", "Gap", "Signed", 2038, 25, 1)
+            load(9_700_001, "R1", "Gap", "FreeAgent", 2039, 26, 2)
+            load(9_700_001, "R1", "Gap", "FreeAgent", 2040, 27, 3)
+            gap = pid_of(9_700_001)
+
+            # the same shape, then a later genuine roster row: Signed, and PracticeSquad
+            for pgid, status, first in ((9_700_002, "Signed", "R1"), (9_700_003, "PracticeSquad", "R1")):
+                load(pgid, first, " Comeback", "Signed", 2037, 24, 0)
+                load(pgid, first, " Comeback", "Signed", 2038, 25, 1)
+                load(pgid, first, " Comeback", "FreeAgent", 2039, 26, 2)
+                load(pgid, first, " Comeback", "FreeAgent", 2040, 27, 3)
+                load(pgid, first, " Comeback", status, 2041, 28, 4)
+            signed_back = pid_of(9_700_002)
+            practice_back = pid_of(9_700_003)
+
+            # an announced retirement followed only by FreeAgent rows
+            load(9_700_004, "R1", "Retired With FAs", "Signed", 2037, 24, 0)
+            load(9_700_004, "R1", "Retired With FAs", "Signed", 2038, 25, 1)
+            retired = pid_of(9_700_004)
+            cur.execute("INSERT INTO player_retirements (season, player_id, player_name, position) "
+                        "VALUES (2039, %s, 'R1 Retired With FAs', 'WR')", (retired,))
+            load(9_700_004, "R1", "Retired With FAs", "FreeAgent", 2039, 26, 2)
+            load(9_700_004, "R1", "Retired With FAs", "FreeAgent", 2040, 27, 3)
+
+            assert gap not in {r[0] for r in C.read_career_rows(cur, 2039)}   # one unsigned year is not two
+
+            careers = [r for r in C.read_career_rows(cur, 2041) if r[0] == gap]
+            assert [(r[1], r[2], r[3], r[4]) for r in careers] == \
+                [(2038, 2037, "WR", 0), (2038, 2038, "WR", 1)]
+            ages = [r for r in C.read_retirement_rows(cur, 2041) if r[0] == gap]
+            assert ages == [(gap, 2038, "WR", 25)]                            # the signed snapshot, not a FA year
+            lengths = C.career_lengths(careers, {gap})
+            assert lengths["drafted"]["WR"]["n"] == 1
+            assert max(r[4] for r in careers) + 1 == 2                        # max signed YoE 1 + 1, never 3 + 1
+            age_bands = C.retirement_ages(ages, {gap})
+            assert age_bands["drafted"]["WR"]["n"] == 1
+
+            # the later NULL-team rows did not reopen him (the endpoint above is still 2038), but a later
+            # Signed or PracticeSquad row does reopen
+            assert signed_back not in {r[0] for r in C.read_career_rows(cur, 2041)}
+            assert practice_back not in {r[0] for r in C.read_career_rows(cur, 2041)}
+            assert signed_back not in {r[0] for r in C.read_retirement_rows(cur, 2041)}
+            assert practice_back not in {r[0] for r in C.read_retirement_rows(cur, 2041)}
+
+            # a retirement is preferred over the unsigned inference and survives the FA rows after it
+            retired_careers = [r for r in C.read_career_rows(cur, 2041) if r[0] == retired]
+            assert [(r[1], r[2]) for r in retired_careers] == [(2039, 2037), (2039, 2038)]
+            retired_ages = [r for r in C.read_retirement_rows(cur, 2041) if r[0] == retired]
+            assert retired_ages == [(retired, 2039, "WR", 25)]
+        finally:
+            conn.rollback()
+
+
+@pytest.mark.integration
+def test_the_chart_in_force_decides_one_starter_per_slot_in_postgres():
+    """R2/§7 decision 12 on real Postgres, rolled back: the chart in force is chosen first (JR's chart for a
+    team/week beats MU_COACH's), then depth 1 in the player's own slot counts. A JR override of Mu's starter
+    gives only the JR man the start; switching JR's starter away after seven weeks gives nobody an eighth; a
+    mapped defensive slot behaves the same; and a slot JR cleared has no starter even though Mu's chart
+    still names one. MADDEN is not read back here (the open M-0347 question)."""
+    import psycopg
+    dsn = _scratch_dsn()
+    with psycopg.connect(dsn) as conn:
+        cur = conn.cursor()
+        try:
+            cur.execute("SELECT id FROM teams ORDER BY id LIMIT 4")
+            teams = [r[0] for r in cur.fetchall()]
+            if len(teams) < 4:
+                pytest.skip("the scratch database has fewer than four teams")
+
+            def player(name):
+                cur.execute("INSERT INTO players (player_name) VALUES (%s) RETURNING id", (name,))
+                return cur.fetchone()[0]
+
+            def roster(pid, team_id, position):
+                cur.execute("INSERT INTO player_seasons (player_id, season, team_id, position) "
+                            "VALUES (%s, 2033, %s, %s)", (pid, team_id, position))
+
+            def chart(team_id, pid, week, slot, source):
+                cur.execute("INSERT INTO depth_charts "
+                            "(team_id, season, week, position_slot, depth, player_id, source) "
+                            "VALUES (%s, 2033, %s, %s, 1, %s, %s)", (team_id, week, slot, pid, source))
+
+            def game(home, away, week):
+                cur.execute("INSERT INTO games (season, week, home_team_id, away_team_id) "
+                            "VALUES (2033, %s, %s, %s)", (week, home, away))
+
+            for week in range(1, 9):
+                game(teams[0], teams[1], week)
+                game(teams[2], teams[3], week)
+
+            # team 0, WR: JR overrides Mu's starter for all eight weeks
+            mu_override = player("R2 MU WR Starter")
+            jr_override = player("R2 JR WR Starter")
+            for pid in (mu_override, jr_override):
+                roster(pid, teams[0], "WR")
+            for week in range(1, 9):
+                chart(teams[0], mu_override, week, "WR", "MU_COACH")
+                chart(teams[0], jr_override, week, "WR", "JR")
+
+            # team 1, WR: JR starts his man for seven weeks, then switches away in week 8
+            mu_switch = player("R2 MU WR Still There")
+            jr_seven = player("R2 JR WR Seven Weeks")
+            jr_switch = player("R2 JR WR Week Eight")
+            for pid in (mu_switch, jr_seven, jr_switch):
+                roster(pid, teams[1], "WR")
+            for week in range(1, 8):
+                chart(teams[1], mu_switch, week, "WR", "MU_COACH")
+                chart(teams[1], jr_seven, week, "WR", "JR")
+            chart(teams[1], mu_switch, 8, "WR", "MU_COACH")
+            chart(teams[1], jr_switch, 8, "WR", "JR")
+
+            # team 0, a mapped defensive slot: roster LEDG -> depth-chart slot LE
+            mu_edge = player("R2 MU Edge Starter")
+            jr_edge = player("R2 JR Edge Starter")
+            for pid in (mu_edge, jr_edge):
+                roster(pid, teams[0], "LEDG")
+            for week in range(1, 9):
+                chart(teams[0], mu_edge, week, "LE", "MU_COACH")
+                chart(teams[0], jr_edge, week, "LE", "JR")
+
+            # team 2: JR's chart is in force but has no WR depth 1 (cleared); Mu's chart still names one
+            mu_cleared = player("R2 MU WR Cleared Slot")
+            jr_te = player("R2 JR TE In Force")
+            roster(mu_cleared, teams[2], "WR")
+            roster(jr_te, teams[2], "TE")
+            for week in range(1, 9):
+                chart(teams[2], mu_cleared, week, "WR", "MU_COACH")
+                chart(teams[2], jr_te, week, "TE", "JR")
+
+            got = C.read_started_seasons(cur, 2033)
+            assert got.get(jr_override) == {2033}       # the JR man, not Mu's overridden starter
+            assert mu_override not in got
+            assert jr_seven not in got                  # seven starts are not a started season
+            assert jr_switch not in got and mu_switch not in got   # switching away gives Mu no eighth
+            assert got.get(jr_edge) == {2033}           # the mapped defensive slot
+            assert mu_edge not in got
+            assert got.get(jr_te) == {2033}             # JR's chart is in force for team 2
+            assert mu_cleared not in got                # ... and the slot JR cleared has no starter
+        finally:
+            conn.rollback()
+
+
+@pytest.mark.integration
+def test_one_ended_row_per_player_when_retirement_follows_the_last_signed_season_in_postgres():
+    """R3 on real Postgres, rolled back: a retirement recorded after the last signed season (2039 after
+    2038) gives exactly one ended row per player whose position and age come from that last signed season,
+    and A1/A2 agree at reports 2039, 2040 and 2041. A retirement-year FreeAgent row does not replace the
+    snapshot, and a genuine later comeback moves the endpoint instead of leaving the old retirement."""
+    import psycopg
+    dsn = _scratch_dsn()
+    with psycopg.connect(dsn) as conn:
+        cur = conn.cursor()
+        try:
+            cur.execute("SELECT id FROM teams ORDER BY id LIMIT 1")
+            pair = cur.fetchone()
+            if not pair:
+                pytest.skip("the scratch database has no teams")
+            team = pair[0]
+
+            def player(name):
+                cur.execute("INSERT INTO players (player_name) VALUES (%s) RETURNING id", (name,))
+                return cur.fetchone()[0]
+
+            def season(pid, year, position, age, yoe, team_id=team):
+                cur.execute("INSERT INTO player_seasons "
+                            "(player_id, season, team_id, position, age, years_of_experience) "
+                            "VALUES (%s, %s, %s, %s, %s, %s)", (pid, year, team_id, position, age, yoe))
+
+            def retire(pid, year, name, position="WR"):
+                cur.execute("INSERT INTO player_retirements (season, player_id, player_name, position) "
+                            "VALUES (%s, %s, %s, %s)", (year, pid, name, position))
+
+            late = player("R3 Retired After Last Season")
+            season(late, 2037, "WR", 26, 4)
+            season(late, 2038, "WR", 27, 5)
+            retire(late, 2039, "R3 Retired After Last Season")
+
+            for report in (2039, 2040, 2041):
+                careers = [r for r in C.read_career_rows(cur, report) if r[0] == late]
+                ages = [r for r in C.read_retirement_rows(cur, report) if r[0] == late]
+                assert careers == [(late, 2039, 2037, "WR", 4), (late, 2039, 2038, "WR", 5)], report
+                assert ages == [(late, 2039, "WR", 27)], report
+                assert C.career_lengths(careers, {late})["drafted"]["WR"]["n"] == 1
+                assert max(r[4] for r in careers) + 1 == 6
+                assert C.retirement_ages(ages, {late})["drafted"]["WR"]["n"] == 1
+
+            # the retirement year's own player_seasons row is a FreeAgent row: no team, no snapshot
+            fa = player("R3 Retired With FreeAgent Year")
+            season(fa, 2038, "WR", 27, 5)
+            retire(fa, 2039, "R3 Retired With FreeAgent Year")
+            season(fa, 2039, "WR", 28, 6, team_id=None)
+            for report in (2039, 2041):
+                assert [r for r in C.read_career_rows(cur, report) if r[0] == fa] == \
+                    [(fa, 2039, 2038, "WR", 5)], report
+                assert [r for r in C.read_retirement_rows(cur, report) if r[0] == fa] == \
+                    [(fa, 2039, "WR", 27)], report
+
+            # a genuine later signing reopens the career: the endpoint moves to the last signed season
+            back = player("R3 Retired Then Came Back")
+            season(back, 2038, "WR", 27, 5)
+            retire(back, 2039, "R3 Retired Then Came Back")
+            season(back, 2041, "WR", 30, 7)
+            assert back not in {r[0] for r in C.read_career_rows(cur, 2041)}
+            assert back not in {r[0] for r in C.read_retirement_rows(cur, 2041)}
+            assert [r for r in C.read_career_rows(cur, 2043) if r[0] == back] == \
+                [(back, 2041, 2038, "WR", 5), (back, 2041, 2041, "WR", 7)]
+            assert [r for r in C.read_retirement_rows(cur, 2043) if r[0] == back] == \
+                [(back, 2041, "WR", 30)]
         finally:
             conn.rollback()
