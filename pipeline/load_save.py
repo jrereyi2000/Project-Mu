@@ -817,7 +817,7 @@ def career_counter_values(career):
 def load_career_counters(cur, snapshot, season, players, capture_id, report):
     """One player_career_counters row per matched player per weekly load. Madden's career totals include real-NFL
     history, so each row is a high-water mark the player_week_counters view differences against the previous load
-    (docs/in_progress/MADDEN_STATS_INGEST_PLAN.md §2.3): week 0 off-season (current_week has no week there), and a
+    (docs/done/MADDEN_STATS_INGEST_PLAN.md §2.3): week 0 off-season (current_week has no week there), and a
     reload of the same week replaces its row. A database without the migration reports `table missing` and writes
     nothing, so a load against an older schema still succeeds."""
     if snapshot.get("meta", {}).get("reader_version", 0) < CAREER_COUNTERS_READER_VERSION:

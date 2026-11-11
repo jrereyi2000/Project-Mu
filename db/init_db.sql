@@ -3850,7 +3850,7 @@ CREATE TABLE IF NOT EXISTS award_ballots (
 
 -- ---------------------------------------------------------------------------
 -- Madden stat counters (db/migrations/2027_02_25_madden_stat_counters.sql,
--- docs/in_progress/MADDEN_STATS_INGEST_PLAN.md U2 §2.2)
+-- docs/done/MADDEN_STATS_INGEST_PLAN.md U2 §2.2)
 -- ---------------------------------------------------------------------------
 
 -- Madden's career totals at each weekly load (raw Career*Stats fields). Only differences between rows mean anything.

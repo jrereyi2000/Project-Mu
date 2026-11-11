@@ -1,4 +1,4 @@
--- Madden stat counters (docs/in_progress/MADDEN_STATS_INGEST_PLAN.md U2, §2.2): the six counters the save reader
+-- Madden stat counters (docs/done/MADDEN_STATS_INGEST_PLAN.md U2, §2.2): the six counters the save reader
 -- already copies and the loader used to drop, plus Madden's career totals stored at every weekly load. Only
 -- differences between career rows mean anything (the totals start from real-NFL history), so the views turn them
 -- into per-week and per-season deltas with a status where the delta is unknown (a career-table change or a reset).
