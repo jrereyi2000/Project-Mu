@@ -4040,6 +4040,58 @@ FROM coverage c
 LEFT JOIN summed s ON s.season = c.season AND s.player_id = c.player_id;
 
 -- ---------------------------------------------------------------------------
+-- NFL weekly mirror (db/migrations/2027_02_26_nfl_mirror.sql,
+-- docs/in_progress/NFL_WEEKLY_MIRROR_PLAN.md §2.1, §2.4)
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS nfl_mirror_settings (    -- one row: is the mirror on, for which season, through which week
+    id                    SMALLINT PRIMARY KEY CHECK (id = 1),
+    enabled               BOOLEAN NOT NULL DEFAULT false,
+    season                INT NOT NULL DEFAULT 2026,
+    last_week             INT,                       -- NULL = through the Super Bowl (Mu week numbers)
+    madden_injuries_field JSONB,                     -- Spike A: {"table", "tableId", "row", "field", "off", "on"}
+    injuries_state        VARCHAR(8) NOT NULL DEFAULT 'ON' CHECK (injuries_state IN ('ON', 'OFF')),
+    updated_at            TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+INSERT INTO nfl_mirror_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS nfl_mirror_weeks (       -- one row per mirrored Mu week
+    season     INT NOT NULL,
+    week       INT NOT NULL,                         -- Mu week (playoffs 19/20/21/23)
+    real_week  INT,                                  -- nflverse week (playoffs 19-22)
+    mode       VARCHAR(8) CHECK (mode IN ('CATCH_UP', 'LIVE')),
+    sources    JSONB NOT NULL DEFAULT '{}',          -- {file name: sha256}
+    counts     JSONB NOT NULL DEFAULT '{}',          -- moves per kind
+    run_id     INT REFERENCES league_office_runs(id) ON DELETE SET NULL,
+    status     VARCHAR(10) NOT NULL DEFAULT 'PLANNED' CHECK (status IN ('PLANNED', 'WRITTEN', 'FAILED')),
+    report     TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (season, week)
+);
+
+CREATE TABLE IF NOT EXISTS nfl_mirror_moves (       -- every move the mirror planned for a week, and what became of it
+    id           SERIAL PRIMARY KEY,
+    season       INT NOT NULL,
+    week         INT NOT NULL,
+    kind         VARCHAR(10) NOT NULL CHECK (kind IN ('SIGN', 'RELEASE', 'TRADE', 'PS', 'IR', 'ACTIVATE', 'INJURY',
+                                                      'HEAL', 'CREATE', 'CHART', 'STAFF', 'SETTING')),
+    gsis_id      TEXT,
+    player_id    INT REFERENCES players(id) ON DELETE SET NULL,
+    pgid         INT,
+    from_team_id INT REFERENCES teams(id),
+    to_team_id   INT REFERENCES teams(id),
+    detail       JSONB NOT NULL DEFAULT '{}',
+    status       VARCHAR(10) NOT NULL DEFAULT 'PLANNED' CHECK (status IN ('PLANNED', 'WRITTEN', 'SKIPPED', 'REFUSED')),
+    reason       TEXT
+);
+CREATE INDEX IF NOT EXISTS nfl_mirror_moves_week ON nfl_mirror_moves (season, week);
+
+-- A player the mirror created in the save is linked to his real person as 'CREATED'.
+ALTER TABLE nfl_player_links DROP CONSTRAINT IF EXISTS nfl_player_links_method_check;
+ALTER TABLE nfl_player_links ADD CONSTRAINT nfl_player_links_method_check
+    CHECK (method IN ('EXACT', 'ESPN', 'ALIAS', 'FUZZY', 'OVERRIDE', 'CREATED'));
+
+-- ---------------------------------------------------------------------------
 -- Migration ledger (schema_migrations; db/migrate.py)
 -- ---------------------------------------------------------------------------
 
@@ -4198,5 +4250,6 @@ INSERT INTO schema_migrations (version, filename, checksum, source) VALUES
     ('2027_02_23_player_stats_team_key', '2027_02_23_player_stats_team_key.sql', '7f5e8241f0e83d35385a272e5c8d7f34ddd3f0f7a68d99f0d51ad635a84fdeab', 'init_db.sql'),
     ('2027_02_24_player_draft_facts', '2027_02_24_player_draft_facts.sql', '08c2e353ebc2e27ac4c83ab23aa38eae32a111dd08d8e528b3ad9b0f79f36afa', 'init_db.sql'),
     ('2027_02_25_madden_stat_counters', '2027_02_25_madden_stat_counters.sql', '4947d8696109ff912f6ec9735f9543a31068a3e1ca05e222adbd6a8f7aa92766', 'init_db.sql'),
-    ('2027_02_26_league_shape_season', '2027_02_26_league_shape_season.sql', 'c953582968fad1e0de03b4fdde23627ab21d23e7f42e0612a63e7dcd45f45026', 'init_db.sql')
+    ('2027_02_26_league_shape_season', '2027_02_26_league_shape_season.sql', 'c953582968fad1e0de03b4fdde23627ab21d23e7f42e0612a63e7dcd45f45026', 'init_db.sql'),
+    ('2027_02_26_nfl_mirror', '2027_02_26_nfl_mirror.sql', 'e16c70ce2d289c0d163a645373057cc112feeb2fda79c7681b233ade0afc2c87', 'init_db.sql')
 ON CONFLICT (version) DO NOTHING;
