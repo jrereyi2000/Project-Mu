@@ -4,7 +4,10 @@ EA's public ratings page (`https://www.ea.com/games/madden-nfl/ratings?page=N`) 
 iteration in its Next.js ``__NEXT_DATA__`` blob: ``props.pageProps.ratingDetails`` holds 100 players per page and a
 ``totalItems`` count.  ``fetch_iteration`` walks pages until one adds no new ids, waits 1.5 s between pages, and
 caches the merged item list at ``data/history/.cache/ea_m27_<iteration>.json`` with its sha256.  The iteration id
-(``madden-ratings-week-8``) is read from the page, never assumed.
+(``madden-ratings-week-8``) is read from the page, never assumed, and every later page and item must report that
+same iteration: a refresh that meets another week's page refuses instead of caching two iterations under one id,
+and a failed refresh leaves an existing cache file untouched (it is written to a temporary file and only then
+swapped in).
 
 The rest is pure and testable from ``tests/fixtures/ea_ratings_page.json``:
 
@@ -162,14 +165,34 @@ def parse_page(html):
     return {"iteration": _iteration(items), "total": details.get("totalItems"), "items": items}
 
 
+def _item_iteration(item):
+    """One EA item's iteration id: ``iteration`` is either the id or a ``{"id", "label"}`` object."""
+    iteration = item.get("iteration") if isinstance(item, dict) else None
+    if isinstance(iteration, dict):
+        iteration = iteration.get("id")
+    return str(iteration).strip() if iteration else None
+
+
 def _iteration(items):
     for item in items or ():
-        iteration = item.get("iteration")
-        if isinstance(iteration, dict):
-            iteration = iteration.get("id")
+        iteration = _item_iteration(item)
         if iteration:
             return iteration
     return None
+
+
+def _validate_iteration(items, iteration, page):
+    """Refuse a page carrying another iteration's items (audit M-0509 F1).
+
+    EA can publish a new weekly iteration between two page requests, and a later page's players would otherwise
+    be cached under the first page's id, permanently rating created players from a mixed-week source.  Every
+    readable item iteration must agree with the refresh's iteration; an item with no iteration id cannot disagree.
+    """
+    other = sorted({_item_iteration(item) for item in items or ()} - {None, iteration})
+    if other:
+        raise RuntimeError(
+            f"EA ratings page {page} carries iteration {', '.join(other)} but the refresh is {iteration}; "
+            "refusing to cache two iterations under one id")
 
 
 def _validate_page(parsed, page):
@@ -196,7 +219,9 @@ def fetch_iteration(refresh=False):
 
     With `refresh` false an existing cache is returned without a request.  Otherwise pages are read until one adds
     no new player id (or `totalItems` is reached), and the merged list is cached as
-    `data/history/.cache/ea_m27_<iteration>.json`.
+    `data/history/.cache/ea_m27_<iteration>.json`.  Every page and item must carry the first page's iteration; a
+    page from another iteration refuses the refresh, and because the cache is written last (to a temporary file,
+    then replaced) a failed refresh never damages an existing cache file.
     """
     os.makedirs(CACHE_DIR, exist_ok=True)
     if not refresh:
@@ -212,6 +237,7 @@ def fetch_iteration(refresh=False):
         _validate_page(parsed, page)
         if page == 1:
             iteration, total = parsed["iteration"], parsed["total"]
+        _validate_iteration(parsed["items"], iteration, page)
         new = [item for item in parsed["items"] if _item_id(item) not in seen]
         if not new:
             break
