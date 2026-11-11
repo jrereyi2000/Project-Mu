@@ -4,7 +4,7 @@ A guarded way to explore a Madden 27 screen the pilot's catalog doesn't know, wi
 One fresh session runs one written brief against the game under a code guard
 (`tools/madden_pilot/spike.py`), captures frames and clips, runs fixed pixel checks, and posts a
 structured report back to whoever asked. The plan behind it is
-[`MADDEN_SPIKE_AGENT_PLAN.md`](../done/MADDEN_SPIKE_AGENT_PLAN.md) (moved to `docs/done/` when built).
+[`MADDEN_SPIKE_AGENT_PLAN.md`](../done/MADDEN_SPIKE_AGENT_PLAN.md).
 
 The pilot itself is unchanged: it stops on an unknown screen by design. A spike goes past the
 catalog, and the requester folds whatever it found back into `catalog.json` afterwards. The skill is
