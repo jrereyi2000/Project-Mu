@@ -133,7 +133,8 @@ def _current_hc(cur, team_id, season):
     cur.execute("""SELECT ct.id, c.id, c.coach_name, c.offensive_scheme, c.defensive_scheme, ct.start_season
                    FROM coach_tenures ct JOIN coaches c ON c.id = ct.coach_id
                    WHERE ct.team_id = %s AND ct.start_season <= %s AND (ct.end_season IS NULL OR ct.end_season >= %s)
-                   ORDER BY ct.start_season DESC, ct.id DESC LIMIT 1""", (team_id, season, season))
+                   ORDER BY ct.start_season DESC, (ct.end_season IS NULL) DESC, ct.id DESC LIMIT 1""",
+                (team_id, season, season))
     row = cur.fetchone()
     if not row:
         return None
@@ -146,7 +147,8 @@ def _current_coord(cur, team_id, role, season):
                    FROM coordinator_tenures ct JOIN coordinators c ON c.id = ct.coordinator_id
                    WHERE ct.team_id = %s AND ct.role = %s AND ct.start_season <= %s
                      AND (ct.end_season IS NULL OR ct.end_season >= %s)
-                   ORDER BY ct.start_season DESC, ct.id DESC LIMIT 1""", (team_id, role, season, season))
+                   ORDER BY ct.start_season DESC, (ct.end_season IS NULL) DESC, ct.id DESC LIMIT 1""",
+                (team_id, role, season, season))
     row = cur.fetchone()
     if not row:
         return None
@@ -187,25 +189,50 @@ def _scheme(value):
     return value if value in cmp.SCHEME_MAP else None
 
 
+def _store_profile_for(cur, kind, person_id, name, role, outgoing):
+    """Store the CREATED Madden profile for `person_id` (audit F1), the same profile a new row would get.
+
+    A person Mu already knows (a `coaches` / `coordinators` row) can still lack a `coach_madden_profiles` row. The
+    mirror must leave him usable by the staff write, so the existing person is given the profile instead of being
+    booked with `profile: None`. The `coaches` / `coordinators` row itself is never touched (no second person row).
+    """
+    if kind == "COACH":
+        off = (outgoing or {}).get("offensive_scheme")
+        de = (outgoing or {}).get("defensive_scheme")
+        carousel._store_created_profile(cur, person_id, name, "HC",
+                                        scheme={"offensive": _scheme(off), "defensive": _scheme(de)},
+                                        promote_from=_find_coordinator(cur, name))
+    else:
+        scheme = (outgoing or {}).get("scheme") or DEFAULT_SCHEME[role]
+        playbook = (outgoing or {}).get("playbook")
+        carousel._store_created_profile(cur, person_id, name, role, scheme=_scheme(scheme),
+                                        playbook=carousel._mapped_playbook(playbook))
+
+
 def _incoming_coach(cur, name, outgoing):
-    """(coach id, created?) for the incoming head coach; a new row gets its CREATED Madden profile."""
+    """(coach id, created?) for the incoming head coach; a new row, and an existing person with no profile, gets a
+    CREATED Madden profile."""
     coach_id = _find_coach(cur, name)
     if coach_id is not None:
+        if carousel._table_exists(cur, "coach_madden_profiles") and _profile_source(cur, "COACH", coach_id) is None:
+            _store_profile_for(cur, "COACH", coach_id, name, "HC", outgoing)
         return coach_id, False
     off = (outgoing or {}).get("offensive_scheme")
     de = (outgoing or {}).get("defensive_scheme")
     cur.execute("INSERT INTO coaches (coach_name, offensive_scheme, defensive_scheme) VALUES (%s, %s, %s) "
                 "RETURNING id", (name, off, de))
     coach_id = cur.fetchone()[0]
-    carousel._store_created_profile(cur, coach_id, name, "HC", scheme={"offensive": _scheme(off),
-                                                                       "defensive": _scheme(de)},
-                                    promote_from=_find_coordinator(cur, name))
+    _store_profile_for(cur, "COACH", coach_id, name, "HC", outgoing)
     return coach_id, True
 
 
 def _incoming_coordinator(cur, name, role, outgoing):
+    """(coordinator id, created?) for the incoming coordinator; a new row, and an existing person with no profile,
+    gets a CREATED Madden profile."""
     coord_id = _find_coordinator(cur, name, role)
     if coord_id is not None:
+        if carousel._table_exists(cur, "coach_madden_profiles") and _profile_source(cur, "COORD", coord_id) is None:
+            _store_profile_for(cur, "COORD", coord_id, name, role, outgoing)
         return coord_id, False
     scheme = (outgoing or {}).get("scheme") or DEFAULT_SCHEME[role]
     playbook = (outgoing or {}).get("playbook")
@@ -213,8 +240,7 @@ def _incoming_coordinator(cur, name, role, outgoing):
                    VALUES (%s, %s, %s, %s, %s) RETURNING id""",
                 (name, SIDE[role], scheme, playbook, "NFL weekly mirror: real 2026 staff change"))
     coord_id = cur.fetchone()[0]
-    carousel._store_created_profile(cur, coord_id, name, role, scheme=_scheme(scheme),
-                                    playbook=carousel._mapped_playbook(playbook))
+    _store_profile_for(cur, "COORD", coord_id, name, role, outgoing)
     return coord_id, True
 
 
