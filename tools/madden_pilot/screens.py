@@ -2,10 +2,13 @@
 
 A Frame is one screenshot plus its Windows OCR words. classify() names the screen from
 catalog.json: the first screen (in catalog order) whose `all` words are all present, at least
-one `any` word is present (when listed), and no `none` word is present; else "UNKNOWN".
+one `any` word is present (when listed), no `none` word is present and every `line_is` phrase
+is one whole OCR line; else "UNKNOWN".
 
 Words are matched upper-case, punctuation-blind, on whole words inside one OCR line, so
-"FRANCHISE" doesn't match "CURRENT FRANCHISES" and a phrase never spans two lines.
+"FRANCHISE" doesn't match "CURRENT FRANCHISES" and a phrase never spans two lines. `line_is`
+exists for a word that also appears inside a longer ticker line: the receiving kickoff's
+standalone KICKOFF banner is not the same evidence as "(11:00 Q1) KICKOFF ON CHI 35".
 """
 import fnmatch
 import json
@@ -105,6 +108,11 @@ class Frame:
                         break
         return None
 
+    def line_is(self, phrase):
+        """True when one whole OCR line equals `phrase` (punctuation-blind)."""
+        p = norm(phrase)
+        return bool(p) and any(ln == p for ln in self._norm_lines)
+
     def near(self, phrase, other, max_px=300):
         """True when both are on screen and their box centres are within `max_px`."""
         a, b = self.find(phrase), self.find(other)
@@ -124,6 +132,8 @@ def load_catalog(path=None):
 def matches(frame, spec):
     if not all(frame.has(w) for w in spec.get("all", [])):
         return False
+    if not all(frame.line_is(w) for w in spec.get("line_is", [])):
+        return False
     anys = spec.get("any", [])
     if anys and not any(frame.has(w) for w in anys):
         return False
@@ -141,46 +151,133 @@ def classify(frame, catalog):
     return UNKNOWN
 
 
-def border_highlight(frame, labels, reach=0.06, bright=170, cover=0.85):
-    """Which of `labels` has Madden's white selection border ('border' highlight mode).
+def _row_run(px, row, x_center, width, bright):
+    """The contiguous bright run of `row` that contains (or is nearest to) `x_center`.
 
-    Madden outlines the selected option (franchise tiles, GAMEDAY buttons, dialog buttons)
-    with a white line. For each label's OCR box, look at the rows within `reach` x height
-    above and below it: the label is highlighted when one of those rows is bright
-    (luma >= `bright`) across at least `cover` of the label's width. Returns the label whose
-    best row is brightest, or None (no image, no boxes, or nothing bright).
+    Returns (start, end) as exclusive-end pixel indices, or None when the row has no bright
+    pixel within a sane distance of the label. A filled selection is bright across its whole
+    row, and an outlined one is bright on its border row; both are solid outside the text.
+    """
+    if row < 0:
+        return None
+    start = min(width - 1, max(0, int(x_center)))
+    if not (0 <= start < width):
+        return None
+    if px[start, row] < bright:                      # nudge to the nearest bright pixel
+        found = None
+        for step in range(1, max(4, int(width * 0.08))):
+            for candidate in (start - step, start + step):
+                if 0 <= candidate < width and px[candidate, row] >= bright:
+                    found = candidate
+                    break
+            if found is not None:
+                break
+        if found is None:
+            return None
+        start = found
+    left = start
+    while left > 0 and px[left - 1, row] >= bright:
+        left -= 1
+    right = start
+    while right + 1 < width and px[right + 1, row] >= bright:
+        right += 1
+    return left, right + 1
+
+
+def border_highlight(frame, labels, reach=0.06, bright=170, cover=0.85, aliases=None):
+    """The one label whose OCR box lies **inside** Madden's selection rectangle, or None.
+
+    Madden marks the selected row either with a white outline around it or a light filled row
+    behind it. The old reader took the brightest row within `reach` x height of a label and
+    chose the nearest label, which handed the selected row's border to the *next* row when the
+    selected row's own OCR text was truncated or missing (SUPERSIM_MENU's selected "JUMP TO
+    NEXT PLAY" read as "JUMP TO NEXT"; the modal's selected NO is not read at all — F9/F11).
+    Selection is now decided by geometry first:
+
+    * bright rows within `reach` x height of a label are grouped into bands;
+    * a band that vertically contains the label's box is a filled selection, and the label is
+      inside it only when the band's bright run also spans the label horizontally;
+    * two separate bands (one above, one below the label) are an outline, accepted only when
+      both runs span the label and their left edges agree (the old "nearest bright row" could
+      never tell these apart);
+    * nothing bright, or a label outside every region, means "not selected" — the caller stops
+      before Space rather than transferring a neighbour's border.
+
+    `aliases` maps a catalog label to the other readings a screen has actually shown for the
+    same row (an observed truncated label), so the row can still be recognized without letting
+    any generic phrase match a different action.
     """
     if not frame.png or not Path(frame.png).exists():
         return None
     from PIL import Image
-    img = Image.open(frame.png).convert("L")
-    W, H = img.size
-    px = img.load()
-    span = max(4, int(H * reach))
-    best, best_key = None, None
-    for lab in labels:
-        box = frame.find(lab)
-        if not box:
-            continue
-        x, y, w, h = (int(v) for v in box)
-        x0, x1 = max(0, x), min(W, x + w)
-        if x1 <= x0:
-            continue
-        rows = list(range(max(0, y - span), max(0, y))) + list(range(min(H, y + h), min(H, y + h + span)))
-        lab_score, lab_dist = 0.0, None
-        for r in rows:
-            lit = sum(1 for c in range(x0, x1) if px[c, r] >= bright)
-            score = lit / (x1 - x0)
-            if score < cover:
+    with Image.open(frame.png) as opened:
+        img = opened.convert("L")
+        width, height = img.size
+        px = img.load()
+        span = max(4, int(height * reach))
+        aliases = aliases or {}
+        boxes: list[tuple[str, tuple[float, float, float, float]]] = []
+        for label in labels:
+            box = frame.find(label)
+            if box is None:
+                for reading in aliases.get(label) or []:
+                    box = frame.find(reading)
+                    if box is not None:
+                        break
+            if box:
+                x, y, w, h = (float(v) for v in box)
+                if w > 0 and h > 0:
+                    boxes.append((label, (x, y, w, h)))
+        if not boxes:
+            return None
+
+        hits: list[str] = []
+        for label, (x, y, w, h) in boxes:
+            x0, x1 = max(0, int(x)), min(width, int(x + w))
+            if x1 <= x0:
                 continue
-            dist = min(abs(r - y), abs(r - (y + h)))
-            if score > lab_score or (score == lab_score and (lab_dist is None or dist < lab_dist)):
-                lab_score, lab_dist = score, dist
-        if lab_score:
-            # Adjacent stacked options both see the selected row's border; the option whose box
-            # is nearest that row owns it (READY TO ADVANCE must not steal FORCE ADVANCE's
-            # border, P2-01 2026-11-10).
-            key = (round(lab_score, 3), -lab_dist)
-            if best_key is None or key > best_key:
-                best, best_key = lab, key
-    return best
+            rows = list(range(max(0, int(y) - span), max(0, int(y)))) + \
+                list(range(min(height, int(y + h)), min(height, int(y + h) + span)))
+            covered: list[int] = []
+            for row in rows:
+                lit = sum(1 for column in range(x0, x1) if px[column, row] >= bright)
+                if lit / (x1 - x0) >= cover:
+                    covered.append(row)
+            if not covered:
+                continue
+            bands: list[list[int]] = []
+            for row in covered:
+                if bands and row - bands[-1][-1] <= 4:
+                    bands[-1].append(row)
+                else:
+                    bands.append([row])
+            runs: list[tuple[int, int, int, int]] = []      # (top, bottom, run_left, run_right)
+            center = (x0 + x1) // 2
+            for band in bands:
+                run = _row_run(px, band[0], center, width, bright) or \
+                    _row_run(px, band[-1], center, width, bright)
+                if run is None:
+                    continue
+                if run[0] <= x0 + 2 and run[1] >= x1 - 2:
+                    runs.append((band[0], band[-1], run[0], run[1]))
+
+            filled = any(top <= y + 2 and bottom >= y + h - 2 for top, bottom, *_ in runs)
+            outlined = False
+            above = [band for band in runs if band[1] <= y + 2]
+            below = [band for band in runs if band[0] >= y + h - 2]
+            # A row's selection rectangle is taller than its text (1080p: ~110 px vs 24 px).
+            max_gap = max(6 * h, 0.10 * height)
+            for up in above:
+                for down in below:
+                    if down[0] - up[1] < 0 or down[0] - up[1] > max_gap:
+                        continue
+                    if abs(up[2] - down[2]) <= max(24.0, 0.15 * w):
+                        outlined = True
+                        break
+                if outlined:
+                    break
+            if filled or outlined:
+                hits.append(label)
+
+        distinct = list(dict.fromkeys(hits))
+        return distinct[0] if len(distinct) == 1 else None

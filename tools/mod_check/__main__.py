@@ -2,7 +2,8 @@
 
 ``run``
     ``python3 -m tools.mod_check run --save CAREER-TUNE-<name> --mod <slug>
-       [--segments game_start,halftime] [--dry-run] [--run-dir DIR] [--pack P] [--data-dir DIR]``
+       [--segments game_start,halftime] [--dry-run] [--run-dir DIR] [--pack P]
+       [--reuse-launch] [--data-dir DIR]``
 
     Launches the plan's own test pack through the pilot's launch job (an already-running Madden
     is refused), clones the save, records the plan's segments, scores them and writes
@@ -10,10 +11,14 @@
     which must stay inside the check folder), prints the markdown, and sends one ntfy line.
     Exit 0 pass, 1 fail, 2 unknown or refused (the pilot's convention). ``--dry-run`` prints the
     segment plan and the check specs and scores nothing: no clone, no driver, no frame, no ntfy.
+    ``--reuse-launch`` skips the launch and attaches to the same verified Madden process and
+    unchanged applied pack a previous cold run recorded in ``<mod>/launch.json`` (F6); it
+    refuses unknown, stale, wrong-pack or changed state instead of relaunching.
 
 ``capture``
     ``python3 -m tools.mod_check capture --mod <slug> --segment <name>
-       --pass-at M:SS --fail-at M:SS [--asset NAME] [--yes] [--run-dir DIR] [--data-dir DIR]``
+       --pass-at M:SS --fail-at M:SS [--asset NAME] [--yes] [--run-dir DIR]
+       [--reuse-launch] [--data-dir DIR]``
 
     Cuts the two named moments out of one segment's frames (a previous ``run``'s frames in
     ``--run-dir``, else the newest run for the mod), shows both crops and their similarity
@@ -116,7 +121,7 @@ def capture_text(result: dict) -> str:
 def _run(args: argparse.Namespace) -> int:
     result = runner.run(args.save, args.mod, segments=_segments(args.segments),
                         run_dir=args.run_dir, dry_run=args.dry_run, data_dir=args.data_dir,
-                        pack=args.pack)
+                        pack=args.pack, reuse=args.reuse_launch)
     if result.get("status") == "dry_run":
         print(dry_run_text(result))
         return 0
@@ -142,7 +147,8 @@ def _run(args: argparse.Namespace) -> int:
 def _capture(args: argparse.Namespace) -> int:
     result = runner.capture(args.mod, args.segment, args.pass_at, args.fail_at,
                             asset=args.asset, yes=args.yes, save=args.save,
-                            run_dir=args.run_dir, data_dir=args.data_dir)
+                            run_dir=args.run_dir, data_dir=args.data_dir,
+                            reuse=args.reuse_launch)
     print(capture_text(result))
     if result.get("status") == "refused":
         print(f"mod_check capture: refused: {result.get('why')}", file=sys.stderr)
@@ -183,6 +189,10 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--pack", default=None,
                             help="cross-check the plan's expected pack; the run launches that pack "
                                  "itself and verifies the launch receipt")
+    run_parser.add_argument("--reuse-launch", action="store_true",
+                            help="attach to the verified Madden a previous cold run launched "
+                                 "(same pack, same process identity, unchanged applied pack); "
+                                 "refuses unknown/stale/wrong-pack state and never relaunches")
     run_parser.set_defaults(func=_run)
 
     cap_parser = sub.add_parser("capture", parents=[common],
@@ -195,6 +205,9 @@ def build_parser() -> argparse.ArgumentParser:
                             help="check name (default: the segment's first check)")
     cap_parser.add_argument("--yes", action="store_true",
                             help="write the pair after you have looked at the previews")
+    cap_parser.add_argument("--reuse-launch", action="store_true",
+                            help="live capture only: attach to the verified Madden a previous "
+                                 "cold run launched instead of relaunching it")
     cap_parser.add_argument("--save", default=None,
                             help="CAREER-TUNE-<name>: record the segment live instead of "
                                  "loading a previous run's frames")

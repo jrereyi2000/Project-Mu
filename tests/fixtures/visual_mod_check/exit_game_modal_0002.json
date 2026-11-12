@@ -1,0 +1,235 @@
+{
+ "fixture": "exit_game_modal_0002",
+ "source": "data/audit_reports/visual_mod_check/live_quit_once/steps/0002_UNKNOWN",
+ "screen": "UNKNOWN",
+ "lines": [
+  "EXIT GAME",
+  "Are you sure you want to exit the game?",
+  "YES - EXIT TO DESKTOP",
+  "YES - EXIT TO MENU",
+  "SELECT"
+ ],
+ "words": [
+  {
+   "text": "EXIT",
+   "box": [
+    874,
+    566,
+    70,
+    39
+   ],
+   "line": 0
+  },
+  {
+   "text": "GAME",
+   "box": [
+    952,
+    565,
+    95,
+    41
+   ],
+   "line": 0
+  },
+  {
+   "text": "Are",
+   "box": [
+    749,
+    636,
+    38,
+    16
+   ],
+   "line": 1
+  },
+  {
+   "text": "you",
+   "box": [
+    793,
+    640,
+    37,
+    16
+   ],
+   "line": 1
+  },
+  {
+   "text": "sure",
+   "box": [
+    837,
+    640,
+    45,
+    12
+   ],
+   "line": 1
+  },
+  {
+   "text": "you",
+   "box": [
+    889,
+    640,
+    37,
+    16
+   ],
+   "line": 1
+  },
+  {
+   "text": "want",
+   "box": [
+    933,
+    636,
+    50,
+    16
+   ],
+   "line": 1
+  },
+  {
+   "text": "to",
+   "box": [
+    990,
+    636,
+    20,
+    16
+   ],
+   "line": 1
+  },
+  {
+   "text": "exit",
+   "box": [
+    1018,
+    635,
+    36,
+    17
+   ],
+   "line": 1
+  },
+  {
+   "text": "the",
+   "box": [
+    1061,
+    635,
+    32,
+    17
+   ],
+   "line": 1
+  },
+  {
+   "text": "game?",
+   "box": [
+    1101,
+    636,
+    69,
+    20
+   ],
+   "line": 1
+  },
+  {
+   "text": "YES",
+   "box": [
+    871,
+    721,
+    29,
+    21
+   ],
+   "line": 2
+  },
+  {
+   "text": "-",
+   "box": [
+    904,
+    731,
+    7,
+    2
+   ],
+   "line": 2
+  },
+  {
+   "text": "EXIT",
+   "box": [
+    916,
+    721,
+    33,
+    21
+   ],
+   "line": 2
+  },
+  {
+   "text": "TO",
+   "box": [
+    954,
+    721,
+    20,
+    21
+   ],
+   "line": 2
+  },
+  {
+   "text": "DESKTOP",
+   "box": [
+    978,
+    721,
+    70,
+    21
+   ],
+   "line": 2
+  },
+  {
+   "text": "YES",
+   "box": [
+    884,
+    777,
+    29,
+    21
+   ],
+   "line": 3
+  },
+  {
+   "text": "-",
+   "box": [
+    917,
+    787,
+    7,
+    2
+   ],
+   "line": 3
+  },
+  {
+   "text": "EXIT",
+   "box": [
+    929,
+    777,
+    33,
+    21
+   ],
+   "line": 3
+  },
+  {
+   "text": "TO",
+   "box": [
+    967,
+    777,
+    20,
+    21
+   ],
+   "line": 3
+  },
+  {
+   "text": "MENU",
+   "box": [
+    991,
+    777,
+    45,
+    21
+   ],
+   "line": 3
+  },
+  {
+   "text": "SELECT",
+   "box": [
+    95,
+    1043,
+    45,
+    16
+   ],
+   "line": 4
+  }
+ ],
+ "png": "exit_game_modal_0002.png"
+}

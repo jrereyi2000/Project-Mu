@@ -24,12 +24,14 @@ Reads DATABASE_URL (default: the active franchise, db.franchises), MMC_CONFIG an
 import argparse
 import datetime as dt
 import glob
+import hashlib
 import json
 import os
 import re
 import subprocess
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_MANAGER_DIR = "/mnt/c/Madden27Modding/MMC_Modding_Tools_v1.1.0.7/MMC_ModManager_v1.1.0.7"
@@ -228,15 +230,72 @@ def base_pack(path):
     return parse_pack(packs[BASE_PACK])
 
 
+def manager_dir():
+    """The Mod Manager's own folder in WSL form (its .exe's directory), for packs and ModData."""
+    exe = os.environ.get("MMC_MOD_MANAGER_EXE")
+    if exe:
+        m = re.match(r"^([a-zA-Z]):[\\/](.*)$", exe)
+        if m:
+            return "/mnt/" + m.group(1).lower() + "/" + m.group(2).replace("\\", "/").rsplit("/", 1)[0]
+        return os.path.dirname(exe) or DEFAULT_MANAGER_DIR
+    return os.environ.get("MMC_MANAGER_DIR", DEFAULT_MANAGER_DIR)
+
+
+def pack_fingerprint(name, path=None, mods_dir=None):
+    """A stable fingerprint of a pack as the Manager has it, or None when it can't be read.
+
+    `name` is the pack the pilot passed to `-launch`. The fingerprint covers the pack's ordered
+    entry list and, for every enabled .fbmod, the file's size and mtime — so editing the pack or
+    replacing an enabled mod changes it even when the pack name stays the same. The config's
+    SelectedPack is reported but is NOT the applied pack: `-launch <name>` applies the named
+    pack without reselecting it. A caller that cannot read the config gets None, i.e. unknown
+    provenance, which the mod check refuses to attach to (F6).
+    """
+    try:
+        path = path or config_path()
+    except (SystemExit, OSError):
+        return None
+    try:
+        with open(path, encoding="utf-8-sig") as f:
+            game = json.load(f)["Games"][GAME_PROFILE]
+        raw = (game.get("Packs") or {}).get(name)
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    if raw is None:
+        return None
+    entries = parse_pack(raw)
+    selected = (game.get("Options") or {}).get("SelectedPack")
+    folder = Path(mods_dir) if mods_dir else Path(manager_dir()) / "Mods"
+    files = []
+    for mod, enabled in entries:
+        if not enabled:
+            continue
+        try:
+            stat = (folder / mod).stat()
+            files.append([mod, int(stat.st_size), int(stat.st_mtime_ns)])
+        except OSError:
+            files.append([mod, None, None])
+    payload = {
+        "pack": name,
+        "entries": [[mod, bool(enabled)] for mod, enabled in entries],
+        "files": files,
+    }
+    digest = hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+    return {"pack": name, "selected": selected, "fingerprint": digest,
+            "entries": len(entries), "enabled": sum(1 for _, enabled in entries if enabled),
+            "files_complete": all(item[1] is not None for item in files)}
+
+
 def launch(pack_name):
-    manager_dir = os.environ.get("MMC_MANAGER_DIR", DEFAULT_MANAGER_DIR)
-    exe = subprocess.run(["wslpath", "-w", os.path.join(manager_dir, "MMCModManager.exe")], capture_output=True,
+    manager = manager_dir()
+    exe = subprocess.run(["wslpath", "-w", os.path.join(manager, "MMCModManager.exe")], capture_output=True,
                          text=True, check=True).stdout.strip()
     # start detaches it; the exe is set to run as Administrator, so Windows asks for consent.
     # cwd is the manager's own folder: started from anywhere else, Frosty's executor fails to load
     # the pack ("errors occurred while attempting to load the following mod"), so the game never
     # starts (2026-11-12, docs/reference/MUSE_EMBER_EVALUATION.md §2.2).
-    subprocess.run(["cmd.exe", "/c", "start", "", exe, "-launch", pack_name], check=True, cwd=manager_dir)
+    subprocess.run(["cmd.exe", "/c", "start", "", exe, "-launch", pack_name], check=True, cwd=manager)
 
 
 # --------------------------------------------------------------------------------------------- database ---

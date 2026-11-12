@@ -1,0 +1,1148 @@
+{
+ "fixture": "playcall_after_receiving",
+ "source": "data/audit_reports/visual_mod_check/after_receiving_timeout",
+ "screen": null,
+ "lines": [
+  "IO D. CANALES",
+  "Hit 'em north-south wth HB Slam from Pistol. Quick-hitter, one gap, let the back make one cut",
+  "and explode. Perfect for spreading the defense thin.",
+  "Orne",
+  "COACH SUGGESTIONS",
+  "ENDENC",
+  "HBSLAM",
+  "PISTOL DOUBLES",
+  "FORMATION",
+  "I CALLI",
+  "CONCEPT",
+  "LAYi9PE",
+  "PLAYER",
+  "PERSONNEL GROUP",
+  "FAVORITES",
+  "O 10.0 YDS",
+  "RECENT",
+  "@ HBDIVE",
+  "PISTOL TRIPS",
+  "SUPERSIM COACH ADJUSTMENTS",
+  "ost IO:S6",
+  "12",
+  "O 10.0 YDS",
+  "RPOALERTTEFLAT",
+  "PISTOL U OFF TRIPS",
+  "[DOUBLETAP]ADD/REMOVEFAVORITE PLAYCALLSUBSTITIJTIONS FLIPPLAY",
+  "(0-0) CHI",
+  "(1-0)",
+  "26",
+  "O",
+  "O \u2022 CAR (0-0)",
+  "M.Statford 28-38, 354 Yds [38 Rush - 316 Pass] , 2 TDs [l Rush",
+  "1ST 2S",
+  "v IO",
+  "WEEK 1",
+  "(0-1) 23",
+  "-l pass]",
+  "K.Williams 17 Att, 69 Yds [73 RI",
+  "FINAL"
+ ],
+ "words": [
+  {
+   "text": "IO",
+   "box": [
+    180,
+    322,
+    22,
+    22
+   ],
+   "line": 0
+  },
+  {
+   "text": "D.",
+   "box": [
+    211,
+    323,
+    17,
+    20
+   ],
+   "line": 0
+  },
+  {
+   "text": "CANALES",
+   "box": [
+    232,
+    323,
+    77,
+    20
+   ],
+   "line": 0
+  },
+  {
+   "text": "Hit",
+   "box": [
+    178,
+    357,
+    20,
+    12
+   ],
+   "line": 1
+  },
+  {
+   "text": "'em",
+   "box": [
+    203,
+    357,
+    24,
+    12
+   ],
+   "line": 1
+  },
+  {
+   "text": "north-south",
+   "box": [
+    232,
+    357,
+    90,
+    12
+   ],
+   "line": 1
+  },
+  {
+   "text": "wth",
+   "box": [
+    327,
+    357,
+    31,
+    12
+   ],
+   "line": 1
+  },
+  {
+   "text": "HB",
+   "box": [
+    363,
+    357,
+    20,
+    12
+   ],
+   "line": 1
+  },
+  {
+   "text": "Slam",
+   "box": [
+    389,
+    357,
+    34,
+    12
+   ],
+   "line": 1
+  },
+  {
+   "text": "from",
+   "box": [
+    429,
+    357,
+    34,
+    12
+   ],
+   "line": 1
+  },
+  {
+   "text": "Pistol.",
+   "box": [
+    468,
+    357,
+    44,
+    12
+   ],
+   "line": 1
+  },
+  {
+   "text": "Quick-hitter,",
+   "box": [
+    517,
+    357,
+    90,
+    14
+   ],
+   "line": 1
+  },
+  {
+   "text": "one",
+   "box": [
+    612,
+    360,
+    28,
+    9
+   ],
+   "line": 1
+  },
+  {
+   "text": "gap,",
+   "box": [
+    644,
+    360,
+    30,
+    12
+   ],
+   "line": 1
+  },
+  {
+   "text": "let",
+   "box": [
+    679,
+    357,
+    18,
+    12
+   ],
+   "line": 1
+  },
+  {
+   "text": "the",
+   "box": [
+    703,
+    357,
+    24,
+    12
+   ],
+   "line": 1
+  },
+  {
+   "text": "back",
+   "box": [
+    731,
+    357,
+    36,
+    12
+   ],
+   "line": 1
+  },
+  {
+   "text": "make",
+   "box": [
+    771,
+    357,
+    39,
+    12
+   ],
+   "line": 1
+  },
+  {
+   "text": "one",
+   "box": [
+    814,
+    360,
+    28,
+    9
+   ],
+   "line": 1
+  },
+  {
+   "text": "cut",
+   "box": [
+    846,
+    357,
+    24,
+    12
+   ],
+   "line": 1
+  },
+  {
+   "text": "and",
+   "box": [
+    179,
+    373,
+    26,
+    12
+   ],
+   "line": 2
+  },
+  {
+   "text": "explode.",
+   "box": [
+    210,
+    373,
+    61,
+    15
+   ],
+   "line": 2
+  },
+  {
+   "text": "Perfect",
+   "box": [
+    276,
+    373,
+    56,
+    12
+   ],
+   "line": 2
+  },
+  {
+   "text": "for",
+   "box": [
+    338,
+    373,
+    22,
+    12
+   ],
+   "line": 2
+  },
+  {
+   "text": "spreading",
+   "box": [
+    364,
+    373,
+    73,
+    15
+   ],
+   "line": 2
+  },
+  {
+   "text": "the",
+   "box": [
+    443,
+    373,
+    24,
+    16
+   ],
+   "line": 2
+  },
+  {
+   "text": "defense",
+   "box": [
+    471,
+    373,
+    62,
+    12
+   ],
+   "line": 2
+  },
+  {
+   "text": "thin.",
+   "box": [
+    538,
+    373,
+    29,
+    12
+   ],
+   "line": 2
+  },
+  {
+   "text": "Orne",
+   "box": [
+    147,
+    408,
+    116,
+    48
+   ],
+   "line": 3
+  },
+  {
+   "text": "COACH",
+   "box": [
+    134,
+    486,
+    58,
+    20
+   ],
+   "line": 4
+  },
+  {
+   "text": "SUGGESTIONS",
+   "box": [
+    197,
+    486,
+    126,
+    20
+   ],
+   "line": 4
+  },
+  {
+   "text": "ENDENC",
+   "box": [
+    142,
+    767,
+    56,
+    12
+   ],
+   "line": 5
+  },
+  {
+   "text": "HBSLAM",
+   "box": [
+    140,
+    805,
+    74,
+    20
+   ],
+   "line": 6
+  },
+  {
+   "text": "PISTOL",
+   "box": [
+    140,
+    832,
+    53,
+    21
+   ],
+   "line": 7
+  },
+  {
+   "text": "DOUBLES",
+   "box": [
+    197,
+    832,
+    70,
+    21
+   ],
+   "line": 7
+  },
+  {
+   "text": "FORMATION",
+   "box": [
+    497,
+    485,
+    92,
+    21
+   ],
+   "line": 8
+  },
+  {
+   "text": "I",
+   "box": [
+    502,
+    766,
+    4,
+    16
+   ],
+   "line": 9
+  },
+  {
+   "text": "CALLI",
+   "box": [
+    511,
+    763,
+    37,
+    20
+   ],
+   "line": 9
+  },
+  {
+   "text": "CONCEPT",
+   "box": [
+    630,
+    485,
+    72,
+    21
+   ],
+   "line": 10
+  },
+  {
+   "text": "LAYi9PE",
+   "box": [
+    752,
+    477,
+    71,
+    29
+   ],
+   "line": 11
+  },
+  {
+   "text": "PLAYER",
+   "box": [
+    861,
+    485,
+    57,
+    21
+   ],
+   "line": 12
+  },
+  {
+   "text": "PERSONNEL",
+   "box": [
+    961,
+    485,
+    88,
+    21
+   ],
+   "line": 13
+  },
+  {
+   "text": "GROUP",
+   "box": [
+    1053,
+    485,
+    52,
+    21
+   ],
+   "line": 13
+  },
+  {
+   "text": "FAVORITES",
+   "box": [
+    1150,
+    485,
+    84,
+    21
+   ],
+   "line": 14
+  },
+  {
+   "text": "O",
+   "box": [
+    1093,
+    766,
+    7,
+    16
+   ],
+   "line": 15
+  },
+  {
+   "text": "10.0",
+   "box": [
+    1148,
+    763,
+    28,
+    20
+   ],
+   "line": 15
+  },
+  {
+   "text": "YDS",
+   "box": [
+    1208,
+    766,
+    25,
+    16
+   ],
+   "line": 15
+  },
+  {
+   "text": "RECENT",
+   "box": [
+    1272,
+    485,
+    59,
+    21
+   ],
+   "line": 16
+  },
+  {
+   "text": "@",
+   "box": [
+    1299,
+    802,
+    27,
+    26
+   ],
+   "line": 17
+  },
+  {
+   "text": "HBDIVE",
+   "box": [
+    1350,
+    805,
+    67,
+    20
+   ],
+   "line": 17
+  },
+  {
+   "text": "PISTOL",
+   "box": [
+    1350,
+    832,
+    53,
+    21
+   ],
+   "line": 18
+  },
+  {
+   "text": "TRIPS",
+   "box": [
+    1407,
+    832,
+    44,
+    21
+   ],
+   "line": 18
+  },
+  {
+   "text": "SUPERSIM",
+   "box": [
+    1292,
+    886,
+    66,
+    16
+   ],
+   "line": 19
+  },
+  {
+   "text": "COACH",
+   "box": [
+    1421,
+    886,
+    43,
+    16
+   ],
+   "line": 19
+  },
+  {
+   "text": "ADJUSTMENTS",
+   "box": [
+    1468,
+    886,
+    94,
+    16
+   ],
+   "line": 19
+  },
+  {
+   "text": "ost",
+   "box": [
+    1297,
+    998,
+    34,
+    13
+   ],
+   "line": 20
+  },
+  {
+   "text": "IO:S6",
+   "box": [
+    1344,
+    997,
+    88,
+    17
+   ],
+   "line": 20
+  },
+  {
+   "text": "12",
+   "box": [
+    1782,
+    495,
+    15,
+    18
+   ],
+   "line": 21
+  },
+  {
+   "text": "O",
+   "box": [
+    1698,
+    766,
+    7,
+    16
+   ],
+   "line": 22
+  },
+  {
+   "text": "10.0",
+   "box": [
+    1753,
+    763,
+    28,
+    20
+   ],
+   "line": 22
+  },
+  {
+   "text": "YDS",
+   "box": [
+    1813,
+    766,
+    25,
+    16
+   ],
+   "line": 22
+  },
+  {
+   "text": "RPOALERTTEFLAT",
+   "box": [
+    745,
+    805,
+    161,
+    20
+   ],
+   "line": 23
+  },
+  {
+   "text": "PISTOL",
+   "box": [
+    745,
+    832,
+    53,
+    21
+   ],
+   "line": 24
+  },
+  {
+   "text": "U",
+   "box": [
+    802,
+    832,
+    10,
+    21
+   ],
+   "line": 24
+  },
+  {
+   "text": "OFF",
+   "box": [
+    816,
+    832,
+    28,
+    21
+   ],
+   "line": 24
+  },
+  {
+   "text": "TRIPS",
+   "box": [
+    848,
+    832,
+    45,
+    21
+   ],
+   "line": 24
+  },
+  {
+   "text": "[DOUBLETAP]ADD/REMOVEFAVORITE",
+   "box": [
+    498,
+    884,
+    243,
+    20
+   ],
+   "line": 25
+  },
+  {
+   "text": "PLAYCALLSUBSTITIJTIONS",
+   "box": [
+    941,
+    886,
+    167,
+    16
+   ],
+   "line": 25
+  },
+  {
+   "text": "FLIPPLAY",
+   "box": [
+    1170,
+    886,
+    60,
+    16
+   ],
+   "line": 25
+  },
+  {
+   "text": "(0-0)",
+   "box": [
+    505,
+    994,
+    50,
+    18
+   ],
+   "line": 26
+  },
+  {
+   "text": "CHI",
+   "box": [
+    564,
+    994,
+    53,
+    17
+   ],
+   "line": 26
+  },
+  {
+   "text": "(1-0)",
+   "box": [
+    550,
+    1050,
+    42,
+    18
+   ],
+   "line": 27
+  },
+  {
+   "text": "26",
+   "box": [
+    622,
+    1052,
+    30,
+    14
+   ],
+   "line": 28
+  },
+  {
+   "text": "O",
+   "box": [
+    681,
+    991,
+    31,
+    28
+   ],
+   "line": 29
+  },
+  {
+   "text": "O",
+   "box": [
+    795,
+    991,
+    31,
+    28
+   ],
+   "line": 30
+  },
+  {
+   "text": "\u2022",
+   "box": [
+    851,
+    1000,
+    12,
+    8
+   ],
+   "line": 30
+  },
+  {
+   "text": "CAR",
+   "box": [
+    885,
+    994,
+    68,
+    17
+   ],
+   "line": 30
+  },
+  {
+   "text": "(0-0)",
+   "box": [
+    961,
+    994,
+    50,
+    18
+   ],
+   "line": 30
+  },
+  {
+   "text": "M.Statford",
+   "box": [
+    739,
+    1050,
+    67,
+    15
+   ],
+   "line": 31
+  },
+  {
+   "text": "28-38,",
+   "box": [
+    811,
+    1050,
+    41,
+    18
+   ],
+   "line": 31
+  },
+  {
+   "text": "354",
+   "box": [
+    857,
+    1050,
+    23,
+    15
+   ],
+   "line": 31
+  },
+  {
+   "text": "Yds",
+   "box": [
+    885,
+    1050,
+    22,
+    15
+   ],
+   "line": 31
+  },
+  {
+   "text": "[38",
+   "box": [
+    912,
+    1047,
+    19,
+    20
+   ],
+   "line": 31
+  },
+  {
+   "text": "Rush",
+   "box": [
+    936,
+    1050,
+    30,
+    15
+   ],
+   "line": 31
+  },
+  {
+   "text": "-",
+   "box": [
+    971,
+    1057,
+    5,
+    2
+   ],
+   "line": 31
+  },
+  {
+   "text": "316",
+   "box": [
+    981,
+    1050,
+    19,
+    15
+   ],
+   "line": 31
+  },
+  {
+   "text": "Pass]",
+   "box": [
+    1005,
+    1047,
+    35,
+    20
+   ],
+   "line": 31
+  },
+  {
+   "text": ",",
+   "box": [
+    1044,
+    1063,
+    3,
+    5
+   ],
+   "line": 31
+  },
+  {
+   "text": "2",
+   "box": [
+    1052,
+    1050,
+    6,
+    15
+   ],
+   "line": 31
+  },
+  {
+   "text": "TDs",
+   "box": [
+    1063,
+    1050,
+    22,
+    15
+   ],
+   "line": 31
+  },
+  {
+   "text": "[l",
+   "box": [
+    1090,
+    1047,
+    8,
+    20
+   ],
+   "line": 31
+  },
+  {
+   "text": "Rush",
+   "box": [
+    1103,
+    1050,
+    30,
+    15
+   ],
+   "line": 31
+  },
+  {
+   "text": "1ST",
+   "box": [
+    1603,
+    998,
+    42,
+    17
+   ],
+   "line": 32
+  },
+  {
+   "text": "2S",
+   "box": [
+    1683,
+    998,
+    38,
+    17
+   ],
+   "line": 32
+  },
+  {
+   "text": "v",
+   "box": [
+    1812,
+    1000,
+    16,
+    13
+   ],
+   "line": 33
+  },
+  {
+   "text": "IO",
+   "box": [
+    1831,
+    997,
+    39,
+    17
+   ],
+   "line": 33
+  },
+  {
+   "text": "WEEK",
+   "box": [
+    19,
+    1055,
+    56,
+    10
+   ],
+   "line": 34
+  },
+  {
+   "text": "1",
+   "box": [
+    81,
+    1055,
+    9,
+    10
+   ],
+   "line": 34
+  },
+  {
+   "text": "(0-1)",
+   "box": [
+    342,
+    1050,
+    42,
+    18
+   ],
+   "line": 35
+  },
+  {
+   "text": "23",
+   "box": [
+    415,
+    1052,
+    29,
+    14
+   ],
+   "line": 35
+  },
+  {
+   "text": "-l",
+   "box": [
+    1138,
+    1050,
+    13,
+    15
+   ],
+   "line": 36
+  },
+  {
+   "text": "pass]",
+   "box": [
+    1156,
+    1047,
+    35,
+    20
+   ],
+   "line": 36
+  },
+  {
+   "text": "K.Williams",
+   "box": [
+    1202,
+    1050,
+    67,
+    15
+   ],
+   "line": 37
+  },
+  {
+   "text": "17",
+   "box": [
+    1274,
+    1050,
+    11,
+    15
+   ],
+   "line": 37
+  },
+  {
+   "text": "Att,",
+   "box": [
+    1289,
+    1050,
+    23,
+    18
+   ],
+   "line": 37
+  },
+  {
+   "text": "69",
+   "box": [
+    1317,
+    1050,
+    14,
+    15
+   ],
+   "line": 37
+  },
+  {
+   "text": "Yds",
+   "box": [
+    1336,
+    1050,
+    22,
+    15
+   ],
+   "line": 37
+  },
+  {
+   "text": "[73",
+   "box": [
+    1363,
+    1047,
+    19,
+    20
+   ],
+   "line": 37
+  },
+  {
+   "text": "RI",
+   "box": [
+    1387,
+    1050,
+    9,
+    15
+   ],
+   "line": 37
+  },
+  {
+   "text": "FINAL",
+   "box": [
+    1513,
+    1049,
+    49,
+    20
+   ],
+   "line": 38
+  }
+ ]
+}

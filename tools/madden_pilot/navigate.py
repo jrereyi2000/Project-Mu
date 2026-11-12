@@ -217,11 +217,13 @@ class Pilot:
             # selected row from the frame, or the injected reader in a dry run/test.
             if self.highlight_reader:
                 return self.highlight_reader(frame, labels, spec)
-            return border_highlight(frame, labels, reach=spec.get("border_reach", 0.06))
+            return border_highlight(frame, labels, reach=spec.get("border_reach", 0.06),
+                                    aliases=spec.get("aliases"))
         if mode == "border":
             if self.highlight_reader:
                 return self.highlight_reader(frame, labels, spec)
-            return border_highlight(frame, labels, reach=spec.get("border_reach", 0.06))
+            return border_highlight(frame, labels, reach=spec.get("border_reach", 0.06),
+                                    aliases=spec.get("aliases"))
         return None
 
     def highlight(self, label, limit=12):

@@ -378,7 +378,8 @@ def test_launch_runs_the_manager_from_its_own_folder(tmp_path, notices, monkeypa
 
     monkeypatch.setattr(jobs.subprocess, "run", fake_run)
     out = jobs.launch(make_pilot(tmp_path, fake), run=None, madden_running=lambda: False,
-                      manager_running=lambda: False)
+                      manager_running=lambda: False, process_identity=lambda: None,
+                      fingerprint=lambda pack: None)
 
     assert out["status"] == "ok", out
     assert len(calls) == 1
@@ -865,6 +866,7 @@ class WatchMadden(ScriptedMadden):
         self.kick_at = None
         self.resume_at = None
         self.quit_game_at = None
+        self.play_at = None
 
     def on_key(self, name):
         before, label = self.screen, self.highlight
@@ -874,6 +876,8 @@ class WatchMadden(ScriptedMadden):
             self.kick_at = len(self.keys)
         elif before == "PAUSE_MENU" and name == select and label == "RESUME":
             self.resume_at = len(self.keys)
+        elif before == "GAME_PLAY_CALL" and name == select and self.play_at is None:
+            self.play_at = len(self.keys) - 1          # `keys` already holds this press
         elif before == "PAUSE_MENU" and name == select and label == "QUIT GAME":
             self.quit_game_at = len(self.keys)
         elif self.screen == "FRANCHISE_LIST" and self.autosave and before in ("QUIT_CONFIRM",
@@ -970,14 +974,17 @@ def test_watch_game_halftime_walks_the_supersim_recipe(tmp_path, notices):
     assert text.count("SUPERSIM_JUMP_FORWARD on NEXT QUARTER") == 1
     assert text.count("SUPERSIM_JUMP_FORWARD on CHANGE OF POSSESSION") == 2
     assert text.count("SUPERSIM_MENU on JUMP TO NEXT PLAY") > 1      # Q2 by play, not "sim to end"
-    assert "PAUSE_MENU on RESUME -> GAME_PLAY" in text
+    # MEASURED 2026-11-12 (F10): Back returns straight to the offensive play call, so there is
+    # no Pause and no spurious RESUME on this route; the play-call frame's own clock is re-read
+    # before the allowed last-play snap.
+    assert "SUPERSIM_MENU -> GAME_PLAY_CALL" in text
+    assert fake.resume_at is None
     # JR's control rule: the sim loop never plays football. The only snaps are the half's last,
-    # after RESUME, then the hold presses nothing and the exit starts.
-    assert sum(1 for ln in log if ln.startswith("  key   space     GAME_PLAY")) == 2
-    after_resume = fake.keys[fake.resume_at:]
-    assert after_resume[:3] == ["space", "space", "esc"]              # the snap, then straight out
+    # then the hold presses nothing and the exit starts with Escape from the play call.
+    assert fake.play_at is not None and fake.keys[fake.play_at:fake.play_at + 3] == [
+        "space", "space", "esc"]
     assert text.count("PAUSE_MENU on QUIT GAME") == 1
-    assert fake.quit_game_at > fake.resume_at + 2
+    assert fake.quit_game_at > fake.play_at + 2
     assert out["end_screen"] == "FRANCHISE_LIST"
 
 
@@ -1130,12 +1137,13 @@ def test_watch_game_quits_the_live_game_through_the_pause_menu(tmp_path, notices
     assert out["end_screen"] == "FRANCHISE_LIST" and fake.screen == "FRANCHISE_LIST"
     text = "\n".join(log)
     assert "PAUSE_MENU on QUIT GAME -> QUIT_GAME_CONFIRM" in text
-    assert "QUIT_GAME_CONFIRM on QUIT GAME -> FRANCHISE_LIST" in text
+    assert "QUIT_GAME_CONFIRM on YES - EXIT TO MENU -> FRANCHISE_LIST" in text
     # once, and only after the hold: the QUIT GAME press is the first use of the label
     assert text.count("PAUSE_MENU on QUIT GAME") == 1
     assert fake.quit_game_at > fake.kick_at and fake.keys[fake.kick_at] == "esc"
-    # no cancel-shaped label is ever selected on the confirmation
+    # the measured modal's destructive/cancel labels are never selected
     assert "on CANCEL" not in text and "on NO " not in text
+    assert "EXIT TO DESKTOP" not in text
 
 
 def test_watch_game_dismisses_a_penalty_before_it_pauses(tmp_path, notices):
@@ -1237,15 +1245,17 @@ def test_cancel_shaped_labels_are_recognised():
 
 
 def test_watch_game_repins_the_pause_menu_instead_of_walking_to_quit_game(tmp_path, notices):
-    # A pause menu re-opened from the sim screen can keep SUPER SIM selected while the pilot's own
-    # cursor resets with the screen change: five Downs from there would land on QUIT GAME, so the
-    # menu is pinned from its top item first (one Up per option).
+    # F10's alternate measured variant: Back from the sim screen lands on PAUSE_MENU (not the
+    # play call) with SUPER SIM still selected because the pilot's cursor reset with the screen
+    # change. Five Downs from there would land on QUIT GAME, so the menu is pinned from its top
+    # item first, and only a verified RESUME is confirmed.
     class RememberingMenu(WatchMadden):
-        def go(self, screen):
-            back_from_sim = screen == "PAUSE_MENU" and self.screen == "SUPERSIM_MENU"
-            super().go(screen)
-            if back_from_sim:
+        def on_key(self, name):
+            if name == "backspace" and self.screen == "SUPERSIM_MENU":
+                self.go("PAUSE_MENU")
                 self.idx = 5                      # SUPER SIM is still selected on the way back
+                return
+            super().on_key(name)
 
     log = []
     fake = RememberingMenu(CAT, tiles=["TUNE-X"], out=log.append)
@@ -1280,7 +1290,7 @@ def test_cli_dry_run_watch_game_prints_the_route_and_touches_nothing(tmp_path, n
     assert "QUIT_GAME_CONFIRM" in lines[0]                    # the exit is narrated too
     assert "GAME_KICKOFF on DEEP KICK -> GAME_PLAY" in text
     assert "PAUSE_MENU on QUIT GAME -> QUIT_GAME_CONFIRM" in text
-    assert "QUIT_GAME_CONFIRM on QUIT GAME -> FRANCHISE_LIST" in text
+    assert "QUIT_GAME_CONFIRM on YES - EXIT TO MENU -> FRANCHISE_LIST" in text
     res = result_json(tmp_path)
     assert res["status"] == "ok" and res["dry_run"] is True and res["route"] == "kickoff"
     assert res["quit"] is True and res["quit_route"] == "quit-game"
@@ -1295,8 +1305,9 @@ def test_cli_dry_run_watch_game_halftime(tmp_path, notices, monkeypatch):
                    "--dry-run", "--run-dir", str(tmp_path / "h")], out=lines.append)
     assert rc == 0
     text = "\n".join(lines)
-    assert "SUPERSIM_JUMP_FORWARD on NEXT QUARTER" in text and "PAUSE_MENU on RESUME" in text
-    assert "QUIT_GAME_CONFIRM on QUIT GAME -> FRANCHISE_LIST" in text
+    assert "SUPERSIM_JUMP_FORWARD on NEXT QUARTER" in text
+    assert "SUPERSIM_MENU -> GAME_PLAY_CALL" in text
+    assert "QUIT_GAME_CONFIRM on YES - EXIT TO MENU -> FRANCHISE_LIST" in text
     res = result_json(tmp_path / "h")
     assert res["status"] == "ok" and res["route"] == "supersim"
     assert res["quit_route"] == "quit-game" and res["end_screen"] == "FRANCHISE_LIST"
