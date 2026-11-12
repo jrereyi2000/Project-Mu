@@ -4285,5 +4285,5 @@ INSERT INTO schema_migrations (version, filename, checksum, source) VALUES
     ('2027_02_26_league_shape_season', '2027_02_26_league_shape_season.sql', 'c953582968fad1e0de03b4fdde23627ab21d23e7f42e0612a63e7dcd45f45026', 'init_db.sql'),
     ('2027_02_27_nfl_mirror', '2027_02_27_nfl_mirror.sql', '7b5d61f3fc3427adaf9c029a5ceb6cfa75b55ba93654d27a52d845624204230c', 'init_db.sql'),
     ('2027_02_28_stats_loader_weeks', '2027_02_28_stats_loader_weeks.sql', '33c2d60765e497dfc353545ed60edba2eca28ddc6d8878ac7e6f2603201a105a', 'init_db.sql'),
-    ('2027_02_29_stats_counter_season_games', '2027_02_29_stats_counter_season_games.sql', '7c691106f76a0973cfd18ed5caac38b3ac4aa81b7b2f031247d03a6ff1a4eff5', 'init_db.sql')
+    ('2027_02_29_stats_counter_season_games', '2027_02_29_stats_counter_season_games.sql', '93c3e06f4ca9cae96957958548a346ad7feeaf9ccd994e1e4082ce5eb17b9bf2', 'init_db.sql')
 ON CONFLICT (version) DO NOTHING;

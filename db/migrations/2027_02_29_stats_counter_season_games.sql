@@ -6,21 +6,40 @@
 -- save's own season line gave the player with the row (`season_games`), and the view reads the row instead of
 -- the live table: a status is judged by what the load knew.
 --
--- Run ./db/backup_db.sh first. Idempotent. Apply with:
+-- Run ./db/backup_db.sh first. Idempotent: the backfill below runs once, when this file creates the column, so a
+-- replay cannot rewrite a later load's own observation. Apply with:
 --   docker exec -i madden-db psql -U postgres -d madden -v ON_ERROR_STOP=1 < db/migrations/2027_02_29_stats_counter_season_games.sql
 
 BEGIN;
 
 -- 1. The load-time season games. NULL means the load had no season line for the player (the view reads that as
 --    zero games, as an absent season_stat_general row did before).
-ALTER TABLE player_career_counters ADD COLUMN IF NOT EXISTS season_games INTEGER;
-
--- Rows written before this migration carry no load-time value; the live season line is the only evidence left,
--- so it is frozen as their value here. Nothing re-reads season_stat_general after this.
-UPDATE player_career_counters c
-SET season_games = g.games_played
-FROM season_stat_general g
-WHERE g.season = c.season AND g.player_id = c.player_id AND c.season_games IS NULL;
+--
+--    Rows written before this migration have no load-time value, and the live season line is not one: it keeps
+--    growing, so copying it would freeze a later, larger total onto an earlier load and invent lost games
+--    (audit-5 stats2 R1). The backfill therefore runs only when this migration creates the column, and it uses
+--    only what the row itself proves: `games_played` is the player's career games at that load and `week` is
+--    the last league week the row covers, so a player's first row can have lost at most LEAST(games_played,
+--    week) games of its season. A first row outside a playable week (PRESEASON week 0, OFFSEASON week -1,
+--    PROBOWL week -2) has no per-week evidence that any game was played and stays a zero-game BASELINE, and a
+--    row that is not a player's first row is never read for it, so both are left NULL rather than given a
+--    number the row cannot support. NULLs written after the migration are the loader's own observations (a save
+--    with no season line for the player) and are never rewritten, so replaying this file changes nothing.
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_schema = 'public' AND table_name = 'player_career_counters'
+                     AND column_name = 'season_games') THEN
+        ALTER TABLE player_career_counters ADD COLUMN season_games INTEGER;
+        UPDATE player_career_counters c
+        SET season_games = LEAST(c.games_played, c.week)
+        WHERE c.season_games IS NULL
+          AND c.week >= 1
+          AND c.games_played > 0
+          AND NOT EXISTS (SELECT 1 FROM player_career_counters p
+                          WHERE p.player_id = c.player_id AND p.load_seq < c.load_seq);
+    END IF;
+END $$;
 
 -- 2. The same view without the join: `season_games_played` comes from the row.
 CREATE OR REPLACE VIEW player_week_counters AS

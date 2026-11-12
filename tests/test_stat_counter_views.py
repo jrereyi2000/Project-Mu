@@ -5,6 +5,8 @@ classes read the PC saves at MU_SAVES_DIR (never write to them) through pipeline
 """
 import json
 import os
+import pathlib
+import re
 import shutil
 import subprocess
 import unittest
@@ -12,10 +14,12 @@ import unittest
 import psycopg
 import pytest
 
+from db import migrate
 from engines import advanced_metrics as am
 from pipeline import load_save as ls
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+MIGRATION = os.path.join(ROOT, "db", "migrations", "2027_02_29_stats_counter_season_games.sql")
 READER = os.path.join(ROOT, "pipeline", "save_reader", "pc_save_reader.mjs")
 SAVES_DIR = os.environ.get("MU_SAVES_DIR", "/mnt/c/Users/jrere/Documents/Madden NFL 27/saves")
 CAREER_TABLE = "CareerOffensiveStats"
@@ -28,6 +32,142 @@ def read_save(name):
     out = subprocess.run(["node", READER, os.path.join(SAVES_DIR, name)],
                          capture_output=True, text=True, check=True, timeout=600)
     return json.loads(out.stdout)
+
+
+def test_the_upgrade_backfill_reads_only_the_row():
+    """Audit-5 stats2 R1: a database upgraded from 2027_02_28 takes the backfill path, and that backfill must
+    never copy the mutable live season line onto an earlier row. Offline: the migration's text."""
+    body = migrate._strip_outer_transaction(pathlib.Path(MIGRATION).read_text())
+    updates = re.findall(r"(?is)UPDATE\s+player_career_counters.*?;", body)
+    assert updates, "the upgrade backfill is gone"
+    assert all("season_stat_general" not in u for u in updates)
+    assert all("LEAST(" in u for u in updates)              # a row-proved bound, not a copied total
+    assert "information_schema.columns" in body             # one-time: only when the column is created
+
+
+@pytest.mark.integration
+class UpgradePathTest(unittest.TestCase):
+    """The 2027_02_29 backfill on a database that already holds Career rows (audit-5 stats2 R1).
+
+    A fresh db/init_db.sql build never takes this path; a database upgraded from 2027_02_28 does. Each test drops
+    the column and both views to the legacy shape, inserts rows, runs the migration body and its own re-run, and
+    rolls the whole thing back, so the scratch database keeps the head schema.
+    """
+
+    def setUp(self):
+        self.conn = psycopg.connect(ls.DSN)
+        self.cur = self.conn.cursor()
+        self.body = migrate._strip_outer_transaction(pathlib.Path(MIGRATION).read_text())
+        self.cur.execute("SELECT pg_get_viewdef('player_season_counters'::regclass)")
+        self.season_view = self.cur.fetchone()[0]
+        self.cur.execute("DROP VIEW player_season_counters")
+        self.cur.execute("DROP VIEW player_week_counters")
+        self.cur.execute("ALTER TABLE player_career_counters DROP COLUMN season_games")
+
+    def tearDown(self):
+        self.conn.rollback()
+        self.conn.close()
+
+    def query(self, sql, *args):
+        self.cur.execute(sql, args)
+        return self.cur.fetchall()
+
+    def one(self, sql, *args):
+        self.cur.execute(sql, args)
+        return self.cur.fetchone()
+
+    def new_player(self, name):
+        self.cur.execute("INSERT INTO players (player_name, full_name) VALUES (%s, %s) RETURNING id", (name, name))
+        return self.cur.fetchone()[0]
+
+    def legacy(self, pid, season, week, stage, games, seq):
+        """A pre-migration row: no season_games column exists yet."""
+        self.cur.execute(
+            "INSERT INTO player_career_counters (season, week, stage, player_id, madden_table, counters, "
+            "games_played, load_seq) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+            (season, week, stage, pid, CAREER_TABLE, json.dumps({"GAMESPLAYED": games}), games, seq))
+
+    def load(self, pid, season, week, stage, games, seq, season_games=None):
+        """A row written after the migration: the loader records its own season line, or NULL when the save had
+        none for the player."""
+        self.cur.execute(
+            "INSERT INTO player_career_counters (season, week, stage, player_id, madden_table, counters, "
+            "games_played, load_seq, season_games) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            (season, week, stage, pid, CAREER_TABLE, json.dumps({"GAMESPLAYED": games}), games, seq, season_games))
+
+    def season_line(self, pid, season, games):
+        self.cur.execute("INSERT INTO season_stat_general (season, player_id, games_played) VALUES (%s, %s, %s)",
+                         (season, pid, games))
+
+    def upgrade(self):
+        """Run the migration body, then put the (unchanged) season view back on the recreated week view."""
+        self.cur.execute(self.body)
+        self.cur.execute("CREATE OR REPLACE VIEW player_season_counters AS " + self.season_view)
+
+    def week_rows(self, pid):
+        return self.query("SELECT week, status, games_covered FROM player_week_counters "
+                          "WHERE player_id = %s ORDER BY load_seq", pid)
+
+    def season_row(self, pid, season=2026):
+        return self.one("SELECT weeks_partial, games_lost, games_covered FROM player_season_counters "
+                        "WHERE player_id = %s AND season = %s", pid, season)
+
+    def test_a_provable_zero_game_baseline_stays_baseline(self):
+        # audit-5's own upgrade repro: career GAMESPLAYED 0 at a preseason load, 3 later, live season line 3.
+        # The live value belongs to the later load; the first row proves it had played nothing.
+        pid = self.new_player("U. Zero")
+        self.legacy(pid, 2026, 0, "PRESEASON", 0, 1)
+        self.legacy(pid, 2026, 3, "WEEK", 3, 2)
+        self.season_line(pid, 2026, 3)
+        self.upgrade()
+        self.assertEqual(self.week_rows(pid), [(0, "BASELINE", 0), (3, "OK", 3)])
+        self.assertEqual(self.season_row(pid), (0, 0, 3))
+        self.assertEqual(self.one("SELECT season_games FROM player_career_counters "
+                                  "WHERE player_id = %s AND week = 0", pid), (None,))
+
+    def test_a_midseason_first_row_keeps_only_the_lost_games_the_row_proves(self):
+        # Career 8 at a week-5 load: at most 5 of them can be this season's games (one per league week), so 5 is
+        # the defensible lost count -- not the career 8, and not the live season line's 11.
+        pid = self.new_player("U. Mid")
+        self.legacy(pid, 2026, 5, "WEEK", 8, 1)
+        self.legacy(pid, 2026, 8, "WEEK", 11, 2)
+        self.season_line(pid, 2026, 11)
+        self.upgrade()
+        self.assertEqual(self.week_rows(pid), [(5, "PARTIAL", 5), (8, "OK", 3)])
+        self.assertEqual(self.season_row(pid), (1, 5, 3))
+
+    def test_a_first_row_with_no_season_line_takes_the_same_bound(self):
+        # Nothing in season_stat_general: the same count, because the backfill never reads the live table.
+        lone = self.new_player("U. Lone")
+        self.legacy(lone, 2026, 6, "WEEK", 9, 1)
+        self.upgrade()
+        self.assertEqual(self.week_rows(lone), [(6, "PARTIAL", 6)])
+
+    def test_replay_never_rewrites_a_later_load_s_own_observation(self):
+        # Acceptance 3 and 4: a load after the migration whose save carried no season line stays a NULL
+        # observation by the load, and replaying the migration twice does not turn it into a lost-games verdict.
+        pid = self.new_player("U. After")
+        self.upgrade()
+        self.load(pid, 2026, 0, "PRESEASON", 0, 1)          # no season line in that save: NULL
+        self.load(pid, 2026, 3, "WEEK", 3, 2, season_games=3)
+        self.season_line(pid, 2026, 3)
+        self.upgrade()
+        self.upgrade()                                       # replay twice
+        self.assertEqual(self.week_rows(pid), [(0, "BASELINE", 0), (3, "OK", 3)])
+        self.assertEqual(self.season_row(pid), (0, 0, 3))
+        self.assertEqual(self.query("SELECT week, season_games FROM player_career_counters "
+                                    "WHERE player_id = %s ORDER BY load_seq", pid), [(0, None), (3, 3)])
+
+    def test_a_known_load_time_value_is_never_recomputed(self):
+        # Acceptance 4: a value the loader wrote is the load's own observation and survives an upgrade and
+        # replays, even where the row's bound would compute a different number.
+        pid = self.new_player("U. Known")
+        self.upgrade()
+        self.load(pid, 2026, 4, "WEEK", 5, 1, season_games=5)   # the loader's value; LEAST(5, 4) would be 4
+        self.upgrade()
+        self.upgrade()
+        self.assertEqual(self.one("SELECT season_games FROM player_career_counters WHERE player_id = %s", pid), (5,))
+        self.assertEqual(self.week_rows(pid), [(4, "PARTIAL", 5)])
 
 
 @pytest.mark.integration
