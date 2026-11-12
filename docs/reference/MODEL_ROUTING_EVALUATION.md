@@ -211,10 +211,27 @@ What the run already settles:
 2. **The cost gap is 8–14×.** Muse Spark wrote the same six slots for $0.18 against Gemini's $2.56, and GLM-5.3-Flash for $0.32. At the desk's ~80 articles a month, that is ~$2.40 (Muse) or ~$4.20 (GLM-5.3-Flash) against ~$34 for Gemini — the whole "$125/mo newsroom" in the June numbers prices out far lower here because this archive's prompts cache heavily.
 3. **Muse researches hardest, GLM-5.3-Flash researches least.** 202 tool calls (Muse) vs 129 (Gemini) vs 129 (GLM-5.3-Flash); GLM-5.3-Flash's `Hero Slot` used **5** calls and produced 1,127 words where the others used 20–25 and wrote 1,423–1,504. Whether that is efficiency or thin grounding is exactly what the blind read decides — the grounding sheet flags numbers absent from the model's own trace, but it over-reports because tool results are clipped, so it is a screening aid, not a verdict.
 4. **Wall time:** GLM-5.3-Flash is the fastest (583 s for six), Gemini 912 s, Muse 1,054 s. Nothing near the 50-call ceiling.
-5. **The judge did not produce verdicts.** Two attempts at the pairwise GLM-5.3 judge returned no parsable answer: on prompts this size its thinking consumed the output cap, so the text came back empty. The tool now reads the non-thought parts, parses nested JSON, raises the cap to 8,192, clips the inputs, and writes each pair to `judge.jsonl` so a re-run resumes. The judging leg needs one more run after the Go 5-hour window resets (13:04Z on 2026-11-12); the failed attempts, not the articles, are what took the window to 89% — the 18 article runs together cost ~$0.5 of Go allowance.
+5. **The judge was dropped, and JR read the blind sheet instead** (2026-11-12). Two attempts at the pairwise GLM-5.3 judge returned no parsable answer: on prompts this size its thinking consumed the output cap, so the text came back empty. The tool now reads the non-thought parts, parses nested JSON, raises the cap to 8,192, clips the inputs and resumes from `judge.jsonl`, but JR chose to decide on his own read rather than spend another pass. The failed attempts, not the articles, took the Go 5-hour window to 89%; the 18 article runs together cost ~$0.5 of allowance.
 6. **The archive has no agent-memory block** (`nfl_mirror_picks.pick_type` predates the column), so all three models saw the same prompt without it. Fair between them, not identical to production.
 
-**Still to do:** JR's blinded read (`blind_read.md`, answer key at the end), and the judge re-run. Only then does this become P8-05 evidence.
+#### JR's blind read (2026-11-12)
+
+His ratings, verbatim per slot (`blind_read.md`): Hero **C > B > A**; Slot 1 **A = B = C**; Slot 4 **C > B > A**; Slot 7 **A = B = C** (typed B, C, A); Power Rankings **B = C > A**; Fantasy **A = B > C**. Decoded through the answer key, with a 3/2/1 Borda score per slot and ties sharing the rank:
+
+| Model | Hero | Slot 1 | Slot 4 | Slot 7 | Standings | Fantasy | Points | First or tied | Last |
+| :--- | :-: | :-: | :-: | :-: | :-: | :-: | ---: | :-: | :-: |
+| `glm-5.3-flash` | **1st** | = | 3rd | = | =1st | =1st | **10** | 3 | 1 |
+| `gemini-3.8-flash` | 2nd | = | 2nd | = | =1st | 3rd | 9 | 1 | 1 |
+| `muse-spark-1.3-contributor` | 3rd | = | **1st** | = | 3rd | =1st | 9 | 2 | 2 |
+
+What that says:
+
+- **The incumbent never won a slot outright.** Gemini 3.8 Flash was first only in a tie (Power Rankings) and last on Fantasy, at 8× the price. It has no remaining argument on this evidence.
+- **GLM-5.3-Flash edges it, on consistency.** It was never clearly beaten except on Slot 4, and it won the Hero with the *shortest* piece (1,127 words against 1,423 and 1,504) — the slot whose length discipline JR has been pushing. It also carries no training term and a $60 allowance.
+- **Muse Spark wins the feature slot and nothing else.** Best on Slot 4, tied first on Fantasy, but last on the Hero and last on Power Rankings. Its cost is the lowest ($0.18 for six against $0.32), so it is a candidate for long-form features, not for the front page.
+- **The spread is one point across three models over six articles.** That is not a decisive separation, and it is one week, six slots and one reader. It is enough to retire Gemini as the default; it is not enough to choose the winner between the two Go models on quality alone.
+
+**Recommended routing for P8-06 (not built):** default writer `glm-5.3-flash`, feature/Hero alternatives `muse-spark-1.3-contributor`, Gemini 3.8 Flash kept only as the comparison control and a per-slot fallback. Confirm with a **second week on the two Go models only** (no Gemini arm, ~$0.5 of allowance) before the production switch, since the tiebreaker is thin.
 
 ### 8.2 What the Muse switch would look like (not built)
 
