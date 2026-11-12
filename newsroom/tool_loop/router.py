@@ -17,14 +17,33 @@ OPENAI_COMPATIBLE_PROVIDERS = {
     "ollama",
     "vllm",
     "deepseek",
+    "opencode-go",
     "glm",
 }
+
+# Prefixes that name a provider under a different spelling. `opencode:` and
+# `opencode-go:` both select OpenCode Go; `deepseek:` stays its own (aliased) provider.
+PROVIDER_PREFIX_ALIASES = {
+    "opencode": "opencode-go",
+}
+
+
+def _prefix_names(provider: str) -> tuple:
+    """The provider's own name plus any aliases that resolve to it."""
+    return (provider,) + tuple(alias for alias, target in PROVIDER_PREFIX_ALIASES.items()
+                               if target == provider)
+
+
+def _is_opencode_model(m: str) -> bool:
+    return m.startswith(("opencode-go:", "opencode-go/", "opencode:", "opencode/"))
 
 
 def resolve_tool_loop_provider(provider: Optional[str] = None, model: Optional[str] = None) -> str:
     """Resolve provider name to 'gemini' or one of the OpenAI-compatible providers."""
     if provider:
         p = provider.strip().lower()
+        if p in PROVIDER_PREFIX_ALIASES:
+            p = PROVIDER_PREFIX_ALIASES[p]
         if p == "gemini" or p in OPENAI_COMPATIBLE_PROVIDERS:
             return p
         raise ValueError(
@@ -34,6 +53,8 @@ def resolve_tool_loop_provider(provider: Optional[str] = None, model: Optional[s
 
     if model:
         m = model.strip().lower()
+        if _is_opencode_model(m):
+            return "opencode-go"
         if m.startswith(("gemini:", "gemini/")) or "gemini" in m:
             return "gemini"
         if m.startswith(("ollama:", "ollama/")):
@@ -63,13 +84,15 @@ def resolve_tool_loop_provider(provider: Optional[str] = None, model: Optional[s
 def strip_provider_prefix(model: str, provider: str) -> str:
     """Remove a routing prefix like 'ollama:' or 'deepseek/' that names the resolved provider.
 
-    The prefix only selects the provider; the endpoint expects the bare model id.
+    The prefix only selects the provider; the endpoint expects the bare model id. A prefix
+    alias of the resolved provider ('opencode:' for 'opencode-go') is stripped too.
     """
     m = (model or "").strip()
-    for sep in (":", "/"):
-        prefix = provider + sep
-        if m.lower().startswith(prefix):
-            return m[len(prefix):]
+    for name in _prefix_names(provider):
+        for sep in (":", "/"):
+            prefix = name + sep
+            if m.lower().startswith(prefix):
+                return m[len(prefix):]
     return m
 
 
@@ -85,7 +108,8 @@ def execute_agent_tool_loop(
     """Execute autonomous tool calling with the specified provider backend.
 
     Args:
-        provider: Provider name ('gemini', 'openai', 'ollama', 'vllm', 'deepseek', 'glm') or None to infer.
+        provider: Provider name ('gemini', 'openai', 'ollama', 'vllm', 'deepseek', 'opencode-go',
+            'glm') or None to infer. ``deepseek`` is a deprecated alias for ``opencode-go``.
         client: Provider client instance (google-genai Client or OpenAI-compatible client) or None.
         model: Target model string.
         system_instruction: System prompt.
