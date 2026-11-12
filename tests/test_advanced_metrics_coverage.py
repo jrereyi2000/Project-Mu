@@ -108,6 +108,98 @@ class SameGamesMetricsTest(unittest.TestCase):
         self.assertEqual(metrics["metrics"]["target_share"], pytest.approx(0.2))
         self.assertTrue(metrics["coverage"]["same_games"])
 
+    def moore(self):
+        """The audit's D. Moore (Bills): several players share the name."""
+        return self.one("SELECT p.id FROM players p "
+                        "JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = 2026 "
+                        "JOIN teams t ON t.id = ps.team_id "
+                        "WHERE p.player_name = 'D. Moore' AND t.name = 'Bills'")[0]
+
+    def test_s3_a_week_reads_only_a_delta_isolated_to_its_game(self):
+        # audit-5 S3: loads at DEBUGWEEK8, 10 and 12 leave deltas labelled (9, prev 7) and (11, prev 9).
+        # Pittman's bye is week 9 and the second delta covers weeks 10-11, so neither can describe a single
+        # week: week 9 has no game and week 10/11 keep only their box score, with no borrowed targets.
+        for name in ("CAREER-DEBUGWEEK8", "CAREER-DEBUGWEEK10", "CAREER-DEBUGWEEK12"):
+            ls.load_snapshot(self.cur, self.snap(name), season=2026)
+        pittman = self.one("SELECT id FROM players WHERE player_name = 'M. Pittman'")[0]
+
+        season = am.player_metrics(self.cur, 2026, pittman)
+        self.assertEqual(season["inputs"]["targets"], 26)
+        self.assertEqual(season["inputs"]["team_pass_attempts"], 83)
+        self.assertAlmostEqual(season["metrics"]["target_share"], 26 / 83, places=10)
+        self.assertAlmostEqual(season["metrics"]["catch_rate"], 15 / 26, places=10)
+
+        week9 = am.player_metrics(self.cur, 2026, pittman, week=9)
+        self.assertIsNone(week9["inputs"].get("receptions"))   # no week-9 game: week 8 is not borrowed
+        self.assertIsNone(week9["inputs"].get("targets"))
+        self.assertEqual(week9["coverage"]["games_covered"], 0)
+        self.assertFalse(week9["coverage"]["same_games"])
+        self.assertTrue(week9["coverage"]["reasons"])
+
+        week10 = am.player_metrics(self.cur, 2026, pittman, week=10)
+        self.assertEqual(week10["inputs"]["receptions"], 7)
+        self.assertEqual(week10["inputs"]["rec_yards"], 70)
+        self.assertIsNone(week10["inputs"].get("targets"))
+        self.assertIsNone(week10["metrics"]["catch_rate"])
+        self.assertIsNone(week10["metrics"]["target_share"])
+        self.assertFalse(week10["coverage"]["same_games"])
+
+        week11 = am.player_metrics(self.cur, 2026, pittman, week=11)
+        self.assertEqual(week11["inputs"]["receptions"], 8)
+        self.assertEqual(week11["inputs"]["rec_yards"], 73)
+        self.assertIsNone(week11["inputs"].get("targets"))
+        self.assertIsNone(week11["metrics"]["catch_rate"])
+        self.assertIsNone(week11["metrics"]["target_share"])
+        self.assertFalse(week11["coverage"]["same_games"])
+        self.assertTrue(any("split" in reason for reason in week11["coverage"]["reasons"]))
+
+    def test_s4_no_receiver_publishes_a_catch_rate_above_one(self):
+        # audit-5 S4: D. Moore's delta has 11 receptions on 10 targets; the season and week 11 must not
+        # publish 1.1, and coverage names the contradicted counter. Rice's valid tracked ratio still computes.
+        for name in ("CAREER-DEBUGWEEK8", "CAREER-DEBUGWEEK10", "CAREER-DEBUGWEEK12"):
+            ls.load_snapshot(self.cur, self.snap(name), season=2026)
+        moore = self.moore()
+        rice = self.one("SELECT id FROM players WHERE player_name = 'R. Rice'")[0]
+
+        season = am.player_metrics(self.cur, 2026, moore)
+        self.assertEqual((season["inputs"]["receptions"], season["inputs"]["targets"]), (11, 10))
+        self.assertIsNone(season["metrics"]["catch_rate"])
+        self.assertIsNone(season["metrics"]["target_share"])
+        self.assertTrue(season["coverage"]["invalid_inputs"])
+        self.assertTrue(any("exceed" in item for item in season["coverage"]["invalid_inputs"]))
+
+        week11 = am.player_metrics(self.cur, 2026, moore, week=11)
+        self.assertIsNone(week11["metrics"]["catch_rate"])
+        self.assertIsNone(week11["metrics"]["target_share"])
+        self.assertTrue(week11["coverage"]["invalid_inputs"])
+
+        rice_season = am.player_metrics(self.cur, 2026, rice)
+        self.assertAlmostEqual(rice_season["metrics"]["catch_rate"], 14 / 15, places=10)
+        self.assertAlmostEqual(rice_season["metrics"]["target_share"], 0.2, places=10)
+
+    def test_s1_a_cross_season_pair_without_full_team_history_publishes_no_share(self):
+        # audit-5 S1: MU2026 -> P2G credits the whole 2026 season (17 games) to 2026, but only the early
+        # 2026 team boxes are stored, so the denominator would be partial history. No share is published
+        # (and never the 2027 club's attempts), and coverage names the gap.
+        ls.load_snapshot(self.cur, self.snap("CAREER-MU2026"), season=2026)
+        ls.load_snapshot(self.cur, self.snap("CAREER-TUNE-P2G"), season=2027)
+        self.cur.execute("""
+            SELECT DISTINCT p.id
+            FROM players p
+            LEFT JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = 2026
+            LEFT JOIN teams t ON t.id = ps.team_id
+            WHERE p.player_name IN ('M. Pittman', 'R. Rice')
+               OR (p.player_name = 'D. Moore' AND t.name = 'Bills')""")
+        players = [row[0] for row in self.cur.fetchall()]
+        self.assertEqual(len(players), 3)
+
+        for pid in players:
+            season = am.player_metrics(self.cur, 2026, pid)
+            self.assertIsNone(season["metrics"]["target_share"])
+            self.assertIsNone(season["inputs"].get("team_pass_attempts"))
+            self.assertTrue(season["coverage"]["team_denominator"])
+            self.assertGreater(season["coverage"]["games_covered"], 9)
+
     def test_p2h_has_no_catch_rate_above_one_and_flags_the_untracked_week(self):
         # H3's reproduction. MUBASE then P2H; the audit measured Rice at 27 receptions / 20 targets = 1.35
         # and 123 of 272 receivers above 1.

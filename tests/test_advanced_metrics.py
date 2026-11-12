@@ -197,6 +197,12 @@ def _tracking(pass_att, pocket_att, week=4, prev_week=0, prev_season=2026):
              "pass_att": pass_att, "pocket_att": pocket_att}]
 
 
+def _games(weeks, has_box=True, first_id=100):
+    """Team games (id, week, has_box) for the `_team_games` query."""
+    return [{"game_id": first_id + i, "week": week, "has_box": has_box}
+            for i, week in enumerate(weeks)]
+
+
 def test_player_metrics_sums_career_deltas_and_uses_the_stat_line_only_for_missing_counters():
     # H3: receptions, targets, drops and attempts all come from the Career delta, which carries the full
     # box counters. The stat line's own receptions lose; only kicking (absent from the Career row) is taken
@@ -214,7 +220,7 @@ def test_player_metrics_sums_career_deltas_and_uses_the_stat_line_only_for_missi
         OUTSIDEPOCKETTHROW_ATTEMPTS=40, OUTSIDEPOCKETTHROW_COMPLETIONS=24, OUTSIDEPOCKETTHROW_YARDS=300,
         OUTSIDEPOCKETTHROW_TD=2, OUTSIDEPOCKETTHROW_INTERCEPTIONS=1)
     team = {"team_pass_attempts": 544, "team_total_plays": 1000}
-    cur = StubCursor([line, [career], _tracking(240, 240), team])
+    cur = StubCursor([line, [career], _games([1, 2, 3, 4]), _tracking(240, 240), team])
 
     result = am.player_metrics(cur, 2026, 42)
 
@@ -226,7 +232,9 @@ def test_player_metrics_sums_career_deltas_and_uses_the_stat_line_only_for_missi
     assert result["inputs"]["team_pass_attempts"] == 544
     assert result["weeks_unknown"] == 0
     assert result["coverage"] == {"games_covered": 4, "stat_line_games": 4, "same_games": True,
-                                  "untracked_weeks": 0, "games_lost": 0, "mixed_sources": False}
+                                  "untracked_weeks": 0, "games_lost": 0, "mixed_sources": False,
+                                  "week": None, "invalid_inputs": [], "team_denominator": None,
+                                  "reasons": []}
     assert result["metrics"]["catch_rate"] == pytest.approx(109 / 136)
     assert result["metrics"]["drop_rate"] == pytest.approx(7 / (109 + 7))
     assert result["metrics"]["target_share"] == pytest.approx(136 / 544)
@@ -237,10 +245,11 @@ def test_player_metrics_sums_career_deltas_and_uses_the_stat_line_only_for_missi
 
     assert "season_stat_lines" in cur.calls[0][0]
     assert "player_week_counters" in cur.calls[1][0]
-    assert "player_seasons" in cur.calls[2][0]
-    assert "team_stats" in cur.calls[3][0]
-    assert cur.calls[3][1]["team_id"] == 7
-    assert cur.calls[3][1]["weeks"] == [1, 2, 3, 4]      # the Career rows' game weeks
+    assert "games" in cur.calls[2][0]                         # the team's stored games
+    assert "player_seasons" in cur.calls[3][0]
+    assert "team_stats" in cur.calls[4][0]
+    assert cur.calls[4][1]["team_id"] == 7
+    assert cur.calls[4][1]["weeks"] == [1, 2, 3, 4]      # the Career rows' game weeks
 
 
 def test_player_metrics_excludes_an_untracked_career_week():
@@ -252,18 +261,21 @@ def test_player_metrics_excludes_an_untracked_career_week():
                  "kick_touchbacks": 25})
     career = _career(TARGETS=20, RECEIVECATCHES=27, PASSATTEMPTS=138,
                      INSIDEPOCKETTHROW_ATTEMPTS=60, OUTSIDEPOCKETTHROW_ATTEMPTS=40)
-    cur = StubCursor([line, [career], _tracking(138, 100), {"team_pass_attempts": 138, "team_total_plays": 500}])
+    cur = StubCursor([line, [career], _games([1, 2, 3, 4]), _tracking(138, 100),
+                      {"team_pass_attempts": 138, "team_total_plays": 500}])
 
     result = am.player_metrics(cur, 2026, 2090)
 
     assert result["inputs"].get("targets") is None        # the untracked delta is not used
     assert result["inputs"]["receptions"] == 27            # the stat line still reports the box score
+    assert result["inputs"]["team_pass_attempts"] is None  # no denominator without a Career game
     assert result["metrics"]["catch_rate"] is None
     assert result["weeks_unknown"] == 1
     assert result["coverage"]["untracked_weeks"] == 1
     assert result["coverage"]["games_covered"] == 0
     assert result["coverage"]["stat_line_games"] == 4
     assert result["coverage"]["same_games"] is False
+    assert result["coverage"]["team_denominator"] == "no Career game covered"
 
 
 def test_player_metrics_suppresses_a_metric_that_mixes_sources_over_different_game_counts():
@@ -274,7 +286,8 @@ def test_player_metrics_suppresses_a_metric_that_mixes_sources_over_different_ga
     line.update({"team_id": 7, "games_played": 5, "rec_drops": 5, "kick_kickoffs": 40,
                  "kick_touchbacks": 25})
     career = _career(TARGETS=100, RECEIVECATCHES=60)
-    cur = StubCursor([line, [career], _tracking(240, 240), {"team_pass_attempts": 300, "team_total_plays": 900}])
+    cur = StubCursor([line, [career], _games([1, 2, 3, 4]), _tracking(240, 240),
+                      {"team_pass_attempts": 300, "team_total_plays": 900}])
 
     result = am.player_metrics(cur, 2026, 42)
 
@@ -294,11 +307,13 @@ def test_a_rollover_row_fills_the_team_denominator_of_the_season_it_is_credited_
     line = _blank(am.STAT_COLUMNS)
     line.update({"team_id": 7, "games_played": 5})
     career = _career(week=0, prev_week=18, games=5, TARGETS=20)
-    cur = StubCursor([line, [career], [], {"team_pass_attempts": 75, "team_total_plays": 180}])
+    cur = StubCursor([line, [career], _games([19, 20, 21, 22, 23]), [],
+                      {"team_pass_attempts": 75, "team_total_plays": 180}])
 
     result = am.player_metrics(cur, 2026, 42)
 
-    assert cur.calls[3][1]["weeks"] == [19, 20, 21, 22, 23]
+    assert cur.calls[4][1]["weeks"] == [19, 20, 21, 22, 23]
+    assert result["coverage"]["team_denominator"] is None
     assert result["inputs"]["team_pass_attempts"] == 75
     assert result["metrics"]["target_share"] == pytest.approx(20 / 75)
 
@@ -309,13 +324,13 @@ def test_the_season_team_supplies_the_denominator_when_the_stat_line_has_none():
     line = _blank(am.STAT_COLUMNS)
     line.update({"team_id": None, "games_played": 3})
     career = _career(week=3, prev_week=0, games=3, TARGETS=15)
-    cur = StubCursor([line, {"team_id": 9}, [career], [],
+    cur = StubCursor([line, {"team_id": 9}, [career], _games([1, 2, 3]), [],
                       {"team_pass_attempts": 120, "team_total_plays": 300}])
 
     result = am.player_metrics(cur, 2026, 42)
 
     assert "player_seasons" in cur.calls[1][0]
-    assert cur.calls[4][1]["team_id"] == 9
+    assert cur.calls[5][1]["team_id"] == 9
     assert result["metrics"]["target_share"] == pytest.approx(15 / 120)
 
 
@@ -327,8 +342,9 @@ def test_player_metrics_accepts_positional_rows():
                         {"season": 2026, "week": 4, "prev_season": 2026, "prev_week": 0, "status": "OK",
                          "delta": {"TARGETS": 136, "RECEIVECATCHES": 109}, "games_covered": 4})
     tracking = (4, 0, 2026, 240, 240)
+    games = [(101, 1, True), (102, 2, True), (103, 3, True), (104, 4, True)]
     team = (544, 1000)
-    cur = StubCursor([line, [career], [tracking], team])
+    cur = StubCursor([line, [career], games, [tracking], team])
 
     result = am.player_metrics(cur, 2026, 42)
 
@@ -340,30 +356,220 @@ def test_player_metrics_accepts_positional_rows():
 
 
 def test_player_metrics_week_reads_only_its_row_and_marks_unknown_weeks():
-    # H1/H3: the week reads its own WEEK-stage row. A TABLE_CHANGED row is not a usable delta, so its
-    # counters are not borrowed and the week counts as unknown; the line still reports the box score.
+    # H1/H3: the week reads only a delta that covers exactly its game. A TABLE_CHANGED row is not a usable
+    # delta, so its counters are not borrowed and the week counts as unknown; the line still reports the
+    # box score.
     line = _blank(am.STAT_COLUMNS)
     line.update({"team_id": 7, "receptions": 6, "pass_attempts": 30, "downs_played": 55})
     career = _career(week=3, prev_week=2, status="TABLE_CHANGED", games=1,
                      TARGETS=10, RECEIVECATCHES=6)
     career["delta"] = None
     team = {"team_pass_attempts": 35, "team_total_plays": 70}
-    cur = StubCursor([line, [career], [], team])
+    cur = StubCursor([line, [career], _games([3]), [], team])
 
     result = am.player_metrics(cur, 2026, 42, week=3)
 
     assert "game_stat_lines" in cur.calls[0][0]
     assert "player_week_counters" in cur.calls[1][0]
-    assert cur.calls[1][1]["week"] == 3
+    assert "credited_season" in cur.calls[1][0]          # the whole credited season, not one label
     assert result["weeks_unknown"] == 1
     assert result["inputs"]["receptions"] == 6
     assert result["inputs"].get("targets") is None
     assert result["metrics"]["catch_rate"] is None
-    assert cur.calls[3][1]["weeks"] == [3]
+    assert cur.calls[4][1]["weeks"] == [3]
 
     # An OK, tracked week is not counted as unknown.
     career_ok = _career(week=3, prev_week=2, status="OK", games=1, TARGETS=10, RECEIVECATCHES=6)
-    cur = StubCursor([line, [career_ok], _tracking(30, 30, week=3, prev_week=2), team])
+    cur = StubCursor([line, [career_ok], _games([3]), _tracking(30, 30, week=3, prev_week=2), team])
     result = am.player_metrics(cur, 2026, 42, week=3)
     assert result["weeks_unknown"] == 0
+    assert result["coverage"]["games_covered"] == 1
+    assert result["coverage"]["same_games"] is True
     assert result["metrics"]["catch_rate"] == pytest.approx(6 / 10)
+
+
+def test_a_bye_week_never_borrows_the_delta_that_spans_it():
+    # audit-5 S3: loads at weeks 8 and 10 leave one delta labelled 10 (prev_week 8). The team played only
+    # week 10, so it is week 10's game; asking for the bye week 9 must not report it or claim same games.
+    career = _career(week=10, prev_week=8, games=1, TARGETS=5, RECEIVECATCHES=2)
+    games = _games([10])
+    tracking = _tracking(30, 30, week=10, prev_week=8)
+    team = {"team_pass_attempts": 30, "team_total_plays": 70}
+
+    bye = am.player_metrics(StubCursor([None, {"team_id": 7}, [career], games, tracking, team]),
+                            2026, 42, week=9)
+    assert bye["inputs"].get("receptions") is None
+    assert bye["inputs"].get("targets") is None
+    assert bye["coverage"]["games_covered"] == 0
+    assert bye["coverage"]["same_games"] is False
+    assert any("no game" in reason for reason in bye["coverage"]["reasons"])
+    assert bye["coverage"]["team_denominator"] == "week 9: no game in the team's stored schedule"
+
+    played = am.player_metrics(StubCursor([None, {"team_id": 7}, [career], games, tracking, team]),
+                               2026, 42, week=10)
+    assert played["inputs"]["targets"] == 5
+    assert played["inputs"]["receptions"] == 2
+    assert played["coverage"]["games_covered"] == 1
+    assert played["coverage"]["same_games"] is True
+    assert played["metrics"]["catch_rate"] == pytest.approx(2 / 5)
+
+
+def test_an_unsplittable_multi_week_delta_leaves_the_week_to_the_stat_line():
+    # audit-5 S3: one delta covers weeks 11 and 12. Asking for week 11 cannot split the 26 targets over two
+    # games, so the week's counters come from the box score and the tracked inputs stay None with a reason.
+    line = _blank(am.STAT_COLUMNS)
+    line.update({"team_id": 7, "receptions": 8, "rec_yards": 73})
+    career = _career(week=12, prev_week=10, games=2, TARGETS=26, RECEIVECATCHES=15, RECEIVEYARDS=143)
+    cur = StubCursor([line, [career], _games([11, 12]), [],
+                      {"team_pass_attempts": 45, "team_total_plays": 110}])
+
+    result = am.player_metrics(cur, 2026, 42, week=11)
+
+    assert result["inputs"]["receptions"] == 8
+    assert result["inputs"]["rec_yards"] == 73
+    assert result["inputs"].get("targets") is None
+    assert result["inputs"].get("rec_drops") is None
+    assert result["metrics"]["catch_rate"] is None
+    assert result["metrics"]["target_share"] is None
+    assert result["coverage"]["games_covered"] == 0
+    assert result["coverage"]["same_games"] is False
+    assert any("cannot be split" in reason for reason in result["coverage"]["reasons"])
+
+
+def test_a_missing_team_box_withholds_the_week_denominator():
+    # audit-5 S1/S3: a stored game without its team box cannot divide any share.
+    line = _blank(am.STAT_COLUMNS)
+    line.update({"team_id": 7, "receptions": 6})
+    career = _career(week=5, prev_week=4, games=1, TARGETS=9, RECEIVECATCHES=6)
+    cur = StubCursor([line, [career], _games([5], has_box=False), _tracking(35, 35, week=5, prev_week=4),
+                      {"team_pass_attempts": 35, "team_total_plays": 80}])
+
+    result = am.player_metrics(cur, 2026, 42, week=5)
+
+    assert result["metrics"]["catch_rate"] == pytest.approx(6 / 9)
+    assert result["metrics"]["target_share"] is None
+    assert result["inputs"]["team_pass_attempts"] is None
+    assert result["coverage"]["team_denominator"] == "week 5: missing team box"
+    assert result["coverage"]["same_games"] is False
+
+
+def test_a_week_without_a_stored_schedule_or_team_publishes_no_share():
+    # A one-week delta can still describe its game, but with no stored schedule its identity cannot be
+    # confirmed and no team denominator exists: the share is None and coverage says why.
+    line = _blank(am.STAT_COLUMNS)
+    line.update({"team_id": None, "receptions": 6})
+    career = _career(week=5, prev_week=4, games=1, TARGETS=9, RECEIVECATCHES=6)
+    cur = StubCursor([line, {"team_id": None}, [career]])   # no team: no games/tracking/totals query
+
+    result = am.player_metrics(cur, 2026, 42, week=5)
+
+    assert result["metrics"]["catch_rate"] == pytest.approx(6 / 9)
+    assert result["metrics"]["target_share"] is None
+    assert result["coverage"]["team_denominator"] == "no stored team schedule"
+    assert result["coverage"]["same_games"] is False
+    assert any("schedule" in reason for reason in result["coverage"]["reasons"])
+
+
+def test_more_receptions_than_targets_publishes_no_catch_rate_or_share():
+    # audit-5 S4: 11 receptions on 10 targets gave catch rate 1.1. The bad counter is reported, the rates
+    # are None (never clamped), and a valid fully tracked receiver still computes.
+    line = _blank(am.STAT_COLUMNS)
+    line.update({"team_id": 7, "games_played": 4})
+    career = _career(week=4, prev_week=0, games=4, TARGETS=10, RECEIVECATCHES=11)
+    cur = StubCursor([line, [career], _games([1, 2, 3, 4]), _tracking(140, 140),
+                      {"team_pass_attempts": 140, "team_total_plays": 300}])
+
+    result = am.player_metrics(cur, 2026, 42)
+
+    assert result["inputs"]["targets"] == 10
+    assert result["inputs"]["receptions"] == 11
+    assert result["metrics"]["catch_rate"] is None
+    assert result["metrics"]["target_share"] is None
+    assert result["coverage"]["invalid_inputs"]
+    assert any("exceed" in item for item in result["coverage"]["invalid_inputs"])
+
+    valid = _career(week=4, prev_week=0, games=4, TARGETS=10, RECEIVECATCHES=7)
+    cur = StubCursor([line, [valid], _games([1, 2, 3, 4]), _tracking(140, 140),
+                      {"team_pass_attempts": 140, "team_total_plays": 300}])
+    result = am.player_metrics(cur, 2026, 42)
+    assert result["metrics"]["catch_rate"] == pytest.approx(0.7)
+    assert result["metrics"]["target_share"] == pytest.approx(10 / 140)
+    assert result["coverage"]["invalid_inputs"] == []
+
+
+def test_an_invalid_receiver_week_is_named_in_coverage():
+    # audit-5 S4's week 11: a single-game delta with 11 receptions on 10 targets must not publish 1.1.
+    line = _blank(am.STAT_COLUMNS)
+    line.update({"team_id": 7})
+    career = _career(week=11, prev_week=10, games=1, TARGETS=10, RECEIVECATCHES=11)
+    cur = StubCursor([line, [career], _games([11]), _tracking(40, 40, week=11, prev_week=10),
+                      {"team_pass_attempts": 40, "team_total_plays": 90}])
+
+    result = am.player_metrics(cur, 2026, 42, week=11)
+
+    assert result["metrics"]["catch_rate"] is None
+    assert result["metrics"]["target_share"] is None
+    assert any(item.startswith("week 11") for item in result["coverage"]["invalid_inputs"])
+
+
+@pytest.mark.parametrize("terminal_week", [-1, -2])
+def test_a_same_season_offseason_or_probowl_terminal_row_fills_the_tail(terminal_week):
+    # A terminal row loaded in the same credited season (OFFSEASON -1, PROBOWL -2) covers the tail weeks.
+    line = _blank(am.STAT_COLUMNS)
+    line.update({"team_id": 7, "games_played": 5})
+    career = _career(week=terminal_week, prev_week=18, games=5, TARGETS=20)
+    cur = StubCursor([line, [career], _games([19, 20, 21, 22, 23]), [],
+                      {"team_pass_attempts": 75, "team_total_plays": 180}])
+
+    result = am.player_metrics(cur, 2026, 42)
+
+    assert cur.calls[4][1]["weeks"] == [19, 20, 21, 22, 23]
+    assert result["coverage"]["team_denominator"] is None
+    assert result["metrics"]["target_share"] == pytest.approx(20 / 75)
+
+
+def test_a_partial_season_tail_does_not_pull_earlier_weeks_into_the_denominator():
+    # Only weeks 15-18 are covered by the Career rows, even though the team's whole season is stored: the
+    # denominator is those four games, and completeness compares against them alone.
+    line = _blank(am.STAT_COLUMNS)
+    line.update({"team_id": 7, "games_played": 4})
+    career = _career(week=18, prev_week=14, games=4, TARGETS=20)
+    cur = StubCursor([line, [career], _games(range(1, 19)), [],
+                      {"team_pass_attempts": 120, "team_total_plays": 300}])
+
+    result = am.player_metrics(cur, 2026, 42)
+
+    assert cur.calls[4][1]["weeks"] == [15, 16, 17, 18]
+    assert result["coverage"]["team_denominator"] is None
+    assert result["metrics"]["target_share"] == pytest.approx(20 / 120)
+
+
+def test_an_incomplete_team_history_publishes_no_share():
+    # audit-5 S1: the Career rows cover a full season but only the first nine games have team boxes, so the
+    # denominator would be partial history. The share is None and coverage names the gap.
+    line = _blank(am.STAT_COLUMNS)
+    line.update({"team_id": 7, "games_played": 17})
+    career = _career(week=18, prev_week=0, games=17, TARGETS=130)
+    cur = StubCursor([line, [career], _games(range(1, 10)), [],
+                      {"team_pass_attempts": 330, "team_total_plays": 800}])
+
+    result = am.player_metrics(cur, 2026, 42)
+
+    assert result["metrics"]["target_share"] is None
+    assert result["inputs"]["team_pass_attempts"] is None
+    assert "Career rows cover 17 games" in result["coverage"]["team_denominator"]
+
+
+def test_a_player_inactive_for_a_team_game_keeps_the_share():
+    # The player's Career rows cover three games, his club played four in the covered weeks: a DNP is not
+    # partial team history, so the denominator over those weeks is used.
+    line = _blank(am.STAT_COLUMNS)
+    line.update({"team_id": 7, "games_played": 3})
+    career = _career(week=4, prev_week=0, games=3, TARGETS=15)
+    cur = StubCursor([line, [career], _games([1, 2, 3, 4]), [],
+                      {"team_pass_attempts": 120, "team_total_plays": 300}])
+
+    result = am.player_metrics(cur, 2026, 42)
+
+    assert result["coverage"]["team_denominator"] is None
+    assert result["metrics"]["target_share"] == pytest.approx(15 / 120)
