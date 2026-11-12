@@ -163,6 +163,58 @@ def test_a_forced_cut_marks_the_gap_and_keeps_the_whole_assignment():
     assert len(shown) < len(assignment) + 4000 + 200     # the bound holds, marker aside
 
 
+def test_split_evidence_keeps_one_tool_marker_per_block():
+    """R5a F4: block 0 already begins with "TOOL "; prefixing it again corrupted it and inflated the
+    character count `window_evidence` reports as missing."""
+    evidence = ("Write Week 5.\n\nTOOL get_boxscore(id=1):\nQB tossed 3 TDs\n\n"
+                "TOOL get_standings():\nBUF 4-1")
+
+    assignment, blocks = fact_gate.split_evidence(evidence)
+
+    assert assignment == "Write Week 5."
+    assert blocks[0].startswith("TOOL get_boxscore")
+    assert blocks[1].startswith("TOOL get_standings")
+    assert "TOOL TOOL" not in "\n".join(blocks)
+
+
+def test_a_cut_reports_exactly_the_tool_characters_it_drops():
+    """R5a F4: the marker counted the synthetic prefix, so it over-reported what the checker never saw."""
+    tool = "TOOL t():\nUNIQUE_TOOL_PAYLOAD"          # 29 characters
+    shown, truncated = fact_gate.window_evidence("Brief\n\n" + tool, limit=30)
+
+    assert truncated is True
+    assert "TOOL TOOL" not in shown
+    # budget = 30 - len("Brief") = 25 kept of 29 characters: exactly 4 dropped, not 9.
+    assert "4 characters of tool results not shown" in shown
+    assert "_TOOL_PAYLOAD" in shown                  # the tail of the tool text survives
+
+
+def test_an_assignment_over_the_window_is_bounded_and_counted():
+    """R5a F4: when the assignment alone fills the window, it too is bounded, and the marker says so."""
+    evidence = ("A" * 120) + "\n\nTOOL t():\nIMPORTANT_TOOL_DATA"
+
+    shown, truncated = fact_gate.window_evidence(evidence, limit=100)
+
+    assert truncated is True
+    assert "IMPORTANT_TOOL_DATA" not in shown
+    assert "the assignment alone exceeds the window" in shown
+    assert len(shown.split("\n[...")[0]) <= 100
+
+
+def test_a_brief_over_the_limit_is_marked_and_reported_cut():
+    """R5a F3: `brief[:BRIEF_LIMIT]` cut the assignment silently, and a fact from the cut looked invented."""
+    brief = "x" * 65_000
+
+    prompt, truncated = fact_gate.render_prompt("Article body.", evidence="EVIDENCE", brief=brief)
+
+    assert truncated is True
+    assert "ASSIGNMENT TRUNCATED HERE" in prompt
+    assert len(prompt) < 65_000 + 500
+
+    short_prompt, short_truncated = fact_gate.render_prompt("body", evidence="ev", brief="short brief")
+    assert short_truncated is False and "short brief" in short_prompt
+
+
 def test_a_cut_evidence_window_adds_the_partial_evidence_rule(monkeypatch):
     monkeypatch.setattr(fact_gate, "EVIDENCE_LIMIT", 3000)
     assignment = ("ASSIGNMENT: write the recap. " * 100)[:1200]
@@ -189,6 +241,14 @@ def test_rubric_scopes_absence_and_only_a_cut_window_makes_it_proof_free():
     assert cut_rubric.startswith(rubric)
     assert "is PARTIAL" in cut_rubric
     assert "UNSUPPORTED, never CONTRADICTED" in cut_rubric
+
+
+def test_the_rubric_does_not_judge_draft_status_against_years_of_experience():
+    """R5a F6: years_of_experience measures tenure, not draft round, so "undrafted" needs its own rule."""
+    rubric = fact_gate.RUBRIC
+    tenure = rubric.split("years_of_experience")[0].rsplit("2. Every status word", 1)[-1]
+    assert "undrafted" not in tenure
+    assert "draft round" in rubric
 
 
 

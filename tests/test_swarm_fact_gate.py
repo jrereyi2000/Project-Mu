@@ -164,16 +164,22 @@ def test_a_still_contradicted_article_saves_flagged_with_its_claims():
         result = _save(dispatcher, conn, client)
 
     assert result["fact_gate_status"] == "flagged"
-    assert result["fact_gate"]["rewritten"] is True
+    # The rewrite was tried and discarded (it contradicted just as much), so the published text is the
+    # writer's and the payload says so; only the attempt is recorded (R5a F5).
+    assert result["text"] == "first draft"
+    assert result["fact_gate"]["rewritten"] is False
+    assert result["fact_gate"]["rewrite_attempted"] is True
     (sql, params), = conn.cur.inserts()
     assert "fact_gate_status" in sql and "fact_gate" in sql
     assert params[-2] == "flagged"
+    assert params[9] == "first draft"
     stored = json.loads(params[-1])
     assert stored["counts"]["CONTRADICTED"] == 1
     assert stored["claims"] == [{"claim": CONTRADICTED_CLAIM["claim"],
                                  "evidence": CONTRADICTED_CLAIM["evidence"]}]
     assert stored["contradicted_kept"] == 1
-    assert stored["rewritten"] is True
+    assert stored["rewritten"] is False
+    assert stored["rewrite_attempted"] is True
     assert "first draft" not in params[-1] and "second draft" not in params[-1]   # never the article
 
 
@@ -357,7 +363,8 @@ def test_a_rewrite_that_returns_nothing_keeps_the_flagged_article():
 
     assert result["fact_gate_status"] == "flagged"
     assert result["text"] == "first draft"            # the contradicting text stands, visibly flagged
-    assert result["fact_gate"]["rewritten"] is True
+    assert result["fact_gate"]["rewritten"] is False   # nothing was adopted (R5a F5)
+    assert result["fact_gate"]["rewrite_attempted"] is True
 
 
 def test_a_comparison_capture_run_is_not_gated():
@@ -388,7 +395,93 @@ def test_an_offline_mock_run_is_not_gated():
     assert result["fact_gate"] is None
 
 
-# ----------------------------------------------------------------------------------------------- the notice ---
+def test_an_unmigrated_database_is_gated_log_only_and_never_rewritten(capsys):
+    """R5a F2: with no fact_gate_status column nothing may be rewritten — a rewrite saved with no
+    record of it is silent alteration, which is worse than a flagged original."""
+    dispatcher, conn = _saving_dispatcher(columns=False)
+    client = _Client(["wrong draft", "corrected draft"])
+    with mock.patch("newsroom.swarm_dispatcher.fact_gate.check", return_value=_gate(1)) as check, \
+         mock.patch("newsroom.swarm_dispatcher.fact_gate.rewrite_prompt") as prompt:
+        result = _save(dispatcher, conn, client)
+
+    check.assert_called_once()                        # judged, never re-checked
+    prompt.assert_not_called()                        # no correction message at all
+    assert client.models.calls == 1                   # the writer's call only
+    assert result["text"] == "wrong draft"            # the writer's own text is what ships
+    assert result["fact_gate_status"] == "flagged"
+    assert result["fact_gate"]["rewritten"] is False
+    assert result["fact_gate"]["rewrite_attempted"] is False
+    (sql, params), = conn.cur.inserts()
+    assert "fact_gate_status" not in sql              # the old INSERT
+    assert params[9] == "wrong draft"
+    probes = [s for s, _ in conn.cur.executed if "INFORMATION_SCHEMA.COLUMNS" in s.upper()]
+    assert len(probes) == 1 and "table_schema = current_schema()" in probes[0]   # R5a F6
+    out = capsys.readouterr().out
+    assert "[FACT GATE COLUMN MISSING]" in out and "log-only" in out
+
+
+def test_the_checker_is_never_handed_the_writers_client_or_model():
+    """R5a F1, as landed in 45e58d1: the checker builds its own client for FACT_GATE_MODEL, so the
+    writer's client is not billed for it and a Gemini writer is not silently 'skipped'."""
+    dispatcher, conn = _saving_dispatcher(columns=True)
+    client = _Client(["a draft"])
+    with mock.patch("newsroom.swarm_dispatcher.fact_gate.check", return_value=_gate(0)) as check:
+        _save(dispatcher, conn, client)
+
+    args, kwargs = check.call_args
+    assert kwargs == {}                               # no client=, no model= (the 546b9fa defect)
+    assert len(args) == 2                             # (text, evidence) only
+    assert args[0] == "a draft"
+    assert client.models.calls == 1                   # one writer call; the checker's is its own
+
+
+def test_the_checker_sees_the_whole_tool_result_past_twelve_thousand_characters():
+    """R5a F3: a 12,000-character slice cut facts the writer saw out of the checker's view while the
+    writer still had them, so real claims came back 'not in evidence'."""
+    tail = "TAIL_FACT: Sam Hollis threw for 3,900 yards."
+
+    def long_lookup(city: str) -> str:
+        """A tool result longer than the old 12,000-character evidence cap."""
+        return "x" * 13_000 + tail
+
+    dispatcher = _dispatcher(tools=[long_lookup])
+    client = _Client(["a draft"])
+    with mock.patch("newsroom.swarm_dispatcher.fact_gate.check", return_value=_gate(0)) as check:
+        dispatcher._execute_agent(_prompt(), 2036, 18, None, live=True,
+                                  model="muse-spark-1.3-contributor", save_to_db=False,
+                                  client=client)
+
+    evidence = check.call_args[0][1]
+    assert tail in evidence
+    assert len(evidence) > 13_000
+
+
+def test_a_rewrite_that_breaks_a_structured_article_is_rejected(capsys):
+    """R5a F5: a fact-gate correction that drops a team from the Power Rankings is discarded — the
+    pre-rewrite validated text ships — instead of publishing a page no table can be stored from."""
+    dispatcher = _dispatcher(tools=[])
+    dispatcher._power_rankings_team_index = lambda: []
+    first = "# Power Rankings\n\n1. Bears\n2. Bills\n...\n32. Cardinals"
+    broken = "# Power Rankings\n\n1. Bears"
+    client = _Client([first, broken])
+
+    with mock.patch("newsroom.swarm_dispatcher.parse_power_rankings",
+                    side_effect=lambda text, index: ([], ["Missing ranks: [32]"] if text == broken else [])), \
+         mock.patch("newsroom.swarm_dispatcher.fact_gate.check", side_effect=[_gate(1), _gate(0)]), \
+         mock.patch("newsroom.swarm_dispatcher.fact_gate.rewrite_prompt", return_value="fix it"):
+        result = dispatcher._execute_agent(_prompt(article_type="POWER_RANKINGS"), 2036, 18, None,
+                                          live=True, model="muse-spark-1.3-contributor",
+                                          save_to_db=False, client=client)
+
+    assert client.models.calls == 2                   # writer + correction
+    assert result["text"] == first                    # the validated original stands
+    assert result["fact_gate_status"] == "flagged"
+    assert result["fact_gate"]["rewritten"] is False
+    assert result["fact_gate"]["rewrite_attempted"] is True
+    assert "rewrite rejected" in capsys.readouterr().out
+
+
+
 
 def test_the_notice_counts_the_weeks_articles():
     from newsroom.weekly_run import fact_gate_summary

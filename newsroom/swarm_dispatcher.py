@@ -1642,7 +1642,10 @@ If you need specific stats, use your database tools before producing your final 
                                         tool_trace.append(entry)
                                     if evidence_blocks is not None:
                                         # The fact gate's evidence: what this writer actually retrieved.
-                                        evidence_blocks.append(f"TOOL {call_repr}:\n{res_text[:12000]}")
+                                        # The whole result: a 12k slice here cut real players out of the
+                                        # checker's view while the writer still saw them (R5a F3). Any
+                                        # cut now happens visibly in `fact_gate.window_evidence`.
+                                        evidence_blocks.append(f"TOOL {call_repr}:\n{res_text}")
                                     return res_text
                                 except Exception as ex:
                                     print(f"   -> Tool Error: {ex}")
@@ -1776,12 +1779,27 @@ If you need specific stats, use your database tools before producing your final 
                     # One correction pass at most; the kept version is whichever has fewer contradictions.
                     if live and ctype == "ARTICLE" and failure_reason is None and (generated_text or "").strip():
                         if fact_gate_enabled:
+                            # Probe the schema BEFORE gating (R5a F2): without `fact_gate_status` a rewrite
+                            # would be stored with no record of it, which is silent alteration. The gate
+                            # still judges and flags, but it never rewrites what it cannot label.
+                            rewrite_allowed = True
+                            if save_to_db and not self._fact_gate_columns_available():
+                                rewrite_allowed = False
+                                if not getattr(self, "_fact_gate_missing_notice", False):
+                                    print("[FACT GATE COLUMN MISSING] news_feed has no fact_gate_status column "
+                                          "(apply db/migrations/2027_02_30_fact_gate.sql); the gate ran log-only: "
+                                          "the article is judged and flagged, never rewritten, and this article "
+                                          "is saved without its verdict.")
+                                    self._fact_gate_missing_notice = True
                             evidence = compiled_prompt.get("task_instruction") or ""
                             if evidence_blocks:
                                 evidence += "\n\n" + "\n\n".join(evidence_blocks)
                             try:
                                 fact_gate_status, fact_gate_payload, generated_text = self._apply_fact_gate(
-                                    chat, generated_text, evidence, rewrites)
+                                    chat, generated_text, evidence, rewrites,
+                                    rewrite_allowed=rewrite_allowed,
+                                    validate=lambda candidate: self._structured_article_errors(
+                                        candidate, at_id, season, week, ballot))
                             except Exception as exc:  # noqa: BLE001 - the gate must never fail a write
                                 print(f"⚠️  [FACT GATE] gate failed: {exc}")
                                 fact_gate_status, fact_gate_payload = "skipped", None
@@ -1888,16 +1906,10 @@ If you need specific stats, use your database tools before producing your final 
                 with psycopg.connect(self.db.db_conn_info) as conn:
                     with conn.cursor() as cur:
                         # A live franchise database may not have the fact-gate columns yet (2027_02_30 is
-                        # JR's to apply). Probe once: without them the gate still ran and logged, so this is
-                        # a schema state, not an article failure — the old INSERT is used unchanged.
-                        if getattr(self, "_fact_gate_columns", None) is None:
-                            try:
-                                cur.execute("SELECT 1 FROM information_schema.columns "
-                                            "WHERE table_name = 'news_feed' AND column_name = 'fact_gate_status'")
-                                self._fact_gate_columns = cur.fetchone() is not None
-                            except Exception:
-                                self._fact_gate_columns = False
-                        store_fact_gate = bool(getattr(self, "_fact_gate_columns", False))
+                        # JR's to apply). Probed before the gate ran (R5a F2, `_fact_gate_columns_available`)
+                        # and cached here: without them this is a schema state, not an article failure, so
+                        # the old 11-column INSERT is used unchanged.
+                        store_fact_gate = self._fact_gate_columns_available(cur)
 
                         if store_fact_gate:
                             cur.execute("""
@@ -2027,7 +2039,61 @@ If you need specific stats, use your database tools before producing your final 
             "fact_gate": fact_gate_payload,
         }
 
-    def _apply_fact_gate(self, chat, text: str, evidence: str, rewrites):
+    def _fact_gate_columns_available(self, cur=None) -> bool:
+        """Whether `news_feed` has the fact-gate columns, probed once per dispatcher.
+
+        Schema-qualified (R5a F6): a same-named table in another schema is not this one. The answer is
+        cached on the instance, so a run probes once; a later migration takes effect in a new dispatcher.
+        """
+        if getattr(self, "_fact_gate_columns", None) is None:
+            sql = ("SELECT 1 FROM information_schema.columns "
+                   "WHERE table_schema = current_schema() AND table_name = 'news_feed' "
+                   "AND column_name = 'fact_gate_status'")
+            try:
+                if cur is not None:
+                    cur.execute(sql)
+                    self._fact_gate_columns = cur.fetchone() is not None
+                else:
+                    with psycopg.connect(self.db.db_conn_info) as conn, conn.cursor() as own_cur:
+                        own_cur.execute(sql)
+                        self._fact_gate_columns = own_cur.fetchone() is not None
+            except Exception:
+                self._fact_gate_columns = False
+        return bool(self._fact_gate_columns)
+
+    def _structured_article_errors(self, text: str, at_id, season: int, week: int, ballot=None) -> list:
+        """The structural errors of `text` for an article a table is stored from, or [].
+
+        `POWER_RANKINGS`, `OFFICIAL_AP_ALL_PRO_ROSTER`, the Week 22 `AWARDS_TRACKER` and
+        `SUPER_BOWL_GAME_RECAP` are validated before they are saved; a fact-gate rewrite is checked
+        with this same rule, so a correction that drops a team or a winner is rejected instead of
+        shipping a page whose structured table cannot be stored (R5a F5). Never raises.
+        """
+        if not (text or "").strip() or not at_id:
+            return []
+        try:
+            if at_id == "POWER_RANKINGS":
+                return parse_power_rankings(text, self._power_rankings_team_index())[1]
+            if at_id == "OFFICIAL_AP_ALL_PRO_ROSTER":
+                return parse_all_pro(text, self._all_pro_roster_index(season))[1]
+            if at_id == "AWARDS_TRACKER" and week == 22:
+                return parse_award_winners(text, self._all_pro_roster_index(season),
+                                           self._coach_index(season))[1]
+            if at_id == "SUPER_BOWL_GAME_RECAP":
+                return parse_sb_mvp(text, self._all_pro_roster_index(season))[1]
+            if ballot and ballot.get("kind") == "all_pro":
+                return check_all_pro_against_stored(text, ballot["stored"],
+                                                    self._all_pro_roster_index(season))
+            if ballot:
+                return check_awards_against_stored(text, ballot["stored"],
+                                                   self._all_pro_roster_index(season),
+                                                   self._coach_index(season))
+        except Exception:
+            return []
+        return []
+
+    def _apply_fact_gate(self, chat, text: str, evidence: str, rewrites,
+                         rewrite_allowed: bool = True, validate=None):
         """Judge `text` against the evidence its writer had and correct it at most once (plan §2.3).
 
         Returns `(status, payload, text)`: status is "clean", "rewritten", "flagged" or "skipped"; payload is
@@ -2043,9 +2109,15 @@ If you need specific stats, use your database tools before producing your final 
         `FACT_GATE_REWRITE=0` (also "off"/"false") is plan R4's switch: the check still runs and the
         verdict and claims are still stored, but no correction message is sent and a contradicting
         article is labelled "flagged" rather than "rewritten".
+
+        `rewrite_allowed=False` is the schema state (R5a F2): `news_feed` has no `fact_gate_status`
+        column, so the verdict cannot be stored and the article is judged and flagged, never altered.
+        `validate` is the article type's structural check (R5a F5): a rewrite that breaks it is
+        discarded like one that made the article worse.
         """
         # R4's switch. Unset or "1" means the correction pass runs; 0/off/false means judge and flag only.
-        rewrite_disabled = os.environ.get("FACT_GATE_REWRITE", "").strip().lower() in ("0", "off", "false")
+        rewrite_disabled = (not rewrite_allowed or
+                            os.environ.get("FACT_GATE_REWRITE", "").strip().lower() in ("0", "off", "false"))
         try:
             gate = fact_gate.check(text, evidence)
         except Exception as exc:  # noqa: BLE001 - a gate outage must never fail a write
@@ -2060,16 +2132,22 @@ If you need specific stats, use your database tools before producing your final 
         first_contradicted = int(first_counts.get("CONTRADICTED") or 0)
         attempts = [{"counts": first_counts, "model": model}]
         kept, kept_counts, kept_claims = text, first_counts, list(gate.get("claims") or [])
+        # `rewritten` means the published text IS the rewrite (adopted), not that one was attempted:
+        # a discarded, empty or failed rewrite leaves the original in place, and the payload must say so
+        # (R5a F5). `rewrite_attempted` records the attempt separately.
         rewritten = False
+        rewrite_attempted = False
 
         if first_contradicted and rewrite_disabled and "FACT_GATE" not in (rewrites or []):
-            print(f"\n⚠️  [FACT GATE] rewrite disabled (FACT_GATE_REWRITE=0): "
+            why = ("rewrite disabled (FACT_GATE_REWRITE=0)" if rewrite_allowed
+                   else "no fact_gate_status column, so log-only")
+            print(f"\n⚠️  [FACT GATE] {why}: "
                   f"{first_contradicted} contradicted claim(s) kept and flagged, no correction pass")
 
         if first_contradicted and not rewrite_disabled and "FACT_GATE" not in (rewrites or []):
             contradicted = [c for c in kept_claims
                             if str(c.get("verdict") or "").strip().upper() == "CONTRADICTED"]
-            rewritten = True
+            rewrite_attempted = True
             if rewrites is not None:
                 rewrites.append("FACT_GATE")
             print(f"\n⚠️  [FACT GATE] {first_contradicted} contradicted claim(s); requesting one rewrite")
@@ -2091,10 +2169,19 @@ If you need specific stats, use your database tools before producing your final 
                 if second and not second.get("skipped"):
                     second_counts = dict(second.get("counts") or {})
                     attempts.append({"counts": second_counts, "model": second.get("model")})
-                    if int(second_counts.get("CONTRADICTED") or 0) < first_contradicted:
+                    adopted = int(second_counts.get("CONTRADICTED") or 0) < first_contradicted
+                    broken = []
+                    if adopted and validate is not None:
+                        # A rewrite that breaks a stored-shape article is not a correction (R5a F5).
+                        broken = validate(retry_text) or []
+                        if broken:
+                            print("⚠️  [FACT GATE] rewrite rejected: it breaks the article's "
+                                  "structure: " + " | ".join(str(e) for e in broken[:5]))
+                    if adopted and not broken:
                         # R4: a rewrite that made the article worse is discarded, not published.
                         kept, kept_counts, kept_claims = (retry_text, second_counts,
                                                           list(second.get("claims") or []))
+                        rewritten = True
             else:
                 print("   -> The rewrite returned no text; the contradicting article stands (flagged).")
 
@@ -2114,6 +2201,7 @@ If you need specific stats, use your database tools before producing your final 
                        if str(c.get("verdict") or "").strip().upper() == "CONTRADICTED"],
             "attempts": attempts,
             "rewritten": rewritten,
+            "rewrite_attempted": rewrite_attempted,
             "contradicted_kept": kept_contradicted,
             "contradicted_discarded": 0 if kept is text else first_contradicted - kept_contradicted,
         }

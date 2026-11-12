@@ -54,8 +54,17 @@ def _load(dirpath: str):
 
 
 def _prompt(result: dict, brief: str) -> tuple[str, bool]:
-    """The prompt and whether its evidence was cut (the brief is already the evidence's head)."""
-    return render_prompt(result.get("text") or "", result.get("evidence") or "", brief)
+    """The prompt and whether its evidence was cut.
+
+    The writer's evidence already begins with its assignment, so the brief is passed only when it is
+    not that head: otherwise the prompt carries the same 46,000-48,000 characters twice (R5a F3).
+    """
+    evidence = result.get("evidence") or ""
+    brief_text = brief or ""
+    head = brief_text.strip()
+    if head and evidence.lstrip().startswith(head):
+        brief_text = ""
+    return render_prompt(result.get("text") or "", evidence, brief_text)
 
 
 def verify(dirpath: str, model: str, slots: list | None, max_claims: int) -> int:

@@ -20,8 +20,10 @@ never saw the tool results: the 18 compared articles carry 56,590-205,579 charac
 (median 97,004), and their assignment alone is 46,484-48,496. 20-62% of claims came back
 "contradicted", almost all falsely ("Mike LaFleur is the Cardinals' head coach" ×37 in one article);
 the bound was the bug. So `EVIDENCE_LIMIT` is 400,000 characters — past any real article and far
-inside DeepSeek V4.1 Flash's context — the assignment is never the part that is cut, and a cut is
-marked in the prompt and turns absence into UNSUPPORTED, never CONTRADICTED.
+inside DeepSeek V4.1 Flash's context — the assignment is never the part that is cut unless it alone
+fills the window (then it is bounded too and the marker says so), and a cut is marked in the prompt
+and turns absence into UNSUPPORTED, never CONTRADICTED. The same rule covers the whole tool result:
+the dispatcher hands it over uncut, so the only cut is this visible one.
 
 The fix is coverage, not the model. The rubric runs three passes before it weighs any number:
 every named person's team and role, every status word against `years_of_experience`, and every
@@ -61,9 +63,10 @@ MAX_CLAIMS = 60
 # Flash's context is far larger than this — and a cut, if it ever happens, is marked and never silent.
 EVIDENCE_LIMIT = 400_000
 BRIEF_LIMIT = 60_000
-# The writer records each tool result at 12,000 characters (newsroom/swarm_dispatcher.py
-# `res_text[:12000]`, which grounding needs); the gate takes whatever result it is handed.
-TOOL_RESULT_LIMIT = 12_000
+# The dispatcher hands the gate every tool result whole (newsroom/swarm_dispatcher.py
+# `evidence_blocks`); a single result is no longer cut to 12,000 characters on the way in, so the
+# only cut is the visible one `window_evidence` makes at `EVIDENCE_LIMIT`.
+TOOL_RESULT_LIMIT = 12_000  # kept for callers that still bound their own trace
 
 # A tool block starts at the beginning of a line: the evidence is "<assignment>\n\nTOOL name(args):\n
 # <result>\n\nTOOL ..." (newsroom/swarm_dispatcher.py `_execute_agent`).
@@ -72,6 +75,13 @@ TOOL_MARKER = "TOOL "
 # is the exact number of tool-result characters dropped.
 TRUNCATION_MARKER = ("[... EVIDENCE TRUNCATED HERE: {missing:,} characters of tool results "
                      "not shown ...]")
+# Used when the assignment alone is already over the window: no tool result is shown at all and the
+# count covers the assignment's own tail as well, so the prompt never claims more than it shows.
+ASSIGNMENT_TRUNCATION_MARKER = ("[... EVIDENCE TRUNCATED HERE: {missing:,} characters not shown "
+                                "(the assignment alone exceeds the window, so no tool results are "
+                                "shown) ...]")
+# The brief is the assignment's copy in the prompt; a cut there is marked and reported too.
+BRIEF_TRUNCATION_MARKER = "[... ASSIGNMENT TRUNCATED HERE: {missing:,} characters not shown ...]"
 
 # Thinking shares the output cap on Go's reasoning models: at 8,192 DeepSeek V4.1 Flash spent the
 # whole budget thinking and returned nothing. The cap is generous and thinking is asked low.
@@ -90,8 +100,10 @@ wrong most often, and a number does not excuse a wrong person, status or result:
 a record, an award, a status word, a team or a role, is that person in the evidence, on the same team \
 and in the same role? This pass is about the claims attached to people, not about whether every name \
 is mentioned: a name that carries no claim is not an error.
-2. Every status word ("rookie", "second-year", "veteran", "undrafted"): check it against that \
-player's years_of_experience in the evidence (0 = rookie, 1 = second-year, 2 or more = veteran).
+2. Every status word ("rookie", "second-year", "veteran"): check it against that player's \
+years_of_experience in the evidence (0 = rookie, 1 = second-year, 2 or more = veteran). A draft \
+status ("undrafted", "first-round pick") is only CONTRADICTED when the evidence states a different \
+draft round or pick; with no draft round in the evidence it is UNSUPPORTED, never an error.
 3. Every game result: the winner, the loser and the exact score, as a (winner, loser, score) triple. \
 A swapped winner and a swapped score are each a contradiction.
 
@@ -196,7 +208,9 @@ def split_evidence(evidence: str) -> tuple[str, list]:
     assignment = text[:start]
     rest = text[start:].lstrip("\n")
     parts = rest.split("\n" + TOOL_MARKER)
-    blocks = [TOOL_MARKER + parts[0]] + [TOOL_MARKER + part for part in parts[1:]]
+    # `parts[0]` already starts with TOOL_MARKER (the boundary find stopped on it): prefixing it again
+    # both corrupted block 0 and inflated the tool-text length `window_evidence` counts.
+    blocks = [parts[0]] + [TOOL_MARKER + part for part in parts[1:]]
     return assignment, [block for block in blocks if block.strip()]
 
 
@@ -219,28 +233,48 @@ def window_evidence(evidence: str, limit: int | None = None) -> tuple[str, bool]
         kept = assignment[:limit].rstrip()
         marker = TRUNCATION_MARKER.format(missing=len(assignment) - len(kept))
         return f"{kept}\n{marker}", True
-    budget = max(limit - len(assignment), 0)
+    budget = limit - len(assignment)
+    if budget <= 0:
+        # The assignment alone fills the window (a long brief). Bound it too, and count every dropped
+        # character — the assignment's own tail plus all of the tool results — in the marker.
+        kept = assignment[:max(limit, 0)].rstrip()
+        missing = (len(assignment) - len(kept)) + len(tool_text)
+        marker = ASSIGNMENT_TRUNCATION_MARKER.format(missing=missing)
+        return f"{kept}\n{marker}", True
     head_len = budget // 2
     tail_len = budget - head_len
-    missing = len(tool_text) - head_len - tail_len
     head = tool_text[:head_len].rstrip()
     tail = tool_text[len(tool_text) - tail_len:].lstrip() if tail_len else ""
+    # The exact number of characters that are not shown, counted from the slices actually kept.
+    missing = len(tool_text) - len(head) - len(tail)
     marker = TRUNCATION_MARKER.format(missing=missing)
     shown = f"{head}\n{marker}\n{tail}" if head else f"{marker}\n{tail}"
     return (f"{assignment.rstrip()}\n\n{shown}" if assignment.strip() else shown), True
 
 
+def clip_brief(brief: str, limit: int = BRIEF_LIMIT) -> tuple[str, bool]:
+    """(the brief the prompt shows, whether it was cut). A cut is marked, never silent."""
+    text = (brief or "").strip()
+    if len(text) <= limit:
+        return text, False
+    keep = max(limit - len(BRIEF_TRUNCATION_MARKER), 0)
+    kept = text[:keep].rstrip()
+    marker = BRIEF_TRUNCATION_MARKER.format(missing=len(text) - len(kept))
+    return f"{kept}\n{marker}", True
+
+
 def render_prompt(text: str, evidence: str = "", brief: str = "") -> tuple[str, bool]:
-    """(the prompt, whether the evidence was cut). The prompt is the assignment, the evidence, the article."""
+    """(the prompt, whether the evidence or the assignment was cut)."""
     shown, truncated = window_evidence(evidence)
+    brief_text, brief_cut = clip_brief(brief)
     sections = []
-    if (brief or "").strip():
+    if brief_text:
         sections.append("ASSIGNMENT (what the writer was asked to produce):\n"
-                        f"{brief.strip()[:BRIEF_LIMIT]}")
+                        f"{brief_text}")
     sections.append("EVIDENCE THE WRITER RETRIEVED (the only facts it may use):\n"
                     f"{shown.strip()}")
     sections.append(f"ARTICLE:\n{text or ''}")
-    return "\n\n".join(sections), truncated
+    return "\n\n".join(sections), truncated or brief_cut
 
 
 def build_prompt(text: str, evidence: str = "", brief: str = "") -> str:
