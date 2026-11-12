@@ -66,7 +66,7 @@ conversation** can be, and that is how an auditor starts if it wants a wake:
 
 ```bash
 tools/agy_batch.sh --label audit-x brief.txt          # first turn; prints `conversation: <id>`
-tools/agent_board_wake.py --harness agy --label audit-x \
+python3 -m tools.agent_board_wake --harness agy --label audit-x \
     --conversation <id> --state data/audit_reports/audit-x/wake.json
 ```
 
