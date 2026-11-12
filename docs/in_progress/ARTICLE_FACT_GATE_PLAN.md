@@ -1,6 +1,6 @@
 # Project Mu: Article Fact Gate Plan
 
-**Status:** approved by JR (2026-11-12); building, wave 1 of 2. `/execute-plan` runs it as label `fact-gate`.
+**Status:** approved by JR (2026-11-12); building, wave 1 of 2 done. `/execute-plan` runs it as label `fact-gate`.
 **Builds on:** [`MODEL_ROUTING_EVALUATION.md`](../reference/MODEL_ROUTING_EVALUATION.md) §8.1 (the measured comparison and the Carson fabrication it exposed), PROJECT_SPEC §7.3 (editorial slate) and §2.5/§2.26 (award candidates, media panel), [`NEWSROOM_MODEL_SIDE_BY_SIDE_PLAN.md`](../done/NEWSROOM_MODEL_SIDE_BY_SIDE_PLAN.md) (the comparison tool and the `capture` seam this reuses).
 
 **Goal:** an article cannot reach `news_feed` with a claim that contradicts the evidence its writer had. Every article is checked claim by claim after it is written, a contradiction earns **one** correction pass that shows the writer the evidence, and an article that still contradicts it is stored *flagged* rather than published silently (or blocked — JR's call, §8).
@@ -204,5 +204,5 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 
 | Unit | Wave | Branch | Worktree | Result | Merge |
 |---|---|---|---|---|---|
-| U1 | 1 | `fact-gate-u1` | `~/.local/share/opencode/worktree/404d9f/fact-gate-u1` | running | — |
-| U2 | 1 | `fact-gate-u2` | `~/.local/share/opencode/worktree/404d9f/fact-gate-u2` | running | — |
+| U1 | 1 | `fact-gate-u1` | `~/.local/share/opencode/worktree/404d9f/fact-gate-u1` | merged | 7075613 |
+| U2 | 1 | `fact-gate-u2` | `~/.local/share/opencode/worktree/404d9f/fact-gate-u2` | merged | a252164 |
