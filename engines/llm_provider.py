@@ -1,16 +1,22 @@
 """
-LLM Provider Seam for Gemini and Local Ollama Models.
-(docs/done/PRE_PC_WORK.md §6, docs/done/PC_MIGRATION_PLAN.md §7.3)
+LLM Provider Seam for Gemini, OpenCode Go and Local Ollama Models.
+(docs/done/PRE_PC_WORK.md §6, docs/done/PC_MIGRATION_PLAN.md §7.3, GLM_5_3_UNIFICATION_PLAN §2.1)
 
-Provides a unified interface for short LLM tasks, allowing execution via either
-Google Gemini (via the google-genai SDK) or local Ollama (via HTTP API), with
-automatic fallback to Gemini on connection error or timeout.
+Provides a unified interface for short LLM tasks, allowing execution via
+Google Gemini (via the google-genai SDK), OpenCode Go (the same SDK pointed at Go's
+Google-compatible endpoint, `newsroom/tool_loop/go_transport.py`) or local Ollama (via HTTP
+API), with automatic fallback to Gemini on an Ollama connection error or timeout. Go never
+falls back to Gemini: without `OPENCODE_GO_API_KEY` it raises.
 
 Usage:
   from engines.llm_provider import generate_text, ProviderText, resolve_provider
 
   # One-off text generation with automatic provider selection and fallback:
   text = generate_text("Summarize season", source="agent_memory", label="summary @handle")
+
+  # A Go model, by provider or by model prefix (no default changes: Gemini stays the default):
+  text = generate_text("Grade this line", source="press", provider="go")
+  text = generate_text("Grade this line", source="press", model="go:glm-5.3-flash")
 
   # Callable prompt -> text with .flush() for GM agents:
   llm = ProviderText(label="gm_rationale", model="ollama:qwen2.5:14b")
@@ -32,6 +38,18 @@ DEFAULT_FALLBACK_MODEL = "gemini-3.8-flash:low"
 DEFAULT_OLLAMA_HOST = "localhost"
 DEFAULT_OLLAMA_PORT = 11434
 DEFAULT_OLLAMA_TIMEOUT = 60.0
+
+# The text model an OpenCode Go call uses when nobody names one. MU_GO_TEXT_MODEL overrides it
+# (read at call time too, so a run or a test can set it after import).
+GO_MODEL_FALLBACK = "glm-5.3-flash"
+
+
+def default_go_model() -> str:
+    """The Go text model to use when no model is named."""
+    return os.environ.get("MU_GO_TEXT_MODEL") or GO_MODEL_FALLBACK
+
+
+DEFAULT_GO_MODEL = default_go_model()
 
 OLLAMA_FALLBACK_EXCEPTIONS = (
     requests.exceptions.ConnectionError,
@@ -87,19 +105,22 @@ def resolve_provider(
     model: Optional[str] = None,
     provider: Optional[str] = None,
 ) -> str:
-    """Resolve whether to use 'gemini' or 'ollama'.
+    """Resolve whether to use 'gemini', 'ollama' or 'go'.
 
     Priority:
-    1. Explicit provider parameter ('gemini' or 'ollama')
-    2. Model prefix ('ollama:<model>' / 'ollama/<model>' vs 'gemini:<model>' / 'gemini/<model>')
+    1. Explicit provider parameter ('gemini', 'ollama' or 'go')
+    2. Model prefix ('ollama:<model>' / 'ollama/<model>', 'gemini:<model>' / 'gemini/<model>',
+       'go:<model>' / 'go/<model>')
     3. Per-source env var: LLM_PROVIDER_<SOURCE> (e.g. LLM_PROVIDER_AGENT_MEMORY=ollama)
     4. Per-label env var: LLM_PROVIDER_<LABEL> (e.g. LLM_PROVIDER_AGENT_WIRE=ollama)
     5. Global env var: LLM_PROVIDER (e.g. LLM_PROVIDER=ollama)
     6. Default: 'gemini'
+
+    An unknown provider name or env value is ignored, as it always was.
     """
     if provider:
         p = provider.strip().lower()
-        if p in ("gemini", "ollama"):
+        if p in ("gemini", "ollama", "go"):
             return p
 
     if model:
@@ -108,6 +129,8 @@ def resolve_provider(
             return "ollama"
         if m.startswith(("gemini:", "gemini/")):
             return "gemini"
+        if m.startswith(("go:", "go/")):
+            return "go"
 
     for candidate in (source, label):
         if candidate:
@@ -115,12 +138,12 @@ def resolve_provider(
             key = f"LLM_PROVIDER_{cand_clean.upper()}"
             if key in os.environ:
                 val = os.environ[key].strip().lower()
-                if val in ("gemini", "ollama"):
+                if val in ("gemini", "ollama", "go"):
                     return val
 
     if "LLM_PROVIDER" in os.environ:
         val = os.environ["LLM_PROVIDER"].strip().lower()
-        if val in ("gemini", "ollama"):
+        if val in ("gemini", "ollama", "go"):
             return val
 
     return "gemini"
@@ -141,6 +164,8 @@ def resolve_model(
             clean = clean[7:]
         elif clean.startswith(("gemini:", "gemini/")):
             clean = clean[7:]
+        elif clean.startswith(("go:", "go/")):
+            clean = clean[3:]
 
     if prov == "ollama":
         if clean and clean != DEFAULT_GEMINI_MODEL:
@@ -152,6 +177,12 @@ def resolve_model(
                 if key in os.environ:
                     return os.environ[key].strip()
         return os.environ.get("OLLAMA_MODEL") or DEFAULT_OLLAMA_MODEL
+
+    if prov == "go":
+        # A Gemini id left over from the caller's default is not a Go model: use the Go default.
+        if clean and clean != DEFAULT_GEMINI_MODEL:
+            return clean
+        return default_go_model()
 
     # gemini
     if clean:
@@ -324,6 +355,106 @@ def call_gemini(
     return (resp.text or "").strip(), usage, resp
 
 
+# One Go client per process: the transport is keyed by OPENCODE_GO_API_KEY, so every GoText and
+# every generate_text(provider="go") can share it and its prompt-cache routing.
+_GO_CLIENT: Any = None
+
+
+def get_go_client(api_key: Optional[str] = None) -> Any:
+    """The process's OpenCode Go client, built once by `go_transport.go_client()`.
+
+    Raises the transport's `ValueError` (`OPENCODE_GO_API_KEY is not set`) when no Go key is
+    configured: a Go call never falls back to a Gemini key or a Gemini answer.
+    """
+    global _GO_CLIENT
+    if _GO_CLIENT is None:
+        from newsroom.tool_loop.go_transport import go_client
+        _GO_CLIENT = go_client(api_key=api_key)
+    return _GO_CLIENT
+
+
+def call_go(
+    prompt: Union[str, list],
+    model: str,
+    label: str = "",
+    system: Optional[str] = None,
+    temperature: Optional[float] = None,
+    thinking_level: Optional[str] = None,
+    response_schema: Any = None,
+    response_mime_type: Optional[str] = None,
+    client: Any = None,
+    api_key: Optional[str] = None,
+) -> Tuple[str, dict, Any]:
+    """Call an OpenCode Go model through the Google-compatible transport.
+
+    Same shape as `call_gemini`: returns (text, usage_dict, resp). The client is the one
+    `go_transport.go_client()` builds, unless a caller injects one (tests, comparisons).
+    """
+    from db.llm_usage import _usage
+
+    resolved_thinking = resolve_thinking_level(
+        label=label,
+        model=model,
+        thinking_level=thinking_level,
+        default="low",
+    )
+    config, clean_model = make_content_config(
+        model=model,
+        thinking_level=resolved_thinking,
+        temperature=temperature,
+        system_instruction=system,
+        response_schema=response_schema,
+        response_mime_type=response_mime_type,
+    )
+
+    c = client if client is not None else get_go_client(api_key=api_key)
+    resp = c.models.generate_content(model=clean_model, contents=prompt, config=config)
+    usage = _usage(resp)
+    return (resp.text or "").strip(), usage, resp
+
+
+class GoText:
+    """prompt -> text through one OpenCode Go client, every call counted by a UsageMeter.
+
+    The Go sibling of `engines.gm_llm.GeminiText`, with the same `.model`, `.label`, callable,
+    `.flush()` and `.meter` interface, so `make_llm`, press and the inbox need no signature change.
+    The client is the shared per-process one from `newsroom/tool_loop/go_transport.go_client()`;
+    a missing key raises its `ValueError` instead of falling back to Gemini.
+    """
+
+    def __init__(self, key=None, label="", model=None, temperature=0.7, thinking_level=None, client=None):
+        self.label = label
+        self.model = model or default_go_model()
+        self.temperature = temperature
+        self.thinking_level = resolve_thinking_level(
+            label=label,
+            model=self.model,
+            thinking_level=thinking_level,
+            default="low",
+        )
+        self.config, self.model_name = make_content_config(
+            model=self.model,
+            thinking_level=self.thinking_level,
+            temperature=temperature,
+        )
+        self.client = client if client is not None else get_go_client(api_key=key)
+        self.meter = UsageMeter(self.client)
+
+    def __call__(self, prompt):
+        with self.meter.labelled(self.label):
+            resp = self.client.models.generate_content(
+                model=self.model_name, contents=prompt,
+                config=self.config)
+        return (resp.text or "").strip()
+
+    def flush(self):
+        try:
+            return self.meter.record(self.label, label=self.label, model=self.model_name)
+        except Exception as e:                                   # logging never breaks a run
+            print(f"[llm_provider] usage not recorded: {e}", flush=True)
+            return None
+
+
 def generate_text(
     prompt: Union[str, list],
     source: str = "llm_call",
@@ -345,18 +476,48 @@ def generate_text(
 ) -> Union[str, Tuple[str, dict]]:
     """Provider-switching text generator.
 
-    Routes to Ollama or Gemini, with automatic fallback to Gemini on Ollama connection error
-    or timeout. Logs token usage for both providers to llm_usage.
+    Routes to Ollama, OpenCode Go or Gemini, with automatic fallback to Gemini on an Ollama
+    connection error or timeout. Logs token usage for every provider to llm_usage.
     If return_usage=True, returns (text, usage_dict).
     allow_fallback=False re-raises Ollama errors instead of answering with Gemini, and
     log_tokens=False skips the llm_usage write (tools/llm_compare.py needs both: a quiet
     fallback would score Gemini's answer as the local model's, and the archive DB is read-only).
     ollama_options passes think / num_ctx / timeout through to call_ollama.
+    A Go call is never answered by Gemini: without OPENCODE_GO_API_KEY it raises the transport's
+    ValueError, whatever allow_fallback says.
     """
     if llm_disabled():
         raise LLMDisabled(f"model calls are disabled by {NO_LLM_ENV}")
     effective_label = label or source
     prov = resolve_provider(label=effective_label, source=source, model=model, provider=provider)
+
+    if prov == "go":
+        go_model = resolve_model("go", label=effective_label, source=source, model=model)
+        text, usage, _resp = call_go(
+            prompt=prompt,
+            model=go_model,
+            label=effective_label,
+            system=system,
+            temperature=temperature,
+            thinking_level=thinking_level,
+            response_schema=response_schema,
+            response_mime_type=response_mime_type,
+            client=client,
+            api_key=api_key,
+        )
+        if log_tokens:
+            log_usage(
+                source=source,
+                label=effective_label,
+                model=go_model,
+                input_tokens=usage["input_tokens"],
+                cached_tokens=usage["cached_tokens"],
+                output_tokens=usage["output_tokens"],
+                thinking_tokens=usage["thinking_tokens"],
+            )
+        if return_usage:
+            return text, usage
+        return text
 
     if prov == "ollama":
         ollama_model = resolve_model("ollama", label=effective_label, source=source, model=model)
@@ -459,9 +620,10 @@ def estimate_cost(model: str, usage: dict) -> float:
 
 
 class ProviderText:
-    """Callable prompt -> text that supports 'gemini' and 'ollama' with fallback and .flush().
+    """Callable prompt -> text that supports 'gemini', 'ollama' and 'go' with fallback and .flush().
 
-    Drop-in provider-neutral counterpart to GeminiText for GM agents and short tasks.
+    Drop-in provider-neutral counterpart to GeminiText for GM agents and short tasks. A Go call
+    goes through `GoText` (OpenCode Go's Google-compatible transport) and never falls back.
     """
 
     def __init__(
@@ -500,9 +662,24 @@ class ProviderText:
                 client=client,
             )
 
+        # A Go call is a GoText, with the same meter/flush contract (and never a Gemini answer)
+        self._go_text = None
+        if self.provider == "go":
+            self._go_text = GoText(
+                key=api_key,
+                label=label,
+                model=self.model,
+                temperature=temperature,
+                thinking_level=thinking_level,
+                client=client,
+            )
+
     def __call__(self, prompt: str) -> str:
         if self._gemini_text is not None:
             return self._gemini_text(prompt)
+
+        if self._go_text is not None:
+            return self._go_text(prompt)
 
         # Ollama execution with fallback
         try:
@@ -566,6 +743,8 @@ class ProviderText:
     def flush(self):
         if self._gemini_text is not None:
             return self._gemini_text.flush()
+        if self._go_text is not None:
+            return self._go_text.flush()
         calls = list(self.calls)
         self.calls.clear()
         keys = ("input_tokens", "cached_tokens", "output_tokens", "thinking_tokens")
