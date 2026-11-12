@@ -103,6 +103,8 @@ Not mapped yet: the way back from a mode landing page to the main menu (the pilo
 - `result.json`;
 - `stop.json` on a stop.
 
+A Muse session started with `tools/muse_session.sh` may run these jobs once the two-step benchmark in [`MUSE_EMBER_ROTATION_PLAN.md`](../in_progress/MUSE_EMBER_ROTATION_PLAN.md) passes its gate; until then they run exactly as documented here.
+
 Every job ends with one ntfy summary through `pipeline.notify`, on finish, refusal or stop. A stop also sends its own alert. Exit code 0 means ok or pass, 2 means unknown, 1 means refused or stopped.
 
 | Job | Does | Refuses / stops |
