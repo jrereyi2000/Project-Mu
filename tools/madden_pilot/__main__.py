@@ -291,6 +291,9 @@ class ScriptedMadden:
             self.go("SUPERSIM_MENU")
         elif self.screen == "PAUSE_MENU" and label == "RESUME":
             self.go("GAME_PLAY")
+        elif self.screen == "PAUSE_MENU" and label == "QUIT GAME":
+            self.pending = [LOADING]
+            self.go("QUIT_GAME_CONFIRM")
         elif self.screen == "SUPERSIM_MENU" and label == "JUMP FORWARD":
             self.go("SUPERSIM_JUMP_FORWARD")
         elif self.screen == "SUPERSIM_MENU" and label == "JUMP TO NEXT PLAY":
@@ -352,7 +355,9 @@ ROUTES = {
                   "only) > GAME_PREGAME_PIVOT > Space > GAME_PREGAME_READY (READY) > ~40 s intro > GAME_KICKOFF > "
                   "Space held 1.5 s > {to} > hold {hold_seconds}s pressing nothing [halftime also: Esc > PAUSE_MENU > "
                   "SUPER > SUPERSIM_MENU > JUMP FORWARD > NEXT QUARTER > CHANGE OF POSSESSION x2 > JUMP TO NEXT PLAY "
-                  "until the clock reads under 20 s in Q2 > Backspace > RESUME > the half's last snap]",
+                  "until the clock reads under 20 s in Q2 > Backspace > RESUME > the half's last snap] > leave: "
+                  "PAUSE_MENU > highlight QUIT GAME (this job's policy; the catalog does not allow it) > Space > "
+                  "QUIT_GAME_CONFIRM > highlight QUIT GAME > Space > FRANCHISE_LIST",
 }
 
 

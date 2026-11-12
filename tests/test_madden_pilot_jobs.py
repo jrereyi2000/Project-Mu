@@ -856,13 +856,14 @@ def test_read_game_clock_pairs_the_scorebug_split_across_two_lines():
 # ---------------------------------------------------------------- watch_game
 class WatchMadden(ScriptedMadden):
     """A ScriptedMadden that marks where the kickoff hold and the RESUME start, and can write the
-    autosave when the franchise is quit (spike S-1: quitting writes <save>-AUTOSAVE)."""
+    autosave when the franchise is left (spike S-1: quitting writes <save>-AUTOSAVE)."""
 
     def __init__(self, *a, autosave=None, **kw):
         super().__init__(*a, **kw)
         self.autosave = autosave
         self.kick_at = None
         self.resume_at = None
+        self.quit_game_at = None
 
     def on_key(self, name):
         before, label = self.screen, self.highlight
@@ -872,8 +873,11 @@ class WatchMadden(ScriptedMadden):
             self.kick_at = len(self.keys)
         elif before == "PAUSE_MENU" and name == select and label == "RESUME":
             self.resume_at = len(self.keys)
-        elif before == "QUIT_CONFIRM" and label == "YES" and self.screen == "FRANCHISE_LIST" and self.autosave:
-            self.autosave.write_bytes(b"autosave")
+        elif before == "PAUSE_MENU" and name == select and label == "QUIT GAME":
+            self.quit_game_at = len(self.keys)
+        elif self.screen == "FRANCHISE_LIST" and self.autosave and before in ("QUIT_CONFIRM",
+                                                                             "QUIT_GAME_CONFIRM"):
+            self.autosave.write_bytes(b"autosave")     # quitting the game/franchise writes it
 
 
 def _watch(tmp_path, fake, **kw):
@@ -920,18 +924,22 @@ def test_watch_game_kickoff_starts_the_game_then_presses_nothing(tmp_path, notic
     assert "GAME_PREGAME_PIVOT -> GAME_PREGAME_READY" in text
     assert "GAME_PREGAME_READY on READY -> GAME_KICKOFF" in text
     assert "GAME_KICKOFF on DEEP KICK -> GAME_PLAY" in text
-    # the whole point: the kick is the last press there is. Nothing is pressed for the hold.
-    assert fake.kick_at is not None and len(fake.keys) == fake.kick_at
-    assert out["end_screen"] == "UNKNOWN"                           # in play, an uncatalogued screen
+    # the whole point: the kick is the last press before the hold, and nothing is pressed for it —
+    # the very next key is the escape that starts the exit (`_quit_game`), after the hold.
+    assert fake.kick_at is not None and fake.keys[fake.kick_at] == "esc"
+    assert fake.quit_game_at is not None and fake.quit_game_at > fake.kick_at
+    assert out["end_screen"] == "FRANCHISE_LIST" and out["quit"] is True
     assert result_json(tmp_path)["job"] == "watch-game"
 
 
-def test_watch_game_adds_play_season_game_to_the_pilot_policy_only(tmp_path, notices):
+def test_watch_game_grants_the_two_start_and_leave_labels_by_policy_only(tmp_path, notices):
     fake = WatchMadden(CAT, tiles=["TUNE-X"], out=lambda s: None)
     p = make_pilot(tmp_path, fake)
     jobs.watch_game(p, save="CAREER-TUNE-X", hold_seconds=2, watcher=lambda: False, folder=tmp_path / "none")
     assert p.policy["HUB_GAMEDAY"] == ["PLAY SEASON GAME"]
+    assert p.policy["PAUSE_MENU"] == ["QUIT GAME"]                  # this run only
     assert CAT["screens"]["HUB_GAMEDAY"]["confirm_ok"] == ["ADVANCE WEEK"]
+    assert CAT["screens"]["PAUSE_MENU"]["confirm_ok"] == ["RESUME", "SUPER", "SUPER SIM"]
 
 
 def test_watch_game_watches_an_already_loaded_franchise_in_place(tmp_path, notices):
@@ -941,8 +949,11 @@ def test_watch_game_watches_an_already_loaded_franchise_in_place(tmp_path, notic
     out = jobs.watch_game(p, save="CAREER-TUNE-X", franchise="TUNE-X", hold_seconds=2,
                           watcher=lambda: False, folder=tmp_path / "none")
     assert out["status"] == "ok" and out["franchise"] == "TUNE-X", out
-    assert not any("look  -> FRANCHISE_LIST" in ln for ln in log)    # it never went back to the list
-    assert "HUB_GAMEDAY on PLAY SEASON GAME -> GAME_PREGAME_PIVOT" in "\n".join(log)
+    text = "\n".join(log)
+    # it watched the franchise it was told is loaded: no tile walk, no PROGRESSION_WARNING (the
+    # list it ends on is the exit's own destination)
+    assert "PROGRESSION_WARNING" not in text and "FRANCHISE_LIST on" not in text
+    assert "HUB_GAMEDAY on PLAY SEASON GAME -> GAME_PREGAME_PIVOT" in text
 
 
 def test_watch_game_halftime_walks_the_supersim_recipe(tmp_path, notices):
@@ -960,10 +971,13 @@ def test_watch_game_halftime_walks_the_supersim_recipe(tmp_path, notices):
     assert text.count("SUPERSIM_MENU on JUMP TO NEXT PLAY") > 1      # Q2 by play, not "sim to end"
     assert "PAUSE_MENU on RESUME -> GAME_PLAY" in text
     # JR's control rule: the sim loop never plays football. The only snaps are the half's last,
-    # after RESUME, and the hold presses nothing at all.
+    # after RESUME, then the hold presses nothing and the exit starts.
     assert sum(1 for ln in log if ln.startswith("  key   space     GAME_PLAY")) == 2
-    assert len(fake.keys) == fake.resume_at + 2
-    assert "QUIT GAME" not in text
+    after_resume = fake.keys[fake.resume_at:]
+    assert after_resume[:3] == ["space", "space", "esc"]              # the snap, then straight out
+    assert text.count("PAUSE_MENU on QUIT GAME") == 1
+    assert fake.quit_game_at > fake.resume_at + 2
+    assert out["end_screen"] == "FRANCHISE_LIST"
 
 
 def test_watch_game_halftime_stops_stuck_instead_of_resuming_outside_the_window(tmp_path, notices,
@@ -1028,18 +1042,126 @@ def test_watch_game_reports_the_autosave_written_by_the_quit(tmp_path, notices, 
     assert out["status"] == "ok", out
     assert calls == [{"franchise": "CAREER-TUNE-X", "allow_quit": False}]
     assert out["quit"] is True and out["end_screen"] == "FRANCHISE_LIST"
+    assert out["quit_route"] == "route"               # outside a game: advance's own quit path
     assert out["written"] == {"save": False, "autosave": True} and out["autosave_written"] is True
     assert out["autosave_path"] == str(autosave) and autosave.is_file()
 
 
-def test_watch_game_leaves_a_live_game_open_rather_than_confirm_quit_game(tmp_path, notices):
+def test_watch_game_quits_the_live_game_through_the_pause_menu(tmp_path, notices):
+    # JR (2026-11-12, M-0673/M-0675): a CAREER-TUNE-* clone may have its game quit, so the run
+    # leaves through PAUSE_MENU > QUIT GAME > its confirmation instead of sitting in the game.
     log = []
     fake = WatchMadden(CAT, tiles=["TUNE-X"], out=log.append)
     _, out = _watch(tmp_path, fake, hold_seconds=2)
-    assert out["status"] == "ok"
-    assert out["quit"] is False and "QUIT GAME" in out["quit_why"]
-    assert "on QUIT GAME" not in "\n".join(log)
-    assert len(fake.keys) == fake.kick_at              # nothing was pressed to leave
+    assert out["status"] == "ok", out
+    assert out["quit"] is True and out["quit_route"] == "quit-game"
+    assert out["end_screen"] == "FRANCHISE_LIST" and fake.screen == "FRANCHISE_LIST"
+    text = "\n".join(log)
+    assert "PAUSE_MENU on QUIT GAME -> QUIT_GAME_CONFIRM" in text
+    assert "QUIT_GAME_CONFIRM on QUIT GAME -> FRANCHISE_LIST" in text
+    # once, and only after the hold: the QUIT GAME press is the first use of the label
+    assert text.count("PAUSE_MENU on QUIT GAME") == 1
+    assert fake.quit_game_at > fake.kick_at and fake.keys[fake.kick_at] == "esc"
+    # no cancel-shaped label is ever selected on the confirmation
+    assert "on CANCEL" not in text and "on NO " not in text
+
+
+def test_watch_game_dismisses_a_penalty_before_it_pauses(tmp_path, notices):
+    # real play does not run itself (spike S-1): a hold that outlasts the play clock ends on a
+    # delay-of-game penalty dialog, so the exit's first Escape dismisses it and the second pauses
+    class Penalty(WatchMadden):
+        penalties = 0
+
+        def on_key(self, name):
+            if name == "esc" and self.screen == "GAME_PLAY" and not self.penalties:
+                self.penalties = 1
+                self.go("DELAY OF GAME PENALTY")     # uncatalogued: reads as UNKNOWN
+                return
+            super().on_key(name)
+
+        def game_key(self, name, label, select):
+            if self.screen == "DELAY OF GAME PENALTY" and name == "esc":
+                self.go("GAME_PLAY")
+                return True
+            return super().game_key(name, label, select)
+
+    log = []
+    fake = Penalty(CAT, tiles=["TUNE-X"], out=log.append)
+    _, out = _watch(tmp_path, fake, hold_seconds=2)
+    assert out["status"] == "ok", out
+    assert fake.penalties == 1 and out["end_screen"] == "FRANCHISE_LIST"
+    # the penalty, then real play again, then the pause — three Escapes, not one
+    assert fake.keys.count("esc") == 3 and fake.quit_game_at is not None
+
+
+def test_pause_gives_up_after_a_bounded_number_of_escapes(tmp_path, notices):
+    class NeverPauses(WatchMadden):
+        def on_key(self, name):
+            if name == "esc":
+                self.pending = [LOADING]             # Escape never reaches the pause menu
+                return
+            super().on_key(name)
+
+    fake = NeverPauses(CAT, tiles=["TUNE-X"], out=lambda s: None)
+    _, out = _watch(tmp_path, fake, hold_seconds=2)
+    assert out["status"] == "stopped" and out["kind"] == "Stuck"
+    assert "didn't reach the pause menu" in out["reason"] and "not pressing again" in out["reason"]
+    assert fake.keys.count("esc") == 3                 # the bounded tries, no more
+
+
+def test_watch_game_reports_the_autosave_the_quit_game_wrote(tmp_path, notices):
+    saves = tmp_path / "saves"
+    saves.mkdir()
+    (saves / "CAREER-TUNE-X").write_bytes(b"save")
+    autosave = saves / "CAREER-TUNE-X-AUTOSAVE"
+    fake = WatchMadden(CAT, tiles=["TUNE-X"], out=lambda s: None, autosave=autosave)
+    _, out = _watch(tmp_path, fake, hold_seconds=2, folder=saves)
+    assert out["status"] == "ok", out
+    assert out["quit_route"] == "quit-game" and out["end_screen"] == "FRANCHISE_LIST"
+    assert out["written"] == {"save": False, "autosave": True}
+    assert out["autosave_written"] is True and autosave.is_file()
+    assert (saves / "CAREER-TUNE-X").read_bytes() == b"save"      # the named save is untouched
+
+
+def test_watch_game_stops_when_quit_game_lands_on_an_unseen_screen(tmp_path, notices):
+    class OddLanding(WatchMadden):
+        def game_key(self, name, label, select):
+            if self.screen == "PAUSE_MENU" and label == "QUIT GAME":
+                self.pending = [LOADING]
+                self.go("SOMETHING NEW")         # neither the confirmation nor the franchise list
+                return True
+            return super().game_key(name, label, select)
+
+    fake = OddLanding(CAT, tiles=["TUNE-X"], out=lambda s: None)
+    _, out = _watch(tmp_path, fake, hold_seconds=2)
+    assert out["status"] == "stopped" and out["kind"] == "Stuck", out
+    assert "QUIT GAME landed on UNKNOWN" in out["reason"] and "not pressing again" in out["reason"]
+    assert fake.quit_game_at == len(fake.keys)          # nothing after the QUIT GAME press
+    assert json.loads((tmp_path / "stop.json").read_text())["kind"] == "Stuck"
+
+
+def test_watch_game_never_confirms_a_cancel_shaped_quit_game_label(tmp_path, notices):
+    import copy
+
+    cat = copy.deepcopy(CAT)
+    dialog = cat["screens"]["QUIT_GAME_CONFIRM"]
+    dialog["options"] = ["CANCEL", "NO"]
+    dialog["default"] = "CANCEL"
+    dialog["confirm_ok"] = ["CANCEL"]                  # a dialog that may only reject
+    dialog["exits"] = {}
+    fake = WatchMadden(cat, start="QUIT_GAME_CONFIRM", tiles=["TUNE-X"], out=lambda s: None)
+    p = make_pilot(tmp_path, fake, catalog=cat)
+    with pytest.raises(jobs.Stuck):
+        jobs._confirm_quit_game(p)
+    assert fake.keys == []                              # no label was pressed
+    assert json.loads((tmp_path / "stop.json").read_text())["kind"] == "Stuck"
+
+
+def test_cancel_shaped_labels_are_recognised():
+    for label in ("CANCEL", "Cancel", "NO", "BACK", "DELETE", "TRADE", "NO THANKS"):
+        assert jobs._cancel_shaped(label), label
+    for label in ("QUIT GAME", "QUIT", "YES", "CONFIRM", "LEAVE GAME"):
+        assert not jobs._cancel_shaped(label), label
 
 
 def test_watch_game_repins_the_pause_menu_instead_of_walking_to_quit_game(tmp_path, notices):
@@ -1058,7 +1180,8 @@ def test_watch_game_repins_the_pause_menu_instead_of_walking_to_quit_game(tmp_pa
     _, out = _watch(tmp_path, fake, to="halftime", hold_seconds=2)
     assert out["status"] == "ok", out
     text = "\n".join(log)
-    assert "on QUIT GAME" not in text
+    # the only QUIT GAME press is the exit's own, once, at the end — never a drift from SUPER
+    assert text.count("PAUSE_MENU on QUIT GAME") == 1
     assert text.count("PAUSE_MENU on SUPER -> SUPERSIM_MENU") >= 1
     assert text.count("PAUSE_MENU on RESUME -> GAME_PLAY") == 1
 
@@ -1082,9 +1205,14 @@ def test_cli_dry_run_watch_game_prints_the_route_and_touches_nothing(tmp_path, n
     text = "\n".join(lines)
     assert lines[0].startswith("[dry-run] watch-game: FRANCHISE_LIST > highlight TUNE-X")
     assert "PLAY SEASON GAME" in lines[0] and "hold 5s pressing nothing" in lines[0]
+    assert "QUIT_GAME_CONFIRM" in lines[0]                    # the exit is narrated too
     assert "GAME_KICKOFF on DEEP KICK -> GAME_PLAY" in text
+    assert "PAUSE_MENU on QUIT GAME -> QUIT_GAME_CONFIRM" in text
+    assert "QUIT_GAME_CONFIRM on QUIT GAME -> FRANCHISE_LIST" in text
     res = result_json(tmp_path)
     assert res["status"] == "ok" and res["dry_run"] is True and res["route"] == "kickoff"
+    assert res["quit"] is True and res["quit_route"] == "quit-game"
+    assert res["end_screen"] == "FRANCHISE_LIST"
     assert notices == []
 
 
@@ -1096,8 +1224,10 @@ def test_cli_dry_run_watch_game_halftime(tmp_path, notices, monkeypatch):
     assert rc == 0
     text = "\n".join(lines)
     assert "SUPERSIM_JUMP_FORWARD on NEXT QUARTER" in text and "PAUSE_MENU on RESUME" in text
+    assert "QUIT_GAME_CONFIRM on QUIT GAME -> FRANCHISE_LIST" in text
     res = result_json(tmp_path / "h")
     assert res["status"] == "ok" and res["route"] == "supersim"
+    assert res["quit_route"] == "quit-game" and res["end_screen"] == "FRANCHISE_LIST"
 
 
 def test_cli_dry_run_watch_game_refuses_a_bad_target(tmp_path, notices, monkeypatch):

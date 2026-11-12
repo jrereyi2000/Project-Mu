@@ -97,6 +97,10 @@ SUPERSIM_PLAY_TIMEOUT = 60                # one JUMP TO NEXT PLAY moves about 4 
 HALFTIME_WINDOW = 20                      # under 20 s left in Q2 is the half's last play (D2)
 HALFTIME_MAX_PLAY_PRESSES = 320           # a quarter at ~4 s a JUMP TO NEXT PLAY is ~225 presses
 HALFTIME_BLIND_READS = 10                 # unreadable clocks in a row before the job stops
+LEAVE_TIMEOUT = 60                        # seconds for QUIT GAME to land on its confirmation
+# Labels that reject, back out of or destroy something: watch-game never confirms one, whatever
+# a quit-game dialog turns out to look like (JR, 2026-11-12).
+CANCEL_WORDS = ("CANCEL", "NO", "BACK", "DELETE", "TRADE")
 
 # Header words that mean the season moved past the playoffs (todo: not seen yet; guesses).
 OFFSEASON_WORDS = ("OFFSEASON", "STAFF", "RE-SIGN", "RESIGN", "FREE AGENCY", "COMBINE", "PRO DAY",
@@ -1187,8 +1191,9 @@ def _pin_highlight(pilot, label):
     if label not in options:
         pilot.stop(f"watch-game: {label!r} isn't one of {pilot.screen}'s options ({options})", Stuck)
     pilot.press("up", times=len(options))       # clamps on the top item from anywhere
-    for _ in range(options.index(label)):
-        pilot.press("down")
+    index = options.index(label)
+    if index:
+        pilot.press("down", times=index)
     pilot.look()
 
 
@@ -1322,20 +1327,120 @@ def _to_halftime(pilot, hold, progress):
     return _hold(pilot, hold), clock
 
 
-def _leave_franchise(pilot, save):
-    """Quit the franchise to CURRENT FRANCHISES when the catalog has a route out of this screen.
+def _quit_game(pilot):
+    """Leave a live game: Escape → the pause menu's QUIT GAME → its confirmation → the list.
 
-    `advance`'s quit path is `goto("FRANCHISE_LIST")`, which only exists outside a football game.
-    A live game's one exit is the pause menu's QUIT GAME, and this job never confirms it (plan
-    2.5, spike S-1: quitting a game is not the mod check's business), so the game is left open
-    and the result says so instead of pressing a forbidden label.
+    JR (2026-11-12): a `CAREER-TUNE-*` clone may have its game quit, because leaving a mod check
+    sitting in a live game was worse. QUIT GAME is added to the pilot's policy for THIS RUN only,
+    exactly as PLAY SEASON GAME is: the catalog's `PAUSE_MENU.confirm_ok` still allows RESUME and
+    SUPER alone, so no other job can reach the label. The dialog that follows was never seen in
+    spike S-1, so it is its own catalogued screen (`QUIT_GAME_CONFIRM`) and the run stops rather
+    than press a second blind time when Madden lands anywhere else.
+    """
+    _pause(pilot)
+    pilot.policy.setdefault("PAUSE_MENU", [])
+    if "QUIT GAME" not in pilot.policy["PAUSE_MENU"]:
+        pilot.policy["PAUSE_MENU"].append("QUIT GAME")
+    _pin_highlight(pilot, "QUIT GAME")
+    pilot.confirm_on("PAUSE_MENU", "QUIT GAME", wait=3.0)
+    _, screen = _wait_quit_landing(pilot)
+    if screen == "QUIT_GAME_CONFIRM":
+        _confirm_quit_game(pilot)
+        _, screen = wait_known(pilot, ["FRANCHISE_LIST"], LEAVE_TIMEOUT, poll=1.0,
+                               what="the franchise list")
+    return screen
+
+
+def _pause(pilot, tries=3, wait=PAUSE_TIMEOUT, poll=1.0):
+    """Reach PAUSE_MENU with Escape, a bounded number of times.
+
+    Real play does not run itself (spike S-1): a hold that outlasts the play clock ends on a
+    delay-of-game penalty dialog whose border does not read, and the first Escape dismisses it,
+    so Escape is tried again — but only that many times, and then the run stops rather than press
+    into a screen nobody has seen.
+    """
+    with patience(pilot, tries * (wait + 10 * poll), poll):
+        for _ in range(tries):
+            _, screen = pilot.look()
+            if screen == "PAUSE_MENU":
+                return
+            pilot.press("esc", wait=2.5)
+            end = pilot.clock() + wait
+            while True:
+                _, screen = pilot.look()
+                if screen == "PAUSE_MENU":
+                    return
+                if screen != UNKNOWN or pilot.clock() >= end:
+                    break
+                pilot.sleep(poll)
+    pilot.stop(f"watch-game: Escape didn't reach the pause menu ({pilot.screen}) in {tries} tries; "
+               f"not pressing again", Stuck)
+
+
+def _wait_quit_landing(pilot, timeout=LEAVE_TIMEOUT, poll=1.0):
+    """Where QUIT GAME lands: the quit-game confirmation, or the list when there is no dialog.
+
+    A loading frame (UNKNOWN) is waited out; any other screen is a Stuck — catalogued or not —
+    because the game is left exactly once and a screen nobody has seen is a report, not a second
+    blind press (`QUIT_GAME_CONFIRM` is only a guess until a live run reads its words).
+    """
+    end = pilot.clock() + timeout
+    with patience(pilot, timeout + 10 * poll, poll):
+        while True:
+            frame, screen = pilot.look()
+            if screen in ("QUIT_GAME_CONFIRM", "FRANCHISE_LIST"):
+                return frame, screen
+            if screen != UNKNOWN or pilot.clock() >= end:
+                pilot.stop(f"watch-game: QUIT GAME landed on {screen}, not the quit-game confirmation "
+                           f"or the franchise list: not pressing again (add the screen to the catalog "
+                           f"and re-run)", Stuck)
+            pilot.sleep(poll)
+
+
+def _cancel_shaped(label):
+    """True for a label that rejects, backs out of or destroys something (CANCEL, NO, ...)."""
+    return bool(set(norm(label).replace("-", " ").split()) & set(CANCEL_WORDS))
+
+
+def _confirm_quit_game(pilot):
+    """Leave through the quit-game confirmation: its one allowed label, never a cancel-shaped one.
+
+    The catalog decides which label is the affirmative (`QUIT_GAME_CONFIRM.confirm_ok`);
+    `forbidden_confirm` means only this job's policy can press it, and the policy is given that
+    one label only. A dialog whose allowed labels all look like cancel/no/back/delete/trade stops
+    the run rather than pick one.
+    """
+    if pilot.screen != "QUIT_GAME_CONFIRM":
+        pilot.look()
+    allowed = [label for label in (pilot.spec("QUIT_GAME_CONFIRM").get("confirm_ok") or [])
+               if not _cancel_shaped(label)]
+    if not allowed:
+        pilot.stop("watch-game: the quit-game confirmation's allowed labels all look like "
+                   "cancel/no/back/delete/trade; not choosing one", Stuck)
+    pilot.policy.setdefault("QUIT_GAME_CONFIRM", [])
+    for label in allowed:
+        if label not in pilot.policy["QUIT_GAME_CONFIRM"]:
+            pilot.policy["QUIT_GAME_CONFIRM"].append(label)
+    label = allowed[0]
+    _pin_highlight(pilot, label)
+    pilot.confirm_on("QUIT_GAME_CONFIRM", label, wait=3.0)
+
+
+def _leave_franchise(pilot, save):
+    """Leave the franchise: `advance`'s quit path outside a game, the pause menu's QUIT GAME in one.
+
+    JR (2026-11-12, M-0673/M-0675): `watch-game` may quit a live game on a CAREER-TUNE-* clone.
+    Outside a football game the catalogued route to CURRENT FRANCHISES is `advance`'s own quit
+    (`_quit_now`, i.e. `goto("FRANCHISE_LIST")`, which the quit guard allows for a TUNE-* tile).
+    Inside one the only exit is the pause menu's QUIT GAME (`_quit_game`), confirmed through the
+    pilot's policy for this run and followed by its own confirmation dialog.
     """
     if pilot.screen != "FRANCHISE_LIST" and pilot.plan(pilot.screen, "FRANCHISE_LIST") is None:
-        return {"quit": False, "end_screen": pilot.screen,
-                "quit_why": (f"no catalogued route from {pilot.screen} to FRANCHISE_LIST: leaving a live "
-                             f"game needs the pause menu's QUIT GAME, which watch-game never confirms")}
+        screen = _quit_game(pilot)
+        return {"quit": True, "quit_route": "quit-game", "end_screen": screen}
     out = _quit_now(pilot, franchise=save, allow_quit=False)
-    return {"quit": bool(out.get("quit")), "end_screen": out.get("screen") or pilot.screen}
+    return {"quit": bool(out.get("quit")), "quit_route": "route",
+            "end_screen": out.get("screen") or pilot.screen}
 
 
 @job("watch-game")
@@ -1356,9 +1461,12 @@ def watch_game(pilot, save=None, franchise=None, to="kickoff", hold_seconds=60, 
     policy for this run, as the spike's guard did. `pack` is recorded for the report; Madden is
     launched by the `launch` job.
 
-    Leaving: `quit` quits through `_quit_now(..., allow_quit=False)` when a route to the
-    franchise list exists (`_leave_franchise`); `written` compares the saves folder's mtimes
-    before and after, i.e. it reports whether `<save>-AUTOSAVE` appeared (S-1: quitting writes it).
+    Leaving: `quit` quits the franchise through `_quit_now(..., allow_quit=False)` when a route to
+    the franchise list exists, and through the pause menu's own QUIT GAME (`_quit_game`) when the
+    segment ended in a live game — a TUNE-* clone may have its game quit (JR, 2026-11-12). The
+    result reports which way it left (`quit_route`: "route" or "quit-game"); `written` compares the
+    saves folder's mtimes before and after, i.e. whether `<save>-AUTOSAVE` appeared (S-1: quitting
+    writes it).
     """
     if not save or not str(save).upper().startswith(TUNE_SAVE_PREFIX) or not _valid_save_name(save):
         return _refuse(f"only {TUNE_SAVE_PREFIX}* saves are watched, not {save!r}", save=save)
