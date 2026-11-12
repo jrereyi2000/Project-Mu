@@ -1,6 +1,6 @@
 # Project Mu: Visual Mod Check Plan
 
-**Status:** approved by JR (2026-11-12), with his answers folded in below. Building, wave 1 of 2 (units; wave 0 spike S-1 run 2026-11-12, status partial — see §2.5a).
+**Status:** approved by JR (2026-11-12), with his answers folded in below. Building, wave 1 of 2 done (wave 0 spike S-1 run 2026-11-12, status partial — see §2.5a).
 **Builds on:** PROJECT_SPEC §1.1 (repository layout), [`MUSE_EMBER_ROTATION_PLAN.md`](../done/MUSE_EMBER_ROTATION_PLAN.md) (the Muse route and the computer-use rules), [`MADDEN_PILOT.md`](../reference/MADDEN_PILOT.md) §5 (jobs) and §6 (safety), [`MADDEN_SPIKE_AGENT.md`](../reference/MADDEN_SPIKE_AGENT.md) §7 (asset checks, checkpoints, clips), [`LOCAL_VISION_LATENCY.md`](../reference/LOCAL_VISION_LATENCY.md) (what a local model measured at), `docs/reference/LOCAL_VISION_HOST.md` (the Mac host, being set up by `mac-vision-setup`).
 
 **Goal:** replace the manual Codex loop JR uses to test visual mods. One command loads a `CAREER-TUNE-*` save, records the game-start and halftime segments, and answers *"did this mod's assets appear?"* with a number per asset plus a short written summary — deterministic pixel checks for the verdict, a vision model (hosted on JR's always-on M1 Mac, never on Madden's GPU) for the description and for unknown screens. JR stops describing frames by hand and starts reading pass/fail lines.
@@ -25,6 +25,11 @@
 - **Clone names carry a letter, not a digit** (`CAREER-TUNE-CHKA`, `CHKB`, …): spike S-1 measured that the pilot's tile OCR reads `1` as `I`, so `CAREER-TUNE-CHK1` was unfindable.
 - **`tools/madden_pilot/__main__.py` belongs to U2**, not to no unit: `watch-game` needs a CLI entry.
 - **`tools/madden_pilot/spike.py` gained `allow_space`** (JR, 2026-11-12), outside every unit's files, because an in-game frame has no OCR label to confirm Space against. It is in the spec's spike paragraph.
+
+- **U2** keeps `HUB_GAMEDAY.confirm_ok` at `["ADVANCE WEEK"]`: `PLAY SEASON GAME` goes in through the pilot's own policy for the run, as the spike did. `PAUSE_MENU` confirms RESUME and SUPER only, so `QUIT GAME` is policy-only too.
+- **Leaving a live game (JR, 2026-11-12):** a `CAREER-TUNE-*` clone may have its game quit, so `watch-game` presses the pause menu's `QUIT GAME` and its confirmation dialog instead of leaving Madden mid-game. The dialog (`QUIT_GAME_CONFIRM`) was never seen in S-1: its words are a guess until a live run reads them, a cancel-shaped label is never pressed, and any other landing stops the run.
+- **The cue names and the job's stops differ:** a segment cue says *kickoff* or *halftime_start*; `watch-game --to` says `kickoff` or `halftime`. `tools/mod_check`'s driver maps between them, and `supersim_menu` is a fixed wait, never a stop.
+- **Run directories are unique per invocation** (`-2`, `-3` on a same-second collision), because the pilot numbers step PNGs per process (S-1 lost most of its frames that way).
 
 ---
 
@@ -248,3 +253,4 @@ No path appears twice.
 | Unit | Wave | Branch | Worktree | Result | Merge |
 |---|---|---|---|---|---|
 | U1 | 1 | `worktree-vmc-u1` | `.claude/worktrees/vmc-u1` | merged | `32f554b` |
+| U2 | 1 | `worktree-vmc-u2` | `.claude/worktrees/vmc-u2` | merged | `9b1006f`, `a7a5620` |
