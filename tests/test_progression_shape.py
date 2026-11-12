@@ -12,6 +12,8 @@ unless the scratch databases exist; set the DSNs below to point them elsewhere.
 3. The exit/rookie draw is keyed on (the season being projected or replayed, seed): the live engine passes its
    target season with seed 0, the fit each replayed season with its own seed (JR, board M-0441/M-0455). A NULL or
    missing `league_state.shape_season` refuses to run; the clean seed writes the start season.
+4. The league term calibrates on every staying player and every rookie, not on a 400-player stride sample (JR
+   2026-11-12, P3-04b; board M-0672). This file pins the full-roster pair on both scratch leagues.
 """
 import os
 import random
@@ -162,10 +164,10 @@ def test_2026_league_holds_its_start_shape(conn):
 def test_live_terms_match_the_fit_first_season(conn):
     """The live engine and the offline fit calibrate the same league the same way.
 
-    The development term is the quantity the P3-04 verdict fits, and the live engine now reproduces the fit exactly.
-    The star term cannot be (and is not) identical: the fit's `_replay` has no Phase C2 inputs (wear, mileage,
-    lasting damage), so on this copy its star term is -1.0, which would leave the real 2027 league at 52 players at
-    90+ against a target of 71. The live term must instead be the one that holds the shape; that is what is asserted.
+    Both now calibrate on the whole league (P3-04b), so the development term matches. The star term cannot be
+    identical: the fit's `_replay` has no Phase C2 inputs (wear, mileage, lasting damage), so on this copy its star
+    term is 0.0, which would leave the real 2027 league short of the target's 71 players at 90+. The live term must
+    instead be the one that holds the shape; that is what is asserted.
     """
     live, _ = _live(conn, 2027)
     live_terms = live["league_shape"]["terms"]
@@ -173,18 +175,34 @@ def test_live_terms_match_the_fit_first_season(conn):
     fit_season = fit["seasons"][0]
     fit_terms = (fit_season["league_term"], fit_season["star_term"])
     # Reproduce the fit number (the verdict's §1 reports +0.5 / 0 for the save snapshot; this DB-built league is
-    # +1.0 / -1.0 after the draw was keyed on (season, seed)) and report it: the live development term is within
-    # one calibration step (0.5).
-    assert fit_terms == (1.0, -1.0)
+    # +1.0 / 0.0 on the full roster after the draw was keyed on (season, seed)) and report it: the live development
+    # term is within one calibration step (0.5).
+    assert fit_terms == (1.0, 0.0)
     assert abs(live_terms[0] - fit_terms[0]) <= 0.5
-    assert live_terms[1] != -1.0
+    assert live_terms[1] != fit_terms[1]
     new = [row["new_ovr"] for row in live["results"]]
-    # The calibrated term holds the projected shape (the stride sample the engine calibrates on; F5 now reports it
-    # at league scale) and the full roster's mean. The full roster's own 90+ count (80 here, against a target of
-    # 71) is the sample-vs-full calibration item the audit left to P3, not this term's contract.
+    # The calibrated term holds the projected shape (the whole roster the engine calibrates on) and the full
+    # roster's mean.
     projected = live["league_shape"]["projected"]["count_90_plus"]
     assert abs(projected - live["league_shape"]["target"]["count_90_plus"]) <= 0.05 * live["league_shape"]["target"]["count_90_plus"]
     assert abs(sum(new) / len(new) - live["league_shape"]["target"]["avg_ovr"]) <= 0.25
+
+
+@pytest.mark.integration
+def test_live_calibrates_the_league_term_on_the_full_roster(conn):
+    """P3-04b (JR 2026-11-12, board M-0672): the live engine fits the league term on every staying player and every
+    rookie, not on the 400-player stride sample it used before.
+
+    On this 2026 league the two pools give different pairs: the stride sample (405 players, the old path) picks
+    star +1.5, the full roster (3,236) picks +1.25. The term is then applied to the whole roster either way, which
+    is why the pool, not just the pair, is pinned here."""
+    live, logs = _live(conn, 2027)
+    shape = live["league_shape"]
+    roster = len(live["results"])
+    assert shape["calibrated"] == roster == 3236
+    assert shape["calibrated"] == roster - shape["leavers"] + shape["class_size"]
+    assert shape["terms"] == (1.0, 1.25)
+    assert any(f"calibrated={roster}" in line for line in logs)
 
 
 @pytest.mark.integration
@@ -285,8 +303,10 @@ def test_2036_archive_keeps_its_shape(archive):
     assert target["avg_ovr"] == pytest.approx(78.13, abs=0.01)
     assert shape["target"]["avg_ovr"] == pytest.approx(target["avg_ovr"])
     assert shape["leavers"] > 0 and shape["class_size"] > 0
-    # Old code: (+1.5, +0.75). The draw is now keyed on the target season and 0, so the fit's terms move.
-    assert shape["terms"] == (4.0, 0.75)
+    # The draw is keyed on the target season and 0, and the term calibrates on the full roster (P3-04b), so the
+    # terms move from the old (+1.5, +0.75) stride sample.
+    assert shape["terms"] == (4.0, 1.25)
+    assert shape["calibrated"] == target["players"]
 
 
 def _shape_spy(calls):
