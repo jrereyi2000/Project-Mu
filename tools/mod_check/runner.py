@@ -904,6 +904,15 @@ def capture(mod: str, segment: str, pass_at: str, fail_at: str, *, asset: str | 
             if not plan.pack:
                 return _refused("segments.json must name the plan's expected test pack for a "
                                 "live capture (add \"pack\": \"Mu Test\"; plan R6)", mod=plan.mod)
+            if reuse:
+                # Verify the attach before cloning (F15, matching run()): a refused
+                # --reuse-launch must not leave a stray CAREER-TUNE-CHK* save behind.
+                try:
+                    attached_receipt = attach_launch(read_launch_receipt(folder), plan.pack,
+                                                     identity=identity, fingerprint=fingerprint)
+                except (LaunchError, DriverError, OSError) as exc:
+                    return {"status": "stopped", "stop": "attach", "why": str(exc),
+                            "mod": plan.mod, "pack_required": plan.pack, "attached": False}
             maker = clone or default_clone
             try:
                 scored = str(maker(save, CHK_PREFIX) or "").strip()
@@ -915,12 +924,7 @@ def capture(mod: str, segment: str, pass_at: str, fail_at: str, *, asset: str | 
                                 mod=plan.mod)
             target.mkdir(parents=True, exist_ok=True)
             if reuse:
-                try:
-                    receipt = attach_launch(read_launch_receipt(folder), plan.pack,
-                                            identity=identity, fingerprint=fingerprint)
-                except (LaunchError, DriverError, OSError) as exc:
-                    return {"status": "stopped", "stop": "attach", "why": str(exc),
-                            "mod": plan.mod, "pack_required": plan.pack, "attached": False}
+                receipt = attached_receipt
             else:
                 launcher = launch or (lambda wanted: default_launch(wanted, target / "launch"))
                 try:
@@ -1069,16 +1073,29 @@ def capture(mod: str, segment: str, pass_at: str, fail_at: str, *, asset: str | 
 
 # --------------------------------------------------------------------------- the real driver
 def _last_json(text: str) -> dict:
-    for line in reversed((text or "").splitlines()):
-        line = line.strip()
-        if not line:
-            continue
+    """The last JSON object in a process's output, even when it is pretty-printed.
+
+    The pilot CLI prints its one JSON result with ``json.dumps(..., indent=1)``, so it spans
+    many lines and a line-by-line parse saw only the closing brace (F13: every real
+    ``default_launch`` failed with "no JSON result"). Scan the *last* object start backwards
+    and let ``raw_decode`` consume the whole object; earlier log lines may contain braces of
+    their own, so only a complete dict counts.
+    """
+    data = text or ""
+    decoder = json.JSONDecoder()
+    best: dict | None = None
+    best_end = -1
+    index = data.find("{")
+    while index >= 0:
         try:
-            value = json.loads(line)
+            value, end = decoder.raw_decode(data[index:])
         except ValueError:
+            index = data.find("{", index + 1)
             continue
-        return value if isinstance(value, dict) else {}
-    return {}
+        if isinstance(value, dict) and index + end > best_end:
+            best, best_end = value, index + end
+        index = data.find("{", index + 1)
+    return best or {}
 
 
 class PilotDriver:

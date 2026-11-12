@@ -203,6 +203,27 @@ def read_header(frame):
     return None
 
 
+TICKER_BAND = 0.94          # the bottom Broadcast Ticker starts near here; it is not this game
+
+
+def _frame_height(frame):
+    """The frame's pixel height, from the look's own size or (once) the saved PNG."""
+    try:
+        if frame.size and len(frame.size) >= 2:
+            return float(frame.size[1])
+    except TypeError:
+        pass
+    if frame.png:
+        try:
+            from PIL import Image
+            with Image.open(frame.png) as opened:
+                frame.size = [opened.width, opened.height]
+            return float(frame.size[1])
+        except Exception:                    # no image/Pillow: no positional rule
+            return None
+    return None
+
+
 def read_game_clock(frame):
     """The game clock off the scorebug's OCR: {"quarter": 1-4 | "OT", "seconds": s}, or None.
 
@@ -213,10 +234,25 @@ def read_game_clock(frame):
     time: a clock needs one or two digits before its separator, and a bare ":40" has none, and
     a time is never read without a quarter word beside it. OCR-digits are not guessed at, so a
     clock that reads as "O:18" is a miss, not a wrong 0:18 — the job would rather stop.
+
+    **The bottom Broadcast Ticker is never this game's clock** (F12): a frame with an unreadable
+    main scorebug ("ost IO:S6") but a lower ticker line "1ST 14:53" used to return the *other*
+    game's 14:53. Rows whose words sit in the bottom `TICKER_BAND` are ignored, so that frame
+    reads None and the caller stops instead of resuming a half on another game's clock.
     """
     if frame is None:
         return None
-    for line in frame.lines:
+    height = _frame_height(frame)
+    cutoff = height * TICKER_BAND if height else None
+
+    def in_ticker(box):
+        if cutoff is None or not box:
+            return False
+        return float(box[1]) + float(box[3]) / 2 > cutoff
+
+    for line, row_y in frame.lines_with_rows():
+        if cutoff is not None and row_y is not None and row_y > cutoff:
+            continue
         up = str(line).upper()
         quarter = _QUARTER_RE.search(up)
         if not quarter:
@@ -226,7 +262,8 @@ def read_game_clock(frame):
             return {"quarter": _QUARTERS[quarter.group(1)],
                     "seconds": int(clock.group(1)) * 60 + int(clock.group(2))}
     # A row split across two OCR lines: the quarter word and the clock word keep their boxes.
-    words = [(str(w.get("text") or "").upper().strip(), w.get("box")) for w in frame.words]
+    words = [(str(w.get("text") or "").upper().strip(), w.get("box")) for w in frame.words
+             if not in_ticker(w.get("box"))]
     quarters = [(text, box) for text, box in words if box and text in _QUARTERS]
     clocks = [(text, box) for text, box in words if box and _CLOCK_RE.fullmatch(text)]
     best = None
@@ -1461,7 +1498,11 @@ def _to_halftime(pilot, progress):
                    f"clock of {HALFTIME_MIN_CLOCK}-{HALFTIME_WINDOW - 1}s may take the half's last "
                    f"play, so no snap is pressed", Stuck)
     _take_one_snap(pilot)                              # the half's last play
-    return pilot.screen, clock
+    # One look after the snap so the ready marker names what is actually on screen at the hold
+    # (the auditor's F1: the pre-snap screen was reported). The show itself is still not
+    # observed here, and the marker says show_observed: false.
+    _, screen = pilot.look()
+    return screen, clock
 
 
 def _quit_game(pilot, save=None):

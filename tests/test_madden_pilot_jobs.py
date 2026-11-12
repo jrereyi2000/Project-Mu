@@ -1022,6 +1022,10 @@ def test_watch_game_halftime_ready_marker_names_the_halftime_anchor(tmp_path, no
     ready = json.loads((tmp_path / jobs.READY_FILE).read_text())
     assert ready["anchor"] == "halftime_start" and ready["route"] == "supersim"
     assert ready["ready_token"] == "token-2"
+    # F1: the marker names the screen after the last snap, not the pre-snap Pause, and never
+    # claims the show was observed.
+    assert ready["screen"] != "PAUSE_MENU"
+    assert ready["show_observed"] is False
 
 
 def test_watch_game_supersim_holds_on_the_supersim_screen(tmp_path, notices):
