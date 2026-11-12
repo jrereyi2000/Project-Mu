@@ -1,7 +1,7 @@
 # Project Mu: Muse Ember evaluation
 
 **Status:** **step 1 is run and written up** — 2026-11-12, by `deepseek-v4.1-flash (muse-ember-plan-2)`. §1 spike S-M1 (done), §2 Job A + Job B + the `launch` defect, §3 the gate, §5 the recommendation. Step 2 (Ember) is not run: no Zen balance (B2).
-**Plan:** [`MUSE_EMBER_ROTATION_PLAN.md`](../in_progress/MUSE_EMBER_ROTATION_PLAN.md) §2.7 (benchmark), §3 (spike, risks), §5 U4.
+**Plan:** [`MUSE_EMBER_ROTATION_PLAN.md`](../done/MUSE_EMBER_ROTATION_PLAN.md) §2.7 (benchmark), §3 (spike, risks), §5 U4.
 **Model:** step 1 `opencode-go/muse-spark-1.3-contributor` (Go plan); step 2 `opencode/muse-ember-1.0` (Zen, on a G-S pass and after the top-up).
 
 The question this file answers: does a Muse session, driving the same tools a DeepSeek or Opus session drives, do Project Mu's computer-use and builder work well enough to justify a route — and at what wall-clock and cost?
@@ -145,9 +145,11 @@ JR's `Mu Base` was left untouched. A scratch pack `Mu Bench` was written from it
 
 ## 4. Step 2 — Ember
 
-Not run: B2 (no Zen balance) and, per D10, it waits for a G-S pass — which is now JR's call on item 2 (§3).
+**Declined by JR (2026-11-12).** No Zen credit was bought and no Ember run was made (B2 stays open, unspent). The reasoning: Spark cleared the gate on the work, Ember has never shown an advantage over it, and the one argument for Ember that survives this evaluation is not speed but privacy — it requests no training endpoint, which would matter for builder work rather than for computer-use frames. That can be reopened as its own decision without rerunning this benchmark.
 
 ## 5. Recommendation, as of 2026-11-12
+
+**Decision (JR, 2026-11-12): the Muse model is `opencode-go/muse-spark-1.3-contributor`; the workflow is closed.** The recommendations below are kept as the reasoning behind it and as the follow-ups that are still worth doing.
 
 1. **G-S: Spark clears it on the work, with one reservation.** Same job, faster sim per week than the catalog driver, no rule broken, and a catalog entry good enough to ship — written from a frame, with provenance, and improved by the nav tests. The reservation is the discovery cost: 9 minutes the first time it met a screen. That is the trade — the catalog driver is faster on known screens and stops dead on unknown ones; the model costs minutes but gets through.
 2. **Ember (step 2) is JR's call on B2.** On this evidence Spark is already usable for computer-use work; Ember's case would be builder work (no training endpoint) rather than speed, and it costs Zen credit that is not on the account.

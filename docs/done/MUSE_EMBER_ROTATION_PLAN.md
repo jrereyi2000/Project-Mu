@@ -1,6 +1,6 @@
 # Project Mu: Muse Ember Rotation Plan
 
-**Status:** approved by JR (2026-11-12); rewritten to the OpenCode agent route and retargeted to JR's two-step benchmark (Spark first, Ember on a pass) on 2026-11-12; waves 1–2 merged (`dca6741`, `c21dd4e`, `7a4d71e`, `31f54f8`); **B1 cleared** (JR turned on the training-endpoint setting; Spark answers, 04:28 EST) and **wave 0 spike S-M1 done** (2026-11-12: TUI route verified, a launcher defect found and fixed — see [`MUSE_EMBER_EVALUATION.md`](../reference/MUSE_EMBER_EVALUATION.md) §1); **wave 3 (U4 step 1) is run: Job A and Job B both reached week 4** (2026-11-12 — Job A 1.9 min, Muse Job B 1.23 min sim, both `ok`, no hard-rule violation; gate §3 in [`MUSE_EMBER_EVALUATION.md`](../reference/MUSE_EMBER_EVALUATION.md)) — verdict and the Ember decision are JR's. B2 (Zen credit for Ember) still open; **a blocking pilot `launch` defect was found** (§2.2 of the evaluation: MMC needs its own directory as cwd) and needs its owner. 
+**Status:** approved by JR (2026-11-12); rewritten to the OpenCode agent route and retargeted to JR's two-step benchmark (Spark first, Ember on a pass) on 2026-11-12; waves 1–2 merged (`dca6741`, `c21dd4e`, `7a4d71e`, `31f54f8`); **B1 cleared** (JR turned on the training-endpoint setting; Spark answers, 04:28 EST) and **wave 0 spike S-M1 done** (2026-11-12: TUI route verified, a launcher defect found and fixed — see [`MUSE_EMBER_EVALUATION.md`](../reference/MUSE_EMBER_EVALUATION.md) §1); **COMPLETE — the workflow is closed by JR's decision (2026-11-12): the Muse model is `opencode-go/muse-spark-1.3-contributor`, and step 2 (Ember) is declined.** Wave 3 (U4 step 1) is run: Job A and Job B both reached week 4 — Job A 1.9 min, Muse Job B 1.23 min sim, both `ok`, no hard-rule violation; gate in [`MUSE_EMBER_EVALUATION.md`](../reference/MUSE_EMBER_EVALUATION.md) §3. **B2 stays open and unspent** (no Zen credit); Ember is not needed because Spark clears the gate and Ember's case was builder work, not speed. A blocking pilot `launch` defect was found during the benchmark and **fixed and proved on a live cold start** (evaluation §2.2, `3ef55a1` + `feb0c29`). 
 **Builds on:** [`OPENCODE_DEEPSEEK_ROUTE_PLAN.md`](../done/OPENCODE_DEEPSEEK_ROUTE_PLAN.md) (built 2026-11-12: the OpenCode launcher, spawn types, route markers and board inbox that this plan copies), PROJECT_SPEC §1.2 (agent routes), [`MADDEN_PILOT_AND_TUNING_PLAN.md`](../done/MADDEN_PILOT_AND_TUNING_PLAN.md), `docs/reference/AGENTS.md` § Model inboxes.
 
 **Goal:** Make a Muse model a first-class Project Mu agent, and find out whether it beats the native route. A Muse session starts in the OpenCode TUI through its own launcher, joins the board with its own label, inbox and commit trailer, takes builder work, and owns computer use by driving `tools/madden_pilot` from its own shell. No Meta API client and no `MODEL_API_KEY`: JR's decision (D6) is that the session is the computer-use route.
@@ -221,7 +221,7 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 | 1 | U1, U2 | none (code only) | Different files; neither needs the other or a model |
 | 2 | U3 | U1, U2 | Writes the docs against merged code |
 | 3 | U4 step 1 | U1–U3, B1, JR's PC | **DONE 2026-11-12** — Job A 1.9 min / Job B 1.23 min sim, both week 1 → 4; gate in the evaluation §3 |
-| 4 | U4 step 2 | G-S pass, B2, JR's PC | The Ember comparison |
+| 4 | U4 step 2 | G-S pass, B2, JR's PC | **DECLINED by JR (2026-11-12)** — Spark is the Muse model; no Zen top-up, no Ember comparison |
 
 Waves 1 and 2 are not blocked by either blocker; only the spike and the benchmark are.
 
@@ -254,8 +254,8 @@ No path appears twice.
 | # | Question | Recommendation |
 |---|---|---|
 | Q1 | **B1: turn on "Allow paid endpoints that train on request data"** so Spark can run step 1? | Yes for the computer-use benchmark only; no repo-wide builder work on Spark until the result says it is worth it (R7). |
-| Q2 | **B2: top up OpenCode Zen for Ember**, only after G-S passes? | Yes, and the smallest sensible amount: step 2 is one sim week plus a handful of screen reads. |
-| Q3 | If Spark passes but Ember fails or is dearer, which becomes the Muse default? | Spark for the benchmark's scope, with the Zen spend stopped; revisit if JR later wants builder work, which should prefer Ember (no training endpoint). |
+| Q2 | **B2: top up OpenCode Zen for Ember**, only after G-S passes? | **Answered no (2026-11-12):** Spark clears the gate, so the top-up buys a comparison rather than a capability; Ember's real case is builder work with no training endpoint, and that can be reopened on its own. |
+| Q3 | If Spark passes but Ember fails or is dearer, which becomes the Muse default? | **Answered (2026-11-12): Spark `opencode-go/muse-spark-1.3-contributor` is the Muse model.** No Ember run was made, so this is a preference for the proven route, not a measured win over Ember. |
 | Q4 | Should a Muse session be allowed to spawn a DeepSeek builder for a large unit, instead of always handing that to JR? | **Always hand to JR** (D9; spawning is how a second class of builder proliferates). |
 
 ## 9. Build log
@@ -267,3 +267,7 @@ No path appears twice.
 | U3 Muse skill and docs (wave 2) | 2 | `worktree-agent-aa7557de5da7c49cc` | `.claude/worktrees/agent-aa7557de5da7c49cc` | merged — `.claude/skills/muse/SKILL.md`, AGENTS.md row + paragraph, MADDEN_PILOT.md line | `7a4d71e` |
 | Wave 0 spike S-M1 (no unit) | 0 | `ses_mu_1794477210_09304` throwaway | OpenCode worktree `spike-muse-session` (removed) | done — route verified, R3 found: TUI has no `--model`; launcher fixed to pin the model on the session, tests 31 green, findings in `docs/reference/MUSE_EMBER_EVALUATION.md` §1 | follow-up commit, `tools/muse_session.sh` + `tests/test_muse_session.py` |
 | U4 step 1 (Jobs A and B) | 3 | `muse-bench-2` + worktree `muse-bench-catalog` | OpenCode worktree `muse-bench-catalog` (kept) | Job A `CAREER-TUNE-MUSE` week 1→4, 1.9 min, ok; Job B `CAREER-TUNE-MUSE-B` week 1→4, 1.23 min sim, ok after 2 safe stops; catalog entry from one frame, 137 tests green, no rule broken. Launch defect (`cwd`) found and documented | no merge (benchmark; the eval doc carries it) |
+
+**Decision (JR, 2026-11-12):** the Muse model is `opencode-go/muse-spark-1.3-contributor`; step 2 (Ember) is declined and no Zen credit is spent. Spark cleared the gate on the work — both jobs reached week 4, no hard rule broken, a withheld screen catalogued from one frame, and a sim faster per week than the catalog driver. The workflow is closed and this plan moves to `docs/done/`.
+
+**Follow-up worth keeping (not planned):** model speed does not enter the sim today. The catalog driver presses the keys; a Muse session only acts at a stop, so a faster model would shorten the minutes spent cataloguing an unknown screen, not the seconds a week takes to sim. If session overhead ever matters, measure it there first (`MUSE_EMBER_EVALUATION.md` §2.4 gives the split — 7 of Job B's 9 minutes were model-and-test time, 2 were pilot time).
