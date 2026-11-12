@@ -663,21 +663,32 @@ def test_driver_failure_is_a_stuck_stop(tmp_path, notices):
     assert "foreground" in read_stop(tmp_path)["reason"]
 
 
-def test_ocr_order_tracks_presses(tmp_path, notices):
+def test_ocr_order_reads_the_selected_row_and_never_the_shadow_index(tmp_path, notices):
+    """F7: a tracked catalog index must not authorize Space; the frame's selection does."""
     cat = {"keys": CAT["keys"], "screens": {
         "MENU": {"all": ["MENU"], "options": ["A", "B", "C"], "default": "A", "nav": "vertical",
                  "highlight": "ocr_order", "confirm_ok": ["C"], "exits": {}}}}
 
     class Menu:
-        keys = []
+        def __init__(self):
+            self.keys = []
+            self.idx = 0
 
         def call(self, cmd):
             if cmd[0] == "key":
-                self.keys.append(cmd[cmd.index("--name") + 1])
+                name = cmd[cmd.index("--name") + 1]
+                times = int(cmd[cmd.index("--times") + 1]) if "--times" in cmd else 1
+                self.keys.append(name)
+                for _ in range(times):
+                    if name == "down":
+                        self.idx = min(2, self.idx + 1)
+                    elif name == "up":
+                        self.idx = max(0, self.idx - 1)
             return {"ok": True, "words": frame_of(["MENU", "A", "B", "C"]).words}
     drv = Menu()
     clock = FakeClock()
-    p = Pilot(cat, tmp_path, driver=drv, sleep=clock.sleep, clock=clock)
+    p = Pilot(cat, tmp_path, driver=drv, sleep=clock.sleep, clock=clock,
+              highlight_reader=lambda frame, labels, spec: labels[drv.idx])
     p.look()
     assert p.highlighted() == "A"
     with pytest.raises(Stuck):
@@ -686,6 +697,23 @@ def test_ocr_order_tracks_presses(tmp_path, notices):
     assert drv.keys == ["down", "down"]
     p.confirm_on("MENU", "C")
     assert drv.keys[-1] == "space"
+
+
+def test_no_selection_evidence_stops_before_space(tmp_path, notices):
+    """F7: when the selected row cannot be read, the shadow index is not enough."""
+    cat = {"keys": CAT["keys"], "screens": {
+        "MENU": {"all": ["MENU"], "options": ["A", "B", "C"], "default": "A", "nav": "vertical",
+                 "highlight": "ocr_order", "confirm_ok": ["C"], "exits": {}}}}
+
+    class Menu:
+        def call(self, cmd):
+            return {"ok": True, "words": frame_of(["MENU", "A", "B", "C"]).words}
+    p = Pilot(cat, tmp_path, driver=Menu(), sleep=lambda _: None)
+    p.look()
+    assert p.highlighted() is None
+    with pytest.raises(Stuck) as caught:
+        p.confirm_on("MENU", "C")
+    assert "not confirming" in str(caught.value)
 
 
 def test_default_driver_is_lazy(monkeypatch, tmp_path):

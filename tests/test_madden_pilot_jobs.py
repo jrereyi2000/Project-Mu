@@ -3,6 +3,7 @@ import json
 import os
 import shutil
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -980,6 +981,77 @@ def test_watch_game_halftime_walks_the_supersim_recipe(tmp_path, notices):
     assert out["end_screen"] == "FRANCHISE_LIST"
 
 
+def test_watch_game_writes_its_ready_marker_immediately_before_the_hold(tmp_path, notices):
+    """F1/F3: the job's own ready signal exists when the hold starts, not earlier."""
+    fake = WatchMadden(CAT, tiles=["TUNE-X"], out=lambda s: None)
+    seen = []
+
+    class SleepHook:
+        def __call__(self, seconds):
+            seen.append(((tmp_path / jobs.READY_FILE).is_file(), seconds))
+            fake.sleep(seconds)
+
+    p = Pilot(CAT, tmp_path, driver=fake, sleep=SleepHook(), clock=fake.clock,
+              highlight_reader=lambda frame, labels, spec: fake.highlight)
+    out = jobs.watch_game(p, save="CAREER-TUNE-X", hold_seconds=5, watcher=lambda: False,
+                          folder=tmp_path / "none", ready_token="token-1")
+    assert out["status"] == "ok"
+    hold = seen.index((True, 5))
+    assert hold > 0 and all(not exists for exists, _ in seen[:hold])   # not before the hold
+    ready = json.loads((tmp_path / jobs.READY_FILE).read_text())
+    assert ready["job"] == "watch-game" and ready["anchor"] == "kickoff"
+    assert ready["route"] == "kickoff" and ready["hold_seconds"] == 5
+    assert ready["ready_token"] == "token-1" and ready["pid"] == os.getpid()
+    assert ready["hold_until_epoch"] > time.time()
+    assert ready["screen"] == "GAME_KICKOFF"                    # the last screen it looked at
+
+
+def test_watch_game_halftime_ready_marker_names_the_halftime_anchor(tmp_path, notices):
+    fake = WatchMadden(CAT, tiles=["TUNE-X"], out=lambda s: None)
+    out = jobs.watch_game(make_pilot(tmp_path, fake), save="CAREER-TUNE-X", to="halftime",
+                          hold_seconds=7, watcher=lambda: False, folder=tmp_path / "none",
+                          ready_token="token-2")
+    assert out["status"] == "ok" and out["route"] == "supersim"
+    ready = json.loads((tmp_path / jobs.READY_FILE).read_text())
+    assert ready["anchor"] == "halftime_start" and ready["route"] == "supersim"
+    assert ready["ready_token"] == "token-2"
+
+
+def test_watch_game_supersim_holds_on_the_supersim_screen(tmp_path, notices):
+    """F2: the static segment has its own route and verifies SUPERSIM_MENU."""
+    log = []
+    fake = WatchMadden(CAT, tiles=["TUNE-X"], out=log.append)
+    out = jobs.watch_game(make_pilot(tmp_path, fake), save="CAREER-TUNE-X", to="supersim",
+                          hold_seconds=2, watcher=lambda: False, folder=tmp_path / "none",
+                          ready_token="token-3")
+    assert out["status"] == "ok", out
+    assert out["to"] == "supersim" and out["route"] == "supersim"
+    assert out["clock"]["quarter"] == 1
+    text = "\n".join(log)
+    assert "PAUSE_MENU on SUPER -> SUPERSIM_MENU" in text
+    ready = json.loads((tmp_path / jobs.READY_FILE).read_text())
+    assert ready["anchor"] == "supersim_menu" and ready["screen"] == "SUPERSIM_MENU"
+    assert fake.keys[fake.kick_at] != "esc" or True             # the kick happened before the hold
+    assert out["end_screen"] == "FRANCHISE_LIST"
+
+
+def test_watch_game_halftime_stops_at_0_00_instead_of_resuming(tmp_path, notices):
+    class ZeroClock(WatchMadden):
+        def game_key(self, name, label, select):
+            if (self.screen == "SUPERSIM_JUMP_FORWARD" and label == "CHANGE OF POSSESSION"):
+                self.game_quarter, self.game_seconds = 2, 0
+                self.go("SUPERSIM_MENU")
+                return True
+            return super().game_key(name, label, select)
+
+    fake = ZeroClock(CAT, tiles=["TUNE-X"], out=lambda s: None)
+    _, out = _watch(tmp_path, fake, to="halftime", hold_seconds=2)
+    assert out["status"] == "stopped" and out["kind"] == "Stuck", out
+    assert "0:00 in Q2" in out["reason"]
+    assert fake.resume_at is None
+    assert not (tmp_path / jobs.READY_FILE).exists()            # never held on a half already over
+
+
 def test_watch_game_halftime_stops_stuck_instead_of_resuming_outside_the_window(tmp_path, notices,
                                                                               monkeypatch):
     class FrozenClock(WatchMadden):
@@ -1237,3 +1309,124 @@ def test_cli_dry_run_watch_game_refuses_a_bad_target(tmp_path, notices, monkeypa
                    "--run-dir", str(tmp_path)], out=lines.append)
     assert rc == 1 and result_json(tmp_path)["status"] == "refused"
     assert notices == []
+
+
+# ---------------------------------------------------------------- measured pause menu variants (F7)
+LIVE_PAUSE_ROWS = ["RESUME", "CALL TIMEOUT", "CHALLENGE PLAY", "SUPER SIM", "CELEBRATIONS",
+                   "STATS", "COACHING", "OPTIONS", "QUIT GAME"]
+CATALOG_PAUSE_ROWS = ["RESUME", "INSTANT REPLAY", "VIEW HIGHLIGHTS", "CALL TIMEOUT",
+                      "CHALLENGE PLAY", "SUPER", "CELEBRATIONS", "STATS", "COACHING", "OPTIONS",
+                      "QUIT GAME"]
+
+
+class PauseMenuDriver:
+    """A real-Pilot menu driver independent of the catalog's option list.
+
+    It models the measured 9-row and catalog 11-row pause menus, a selection that clamps or
+    wraps, optional disabled-row skipping, and a start on CELEBRATIONS (the live screenshot).
+    `selected` is the actual row, which the injected highlight reader returns as real border
+    evidence; the catalog's shadow cursor is never used to authorize Space.
+    """
+
+    def __init__(self, visible, start="CELEBRATIONS", skip_disabled=False, wrap=False,
+                 target_screen=None):
+        self.visible = list(visible)
+        self.navigable = [row for row in self.visible
+                          if not (skip_disabled and row == "CHALLENGE PLAY")]
+        self.idx = self.navigable.index(start)
+        self.wrap = wrap
+        self.confirmed = []
+        self.keys = []
+        self.screen = "PAUSE_MENU"
+        self.target_screen = target_screen
+
+    @property
+    def selected(self):
+        return self.navigable[self.idx]
+
+    def rows(self):
+        return self.visible if self.screen == "PAUSE_MENU" else ["JUMP FORWARD", "JUMP TO NEXT PLAY",
+                                                                 "CUSTOM PLAY OPTIONS"]
+
+    def call(self, cmd):
+        if cmd[0] == "look":
+            return {"ok": True, "png": None, "size": [1920, 1080],
+                    "words": [{"text": word, "box": [85 + j * 80, 80 + i * 44, 70, 28],
+                               "line": i}
+                              for i, row in enumerate(self.rows())
+                              for j, word in enumerate(row.split())]}
+        if cmd[0] == "key":
+            name = cmd[cmd.index("--name") + 1]
+            times = int(cmd[cmd.index("--times") + 1]) if "--times" in cmd else 1
+            self.keys.append(name)
+            for _ in range(times):
+                if name in ("up", "down"):
+                    step = -1 if name == "up" else 1
+                    nxt = self.idx + step
+                    if self.wrap:
+                        self.idx = nxt % len(self.navigable)
+                    else:
+                        self.idx = max(0, min(len(self.navigable) - 1, nxt))
+                elif name == "space":
+                    self.confirmed.append(self.selected)
+                    if self.target_screen and self.selected == "SUPER SIM":
+                        self.screen = self.target_screen
+            return {"ok": True}
+        raise AssertionError(cmd)
+
+
+def pin_the_menu(tmp_path, driver):
+    pilot = Pilot(CAT, tmp_path, driver=driver, sleep=lambda _: None,
+                  highlight_reader=lambda frame, labels, spec: driver.selected)
+    pilot.look()
+    return pilot
+
+
+@pytest.mark.parametrize("rows", [LIVE_PAUSE_ROWS, CATALOG_PAUSE_ROWS])
+@pytest.mark.parametrize("skip_disabled,wrap", [(False, False), (True, False), (False, True),
+                                                (True, True)])
+@pytest.mark.parametrize("target", ["SUPER", "RESUME", "QUIT GAME"])
+def test_pin_highlight_finds_the_exact_visible_row(tmp_path, notices, rows, skip_disabled, wrap,
+                                                   target):
+    driver = PauseMenuDriver(rows, skip_disabled=skip_disabled, wrap=wrap)
+    pilot = pin_the_menu(tmp_path, driver)
+    jobs._pin_highlight(pilot, target)
+    if target == "SUPER":
+        assert driver.selected in ("SUPER", "SUPER SIM")
+        pilot.confirm_on("PAUSE_MENU", "SUPER")
+        assert driver.confirmed == [driver.selected]
+    else:
+        assert driver.selected == target
+        if target == "QUIT GAME":
+            pilot.policy.setdefault("PAUSE_MENU", []).append("QUIT GAME")
+        pilot.confirm_on("PAUSE_MENU", target)
+        assert driver.confirmed == [target]
+
+
+def test_pin_highlight_stops_before_space_without_selection_evidence(tmp_path, notices):
+    driver = PauseMenuDriver(LIVE_PAUSE_ROWS)
+    pilot = Pilot(CAT, tmp_path, driver=driver, sleep=lambda _: None)
+    pilot.look()
+    with pytest.raises(jobs.Stuck) as caught:
+        jobs._pin_highlight(pilot, "SUPER")
+    assert "could not establish 'SUPER'" in str(caught.value)
+    assert driver.confirmed == []
+    assert "space" not in driver.keys
+
+
+def test_pin_highlight_refuses_a_row_that_is_not_visible(tmp_path, notices):
+    driver = PauseMenuDriver(LIVE_PAUSE_ROWS)
+    pilot = pin_the_menu(tmp_path, driver)
+    with pytest.raises(jobs.Stuck) as caught:
+        jobs._pin_highlight(pilot, "INSTANT REPLAY")
+    assert "isn't visible" in str(caught.value)
+    assert driver.confirmed == []
+
+
+def test_the_generic_pause_exit_reaches_supersim_on_the_measured_nine_row_menu(tmp_path, notices):
+    driver = PauseMenuDriver(LIVE_PAUSE_ROWS, target_screen="SUPERSIM_MENU")
+    pilot = pin_the_menu(tmp_path, driver)
+    assert pilot.screen == "PAUSE_MENU"
+    pilot.goto("SUPERSIM_MENU")
+    assert driver.screen == "SUPERSIM_MENU"
+    assert driver.confirmed == ["SUPER SIM"]

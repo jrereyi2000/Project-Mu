@@ -4,7 +4,8 @@
     ``python3 -m tools.mod_check run --save CAREER-TUNE-<name> --mod <slug>
        [--segments game_start,halftime] [--dry-run] [--run-dir DIR] [--pack P] [--data-dir DIR]``
 
-    Clones the save, records the plan's segments, scores them and writes
+    Launches the plan's own test pack through the pilot's launch job (an already-running Madden
+    is refused), clones the save, records the plan's segments, scores them and writes
     ``data/mod_checks/runs/<stamp>_<slug>/report.json`` and ``report.md`` (or ``--run-dir``,
     which must stay inside the check folder), prints the markdown, and sends one ntfy line.
     Exit 0 pass, 1 fail, 2 unknown or refused (the pilot's convention). ``--dry-run`` prints the
@@ -56,11 +57,13 @@ def dry_run_text(result: dict) -> str:
     """The plan ``run --dry-run`` prints, before anything is touched."""
     segments = result.get("segments") or []
     lines = [f"mod_check plan: {result.get('mod')} ({result.get('mod_dir')})",
+             f"pack: {result.get('pack_required') or 'MISSING (a run refuses without one)'} "
+             f"(the run launches this pack itself and verifies the launch receipt)",
              f"save: {result.get('save')} (dry run: would clone it to "
              f"{result.get('would_clone')} and score that clone)",
              "", "segments:"]
     for segment in segments:
-        cue = segment.get("cue") or "fixed wait"
+        cue = segment.get("cue") or "no cue"
         lines.append(f"  {segment.get('name')}: cue {cue}, record_s {segment.get('record_s')}, "
                      f"fps {segment.get('fps')}, width {segment.get('width')}, "
                      f"preroll {segment.get('preroll_s')}s")
@@ -102,6 +105,11 @@ def capture_text(result: dict) -> str:
         lines.append("  nothing written: re-run with --yes once the crops look right")
     if result.get("refused"):
         lines.append(f"  refused: {result['refused']}")
+    operational = result.get("operational") or {}
+    if operational.get("status") not in (None, "complete"):
+        lines.append(f"  run status: {operational.get('status')}: {operational.get('why')}")
+        if operational.get("recovery"):
+            lines.append(f"  recovery: {operational['recovery']}")
     return "\n".join(lines)
 
 
@@ -122,6 +130,12 @@ def _run(args: argparse.Namespace) -> int:
           f"(cloned from {result.get('source_save')}, pack {result.get('pack')})")
     markdown = Path(result["report_md"]).read_text(encoding="utf-8")
     print(markdown, end="" if markdown.endswith("\n") else "\n")
+    if result.get("status") == "incomplete":
+        operational = result.get("operational") or {}
+        print(f"mod_check: INCOMPLETE: {operational.get('why')}", file=sys.stderr)
+        if operational.get("recovery"):
+            print(f"mod_check: recovery: {operational['recovery']}", file=sys.stderr)
+        return 2
     return {"pass": 0, "fail": 1}.get(str(result.get("status")), 2)
 
 
@@ -135,6 +149,12 @@ def _capture(args: argparse.Namespace) -> int:
         return 2
     if result.get("status") == "stopped":
         print(f"mod_check capture: stopped: {result.get('why')}", file=sys.stderr)
+        return 2
+    operational = result.get("operational") or {}
+    if operational.get("status") not in (None, "complete"):
+        print(f"mod_check capture: INCOMPLETE: {operational.get('why')}", file=sys.stderr)
+        if operational.get("recovery"):
+            print(f"mod_check capture: recovery: {operational['recovery']}", file=sys.stderr)
         return 2
     return 0
 
@@ -161,7 +181,8 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--dry-run", action="store_true",
                             help="print the plan and score nothing: no clone, no PC, no notice")
     run_parser.add_argument("--pack", default=None,
-                            help="mod pack to launch (a launch that reports its own pack wins)")
+                            help="cross-check the plan's expected pack; the run launches that pack "
+                                 "itself and verifies the launch receipt")
     run_parser.set_defaults(func=_run)
 
     cap_parser = sub.add_parser("capture", parents=[common],

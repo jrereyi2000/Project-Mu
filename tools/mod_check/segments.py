@@ -11,13 +11,17 @@ A mod lives in ``data/mod_checks/<slug>/``:
     ``width``, ``checks`` and ``preroll_s``; an unknown key is a refusal, so a typo cannot be
     ignored.
 
-    ``after`` is a cue from the fixed vocabulary the runner knows how to see on screen
+    ``after`` is a cue from the fixed vocabulary the runner knows how to see
     (``kickoff``, ``halftime_start``, ``supersim_menu``); anything else is refused rather than
-    guessed. A segment may omit ``after`` only for the static ``supersim_menu`` screen, and then
-    it must say so with ``"cue": "supersim_menu"``: a fixed wait is allowed there, nowhere else,
-    so a timing-based check cannot silently score the wrong moment. ``preroll_s`` (plan R2) is an
-    optional fixed wait, ``0``..``10`` seconds, before the recording starts; the report carries it
-    so a reader knows a segment was timed rather than cued.
+    guessed. Every cue has its own ``watch-game`` route now, so no segment is a blind fixed wait:
+    the older ``"cue": "supersim_menu"`` form (no ``after``) is still accepted for that one
+    screen, and it is cued and verified like the rest. ``preroll_s`` (plan R2) is an optional
+    wait, ``0``..``10`` seconds, after the cue and before the recording starts; the report
+    carries it so a reader knows a segment was timed as well as cued.
+
+    A top-level ``"pack"`` names the expected test pack (``"Mu Test"`` for JR's throwaway pack).
+    It is required for a run and for a live capture: the run launches that pack itself and the
+    report records both the required and the actual launch pack.
 
 ``checks.json``
     One spec per asset in ``tools.madden_pilot.assets.check_frame``'s own shape. ``reference``
@@ -74,8 +78,9 @@ SMALL_WIDTH, MAX_RECORD_S, MAX_RECORD_FPS = _driver_caps()
 # The cues the runner (and U2's watch-game job) know how to wait for. An unknown cue is a
 # refusal, never a guess (plan section 2.2).
 CUES = ("kickoff", "halftime_start", "supersim_menu")
-# The one static screen a segment may wait a fixed time on instead of a cue.
+# The older cue-only form still accepted for the one static screen, now driven by its own route.
 STATIC_CUE = "supersim_menu"
+PLAN_KEYS = ("mod", "pack", "segments")
 
 DEFAULT_FPS = 5
 MIN_WIDTH = 320
@@ -104,11 +109,11 @@ class Segment:
     width: int
     checks: tuple[str, ...]
     preroll_s: float = 0.0
-    cued: bool = True          # False for a fixed wait on the static supersim_menu screen
+    cued: bool = True          # every cue has a route; kept for the plan/report shape
 
     def as_dict(self) -> dict:
         """The plan fields, for ``--dry-run`` output and logs."""
-        return {"name": self.name, "cue": self.cue, "after": self.cue if self.cued else None,
+        return {"name": self.name, "cue": self.cue, "after": self.cue,
                 "record_s": self.record_s, "fps": self.fps, "width": self.width,
                 "checks": list(self.checks), "preroll_s": self.preroll_s}
 
@@ -121,6 +126,7 @@ class Plan:
     mod_dir: Path
     segments: tuple[Segment, ...]
     checks: Mapping[str, dict] = field(default_factory=dict)
+    pack: str | None = None
 
     def names(self) -> list[str]:
         return [segment.name for segment in self.segments]
@@ -258,15 +264,19 @@ def _parse_segment(raw: Any, index: int, path: Path, check_names: set[str]) -> S
     if after is not None and cue is not None and after != cue:
         raise PlanError(f"{path}: {where}: after {after!r} and cue {cue!r} disagree; "
                         f"a segment waits for one cue")
-    cued = after is not None
-    if not cued:
-        if cue != STATIC_CUE:
-            raise PlanError(
-                f"{path}: {where}: no after cue. Only the static {STATIC_CUE} screen may be a "
-                f"fixed wait (write \"cue\": \"{STATIC_CUE}\"); every other segment must name "
-                f"one of {', '.join(CUES)} so it cannot score the wrong moment")
-        # A static screen is reached, not cued: the run waits a fixed time on it.
-    selected_cue = after if cued else cue
+    if after is None and cue is None:
+        raise PlanError(
+            f"{path}: {where}: no after cue. Every segment must name one of "
+            f"{', '.join(CUES)} so it cannot score the wrong moment; the static super-sim "
+            f"screen is \"after\": \"{STATIC_CUE}\" (or the older \"cue\": \"{STATIC_CUE}\")")
+    if after is None and cue != STATIC_CUE:
+        raise PlanError(
+            f"{path}: {where}: a cue without an after is only accepted for the static "
+            f"{STATIC_CUE} screen; use \"after\": <cue> so the segment records on its route")
+    # Every cue, including the static one, is cued: watch-game positions the screen and the
+    # driver verifies its ready marker before a frame is recorded.
+    cued = True
+    selected_cue = after if after is not None else cue
 
     record_s = raw.get("record_s")
     if not _is_int(record_s) or not 1 <= record_s <= MAX_RECORD_S:
@@ -304,6 +314,14 @@ def load_plan(mod_dir: str | Path, *, require_refs: bool = True) -> Plan:
     raw = _read_json(path, "segment plan")
     if not isinstance(raw, dict) or not isinstance(raw.get("segments"), list):
         raise PlanError(f"{path} must be an object with a \"segments\" list")
+    unknown_plan = sorted(set(raw) - set(PLAN_KEYS))
+    if unknown_plan:
+        raise PlanError(f"{path}: unknown top-level field(s) {unknown_plan} "
+                        f"(allowed: {', '.join(PLAN_KEYS)})")
+    pack = raw.get("pack")
+    if pack is not None and (not isinstance(pack, str) or not pack.strip()):
+        raise PlanError(f"{path}: pack must be a non-empty pack name, not {pack!r}")
+    pack = pack.strip() if isinstance(pack, str) else None
     entries = raw["segments"]
     if not entries:
         raise PlanError(f"{path}: \"segments\" is empty; a run needs at least one segment")
@@ -319,4 +337,4 @@ def load_plan(mod_dir: str | Path, *, require_refs: bool = True) -> Plan:
     display = raw.get("mod") or folder.name
     if not isinstance(display, str) or Path(display).name != display or display in (".", ".."):
         raise PlanError(f"{path}: mod must be a plain display name or omitted, not {raw.get('mod')!r}")
-    return Plan(mod=display, mod_dir=folder, segments=tuple(segments), checks=checks)
+    return Plan(mod=display, mod_dir=folder, segments=tuple(segments), checks=checks, pack=pack)

@@ -5,7 +5,7 @@ One command loads a season game on a throwaway clone of a tuning save, records n
 Built by [`VISUAL_MOD_CHECK_PLAN.md`](../in_progress/VISUAL_MOD_CHECK_PLAN.md) (U1 `tools/mod_check/`, U2 the `watch-game` pilot job). The pilot underneath is [`MADDEN_PILOT.md`](MADDEN_PILOT.md) §5–§6. The per-frame check specs are the spike agent's ([`MADDEN_SPIKE_AGENT.md`](MADDEN_SPIKE_AGENT.md) §7), now standing rather than inside a spike. The model and its measured cost: [`LOCAL_VISION_LATENCY.md`](LOCAL_VISION_LATENCY.md) and [`LOCAL_VISION_HOST.md`](LOCAL_VISION_HOST.md). Building the mod itself: [`MOD_BUILDING.md`](MOD_BUILDING.md).
 
 ```
-python3 -m tools.mod_check run --save CAREER-TUNE-<name> --mod <slug> [--segments a,b] [--dry-run] [--pack P]
+python3 -m tools.mod_check run --save CAREER-TUNE-<name> --mod <slug> [--segments a,b] [--dry-run] [--pack P]   # launches the plan's pack itself
 python3 -m tools.mod_check capture --mod <slug> --segment <name> --pass-at M:SS --fail-at M:SS [--asset NAME] [--yes]
 python3 -m tools.mod_check run --save CAREER-TUNE-<name> --mod <slug> --data-dir DIR      # or MU_MOD_CHECKS_DIR
 python3 -m tools.madden_pilot watch-game --save CAREER-TUNE-<name> --to kickoff|halftime [--hold-seconds N]
@@ -18,8 +18,8 @@ python3 -m tools.madden_pilot watch-game --save CAREER-TUNE-<name> --to kickoff|
 | `run … --dry-run` | nothing | reads the plan and the reference files, prints it |
 | `capture` (no `--save`) | nothing | reads a previous run's frames, writes a preview under `data/mod_checks/captures/` |
 | `capture … --yes` | nothing | writes the reference pair (`--yes` is the human gate) |
-| `run` (no `--dry-run`) | Madden PC, a `CAREER-TUNE-*` save | clones the save, starts a game, records, quits, writes a run |
-| `watch-game` | Madden PC, a `CAREER-TUNE-*` save | starts a game on that clone and quits it |
+| `run` (no `--dry-run`) | Madden PC closed, a `CAREER-TUNE-*` save | launches the plan's pack through MMC, clones the save, starts a game, records, quits, writes a run |
+| `watch-game` | Madden PC, a `CAREER-TUNE-*` save | starts a game on that clone, writes `ready.json` before its hold, and quits it |
 
 ## 1. What it is, and what it is not
 
@@ -55,12 +55,13 @@ data/mod_checks/
       previews/<asset>_native.png
 ```
 
-A slug is one directory name (`pink-cfb`), never a path. Two runs in the same second would collide in principle; the stamp is to the second, so leave a second between runs.
+A slug is one directory name (`pink-cfb`), never a path. Two runs in the same second get `-2`, `-3`… on the default directory, and an explicit `--run-dir` that already holds anything is refused, so two invocations never share frames.
 
 ## 3. `segments.json`: what to record
 
 ```json
 {"mod": "pink-cfb",
+ "pack": "Mu Test",
  "segments": [
   {"name": "game_start", "after": "kickoff", "record_s": 8, "fps": 5, "width": 1280,
    "checks": ["midfield_logo", "pink_ball"]},
@@ -69,11 +70,13 @@ A slug is one directory name (`pink-cfb`), never a path. Two runs in the same se
  ]}
 ```
 
+`pack` is the plan's expected **test pack**. It is required for a run and for a live capture: the run launches that pack itself through the pilot's `launch` job and refuses when Madden is already running, because an attached game's loaded pack cannot be verified (plan R6). The report records both the required and the launched pack.
+
 | Key | Required | Rule | Default |
 |---|---|---|---|
 | `name` | yes | one plain name; it becomes the segment's folder under the run | — |
-| `after` | for a cued segment | a cue the runner can see: `kickoff`, `halftime_start` | — |
-| `cue` | only for a fixed wait | must be `supersim_menu`, and then `after` must be left out | — |
+| `after` | yes (one of `after`/`cue`) | a cue the runner can see: `kickoff`, `halftime_start`, `supersim_menu` | — |
+| `cue` | only the older form for `supersim_menu` | without `after`; the segment is still cued and verified | — |
 | `record_s` | yes | 1–30 s, `win_agent record`'s `MAX_RECORD_S` | — |
 | `fps` | no | 1–10, `MAX_RECORD_FPS` | 5 |
 | `width` | no | at least 320 px; frames are resized to it | 960 (`SMALL_WIDTH`) |
@@ -84,19 +87,19 @@ An unknown key is a refusal, so a typo cannot be silently ignored. The three cue
 
 | Cue | Means | Driven by |
 |---|---|---|
-| `kickoff` | the pre-snap kickoff screen is on | `watch-game --to kickoff` |
-| `halftime_start` | the half is over; the halftime show is on | `watch-game --to halftime` |
-| `supersim_menu` | the super-sim screen (static) | a fixed wait — never a stop |
+| `kickoff` | the kickoff has been taken and the game is holding | `watch-game --to kickoff` |
+| `halftime_start` | the half's last snap has been taken; the job holds for the show | `watch-game --to halftime` |
+| `supersim_menu` | the super-sim screen (static) is up | `watch-game --to supersim`, ready screen verified |
 
-**The fixed-wait rule.** A segment with no `after` must say `"cue": "supersim_menu"`. That is the only screen a timing-based segment is allowed on, because it is static: timing any other moment would let a check score the wrong play without saying so. Every way of getting it wrong is refused with a sentence naming the segment:
+**No blind fixed wait.** Every segment is cued and positioned by a `watch-game` route. The job writes `ready.json` immediately before its hold; the driver accepts that marker only from the process it started, only while it is alive, only when the anchor matches the cue, and only when the remaining hold still covers the recording. For `supersim_menu` the marker's screen must also read `SUPERSIM_MENU`. The older `"cue": "supersim_menu"` form (no `after`) is still accepted, but it is cued and verified the same way. Every way of getting it wrong is refused with a sentence naming the segment:
 
 ```
 segment game_start: after must be one of kickoff, halftime_start, supersim_menu, not 'after_halftime'
 segment game_start: cue must be one of kickoff, halftime_start, supersim_menu, not 'supersim'
-segment game_start: no after cue. Only the static supersim_menu screen may be a fixed wait (write "cue": "supersim_menu"); every other segment must name one of kickoff, halftime_start, supersim_menu so it cannot score the wrong moment
+segment game_start: no after cue. Every segment must name one of kickoff, halftime_start, supersim_menu so it cannot score the wrong moment; the static super-sim screen is "after": "supersim_menu" (or the older "cue": "supersim_menu")
 ```
 
-`preroll_s` is the plan's answer to a cue landing slightly early (R2): the run sleeps it after the cue and before recording, and the report carries the segment's `cue`, not the preroll, so anything timed rather than cued is visible in the plan file.
+`preroll_s` is the plan's answer to a cue landing slightly early (R2): the run sleeps it after the ready marker and before recording. The report now carries the segment's `preroll_s` beside its `cue`, so a reader sees both the cue and the extra wait.
 
 **Two facts to design around.** First, the driver starts `watch-game` in the background and records *during its hold*; the job quits the franchise when the hold ends, and `finish` collects that quit (§12). Second, an asset passes on its **latest decisive frame** in the segment, so a segment must show the asset for its whole length — a logo that is only in frame for the first second of an 8 s recording will be scored on the last frame, which no longer has it. Keep `record_s` short and the `region` on something that stays put (a scorebug, a field logo under a static camera), or cut the segment to the moment.
 
@@ -195,8 +198,8 @@ python3 -m tools.mod_check run --save CAREER-TUNE-WEEK1 --mod pink-cfb --segment
 | `--mod` | the slug: `data/mod_checks/<slug>/` |
 | `--segments a,b` | run only these segments, in plan order (default: all) |
 | `--dry-run` | print the plan and score nothing: no clone, no driver, no frame, no notice |
-| `--pack` | the pack the game is running, recorded in the report (it does not launch anything) |
-| `--run-dir DIR` | write the run there instead of `runs/<stamp>_<slug>/`; must be inside the data root |
+| `--pack` | a cross-check of the plan's own `pack`; it is never treated as proof. The run launches the plan's pack itself. |
+| `--run-dir DIR` | write the run there instead of `runs/<stamp>_<slug>/`; must be inside the data root and must not already hold anything |
 | `--data-dir DIR` | the data root (else `MU_MOD_CHECKS_DIR`, else `data/mod_checks`) |
 
 **What it refuses, before touching anything** (exit 2, nothing written):
@@ -208,8 +211,13 @@ python3 -m tools.mod_check run --save CAREER-TUNE-WEEK1 --mod pink-cfb --segment
 | a save that is not on disk | `mod_check: refused: could not clone CAREER-TUNE-NOPE: no save CAREER-TUNE-NOPE in /mnt/c/Users/jrere/Documents/Madden NFL 27/saves` |
 | a broken plan | the `PlanError` text, naming the file, segment or check and what was expected |
 | a run directory outside the data root | `mod_check: the run directory must be inside <data root> (the git-ignored mod-check folder), not /tmp/elsewhere` |
+| a run directory that already holds a run | `mod_check: refused: the run directory … is not fresh (it already holds N item(s) …); every run needs its own directory so old frames cannot satisfy a segment` |
+| a plan with no expected pack | `mod_check: refused: segments.json must name the plan's expected test pack … (add "pack": "Mu Test" at the top level; plan R6)` |
+| a `--pack` that disagrees with the plan | `mod_check: refused: --pack 'Mu Base' disagrees with the plan's expected pack 'Mu Test'; the launch is bound to the plan (plan R6)` |
 
-**It clones its own save, mandatorily.** Loading and quitting a franchise writes `<save>-AUTOSAVE` (JR, 2026-11-12; plan R1/D1), so the run never scores the save it was given: it copies `--save` to the first free `CAREER-TUNE-CHK<letter>` — A, B, … Z, AA — and scores that clone. There is no `--no-clone`, and a clone that comes back as the source save is a refusal. The names carry **letters, never digits**: the pilot finds a franchise tile by reading its name, and Windows OCR reads `1` as `I`, so `CAREER-TUNE-CHK1` was unfindable in spike S-1. The clone is left on disk (the saves folder's 20 MiB window is not pruned for a short check), so a folder of `CAREER-TUNE-CHK*` files accumulates; JR deletes the ones no report names.
+**It launches the plan's pack, and clones its own save.** The run requires the plan's `pack`, launches it through the pilot's approved `launch` job and refuses when Madden is already running (an attached game's loaded pack cannot be verified, plan R6). The launch receipt is checked: `status: ok`, the same pack as the plan, and `already_running: false`. Only then does it clone. Loading and quitting a franchise writes `<save>-AUTOSAVE` (JR, 2026-11-12; plan R1/D1), so the run never scores the save it was given: it copies `--save` to the first free `CAREER-TUNE-CHK<letter>` — A, B, … Z, AA — and scores that clone. There is no `--no-clone`, and a clone that comes back as the source save is a refusal. The names carry **letters, never digits**: the pilot finds a franchise tile by reading its name, and Windows OCR reads `1` as `I`, so `CAREER-TUNE-CHK1` was unfindable in spike S-1. The clone is left on disk (the saves folder's 20 MiB window is not pruned for a short check), so a folder of `CAREER-TUNE-CHK*` files accumulates; JR deletes the ones no report names.
+
+**Every run gets a fresh directory.** The default `runs/<stamp>_<slug>/` gets `-2`, `-3`… when a second run starts in the same second, and an explicit `--run-dir` that already holds anything is refused. Old frames can therefore never satisfy a new segment, and `_frame_paths` only accepts files written after that recording began.
 
 **Exit codes** (the pilot's convention):
 
@@ -217,7 +225,7 @@ python3 -m tools.mod_check run --save CAREER-TUNE-WEEK1 --mod pink-cfb --segment
 |---|---|
 | 0 | the run's verdict is `pass`, or it was a `--dry-run` |
 | 1 | the verdict is `fail` |
-| 2 | `unknown`, refused, or stopped (a missed cue, a screen nobody has catalogued, a driver that could not run) |
+| 2 | `unknown`, refused, stopped, or `incomplete` (a missed cue, a screen nobody has catalogued, a driver that could not run, or a run whose quit/exit could not be confirmed) |
 
 **One ntfy line** at the end, in the pilot's style, naming each segment that did not fully pass:
 
@@ -229,7 +237,9 @@ mod_check pink-cfb: 1/3 pass (game_start unknown, supersim unknown)
 
 The CLI also prints `mod_check: scored clone <clone> (cloned from <save>, pack <pack>)` and then `report.md` itself, so the terminal shows the same table the run wrote.
 
-**Before a live run,** Madden must already be running with the pack loaded — `run` does not launch it (`--pack` is only recorded). Launch with `python3 -m tools.madden_pilot launch --pack "Mu Test"`, which also presses through the cold boot to a menu. The driver shells out to `python3 -m tools.madden_pilot`; if that `python3` is not the project interpreter, set `MU_PILOT_PYTHON` to the one the repo uses.
+**Before a live run, close Madden.** The run launches the plan's pack itself through `python3 -m tools.madden_pilot launch --pack <plan pack>`, which also presses through the cold boot to a menu. An already-running Madden is refused because its loaded pack cannot be verified. The driver shells out to `python3 -m tools.madden_pilot`; if that `python3` is not the project interpreter, set `MU_PILOT_PYTHON` to the one the repo uses.
+
+**Pixel verdict and run status are separate.** `report.verdict` is the pixels alone. `report.operational.status` is `complete` only when the job exited 0, reported `ok`, and confirmed `quit: true`; a failed quit, a finish exception, a missing `result.json`, a non-zero exit or a finish timeout reads `cleanup_failed`, keeps the recorded rows for diagnosis, and the CLI exits 2 with the recovery sentence. A passing picture with an open game is therefore not a successful run.
 
 ## 7. What `watch-game` does underneath
 
@@ -239,16 +249,20 @@ So a stop can be read, and so the plan's cues make sense. `watch-game` is the on
 
 **Then it holds.** `--hold-seconds` (default 60, 1–600) passes with **no key pressed and no look taken** — a look refocuses Madden — and one look at the end reports the screen and, on a game screen, the scorebug clock.
 
+**The ready marker.** Immediately before every hold the job writes `ready.json` into its own run directory: `anchor` (`kickoff`, `halftime_start` or `supersim_menu`), `route`, the last screen it looked at, the clock, `hold_seconds`, a wall-clock hold deadline, the job's pid and the `--ready-token` the driver passed. The driver accepts only a marker carrying its token, from that process's pid, while the process is alive, with the cue's anchor and (for `supersim_menu`) the `SUPERSIM_MENU` screen; the remaining hold must still cover the recording plus a margin. A historical `steps/*.json` classification is never readiness.
+
 **`--to halftime` walks JR's supersim recipe** (D2/D3: a fully simmed game never shows the halftime show, so the half must be resumed for its last play):
 
 1. Escape → `PAUSE_MENU` → SUPER → `SUPERSIM_MENU`;
 2. JUMP FORWARD → **NEXT QUARTER** (stops at the start of Q2);
 3. JUMP FORWARD → **CHANGE OF POSSESSION** twice (one drive each);
-4. **JUMP TO NEXT PLAY** until the scorebug clock reads **under 20 s in Q2** (each press moves about 4 s);
+4. **JUMP TO NEXT PLAY** until the scorebug clock reads **1–19 s in Q2** (each press moves about 4 s);
 5. Backspace → `PAUSE_MENU` → RESUME → **the half's last snap** (Space for the default play, ~1 s, Space again);
-6. hold through the halftime show.
+6. write `ready.json`, then hold through the halftime show.
 
-The **clock, not a timer, is the resume cue**: if the clock never reads inside the window — 10 unreadable clocks in a row, 320 presses, or a quarter other than 1 or 2 — the job stops as Stuck rather than resume the half at the wrong moment. That stop is the recipe failing, not the mod.
+The **clock, not a timer, is the resume cue**: if the clock never reads inside the window — 10 unreadable clocks in a row, 320 presses, or a quarter other than 1 or 2 — the job stops as Stuck rather than resume the half at the wrong moment. A clock reading `0:00` in Q2 also stops: the half is already over, so there is no last play to resume. That stop is the recipe failing, not the mod.
+
+**`--to supersim`** kicks off, Escape → `PAUSE_MENU` → SUPER → `SUPERSIM_MENU`, writes its ready marker with `screen: SUPERSIM_MENU`, and holds there. It is the route behind a `supersim_menu` segment, so a static segment is positioned and verified rather than timed on whatever is on screen.
 
 **Control rule.** It calls no play of its own. Every control between the kickoff and the half's last snap is a supersim control; if a sim hands real play back, the job reopens the pause menu and sims on. The half's last snap is the only football key press in the whole job, and an offense drive is simmed, never played. `JUMP TO NEXT PLAY` moves the clock; `JUMP FORWARD → END OF GAME` is never confirmed.
 
@@ -259,6 +273,8 @@ A dry run of that recipe is free and needs no PC — it proves the route, not th
 ```
 python3 -m tools.madden_pilot watch-game --save CAREER-TUNE-CHKA --to halftime --hold-seconds 1 --dry-run
 # result.json: "route": "supersim", clock {"quarter": 2, "seconds": 10}, "quit_route": "quit-game", "end_screen": "FRANCHISE_LIST"
+python3 -m tools.madden_pilot watch-game --save CAREER-TUNE-CHKA --to supersim --hold-seconds 1 --dry-run
+# result.json: "route": "supersim", screen SUPERSIM_MENU at the ready marker
 ```
 
 ## 8. Reading `report.md`
@@ -269,14 +285,16 @@ One table per segment, then the model's description:
 # Mod check: pink-cfb
 
 - save: `CAREER-TUNE-CHKA`
-- pack: `Mu Test`
+- pack: `Mu Test` (required `Mu Test`, verified: yes)
 - autosave written: yes
-- verdict: **pass**
+- game quit: yes via quit-game, end screen FRANCHISE_LIST
+- run status: **complete**
+- verdict (pixels): **pass**
 - minutes: 0.05
 
 ## game_start
 
-cue `kickoff`; 8 s requested; 40 frame(s).
+cue `kickoff`; 8 s requested; preroll 0 s; 40 frame(s).
 
 | asset | status | measures | frame | why |
 |---|---|---|---|---|
@@ -290,9 +308,11 @@ midfield logo at centre. The replay banner is not on screen.
 | Field | Read it as |
 |---|---|
 | `save` | the **clone** that was scored, not the save that was passed in (`CAREER-TUNE-CHKA`); the CLI prints the source |
-| `pack` | the `--pack` string, or `unknown (the launch did not report one)` |
+| `pack` | the launch receipt's pack, with the plan's required pack and whether the receipt was verified; never the caller's bare string |
 | `autosave written` | whether `<clone>-AUTOSAVE` appeared while the run quit — the R1 fact, `yes`/`no`/`unknown` |
-| `verdict` | `fail` if any asset failed; `pass` only if every checked asset passed; otherwise `unknown` |
+| `game quit` | the job's own `quit`/`quit_route`/`end_screen`; `unknown` when finish did not report one |
+| `run status` | `complete` only when the job exited 0, reported `ok` and confirmed the quit; otherwise `cleanup_failed` with the reason and recovery |
+| `verdict` | the pixels alone: `fail` if any asset failed; `pass` only if every checked asset passed; otherwise `unknown` |
 | `minutes` | wall clock of the whole run, clone to report |
 | per segment | `cue`, `recorded_s` as requested, and how many frames were actually written |
 | `asset` | the check name from `checks.json` |
@@ -305,21 +325,27 @@ midfield logo at centre. The replay banner is not on screen.
 **`fail` versus `unknown`.**
 
 - **`fail`**: a measure decided, and it decided native. `similarity fail 1.000 beats pass 0.879 by 0.04`; `colour share 0.000 < 0.02 (hue [300, 350])`. This is a real answer about the screen: the mod's picture was not there.
-- **`unknown`**: no decisive answer. The two similarities sit inside the margin (`reference inconclusive (pass 0.970, fail 0.951, margin 0.04)`), or no frames were recorded (`no frames were recorded for this segment`), or a frame could not be read. It is not a quiet pass and not a quiet fail — the run says "I could not tell", and the fixed wait to try first is the `region`, then the reference pair.
+- **`unknown`**: no decisive answer. The two similarities sit inside the margin (`reference inconclusive (pass 0.970, fail 0.951, margin 0.04)`), or no frames were recorded (`no frames were recorded for this segment`), or a frame could not be read. It is not a quiet pass and not a quiet fail — the run says "I could not tell"; the first thing to try is a tighter `region`, then a better reference pair.
 - A single `unknown` asset makes the whole run `unknown`: the verdict is `pass` only when every checked asset passed, so a run with two passes and one inconclusive reads `unknown`. That is deliberate — a run that cannot see one of its assets has not passed.
 
 `report.json` is the same content in the exact shape:
 
 ```json
 {"save": "CAREER-TUNE-CHKA", "mod": "pink-cfb",
- "segments": [{"name": "game_start", "cue": "kickoff", "recorded_s": 8,
+ "segments": [{"name": "game_start", "cue": "kickoff", "recorded_s": 8, "preroll_s": 0.0,
                "frames": ["segments/game_start/frames/frame_0000.jpg", "…"],
                "checks": {"midfield_logo": {"status": "pass",
                                             "measures": {"similarity_pass": 0.998, "…": 0},
                                             "frame": "segments/game_start/frames/frame_0039.jpg",
                                             "why": "similarity pass 0.998 beats fail 0.878 by 0.04"}},
                "summary": "…"}],
- "verdict": "pass", "minutes": 0.05, "pack": "Mu Test", "autosave_written": true}
+ "verdict": "pass", "minutes": 0.05,
+ "pack": "Mu Test", "pack_required": "Mu Test", "pack_actual": "Mu Test",
+ "pack_verified": true, "launch": {"status": "ok", "pack": "Mu Test", "already_running": false},
+ "quit": true, "quit_route": "quit-game", "end_screen": "FRANCHISE_LIST",
+ "operational": {"status": "complete", "why": "", "recovery": null,
+                 "job_status": "ok", "exit_code": 0},
+ "autosave_written": true}
 ```
 
 ## 9. The vision host
@@ -344,22 +370,23 @@ The model is the same backend everywhere else in the pilot, so a stop on an unkn
 - **Stop the watcher first.** The run refuses while `pipeline.watch_save` runs: a clone keeps the real franchise's LeagueID, so the watcher would ingest it into the real database. Stop it, run the check, start it again.
 - **`CLAIM · Madden PC` on the board first**, and say how long you need. A run starts a game, quits it, and gives the PC back; nothing else may drive Madden meanwhile.
 - **The clone is throwaway.** The report names it (`CAREER-TUNE-CHK<letter>`), so a `-AUTOSAVE` written by quitting lands on the clone and never on the save JR plays from. The run does not delete clones; delete the ones no report names yourself.
-- **The game is quit for you.** There is no "leave it paused" option: a segment that ends in a live game is left through the pause menu's QUIT GAME and its confirmation. If that confirmation cannot be read safely, the job stops with the game still up and a screenshot — JR then leaves it by hand.
-- **Screens whose words are still guesses.** `QUIT_GAME_CONFIRM` was never seen in spike S-1: its words (`ARE YOU SURE`, `PROGRESS`, `QUIT GAME`, `CANCEL`) are a reading of what a quit dialog usually says, and the catalog marks it `todo`. `SUPERSIM_MENU` and `SUPERSIM_JUMP_FORWARD` are also `todo`: S-1 saw both, but not which item is selected on arrival, so they are driven by position from the top item. **A first live run is expected to stop somewhere and teach the catalog** — that is the design, not a failure. Read `stop.json`, open the screenshot it names, and extend `catalog.json` as [`MADDEN_PILOT.md` §7](MADDEN_PILOT.md) describes.
+- **The game is quit for you.** There is no "leave it paused" option: a segment that ends in a live game is left through the pause menu's QUIT GAME and its confirmation; a segment that ends on the super-sim screen backs out with that screen's own Backspace first. If the confirmation cannot be read safely, the job stops with the game still up and a screenshot — JR then leaves it by hand, and the run's `operational.status` says `cleanup_failed`.
+- **Screens whose words are still guesses.** `QUIT_GAME_CONFIRM` was never seen in spike S-1: its words (`ARE YOU SURE`, `PROGRESS`, `QUIT GAME`, `CANCEL`) are a reading of what a quit dialog usually says, and the catalog marks it `todo`. `SUPERSIM_MENU` and `SUPERSIM_JUMP_FORWARD` are also `todo` for their selection border. **The pause menu's rows vary by game state:** the measured live screen had 9 rows (no INSTANT REPLAY or VIEW HIGHLIGHTS, and `SUPER SIM` rather than the catalog's `SUPER`), while the catalog lists 11. Navigation now reads the rows actually on the frame and the selected row from the image; it never trusts a catalog shadow index or a fixed row count. When the selected row cannot be read, the job stops before Space instead of guessing. `SUPERSIM_MENU`/`SUPERSIM_JUMP_FORWARD`/`QUIT_GAME_CONFIRM` selection evidence is still live-unmeasured, so the first live run may stop there and teach the catalog — that is the design, not a failure. Read `stop.json`, open the screenshot it names, and extend `catalog.json` as [`MADDEN_PILOT.md` §7](MADDEN_PILOT.md) describes.
 - **Never:** online play, purchases, deleting anything, roster decisions, a real franchise, or a pack that is not the throwaway test pack.
 
 ## 11. Worked example: `pink-cfb`, end to end
 
 The mod: a pink football and a cyan midfield logo, built with [`MOD_BUILDING.md`](MOD_BUILDING.md) and installed into the `Mu Test` pack. It should be visible at kickoff and on the super-sim screen.
 
-**1. The plan.** `data/mod_checks/pink-cfb/segments.json`:
+**1. The plan.** `data/mod_checks/pink-cfb/segments.json` (the `pack` is required):
 
 ```json
 {"mod": "pink-cfb",
+ "pack": "Mu Test",
  "segments": [
   {"name": "game_start", "after": "kickoff", "record_s": 8, "fps": 5, "width": 1280,
    "checks": ["midfield_logo", "pink_ball"]},
-  {"name": "supersim", "cue": "supersim_menu", "record_s": 3, "fps": 2, "width": 960,
+  {"name": "supersim", "after": "supersim_menu", "record_s": 3, "fps": 2, "width": 960,
    "preroll_s": 1.0, "checks": ["midfield_logo"]}
  ]}
 ```
@@ -398,6 +425,7 @@ The plan, as `--dry-run` prints it before anything is touched (paths shown from 
 
 ```
 mod_check plan: pink-cfb (/tmp/opencode/vmc-doc/pink-cfb)
+pack: Mu Test (the run launches this pack itself and verifies the launch receipt)
 save: CAREER-TUNE-WEEK1 (dry run: would clone it to CAREER-TUNE-CHK<first free n> and score that clone)
 
 segments:
@@ -414,13 +442,13 @@ checks:
 dry run: nothing recorded, nothing cloned, nothing scored, no notice sent.
 ```
 
-The run clones the save, starts a game on the clone, records 8 s at kickoff and 3 s on the super-sim screen, scores all 46 frames, quits the game, and writes `data/mod_checks/runs/<stamp>_pink-cfb/`. It prints:
+The run launches `Mu Test`, clones the save, starts a game on the clone, records 8 s from the kickoff hold and 3 s on the positioned super-sim screen (a second `watch-game` job), scores all recorded frames, quits the game, and writes `data/mod_checks/runs/<stamp>_pink-cfb/`. It prints:
 
 ```
 mod_check: scored clone CAREER-TUNE-CHKA (cloned from CAREER-TUNE-WEEK1, pack Mu Test)
 ```
 
-followed by `report.md` (§8), whose table is the one quoted there: both assets `pass` at `segments/game_start/frames/frame_0039.jpg`, verdict `pass`, `autosave written: yes`, and one ntfy line `mod_check pink-cfb: 3/3 pass`.
+followed by `report.md` (§8), whose table is the one quoted there: both assets `pass` at `segments/game_start/frames/frame_0039.jpg`, the pixel verdict `pass`, `run status: complete`, `autosave written: yes`, and one ntfy line `mod_check pink-cfb: 3/3 pass`.
 
 **5. When it reads `fail`, the mod is not on screen.** The same plan and references on a run with the native assets scored `0/3 pass`:
 
@@ -429,7 +457,7 @@ followed by `report.md` (§8), whose table is the one quoted there: both assets 
 | midfield_logo | fail | similarity_pass=0.879; similarity_fail=1.000; reference_margin=0.040 | segments/game_start/frames/frame_0039.jpg | similarity fail 1.000 beats pass 0.879 by 0.04 |
 | pink_ball | fail | colour_share=0.000; colour_pass_at=0.020 | segments/game_start/frames/frame_0039.jpg | colour share 0.000 < 0.02 (hue [300, 350]) |
 
-Before blaming the mod, check the pack (`- pack:` in the report) and open the `frame` — a franchise-list frame means the segment was recorded after the game was left, which the driver no longer does for `kickoff` (§12).
+Before blaming the mod, check the pack (`- pack:` in the report, which now names both the required and the launched pack) and open the `frame` — a franchise-list frame means the segment was recorded after the game was left, which the driver no longer does for its cued segments (§12).
 
 **6. When it reads `unknown`, nothing decided.** A frame the checks could neither match nor reject:
 
@@ -444,7 +472,7 @@ The report rows in steps 4–6 come from `tools/mod_check`'s own scorer run over
 
 ## 12. Limits and the known gap
 
-- **A `kickoff` segment is recorded during `watch-game`'s hold.** `PilotDriver.wait_for` starts `watch-game --save <clone> --to kickoff --hold-seconds <record_s + 20> --run-dir <run>/watch-game/NN_kickoff` as a background process, then polls that directory's `steps/*.json` until a step's `screen` is `GAME_KICKOFF`. It returns while the job is still holding, so `win_agent record` captures the game; when the hold ends the job quits on its own and `finish` collects its `result.json` (`quit`, `quit_route`, `autosave_written`, `pack`) instead of quitting a second time. If the job exits before `GAME_KICKOFF` appears — or is still short of it at `timeout_s` (180 s) — the run stops as a driver `stopped` with the last screen and the job's output tail, rather than score whatever is on screen. A by-hand recording is still useful only to debug the pilot itself (and `watch-game --no-quit` is the tool for that):
+- **A segment is recorded during `watch-game`'s hold.** `PilotDriver.wait_for` starts `watch-game --save <clone> --to <route> --hold-seconds <record_s + preroll + 20> --run-dir <run>/watch-game/NN_<route> --ready-token <T>` as a background process, then waits for that process's own `ready.json`. It returns while the job is still holding, so `win_agent record` captures the game; when the hold ends the job quits on its own and `finish` collects its `result.json` (`quit`, `quit_route`, `autosave_written`, `end_screen`, `exit_code`) instead of quitting a second time. A process that exits before its marker, one whose marker names another anchor or screen, a stale marker (wrong token/pid), a marker whose hold is too short, and one still short at its cue timeout all stop as a driver `stopped` before a frame is recorded, rather than score whatever is on screen. The cue timeout is per cue: 180 s for `kickoff`, 300 s for `supersim_menu`, and **1800 s for `halftime_start`**, whose bounded 320 JUMP TO NEXT PLAY presses and two possessions need far more than a kickoff's pregame. A by-hand recording is still useful only to debug the pilot itself (and `watch-game --no-quit` is the tool for that):
 
   ```
   python3 -m tools.madden_pilot watch-game --save CAREER-TUNE-CHKA --to kickoff --hold-seconds 60 --no-quit
@@ -457,9 +485,10 @@ The report rows in steps 4–6 come from `tools/mod_check`'s own scorer run over
   PY
   ```
 
-  then leave the game by hand and cut the references with `capture --run-dir <a folder with segments/game_start/frames>`. A `report.md` whose `frame` is a franchise list on this code means the job never reached `GAME_KICKOFF` (read the stop's `why`), not that the mod failed.
-- **`halftime_start` still stops; `supersim_menu` still has no route.** The halftime show's screen was never catalogued (plan §2.5a/R4), so `wait_for("halftime_start")` raises `CueMissed` with that reason rather than record the wrong moment; the segment is not scored. A fixed-wait `supersim_menu` segment is never waited for at all (it is a timing-based segment, not a stop), and no `watch-game` route leaves the game standing on the super-sim screen, so a `supersim` segment scores whatever is on screen — treat its checks as `unknown` until an anchor for that screen exists.
-- **`--pack` is recorded, not verified.** It does not launch Madden and it cannot check what the game actually loaded (plan R6), so a `pass` with the wrong pack looks exactly like a `pass`. Launch with `python3 -m tools.madden_pilot launch --pack "Mu Test"` and read the `- pack:` line.
-- **The halftime show itself is unverified.** The recipe in §7 reproduces down to the clock in a dry run, but no live run has yet seen the show (plan §2.5a, R4). A stop during the recipe is the recipe, not the mod.
+  then leave the game by hand and cut the references with `capture --run-dir <a folder with segments/game_start/frames>`. A `report.md` whose `frame` is a franchise list on this code means the job never reached its ready marker (read the stop's `why`), not that the mod failed.
+- **Halftime is now recordable, but the show itself is still unmeasured.** `halftime_start` drives the job's `--to halftime` route and records from the job's own ready marker after the half's last snap; the route is no longer an unconditional stop. No live run has yet produced footage that visibly contains the halftime show (plan §2.5a/R4), so the first live run is the measurement: if the hold after the snap does not show the show, the recipe/anchor must be re-measured rather than the result called a pass. A stop during the recipe is the recipe, not the mod.
+- **`supersim_menu` has its own route.** `watch-game --to supersim` kicks off, opens the pause menu's SUPER SIM screen, writes a ready marker whose screen must read `SUPERSIM_MENU`, and holds there. The driver refuses any other ready screen, so a supersim segment can no longer score an arbitrary current frame. The screen is still `todo` in the catalog for its selection border, but its words and route are known.
+- **Pause-menu navigation is evidence-based, not positional.** The live audit's 9-row pause menu silently activated STATS while a shadow cursor claimed SUPER; `_pin_highlight` and the generic pause exit now use the visible rows and read the selected row from the frame after every Down press, visiting each row at most once (clamped, wrapped or disabled-skipping menus included). A target that is not visible, or a selection that never becomes readable, stops before Space. That is why a live run can stop at a pause-menu step even when the menu is on screen: the fix refuses to press an unverified item, and the acceptance run records the selected-row evidence.
+- **Pack provenance is launch-level, not file-level.** The run launches the plan's pack itself and refuses an already-running Madden; the report names the required pack, the launch receipt's pack and `pack_verified`. That proves what the launch workflow started, not that Frosty applied every `.fbmod` file, and it still cannot tell a mod's asset from a hand-painted lookalike (§ last bullet).
 - **A clone keeps the original's LeagueID**, so never run a check while the watcher is up, and never leave a `CAREER-TUNE-CHK*` clone where the league office can mistake it for a franchise to advance.
 - **The check compares pictures, not files.** It cannot tell a mod's asset from a hand-painted lookalike, and it cannot tell a mod from a pack that shipped the same colour. It answers "the screen looks like the mod's reference", one asset at a time.
