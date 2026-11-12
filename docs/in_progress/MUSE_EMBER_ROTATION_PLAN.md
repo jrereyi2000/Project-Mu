@@ -1,6 +1,6 @@
 # Project Mu: Muse Ember Rotation Plan
 
-**Status:** approved by JR (2026-11-12); rewritten to the OpenCode agent route and retargeted to JR's two-step benchmark (Spark first, Ember on a pass) on 2026-11-12; building, wave 2 of 2 (wave 1 merged `dca6741`, `c21dd4e`).
+**Status:** approved by JR (2026-11-12); rewritten to the OpenCode agent route and retargeted to JR's two-step benchmark (Spark first, Ember on a pass) on 2026-11-12; waves 1–2 merged (`dca6741`, `c21dd4e`, `7a4d71e`, `31f54f8`); wave 3 (the benchmark) waits on B1 and JR's PC.
 **Builds on:** [`OPENCODE_DEEPSEEK_ROUTE_PLAN.md`](../done/OPENCODE_DEEPSEEK_ROUTE_PLAN.md) (built 2026-11-12: the OpenCode launcher, spawn types, route markers and board inbox that this plan copies), PROJECT_SPEC §1.2 (agent routes), [`MADDEN_PILOT_AND_TUNING_PLAN.md`](../done/MADDEN_PILOT_AND_TUNING_PLAN.md), `docs/reference/AGENTS.md` § Model inboxes.
 
 **Goal:** Make a Muse model a first-class Project Mu agent, and find out whether it beats the native route. A Muse session starts in the OpenCode TUI through its own launcher, joins the board with its own label, inbox and commit trailer, takes builder work, and owns computer use by driving `tools/madden_pilot` from its own shell. No Meta API client and no `MODEL_API_KEY`: JR's decision (D6) is that the session is the computer-use route.
