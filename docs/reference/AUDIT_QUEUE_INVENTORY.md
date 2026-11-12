@@ -311,11 +311,12 @@ builder/computer-use only and never audits). All four of the following are eligi
 | **GPT-6.1 Sol (Codex)** | **Yes — it is what is running now** (`audit-visual`, M-0685). Highest per-batch burn, so spend it on the rows where a wrong verdict is expensive | **R8 + R10 + R9** (the P7 chain, ~3.2 batches) and **R5** fact-gate. Nothing else |
 | **Gemini 4 Argon** | Yes as a role, **but no Argon audit report exists yet** (`AUDITOR_MODEL_EVALUATION.md` §4.3) — its first job should be a row whose answer is checkable | **R3 + R4** (~8.8 batches): shell, skills, docs, and the 46 + 105 tests the builders already ran — mechanical to check, low product risk. Then the **R1/R2 re-checks**, where audit-5's repros are a free reference answer |
 | **Claude Opus 5.5** | **Not now.** Weekly window read 98% on 2026-11-11 20:30, resets **Nov 16 03:00**; `data/commit_audits/` holds 92 reviews killed by Claude's usage limits | Nothing before the reset. After it: the rows Argon did not take, or the P5 shadow-season reviews |
-| **Gemini 4 Hydrogen** | **Unknown — that is what `gemini-hydrogen-eval` is measuring right now** (M-0683). No measured audit batch exists | **Not a queue row.** Give it the trial that is already designed: the three known-answer batches in `AUDITOR_MODEL_EVALUATION.md` §4.3 (U18 N1 parent, `26d1141` parent, `feb0c29` as a false-positive control, ~$9). If it passes, it takes R3/R4 and the stats re-checks — which is exactly the block Argon would otherwise take |
+| **Gemini 4 Hydrogen** | **Measured today and not adopted as auditor of record**: [`GEMINI_4_HYDROGEN_EVALUATION.md`](GEMINI_4_HYDROGEN_EVALUATION.md) (`fe8eeff`) puts it mid-pack on Terminal-Bench 4.0 (54.0%, #11/64), **cheapest of the candidates to run** (~$1.25 a batch / ~$17.50 a session, inferred, and $0 marginal on JR's Antigravity plan), **absent from the Go allowance**, with **no local quota probe** and no EQ-Bench entry | **Not a queue row until one blind trial passes.** The trial is written down (that doc §3.4): H1 re-audit of the mirror N1 defect at `26d1141` = `a641efa^`, H2 the fact-gate evidence-window defect at `8cfa931`, H3 `feb0c29` as a clean control — ~$1.25, and both known answers exist. If it passes, it takes **R3/R4 and the R1/R2 re-checks**, which is the same block Argon would take |
 
 **Concretely, the split this inventory supports:** Codex takes the 3.2-batch P7 chain **now**, before it spends
-another ten hours on visual-mod-check. Argon (or Hydrogen, if its trial lands first) takes the two route plans
-and the stats re-checks. Codex, Argon or a post-reset Opus takes fact-gate and glm-unification afterwards. That
+another ten hours on visual-mod-check. Argon (or Hydrogen, if its one blind trial passes first — today's
+evaluation prices that trial at ~$1.25) takes the two route plans and the stats re-checks. Codex, Argon or a
+post-reset Opus takes fact-gate and glm-unification afterwards. That
 puts checkpoint 1 clear inside **one Codex 5-hour window** (~4.2 h of work, ~16% of the weekly limit, since
 14 batches was 99% of a window), and leaves the ~28-batch remainder to lanes that are not the scarce one.
 
