@@ -18,7 +18,7 @@ with the report path beside it (mostly `data/audit_reports/audit-5/*`). A DeepSe
 
 | | Batches (audit-5 units) | Input tokens | Wall clock | Codex-Plus weekly limit |
 |---|---:|---:|---:|---:|
-| **The whole queue, all ten rows** | **33.3** | **~326M** | **~44 h** | **~171%** |
+| **The whole queue, ten rows + R11** | **33.6** | **~330M** | **~44 h** | **~173%** |
 | Never reviewed and not started | 21.3 | ~208M | ~28 h | ~110% |
 | Audited today, fixes now landing (R7) | 7.8 | ~77M | ~10 h | ~40% |
 | Already reported at the pin (R1, R2, R9) | 4.2 | ~42M | ~5.6 h | ~22% |
@@ -26,7 +26,8 @@ with the report path beside it (mostly `data/audit_reports/audit-5/*`). A DeepSe
 
 1. **The queue does not fit in one Codex week.** At audit-5's measured burn (14 batches took the Plus plan to
    99% of a 5-hour window and 72% of a week), 33 batches is about **1.7 weeks** of Codex Plus, and the
-   never-started remainder alone is about **1.1 weeks**.
+   never-started remainder alone is about **1.1 weeks**. JR's route (Hydrogen first, §3.3) does not
+   spend Codex quota on any of it.
 2. **Only three rows gate checkpoint 1, and they are one chain** (`ded2627` → `e93e417` → `P3-04b`), about
    **3.2 batches / 4.2 h**. Everything else is P8 (articles, decision routing, mod checks), tooling
    (the two OpenCode plans) or analytics (stats). See §3.1.
@@ -43,6 +44,9 @@ with the report path beside it (mostly `data/audit_reports/audit-5/*`). A DeepSe
    priority PC control for live acceptance of a checkpoint-2 feature (M-0692), while the P7 chain is still
    untaken. That is a defensible call for the CL JR assigned it — it is simply not the CL that gates checkpoint
    1, and at audit-5's rate it consumed a week's allowance before the blocking chain started.
+6. **On JR's route (Hydrogen first, Opus for the remainder, §3.3) the bulk clears in about an hour of Hydrogen
+   time and ~11 batches are left for Opus.** Hydrogen needs no Codex window, so the 33.6-batch queue stops
+   being a quota problem and becomes a scheduling one. See §6.6 for the split's wall clock.
 
 ---
 
@@ -68,6 +72,7 @@ sessions' commits. Every figure is `main` today.
 | **R8** | **P3-04b** — calibrate the league-shape term on the full roster (JR's decision 2, M-0672). `2087aae..HEAD` = `46d1716` + merge `c82f13b` + spec `fe0c44e` | deepseek (builder-10) | 3 | 5 files, **+81 −54** | 5 | `test_progression_shape.py` (+33/−13), `test_progression.py` (+13) | No / No | **Yes** — JR's two decisions recorded at `7183151`: no constant applied; the league-shape calibration runs on the full roster | None yet. Builder-10's NOTICE is M-0684 (both new tests fail on parent `e1d36ca`; 66 + 12 passed; full offline 6,629 passed / 7 failed, 2 of them failing on `main` too) and it signed off in M-0685. The verdict is owed | Fix landed, awaiting verdict |
 | **R9** | **league-shape fix** — stored `shape_season`, live projection drafts and exits. `ded2627` | deepseek | 1 | 5 files, +485 −83 | 5 | `test_progression_shape.py` (new, 266) | No / **Yes** `2027_02_26_league_shape_season.sql` (new, 19) — applied | JR ruling M-0441 folded into the fix brief (seed keying is a required change) | **A report exists**: `data/audit_reports/league_shape_fix/report.md` (2026-11-11, `claude-opus-5-5`) — its verdict table reads PARTIAL on both HIGH and MEDIUM, with F1–F6 findings. F1 is what `e93e417` fixed | Reported; residuals partly fixed |
 | **R10** | **league-shape exit-draw fix** — key `shape_exits_and_rookies` on the projected season and the seed (F1). `e93e417`, merged `82966ca` | deepseek | 1 | 7 files, +265 −80 | 7 | `test_progression_shape.py` (170), `test_decision_compare.py` (12) | No / No (touches `db/seed_clean_db.py`, no schema) | JR's M-0441 ruling is the spec of the change | **No report anywhere**: `grep -rl e93e417 data/audit_reports/` is empty; the only mention is the archive note that it was built *"per report"* | Never reviewed |
+| **R11** | **`custom_commission.classify_prompt` builds a Gemini client from `DEFAULT_WRITER_MODEL`** — surfaced by the Hydrogen blind trial (M-0713 finding 2), unverified. `newsroom/custom_commission.py:76,108`; live callers `server/debug_api.py:932` and the CLI | deepseek (pre-existing, not a build) | — | one file, ~2 lines, no commit yet | ~2 | none yet | No / No | No | **Reported by the trial, not audited**: the writer default has been `glm-5.3-flash` (Go) since `ac8df19`, while this function builds `genai.Client` — the same class of bug U3 fixed for takes extraction (`effd0a7`). Still live on `main` at `f78acbd` | New today, ~0.3 batch |
 
 ### 1.1 File lists
 
@@ -221,7 +226,8 @@ So **1 batch ≈ 850 review units ≈ 9.8M input tokens ≈ 1.32 h**. Per row: `
 | R8 | builder-10 P3-04b `2087aae..HEAD` | 615 | 0.7 | 7M | 1.0 h |
 | R9 | `ded2627` | 1,048 | 1.2 | 12M | 1.6 h |
 | R10 | `e93e417` | 1,065 | 1.3 | 12M | 1.7 h |
-| | **Total** | **28,278** | **33.3** | **~326M** | **~44 h** |
+| R11 | `custom_commission.classify_prompt` | ~250 | 0.3 | 3M | 0.4 h |
+| | **Total** | **~28,528** | **33.6** | **~330M** | **~44.4 h** |
 
 Converted to Codex Plus at audit-5's rate (14 batches ≈ 72% of a week): **171% of a week**, i.e. about two
 calendar weeks of Codex Plus at one auditor. The queue does not fit in the week JR just got back.
@@ -304,21 +310,40 @@ R4 (1,946, 721 lines of tests), R6 (1,301 own lines, 845 of tests). Two rules of
 ### 3.3 Who can take what (the auditor must not be the builder's model)
 
 Every builder here is `deepseek-v4.1-flash`, so **the rule excludes only DeepSeek and Muse** (Muse is
-builder/computer-use only and never audits). All four of the following are eligible:
+builder/computer-use only and never audits). Codex, Opus 5.5, Argon and — since JR's decision today — **Gemini 4
+Hydrogen** are all eligible.
 
-| Model | Can take it in practice? | Best fit |
+**JR's routing decision (2026-11-12):** make **Hydrogen a first-class auditor** and run the queue through it
+first with maximum subagents, then let **Opus 5.5's returning week** take what is left. That is recorded in
+`.agents/skills/hydrogen/SKILL.md` (in build, `gemini-hydrogen-eval` M-0714) and it changes two things in this
+inventory: the model table became an allocation, and the wall clock is no longer bound by Codex's quota.
+
+| Model | Standing today | Give it |
 |---|---|---|
-| **GPT-6.1 Sol (Codex)** | **Yes — it is what is running now** (`audit-visual`, M-0685). Highest per-batch burn, so spend it on the rows where a wrong verdict is expensive | **R8 + R10 + R9** (the P7 chain, ~3.2 batches) and **R5** fact-gate. Nothing else |
-| **Gemini 4 Argon** | Yes as a role, **but no Argon audit report exists yet** (`AUDITOR_MODEL_EVALUATION.md` §4.3) — its first job should be a row whose answer is checkable | **R3 + R4** (~8.8 batches): shell, skills, docs, and the 46 + 105 tests the builders already ran — mechanical to check, low product risk. Then the **R1/R2 re-checks**, where audit-5's repros are a free reference answer |
-| **Claude Opus 5.5** | **Not now.** Weekly window read 98% on 2026-11-11 20:30, resets **Nov 16 03:00**; `data/commit_audits/` holds 92 reviews killed by Claude's usage limits | Nothing before the reset. After it: the rows Argon did not take, or the P5 shadow-season reviews |
-| **Gemini 4 Hydrogen** | **Measured today and not adopted as auditor of record**: [`GEMINI_4_HYDROGEN_EVALUATION.md`](GEMINI_4_HYDROGEN_EVALUATION.md) (`fe8eeff`) puts it mid-pack on Terminal-Bench 4.0 (54.0%, #11/64), **cheapest of the candidates to run** (~$1.25 a batch / ~$17.50 a session, inferred, and $0 marginal on JR's Antigravity plan), **absent from the Go allowance**, with **no local quota probe** and no EQ-Bench entry | **Not a queue row until one blind trial passes.** The trial is written down (that doc §3.4): H1 re-audit of the mirror N1 defect at `26d1141` = `a641efa^`, H2 the fact-gate evidence-window defect at `8cfa931`, H3 `feb0c29` as a clean control — ~$1.25, and both known answers exist. If it passes, it takes **R3/R4 and the R1/R2 re-checks**, which is the same block Argon would take |
+| **Gemini 4 Hydrogen** | **Auditor-class as of today.** The blind trial (`f78acbd`, M-0713) found the known mirror N1 defect **first time** at `league_office.py:776` with a repro, **24/24 citations resolved**, two batches in **8 minutes** (H1 in 3 m 44 s), no contamination. Still missing for auditor of record: a second known answer, and **no meter for the interactive session** (Antigravity writes no rate-limit file; `tools/antigravity_usage.py` sees only scripted `agy -p` runs) | **The mechanical bulk: R3 (4.8), R4 (4.0), R6 (3.6), R1 (1.5), R2 (1.5), R11 (0.3) = 15.7 batches.** Fast, cheap, and every one is checkable against tests the builders already ran |
+| **Claude Opus 5.5** | **Returns in ~3 h** (weekly window read 98% on 2026-11-11 20:30, resets **Nov 16 03:00**). Highest capability in the queue (TB4 64.8 against Hydrogen's 54.0) and the author of the existing `ded2627` report | **The P7 chain (R8 0.72 + R10 1.25 + R9 1.2 = 3.2)** and **fact-gate (R5a 5.2 + R5b 1.6 = 6.8)**, plus the R7 re-check after the current fix rounds (~1.2). **~11.2 batches** |
+| **GPT-6.1 Sol (Codex)** | Running now as `audit-visual`, on a CL JR assigned it directly | **Only the visual-mod-check re-check** when its fixes land. Nothing else — it has already spent a week's allowance on checkpoint 2 |
+| **Gemini 4 Argon** | Eligible, no audit report exists yet | Nothing while Hydrogen is up. It is the fallback if Antigravity's subagent limit or quota refuses the Hydrogen lane |
 
-**Concretely, the split this inventory supports:** Codex takes the 3.2-batch P7 chain **now**, before it spends
-another ten hours on visual-mod-check. Argon (or Hydrogen, if its one blind trial passes first — today's
-evaluation prices that trial at ~$1.25) takes the two route plans and the stats re-checks. Codex, Argon or a
-post-reset Opus takes fact-gate and glm-unification afterwards. That
-puts checkpoint 1 clear inside **one Codex 5-hour window** (~4.2 h of work, ~16% of the weekly limit, since
-14 batches was 99% of a window), and leaves the ~28-batch remainder to lanes that are not the scarce one.
+**Why the P7 chain goes to Opus and not to the faster lane:** it is one chain, and `R9`'s existing report is
+Opus's own — same-model lineage means the residual verdict and the new ones agree by construction rather than by
+argument. Opus also lands inside Hydrogen's first hour, so nothing waits on it.
+
+**Why fact-gate goes to Opus:** it is the only row where a wrong verdict ships to production (the gate is on by
+default and rewrites articles, plus an applied migration and a rebuilt frontend). Hydrogen's citation discipline
+is proven; its judgement on a four-wave build is not yet.
+
+**If JR wants the ~2 h idle gap filled:** start **R5a on Hydrogen as well** and let the two reports stand as
+independent readings, with Opus's as the verdict of record. That is a cross-model double read on the one
+high-stakes row, at ~$6.50 of Hydrogen list price, and it is the only place in the queue where a second reading
+is worth buying.
+
+**Lane mechanics that differ from Codex and Claude** (from `.agents/skills/hydrogen/SKILL.md`):
+one subagent is one batch and the **main session owns the board** — a subagent never posts; the report path and
+`mu_scratch_audit_<sha7>` convention are unchanged; **no `/context-check`** is possible on Antigravity, so
+hand-over is by judgement; and because nothing meters the interactive session, the auditor **reads the Antigravity
+usage screen at every batch boundary** and posts a quota-style `HANDOFF` to the builders **every third batch or
+90 minutes**. With six subagents that hand-off cadence, not the token window, is what paces the lane.
 
 ### 3.4 Two traps in the ranges as handed over
 
@@ -467,6 +492,28 @@ The prep is the part that makes a 3 h wave possible instead of a 6 h one, and no
 - **The 2–3 h wave figure assumes no re-reads.** With the fix round, count a second, shorter wave.
 - **One observation, not a benchmark:** "R7 in under an hour" is one agent on one range today. A model with a
   sloppier tool loop will be slower, and the estimate band in §2.5 still applies to the tokens.
+
+### 6.6 The split's wall clock (Hydrogen first, Opus for the remainder)
+
+| Lane | Rows | Batches | Concurrency | Wall clock | Cost |
+|---|---|---:|---|---|---|
+| **Hydrogen, starting now** | R3, R4, R6, R1, R2, R11 | **15.7** | 5–6 subagents (one batch each); only R1/R2 need a scratch DB | **~30–60 min.** Measured today: `gemini-4-hydrogen-high` did a small known-answer batch in **3 m 44 s** and two batches in **8 min**; the plan-review rows are 3–5× that size | ~$19 at list rates; unmeasured on Antigravity (no meter) |
+| **Hydrogen, optional gap-filler** | + R5a fact-gate (independent second reading) | +5.2 | 1 more subagent | +~20–30 min | +~$6.50 |
+| **Opus 5.5, from ~3 h** | R8, R10, R9 (the P7 chain), R5a/R5b fact-gate, R7 re-check | **~11.2** | 6–8 subagents, same shape as audit-5 | **~2–3 h**, subject to Claude's 5-hour window: the skill hands off at 85%, and 11.2 batches is most of one audit-5 day | draws the returning week |
+| **Total to every report in hand** | | 33.6 | | **~4–6 h from now**, once the Opus window opens | |
+| **Fix round** | the builders | — | DeepSeek on Go, parallel | same evening | no Claude or Codex quota |
+| **Re-checks** | 15% per row, back to the model that found the finding | ~5 | 3–4 | next window, ~1–2 h | Hydrogen for its own rows, Opus for its own |
+
+Three caveats specific to this route:
+
+- **Antigravity's own concurrency limit is unmeasured.** Nothing in the trial exercised 5–6 simultaneous
+  subagents, so a refusal or a 429 is the most likely way this lane underperforms its estimate. Start with four
+  and add two once the first reports land on time.
+- **No meter on the interactive session** means the lane cannot tell JR it is over budget until the console
+  says so. The skill's answer is the per-batch-boundary check and a `HANDOFF` every third batch or 90 minutes —
+  with six subagents, that cadence (not a token window) paces the lane.
+- **The P7 chain must stay on one model.** Do not let Hydrogen take R10 or R9 because it is idle: splitting a
+  chain across two reviewers is how a residual gets re-litigated twice.
 
 ---
 
