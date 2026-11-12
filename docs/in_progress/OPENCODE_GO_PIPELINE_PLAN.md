@@ -184,7 +184,7 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 
 ### U2: dossier_pilot budget and env documentation
 
-- **Owns:** `tools/dossier_pilot.py`, `tests/test_dossier_pilot.py`, `.env.example`
+- **Owns:** `tools/dossier_pilot.py`, `tests/test_dossier_pilot.py`, `.env.example`, `newsroom/tool_loop/README.md`
 - **Reads:** `tools/dossier_pilot.py` (pricing, reserve/settle, live guard), U1's `extract_openai_usage` and ledger, `.env.example`
 - **Depends on:** U1
 - **Done when:** a live dossier call is priced from Go's `list_cost_usd` when present, falls back to the local table otherwise, and both new env variables are documented.
@@ -204,6 +204,7 @@ If JR wants this built in one pass, U1 and U2 can be built inline in a single se
 | File | Unit |
 |---|---|
 | `.env.example` | U2 |
+| `newsroom/tool_loop/README.md` | U2 |
 | `newsroom/tool_loop/go_allowance.py` | U1 |
 | `newsroom/tool_loop/openai_loop.py` | U1 |
 | `newsroom/tool_loop/router.py` | U1 |
