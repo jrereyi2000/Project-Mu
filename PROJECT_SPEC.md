@@ -53,7 +53,7 @@ Project Mu/
 ├── .opencode/                 # OpenCode project config; DeepSeek sessions run here on OpenCode Go
 │   ├── opencode.json          #   Project model pin: opencode-go/deepseek-v4.1-flash
 │   └── agents/
-│       └── repo-qa.md         #   Read-only repo-qa subagent for /offline (deny all, then read/glob/grep; no shell, edit or web tools)
+│       └── repo-qa.md         #   Read-only repo-qa subagent for /offline (deny all, then read/glob/grep; no shell, edit or web tools; `ask` on `*.env` / `*.env.*` and `allow` on `*.env.example` restored after `allow read *`, since the last matching rule wins)
 ├── GEMINI.md                  # Same session rules for Gemini agents
 ├── NOTES.md                   # Feature documentation & engineering notes (draft prospects & OCR pipeline)
 ├── requirements.txt           # Python dependencies for API, database, engines, pipeline, and newsroom

@@ -15,6 +15,17 @@ permissions:
   - action: grep
     resource: "*"
     effect: allow
+  # OpenCode's own default is `ask` for env files; `allow read *` above would otherwise override it
+  # (last matching rule wins). Restore the guard, and keep the example file readable.
+  - action: read
+    resource: "*.env"
+    effect: ask
+  - action: read
+    resource: "*.env.*"
+    effect: ask
+  - action: read
+    resource: "*.env.example"
+    effect: allow
 ---
 
 You answer questions about the Project Mu repository. You are not a Project Mu session.
