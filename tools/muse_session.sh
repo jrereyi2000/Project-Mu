@@ -20,13 +20,28 @@
 # Console credential and the shared background service serve them. If the pin fails the wrapper
 # exits 3 rather than open a window that would run the wrong model.
 #
-#   tools/muse_session.sh [--prompt TEXT] [any opencode arguments]
+#   tools/muse_session.sh [--session-only] [--title TEXT] [--prompt TEXT] [any opencode arguments]
+#
+# --session-only creates and pins the session, prints `session: <id>` and exits instead of handing the
+# terminal to OpenCode, so `tools/spawn_agent.sh <label> muse` keeps a Muse session inside the shared
+# OpenCode window rather than opening a tmux window of its own (JR, 2026-11-12).
 #
 # MU_MUSE_MODEL overrides the pinned model (step 2 is `MU_MUSE_MODEL=opencode/muse-ember-1.0`), and
 # MU_OPENCODE_SESSION reuses an existing session (a resume); both are exported so a session can be
 # continued. MU_OPENCODE_BIN exists for the tests. No key lives here or in the repo — OpenCode
 # uses its own stored Console credential.
 set -euo pipefail
+
+session_only=0
+title='Project Mu Muse session'
+args=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --session-only) session_only=1; shift ;;
+    --title) title="${2:?--title needs a value}"; shift 2 ;;
+    *) args+=("$1"); shift ;;
+  esac
+done
 
 if ! root="$(git rev-parse --show-toplevel 2>/dev/null)"; then
   echo "muse_session: not inside a git checkout (git rev-parse --show-toplevel failed)" >&2
@@ -61,7 +76,7 @@ pin_failed() {
 # Create the session with the Muse model (idempotent: an existing id is returned unchanged), then
 # re-pin the model so a resumed session follows MU_MUSE_MODEL too.
 "$bin" api post /api/session \
-  --data "{\"id\":\"$MU_OPENCODE_SESSION\",\"title\":\"Project Mu Muse session\",\"model\":{\"id\":\"$model_id\",\"providerID\":\"$provider\"},\"location\":{\"directory\":\"$root\"}}" \
+  --data "{\"id\":\"$MU_OPENCODE_SESSION\",\"title\":\"$title\",\"model\":{\"id\":\"$model_id\",\"providerID\":\"$provider\"},\"location\":{\"directory\":\"$root\"}}" \
   >/dev/null 2>&1 || pin_failed "session create failed"
 "$bin" api post "/api/session/$MU_OPENCODE_SESSION/model" \
   --data "{\"model\":{\"id\":\"$model_id\",\"providerID\":\"$provider\"}}" \
@@ -69,4 +84,9 @@ pin_failed() {
 
 echo "Project Mu Muse route: $MU_OPENCODE_MODEL (harness opencode, model $MU_AGENT_MODEL, session $MU_OPENCODE_SESSION)" >&2
 
-exec "$bin" --session "$MU_OPENCODE_SESSION" "$@"
+if [ "$session_only" = 1 ]; then
+  echo "session: $MU_OPENCODE_SESSION"
+  exit 0
+fi
+
+exec "$bin" --session "$MU_OPENCODE_SESSION" ${args[@]+"${args[@]}"}

@@ -48,7 +48,9 @@ with the report path beside it (mostly `data/audit_reports/audit-5/*`). A DeepSe
 6. **JR's route worked: the Hydrogen lane finished all six rows in about six minutes of board time.** Opened at
    17:00, all six reports written by 17:07 (§9). **None came back clean** — 17 findings (5 HIGH, 8 MEDIUM,
    4 LOW) across six rows whose builders had each reported green. That is the strongest argument in this
-   document for the queue existing at all. ~11.2 batches remain for Opus.
+   document for the queue existing at all. JR then sent the remaining rows to Hydrogen as well rather than
+   wait for Claude quota, so **the whole 33.6-batch queue is dispatched**; the one piece still outside it is
+   the visual-mod-check re-check, which belongs to the Codex auditor once that builder's fixes land (§10).
 
 ---
 
@@ -585,3 +587,53 @@ report's own, quoted with its path; none is mine. **All six delivered; none is c
 5. **17 findings, zero clean rows.** Six builders had each reported their tests green. This is the case for
    keeping the queue rather than trusting plan-level verification — and the case for the fix round now going
    to a builder with these six reports as one batch, which is a separate decision from the audit that found them.
+
+---
+
+## 10. Wave 2 and the fix lane, opened 2026-11-12 17:16
+
+JR's call: no point waiting for Claude quota, so the rows that were earmarked for Opus went to Hydrogen too, and
+the six reports went to a fix lane. Everything is staged the same way as §7 — pinned detached-HEAD worktree,
+self-contained prompt, one row or one file-disjoint group per session.
+
+### 10.1 Wave 2 — auditors (Hydrogen)
+
+| Label | Rows | Worktrees | Report |
+|---|---|---|---|
+| `audit-p3-chain` | **R9 → R10 → R8, one session, three batches in that order** (the league-shape chain; each verdict depends on the last) | `audit-ded2627`, `audit-e93e417`, `audit-fe0c44e` | `data/audit_reports/audit-p3-chain/{r9,r10,r8}/` |
+| `audit-fact-gate` | R5a, the plan's own 22 commits of `4abd2c9^..546b9fa` | `audit-546b9fa` | `data/audit_reports/audit-fact-gate/` |
+| `audit-fact-api` | R5b, `45e58d1` alone (capture exclusion, API/view, rebuilt dist) | `audit-45e58d1` | `data/audit_reports/audit-fact-api/` |
+
+`audit-p3-chain` is one session on purpose: R9's residual, R10's F1 fix and R8's P3-04b are one subsystem, and
+splitting them would re-litigate the same residuals three ways. `audit-fact-gate` is the row I had argued should
+get Opus's judgement; it gets Hydrogen now, and a later Opus second read of that single row is still the one
+double-read worth buying.
+
+### 10.2 Fix lane — builders (DeepSeek), one per file-disjoint group
+
+| Label | Reports | Findings | Files (exclusive) | Order |
+|---|---|---:|---|---|
+| `fix-tooling` | `audit-route`, `audit-go` | 8 | `tools/context_check.py`, `tools/spawn_agent.sh`, `tools/opencode_session.sh`, `.opencode/agents/repo-qa.md`, `tools/go_usage.py`, their four test files | **R4 F1 first — a red suite on `main` today** |
+| `fix-go-voice` | `audit-glm`, `audit-commission` | 6 | `newsroom/{swarm_dispatcher,agent_memory,custom_commission,social_publish,social_writer}.py`, `engines/llm_provider.py`, `tools/latency_spike.py`, their tests | R6 F1 (wrong key into `go_client`), then F2 = R11 (one fix), then F3's revert, then the MEDIUM/LOW |
+| `fix-stats-id` | `audit-stats3`, `audit-stats2b` | 3 | `engines/advanced_metrics.py`, `pipeline/load_save.py`, their four test files | R2a/R2b, then P1; the reports' required regressions are the acceptance tests |
+
+Grouping is by file, not by severity, so no two builders can touch the same file: `tools/*`; `newsroom/*` plus
+`engines/llm_provider.py`; `engines/advanced_metrics.py` plus `pipeline/load_save.py`. `PROJECT_SPEC.md` is the
+one shared file and each lane edits only its own section hunks.
+
+**Re-checks go back to the auditor that found the finding** — `audit-route`/`audit-go`, `audit-glm`/
+`audit-commission`, `audit-stats3`/`audit-stats2b`. All six are still up and listening, so the same-model
+verification the audit skill requires costs no new sessions.
+
+**One harness note for whoever stages the next lane:** `tools/spawn_agent.sh <label> deepseek` no longer opens a
+tmux window. It mints an OpenCode session in the shared window and prints the id; the first turn has to be sent
+with `opencode run --session <id> "<prompt>"`. The three builder sessions were started that way
+(`ses_mu_1794521735_29181`, `…1738_08389`, `…1742_04518`), which is also how a prompt can be given after the
+fact without typing into anyone's window.
+
+### 10.3 What is still outside the lanes
+
+- **R7's re-check** — belongs to `audit-visual` (Codex) once `visual-check-fixes-2` lands its second round; not
+  stageable until that builder's NOTICE.
+- **Any fix round from wave 2** — the P7 chain and fact-gate findings will need a fourth builder group once their
+  reports land, and that is a new decision, not part of this staging.

@@ -6,6 +6,7 @@ stub on PATH records any attempt to open a window so a test fails loudly if one 
 
 from __future__ import annotations
 
+import re
 import subprocess
 from pathlib import Path
 
@@ -56,11 +57,13 @@ def _assert_no_window(env: dict[str, str]) -> None:
     assert not marker.exists(), marker.read_text(encoding="utf-8") if marker.exists() else ""
 
 
-def test_deepseek_dry_run_launches_the_opencode_wrapper(env: dict[str, str]) -> None:
+def test_deepseek_dry_run_creates_a_session_with_no_window(env: dict[str, str]) -> None:
     result = _run(env, "--dry-run", "b1", "deepseek", "/builder")
 
     assert result.returncode == 0, result.stderr
-    assert "opencode_session.sh --prompt /builder" in result.stdout
+    assert "no_window=1" in result.stdout                       # JR 2026-11-12: no tmux window for DeepSeek
+    assert "opencode_session.sh --session-only" in result.stdout
+    assert "prompt: /builder" in result.stdout
     assert "claude-deepseek" not in result.stdout
     _assert_no_window(env)
 
@@ -72,7 +75,26 @@ def test_deepseek_plain_prompt_gets_the_label_prefix(env: dict[str, str]) -> Non
     # The run line is printf %q-quoted, so spaces in the prompt come back as `\ `.
     unquoted = result.stdout.replace("\\ ", " ")
     assert "Your session label is b1. fix the flaky test" in unquoted
-    assert "opencode_session.sh --prompt" in result.stdout
+    assert "opencode_session.sh --session-only" in result.stdout
+    _assert_no_window(env)
+
+
+def test_deepseek_start_opens_no_window_and_prints_the_session(
+    env: dict[str, str], tmp_path: Path
+) -> None:
+    """The real path: the wrapper runs with a stub binary, so no session is started and no tab opened."""
+    stub = tmp_path / "stub-bin" / "opencode"
+    stub.parent.mkdir()
+    stub.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+    stub.chmod(0o755)
+    env["MU_OPENCODE_BIN"] = str(stub)
+    env["MU_ALLOW_DEEPSEEK_SPAWN"] = "1"
+
+    result = _run(env, "b1", "deepseek", "/builder")
+
+    assert result.returncode == 0, result.stderr
+    assert re.search(r"^session: ses_mu_\d{10}_\d{5}$", result.stdout, re.M)
+    assert "/builder" in result.stdout and "tab" in result.stdout
     _assert_no_window(env)
 
 
@@ -108,7 +130,7 @@ def test_guard_allows_a_deepseek_caller_that_declares_the_rule(env: dict[str, st
     result = _run(env, "--dry-run", "b1", "deepseek", "/builder")
 
     assert result.returncode == 0, result.stderr
-    assert "opencode_session.sh --prompt /builder" in result.stdout
+    assert "opencode_session.sh --session-only" in result.stdout
     _assert_no_window(env)
 
 
@@ -147,15 +169,17 @@ def test_a_claude_caller_may_spawn_a_deepseek_session(env: dict[str, str]) -> No
     result = _run(env, "--dry-run", "b1", "deepseek", "/builder")
 
     assert result.returncode == 0, result.stderr
-    assert "opencode_session.sh --prompt /builder" in result.stdout
+    assert "opencode_session.sh --session-only" in result.stdout
     _assert_no_window(env)
 
 
-def test_muse_dry_run_launches_the_muse_wrapper(env: dict[str, str]) -> None:
+def test_muse_dry_run_creates_a_session_with_no_window(env: dict[str, str]) -> None:
     result = _run(env, "--dry-run", "muse-lab", "muse", "/builder")
 
     assert result.returncode == 0, result.stderr
-    assert "muse_session.sh --prompt /builder" in result.stdout
+    assert "no_window=1" in result.stdout                       # JR 2026-11-12: no tmux window for Spark
+    assert "muse_session.sh --session-only" in result.stdout
+    assert "prompt: /builder" in result.stdout
     assert "opencode_session.sh" not in result.stdout
     _assert_no_window(env)
 
@@ -166,7 +190,7 @@ def test_muse_plain_prompt_gets_the_label_prefix(env: dict[str, str]) -> None:
     assert result.returncode == 0, result.stderr
     unquoted = result.stdout.replace("\\ ", " ")
     assert "Your session label is muse-lab. run the pilot" in unquoted
-    assert "muse_session.sh --prompt" in result.stdout
+    assert "muse_session.sh --session-only" in result.stdout
     _assert_no_window(env)
 
 
@@ -176,7 +200,7 @@ def test_muse_needs_no_deepseek_spawn_flag(env: dict[str, str]) -> None:
     result = _run(env, "--dry-run", "muse-lab", "muse", "/builder")
 
     assert result.returncode == 0, result.stderr
-    assert "muse_session.sh --prompt /builder" in result.stdout
+    assert "muse_session.sh --session-only" in result.stdout
     _assert_no_window(env)
 
 
@@ -277,9 +301,20 @@ def test_route_model_overrides_reach_the_export(env: dict[str, str]) -> None:
 
 def test_the_opencode_wrappers_set_the_actor_themselves(env: dict[str, str]) -> None:
     deepseek = _run(env, "--dry-run", "wrap-ds", "deepseek", "/x").stdout
-    assert "MU_AGENT_MODEL=" not in deepseek and "opencode_session.sh --prompt /x" in deepseek
+    assert "MU_AGENT_MODEL=" not in deepseek and "opencode_session.sh --session-only" in deepseek
     muse = _run(env, "--dry-run", "wrap-muse", "muse", "/x").stdout
-    assert "MU_AGENT_MODEL=" not in muse and "muse_session.sh --prompt /x" in muse
+    assert "MU_AGENT_MODEL=" not in muse and "muse_session.sh --session-only" in muse
+    _assert_no_window(env)
+
+
+@pytest.mark.parametrize("agent", ["claude", "opus", "codex", "gemini", "argon", "hydrogen"])
+def test_only_codex_claude_and_agy_routes_get_a_window(env: dict[str, str], agent: str) -> None:
+    """JR 2026-11-12: new windows are for codex, claude and agy; DeepSeek/Spark share the OpenCode one."""
+    result = _run(env, "--dry-run", f"win-{agent}", agent, "/x")
+
+    assert result.returncode == 0, result.stderr
+    assert f"window=win-{agent}" in result.stdout
+    assert "no_window" not in result.stdout
     _assert_no_window(env)
 
 
