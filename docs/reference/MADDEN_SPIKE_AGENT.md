@@ -85,16 +85,17 @@ error names the field, e.g. `save: must be null or CAREER-TUNE-<name>`.
 
 ## 3. Asking for a spike
 
-Any session may request one. A DeepSeek-routed session can't spawn another session for this, so it
-asks on the board instead.
+Any session may request one. A DeepSeek-routed session may spawn the spike session itself, exactly as
+another session does (JR, 2026-11-11): run the script with `MU_ALLOW_DEEPSEEK_SPAWN=1`, which
+`tools/spawn_agent.sh` requires from a DeepSeek caller. Otherwise it asks on the board instead.
 
 1. **Write the brief** under `data/spikes/<id>/brief.json` and validate it with `--dry-run` (§2).
 2. **Post a NOTICE** on `AGENT_CONVERSATION.md`: `spawning spike-<id> for <goal>`, the pack, the save,
    the step and time caps, and the files you expect (the brief).
-3. **Spawn the session** (Opus, Codex or Argon only):
+3. **Spawn the session** (any model class; a DeepSeek caller adds `MU_ALLOW_DEEPSEEK_SPAWN=1`):
    `tools/spawn_agent.sh spike-<id> deepseek "/madden-spike data/spikes/<id>/brief.json"`.
-   A DeepSeek requester instead posts `QUESTION` to `all` asking for a spike session, with the brief
-   path, and waits for a session that can spawn to answer.
+   A session that cannot spawn one instead posts `QUESTION` to `all` asking for a spike session, with
+   the brief path, and waits for a session that can.
 4. **Wait.** The spike session does its own session start, shows JR the brief and waits for his yes in
    its own window. Nobody answers its permission prompts for it. You get a `HANDOFF` on the board
    when it ends, naming `data/spikes/<id>/report.md`.

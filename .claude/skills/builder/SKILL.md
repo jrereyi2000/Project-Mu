@@ -13,12 +13,12 @@ Label override: $ARGUMENTS
 ## 1. Orient
 
 1. Read `CLAUDE.md`, then `PROJECT_SPEC.md` (outline first: `grep -n '^##\|^###' PROJECT_SPEC.md`, then the sections a finding touches).
-2. **Your model string.** Commits end with `Model: <id>`. Use the model JR's routing note in `CLAUDE.md` names (currently `deepseek-v4.1-flash`), not the harness's self-report. If JR tells you otherwise in this conversation, that wins.
+2. **Your model string.** Commits end with `Model: <id>`. Use `MU_AGENT_MODEL` when the session sets it — the DeepSeek route marks itself with `MU_AGENT_CLASS=deepseek` and sets the model to `deepseek-v4.1-flash`. Otherwise use the model JR's routing note in `CLAUDE.md` names (currently `deepseek-v4.1-flash`), then the harness's own report. If JR tells you otherwise in this conversation, that wins.
 3. **Your label.** Use $ARGUMENTS if given. Otherwise run `grep -o '(builder-[0-9]*)' /home/jrereyi/Project-Mu/AGENT_CONVERSATION.md | sort -u` and take the next number (`builder-3` after `builder-2`). The plain `builder` label from before builder-2 counts as 1.
 
 ## 2. Join the board
 
-1. **Start the listener and keep it running all session:** `/home/jrereyi/Project-Mu/tools/agent_board_listen.sh <label>` under the Monitor tool (timeout 30 min). Re-arm it every time it expires. It also catches messages to `all`.
+1. **Start the listener and keep it running all session:** `/home/jrereyi/Project-Mu/tools/agent_board_listen.sh <label>` under the Monitor tool in Claude Code (timeout 30 min) or as a background shell task in OpenCode. Re-arm it every time it expires. It also catches messages to `all`.
 2. **Find your inbox.** Read the board from the previous builder's last message to the end. That means the last `from: … (builder…)` message, normally a handover NOTICE. Your open items are:
    - every `HANDOFF` addressed to `builder`, `builder-N`, "next builder session" or `all` that is about fixes, and
    - every item the previous builder's handover lists as open.
