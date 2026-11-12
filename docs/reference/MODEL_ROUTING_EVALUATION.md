@@ -274,7 +274,7 @@ What it means, and what it does not:
 | D3 | Is a 2.1× newsroom bill (~$260/mo) acceptable for GLM-5.3 quality, or a 4× bill (~$500/mo) for Kimi K3? | **open** — only matters as the flagship slice now that Muse fits |
 | D4 | Should the short calls (agent_wire, memory, gm_*) move to Go independently of the desk? | **open** |
 | D5 | Is "unlimited but temporary and unscored" acceptable for any production path? | **open** |
-| D6 | Where does JR see `gemini-decision-1` and `jev-1.13-free` (TUI picker, Console, a workspace setting)? A screenshot or the exact id would let me re-probe; both currently answer `400 Model is unavailable` to the pipeline key. | **open — needs JR** |
+| D6 | Where does JR see `gemini-decision-1` and `jev-1.13-free`? Both answer `400 Model is unavailable` to the pipeline key and are absent from the Go/Zen lists. | **Parked (JR, 2026-11-12): "forget the decision models, they might be broken on OpenCode for now."** Not a dependency; nothing in Mu refers to them. If they ever answer again, re-probe with `POST /inference/go/openai/v1/chat/completions` before planning anything. |
 
 ---
 
