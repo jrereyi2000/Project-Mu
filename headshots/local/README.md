@@ -4,7 +4,7 @@ Standalone local portrait generation engine for Project Mu player and rookie hea
 
 References:
 - `docs/done/PC_MIGRATION_PLAN.md` §7.7
-- `docs/not_started/PRE_PC_WORK_2.md` Item A1
+- `docs/done/PRE_PC_WORK_2.md` Item A1
 
 ---
 

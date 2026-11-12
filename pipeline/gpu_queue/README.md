@@ -4,7 +4,7 @@ A standalone offline queue and scheduler for orchestrating GPU workloads on the 
 
 References:
 - `docs/done/PC_MIGRATION_PLAN.md` §7.5, §7.8
-- `docs/not_started/PRE_PC_WORK_2.md` Item A7
+- `docs/done/PRE_PC_WORK_2.md` Item A7
 
 ---
 

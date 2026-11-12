@@ -1,6 +1,6 @@
 # Project Mu: Pre-PC Work, Round 2 (sorted by what each item needs)
 
-**Status:** audit only, nothing built (2026-10-28). **2026-10-29: the teleport is dropped for a fresh 2034 save (PC_MIGRATION_PLAN.md, decision at the top).** §D, C12 and C13 are obsolete; items that ran on the 2036 data (C3's "run on 2036", C1's backtest) now use the `madden_2036` archive or wait for the new league. The rest still stands. Round 1 (the 11 items in [`PC_MIGRATION_PLAN.md`](../in_progress/PC_MIGRATION_PLAN.md) §2.4, briefs in [`PRE_PC_WORK.md`](../done/PRE_PC_WORK.md)) is done. This is what's still left that doesn't need the PC, sorted so some of it can be built on another device.
+**Status:** audit only, nothing built (2026-10-28). **2026-10-29: the teleport is dropped for a fresh 2034 save (PC_MIGRATION_PLAN.md, decision at the top).** §D, C12 and C13 are obsolete; items that ran on the 2036 data (C3's "run on 2036", C1's backtest) now use the `madden_2036` archive or wait for the new league. The rest still stands. Round 1 (the 11 items in [`PC_MIGRATION_PLAN.md`](PC_MIGRATION_PLAN.md) §2.4, briefs in [`PRE_PC_WORK.md`](PRE_PC_WORK.md)) is done. **2026-11-12: moved to `docs/done/` (JR: done).** This is what's still left that doesn't need the PC, sorted so some of it can be built on another device.
 
 **The sort:**
 * **A. Standalone:** needs neither the repo, the database nor Madden. Build it anywhere as a small package with the interface given here, then bring it in.
