@@ -32,6 +32,14 @@ TITLE = "Madden NFL 27"
 TUNE_PREFIX = "TUNE-"
 
 
+def same_option(one, other):
+    """One menu row under two labels: SUPER and SUPER SIM are the same catalog option."""
+    if label_match(one, other) or label_match(other, one):
+        return True
+    supers = {"SUPER", "SUPER SIM"}
+    return norm(one) in supers and norm(other) in supers
+
+
 class PilotStop(Exception):
     """The run stopped; `info` is what was written to stop.json."""
     kind = "Stop"
@@ -91,7 +99,7 @@ class Pilot:
         self.last_known = None
         self.last_png = None
         self.unknown_run = 0
-        self.cursor = None                 # tracked option index on 'ocr_order' screens
+        self.cursor = None                 # hint only: never authorizes a press (F7)
         self.loaded_franchise = None
         self.allow_quit = False
         (self.run_dir / "steps").mkdir(parents=True, exist_ok=True)
@@ -205,8 +213,11 @@ class Pilot:
         mode = spec.get("highlight")
         labels = labels or spec.get("options") or []
         if mode == "ocr_order":
-            opts = spec.get("options") or []
-            return opts[self.cursor] if self.cursor is not None and self.cursor < len(opts) else None
+            # The catalog's shadow index never authorizes a press (F7): read the actual
+            # selected row from the frame, or the injected reader in a dry run/test.
+            if self.highlight_reader:
+                return self.highlight_reader(frame, labels, spec)
+            return border_highlight(frame, labels, reach=spec.get("border_reach", 0.06))
         if mode == "border":
             if self.highlight_reader:
                 return self.highlight_reader(frame, labels, spec)
@@ -222,10 +233,12 @@ class Pilot:
         for _ in range(limit):
             labels = opts if any(label_match(label, o) for o in opts) else opts + [label]
             cur = self.highlighted(labels=labels)
-            if cur is not None and label_match(cur, label):
+            if cur is not None and same_option(cur, label):
                 return
             key = fwd
             a, b = (self.frame.find(cur) if cur else None), self.frame.find(label)
+            if b is None and norm(label) == "SUPER":
+                b = self.frame.find("SUPER SIM")
             i = 1 if spec.get("nav", "vertical") == "vertical" else 0
             if a and b and a[i] != b[i]:
                 key = fwd if b[i] > a[i] else back
@@ -274,7 +287,7 @@ class Pilot:
             if not any(label_match(label, o) for o in labels):
                 labels.append(label)
             cur = self.highlighted(labels=labels)
-            if cur is None or not label_match(cur, label):
+            if cur is None or not same_option(cur, label):
                 self.stop(f"highlight on {screen} is {cur!r}, not {label!r}; not confirming", Stuck)
         self.press("select", wait=wait, _confirm=True)
         if spec.get("loads_franchise"):

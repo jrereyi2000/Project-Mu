@@ -1,6 +1,6 @@
 # Project Mu: Visual Mod Check Plan
 
-**Status:** approved by JR (2026-11-12), with his answers folded in below. Built and on main (2026-11-12). Wave 0 spike S-1 ran the same day, status partial — see §2.5a; the halftime show itself was never seen, so that segment is written for and not yet measured.
+**Status:** approved by JR (2026-11-12), with his answers folded in below. Built and on main (2026-11-12). Wave 0 spike S-1 ran the same day, status partial — see §2.5a; the halftime show itself was never seen, so that segment is written for and not yet measured. **M-0689/F7 audit fixes (2026-11-12):** the halftime and static-super-sim routes are now reachable and recording is synchronized on the job's own ready marker, fresh run directories and launch-verified pack provenance; the show itself is still unmeasured live and the plan stays partial until a cloned-save run produces footage of it. F7's measured pause-menu mismatch is fixed: navigation reads the visible rows and the actual selected row, and stops before Space when it cannot; the other `ocr_order` screens' selection evidence remains live-unmeasured.
 **Builds on:** PROJECT_SPEC §1.1 (repository layout), [`MUSE_EMBER_ROTATION_PLAN.md`](../done/MUSE_EMBER_ROTATION_PLAN.md) (the Muse route and the computer-use rules), [`MADDEN_PILOT.md`](../reference/MADDEN_PILOT.md) §5 (jobs) and §6 (safety), [`MADDEN_SPIKE_AGENT.md`](../reference/MADDEN_SPIKE_AGENT.md) §7 (asset checks, checkpoints, clips), [`LOCAL_VISION_LATENCY.md`](../reference/LOCAL_VISION_LATENCY.md) (what a local model measured at), `docs/reference/LOCAL_VISION_HOST.md` (the Mac host, being set up by `mac-vision-setup`).
 
 **Goal:** replace the manual Codex loop JR uses to test visual mods. One command loads a `CAREER-TUNE-*` save, records the game-start and halftime segments, and answers *"did this mod's assets appear?"* with a number per asset plus a short written summary — deterministic pixel checks for the verdict, a vision model (hosted on JR's always-on M1 Mac, never on Madden's GPU) for the description and for unknown screens. JR stops describing frames by hand and starts reading pass/fail lines.
@@ -28,8 +28,8 @@
 
 - **U2** keeps `HUB_GAMEDAY.confirm_ok` at `["ADVANCE WEEK"]`: `PLAY SEASON GAME` goes in through the pilot's own policy for the run, as the spike did. `PAUSE_MENU` confirms RESUME and SUPER only, so `QUIT GAME` is policy-only too.
 - **Leaving a live game (JR, 2026-11-12):** a `CAREER-TUNE-*` clone may have its game quit, so `watch-game` presses the pause menu's `QUIT GAME` and its confirmation dialog instead of leaving Madden mid-game. The dialog (`QUIT_GAME_CONFIRM`) was never seen in S-1: its words are a guess until a live run reads them, a cancel-shaped label is never pressed, and any other landing stops the run.
-- **The cue names and the job's stops differ:** a segment cue says *kickoff* or *halftime_start*; `watch-game --to` says `kickoff` or `halftime`. `tools/mod_check`'s driver maps between them, and `supersim_menu` is a fixed wait, never a stop.
-- **Run directories are unique per invocation** (`-2`, `-3` on a same-second collision), because the pilot numbers step PNGs per process (S-1 lost most of its frames that way).
+- **The cue names and the job's stops differ:** a segment cue says *kickoff*, *halftime_start* or *supersim_menu*; `watch-game --to` says `kickoff`, `halftime` or `supersim`. `tools/mod_check`'s driver maps between them. No cue is a blind fixed wait: every route writes `ready.json` immediately before its hold, and the driver accepts only its own process's marker while that process is alive and the hold still covers the recording.
+- **Run directories are unique per invocation** (`-2`, `-3` on a same-second collision; an explicit `--run-dir` that already holds anything is refused), because the pilot numbers step PNGs per process (S-1 lost most of its frames that way). Old frames are never a fallback for an empty recording.
 
 ---
 
@@ -137,10 +137,11 @@ python3 -m tools.madden_pilot watch-game --save CAREER-TUNE-<name> --franchise T
 - **The halftime path (D2, D3)** — the only way to reach the halftime show:
   1. supersim to the end of the first quarter;
   2. simulate the second quarter **by play** (not "sim to end");
-  3. resume the real game for the last play of the half, with **under 20 s on the clock**;
-  4. hold while the caller records the halftime show.
-  Each step is a catalogued screen with a bounded label set, and the runner records which route produced a segment (`halftime` vs `supersim_halftime_skipped`) so a missed halftime cannot be mistaken for a mod problem.
-- It stops as `Stuck` if the clock does not read inside the <20 s window when it expects to resume, rather than resuming a play at the wrong time.
+  3. resume the real game for the last play of the half, with **1–19 s on the clock**;
+  4. write the ready marker, then hold while the caller records the halftime show.
+  Each step is a catalogued screen with a bounded label set, and the result records `route: supersim` and the clock so a missed halftime cannot be mistaken for a mod problem.
+- It stops as `Stuck` if the clock does not read inside the window (or reads 0:00, when the half is already over) when it expects to resume, rather than resuming a play at the wrong time.
+- **The static path:** `--to supersim` kicks off, opens SUPER SIM and holds there; its ready marker's screen must be `SUPERSIM_MENU`, so a fixed-wait segment is positioned and verified rather than timed on an arbitrary frame.
 - Leaving: it quits to the franchise list through the same path `quit-franchise` uses, and the report states whether `-AUTOSAVE` was written. **That write is confirmed (D1, R1).**
 - The catalog gains the screens this route needs, each with `confirm_ok` limited to the labels that start a game and the supersim controls it must press; roster cards and delete paths stay `never_select`/forbidden.
 
@@ -151,7 +152,7 @@ python3 -m tools.madden_pilot watch-game --save CAREER-TUNE-<name> --franchise T
 - **Real play does not run itself:** left alone it stops on a delay-of-game PENALTY dialog (Accept / Decline) whose border does not read. JR's rules: never control offense except the last play of the quarter (or the last play before the half or game ends, whichever is sooner); if on offense, reopen supersim and sim until on defense; if a snap must be taken, Space for the default play, ~1 s for the line, Space again.
 - **Clone names:** the franchise tile OCR reads a digit `1` as `I`, so `CAREER-TUNE-CHK1` is unfindable; use digit-free clone names (the spike ran `CAREER-TUNE-CHECK`).
 - **Evidence:** the pilot numbers step PNGs per process, so a multi-call run overwrites `steps/0001_*.png`. `watch-game` must write one run directory per invocation with unique step names.
-- **Not verified:** the halftime show itself; whether NEXT QUARTER from Q2 plays or skips it.
+- **Not verified:** the halftime show itself; whether NEXT QUARTER from Q2 plays or skips it; the exact last-play/resume window (the code now refuses 0:00 and requires 1–19 s). The first live cloned-save run is the measurement.
 
 ### 2.6 Output
 
@@ -164,9 +165,9 @@ python3 -m tools.madden_pilot watch-game --save CAREER-TUNE-<name> --franchise T
 | R1 | **Quitting a game writes `-AUTOSAVE` — confirmed by JR (D1).** A check could disturb the save it tested. | Not a question any more: S-1 measures *what* changes (which file, hashes, mtimes) so the report can state it. | Mandatory: `run` clones `--from` into a fresh `CAREER-TUNE-CHK<n>` and checks that; it refuses to run against a save it did not make. |
 | R2 | The game-start segment is short and the cue may be missed (intro timing, pregame skip). | Run the capture step twice on the same save and compare which frames the cue picks. | Allow a fixed pre-roll (`preroll_s`) before the cue; report it so the reader knows the segment was timed, not cued. |
 | R3 | A wrong `pass`/`fail` reference pair silently inverts a verdict. | `capture` previews both crops and requires JR's yes; the report always prints both similarity numbers. | Reject a pair whose pass/fail similarity is within the margin (unknown, with the numbers shown), rather than guessing. |
-| R4 | **Halftime needs the real game resumed at the right moment (D2, D3).** A supersimmed game never shows the halftime show, so the recipe is: supersim to the end of Q1 → sim Q2 by play → resume for the last play of the half with <20 s on the clock. | Spike S-1 walks that recipe once and records the screens and the cue that says "resume now". | Ship `game_start` and `supersim_menu` first; halftime works only when the runner detected the <20 s state, and the report says which route produced the segment. |
+| R4 | **Halftime needs the real game resumed at the right moment (D2, D3).** A supersimmed game never shows the halftime show, so the recipe is: supersim to the end of Q1 → sim Q2 by play → resume for the last play of the half with 1–19 s on the clock. | Spike S-1 walks that recipe once and records the screens and the cue that says "resume now". | The route is now implemented and recording is synchronized with the job's ready marker; the show itself remains unmeasured until a live cloned-save run, and the result names the route/clock. 0:00 and an unreadable/out-of-window clock stop as Stuck. |
 | R5 | The Mac is not up yet, or the LAN round trip is slower than measured. | `python3 -m tools.madden_pilot.vision_bench --models ollama:qwen2.5vl:7b` with `OLLAMA_HOST` pointed at the Mac. | The model's summary is optional: the run still produces every pass/fail without it, with `summary: "model unavailable"`. |
-| R6 | Someone treats a `pass` as "the mod is installed" when the pack was not applied. | The report records the pack name and the launch's `result.json` pack field beside the verdict. | Refuse when the launch's pack is not the one the mod belongs to. |
+| R6 | Someone treats a `pass` as "the mod is installed" when the pack was not applied. | The plan names its expected `pack`; the run launches that pack itself through the pilot's `launch` job and checks the receipt (`status: ok`, same pack, `already_running: false`). | Refuse an already-running Madden (unknown provenance), a receipt naming another pack and a launch with no verified pack, before recording. The report records `pack_required`, `pack_actual`, `pack_verified` and the receipt. |
 
 **Spike first (S-1, ~20 minutes, needs JR's PC and his yes):** on a throwaway `CAREER-TUNE-CHK1` clone, answer three things — (1) which catalogued route starts a game, (2) whether the pregame reaches kickoff without a press, (3) what quitting writes (save and autosave hashes before/after). It decides R1 and R4, which change U2's shape. Run it before wave 1.
 
@@ -174,7 +175,9 @@ python3 -m tools.madden_pilot watch-game --save CAREER-TUNE-<name> --franchise T
 
 - `tests/test_mod_check.py` — segment plan validation: an unknown cue, a `record_s` outside `win_agent record`'s limits, a check name missing from `checks.json`, and a missing reference file each refuse with a readable reason; `--dry-run` prints the plan and scores nothing; the report shape is exactly §2.6; a passing run, a failing run and an inconclusive pair produce `pass`, `fail` and `unknown`.
 - `tests/test_mod_check_capture.py` — cutting a clip into `pass`/`fail` crops by timestamp uses the right frames (a two-frame fixture clip), and a pair whose similarity is inside the margin is refused rather than saved.
-- `tests/test_madden_pilot_jobs.py` (extend) — `watch_game` refuses a non-TUNE save, refuses while the watcher runs, presses nothing during its hold, and reports the autosave it caused.
+- `tests/test_madden_pilot_jobs.py` (extend) — `watch_game` refuses a non-TUNE save, refuses while the watcher runs, presses nothing during its hold, writes its ready marker immediately before the hold for kickoff/halftime/supersim, reports the autosave it caused, and stops at 0:00 instead of resuming.
+- `tests/test_madden_pilot_jobs.py` (F7) — a real Pilot and a menu driver separate from the catalog cover 9-row and 11-row pause menus, clamped/wrapped navigation, disabled-row skipping, a CELEBRATIONS start and targets SUPER SIM/RESUME/QUIT GAME; a missing selection stops before Space, and the generic pause exit reaches SUPERSIM_MENU on the measured 9-row menu.
+- `tests/test_mod_check.py` / `test_mod_check_capture.py` (M-0689) — the M-0689 regressions: halftime is drivable and records on its ready marker; a missed supersim cue records nothing and scores nothing; historical/stale/too-short ready markers and an exited process stop; a failed quit, finish exception, missing result and non-zero exit are `incomplete`; live capture finishes exactly once on success, empty recording, cue error and bad timestamp; and launch/pack mismatches stop before recording.
 - `tests/test_madden_pilot_nav.py` (extend) — every new catalog exit's confirm label is allowed, and the roster/delete guards are unchanged.
 
 ## 5. Work breakdown

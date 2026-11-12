@@ -12,7 +12,7 @@ result dict. `status` is one of:
     clone_save(pilot, src="CAREER-MU2026", dst="CAREER-TUNE-<name>")
     sim_season(pilot, save="CAREER-TUNE-<name>", to="week N" | "regular-season-end" | "playoffs-end")
     advance(pilot, save="CAREER-TUNE-<name>")
-    watch_game(pilot, save="CAREER-TUNE-<name>", to="kickoff" | "halftime")
+    watch_game(pilot, save="CAREER-TUNE-<name>", to="kickoff" | "halftime" | "supersim")
     catch_up(pilot, save="CAREER-<name>", to_week=None, dsn=None)
     set_setting(pilot, path="A>B>C", value="V")
     verify_mods(pilot, check="first_down_line")
@@ -32,8 +32,9 @@ watcher, a disabled mirror and a next week that is not CATCH_UP.
 
 watch_game is the one job allowed to start a season game (VISUAL_MOD_CHECK_PLAN.md section 2.5):
 it presses PLAY SEASON GAME through the pilot's own policy (the catalog's HUB_GAMEDAY still
-allows ADVANCE WEEK alone), walks the pregame to kickoff, holds still while a caller records,
-and for --to halftime walks JR's D2 supersim recipe to the last play of the half. It never calls
+allows ADVANCE WEEK alone), walks the pregame to kickoff, writes `ready.json` immediately before
+its hold, and holds still while a caller records. --to halftime walks JR's D2 supersim recipe to
+the last play of the half; --to supersim holds on the positioned SUPERSIM_MENU. It never calls
 a play except that half's last snap.
 """
 import contextlib
@@ -49,7 +50,7 @@ import sys
 import time
 from pathlib import Path
 
-from tools.madden_pilot.navigate import ROOT, TITLE, PilotStop, Stuck, Unknown
+from tools.madden_pilot.navigate import ROOT, TITLE, PilotStop, Stuck, Unknown, same_option
 from tools.madden_pilot.screens import UNKNOWN, label_match, norm
 
 DEFAULT_SAVES_DIR = "/mnt/c/Users/jrere/Documents/Madden NFL 27/saves/"
@@ -85,7 +86,10 @@ PRO_BOWL_WEEK = 22                 # Madden's no-game stop between the conferenc
 PRO_BOWL = "PRO_BOWL"              # a progression stop with no real NFL week and no mirror row
 
 # watch_game (VISUAL_MOD_CHECK_PLAN.md 2.5; the spike S-1 numbers are in the plan's 2.5a).
-WATCH_TARGETS = ("kickoff", "halftime")   # what watch-game drives to
+WATCH_TARGETS = ("kickoff", "halftime", "supersim")   # what watch-game drives to
+# The ready marker's cue anchor per target, the name the mod-check driver waits for.
+WATCH_ANCHORS = {"kickoff": "kickoff", "halftime": "halftime_start", "supersim": "supersim_menu"}
+READY_FILE = "ready.json"                 # written immediately before watch-game's hold
 WATCH_MAX_HOLD = 600                      # --hold-seconds' upper bound (the plan's 1..600)
 KICK_HOLD = 1.5                           # the kickoff is a Space hold, not a tap (JR, S-1)
 PREGAME_TIMEOUT = 90                      # seconds for one pregame press to land
@@ -95,6 +99,7 @@ SUPERSIM_TIMEOUT = 30                     # seconds for the pause menu to open t
 SUPERSIM_SIM_TIMEOUT = 180                # one CHANGE OF POSSESSION runs about 2 min of clock
 SUPERSIM_PLAY_TIMEOUT = 60                # one JUMP TO NEXT PLAY moves about 4 s of clock
 HALFTIME_WINDOW = 20                      # under 20 s left in Q2 is the half's last play (D2)
+HALFTIME_MIN_CLOCK = 1                    # 0:00 means the half is already over: do not resume
 HALFTIME_MAX_PLAY_PRESSES = 320           # a quarter at ~4 s a JUMP TO NEXT PLAY is ~225 presses
 HALFTIME_BLIND_READS = 10                 # unreadable clocks in a row before the job stops
 LEAVE_TIMEOUT = 60                        # seconds for QUIT GAME to land on its confirmation
@@ -299,7 +304,7 @@ def job(name):
         def run(pilot, *args, **kwargs):
             t0 = time.monotonic()
             started = datetime.datetime.now().isoformat(timespec="seconds")
-            progress = {}
+            progress = {"started": started}
             try:
                 result = fn(pilot, *args, progress=progress, **kwargs)
             except PilotStop as e:
@@ -1168,6 +1173,29 @@ def _start_game(pilot):
     return screen
 
 
+def _write_ready(pilot, save, target, hold, clock, ready_token=None, started=None):
+    """Write this invocation's ready-for-recording marker immediately before the hold.
+
+    The mod-check driver accepts only a marker carrying the token it passed, from this process's
+    pid, naming the cue's anchor; the remaining hold must still cover the recording. This is the
+    job's own "I am holding now" signal (F1/F3), not a historical screen classification. A look
+    is deliberately not taken: a look refocuses Madden while the caller is about to record.
+    """
+    now = time.time()
+    stamp = datetime.datetime.now()
+    payload = {
+        "job": "watch-game", "save": save, "route": "supersim" if target == "halftime" else target,
+        "anchor": WATCH_ANCHORS[target], "screen": pilot.screen,
+        "clock": clock, "hold_seconds": int(hold),
+        "ready_token": ready_token, "pid": os.getpid(), "started": started,
+        "ready_at": stamp.isoformat(timespec="seconds"),
+        "hold_until_epoch": now + float(hold),
+        "hold_until": (stamp + datetime.timedelta(seconds=float(hold))).isoformat(timespec="seconds"),
+    }
+    Path(pilot.run_dir).mkdir(parents=True, exist_ok=True)
+    (Path(pilot.run_dir) / READY_FILE).write_text(json.dumps(payload, indent=1, default=str))
+
+
 def _hold(pilot, seconds):
     """Press nothing for `seconds` and report the screen it ended on: the job's whole point.
 
@@ -1178,23 +1206,55 @@ def _hold(pilot, seconds):
     return pilot.look()[1]
 
 
-def _pin_highlight(pilot, label):
-    """Put an in-game list's selection on `label` by position, from its top item.
+def _visible_options(pilot):
+    """The menu rows actually on the frame, in screen order, under their catalog names.
 
-    The game screens' selection borders do not read back (spike S-1), so the list is counted
-    through by `ocr_order`: one Up per option (a single driver call) clamps on the top item —
-    however far down the game left the selection, and a pause menu re-opened on SUPER SIM must
-    never be counted five Downs from there onto QUIT GAME — then one Down per step. It is the
-    same pin `_sim_one_week` uses for the Advance menu's unreadable READY.
+    The catalog's option list is what the menu can contain, not what this game state shows
+    (F7: the live pause menu has 9 rows, not the catalog's 11). A row is found by its own OCR
+    text; ``SUPER`` and its ``SUPER SIM`` tooltip are the same row.
     """
-    options = list(pilot.spec(pilot.screen).get("options") or [])
-    if label not in options:
-        pilot.stop(f"watch-game: {label!r} isn't one of {pilot.screen}'s options ({options})", Stuck)
-    pilot.press("up", times=len(options))       # clamps on the top item from anywhere
-    index = options.index(label)
-    if index:
-        pilot.press("down", times=index)
+    options = [str(option) for option in (pilot.spec().get("options") or [])]
+    found = []
+    for index, option in enumerate(options):
+        box = pilot.frame.find(option) if pilot.frame else None
+        if box is None and norm(option) == "SUPER":
+            box = pilot.frame.find("SUPER SIM") if pilot.frame else None
+        if box is None and norm(option) == "SUPER SIM":
+            box = pilot.frame.find("SUPER") if pilot.frame else None
+        if box:
+            found.append((float(box[1]), float(box[0]), index, option))
+    found.sort()
+    return [option for *_, option in found]
+
+
+def _pin_highlight(pilot, label):
+    """Put the visible selection on `label`, verified from the frame at every step.
+
+    The old pin pressed ``len(catalog options)`` Ups then a catalog-index number of Downs and
+    trusted a shadow cursor (F7). That silently activated STATS or COACHING on the measured
+    9-row pause menu. This pin uses the rows actually on screen, walks Up to the top only as
+    navigation, then steps Down one row at a time and reads the selected row each time; it
+    stops before Space when the target never becomes selected. A wrapped, clamped or
+    disabled-skipping menu is covered because every visible row is visited at most once.
+    """
+    if pilot.screen is None:
+        pilot.look()
+    options = _visible_options(pilot)
+    if not any(same_option(label, option) for option in options):
+        pilot.stop(f"watch-game: {label!r} isn't visible on {pilot.screen} "
+                   f"(visible rows: {options}); not pressing blind", Stuck)
+    pilot.press("up", times=max(1, len(options)))     # bounded navigation to the top
     pilot.look()
+    seen = []
+    for _ in range(len(options) + 1):
+        current = pilot.highlighted(labels=options)
+        seen.append(current)
+        if current is not None and same_option(current, label):
+            return
+        pilot.press("down", wait=0.6)
+        pilot.look()
+    pilot.stop(f"watch-game: could not establish {label!r} on {pilot.screen}; selection read "
+               f"{seen}; not pressing Space", Stuck)
 
 
 def _supersim_menu(pilot, timeout=SUPERSIM_TIMEOUT):
@@ -1289,13 +1349,15 @@ def _take_one_snap(pilot):
     pilot.press("select", _confirm=True, wait=1.0)     # the snap
 
 
-def _to_halftime(pilot, hold, progress):
+def _to_halftime(pilot, progress):
     """D2's recipe (JR, spike S-1): supersim Q1's end, sim Q2 by play, resume under 20 s.
 
     SUPER SIM → JUMP FORWARD → NEXT QUARTER (stops at the start of Q2) → CHANGE OF POSSESSION
-    twice (a drive each) → JUMP TO NEXT PLAY until the clock reads under 20 s in Q2 →
-    Backspace → RESUME. The clock is the resume cue: if it never reads inside the window the
-    job stops as Stuck rather than resume the half at the wrong moment (plan R4).
+    twice (a drive each) → JUMP TO NEXT PLAY until the clock reads between 1 and 19 s in Q2 →
+    Backspace → RESUME → the half's last snap. The clock is the resume cue: 0:00 means the half
+    is already over, so the job stops as Stuck rather than resume a play that no longer exists;
+    an unreadable or out-of-window clock stops the same way (plan R4). The caller writes its
+    ready marker and holds after this returns, so recording is synchronized with the hold.
     """
     _supersim_jump(pilot, "NEXT QUARTER")              # Q1's end: stops at the start of Q2
     frame, _ = _supersim_jump(pilot, "CHANGE OF POSSESSION")     # one drive
@@ -1303,7 +1365,11 @@ def _to_halftime(pilot, hold, progress):
     presses, blind = 0, 0
     while True:
         clock = read_game_clock(frame)
-        if clock and clock["quarter"] == 2 and clock["seconds"] < HALFTIME_WINDOW:
+        if clock and clock["quarter"] == 2 and clock["seconds"] == 0:
+            pilot.stop("the clock read 0:00 in Q2: the half is already over, so there is no last "
+                       "play to resume; not resuming at the wrong moment", Stuck)
+        if (clock and clock["quarter"] == 2
+                and HALFTIME_MIN_CLOCK <= clock["seconds"] < HALFTIME_WINDOW):
             break
         if clock and clock["quarter"] not in (1, 2):
             pilot.stop(f"the sim reached Q{clock['quarter']} before the clock read under "
@@ -1324,7 +1390,7 @@ def _to_halftime(pilot, hold, progress):
     _pin_highlight(pilot, "RESUME")
     pilot.confirm_on("PAUSE_MENU", "RESUME", wait=3.0)
     _take_one_snap(pilot)                              # the half's last play
-    return _hold(pilot, hold), clock
+    return pilot.screen, clock
 
 
 def _quit_game(pilot):
@@ -1337,6 +1403,7 @@ def _quit_game(pilot):
     spike S-1, so it is its own catalogued screen (`QUIT_GAME_CONFIRM`) and the run stops rather
     than press a second blind time when Madden lands anywhere else.
     """
+    _leave_supersim(pilot)
     _pause(pilot)
     pilot.policy.setdefault("PAUSE_MENU", [])
     if "QUIT GAME" not in pilot.policy["PAUSE_MENU"]:
@@ -1349,6 +1416,24 @@ def _quit_game(pilot):
         _, screen = wait_known(pilot, ["FRANCHISE_LIST"], LEAVE_TIMEOUT, poll=1.0,
                                what="the franchise list")
     return screen
+
+
+def _leave_supersim(pilot, timeout=SUPERSIM_TIMEOUT):
+    """Backspace out of the super-sim screens to the pause menu before QUIT GAME.
+
+    The supersim screen's own catalogued exit is Backspace, not Escape: Escape is real play's
+    pause key, so a hold that ends on SUPERSIM_MENU (the `--to supersim` route) must back out
+    once (twice from JUMP FORWARD) before `_quit_game` can pin QUIT GAME.
+    """
+    for _ in range(2):
+        if pilot.screen == "SUPERSIM_MENU":
+            pilot.press("back", wait=2.0)
+            wait_known(pilot, ["PAUSE_MENU"], PAUSE_TIMEOUT, poll=1.0, what="the pause menu")
+            return
+        if pilot.screen == "SUPERSIM_JUMP_FORWARD":
+            pilot.press("back", wait=2.0)
+            continue
+        return
 
 
 def _pause(pilot, tries=3, wait=PAUSE_TIMEOUT, poll=1.0):
@@ -1445,15 +1530,17 @@ def _leave_franchise(pilot, save):
 
 @job("watch-game")
 def watch_game(pilot, save=None, franchise=None, to="kickoff", hold_seconds=60, pack=None, watcher=None,
-               folder=None, progress=None, quit=True):
+               folder=None, progress=None, quit=True, ready_token=None):
     """Start a CAREER-TUNE-* season game, then hold still while a caller records the screen.
 
     The one pilot job allowed to start a game (VISUAL_MOD_CHECK_PLAN.md 2.5). `to="kickoff"`
     presses PLAY SEASON GAME, walks the pregame (an unlabelled SELECT pivot, READY, a ~40 s
     intro), holds Space 1.5 s to kick, then presses NOTHING for `hold_seconds` and reports the
     screen it ended on. `to="halftime"` then walks D2's supersim recipe (`_to_halftime`), takes
-    the half's last snap and holds through the halftime show. The clock, not a timer, is the
-    resume cue (plan R4).
+    the half's last snap and holds through the halftime show. `to="supersim"` kicks off, opens
+    the pause menu's SUPER SIM screen and holds on it. The clock, not a timer, is the resume cue
+    (plan R4). Immediately before any hold the job writes `ready.json` (see `_write_ready`) with
+    the cue anchor, route, screen, clock, hold deadline, pid and the caller's `--ready-token`.
 
     It never calls a play of its own: every control between the kickoff and the half's last play
     is a supersim control (`_take_one_snap` is the only football key press). HUB_GAMEDAY's
@@ -1501,11 +1588,17 @@ def watch_game(pilot, save=None, franchise=None, to="kickoff", hold_seconds=60, 
     _start_game(pilot)
     route = "kickoff"
     if target == "kickoff":
-        screen = _hold(pilot, hold)
+        clock = read_game_clock(pilot.frame)
+    elif target == "supersim":
+        _supersim_menu(pilot)
+        route = "supersim"
         clock = read_game_clock(pilot.frame)
     else:
-        screen, clock = _to_halftime(pilot, hold, progress)
+        _, clock = _to_halftime(pilot, progress)
         route = "supersim"
+    _write_ready(pilot, save, target, hold, clock, ready_token=ready_token,
+                 started=progress.get("started"))
+    screen = _hold(pilot, hold)
     progress.update(route=route, end_screen=screen, clock=clock)
     leaving = {"quit": False, "end_screen": screen}
     if quit:

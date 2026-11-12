@@ -353,9 +353,10 @@ ROUTES = {
     "watch-game": "FRANCHISE_LIST > highlight {tile} > Space > PROGRESSION_WARNING (Proceed) > hub > GAMEDAY > "
                   "highlight PLAY SEASON GAME > Space (this job's policy; the catalog still allows ADVANCE WEEK "
                   "only) > GAME_PREGAME_PIVOT > Space > GAME_PREGAME_READY (READY) > ~40 s intro > GAME_KICKOFF > "
-                  "Space held 1.5 s > {to} > hold {hold_seconds}s pressing nothing [halftime also: Esc > PAUSE_MENU > "
+                  "Space held 1.5 s > ready.json > hold {hold_seconds}s pressing nothing [halftime also: Esc > PAUSE_MENU > "
                   "SUPER > SUPERSIM_MENU > JUMP FORWARD > NEXT QUARTER > CHANGE OF POSSESSION x2 > JUMP TO NEXT PLAY "
-                  "until the clock reads under 20 s in Q2 > Backspace > RESUME > the half's last snap] > leave: "
+                  "until the clock reads 1-19 s in Q2 > Backspace > RESUME > the half's last snap; supersim stops on "
+                  "SUPERSIM_MENU] > leave: "
                   "PAUSE_MENU > highlight QUIT GAME (this job's policy; the catalog does not allow it) > Space > "
                   "QUIT_GAME_CONFIRM > highlight QUIT GAME > Space > FRANCHISE_LIST",
 }
@@ -388,12 +389,14 @@ def build_parser():
     s = sub.add_parser("watch-game", parents=[common],
                        help="start a CAREER-TUNE-* season game and hold still while it is recorded")
     s.add_argument("--save", required=True)
-    s.add_argument("--to", default="kickoff", help="kickoff, or halftime for the supersim recipe")
+    s.add_argument("--to", default="kickoff",
+                   help="kickoff, halftime for the supersim recipe, or supersim to hold on SUPERSIM_MENU")
     s.add_argument("--hold-seconds", type=int, default=60,
                    help="how long to press nothing once the segment starts (1-600)")
     s.add_argument("--pack", help="the pack the game was launched with; recorded in the result")
     s.add_argument("--franchise", help="the TUNE-* franchise already loaded: watch it in place")
     s.add_argument("--no-quit", action="store_true", help="leave the game/franchise open afterwards")
+    s.add_argument("--ready-token", help="the mod-check driver's per-job ready-marker token")
     s = sub.add_parser("catch-up", parents=[common],
                        help="sim the real CAREER-* franchise one week at a time, waiting for the NFL mirror")
     s.add_argument("--save", required=True)
@@ -547,7 +550,7 @@ def _run(args, run_dir, catalog, fmt, out):
             watcher = lambda: False  # noqa: E731
         result = jobs.watch_game(pilot, save=args.save, franchise=args.franchise, to=args.to,
                                  hold_seconds=args.hold_seconds, pack=args.pack, watcher=watcher,
-                                 quit=not args.no_quit)
+                                 quit=not args.no_quit, ready_token=args.ready_token)
     elif args.job == "catch-up":
         kw = {}
         if args.dry_run:

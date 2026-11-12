@@ -43,9 +43,11 @@ def check_result(status: str, measures: Mapping[str, Any] | None, frame: str | N
 
 
 def segment_result(name: str, cue: str | None, recorded_s: int, frames: Iterable[str],
-                   checks: Mapping[str, dict], summary: str | None) -> dict:
+                   checks: Mapping[str, dict], summary: str | None,
+                   preroll_s: float = 0.0) -> dict:
     """One segment's entry, in the report's exact shape."""
-    return {"name": name, "cue": cue, "recorded_s": int(recorded_s), "frames": list(frames),
+    return {"name": name, "cue": cue, "recorded_s": int(recorded_s),
+            "preroll_s": round(float(preroll_s), 3), "frames": list(frames),
             "checks": dict(checks), "summary": summary or MODEL_UNAVAILABLE}
 
 
@@ -66,12 +68,36 @@ def verdict_for(segments: Iterable[Mapping[str, Any]]) -> str:
 
 
 def build_report(save: str, mod: str, segments: Iterable[Mapping[str, Any]], minutes: float,
-                 pack: str | None = None, autosave_written: bool | None = None) -> dict:
-    """Assemble ``report.json``. ``segments`` are ``segment_result`` entries."""
+                 pack: str | None = None, autosave_written: bool | None = None, *,
+                 pack_required: str | None = None, pack_actual: str | None = None,
+                 pack_verified: bool = False, launch: Mapping[str, Any] | None = None,
+                 quit: bool | None = None, quit_route: str | None = None,
+                 end_screen: str | None = None,
+                 operational: Mapping[str, Any] | None = None) -> dict:
+    """Assemble ``report.json``. ``segments`` are ``segment_result`` entries.
+
+    ``verdict`` is the pixels alone (``verdict_for``); ``operational`` carries whether the run
+    actually finished and released the PC. A caller must not read ``verdict`` as completion.
+    """
     entries = list(segments)
+    status = dict(operational or {})
+    status.setdefault("status", "not_started")
+    status.setdefault("why", "")
+    status.setdefault("recovery", None)
+    status.setdefault("job_status", None)
+    status.setdefault("exit_code", None)
     return {"save": str(save), "mod": str(mod), "segments": entries,
             "verdict": verdict_for(entries), "minutes": round(float(minutes), 2),
-            "pack": pack, "autosave_written": autosave_written}
+            "pack": pack, "pack_required": pack_required, "pack_actual": pack_actual,
+            "pack_verified": bool(pack_verified),
+            "launch": dict(launch) if launch is not None else None,
+            "quit": quit, "quit_route": quit_route, "end_screen": end_screen,
+            "operational": status, "autosave_written": autosave_written}
+
+
+def operational_complete(report: Mapping[str, Any]) -> bool:
+    """True only when the run both scored its pixels and released the PC cleanly."""
+    return str((report.get("operational") or {}).get("status")) == "complete"
 
 
 # --------------------------------------------------------------------------- markdown
@@ -106,20 +132,34 @@ def markdown(report: Mapping[str, Any]) -> str:
     """``report.md``: one table per segment, then the model's description."""
     autosave = report.get("autosave_written")
     autosave_text = "unknown" if autosave is None else ("yes" if autosave else "no")
+    operational = report.get("operational") or {}
+    quit_text = "unknown" if report.get("quit") is None else ("yes" if report.get("quit") else "no")
+    pack_text = (f"- pack: `{report.get('pack')}` (required `{report.get('pack_required')}`, "
+                 f"verified: {'yes' if report.get('pack_verified') else 'no'})"
+                 if report.get("pack") else
+                 f"- pack: unknown (required `{report.get('pack_required')}`; the launch did not verify one)")
     lines = [
         f"# Mod check: {report.get('mod')}",
         "",
         f"- save: `{report.get('save')}`",
-        f"- pack: `{report.get('pack')}`" if report.get("pack") else "- pack: unknown (the launch did not report one)",
+        pack_text,
         f"- autosave written: {autosave_text}",
-        f"- verdict: **{report.get('verdict')}**",
+        f"- game quit: {quit_text}"
+        + (f" via {report.get('quit_route')}" if report.get("quit_route") else "")
+        + (f", end screen {report.get('end_screen')}" if report.get("end_screen") else ""),
+        f"- run status: **{operational.get('status', 'not_started')}**"
+        + (f" ({operational.get('why')})" if operational.get("why") else ""),
+        f"- verdict (pixels): **{report.get('verdict')}**",
         f"- minutes: {report.get('minutes')}",
         "",
     ]
+    if operational.get("recovery"):
+        lines += [f"> Recovery: {operational['recovery']}", ""]
     for segment in report.get("segments") or []:
-        cue = segment.get("cue") or "fixed wait"
+        cue = segment.get("cue") or "no cue"
         lines += [f"## {segment.get('name')}", "",
                   f"cue `{cue}`; {segment.get('recorded_s')} s requested; "
+                  f"preroll {segment.get('preroll_s', 0.0):g} s; "
                   f"{len(segment.get('frames') or [])} frame(s).", "",
                   "| asset | status | measures | frame | why |",
                   "|---|---|---|---|---|"]
@@ -155,6 +195,13 @@ def notice_line(report: Mapping[str, Any]) -> str:
         line += f" ({', '.join(parts)})"
     elif not statuses:
         line += " (no assets checked)"
+    operational = report.get("operational") or {}
+    if operational.get("status") not in (None, "complete"):
+        line += f"; run {operational.get('status')}"
+        if operational.get("why"):
+            line += f": {operational['why']}"
+        if operational.get("recovery"):
+            line += f" — {operational['recovery']}"
     return line
 
 
