@@ -1564,11 +1564,14 @@ If you need specific stats, use your database tools before producing your final 
         tool_trace = capture.setdefault("tool_calls", []) if capture is not None else None
         rewrites = capture.setdefault("rewrites", []) if capture is not None else None
 
-        # Fact gate (docs/in_progress/ARTICLE_FACT_GATE_PLAN.md §2.3): every live ARTICLE is judged against the
+        # Fact gate (docs/done/ARTICLE_FACT_GATE_PLAN.md §2.3): every live ARTICLE is judged against the
         # evidence its writer received. The evidence list is kept only when the gate can run, so a mock run or a
         # switched-off gate costs nothing. `fact_gate_status` stays None unless this path judged an article.
+        # A `capture` run is the model-comparison seam (tools/article_model_compare.py): it measures the
+        # writer's own output and never saves, so the gate stays out of it — a correction pass there would
+        # rewrite the text being measured and spend a call the comparison did not budget for.
         fact_gate_enabled = (
-            live and ctype == "ARTICLE"
+            live and ctype == "ARTICLE" and capture is None
             and os.environ.get("MU_NO_LLM", "").strip().lower() not in ("1", "on", "true", "yes")
             and os.environ.get("FACT_GATE_ARTICLES", "").strip() != "0"
         )
@@ -1778,11 +1781,7 @@ If you need specific stats, use your database tools before producing your final 
                                 evidence += "\n\n" + "\n\n".join(evidence_blocks)
                             try:
                                 fact_gate_status, fact_gate_payload, generated_text = self._apply_fact_gate(
-                                    chat, generated_text, evidence, rewrites,
-                                    # A capture/comparison run already owns a client for the model it measures and
-                                    # meters its own tokens: reuse it, so the gate never opens a second, unmetered
-                                    # one. The production path passes None and the checker builds its own client.
-                                    client=client if capture is not None else None)
+                                    chat, generated_text, evidence, rewrites)
                             except Exception as exc:  # noqa: BLE001 - the gate must never fail a write
                                 print(f"⚠️  [FACT GATE] gate failed: {exc}")
                                 fact_gate_status, fact_gate_payload = "skipped", None
@@ -2028,7 +2027,7 @@ If you need specific stats, use your database tools before producing your final 
             "fact_gate": fact_gate_payload,
         }
 
-    def _apply_fact_gate(self, chat, text: str, evidence: str, rewrites, client=None):
+    def _apply_fact_gate(self, chat, text: str, evidence: str, rewrites):
         """Judge `text` against the evidence its writer had and correct it at most once (plan §2.3).
 
         Returns `(status, payload, text)`: status is "clean", "rewritten", "flagged" or "skipped"; payload is
@@ -2037,8 +2036,9 @@ If you need specific stats, use your database tools before producing your final 
         publish. A checker outage is a skip and a failed rewrite leaves the article flagged; nothing here
         ever raises into the save path.
 
-        `client` is a caller-owned client to check with (a capture run reuses the one it already meters);
-        None lets `fact_gate.check` build the checker's own client for `FACT_GATE_MODEL`.
+        The checker builds its own client for `FACT_GATE_MODEL` (a Go checker is a second Go session, never
+        the writer's), so a comparison capture run — which has its own client and must stay untouched —
+        never runs this method at all.
 
         `FACT_GATE_REWRITE=0` (also "off"/"false") is plan R4's switch: the check still runs and the
         verdict and claims are still stored, but no correction message is sent and a contradicting
@@ -2047,7 +2047,7 @@ If you need specific stats, use your database tools before producing your final 
         # R4's switch. Unset or "1" means the correction pass runs; 0/off/false means judge and flag only.
         rewrite_disabled = os.environ.get("FACT_GATE_REWRITE", "").strip().lower() in ("0", "off", "false")
         try:
-            gate = fact_gate.check(text, evidence, client=client)
+            gate = fact_gate.check(text, evidence)
         except Exception as exc:  # noqa: BLE001 - a gate outage must never fail a write
             print(f"⚠️  [FACT GATE] checker failed: {exc}")
             return "skipped", None, text
@@ -2084,7 +2084,7 @@ If you need specific stats, use your database tools before producing your final 
                 print(f"⚠️  [FACT GATE] rewrite failed: {exc}")
             if (retry_text or "").strip():
                 try:
-                    second = fact_gate.check(retry_text, evidence, client=client)
+                    second = fact_gate.check(retry_text, evidence)
                 except Exception as exc:  # noqa: BLE001 - keep the first version when the re-check fails
                     print(f"⚠️  [FACT GATE] re-check failed: {exc}")
                     second = None

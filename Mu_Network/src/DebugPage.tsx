@@ -14,8 +14,8 @@ type Job = { id: string; kind: string; kind_label: string; status: string; exit_
 type Capture = { id: number; folder: string; mode: string; season: number; week: number | null; status: string; error: string | null; loaded_at: string | null };
 type Resumable = { folder: string; mode: string; stage: string };
 type DebugState = { state: { current_season: number; current_week: number }; database: string; captures: Capture[]; writes_enabled: boolean; running_job: Job | null; resumable: Resumable[] };
-type NewsWeekSummary = { season: number; week: number; articles: number; tweets: number };
-type NewsSummary = { current_season: number; current_week: number; summary: NewsWeekSummary[]; total_articles: number; total_tweets: number };
+type NewsWeekSummary = { season: number; week: number; articles: number; tweets: number; flagged?: number };
+type NewsSummary = { current_season: number; current_week: number; summary: NewsWeekSummary[]; total_articles: number; total_tweets: number; total_flagged?: number };
 
 function readToken() {
   try { return localStorage.getItem(TOKEN_KEY) || ""; } catch { return ""; }
@@ -923,7 +923,7 @@ function Control({ token, data, reload }: { token: string; data: DebugState | nu
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-black uppercase tracking-wide">Newsroom & Articles</h3>
             <span className="text-[10px] font-mono text-[var(--gray-500)]">
-              {news ? `${news.total_articles} articles · ${news.total_tweets} posts` : "Loading..."}
+              {news ? `${news.total_articles} articles · ${news.total_tweets} posts${news.total_flagged ? ` · ${news.total_flagged} fact-gate flagged` : ""}` : "Loading..."}
             </span>
           </div>
 

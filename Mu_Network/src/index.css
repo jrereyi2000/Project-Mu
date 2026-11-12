@@ -643,6 +643,12 @@ main { max-width: 1440px; margin: 0 auto; padding: 0 42px 80px; }
 .article-breadcrumb a:hover { color: var(--team-color, var(--red)); }
 .article-breadcrumb b { color: var(--ink); }
 .article-kicker { color: var(--team-color, var(--red)); font: 700 9px var(--font-mono); letter-spacing: .12em; text-transform: uppercase; }
+.article-fact-gate { display: flex; flex-direction: column; gap: 6px; margin: 14px 0 4px; padding: 12px 14px; border-left: 3px solid #d9a300; background: #fff8e1; border-radius: 4px; font-size: 13px; line-height: 1.45; color: #3b3b3b; }
+.article-fact-gate strong { font: 700 10px var(--font-mono); letter-spacing: .1em; text-transform: uppercase; color: #8a6d00; }
+.article-fact-gate ul { margin: 6px 0 0 16px; padding: 0; list-style: disc; }
+.article-fact-gate li { font-size: 12px; color: #555; }
+.article-fact-gate li em { font-style: normal; font-weight: 600; }
+.article-fact-gate-note { margin: 10px 0 0; font: 600 10px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--gray-500, #777); }
 .article-header h1 { max-width: 1000px; margin: 12px 0 18px; font-size: clamp(47px, 6.6vw, 87px); line-height: .88; letter-spacing: -.06em; text-transform: uppercase; }
 .article-header > p { max-width: 850px; margin: 0; color: #55575d; font-size: 16px; line-height: 1.55; }
 .article-byline { margin-top: 31px; padding-top: 20px; border-top: 1px solid var(--gray-100); display: flex; align-items: center; gap: 13px; }

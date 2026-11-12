@@ -175,7 +175,9 @@ def get_news_summary():
         rows = conn.execute("""
             SELECT season, week,
                    COUNT(*) FILTER (WHERE content_type = 'ARTICLE')::int AS articles,
-                   COUNT(*) FILTER (WHERE content_type = 'TWEET')::int AS tweets
+                   COUNT(*) FILTER (WHERE content_type = 'TWEET')::int AS tweets,
+                   -- The fact gate's verdict (§7.3): articles it stored still contradicting their evidence.
+                   COUNT(*) FILTER (WHERE fact_gate_status = 'flagged')::int AS flagged
             FROM news_feed
             GROUP BY season, week
             ORDER BY season DESC, week DESC
@@ -183,7 +185,8 @@ def get_news_summary():
         totals = conn.execute("""
             SELECT
                 COUNT(*) FILTER (WHERE content_type = 'ARTICLE')::int AS total_articles,
-                COUNT(*) FILTER (WHERE content_type = 'TWEET')::int AS total_tweets
+                COUNT(*) FILTER (WHERE content_type = 'TWEET')::int AS total_tweets,
+                COUNT(*) FILTER (WHERE fact_gate_status = 'flagged')::int AS total_flagged
             FROM news_feed
         """).fetchone()
     return {
@@ -192,6 +195,7 @@ def get_news_summary():
         "summary": rows,
         "total_articles": totals["total_articles"] if totals else 0,
         "total_tweets": totals["total_tweets"] if totals else 0,
+        "total_flagged": totals["total_flagged"] if totals else 0,
     }
 
 

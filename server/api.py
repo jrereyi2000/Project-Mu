@@ -3012,6 +3012,7 @@ def get_weekly_news(week: int, season: Optional[int] = None):
                 SELECT DISTINCT ON (n.id)
                        n.id, n.season, n.week, n.team_id, n.content_type, n.persona,
                        n.article_type, n.slot, n.headline, n.excerpt, n.content, n.created_at,
+                       n.fact_gate_status,
                        am.display_name, am.handle, am.archetype
                 FROM news_feed n
                 LEFT JOIN agent_memories am ON (
@@ -3115,6 +3116,10 @@ def get_weekly_news(week: int, season: Optional[int] = None):
                     },
                     "team_id": a["team_id"],
                     "created_at": a["created_at"].isoformat() if a["created_at"] else None,
+                    # The write-time fact gate's verdict (§7.3): 'flagged' marks an article whose claims
+                    # still contradict the evidence its writer had. NULL = written before the gate.
+                    "fact_gate_status": a["fact_gate_status"],
+                    "fact_gate_flagged": a["fact_gate_status"] == "flagged",
                     "tagged_teams": teams_by_art.get(art_id, []),
                     "tagged_players": players_by_art.get(art_id, [])
                 }
@@ -3154,6 +3159,7 @@ def get_article_detail(article_id: int):
             cur.execute("""
                 SELECT n.id, n.season, n.week, n.team_id, n.content_type, n.persona,
                        n.article_type, n.slot, n.headline, n.excerpt, n.content, n.created_at,
+                       n.fact_gate_status, n.fact_gate,
                        am.display_name, am.handle, am.archetype, am.bio,
                        t_auth.name AS author_team_name, t_auth.abbreviation AS author_team_abbr
                 FROM news_feed n
@@ -3250,6 +3256,10 @@ def get_article_detail(article_id: int):
                 },
                 "team_id": article["team_id"],
                 "created_at": article["created_at"].isoformat() if article["created_at"] else None,
+                # The fact gate's stored verdict (§3.3 news_feed, §7.3): status, the checked claims,
+                # the checker model and the two versions' contradiction counts. Never the article text.
+                "fact_gate_status": article.get("fact_gate_status"),
+                "fact_gate": article.get("fact_gate"),
                 "tagged_teams": [{
                     "id": t["id"], "name": t["name"], "city": t["city"],
                     "abbr": display_team_abbr(t["abbreviation"]),

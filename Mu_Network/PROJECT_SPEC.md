@@ -59,9 +59,9 @@ The frontend is powered by a live FastAPI backend (`server/api.py`) backed by a 
   - `StatsPage.tsx`: 32-team and player league-wide leaderboards.
   - `StandingsPage.tsx`: Division, Conference / Playoff Seed, and League standings.
 - `src/components/newsroom/`:
-  - `NewsroomHomePage.tsx`: Editorial front page with edition week selector, Hero story, All-Time Record Breaker spotlight, secondary/feature stories, trending local beat coverage, and top 3 power rankings card.
+  - `NewsroomHomePage.tsx`: Editorial front page with edition week selector, Hero story, All-Time Record Breaker spotlight, secondary/feature stories, trending local beat coverage, and top 3 power rankings card; a story whose article came back `fact_gate_status: 'flagged'` shows `⚠ FACT-CHECK FLAG ·` in its kicker (root spec §7.3).
   - `PowerRankingsPage.tsx`: 32-team power rankings board, jump pills, and weekly rankings archives.
-  - `ArticlePage.tsx`: Long-form article page.
+  - `ArticlePage.tsx`: Long-form article page. A flagged article (root spec §7.3, `/api/news/article/{id}`) opens with a `Fact-check flag` notice naming the claims that still contradict the evidence its writer had, each with its evidence quote; a `rewritten` article carries a one-line "Corrected once after a fact check" note; nothing is hidden.
   - `ArticleMarkdown.tsx`: Markdown renderer for headers, quotes, tables, and lists.
   - `AuthorPage.tsx`: Beat writer and national columnist profile archive.
 - `src/components/history/`:

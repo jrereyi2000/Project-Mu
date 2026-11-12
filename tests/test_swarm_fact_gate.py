@@ -111,10 +111,12 @@ def _saving_dispatcher(tools=None, columns=True):
 
 
 def _save(dispatcher, conn, client, capture=None, **kwargs):
+    # capture=None is the production write path — the only one the gate runs on (a capture run is the
+    # model-comparison seam and is deliberately not gated).
     with mock.patch("newsroom.swarm_dispatcher.psycopg.connect", return_value=conn):
         return dispatcher._execute_agent(
             _prompt(), 2036, 18, None, live=True, model="muse-spark-1.3-contributor",
-            save_to_db=True, client=client, capture={} if capture is None else capture, **kwargs)
+            save_to_db=True, client=client, capture=capture, **kwargs)
 
 
 # ------------------------------------------------------------------------------------------------ the gate ---
@@ -126,19 +128,17 @@ def test_a_contradiction_triggers_one_rewrite_one_recheck_and_records_it():
 
     dispatcher = _dispatcher(tools=[lookup])
     client = _Client(["# Headline\n\nIsaiah Carson threw for 4,102 yards.", "# Headline\n\nHollis threw for 3,900."])
-    capture = {}
     with mock.patch("newsroom.swarm_dispatcher.fact_gate.check",
                     side_effect=[_gate(1), _gate(0)]) as check, \
          mock.patch("newsroom.swarm_dispatcher.fact_gate.rewrite_prompt", return_value="fix it") as prompt:
         result = dispatcher._execute_agent(_prompt(), 2036, 18, None, live=True,
                                            model="muse-spark-1.3-contributor", save_to_db=False,
-                                           client=client, capture=capture)
+                                           client=client)
 
     assert check.call_count == 2                     # one check, one re-check, never a second rewrite
     assert prompt.call_count == 1
     assert client.models.calls == 2                  # one writer call, one correction call
-    assert capture["rewrites"] == ["FACT_GATE"]
-    assert capture["text"].startswith("# Headline\n\nHollis")   # the corrected version is published
+    assert result["text"].startswith("# Headline\n\nHollis")   # the corrected version is published
     assert result["fact_gate_status"] == "rewritten"
     payload = result["fact_gate"]
     assert payload["rewritten"] is True
@@ -151,7 +151,7 @@ def test_a_contradiction_triggers_one_rewrite_one_recheck_and_records_it():
     assert sent_evidence.startswith("Write the recap.")
     assert "TOOL lookup(" in sent_evidence and "18C" in sent_evidence
     # the re-check judges the rewrite against the same evidence
-    assert check.call_args_list[1][0][0] == capture["text"]
+    assert check.call_args_list[1][0][0] == result["text"]
     assert check.call_args_list[1][0][1] == sent_evidence
     assert payload["claims"] == []                  # the kept, corrected version contradicts nothing
 
@@ -159,13 +159,12 @@ def test_a_contradiction_triggers_one_rewrite_one_recheck_and_records_it():
 def test_a_still_contradicted_article_saves_flagged_with_its_claims():
     dispatcher, conn = _saving_dispatcher(columns=True)
     client = _Client(["first draft", "second draft"])
-    capture = {}
     with mock.patch("newsroom.swarm_dispatcher.fact_gate.check", side_effect=[_gate(1), _gate(1)]), \
          mock.patch("newsroom.swarm_dispatcher.fact_gate.rewrite_prompt", return_value="fix it"):
-        result = _save(dispatcher, conn, client, capture=capture)
+        result = _save(dispatcher, conn, client)
 
     assert result["fact_gate_status"] == "flagged"
-    assert capture["rewrites"] == ["FACT_GATE"]
+    assert result["fact_gate"]["rewritten"] is True
     (sql, params), = conn.cur.inserts()
     assert "fact_gate_status" in sql and "fact_gate" in sql
     assert params[-2] == "flagged"
@@ -231,7 +230,7 @@ def test_fact_gate_articles_zero_leaves_the_writer_path_as_today(monkeypatch):
 
     dispatcher, conn = _saving_dispatcher(tools=[lookup], columns=False)
     client = _Client(["a true article"])
-    capture = {}
+    capture = {}                                     # a capture run with the gate off: today's path exactly
     monkeypatch.setenv("FACT_GATE_ARTICLES", "0")
     with mock.patch("newsroom.swarm_dispatcher.fact_gate.check") as check:
         result = _save(dispatcher, conn, client, capture=capture)
@@ -253,15 +252,13 @@ def test_fact_gate_rewrite_zero_flags_without_a_correction_pass(monkeypatch, cap
     dispatcher, conn = _saving_dispatcher(columns=True)
     client = _Client(["a draft that contradicts the evidence"])
     monkeypatch.setenv("FACT_GATE_REWRITE", "0")
-    capture = {}
     with mock.patch("newsroom.swarm_dispatcher.fact_gate.check", return_value=_gate(2)) as check, \
          mock.patch("newsroom.swarm_dispatcher.fact_gate.rewrite_prompt") as prompt:
-        result = _save(dispatcher, conn, client, capture=capture)
+        result = _save(dispatcher, conn, client)
 
     check.assert_called_once()                       # one check, no re-check
     prompt.assert_not_called()
     assert client.models.calls == 1                  # one writer call, no correction call
-    assert capture["rewrites"] == []
     assert result["fact_gate_status"] == "flagged"
     payload = result["fact_gate"]
     assert payload["rewritten"] is False
@@ -352,16 +349,34 @@ def test_a_rewrite_that_returns_nothing_keeps_the_flagged_article():
         return chat
     client.chats.create = create
 
-    capture = {}
     with mock.patch("newsroom.swarm_dispatcher.fact_gate.check", return_value=_gate(1)), \
          mock.patch("newsroom.swarm_dispatcher.fact_gate.rewrite_prompt", return_value="fix it"):
         result = dispatcher._execute_agent(_prompt(), 2036, 18, None, live=True,
                                            model="muse-spark-1.3-contributor", save_to_db=False,
-                                           client=client, capture=capture)
+                                           client=client)
 
     assert result["fact_gate_status"] == "flagged"
     assert result["text"] == "first draft"            # the contradicting text stands, visibly flagged
-    assert capture["rewrites"] == ["FACT_GATE"]
+    assert result["fact_gate"]["rewritten"] is True
+
+
+def test_a_comparison_capture_run_is_not_gated():
+    """The capture seam records the writer's raw output (tools/article_model_compare.py): no checker call,
+    no correction pass, no evidence list, whatever the environment says."""
+    dispatcher = _dispatcher(tools=[])
+    client = _Client(["raw text"])
+    capture = {}
+    with mock.patch("newsroom.swarm_dispatcher.fact_gate.check") as check:
+        result = dispatcher._execute_agent(_prompt(), 2036, 18, None, live=True,
+                                           model="muse-spark-1.3-contributor", save_to_db=False,
+                                           client=client, capture=capture)
+
+    check.assert_not_called()
+    assert client.models.calls == 1
+    assert result["fact_gate"] is None                # no verdict on a run that is never saved
+    assert result["fact_gate_status"] in (None, "skipped")
+    assert capture["text"] == "raw text"
+    assert capture["rewrites"] == []
 
 
 def test_an_offline_mock_run_is_not_gated():

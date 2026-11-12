@@ -81,7 +81,7 @@ export function NewsroomHomePage({
             const heroAuthor = hero?.author?.display_name || "Bill Barnwell";
             const heroInitials = heroAuthor.split(" ").map((p: string) => p[0]).join("").slice(0, 2).toUpperCase() || "BB";
             const heroRole = hero?.author?.archetype ? hero.author.archetype.replace(/_/g, " ") : "National Writer";
-            const heroSlotLabel = hero?.slot ? hero.slot.toUpperCase() : (week === 24 ? "OFFSEASON LEAD · SUPER BOWL RECAP" : "GAME OF THE WEEK");
+            const heroSlotLabel = (hero?.fact_gate_status === "flagged" ? "⚠ FACT-CHECK FLAG · " : "") + (hero?.slot ? hero.slot.toUpperCase() : (week === 24 ? "OFFSEASON LEAD · SUPER BOWL RECAP" : "GAME OF THE WEEK"));
 
             return (
               <article className="hero-story">
@@ -333,13 +333,14 @@ export function NewsroomHomePage({
                       : story.article_type
                         ? story.article_type.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase())
                         : (story.kicker || "Analysis");
+                    const shownKicker = story.fact_gate_status === "flagged" ? `⚠ FACT-CHECK FLAG · ${kicker}` : kicker;
                     const readTime = story.read || "7 min read";
 
                     return (
                       <article className={`story-card ${index === 0 ? "feature-card" : ""} ${isRecord ? "record-breaker-card" : ""}`} key={story.id || title}>
                         <span className="story-number">0{index + 1}</span>
                         <div className="story-copy">
-                          <span className="kicker">{kicker}</span>
+                          <span className="kicker">{shownKicker}</span>
                           <a href={artLink}><h3>{title}</h3></a>
                           <p>{blurb}</p>
                           <div className="author-row">

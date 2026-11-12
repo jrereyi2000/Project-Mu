@@ -20,6 +20,9 @@ export function ArticlePage({ articleId }: { articleId: string }) {
     }
   }, [articleId, isDbArticle]);
 
+  const factGateStatus: string | null = dbArticle?.fact_gate_status ?? null;
+  const factGateClaims: any[] = Array.isArray(dbArticle?.fact_gate?.claims) ? dbArticle.fact_gate.claims : [];
+
   const nationalMatch = articleId.match(/^national-(\d+)$/);
   const localMatch = articleId.match(/^local-([a-z]+)$/);
   const teamHeroMatch = articleId.match(/^team-hero-([a-z]+)$/);
@@ -116,6 +119,31 @@ export function ArticlePage({ articleId }: { articleId: string }) {
         <header className="article-header">
           <div className="article-breadcrumb"><a href="#">The Newsroom</a><span>/</span><b>{data.category}</b></div>
           <span className="article-kicker">{data.category}</span>
+          {factGateStatus === "flagged" && (
+            <div className="article-fact-gate" role="note">
+              <strong>Fact-check flag</strong>
+              <span>
+                This article still contradicts the evidence its writer retrieved
+                {factGateClaims.length > 0 ? ` (${factGateClaims.length} claim${factGateClaims.length === 1 ? "" : "s"})` : ""}.
+                It is published rather than hidden, and the claims below are the ones a checker could not reconcile.
+              </span>
+              {factGateClaims.length > 0 && (
+                <ul>
+                  {factGateClaims.slice(0, 6).map((claim: any, i: number) => (
+                    <li key={i}>
+                      <em>{claim.claim}</em>
+                      {claim.evidence ? <span> — evidence: {claim.evidence}</span> : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+          {factGateStatus === "rewritten" && (
+            <p className="article-fact-gate-note">
+              Corrected once after a fact check against the evidence its writer had.
+            </p>
+          )}
           <h1>{data.title}</h1>
           <p>{data.dek}</p>
           <div className="article-byline">
