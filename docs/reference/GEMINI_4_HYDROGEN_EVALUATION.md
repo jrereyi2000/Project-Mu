@@ -17,7 +17,7 @@
 3. **It satisfies the different-model rule cleanly.** `[M]` The rule (`AUDITOR_MODEL_EVALUATION.md` D5, `audit/SKILL.md:10`) is that the auditor must not be the builders' family: the builders are DeepSeek, Hydrogen is Google, and Argon (same Gemini 4 family) is already a sanctioned auditor. It never audits its own work because it would write nothing.
 4. **But the two things that stopped audit-5 are not fixed by it, and one of them is worse.** `[M]` audit-5 died at **5-hour 99% / weekly 72%** with no warning; an Antigravity auditor has **no local quota probe** (`agy` has no `usage` subcommand, `tools/usage_check.py` reads Claude's file, `tools/go_usage.py` reads Go's) — the same "runs until the API refuses" failure, exactly as `AUDITOR_MODEL_EVALUATION.md` §2.4 found for GLM. And there is **no EQ-Bench entry** for it `[M]`, so nothing published speaks to prose or to Mu's citation discipline.
 5. **For every writer tier it is the wrong model twice over.** It would cost **~$216/mo** at Mu's measured newsroom mix (inferred) against **~$29/mo** for the `glm-5.3-flash` that writes the desk today `[M]`, with no published voice score at all `[M]`. It is a Carbon-derived "everyday coding and agentic workflows" model `[P]`, not a voice model.
-6. **Direct answer on audit fitness:** on today's evidence it is **not auditor of record**, and it is a plausible **second auditor** after one cheap blind re-audit and a quota watcher. That is a measurement recommendation, not a verdict — a DeepSeek-routed session never audits, and nothing below authorizes one. **JR decides.**
+6. **Direct answer on audit fitness:** on today's evidence it is **not auditor of record**, and it is a credible **second auditor** — after one blind re-audit (**run the same day: the known defect found first time, 24/24 citations resolved**, §3.5) and a quota watcher, which does not exist yet. That is a measurement recommendation, not a verdict — a DeepSeek-routed session never audits, and nothing below authorizes one. **JR decides.**
 
 ---
 
@@ -56,7 +56,7 @@
 | FrontierCode 2.0 | 38.2% | — | Cognition | `[P]` |
 | **EQ-Bench Creative Writing v3** | **no entry** (0 occurrences of "hydrogen" in the leaderboard's embedded data; `gemini-4-argon` is present) | — | — | `[M]` |
 | **EQ-Bench Longform** | **no entry** (same check, 1.2 MB of chart data) | — | — | `[M]` |
-| Mu audit record | **none** — no report in `data/audit_reports/` | — | — | `[M]` |
+| Mu audit record | **one measured trial** (§3.5: known defect found first time, 24/24 citations, 8 min) — **no audit verdict**, and no report in `data/audit_reports/` | — | `[M]` |
 
 Two readings that matter. **Its agentic evidence is real but second-tier:** it beats Sonnet 5.5 on knowledge-work and computer-use-style tasks, loses to it on both terminal benchmarks, and sits between Sol and Argon on the independent TB 4.0. `[P]` **Its prose is simply unmeasured:** the model card sells "ready-to-go writing", but neither EQ-Bench table has a row, and the only writer-ish evidence in the repo is that Gemini-family models score mid-table on those benches (`gemini-4-argon` 1757.8 Elo / 80.9 longform; `gemini-3.8-flash` 1744.4 / 76.8) `[M]`.
 
@@ -175,6 +175,27 @@ Score it on `AUDITOR_MODEL_EVALUATION.md` §5's gate, unchanged:
 
 **What the trial cannot tell you:** whether it writes a good *fix brief* — that is the builder's judgement, and it is condition 4.
 
+### 3.5 The trial, run (2026-11-12, `gemini-4-hydrogen-high`)
+
+JR started a Hydrogen session on the Antigravity CLI at 16:10 EST; it answered on the board at 16:19 (M-0702) and left two reports. Everything below is **measured**, and none of it is an audit verdict: this session does not audit, and the range it reviewed is still unaudited for Project Mu's purposes.
+
+**Setup.** Two clean snapshots made with `git archive` (no `.git`, no `data/`, no board) in `/tmp/opencode/hydrogen-trial/`: **H1** at `26d1141` (`a641efa^`), briefed as the mirror's U18 R3/R4 trade-and-list work audited against `NFL_WEEKLY_MIRROR_PLAN.md`; **H3** at `feb0c29`, briefed as "audit this change cold", where *nothing to fix* is the correct outcome. Both briefs withheld the answer, named no file, function or verdict, and forbade network, model calls, database, Madden, save writes and any read of the main checkout. 75-minute cap.
+
+| Check (`AUDITOR_MODEL_EVALUATION.md` §5) | Result | Label |
+|---|---|---|
+| Known defect found, with a repro | **Yes, exactly.** H1: `Plan.trade_player` writes `"Roster"` into `self.view` at `pipeline/league_office.py:776`, so `MirrorAdapter.chart_override` (`league_office_mirror.py:199`) drops the promoted man from the same write's chart. It named **eight** further consumers (`Plan.rosters`, `step_coach_charts`, `Plan._charts`, `step_legality`, `step_injuries`, `step_drift`, `set_contract`, `retirement_window._is_active`), the two tests that missed it, and an offline repro with observed vs expected values (`('Roster', 0)` vs `('Signed', 0)`, `chart_override(0) == {}` vs `{'WR': [6]}`) | `[M]` |
+| 100% of cited `file:line` resolve | **24 of 24** in H1, **23 of 23** in H3, against the pinned trees (mechanical `score.py`) | `[M]` |
+| ≤1 non-reproducing finding; the control clean | 0 in H1. **H3 did not return the null:** it audited the whole snapshot rather than the one-line docs change and reported 3 findings — all three citation-accurate at the pin, so not invented, but the control did not run as designed (**my brief's flaw**, not its error) | `[M]` |
+| A report a builder can fix from in one pass | Yes on inspection: root cause, every affected caller, the tests to add with their assertions, the one-line fix, expected values, and what it checked and found fine | `[M]` |
+| Credit burn within 2× | **Unmeasurable** — no Antigravity usage instrument; wall time **8 min** for both batches (H1 in **3 m 44 s**) | `[M]` / `[U]` burn |
+| Six hours without losing the pin | Not tested (8 minutes); it did hold two pins and compared the trees | `[M]` |
+| A quota watcher | **Still absent** — the one condition it cannot meet today | `[M]` |
+| Blindness | **No contamination found**: zero answer-only tokens (the pgid it used is the tree's own fixture, not the audit's), phrasing differs from the board's, and every citation is in-tree | `[M]` |
+
+**What it found outside the brief.** H3's three findings are about the article-writer default, not the docs commit: (1) `SwarmDispatcher.dispatch_team_local` (`swarm_dispatcher.py:2441`) defaults `model` to `DEFAULT_WRITER_MODEL` (`glm-5.3-flash`) and forwards it to `run_team_social`, which at that pin built Google's `genai.Client` — fixed later the same day by `6f7abe8`/`80ec761`, which added `is_go_model` → `go_client()`; (2) `custom_commission.classify_prompt` still defaults to `DEFAULT_WRITER_MODEL` while constructing `genai.Client` (`custom_commission.py:76`, `:108`) — **the same pattern is still on `main` at `fe8eeff`**, with `server/debug_api.py:932` and the CLI as its live callers `[M]`; (3) a LOW about `.rsplit("/", 1)[0]` on a drive-root `MMC_MOD_MANAGER_EXE` in `game_launch.py:88`. **None of these is a verdict.** (1) and (3) are facts about a pinned tree and its later fix; (2) is a fact about `main`, and whether it is a defect is for an Opus/Codex/Argon auditor to decide — it is now the most concrete item a real audit queue could pick up.
+
+**What the trial changes.** One batch is not the §5 gate ("≥2 of 3 known defects"), but the one known answer available was found first time, at the right line, with a repro, in under four minutes, and every citation in both reports resolves. On this evidence Hydrogen is a **credible second auditor and a plausible first-pass sweeper**, and it is still **not** auditor of record: the gate is unmet at 1 of 3 known answers, the burn is unmeasured, and the quota watcher does not exist. The next step is H2 (the fact-gate R1 range) on a clean tree — the board now carries that range's verdict, so it needs the same sealed setup — plus one more false-positive control that is scoped to a *single* change rather than a whole tree.
+
 ---
 
 ## 4. What it must not be used for
@@ -194,7 +215,7 @@ Score it on `AUDITOR_MODEL_EVALUATION.md` §5's gate, unchanged:
 
 In rough order of leverage:
 
-1. **The blind re-audit (§3.4)**, H1 first — one batch, one answer key, and it converts the whole audit question from published to measured.
+1. **~~The blind re-audit (§3.4).~~ Done 2026-11-12 (§3.5): H1 found first time, 24/24 citations.** Next: **H2** (the fact-gate R1 range) on the same sealed setup, plus a false-positive control scoped to a single change, to complete §5's "≥2 of 3" and "clean control" conditions.
 2. **A quota number.** Either find Antigravity's usage API (a Console/plan endpoint, or a documented `agy` flag) or accept that the trial's own token count, taken by hand, is the sizing evidence. Without it, auditing on the plan route cannot be run unattended.
 3. **A `gemini:` backend in `tools/madden_pilot/vision.py`** and one `vision_bench` run on the same 202 frames — that is the only thing that can settle the screen-reader question, and it also gives the pilot an accuracy ceiling for a cloud model.
 4. **One judged article week** on the Week 18 archive (`tools/article_model_compare.py` + `article_factcheck.py`): if it outscores `glm-5.3-flash` on JR's read *and* on contradictions, the price question becomes real; if not, it is closed for the desk.
