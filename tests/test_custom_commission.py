@@ -170,6 +170,7 @@ class TestClassifyPromptRoutesByModel(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, \
                 patch.dict(os.environ, {}, clear=True), \
                 patch.object(cc, "ROOT", tmp), \
+                patch("newsroom.tool_loop.go_transport.go_api_key", lambda: None), \
                 patch("google.genai.Client", side_effect=AssertionError("a client was built")) as built:
             with self.assertRaises(ValueError) as ctx:
                 cc.classify_prompt("Bills third downs", season=2028, week=10)
