@@ -269,6 +269,11 @@ def run_arm(packet, arm, tools, model, budget, directory):
     key = api_key()
     if not key:
         raise RuntimeError('No API key configured')
+    from newsroom.tool_loop.go_transport import is_go_model
+    if is_go_model(model) and ':' not in (model or ''):
+        # The Gemini arm builds a Google client: a Go id must never be sent to it (AUDIT_QUEUE_INVENTORY R11).
+        raise RuntimeError(f'{model} is served by OpenCode Go, not Gemini: run it with --provider deepseek '
+                           '(tools/dossier_pilot.py run_deepseek_arm)')
     first_call = len(budget.rows)
     trace = []
     exposed = []

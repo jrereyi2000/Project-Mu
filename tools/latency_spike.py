@@ -69,7 +69,14 @@ def run_inbox(calls=20, model=None):
     prompt = build_inbox_appraisal_inputs(season=2026, week=8, limit=1)[0].prompt
     llm = make_llm("inbox", model=model) if model else make_llm("inbox")
     if llm is None:
-        raise SystemExit("no inbox model: set GEMINI_API_KEY (or MU_INBOX_LLM is 0 / no key)")
+        # Name the key the *chosen* provider needs: the Go route is opened by INBOX_MODEL/LLM_PROVIDER_INBOX
+        # (or a Go model id) and needs OPENCODE_GO_API_KEY, not GEMINI_API_KEY (AUDIT R6 F5).
+        from engines.gm_llm import DEFAULT_MODEL
+        from engines.llm_provider import resolve_provider
+        provider = resolve_provider(label="inbox", model=model or DEFAULT_MODEL)
+        key = "OPENCODE_GO_API_KEY" if provider == "go" else "GEMINI_API_KEY"
+        raise SystemExit(f"no inbox model: set {key} for the {provider} route it resolves to "
+                         f"(or MU_INBOX_LLM is 0 / no key)")
 
     llm("Reply with exactly: OK")          # warm-up, not measured
     if hasattr(llm, "meter"):

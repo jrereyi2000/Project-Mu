@@ -596,31 +596,35 @@ def model_provider(model: str | None = None, provider: str | None = None,
 
 def summaries_enabled(api_key: str | None, model: str) -> bool:
     """The ``refresh_season_summaries`` gate: a Gemini run needs its API key, exactly as before; a Go run needs
-    ``OPENCODE_GO_API_KEY`` instead, so a Go model is never skipped just because ``GEMINI_API_KEY`` is unset."""
-    if api_key:
-        return True
-    if model_provider(model=model, label="summary", source="agent_memory") != "go":
-        return False
-    from newsroom.tool_loop.go_transport import go_api_key
-    return bool(go_api_key())
+    ``OPENCODE_GO_API_KEY`` instead, so a Go model is never skipped just because ``GEMINI_API_KEY`` is unset — and
+    never *enabled* by a Gemini key either (AUDIT R6 F1: the provider is settled before the key is looked at)."""
+    if model_provider(model=model, label="summary", source="agent_memory") == "go":
+        from newsroom.tool_loop.go_transport import go_api_key
+        return bool(go_api_key())
+    return bool(api_key)
 
 
 def llm_text(prompt: str, label: str = "agent_memory", model: str | None = None,
              thinking_level: str | None = None, api_key: str | None = None,
              client=None, provider: str | None = None, fallback_model: str | None = None) -> str:
-    """Provider-neutral text helper for agent memory, supporting Ollama, Gemini and OpenCode Go with fallback."""
+    """Provider-neutral text helper for agent memory, supporting Ollama, Gemini and OpenCode Go with fallback.
+
+    ``api_key`` is a Gemini key. On a Go route it is dropped: OpenCode Go is authenticated by
+    ``OPENCODE_GO_API_KEY`` only, so a caller passing the dispatcher's Gemini key can neither spend it against
+    Go nor have it cached as the process's Go credential (AUDIT R6 F1)."""
     from engines.llm_provider import generate_text
+    resolved = model_provider(model=model, provider=provider, label=label or "agent_memory")
     return generate_text(
         prompt=prompt,
         source="agent_memory",
         label=label,
         model=model,
-        provider=model_provider(model=model, provider=provider, label=label or "agent_memory"),
+        provider=resolved,
         fallback_model=fallback_model,
         thinking_level=thinking_level,
         temperature=0.3,
         client=client,
-        api_key=api_key,
+        api_key=None if resolved == "go" else api_key,
     )
 
 

@@ -336,7 +336,34 @@ class ProviderRoutingTests(unittest.TestCase):
         with mock.patch("newsroom.tool_loop.go_transport.go_api_key", lambda: None):
             self.assertFalse(summaries_enabled(None, "glm-5.3-flash"))      # no key for the provider it chose
             self.assertFalse(summaries_enabled(None, "gemini-3.8-flash"))   # the Gemini gate is unchanged
-        self.assertTrue(summaries_enabled("gemini-key", "glm-5.3-flash"))
+            # AUDIT R6 F1: a Gemini key never enables a Go run, and never stands in for OPENCODE_GO_API_KEY.
+            self.assertFalse(summaries_enabled("gemini-key", "glm-5.3-flash"))
+
+    def test_a_gemini_key_is_never_forwarded_to_a_go_model(self):
+        """AUDIT R6 F1: the dispatcher's Gemini key stays on the Gemini route."""
+        sent = {}
+        with mock.patch("engines.llm_provider.generate_text",
+                        lambda prompt, **kw: sent.update(kw) or "takes"):
+            gemini_text("GEMINI_KEY", "glm-5.3-flash", "Extract takes", label="takes #9")
+        self.assertEqual(sent["provider"], "go")
+        self.assertIsNone(sent["api_key"])
+        sent.clear()
+        with mock.patch("engines.llm_provider.generate_text",
+                        lambda prompt, **kw: sent.update(kw) or "summary"):
+            gemini_text("GEMINI_KEY", "gemini-3.8-flash", "Summarize", label="summary 1")
+        self.assertEqual((sent["provider"], sent["api_key"]), ("gemini", "GEMINI_KEY"))
+
+    def test_a_go_take_extraction_without_the_go_key_raises_instead_of_calling_out(self):
+        """AUDIT R6 F1: with GEMINI_API_KEY set and OPENCODE_GO_API_KEY missing, the Go call fails loudly —
+        it never makes a network request authenticated with the Gemini key."""
+        import engines.llm_provider as provider
+        with mock.patch.object(provider, "_GO_CLIENT", None), \
+                mock.patch("newsroom.tool_loop.go_transport.go_api_key", lambda: None), \
+                mock.patch("google.genai.Client", side_effect=AssertionError("a client was built")) as built:
+            with self.assertRaises(ValueError) as ctx:
+                gemini_text("GEMINI_KEY", "glm-5.3-flash", "Extract takes", label="takes #9")
+        self.assertEqual(str(ctx.exception), "OPENCODE_GO_API_KEY is not set")
+        built.assert_not_called()
 
     def test_a_go_summary_run_opens_the_database_without_a_gemini_key(self):
         import psycopg

@@ -382,3 +382,42 @@ class GoDefaultsUnchangedTests(unittest.TestCase):
             for label in ("press", "agent_memory", "inbox", "scouting_notes", "agent_wire", "gm_rationale"):
                 self.assertEqual(resolve_provider(label), "gemini", label)
                 self.assertEqual(resolve_model("gemini", label), DEFAULT_GEMINI_MODEL, label)
+
+
+class GoKeyIsolationTests(unittest.TestCase):
+    """AUDIT R6 F1 and AUDIT_QUEUE_INVENTORY.md R11: a caller's Gemini key can never authenticate, or become
+    the cached credential of, the process's OpenCode Go client, and a bare Go id never resolves to Gemini."""
+
+    def setUp(self):
+        clear_go_client()
+
+    def tearDown(self):
+        clear_go_client()
+
+    def test_resolve_provider_sends_a_bare_go_id_to_go(self):
+        with mock.patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(resolve_provider(model="glm-5.3-flash"), "go")
+            self.assertEqual(resolve_provider(model="muse-spark-1.3-contributor"), "go")
+            self.assertEqual(resolve_provider(model="gemini-3.8-flash"), "gemini")
+            self.assertEqual(resolve_provider(model="qwen2.5:14b"), "gemini")   # an Ollama tag is not a Go id
+
+    def test_a_caller_key_never_reaches_go_client(self):
+        client = FakeGoClient("go text")
+        with mock.patch("newsroom.tool_loop.go_transport.go_client", return_value=client) as built, \
+                mock.patch("newsroom.tool_loop.go_transport.go_api_key", return_value="oc_sk_env"):
+            text = generate_text("p", source="agent_memory", model="glm-5.3-flash",
+                                 api_key="GEMINI_KEY", log_tokens=False)
+
+        self.assertEqual(text, "go text")
+        built.assert_called_once_with()          # no key argument: the transport reads OPENCODE_GO_API_KEY itself
+
+    def test_a_gemini_key_cannot_stand_in_for_the_go_key(self):
+        with mock.patch("google.genai.Client", side_effect=AssertionError("a client was built")) as built, \
+                mock.patch("newsroom.tool_loop.go_transport.go_api_key", return_value=None):
+            with self.assertRaises(ValueError) as ctx:
+                generate_text("p", source="agent_memory", model="glm-5.3-flash",
+                              api_key="GEMINI_KEY", log_tokens=False)
+
+        self.assertEqual(str(ctx.exception), "OPENCODE_GO_API_KEY is not set")
+        built.assert_not_called()
+
