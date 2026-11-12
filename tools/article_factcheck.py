@@ -19,7 +19,9 @@ A claim the checker cannot tie to the evidence is reported, never counted as a l
   python3 -m tools.article_factcheck --dir ... --model gpt-6-luna --slot "Slot 4"
 
 Writes `veracity.jsonl` (one article per line, resumable), `veracity.csv` (one claim per line) and
-`veracity.md` (per-model summary) beside the articles. Costs a few cents per pass on Go.
+`veracity.md` (per-model summary) beside the articles. Costs a few cents per pass on Go. A malformed
+answer is repaired where it can be (a trailing comma, a raw newline inside a claim string) and
+otherwise earns exactly one retry asking for JSON only — the same path the write-time gate uses.
 """
 from __future__ import annotations
 
@@ -36,9 +38,9 @@ if ROOT not in sys.path:
 # The rubric, the parser and the no-checker behaviour live in the gate module now, so the offline
 # audit and the write-time gate judge claims by the same rules.
 from newsroom.fact_gate import (  # noqa: E402
-    ask_checker,
     client_for_model,
     count_claims,
+    judge,
     normalize_claims,
     render_prompt,
 )
@@ -84,8 +86,9 @@ def verify(dirpath: str, model: str, slots: list | None, max_claims: int) -> int
         prompt, truncated = _prompt(result, briefs.get(result["slot"], ""))
         answer = None
         try:
-            # Temperature 0, low thinking, thinking-inclusive output cap (see newsroom/fact_gate.py).
-            answer = ask_checker(client, model, prompt, max_claims, truncated)
+            # Temperature 0, low thinking, thinking-inclusive output cap, one retry on a bad answer
+            # (see newsroom/fact_gate.py `judge`). At most two calls per article.
+            answer = judge(client, model, prompt, max_claims, truncated)
         except Exception as exc:
             print(f"[factcheck] {key}: {type(exc).__name__}: {exc}")
         if not answer:

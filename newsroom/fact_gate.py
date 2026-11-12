@@ -31,6 +31,14 @@ missed (the fabricated Isaiah Carson, docs/reference/MODEL_ROUTING_EVALUATION.md
 A gate outage must never fail an article write: no key, no client, no SDK, a transport error or an
 unparsable answer all return `{"ok": True, "skipped": "no checker", ...}` and never raise.
 
+A malformed answer is not an outage. The second R1 run (plan §3.2) lost 4 of 18 articles to
+"no parsable answer" — intermittent malformation of a 60-claim answer quoting article text, not a
+size limit — and a parse failure is a `skipped` verdict, so those articles reached `news_feed`
+ungated. `parse_answer` therefore repairs the two common ways a long JSON answer breaks (a trailing
+comma before `}`/`]`, and a raw newline, tab or other control character inside a JSON string), and
+`judge` makes at most one retry asking for JSON only. Both the gate and the CLI call `judge`, so a
+retry behaves the same in production and in an offline audit.
+
     from newsroom.fact_gate import check, rewrite_prompt
     result = check(article_text, evidence)
     if result["counts"]["CONTRADICTED"]:
@@ -283,15 +291,97 @@ def json_blobs(text: str) -> list:
     return blobs
 
 
-def parse_answer(text: str) -> dict | None:
-    """The last JSON object in the answer that carries a `claims` list, or None."""
-    for blob in reversed(json_blobs(text or "")):
-        try:
-            data = json.loads(blob)
-        except Exception:
+# Control characters that JSON forbids raw inside a string, and their escapes. A 60-claim answer that
+# quotes an article line breaks exactly here: the model writes a real newline instead of "\n".
+_CONTROL_ESCAPES = {"\n": "\\n", "\r": "\\r", "\t": "\\t", "\b": "\\b", "\f": "\\f"}
+
+
+def _escape_control_chars(blob: str) -> str:
+    """Escape raw control characters that sit inside a JSON string; leave the rest of the blob alone.
+
+    The walk is string-aware, so a newline between tokens (legal) is untouched and an escaped sequence
+    (`\\n`, `\\\"`, `\\u00e9`) passes through unchanged.
+    """
+    out, in_string, escape = [], False, False
+    for ch in blob:
+        if not in_string:
+            if ch == '"':
+                in_string = True
+            out.append(ch)
             continue
-        if isinstance(data, dict) and isinstance(data.get("claims"), list):
-            return data
+        if escape:
+            escape = False
+            out.append(ch)
+        elif ch == "\\":
+            escape = True
+            out.append(ch)
+        elif ch == '"':
+            in_string = False
+            out.append(ch)
+        elif ch < " " or ch == "\x7f":
+            out.append(_CONTROL_ESCAPES.get(ch, "\\u%04x" % ord(ch)))
+        else:
+            out.append(ch)
+    return "".join(out)
+
+
+def _strip_trailing_commas(blob: str) -> str:
+    """Drop a comma that sits just before a closing `}` or `]`, outside a string.
+
+    String-aware, so a claim that itself ends in ",}" keeps its text.
+    """
+    out, in_string, escape = [], False, False
+    i, n = 0, len(blob)
+    while i < n:
+        ch = blob[i]
+        if in_string:
+            if escape:
+                escape = False
+            elif ch == "\\":
+                escape = True
+            elif ch == '"':
+                in_string = False
+            out.append(ch)
+            i += 1
+            continue
+        if ch == '"':
+            in_string = True
+        elif ch == ",":
+            j = i + 1
+            while j < n and blob[j] in " \t\r\n":
+                j += 1
+            if j < n and blob[j] in "}]":
+                i += 1                      # the comma was trailing: drop it
+                continue
+        out.append(ch)
+        i += 1
+    return "".join(out)
+
+
+def repair_json(blob: str) -> str:
+    """The blob with the two common malformations undone, in the order that keeps both safe."""
+    return _strip_trailing_commas(_escape_control_chars(blob))
+
+
+def parse_answer(text: str) -> dict | None:
+    """The last JSON object in the answer that carries a `claims` list, or None.
+
+    A strictly valid blob always wins. Only when none parses is each candidate tried again after
+    `repair_json` — a trailing comma, or a raw newline/tab/control character inside a string — so a
+    long answer that quotes article text still yields its claims. Never raises.
+    """
+    try:
+        blobs = json_blobs(text or "")
+        for repaired in (False, True):           # valid blobs first; repair only when none parses
+            for blob in reversed(blobs):
+                try:
+                    data = json.loads(repair_json(blob) if repaired else blob)
+                except Exception:
+                    continue
+                if isinstance(data, dict) and isinstance(data.get("claims"), list):
+                    return data
+    except Exception:
+        return None
     return None
 
 
@@ -340,6 +430,29 @@ def ask_checker(client, model: str, prompt: str, max_claims: int = MAX_CLAIMS,
     return parse_answer(answer_text(response))
 
 
+# Appended to the same prompt when the first answer did not parse. Short on purpose: the rubric and the
+# schema are already in the conversation, so this only says "again, JSON only".
+REPAIR_INSTRUCTION = ("Your last answer was not valid JSON. Reply with JSON only, in the schema above, "
+                      "no prose.")
+
+
+def judge(client, model: str, prompt: str, max_claims: int = MAX_CLAIMS,
+          truncated: bool = False) -> dict | None:
+    """One checker call, and at most one retry when the answer does not parse or carries no claims.
+
+    The retry re-sends the same prompt with `REPAIR_INSTRUCTION` appended and the same rubric, so a
+    malformed answer costs one extra call, never a loop. Returns the parsed answer or None; transport
+    and SDK errors propagate (`check` swallows them, the CLI prints them). `check` and
+    `tools/article_factcheck.verify` both go through here, so production and an offline audit retry
+    identically.
+    """
+    answer = ask_checker(client, model, prompt, max_claims, truncated=truncated)
+    if answer is not None and answer.get("claims"):
+        return answer
+    return ask_checker(client, model, f"{prompt}\n\n{REPAIR_INSTRUCTION}", max_claims,
+                       truncated=truncated)
+
+
 def _skipped(model: str) -> dict:
     """The shape a failed checker returns: gate open, nothing judged, no exception."""
     return {"ok": True, "skipped": SKIP_REASON, "claims": [],
@@ -359,7 +472,7 @@ def check(text: str, evidence: str, model: str | None = None, client=None) -> di
             if client is None:
                 return _skipped(resolved)
         prompt, truncated = render_prompt(text, evidence)
-        answer = ask_checker(client, resolved, prompt, MAX_CLAIMS, truncated=truncated)
+        answer = judge(client, resolved, prompt, MAX_CLAIMS, truncated=truncated)
         if not answer:
             return _skipped(resolved)
         claims = normalize_claims(answer, MAX_CLAIMS)
