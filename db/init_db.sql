@@ -3866,6 +3866,9 @@ CREATE TABLE IF NOT EXISTS player_career_counters (
     counters     JSONB NOT NULL,            -- {Madden field: int}, every numeric field on the row
     games_played INT,                       -- counters->GAMESPLAYED, pulled out for the views
     season_games INT,                       -- the load's own season line games (2027_02_29); NULL = none known
+    season_games_source TEXT NOT NULL DEFAULT 'LOAD'    -- LOAD (observed by a load), LEGACY_ZERO, LEGACY_UNKNOWN
+        CHECK (season_games_source IN ('LOAD', 'LEGACY_ZERO', 'LEGACY_UNKNOWN')),
+    season_games_bound INT,                 -- a pre-migration first row's upper bound; never an observation
     load_seq     BIGINT NOT NULL DEFAULT nextval('player_career_counters_load_seq'),  -- load order per player
     capture_id   INT REFERENCES captures(id) ON DELETE SET NULL,
     read_at      TIMESTAMPTZ,               -- snapshot meta.read_at
@@ -3883,17 +3886,19 @@ $$;
 
 -- One row per career-counter row. The previous row is the player's previous load (`load_seq`). Status:
 --    BASELINE (first row, no games in the season yet), PARTIAL (first row but the season says games were
---    played: that load's games are lost and reported), TABLE_CHANGED, RESET, NO_GAMES, OK (the delta's games
---    belong to this row's season) or CROSS_SEASON (the previous load was in an earlier season and this load
---    already has games of its own, so the delta covers both and cannot be split; it is flagged under the
---    earlier season). `credited_season` is the season the delta belongs to: the row's own season, or the
---    previous season when a start-of-season load (week <= 0) covers the tail of the season just ended.
---    `season_games_played` is the row's own load-time season games (`season_games`), never the live
---    season_stat_general row, so a later load cannot change an earlier row's status (2027_02_29).
+--    played: that load's games are lost and reported), UNKNOWN_HISTORY (first row from before the load-time
+--    record: its earlier games are unknown, not zero, and its upper bound is carried apart), TABLE_CHANGED,
+--    RESET, NO_GAMES, OK (the delta's games belong to this row's season) or CROSS_SEASON (the previous load was
+--    in an earlier season and this load already has games of its own, so the delta covers both and cannot be
+--    split; it is flagged under the earlier season). `credited_season` is the season the delta belongs to: the
+--    row's own season, or the previous season when a start-of-season load (week <= 0) covers the tail of the
+--    season just ended. `season_games_played` is the row's own load-time season games (`season_games`), never
+--    the live season_stat_general row, so a later load cannot change an earlier row's status (2027_02_29).
 CREATE OR REPLACE VIEW player_week_counters AS
 WITH base AS (
     SELECT c.season, c.week, c.stage, c.player_id, c.madden_table, c.counters, c.games_played, c.load_seq,
            COALESCE(c.season_games, 0) AS season_games_played,
+           c.season_games_source, c.season_games_bound,
            LAG(c.season)       OVER (PARTITION BY c.player_id ORDER BY c.load_seq) AS prev_season,
            LAG(c.week)         OVER (PARTITION BY c.player_id ORDER BY c.load_seq) AS prev_week,
            LAG(c.stage)        OVER (PARTITION BY c.player_id ORDER BY c.load_seq) AS prev_stage,
@@ -3904,6 +3909,7 @@ WITH base AS (
 ), marked AS (
     SELECT b.*,
            CASE
+               WHEN b.prev_season IS NULL AND b.season_games_source = 'LEGACY_UNKNOWN' THEN 'UNKNOWN_HISTORY'
                WHEN b.prev_season IS NULL AND b.season_games_played > 0 THEN 'PARTIAL'
                WHEN b.prev_season IS NULL THEN 'BASELINE'
                WHEN b.madden_table IS DISTINCT FROM b.prev_madden_table THEN 'TABLE_CHANGED'
@@ -3913,7 +3919,8 @@ WITH base AS (
                WHEN b.season = b.prev_season + 1 AND b.week <= 0 THEN 'OK'
                ELSE 'CROSS_SEASON'
            END AS status,
-           CASE WHEN b.prev_season IS NULL THEN b.season_games_played
+           CASE WHEN b.prev_season IS NULL AND b.season_games_source = 'LEGACY_UNKNOWN' THEN 0
+                WHEN b.prev_season IS NULL THEN b.season_games_played
                 ELSE b.games_played - b.prev_games_played END AS games_covered,
            CASE
                WHEN b.prev_season IS NULL THEN b.season
@@ -3982,12 +3989,14 @@ SELECT season, week, player_id, madden_table, prev_season, prev_week, games_cove
        (delta ->> 'STOPS')::int                  AS stops,
        (delta ->> 'STUFFS')::int                 AS stuffs,
        (delta ->> 'DOWNSPLAYED')::int            AS downs_played,
-       stage, prev_stage, load_seq, credited_season
+       stage, prev_stage, load_seq, credited_season, season_games_bound
 FROM deltas;
 
 -- One row per (credited season, player): the OK and NO_GAMES deltas summed key by key, the games those
---    rows covered, and the coverage gaps: weeks_unknown (TABLE_CHANGED, RESET or CROSS_SEASON), weeks_partial /
---    games_lost (a first career row whose games are lost, L2), and weeks_no_games (a NO_GAMES row whose
+--    rows covered, and the coverage gaps: weeks_unknown (TABLE_CHANGED, RESET, CROSS_SEASON or UNKNOWN_HISTORY),
+--    weeks_partial / games_lost (a first career row whose games are lost, L2), weeks_history_unknown /
+--    games_history_bound (a legacy first row whose earlier games are unknown; the bound is a labelled maximum,
+--    never added to games_lost, audit-5 stats2b R1), and weeks_no_games (a NO_GAMES row whose
 --    counters still grew, L4; its growth is kept in the sum).
 CREATE OR REPLACE VIEW player_season_counters AS
 WITH delta_rows AS (
@@ -4005,9 +4014,12 @@ WITH delta_rows AS (
 ), coverage AS (
     SELECT credited_season AS season, player_id,
            COALESCE(SUM(games_covered) FILTER (WHERE status IN ('OK', 'NO_GAMES')), 0) AS games_covered,
-           COUNT(*) FILTER (WHERE status IN ('TABLE_CHANGED', 'RESET', 'CROSS_SEASON')) AS weeks_unknown,
+           COUNT(*) FILTER (WHERE status IN ('TABLE_CHANGED', 'RESET', 'CROSS_SEASON',
+                                             'UNKNOWN_HISTORY')) AS weeks_unknown,
            COUNT(*) FILTER (WHERE status = 'PARTIAL') AS weeks_partial,
            COALESCE(SUM(games_covered) FILTER (WHERE status = 'PARTIAL'), 0) AS games_lost,
+           COUNT(*) FILTER (WHERE status = 'UNKNOWN_HISTORY') AS weeks_history_unknown,
+           MAX(season_games_bound) FILTER (WHERE status = 'UNKNOWN_HISTORY') AS games_history_bound,
            COUNT(*) FILTER (WHERE status = 'NO_GAMES') AS weeks_no_games
     FROM player_week_counters
     GROUP BY credited_season, player_id
@@ -4067,7 +4079,8 @@ SELECT c.season, c.player_id, s.delta, c.games_covered, c.weeks_unknown,
        (s.delta ->> 'STOPS')::int                  AS stops,
        (s.delta ->> 'STUFFS')::int                 AS stuffs,
        (s.delta ->> 'DOWNSPLAYED')::int            AS downs_played,
-       c.weeks_partial, c.games_lost, c.weeks_no_games
+       c.weeks_partial, c.games_lost, c.weeks_no_games,
+       c.weeks_history_unknown, c.games_history_bound
 FROM coverage c
 LEFT JOIN summed s ON s.season = c.season AND s.player_id = c.player_id;
 
@@ -4285,5 +4298,5 @@ INSERT INTO schema_migrations (version, filename, checksum, source) VALUES
     ('2027_02_26_league_shape_season', '2027_02_26_league_shape_season.sql', 'c953582968fad1e0de03b4fdde23627ab21d23e7f42e0612a63e7dcd45f45026', 'init_db.sql'),
     ('2027_02_27_nfl_mirror', '2027_02_27_nfl_mirror.sql', '7b5d61f3fc3427adaf9c029a5ceb6cfa75b55ba93654d27a52d845624204230c', 'init_db.sql'),
     ('2027_02_28_stats_loader_weeks', '2027_02_28_stats_loader_weeks.sql', '33c2d60765e497dfc353545ed60edba2eca28ddc6d8878ac7e6f2603201a105a', 'init_db.sql'),
-    ('2027_02_29_stats_counter_season_games', '2027_02_29_stats_counter_season_games.sql', '93c3e06f4ca9cae96957958548a346ad7feeaf9ccd994e1e4082ce5eb17b9bf2', 'init_db.sql')
+    ('2027_02_29_stats_counter_season_games', '2027_02_29_stats_counter_season_games.sql', 'ff13b1669af51461b5017d24a967b1c890aca5f389bb328f6686e9b904193151', 'init_db.sql')
 ON CONFLICT (version) DO NOTHING;

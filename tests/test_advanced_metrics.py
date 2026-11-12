@@ -186,9 +186,10 @@ def test_blocked_and_impossible_are_never_computed_and_explain_why():
         assert metric.reason.strip(), f"{metric.key} ({metric.status}) needs a reason"
 
 
-def _career(week=4, prev_week=0, prev_season=2026, status="OK", games=4, **delta):
+def _career(week=4, prev_week=0, prev_season=2026, status="OK", games=4, bound=None, **delta):
     row = {"season": 2026, "week": week, "prev_season": prev_season, "prev_week": prev_week,
-           "status": status, "delta": delta or None, "games_covered": games}
+           "status": status, "delta": delta or None, "games_covered": games,
+           "season_games_bound": bound}
     return row
 
 
@@ -344,7 +345,8 @@ def test_player_metrics_accepts_positional_rows():
     """Ordinary psycopg cursors return tuples, not dicts."""
     line = _tuple_row(("team_id", "games_played") + am.STAT_COLUMNS,
                       {"team_id": 7, "games_played": 4, "receptions": 109})
-    career = _tuple_row(("season", "week", "prev_season", "prev_week", "status", "delta", "games_covered"),
+    career = _tuple_row(("season", "week", "prev_season", "prev_week", "status", "delta", "games_covered",
+                         "season_games_bound"),
                         {"season": 2026, "week": 4, "prev_season": 2026, "prev_week": 0, "status": "OK",
                          "delta": {"TARGETS": 136, "RECEIVECATCHES": 109}, "games_covered": 4})
     tracking = (7, 4, 0, 2026, 240, 240)
@@ -694,3 +696,39 @@ def test_a_traded_player_s_row_is_checked_against_its_own_club_s_tracking():
     assert result["coverage"]["untracked_weeks"] == 1
     assert result["weeks_unknown"] >= 1
     assert result["coverage"]["games_covered"] == 0
+
+
+def test_a_legacy_first_row_reports_unknown_history_with_its_bound():
+    # audit-5 stats2b R1: a first row from before the load-time record can only say its lost games are
+    # unknown (and at most its bound), never an exact count. The later row's delta still counts.
+    line = _blank(am.STAT_COLUMNS)
+    line.update({"team_id": 7, "games_played": 3})
+    legacy = _career(week=5, prev_week=None, prev_season=None, status="UNKNOWN_HISTORY", games=0, bound=5)
+    later = _career(week=8, prev_week=5, prev_season=2026, status="OK", games=3, TARGETS=30)
+    cur = StubCursor([line, [legacy, later], _no_identity(), _games([6, 7, 8]), [],
+                      {"team_pass_attempts": 90, "team_total_plays": 200}])
+
+    result = am.player_metrics(cur, 2026, 42)
+
+    assert result["weeks_unknown"] == 1
+    assert result["coverage"]["games_lost"] == 0          # the bound is never lost games
+    assert result["coverage"]["games_covered"] == 3
+    assert result["inputs"]["targets"] == 30
+    assert any("at most 5" in reason for reason in result["coverage"]["reasons"])
+
+
+def test_a_legacy_first_row_without_a_bound_is_still_unknown():
+    # A first row outside a playable week has no per-week evidence: unknown, and no number offered.
+    line = _blank(am.STAT_COLUMNS)
+    line.update({"team_id": 7, "games_played": 3})
+    legacy = _career(week=0, prev_week=None, prev_season=None, status="UNKNOWN_HISTORY", games=0)
+    later = _career(week=8, prev_week=0, prev_season=2026, status="OK", games=3, TARGETS=30)
+    cur = StubCursor([line, [legacy, later], _no_identity(), _games([1, 2, 3]), [],
+                      {"team_pass_attempts": 90, "team_total_plays": 200}])
+
+    result = am.player_metrics(cur, 2026, 42)
+
+    assert result["weeks_unknown"] == 1
+    assert result["coverage"]["games_lost"] == 0
+    assert any("unknown" in reason for reason in result["coverage"]["reasons"])
+    assert not any("at most" in reason for reason in result["coverage"]["reasons"])
