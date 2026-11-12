@@ -7,6 +7,7 @@ and commissions the article into the weekly slate (routed to National Newsroom
 or Mu Fantasy Desk).
 """
 
+from newsroom.model_default import DEFAULT_WRITER_MODEL
 import argparse
 import json
 import os
@@ -72,7 +73,7 @@ def classify_prompt(
     week: int = None,
     api_key: str = None,
     conn_info: str = None,
-    model: str = "gemini-3.8-flash",
+    model: str = DEFAULT_WRITER_MODEL,
 ) -> dict:
     """Uses Gemini Flash to classify a user article prompt into:
     - target_desk: 'NATIONAL' or 'FANTASY'
@@ -247,7 +248,7 @@ def commission_custom_article(
     desk_note: str = None,
     slot: str = None,
     live: bool = True,
-    model: str = "gemini-3.8-flash",
+    model: str = DEFAULT_WRITER_MODEL,
     save_to_db: bool = True,
     api_key: str = None,
 ) -> dict:
@@ -393,7 +394,7 @@ def main():
     parser.add_argument("--slot", help="Slot name override")
     parser.add_argument("--classify-only", action="store_true", help="Only classify and print JSON, do not write")
     parser.add_argument("--dry-run", action="store_true", help="Run without live model call or DB write")
-    parser.add_argument("--model", default="gemini-3.8-flash", help="Gemini model")
+    parser.add_argument("--model", default=DEFAULT_WRITER_MODEL, help="Gemini model")
 
     args = parser.parse_args()
 

@@ -12,6 +12,7 @@ Usage:
   python3 -m newsroom.offseason_run --season 2035 --input captures/offseason/2035/manifest.json [--dry-run] [--only <event>] [--force]
 """
 
+from newsroom.model_default import DEFAULT_WRITER_MODEL
 import argparse
 import json
 import logging
@@ -102,7 +103,7 @@ def run_offseason_package(
     only: Optional[str] = None,
     force: bool = False,
     live: Optional[bool] = None,
-    model: str = "gemini-3.8-flash",
+    model: str = DEFAULT_WRITER_MODEL,
     conn_info: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Coordinates validation, DB state updates, and dispatching of the offseason package."""
@@ -284,7 +285,7 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="Preview manifest & compilation without DB mutations or live LLM calls")
     parser.add_argument("--only", choices=["super_bowl", "coaching", "signings", "draft"], help="Run only a specific sub-event")
     parser.add_argument("--force", action="store_true", help="Overwrite existing Week 24 articles in news_feed")
-    parser.add_argument("--model", default="gemini-3.8-flash", help="Gemini model to use for live execution")
+    parser.add_argument("--model", default=DEFAULT_WRITER_MODEL, help="Gemini model to use for live execution")
 
     args = parser.parse_args()
 

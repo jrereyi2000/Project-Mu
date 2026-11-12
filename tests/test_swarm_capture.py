@@ -149,3 +149,26 @@ def test_a_model_without_a_key_is_skipped_but_a_supplied_client_works():
     dispatcher._execute_agent(_prompt(), 2036, 18, None, live=True, model="muse-spark-1.3-contributor",
                               save_to_db=False, client=_Client(["ok"]), capture=capture)
     assert capture["text"] == "ok"
+
+
+def test_a_go_model_builds_a_go_client_and_needs_no_gemini_key():
+    from newsroom.swarm_dispatcher import SwarmDispatcher
+    dispatcher = SwarmDispatcher(api_key=None, debug_mode=False)
+    dispatcher.tools_for = lambda article_type=None: []
+    dispatcher._ballot_brief = lambda *a, **k: None
+    capture = {}
+    fake = _Client(["go text"])
+    with mock.patch("newsroom.tool_loop.go_transport.go_client", return_value=fake) as go_client:
+        dispatcher._execute_agent(_prompt(), 2036, 18, None, live=True, model="glm-5.3-flash",
+                                  save_to_db=False, capture=capture)
+    go_client.assert_called_once()
+    assert capture["text"] == "go text"
+
+
+def test_the_article_writer_default_is_the_go_model():
+    from newsroom.model_default import DEFAULT_WRITER_MODEL
+    from newsroom import weekly_run
+    assert DEFAULT_WRITER_MODEL == "glm-5.3-flash"
+    assert weekly_run.DEFAULT_MODEL == DEFAULT_WRITER_MODEL
+    assert weekly_run.SOCIAL_MODEL.startswith("gemini-")
+    assert weekly_run.MEMORY_MODEL.startswith("gemini-")

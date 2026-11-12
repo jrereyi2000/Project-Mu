@@ -11,6 +11,7 @@ from db.db_handler import DatabaseHandler
 from newsroom.slot_targets import load_league_snapshot, resolve_slot_targets
 from newsroom.entity_patterns import team_mention_pattern
 from newsroom.run_context import reset_article_context, set_article_context
+from newsroom.model_default import DEFAULT_WRITER_MODEL
 from newsroom.roster_moves import (brief_block, cap_line, is_starter_rank, new_this_week, new_trades, team_block,
                                    trade_grades_due, trade_grades_target, trades_block)
 from newsroom.local_portfolio import PRIMER as LOCAL_PRIMER, plan_local_portfolio
@@ -1510,7 +1511,7 @@ If you need specific stats, use your database tools before producing your final 
         week: int,
         team_id: int,
         live: bool = False,
-        model: str = "gemini-3.8-flash",
+        model: str = DEFAULT_WRITER_MODEL,
         save_to_db: bool = False,
         slot: str = None,
         article_type: str = None,
@@ -1565,15 +1566,25 @@ If you need specific stats, use your database tools before producing your final 
         # week onward. Gemini runs the tools on this thread, so the context covers every tool call below.
         run_ctx_token = set_article_context(season, week)
 
-        # Call Gemini if live mode is active
+        # Call the model if live mode is active. A Go model id (the default writer) runs through OpenCode
+        # Go's Google-compatible transport, so it needs OPENCODE_GO_API_KEY rather than GEMINI_API_KEY.
         if live:
+            if client is None:
+                from newsroom.tool_loop.go_transport import go_client, is_go_model
+                if is_go_model(model):
+                    try:
+                        client = go_client()
+                    except Exception as exc:
+                        print(f"\n⚠️  [GO LIVE CALL SKIPPED]: {exc}")
+                        failure_reason = f"Go client unavailable: {exc}"
+                        generated_text = f"[{ctype}] Go execution skipped: {exc}"
             if client is None and not self.api_key:
                 print("\n⚠️  [GEMINI LIVE CALL SKIPPED]: GEMINI_API_KEY environment variable is not set.")
                 print("   Set it via: export GEMINI_API_KEY=\"your_key\" or pass --api-key YOUR_KEY")
                 failure_reason = "missing GEMINI_API_KEY"
                 generated_text = f"[{ctype}] Gemini execution skipped: Missing GEMINI_API_KEY."
-            else:
-                print(f"\n🚀 Sending prompt to Gemini ({model}) with Autonomous Database Tools...")
+            if failure_reason is None:
+                print(f"\n🚀 Sending prompt to {model} with Autonomous Database Tools...")
                 usage = None
                 try:
                     from google import genai
@@ -2250,7 +2261,7 @@ If you need specific stats, use your database tools before producing your final 
             print(f"⚠️ Slot targeting unavailable ({e}); writers will choose their own subjects.")
             return [None] * len(raw_slots)
 
-    def dispatch_single_archetype(self, archetype: str, brief: dict, season: int, week: int, live: bool = False, model: str = "gemini-3.8-flash", save_to_db: bool = False, article_type: str = None):
+    def dispatch_single_archetype(self, archetype: str, brief: dict, season: int, week: int, live: bool = False, model: str = DEFAULT_WRITER_MODEL, save_to_db: bool = False, article_type: str = None):
         """Dispatches a single specific agent archetype for targeted testing and generation."""
         arch_upper = archetype.upper().strip()
         print(f"\n🎯 --- DISPATCHING TARGETED AGENT ({arch_upper}, Season {season}, Week {week}) ---")
@@ -2273,7 +2284,7 @@ If you need specific stats, use your database tools before producing your final 
         week: int,
         article_count: int = None,
         live: bool = False,
-        model: str = "gemini-3.8-flash",
+        model: str = DEFAULT_WRITER_MODEL,
         save_to_db: bool = False,
         max_workers: int = 5
     ):
@@ -2370,7 +2381,7 @@ If you need specific stats, use your database tools before producing your final 
         season: int,
         week: int,
         live: bool = False,
-        model: str = "gemini-3.8-flash",
+        model: str = DEFAULT_WRITER_MODEL,
         save_to_db: bool = False,
         max_workers: int = 5,
     ) -> list:
@@ -2427,7 +2438,7 @@ If you need specific stats, use your database tools before producing your final 
         season: int,
         week: int,
         live: bool = False,
-        model: str = "gemini-3.8-flash",
+        model: str = DEFAULT_WRITER_MODEL,
         save_to_db: bool = False,
         max_workers: int = 5
     ):

@@ -22,8 +22,15 @@ with its own already-published check (slots 'Fantasy ...'). The week's ~100 Agen
 slot 'Agent Wire'.
 """
 import argparse
+import os
 
-DEFAULT_MODEL = "gemini-3.8-flash"  # same default as SwarmDispatcher
+from newsroom.model_default import DEFAULT_WRITER_MODEL
+
+DEFAULT_MODEL = DEFAULT_WRITER_MODEL   # every article; teammates below work on non-articles
+# Not articles, so not part of the writer switch (PROJECT_SPEC §7.3, §7.12): Agent Wire posts use the
+# social writer's own Gemini client, and season memories go through agent_memory's single Gemini call.
+MEMORY_MODEL = os.environ.get("AGENT_MEMORY_MODEL") or "gemini-3.8-flash"
+SOCIAL_MODEL = os.environ.get("SOCIAL_MODEL") or "gemini-3.8-flash"
 FINAL_WEEK = 23                 # Super Bowl week (see POSTSEASON_EDITORIAL_SLATES)
 NATIONAL_SLOT_FILTER = "(slot IN ('Hero Slot', 'Standalone') OR slot LIKE 'Slot %%' OR slot LIKE 'Record%%')"  # local wakeups use 'Local Beat N'
 FANTASY_SLOT_FILTER = "slot LIKE 'Fantasy %%'"
@@ -177,7 +184,7 @@ def run_weekly_swarm(
                 if not dry_run:
                     # Agents' "season so far" memories, through last week, before any prompt is built
                     from newsroom.agent_memory import refresh_season_summaries
-                    n = refresh_season_summaries(conn_info, dispatcher.api_key, model or DEFAULT_MODEL, season, week)
+                    n = refresh_season_summaries(conn_info, dispatcher.api_key, MEMORY_MODEL, season, week)
                     print(f"[Newsroom] Refreshed {n} agent season summaries through Week {week - 1}.")
                     # Writer relationships: grade what the season's stored data can decide, then apply last week's
                     # graded picks and calls; a season's first run (Week 1) grades last season's calls and decays
@@ -217,7 +224,7 @@ def run_weekly_swarm(
                 if todo["social"] is None:
                     print(f"[Newsroom] Publishing Season {season} Week {week} Agent Wire posts"
                           f"{' (dry run)' if dry_run else ''}...")
-                    res = run_social_week(conn_info, season, week, model=model, dry_run=dry_run, force=force,
+                    res = run_social_week(conn_info, season, week, model=SOCIAL_MODEL, dry_run=dry_run, force=force,
                                           max_workers=max_workers)
                     todo["social"] = done if res.get("status") in ("published", "dry_run") else res.get("status")
                 else:
