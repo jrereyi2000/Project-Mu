@@ -33,32 +33,15 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from tools.article_model_compare import _answer_text, client_for, _json_blobs  # noqa: E402
-
-RUBRIC = """You are a fact-checker for a fictional NFL league's newsroom. You get an article, the \
-assignment it answered, and the evidence its writer retrieved from the league database. Judge the \
-article's factual claims ONLY against that evidence.
-
-Claim types: numbers (yards, records, scores, ranks, percentages, ages, money), names and roles \
-(player on team, coach on team), events (a trade, a firing, a result), and stated standings.
-
-For each claim output one of:
-- "SUPPORTED": the evidence states this value/fact.
-- "CONTRADICTED": the evidence gives a DIFFERENT value/fact for the same thing. Use this only when \
-the evidence positively says otherwise; never infer it from silence.
-- "UNSUPPORTED": the evidence does not mention it. This is not an error; say so and move on.
-
-Rules:
-- Cluster a sentence's numbers into one claim per fact (a stat line is several claims).
-- Skip pure opinion, prediction, style, and obvious arithmetic the writer did on evidence values \
-(mark arithmetic "SUPPORTED" and set "derived": true).
-- Quote the evidence line for every SUPPORTED or CONTRADICTED claim, 12 words maximum.
-- Cap at 40 claims, the most load-bearing first.
-- Never use outside knowledge about real NFL players or teams; this league is fictional.
-
-Reply with JSON only:
-{"claims": [{"claim": "...", "verdict": "SUPPORTED|CONTRADICTED|UNSUPPORTED", "evidence": "...", \
-"derived": false}], "note": "one sentence on the article's overall accuracy"}"""
+# The rubric, the parser and the no-checker behaviour live in the gate module now, so the offline
+# audit and the write-time gate judge claims by the same rules.
+from newsroom.fact_gate import (  # noqa: E402
+    ask_checker,
+    build_prompt,
+    client_for_model,
+    count_claims,
+    normalize_claims,
+)
 
 
 def _load(dirpath: str):
@@ -69,23 +52,8 @@ def _load(dirpath: str):
 
 
 def _prompt(result: dict, brief: str) -> str:
-    evidence = (result.get("evidence") or "").strip()
-    # The brief is already the head of `evidence`; keep it, and bound the whole thing.
-    body = evidence[:24000]
-    return (f"ASSIGNMENT (what the writer was asked to produce):\n{brief[:6000]}\n\n"
-            f"EVIDENCE THE WRITER RETRIEVED (the only facts it may use):\n{body}\n\n"
-            f"ARTICLE:\n{result.get('text') or ''}")
-
-
-def _parse(text: str) -> dict | None:
-    for blob in reversed(_json_blobs(text or "")):
-        try:
-            data = json.loads(blob)
-        except Exception:
-            continue
-        if isinstance(data.get("claims"), list):
-            return data
-    return None
+    """The assignment brief, then the evidence (the brief is already its head), then the article."""
+    return build_prompt(result.get("text") or "", result.get("evidence") or "", brief)
 
 
 def verify(dirpath: str, model: str, slots: list | None, max_claims: int) -> int:
@@ -104,7 +72,7 @@ def verify(dirpath: str, model: str, slots: list | None, max_claims: int) -> int
             done.add((row["slot"], row["model"]))
         print(f"[factcheck] resuming: {len(done)} article(s) already checked")
 
-    client, error = client_for(model)
+    client, error = client_for_model(model)
     if client is None:
         print(f"[factcheck] no checker: {error}")
         return 1
@@ -116,29 +84,15 @@ def verify(dirpath: str, model: str, slots: list | None, max_claims: int) -> int
         prompt = _prompt(result, briefs.get(result["slot"], ""))
         answer = None
         try:
-            from google.genai import types
-            # Thinking shares the output cap on Go's reasoning models: at 8,192 DeepSeek V4.1 Flash
-            # spent the whole budget thinking and returned nothing. The cap is generous and the
-            # thinking level is asked low; neither changes the answer, both make one arrive.
-            config = types.GenerateContentConfig(system_instruction=RUBRIC, temperature=0.0,
-                                                 max_output_tokens=32768)
-            try:
-                config.thinking_config = types.ThinkingConfig(thinking_level="LOW")
-            except Exception:
-                pass
-            response = client.models.generate_content(model=model, contents=prompt, config=config)
-            answer = _parse(_answer_text(response))
+            # Temperature 0, low thinking, thinking-inclusive output cap (see newsroom/fact_gate.py).
+            answer = ask_checker(client, model, prompt, max_claims)
         except Exception as exc:
             print(f"[factcheck] {key}: {type(exc).__name__}: {exc}")
         if not answer:
             print(f"[factcheck] {key}: no parsable answer")
             continue
-        claims = answer.get("claims", [])[:max_claims]
-        counts = {"SUPPORTED": 0, "CONTRADICTED": 0, "UNSUPPORTED": 0}
-        for claim in claims:
-            verdict = str(claim.get("verdict", "")).upper()
-            if verdict in counts:
-                counts[verdict] += 1
+        claims = normalize_claims(answer, max_claims)
+        counts = count_claims(claims)
         row = {"slot": result["slot"], "model": result["model"], "claims": claims,
                "counts": counts, "claim_total": len(claims), "note": answer.get("note", "")}
         with open(out_path, "a") as f:

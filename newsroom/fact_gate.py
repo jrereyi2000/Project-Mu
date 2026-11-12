@@ -1,0 +1,285 @@
+"""The write-time fact gate: does an article contradict the evidence its writer had?
+
+Every article is checked claim by claim after it is written, so nothing reaches `news_feed` with a
+claim that disagrees with the tool results its writer actually received. This module is the single
+source for the rubric, the response parser and the client construction; `tools/article_factcheck.py`
+(the offline veracity CLI) imports them back instead of keeping its own copies.
+
+Three verdicts per claim:
+
+- **SUPPORTED** — the evidence states it (including arithmetic the writer did on evidence values).
+- **CONTRADICTED** — the evidence states something different for the same thing (the real error),
+  or the claim names a person the evidence never mentions (an invented person is a fabrication,
+  not an omission).
+- **UNSUPPORTED** — the evidence does not mention it. Not an error by itself.
+
+The fix is coverage, not the model. The rubric runs three passes before it weighs any number:
+every named person's team and role, every status word against `years_of_experience`, and every
+game result as a (winner, loser, score) triple. That is the class of error the first veracity pass
+missed (the fabricated Isaiah Carson, docs/reference/MODEL_ROUTING_EVALUATION.md §8.1).
+
+A gate outage must never fail an article write: no key, no client, no SDK, a transport error or an
+unparsable answer all return `{"ok": True, "skipped": "no checker", ...}` and never raise.
+
+    from newsroom.fact_gate import check, rewrite_prompt
+    result = check(article_text, evidence)
+    if result["counts"]["CONTRADICTED"]:
+        message = rewrite_prompt([c for c in result["claims"] if c["verdict"] == "CONTRADICTED"])
+"""
+from __future__ import annotations
+
+import json
+import os
+
+FACT_GATE_MODEL = os.environ.get("FACT_GATE_MODEL") or "deepseek-v4.1-flash"
+DEFAULT_MODEL = "deepseek-v4.1-flash"
+
+# A raised cap from the CLI's 40: the Carson section sat past the cut.
+MAX_CLAIMS = 60
+
+# Bounds on the prompt. The CLI used 24,000 / 6,000 and the gate keeps the same shape.
+EVIDENCE_LIMIT = 24000
+BRIEF_LIMIT = 6000
+
+# Thinking shares the output cap on Go's reasoning models: at 8,192 DeepSeek V4.1 Flash spent the
+# whole budget thinking and returned nothing. The cap is generous and thinking is asked low.
+MAX_OUTPUT_TOKENS = 32768
+THINKING_LEVEL = "LOW"
+
+SKIP_REASON = "no checker"
+
+RUBRIC_TEMPLATE = """You are a fact-checker for a fictional NFL league's newsroom. You get an article, the \
+assignment it answered, and the evidence its writer retrieved from the league database. Judge the \
+article's factual claims ONLY against that evidence.
+
+Make these three passes FIRST, before you judge any number. They are the claims the writers get \
+wrong most often, and a number does not excuse a wrong person, status or result:
+1. Every named person: is the name in the evidence at all, and does the evidence put him on the same \
+team and in the same role?
+2. Every status word ("rookie", "second-year", "veteran", "undrafted"): check it against that \
+player's years_of_experience in the evidence (0 = rookie, 1 = second-year, 2 or more = veteran).
+3. Every game result: the winner, the loser and the exact score, as a (winner, loser, score) triple. \
+A swapped winner and a swapped score are each a contradiction.
+
+Claim types: numbers (yards, records, scores, ranks, percentages, ages, money), names and roles \
+(player on team, coach on team), events (a trade, a firing, a result), and stated standings.
+
+For each claim output one of:
+- "SUPPORTED": the evidence states this value/fact.
+- "CONTRADICTED": the evidence gives a DIFFERENT value/fact for the same thing. Use this only when \
+the evidence positively says otherwise; never infer it from silence.
+- "UNSUPPORTED": the evidence does not mention it. This is not an error; say so and move on.
+
+A claim that names a person who does not appear anywhere in the evidence is CONTRADICTED, with the \
+evidence quote "not in evidence": silence about an invented person is the signal. Any other fact the \
+evidence simply does not mention is UNSUPPORTED.
+
+Rules:
+- Cluster a sentence's numbers into one claim per fact (a stat line is several claims).
+- Skip pure opinion, prediction, style, and obvious arithmetic the writer did on evidence values \
+(mark arithmetic "SUPPORTED" and set "derived": true).
+- Quote the evidence line for every SUPPORTED or CONTRADICTED claim, 12 words maximum.
+- Cap at {max_claims} claims, the most load-bearing first.
+- Never use outside knowledge about real NFL players or teams; this league is fictional.
+
+Reply with JSON only:
+{"claims": [{"claim": "...", "verdict": "SUPPORTED|CONTRADICTED|UNSUPPORTED", "evidence": "...", \
+"derived": false}], "note": "one sentence on the article's overall accuracy"}"""
+
+
+def build_rubric(max_claims: int = MAX_CLAIMS) -> str:
+    """The checker's system instruction, with the claim cap it should honour."""
+    return RUBRIC_TEMPLATE.replace("{max_claims}", str(int(max_claims)))
+
+
+RUBRIC = build_rubric()
+
+
+def resolve_model(model: str | None = None) -> str:
+    """The argument, else `FACT_GATE_MODEL` from the environment now, else the module default."""
+    return (model or os.environ.get("FACT_GATE_MODEL") or FACT_GATE_MODEL
+            or DEFAULT_MODEL)
+
+
+def _env(name: str) -> str | None:
+    """Read an environment variable, then the repo's .env (as `go_transport` does)."""
+    value = os.environ.get(name)
+    if value:
+        return value
+    try:
+        from pipeline.notify import env
+        return env(name) or None
+    except Exception:
+        return None
+
+
+def client_for_model(model: str):
+    """(client, error). Go models use the Go Google-compatible transport; Gemini gets its own key."""
+    try:
+        from newsroom.tool_loop.go_transport import go_client, is_go_model
+        if is_go_model(model):
+            return go_client(), None
+        api_key = _env("GEMINI_API_KEY")
+        if not api_key:
+            return None, "GEMINI_API_KEY is not set"
+        from google import genai
+        return genai.Client(api_key=api_key), None
+    except Exception as exc:
+        return None, f"{type(exc).__name__}: {exc}"
+
+
+def build_prompt(text: str, evidence: str, brief: str = "") -> str:
+    """The assignment, the evidence and the article, each bounded. Same shape as the CLI's prompt."""
+    sections = []
+    if (brief or "").strip():
+        sections.append("ASSIGNMENT (what the writer was asked to produce):\n"
+                        f"{brief.strip()[:BRIEF_LIMIT]}")
+    sections.append("EVIDENCE THE WRITER RETRIEVED (the only facts it may use):\n"
+                    f"{(evidence or '').strip()[:EVIDENCE_LIMIT]}")
+    sections.append(f"ARTICLE:\n{text or ''}")
+    return "\n\n".join(sections)
+
+
+def answer_text(response) -> str:
+    """The model's answer text, from `response.text` or the non-thought parts (some Go models only fill parts)."""
+    text = getattr(response, "text", "") or ""
+    if text.strip():
+        return text
+    chunks = []
+    try:
+        for part in response.candidates[0].content.parts:
+            if not getattr(part, "thought", False) and getattr(part, "text", None):
+                chunks.append(part.text)
+    except Exception:
+        pass
+    return "\n".join(chunks)
+
+
+def json_blobs(text: str) -> list:
+    """Every balanced `{...}` object in the text, string-aware, so nested JSON parses cleanly."""
+    blobs, start, depth, in_string, escape = [], None, 0, False, False
+    for i, ch in enumerate(text or ""):
+        if start is None:
+            if ch == "{":
+                start, depth, in_string, escape = i, 1, False, False
+            continue
+        if in_string:
+            if escape:
+                escape = False
+            elif ch == "\\":
+                escape = True
+            elif ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+        elif ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                blobs.append(text[start:i + 1])
+                start = None
+    return blobs
+
+
+def parse_answer(text: str) -> dict | None:
+    """The last JSON object in the answer that carries a `claims` list, or None."""
+    for blob in reversed(json_blobs(text or "")):
+        try:
+            data = json.loads(blob)
+        except Exception:
+            continue
+        if isinstance(data, dict) and isinstance(data.get("claims"), list):
+            return data
+    return None
+
+
+def normalize_claims(answer: dict | None, max_claims: int = MAX_CLAIMS) -> list:
+    """One dict per claim, with exactly `claim`, `verdict`, `evidence`, `derived`, capped."""
+    claims = []
+    for raw in (answer or {}).get("claims", [])[:max_claims]:
+        if not isinstance(raw, dict):
+            continue
+        claims.append({
+            "claim": str(raw.get("claim") or "").strip(),
+            "verdict": str(raw.get("verdict") or "").strip().upper(),
+            "evidence": str(raw.get("evidence") or "").strip(),
+            "derived": bool(raw.get("derived")),
+        })
+    return claims
+
+
+def count_claims(claims: list) -> dict:
+    """The three verdict counts, with unknown verdicts left uncounted."""
+    counts = {"SUPPORTED": 0, "CONTRADICTED": 0, "UNSUPPORTED": 0}
+    for claim in claims:
+        verdict = str(claim.get("verdict", "")).upper()
+        if verdict in counts:
+            counts[verdict] += 1
+    return counts
+
+
+def ask_checker(client, model: str, prompt: str, max_claims: int = MAX_CLAIMS) -> dict | None:
+    """One checker call at temperature 0, low thinking and a thinking-inclusive output cap.
+
+    Returns the parsed answer, or None. Transport and SDK errors propagate; `check` swallows them
+    (the CLI prints them per article).
+    """
+    from google.genai import types
+
+    config = types.GenerateContentConfig(system_instruction=build_rubric(max_claims),
+                                         temperature=0.0,
+                                         max_output_tokens=MAX_OUTPUT_TOKENS)
+    try:
+        config.thinking_config = types.ThinkingConfig(thinking_level=THINKING_LEVEL)
+    except Exception:
+        pass
+    response = client.models.generate_content(model=model, contents=prompt, config=config)
+    return parse_answer(answer_text(response))
+
+
+def _skipped(model: str) -> dict:
+    """The shape a failed checker returns: gate open, nothing judged, no exception."""
+    return {"ok": True, "skipped": SKIP_REASON, "claims": [],
+            "counts": {"SUPPORTED": 0, "CONTRADICTED": 0, "UNSUPPORTED": 0}, "model": model}
+
+
+def check(text: str, evidence: str, model: str | None = None, client=None) -> dict:
+    """Judge `text` against `evidence`. Never raises: a checker outage is a skip, not a failure.
+
+    `evidence` is the assignment text plus the tool results the writer received. `client=None`
+    builds one for the resolved model; a caller may inject a client (tests, or a shared session).
+    """
+    resolved = resolve_model(model)
+    try:
+        if client is None:
+            client, _error = client_for_model(resolved)
+            if client is None:
+                return _skipped(resolved)
+        answer = ask_checker(client, resolved, build_prompt(text, evidence))
+        if not answer:
+            return _skipped(resolved)
+        claims = normalize_claims(answer, MAX_CLAIMS)
+        counts = count_claims(claims)
+        return {"claims": claims, "counts": counts,
+                "ok": counts["CONTRADICTED"] == 0, "model": resolved}
+    except Exception:
+        return _skipped(resolved)
+
+
+def rewrite_prompt(contradicted: list) -> str:
+    """One correction message: each contradicted claim, its evidence, and no new claims allowed."""
+    items = [c for c in (contradicted or []) if isinstance(c, dict)]
+    flagged = [c for c in items if str(c.get("verdict", "")).upper() == "CONTRADICTED"]
+    chosen = flagged or items
+    if not chosen:
+        return ""
+    lines = ["The article contradicts the evidence its writer had. Correct or delete each claim "
+             "below, using only the evidence quoted. Do not add any new claims and do not "
+             "introduce a fact the evidence does not state.", ""]
+    for claim in chosen:
+        quote = str(claim.get("evidence") or "").strip() or "not in evidence"
+        lines.append(f"- CLAIM: {str(claim.get('claim') or '').strip()} — EVIDENCE: {quote}")
+    lines += ["", "Rewrite the article now. Change only what these lines require; add no new claims."]
+    return "\n".join(lines)
