@@ -709,3 +709,41 @@ tmux new-window -d -t mu: -n <label> -c /home/jrereyi/Project-Mu \
 The window is a viewer; the headless runner owns the turn in flight, and anything typed queues behind it. The
 fix-lane builders and `build-agy-wake` are attached this way. Worth folding into `tools/spawn_agent.sh` once
 `fix-tooling` releases it — print it as part of the spawn line, as the DeepSeek route already prints the id.
+
+---
+
+## 12. Backlog snapshot, 2026-11-12 17:50
+
+Everything below is quoted from the reports and NOTICEs named in §9 and §10; none of it is my verdict.
+
+| Row | Audit | Fix | Re-check |
+|---|---|---|---|
+| **R8** P3-04b | **PASS** (`audit-p3-chain/r8`) — no `CALIBRATION_SAMPLE` left anywhere, live `(1.0, 1.25)`, cost 7.3 s a season | none needed | — |
+| **R9** `ded2627` residuals | re-check: all six of the earlier report's findings answered | none needed | — |
+| **R10** `e93e417` | **PASS, F1–F6 CLOSED** (`r10`) — seed 0 draws 373 leavers vs 374 at seed 1; year 2 differs from year 1; live == fit at seed 0; pinned test values re-derived | none needed | — |
+| **R3** route plan | OPEN, 5 | `fix-tooling` F1–F4 on `main`; **F5 blocked on JR** (both OpenCode plan files are still tracked in `HEAD`) | **owed** |
+| **R4** Go pipeline | needs fix, 3 | `fix-tooling` F1–F3 on `main` (`a59a186`, `f91cabd`, `86ed78d`) | **owed** |
+| **R6 + R11** | R6 fails 5, R11 confirmed | `fix-go-voice` `8c97e78` / recheck pin **`190a5fc`** — all five closed, R11 via `client_for_model()` | **owed** |
+| **R5a** fact-gate | CHANGES REQUIRED, 6 (2 HIGH) | `fix-fact-gate`, in flight | owed |
+| **R5b** `45e58d1` | CONDITIONAL PASS, 3 | same builder, in flight | owed |
+| **R1** stats3 | PARTIAL — R2a, R2b open | `fix-stats-id`, in flight | owed |
+| **R2** stats2b | PARTIAL — P1 open | same builder, in flight | owed |
+| **R7** visual mod check | 6 + a live round (F8/F12) | `visual-check-fixes-2` round 2 | `audit-visual-hydrogen` lane, live |
+
+**Counts.** Nine rows have produced findings (R8/R9/R10 came back clean, and they are the checkpoint-1 chain — that
+is the headline). About **13 findings have a fix on `main` and are awaiting a verdict** (R3 F1–F4, R4 F1–F3,
+R6 F1–F5 with R11). About **12 are in the fix lane right now** (R5a 6, R5b 3, R1 2, R2 1). **One is blocked on
+JR** (R3 F5). R7's round is with its own builder and re-checker.
+
+**What the backlog needs next:** four re-check batches, two of which are ready the moment someone opens them —
+`R3 + R4` against `a2d21ec`, and `R6 + R11` against `190a5fc`. The other two start when `fix-stats-id` and
+`fix-fact-gate` post their NOTICEs. Each is a fresh Hydrogen session with the relevant report and NOTICE as its
+brief; nothing is waiting on the queue itself any more.
+
+**Loose ends for JR, none of them an audit:**
+1. **R3 F5** — `docs/in_progress/OPENCODE_{DEEPSEEK_ROUTE,GO_PIPELINE}_PLAN.md` are still tracked in `HEAD`;
+   deleting them in the main checkout only is not a fix.
+2. **`fix-go-voice`'s two deferrals** — `go_allowance.jsonl` writes from `go_client()`, and `estimate_cost`'s
+   Gemini fallback pricing for `glm-5.3-flash`. Named open, not closed findings.
+3. **R5a F1** is probably already fixed by `45e58d1` — the re-check should verify rather than re-fix.
+4. **`audit-p3-chain`'s out-of-scope note:** `e93e417` also bundles the F6/N1 `lone_two_back` change.
