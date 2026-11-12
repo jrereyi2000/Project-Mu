@@ -206,3 +206,4 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 |---|---|---|---|---|---|
 | U1 | 1 | `fact-gate-u1` | `~/.local/share/opencode/worktree/404d9f/fact-gate-u1` | merged | 7075613 |
 | U2 | 1 | `fact-gate-u2` | `~/.local/share/opencode/worktree/404d9f/fact-gate-u2` | merged | a252164 |
+| U3 | 2 | `fact-gate-u3` | `~/.local/share/opencode/worktree/404d9f/fact-gate-u3` | running | — |
