@@ -95,3 +95,41 @@ a memory block, the 10 scouting reports and the GM tasks; no default flips first
 - Vision: `extract.py` screenshot extraction stays on Gemini.
 - Article writing: already on `glm-5.3-flash` (`ac8df19`), priced and read in
   `docs/reference/MODEL_ROUTING_EVALUATION.md`.
+
+## 7. JR's blind reads (2026-11-12)
+
+Both reads were blind: the per-item A/B/C order was randomized and the key withheld until JR had
+ranked every item. Nothing was written to a database.
+
+### Agent Wire — 2035 Week 9, 20 posts, 3-way (Gemini / GLM-5.3-Flash / Muse Spark)
+
+Scores are 3/2/1 by JR's rank (first / second / third).
+
+| Model | Points | Firsts | Lasts |
+|---|---|---|---|
+| `gemini-3.8-flash` | **46** | **10** | 4 |
+| `muse-spark-1.3-contributor` | 39 | 4 | 5 |
+| `glm-5.3-flash` | 35 | 6 | **11** |
+
+GLM's six firsts: posts 1, 3, 7, 8, 17, 20. It was last on 11 of 20, and no model was flagged by
+the writer's own guards (0/20 each). **Verdict: Agent Wire stays on Gemini** — the plan's R6 held
+(the voice is the product), and the plan's acceptance test ("GLM not worse") fails. Muse does not
+beat Gemini either, so it does not replace it.
+
+### Inbox voice — 9 production-shaped cases, 2-way (Gemini / GLM-5.3-Flash)
+
+JR preferred **GLM on 5** and Gemini on 4: GLM won the LB rejection, the accepted extension, the
+talk turn, the beat question and the owner expectation; Gemini won the WR counter, the GM counter,
+the GM rejection and the role talk. **Verdict: a wash on voice**, with the latency gate already
+cleared (p95 3.06 s against 4.0 s). The inbox can move on cost/allowance grounds, or stay; it is not
+a voice regression either way. JR's read of beat case 8 flagged both versions as off-brief (a
+reporter would not ask a GM to confirm his own practice report), which is a prompt issue, not a
+model one.
+
+### Still open after the reads
+
+- The real inbox p95 on the PC with Madden open (P1-09 method) — the measured 3.06 s was taken
+  without Madden running, so it is not the production number.
+- One dry press conference against a scratch database and JR's read of it.
+- JR's read of a memory block, 10 scouting reports and the `llm_compare` GM tasks (parse rates
+  already 3/3 takes).
