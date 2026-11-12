@@ -461,6 +461,10 @@ def run_deepseek_arm(packet, arm, tools, model, budget, directory, client=None):
     except Exception as exc:
         result['error'] = str(exc)
     finally:
+        # R4 F3: put the client back the way it arrived. The wrapper used to stay installed, so a
+        # caller that injects one client across both arms stacked metered wrappers: double budget
+        # rows, and in the b-then-a order a double ledger row through the tool loop.
+        completions.create = original
         result['latency_s'] = time.perf_counter() - started
         result['tool_calls'] = len(trace)
         result['usage_calls'] = [r for r in budget.rows[first_call:] if r.get('arm') == arm]

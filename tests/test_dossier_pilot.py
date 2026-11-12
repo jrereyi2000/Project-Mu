@@ -386,3 +386,69 @@ def test_creative_texture_is_allowed_without_canonical_contradictions():
     assert 'Unknown canonical numbers remain unknown' in POLICY
     assert 'distinguish tied from broken' in POLICY
     assert 'Do not fabricate quotes' not in POLICY
+
+
+# --- one injected client must survive both arms unchanged (R4 F3) ------------------------------
+
+
+def _go_usage():
+    return {'prompt_tokens': 1000, 'prompt_cache_hit_tokens': 600,
+            'prompt_cache_miss_tokens': 400, 'completion_tokens': 200,
+            'completion_tokens_details': {'reasoning_tokens': 50}, 'cost': 0.0,
+            'opencode': {'list_cost': 0.008, 'allowance': 0.0048, 'billing_source': 'go'}}
+
+
+def _article():
+    return _deepseek_response(content='# Game\n\n> **EXCERPT:** Both teams.\n\nBody.',
+                              usage=_go_usage())
+
+
+def _ledger_rows(tmp_path):
+    return (tmp_path / 'go_allowance.jsonl').read_text().splitlines()
+
+
+def test_a_shared_client_is_restored_after_each_arm(monkeypatch, tmp_path):
+    """a then b on one client: one ledger row per API call, not two for arm b."""
+    monkeypatch.setenv('MU_GO_ALLOWANCE_FILE', str(tmp_path / 'go_allowance.jsonl'))
+    tool_call = SimpleNamespace(id='call_1', type='function',
+                                function=SimpleNamespace(name='_get_matchup_edges', arguments='{}'))
+    client = _FakeClient([_deepseek_response(tool_calls=[tool_call], usage=_go_usage()),
+                          _article(), _article()])
+    budget = Budget(5, tmp_path / 'usage.json', 8192, provider='deepseek')
+    original = client.completions.create
+    assert original.__name__ == 'create'
+
+    run_deepseek_arm(_packet(), 'a', [_get_matchup_edges], DEEPSEEK_MODEL, budget, tmp_path,
+                     client=client)
+    assert client.completions.create.__func__ is original.__func__
+    run_deepseek_arm(_packet(), 'b', [_get_matchup_edges], DEEPSEEK_MODEL, budget, tmp_path,
+                     client=client)
+    assert client.completions.create.__func__ is original.__func__
+
+    assert len(budget.rows) == 3                    # a made 2 requests, b made 1
+    assert len(_ledger_rows(tmp_path)) == 3
+    assert [row['arm'] for row in budget.rows] == ['a', 'a', 'b']
+
+
+def test_a_shared_client_run_b_then_a_does_not_double_ledger(monkeypatch, tmp_path):
+    """b then a on one client: arm a's loop must not sit inside arm b's metered wrapper."""
+    monkeypatch.setenv('MU_GO_ALLOWANCE_FILE', str(tmp_path / 'go_allowance.jsonl'))
+    tool_call = SimpleNamespace(id='call_1', type='function',
+                                function=SimpleNamespace(name='_get_matchup_edges', arguments='{}'))
+    client = _FakeClient([_article(),                     # arm b
+                          _deepseek_response(tool_calls=[tool_call], usage=_go_usage()),
+                          _article()])                    # arm a's two loop requests
+    budget = Budget(5, tmp_path / 'usage.json', 8192, provider='deepseek')
+    original = client.completions.create
+    assert original.__name__ == 'create'
+
+    run_deepseek_arm(_packet(), 'b', [_get_matchup_edges], DEEPSEEK_MODEL, budget, tmp_path,
+                     client=client)
+    assert client.completions.create.__func__ is original.__func__
+    run_deepseek_arm(_packet(), 'a', [_get_matchup_edges], DEEPSEEK_MODEL, budget, tmp_path,
+                     client=client)
+    assert client.completions.create.__func__ is original.__func__
+
+    assert len(budget.rows) == 3
+    assert len(_ledger_rows(tmp_path)) == 3
+    assert [row['arm'] for row in budget.rows] == ['b', 'a', 'a']
