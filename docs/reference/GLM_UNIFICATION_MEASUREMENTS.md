@@ -1,6 +1,6 @@
 # GLM-5.3-Flash Unification: Measurements
 
-Reference worksheet for `docs/in_progress/GLM_5_3_UNIFICATION_PLAN.md`. It records what was
+Reference worksheet for `docs/done/GLM_5_3_UNIFICATION_PLAN.md`. It records what was
 measured before a site may flip its default to `glm-5.3-flash` on OpenCode Go, and what is still
 unmeasured. The plan flips nothing itself (U4 is JR's): this file is the evidence a flip needs.
 

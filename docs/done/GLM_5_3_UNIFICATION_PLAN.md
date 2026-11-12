@@ -1,7 +1,7 @@
 # Project Mu: GLM-5.3-Flash Unification Plan
 
-**Status:** approved by JR (2026-11-12); building, wave 2 of 2 done. `/execute-plan` runs it as label `glm-unification` (DeepSeek session, 2026-11-12).
-**Builds on:** [`MODEL_ROUTING_EVALUATION.md`](../reference/MODEL_ROUTING_EVALUATION.md) §8.1 and [`ARTICLE_FACT_GATE_PLAN.md`](ARTICLE_FACT_GATE_PLAN.md) (both read the same measured week), PROJECT_SPEC §7.7 (agent memory), §7.8 (Agent Wire), §7.11 (personas), §2.21b (inbox voice), [`AGENT_WIRE_VOICE_PLAN.md`](../done/AGENT_WIRE_VOICE_PLAN.md) (**built 2026-11-09** — the voice rules are settled, so a model swap is a clean comparison), [`OPENCODE_GO_PIPELINE_PLAN.md`](../done/OPENCODE_GO_PIPELINE_PLAN.md) (the Go provider and allowance watchdog).
+**Status:** approved by JR (2026-11-12); built and on main (2026-11-12). `/execute-plan` runs it as label `glm-unification` (DeepSeek session, 2026-11-12).
+**Builds on:** [`MODEL_ROUTING_EVALUATION.md`](../reference/MODEL_ROUTING_EVALUATION.md) §8.1 and [`ARTICLE_FACT_GATE_PLAN.md`](../not_started/ARTICLE_FACT_GATE_PLAN.md) (both read the same measured week), PROJECT_SPEC §7.7 (agent memory), §7.8 (Agent Wire), §7.11 (personas), §2.21b (inbox voice), [`AGENT_WIRE_VOICE_PLAN.md`](AGENT_WIRE_VOICE_PLAN.md) (**built 2026-11-09** — the voice rules are settled, so a model swap is a clean comparison), [`OPENCODE_GO_PIPELINE_PLAN.md`](OPENCODE_GO_PIPELINE_PLAN.md) (the Go provider and allowance watchdog).
 
 **Goal:** one text model — `glm-5.3-flash` on OpenCode Go — writes everything Mu says in words: articles (already done, `ac8df19`), Agent Wire posts, season memories, press conferences, scouting prose, GM lines and inbox voice. Gemini stops being a text model for Mu and stays only where Go has no equivalent: **embeddings** and **vision**.
 
