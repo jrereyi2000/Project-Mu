@@ -1,6 +1,6 @@
 # Project Mu: Visual Mod Check Plan
 
-**Status:** approved by JR (2026-11-12), with his answers folded in below. Building, wave 1 of 2 (units; wave 0 is spike S-1).
+**Status:** approved by JR (2026-11-12), with his answers folded in below. Building, wave 1 of 2 (units; wave 0 spike S-1 run 2026-11-12, status partial — see §2.5a).
 **Builds on:** PROJECT_SPEC §1.1 (repository layout), [`MUSE_EMBER_ROTATION_PLAN.md`](../done/MUSE_EMBER_ROTATION_PLAN.md) (the Muse route and the computer-use rules), [`MADDEN_PILOT.md`](../reference/MADDEN_PILOT.md) §5 (jobs) and §6 (safety), [`MADDEN_SPIKE_AGENT.md`](../reference/MADDEN_SPIKE_AGENT.md) §7 (asset checks, checkpoints, clips), [`LOCAL_VISION_LATENCY.md`](../reference/LOCAL_VISION_LATENCY.md) (what a local model measured at), `docs/reference/LOCAL_VISION_HOST.md` (the Mac host, being set up by `mac-vision-setup`).
 
 **Goal:** replace the manual Codex loop JR uses to test visual mods. One command loads a `CAREER-TUNE-*` save, records the game-start and halftime segments, and answers *"did this mod's assets appear?"* with a number per asset plus a short written summary — deterministic pixel checks for the verdict, a vision model (hosted on JR's always-on M1 Mac, never on Madden's GPU) for the description and for unknown screens. JR stops describing frames by hand and starts reading pass/fail lines.
@@ -130,6 +130,15 @@ python3 -m tools.madden_pilot watch-game --save CAREER-TUNE-<name> --franchise T
 - Leaving: it quits to the franchise list through the same path `quit-franchise` uses, and the report states whether `-AUTOSAVE` was written. **That write is confirmed (D1, R1).**
 - The catalog gains the screens this route needs, each with `confirm_ok` limited to the labels that start a game and the supersim controls it must press; roster cards and delete paths stay `never_select`/forbidden.
 
+### 2.5a What spike S-1 verified (2026-11-12, `data/spikes/20261112-1410-game-start-halftime/report.md`)
+
+- **Starting a game:** `HUB_GAMEDAY` (PLAY SEASON GAME bordered on arrival) → Space → a full-screen **pregame pivot** card whose only control is a SELECT hint that does not OCR (Space) → a **ready** screen with READY highlighted (Space) → a ~40 s broadcast intro that runs unattended → the **kickoff** screen (aim arc, 1 DEEP KICK / 2 PLACEMENT / 3 POWER SQUIB). The kick itself is a **~1.5 s Space hold**, not a tap.
+- **Supersim:** Escape pauses; the pause menu's sixth item opens the supersim screen (CUSTOM PLAY OPTIONS / JUMP TO NEXT PLAY / JUMP FORWARD; SPEED: FAST; Backspace returns to the pause menu). JUMP FORWARD offers **CHANGE OF POSSESSION** (one drive, ~2 min of clock), **NEXT QUARTER** (stops at the next quarter start) and END OF GAME. JUMP TO NEXT PLAY moves only ~4 s of clock a press, so a whole quarter by play is not a bounded number of steps.
+- **Real play does not run itself:** left alone it stops on a delay-of-game PENALTY dialog (Accept / Decline) whose border does not read. JR's rules: never control offense except the last play of the quarter (or the last play before the half or game ends, whichever is sooner); if on offense, reopen supersim and sim until on defense; if a snap must be taken, Space for the default play, ~1 s for the line, Space again.
+- **Clone names:** the franchise tile OCR reads a digit `1` as `I`, so `CAREER-TUNE-CHK1` is unfindable; use digit-free clone names (the spike ran `CAREER-TUNE-CHECK`).
+- **Evidence:** the pilot numbers step PNGs per process, so a multi-call run overwrites `steps/0001_*.png`. `watch-game` must write one run directory per invocation with unique step names.
+- **Not verified:** the halftime show itself; whether NEXT QUARTER from Q2 plays or skips it.
+
 ### 2.6 Output
 
 `report.json`: `{save, mod, segments: [{name, cue, recorded_s, frames, checks: {asset: {status, measures, frame, why}}, summary}], verdict: pass|fail|unknown, minutes}`. `report.md` is the same in one table per segment plus the model's two sentences. One ntfy line: `mod_check <slug>: 2/3 pass (halftime fail)`.
@@ -228,3 +237,4 @@ No path appears twice.
 
 | Unit | Wave | Branch | Worktree | Result | Merge |
 |---|---|---|---|---|---|
+| U1 | 1 | `worktree-vmc-u1` | `.claude/worktrees/vmc-u1` | merged | `32f554b` |
