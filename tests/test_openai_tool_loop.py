@@ -12,10 +12,15 @@ Verifies:
 7. Fallback synthesis prompt when model returns empty text after research.
 8. Encapsulated Gemini tool loop execution and fallback synthesis.
 9. Router dispatching between Gemini and OpenAI-compatible providers.
+10. OpenCode Go provider: endpoints, the `deepseek` alias, model aliases, session header,
+    usage cost capture and the allowance ledger (OPENCODE_GO_PIPELINE_PLAN.md U1).
 """
 import collections
+import contextlib
+import io
 import json
 import os
+import tempfile
 import unittest
 from typing import Any, Dict, List, Literal, Optional, Union
 from unittest import mock
@@ -79,6 +84,18 @@ class MockUsage:
         self.total_tokens = prompt_tokens + completion_tokens
         self.prompt_tokens_details = MockUsageDetails(cached_tokens=cached_tokens)
         self.completion_tokens_details = MockUsageDetails(reasoning_tokens=reasoning_tokens)
+
+
+class MockGoUsage(MockUsage):
+    """OpenCode Go's usage: the token counts plus ``cost`` and ``usage.opencode``."""
+
+    def __init__(self, *args, cost: float = 0.0, allowance: Optional[float] = 1.2e-05,
+                 list_cost: Optional[float] = 2.0e-05, billing_source: str = "go", **kwargs):
+        super().__init__(*args, **kwargs)
+        self.cost = cost
+        self.opencode = {"allowance": allowance, "list_cost": list_cost,
+                         "billing_source": billing_source,
+                         "tokens": {"input": 1000, "output": 20}}
 
 
 class MockResponse:
@@ -520,7 +537,10 @@ class TestOpenAIToolLoop(unittest.TestCase):
         })
         self.assertEqual(usage, {"input_tokens": 1000, "cached_tokens": 600,
                                  "uncached_tokens": 400, "output_tokens": 300,
-                                 "thinking_tokens": 200})
+                                 "thinking_tokens": 200,
+                                 # Go's four optional fields are None when unreported
+                                 "cost_usd": None, "list_cost_usd": None,
+                                 "allowance_usd": None, "billing_source": None})
         # Its schema also nests them under prompt_tokens_details.
         nested = extract_openai_usage({
             "prompt_tokens": 100,
@@ -858,14 +878,23 @@ class TestToolLoopRouter(unittest.TestCase):
             # Hosted provider with no key is an error, not a dummy key
             with self.assertRaises(ValueError):
                 resolve_endpoint("deepseek")
-        with mock.patch.dict(os.environ, {"DEEPSEEK_API_KEY": "k"}, clear=True):
+        # The direct DeepSeek API is the escape hatch: setting DEEPSEEK_BASE_URL by hand
+        with mock.patch.dict(os.environ, {"DEEPSEEK_BASE_URL": "https://api.deepseek.com",
+                                          "DEEPSEEK_API_KEY": "k"}, clear=True), \
+             mock.patch("pipeline.notify.env", return_value=None):
             self.assertEqual(resolve_endpoint("deepseek"), ("https://api.deepseek.com", "k"))
 
     def test_openai_loop_missing_key_returns_error(self):
         with mock.patch.dict(os.environ, {}, clear=True), \
              mock.patch("pipeline.notify.env", return_value=None):
+            # `deepseek` is a Go alias, so the missing key is Go's
             result = run_openai_tool_loop(None, "deepseek-chat", "s", "p", [], provider="deepseek")
-        self.assertIn("DEEPSEEK_API_KEY", result.error)
+        self.assertIn("OPENCODE_GO_API_KEY", result.error)
+        with mock.patch.dict(os.environ, {"DEEPSEEK_BASE_URL": "https://api.deepseek.com"},
+                             clear=True), \
+             mock.patch("pipeline.notify.env", return_value=None):
+            escaped = run_openai_tool_loop(None, "deepseek-chat", "s", "p", [], provider="deepseek")
+        self.assertIn("DEEPSEEK_API_KEY", escaped.error)
 
     def test_provider_from_env_variable(self):
         with mock.patch.dict(os.environ, {"LLM_PROVIDER": "vllm"}):
@@ -942,6 +971,303 @@ class TestEdgeCasesAndRobustness(unittest.TestCase):
         self.assertEqual(result.usage["output_tokens"], 50)
         self.assertEqual(result.usage["cached_tokens"], 25)
         self.assertEqual(result.usage["thinking_tokens"], 15)
+
+
+# ---------------------------------------------------------------------------
+# Tests: OpenCode Go provider (OPENCODE_GO_PIPELINE_PLAN.md U1)
+# ---------------------------------------------------------------------------
+
+class MockDumpUsage:
+    """A usage object whose extras only appear in ``model_dump()`` (an SDK version detail)."""
+
+    def __init__(self, prompt_tokens: int = 10, completion_tokens: int = 5, data=None):
+        self.prompt_tokens = prompt_tokens
+        self.completion_tokens = completion_tokens
+        self._data = data or {}
+
+    def model_dump(self):
+        return dict(self._data, prompt_tokens=self.prompt_tokens,
+                    completion_tokens=self.completion_tokens)
+
+
+class MockExtraUsage:
+    """A usage object whose extras only appear in ``model_extra``."""
+
+    def __init__(self, prompt_tokens: int = 10, completion_tokens: int = 5, data=None):
+        self.prompt_tokens = prompt_tokens
+        self.completion_tokens = completion_tokens
+        self.model_extra = data or {}
+
+
+GO_ENV = {"OPENCODE_GO_API_KEY": "go-key"}
+
+
+class TestOpenCodeGoProvider(unittest.TestCase):
+    def test_provider_endpoint_entry(self):
+        from newsroom.tool_loop.openai_loop import PROVIDER_ENDPOINTS
+        self.assertEqual(PROVIDER_ENDPOINTS["opencode-go"],
+                         ("OPENCODE_GO_BASE_URL",
+                          "https://opencode.ai/inference/go/openai/v1",
+                          "OPENCODE_GO_API_KEY"))
+
+    def test_resolve_opencode_go_from_env(self):
+        from newsroom.tool_loop.openai_loop import resolve_endpoint
+        env = dict(GO_ENV, OPENCODE_GO_BASE_URL="https://example.test/inference/go/openai/v1")
+        with mock.patch.dict(os.environ, env, clear=True), \
+             mock.patch("pipeline.notify.env", return_value=None):
+            self.assertEqual(resolve_endpoint("opencode-go"),
+                             ("https://example.test/inference/go/openai/v1", "go-key"))
+        with mock.patch.dict(os.environ, GO_ENV, clear=True), \
+             mock.patch("pipeline.notify.env", return_value=None):
+            self.assertEqual(resolve_endpoint("opencode-go"),
+                             ("https://opencode.ai/inference/go/openai/v1", "go-key"))
+
+    def test_resolve_opencode_go_without_key_raises(self):
+        from newsroom.tool_loop.openai_loop import resolve_endpoint
+        with mock.patch.dict(os.environ, {}, clear=True), \
+             mock.patch("pipeline.notify.env", return_value=None), \
+             self.assertRaises(ValueError) as raised:
+            resolve_endpoint("opencode-go")
+        self.assertIn("OPENCODE_GO_API_KEY", str(raised.exception))
+
+    def test_deepseek_alias_resolves_to_go_by_default(self):
+        from newsroom.tool_loop.openai_loop import resolve_endpoint
+        with mock.patch.dict(os.environ, GO_ENV, clear=True), \
+             mock.patch("pipeline.notify.env", return_value=None):
+            self.assertEqual(resolve_endpoint("deepseek"),
+                             ("https://opencode.ai/inference/go/openai/v1", "go-key"))
+
+    def test_deepseek_escape_hatch_when_base_url_is_set(self):
+        from newsroom.tool_loop.openai_loop import resolve_endpoint
+        env = {"DEEPSEEK_BASE_URL": "https://api.deepseek.com", "DEEPSEEK_API_KEY": "dk",
+               **GO_ENV}
+        with mock.patch.dict(os.environ, env, clear=True), \
+             mock.patch("pipeline.notify.env", return_value=None):
+            self.assertEqual(resolve_endpoint("deepseek"), ("https://api.deepseek.com", "dk"))
+
+    def _sent_model(self, model: str, provider: str) -> str:
+        client = MockOpenAIClient([MockResponse(MockMessage(content="done"))])
+        run_openai_tool_loop(client=client, model=model, system_instruction="",
+                             prompt="p", tools=[], provider=provider)
+        return client.call_history[0]["model"]
+
+    def test_model_alias_for_both_go_providers(self):
+        self.assertEqual(self._sent_model("deepseek-flash", "opencode-go"),
+                         "deepseek-v4.1-flash")
+        self.assertEqual(self._sent_model("deepseek-flash", "deepseek"),
+                         "deepseek-v4.1-flash")
+
+    def test_model_alias_passes_other_ids_and_providers_through(self):
+        self.assertEqual(self._sent_model("deepseek-flash", "openai"), "deepseek-flash")
+        self.assertEqual(self._sent_model("glm-4", "opencode-go"), "glm-4")
+        self.assertEqual(self._sent_model("deepseek-v4.1-flash", "deepseek"),
+                         "deepseek-v4.1-flash")
+
+    def test_build_default_client_sends_session_header(self):
+        import newsroom.tool_loop.openai_loop as openai_loop
+        with mock.patch.dict(os.environ, GO_ENV, clear=True), \
+             mock.patch("pipeline.notify.env", return_value=None), \
+             mock.patch("openai.OpenAI") as fake_openai:
+            openai_loop.build_default_client("opencode-go", max_retries=0)
+        kwargs = fake_openai.call_args.kwargs
+        self.assertEqual(kwargs["base_url"], "https://opencode.ai/inference/go/openai/v1")
+        self.assertEqual(kwargs["api_key"], "go-key")
+        session = kwargs["default_headers"]["x-opencode-session"]
+        self.assertTrue(session.startswith("mu-pipeline-"))
+        self.assertIn(str(os.getpid()), session)
+        self.assertEqual(kwargs["max_retries"], 0)
+
+    def test_build_default_client_honours_mu_go_session(self):
+        import newsroom.tool_loop.openai_loop as openai_loop
+        env = dict(GO_ENV, MU_GO_SESSION="mu-pipeline-test")
+        with mock.patch.dict(os.environ, env, clear=True), \
+             mock.patch("pipeline.notify.env", return_value=None), \
+             mock.patch("openai.OpenAI") as fake_openai:
+            openai_loop.build_default_client("deepseek")
+        self.assertEqual(fake_openai.call_args.kwargs["default_headers"],
+                         {"x-opencode-session": "mu-pipeline-test"})
+
+    def test_build_default_client_leaves_local_providers_unchanged(self):
+        import newsroom.tool_loop.openai_loop as openai_loop
+        with mock.patch.dict(os.environ, {"OLLAMA_HOST": "localhost:11434"}, clear=True), \
+             mock.patch("pipeline.notify.env", return_value=None), \
+             mock.patch("openai.OpenAI") as fake_openai:
+            openai_loop.build_default_client("ollama")
+            self.assertNotIn("default_headers", fake_openai.call_args.kwargs)
+            openai_loop.build_default_client("vllm")
+            self.assertNotIn("default_headers", fake_openai.call_args.kwargs)
+
+
+class TestGoUsageCapture(unittest.TestCase):
+    def test_cost_fields_from_dict(self):
+        from newsroom.tool_loop.openai_loop import extract_openai_usage
+        usage = extract_openai_usage({
+            "prompt_tokens": 1000,
+            "completion_tokens": 20,
+            "cost": 0,
+            "opencode": {"allowance": 1.206e-05, "billing_source": "go",
+                         "list_cost": 2.01e-05, "tokens": {"input": 1000}},
+        })
+        self.assertEqual(usage["cost_usd"], 0.0)
+        self.assertAlmostEqual(usage["allowance_usd"], 1.206e-05)
+        self.assertAlmostEqual(usage["list_cost_usd"], 2.01e-05)
+        self.assertEqual(usage["billing_source"], "go")
+        # Token contract is untouched
+        self.assertEqual((usage["input_tokens"], usage["output_tokens"]), (1000, 20))
+
+    def test_cost_fields_from_model_dump(self):
+        from newsroom.tool_loop.openai_loop import extract_openai_usage
+        usage = extract_openai_usage(MockDumpUsage(data={
+            "cost": 0.0,
+            "opencode": {"allowance": 0.5, "list_cost": 0.75, "billing_source": "go"},
+        }))
+        self.assertEqual(usage["cost_usd"], 0.0)
+        self.assertEqual(usage["allowance_usd"], 0.5)
+        self.assertEqual(usage["list_cost_usd"], 0.75)
+        self.assertEqual(usage["billing_source"], "go")
+
+    def test_cost_fields_from_model_extra(self):
+        from newsroom.tool_loop.openai_loop import extract_openai_usage
+        usage = extract_openai_usage(MockExtraUsage(data={
+            "cost": 0.0,
+            "opencode": {"allowance": 0.25, "list_cost": 0.5, "billing_source": "go"},
+        }))
+        self.assertEqual(usage["allowance_usd"], 0.25)
+        self.assertEqual(usage["list_cost_usd"], 0.5)
+        self.assertEqual(usage["billing_source"], "go")
+
+    def test_cost_fields_absent_are_none(self):
+        from newsroom.tool_loop.openai_loop import extract_openai_usage
+        usage = extract_openai_usage({"prompt_tokens": 10, "completion_tokens": 5})
+        for key in ("cost_usd", "list_cost_usd", "allowance_usd", "billing_source"):
+            self.assertIsNone(usage[key], key)
+        empty = extract_openai_usage(None)
+        for key in ("cost_usd", "list_cost_usd", "allowance_usd", "billing_source"):
+            self.assertIsNone(empty[key], key)
+
+
+class TestGoAllowanceLedger(unittest.TestCase):
+    def _two_request_client(self, **usage_kwargs):
+        return MockOpenAIClient([
+            MockResponse(MockMessage(tool_calls=[MockToolCall("c1", "calc", "{}")]),
+                         MockGoUsage(**usage_kwargs)),
+            MockResponse(MockMessage(content="Done"), MockGoUsage(**usage_kwargs)),
+        ])
+
+    def _run(self, client, **kwargs):
+        def calc() -> str:
+            """Compute."""
+            return "42"
+        return run_openai_tool_loop(client=client, model="deepseek-flash",
+                                    system_instruction="", prompt="Calculate",
+                                    tools=[calc], **kwargs)
+
+    def _ledger_lines(self, path):
+        with open(path) as f:
+            return [json.loads(line) for line in f if line.strip()]
+
+    def test_loop_writes_one_line_per_request(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "go_allowance.jsonl")
+            with mock.patch.dict(os.environ, {"MU_GO_ALLOWANCE_FILE": path}):
+                result = self._run(self._two_request_client(), provider="opencode-go")
+            self.assertEqual(result.text, "Done")
+            lines = self._ledger_lines(path)
+            self.assertEqual(len(lines), 2)
+            for line in lines:
+                self.assertEqual(line["model"], "deepseek-v4.1-flash")
+                self.assertEqual(line["label"], "opencode-go")
+                self.assertEqual(line["allowance_usd"], 1.2e-05)
+                self.assertEqual(line["list_cost_usd"], 2.0e-05)
+                self.assertEqual(line["billing_source"], "go")
+                self.assertIn("at", line)
+            # Totals carry the summed money fields; usage_calls keep the per-request ones
+            self.assertAlmostEqual(result.usage["allowance_usd"], 2.4e-05)
+            self.assertAlmostEqual(result.usage["list_cost_usd"], 4.0e-05)
+            self.assertEqual(result.usage_calls[0]["billing_source"], "go")
+
+    def test_loop_writes_nothing_without_an_allowance(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "go_allowance.jsonl")
+            client = MockOpenAIClient([MockResponse(MockMessage(content="Done"))])
+            with mock.patch.dict(os.environ, {"MU_GO_ALLOWANCE_FILE": path}):
+                result = self._run(client, provider="opencode-go")
+            self.assertEqual(result.text, "Done")
+            self.assertFalse(os.path.exists(path))
+
+    def test_ledger_write_failure_does_not_break_the_run(self):
+        with tempfile.TemporaryDirectory() as td:
+            blocker = os.path.join(td, "blocker")
+            with open(blocker, "w") as f:
+                f.write("not a directory")
+            path = os.path.join(blocker, "go_allowance.jsonl")
+            stderr = io.StringIO()
+            with mock.patch.dict(os.environ, {"MU_GO_ALLOWANCE_FILE": path}), \
+                 contextlib.redirect_stderr(stderr):
+                result = self._run(self._two_request_client(), provider="opencode-go")
+            self.assertEqual(result.text, "Done")
+            self.assertIsNone(result.error)
+            self.assertAlmostEqual(result.usage["allowance_usd"], 2.4e-05)
+            self.assertIn("go allowance not recorded", stderr.getvalue())
+            self.assertFalse(os.path.exists(path))
+
+    def test_record_creates_the_directory_and_entries_read_back(self):
+        from newsroom.tool_loop import go_allowance
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "nested", "usage", "go_allowance.jsonl")
+            go_allowance.record(path, at="2026-11-12T04:05:00Z", model="deepseek-v4.1-flash",
+                                label="dossier", allowance_usd=1.5e-05,
+                                list_cost_usd=2.0e-05, billing_source="go")
+            rows = go_allowance.entries(path)
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]["at"], "2026-11-12T04:05:00Z")
+            self.assertEqual(rows[0]["label"], "dossier")
+
+    def test_entries_skip_malformed_lines_and_filter_by_since(self):
+        from newsroom.tool_loop import go_allowance
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "go_allowance.jsonl")
+            with open(path, "w") as f:
+                f.write('{"at": "2026-11-12T01:00:00Z", "allowance_usd": 0.1}\n')
+                f.write("not json\n")
+                f.write("[1, 2, 3]\n")
+                f.write('{"at": "2026-11-12T05:00:00Z", "allowance_usd": 0.2}\n')
+            self.assertEqual(len(go_allowance.entries(path)), 2)
+            recent = go_allowance.entries(path, since="2026-11-12T03:00:00Z")
+            self.assertEqual([r["allowance_usd"] for r in recent], [0.2])
+            self.assertEqual(go_allowance.entries(os.path.join(td, "missing.jsonl")), [])
+
+
+class TestOpenCodeGoRouting(unittest.TestCase):
+    def test_provider_names(self):
+        self.assertEqual(resolve_tool_loop_provider("opencode-go"), "opencode-go")
+        self.assertEqual(resolve_tool_loop_provider("opencode"), "opencode-go")
+        self.assertEqual(resolve_tool_loop_provider("deepseek"), "deepseek")
+
+    def test_model_prefixes(self):
+        self.assertEqual(resolve_tool_loop_provider(model="opencode-go:deepseek-v4.1-flash"),
+                         "opencode-go")
+        self.assertEqual(resolve_tool_loop_provider(model="opencode:glm-5.3-flash"),
+                         "opencode-go")
+        self.assertEqual(resolve_tool_loop_provider(model="deepseek:deepseek-v4.1-flash"),
+                         "deepseek")
+
+    @mock.patch("newsroom.tool_loop.router.run_openai_tool_loop")
+    def test_router_strips_opencode_prefix(self, mock_openai):
+        mock_openai.return_value = ToolLoopResult(text="ok")
+        execute_agent_tool_loop(None, "c", "opencode:deepseek-v4.1-flash", "sys", "p", [])
+        kwargs = mock_openai.call_args.kwargs
+        self.assertEqual(kwargs["model"], "deepseek-v4.1-flash")
+        self.assertEqual(kwargs["provider"], "opencode-go")
+
+        execute_agent_tool_loop("opencode-go", "c", "opencode-go:deepseek-v4.1-flash",
+                                "sys", "p", [])
+        self.assertEqual(mock_openai.call_args.kwargs["model"], "deepseek-v4.1-flash")
+
+        # `deepseek:` still resolves to its own provider, which is the Go alias
+        execute_agent_tool_loop(None, "c", "deepseek:deepseek-flash", "sys", "p", [])
+        self.assertEqual(mock_openai.call_args.kwargs["provider"], "deepseek")
+        self.assertEqual(mock_openai.call_args.kwargs["model"], "deepseek-flash")
 
 
 if __name__ == "__main__":
