@@ -88,9 +88,9 @@ tools/opencode_session.sh [--prompt TEXT] [any opencode arguments]
 ```
 
 1. Refuses to run outside a git checkout that has `.opencode/opencode.json` (exit 2 with a one-line message), so a session never starts unconfigured.
-2. Exports the three markers and `MU_OPENCODE_MODEL` (default `opencode-go/deepseek-v4.1-flash`).
+2. Exports the three markers, `MU_OPENCODE_MODEL` (default `opencode-go/deepseek-v4.1-flash`) and `MU_OPENCODE_SESSION`. The session id is `MU_OPENCODE_SESSION` if already set (a resume), else a fresh `ses_mu_<epoch>_<random>`; it is passed to OpenCode as `--session`, so every window has a stable id that `tools/context_check.py` can export without guessing (spike S1).
 3. Prints the route line.
-4. `exec "${MU_OPENCODE_BIN:-opencode}" "$@"`.
+4. `exec "${MU_OPENCODE_BIN:-opencode}" --session "$MU_OPENCODE_SESSION" "$@"`.
 
 `MU_OPENCODE_BIN` exists for tests; nothing else reads it.
 
@@ -152,15 +152,15 @@ New flag `--harness auto|claude|opencode` (default `auto`). Resolution order:
 
 1. `--transcript PATH` → Claude transcript, as today.
 2. `--session ID` → if it starts with `ses_`, export it from OpenCode; otherwise treat it as a Claude session id.
-3. `MU_AGENT_HARNESS` → `opencode` or `claude-code`.
-4. `auto`: try OpenCode when `opencode` is on PATH and one of its sessions has `directory` equal to the resolved current directory; else fall back to the Claude transcript.
+3. `MU_OPENCODE_SESSION` → export that OpenCode session (the id `tools/opencode_session.sh` minted for this window). This is the normal path for a spawned DeepSeek session.
+4. `MU_AGENT_HARNESS` → `opencode` or `claude-code`.
+5. `auto`: try OpenCode when `opencode` is on PATH and a session exists; else fall back to the Claude transcript.
 
-The OpenCode source:
+The OpenCode source, for cases 2–5:
 
-1. `opencode session list --format json` (newest first), keep entries whose `directory` equals `Path.cwd().resolve()`, take the newest by `updated`.
-2. `opencode session export <id>`.
-3. Context = `input + cache.read + cache.write` of the newest entry in `messages` with `type == "assistant"` and a `tokens` object.
-4. The report line names its source: `context: 105,278 / 1,000,000 tokens (10.5%) - under 60% (opencode ses_…)`.
+1. `opencode session export <id>` — the id from step 2 or 3, else the newest entry from `opencode session list --format json` (a warning goes on stderr: the shared service gives every session the same `directory`, so this is only a fallback).
+2. Context = `input + cache.read + cache.write` of the newest entry in `messages` with `type == "assistant"` and a `tokens` object.
+3. The report line names its source: `context: 105,278 / 1,000,000 tokens (10.5%) - under 60% (opencode ses_…)`.
 
 Exit codes, thresholds and `MU_CONTEXT_LIMIT` / `MU_CONTEXT_THRESHOLD` are unchanged. A session that has exported nothing (a fresh session before its first reply) counts as exit 1 with "no usage yet", not as zero.
 
@@ -175,22 +175,22 @@ DeepSeek window becomes `tools/opencode_session.sh --prompt "/deepseek"`. The pl
 | R1 | The TUI may ignore the project `model` pin (only `opencode run`/`mini` document `--model`). | Spike S1: start one window and read `/models`. | Fall back to `opencode mini --model … --prompt …` for spawned windows and tell JR the TUI has to be switched by hand. |
 | R2 | `/builder`, `/propose`, `/audit` may load by `@skill-id` but not as slash commands in the TUI. | Spike S1: type `/propose` and `@propose` in the spike window. | Skill text says `@skill-id`; `spawn_agent.sh` prefixes stay unchanged. |
 | R3 | `/execute-plan` needs background subagents in git worktrees that commit their own branch. OpenCode has both, but this flow has never run there. | Spike S2: one-unit throwaway plan, subagent commits in a worktree. | Builds run inline in the orchestrator at a cost of time, or `/execute-plan` stays on Claude Code until fixed. |
-| R4 | Two DeepSeek sessions in the same checkout make `session list` ambiguous for `/context-check`. | U3 tests pick by `directory`; worktrees differ. | Pass `--session ses_…`; the flag exists for exactly this. |
+| R4 | The shared OpenCode service reports one `directory` for every session (spike S1: a session started in `/tmp/opencode/oc-spike` exported `location.directory = /home/jrereyi/Project-Mu`), so "newest by directory" cannot identify this session, and two builders would read each other's usage. | Solved by design: `tools/opencode_session.sh` mints `MU_OPENCODE_SESSION` and passes `--session`, and `/context-check` reads it first. | `--session ses_…` still works by hand; the newest-session fallback only runs for sessions started without the wrapper. |
 | R5 | OpenCode's context allowance for this model is unproven; `MU_CONTEXT_LIMIT` assumes 1,000,000. | Spike S1: `/context-check` after a long tool run; the console if it errors. | Lower `MU_CONTEXT_LIMIT` and note it in the spec. |
 | R6 | One shared OpenCode service serves every window; a bad config reload or stuck server affects all sessions at once. | Spike S1 starts two windows. | `opencode service restart`; `--standalone` per window as a last resort. |
 | R7 | Go's allowance is $100/month for this model (5-hour 20%, weekly 50%), shared by every builder, and nothing watches it. | §8 Q1; the console. | Sessions start failing mid-wave; the hand-over rules then rely on context only, as today. |
 | R8 | The guard could be bypassed by a DeepSeek session started without the wrapper. | Skills check the model id as well as `MU_AGENT_CLASS`. | Board rule stands: a session whose model id is `deepseek-*` never audits. |
 
-**Spike first (S1, before wave 1, ~15 minutes):** in a throwaway git worktree of this repo, write the `.opencode/opencode.json` from §2.5 by hand, then start `opencode --prompt "/propose"` in a tmux window from that worktree. Confirms: the project `model` pin is honoured (`/models` shows `opencode-go/deepseek-v4.1-flash`), the session reads `AGENTS.md` and asks for a label, `/propose` and `@propose` both load the skill, `/context-check` prints a real number via `python3 -m tools.context_check`, and two windows can run at once on the shared service. The worktree is deleted afterwards; nothing in the repo changes. Answers R1, R2, R5, R6, and it can change U1's command, so it must run first.
+**Spike first (S1, before wave 1) — done 2026-11-12, 03:40 EST.** In a detached worktree at `/tmp/opencode/oc-spike` with the §2.5 config written by hand, `opencode run --auto` answered as `build · deepseek-v4.1-flash`: the project `model` pin is honoured, the `propose` skill loaded by id from `.claude/skills`, and the session named `CLAUDE.md` as its project instruction file (the `AGENTS.md` symlink works). A hand-supplied id worked too — `opencode run --session ses_mu_spike_0001` created and exported that session — which is why §2.3 mints `MU_OPENCODE_SESSION`. Two findings changed the design: every session reports the service's `directory`, not its own (R4), and the shared service lists sessions from all worktrees at once. R1, R2 and the instruction loading are cleared; the TUI's own `--prompt` path is confirmed by JR's first window after wave 1. The worktree and the spike sessions were deleted.
 
 **Spike S2 (before the first real `/execute-plan` on OpenCode, ~30 minutes):** a throwaway one-unit plan whose unit writes one file, run end to end by a spawned OpenCode session. Answers R3.
 
 ## 4. Tests (synthetic, no live DB, no network)
 
-- `tests/test_opencode_session.py` (new) → the wrapper exits 2 outside a configured checkout; with a stub `opencode` on `PATH` it exports `MU_AGENT_CLASS=deepseek`, `MU_AGENT_HARNESS=opencode`, `MU_AGENT_MODEL=deepseek-v4.1-flash`, `MU_OPENCODE_MODEL` default and override, prints the route line, and passes arguments through unchanged.
+- `tests/test_opencode_session.py` (new) → the wrapper exits 2 outside a configured checkout; with a stub `opencode` on `PATH` it exports `MU_AGENT_CLASS=deepseek`, `MU_AGENT_HARNESS=opencode`, `MU_AGENT_MODEL=deepseek-v4.1-flash`, `MU_OPENCODE_MODEL` default and override, and `MU_OPENCODE_SESSION` (minted `ses_mu_…`, or the one it was given for a resume), passes `--session <that id>` to OpenCode, prints the route line, and passes the remaining arguments through unchanged.
 - `tests/test_spawn_agent.py` (new) → `--dry-run` for `deepseek` prints `opencode_session.sh --prompt '/builder'`; for `deepseek-claude` prints the wrapper; `deepseek` with a non-slash prompt still gets the `Your session label is …` prefix; a caller with `MU_AGENT_CLASS=deepseek` and no flag exits 3; with `MU_ALLOW_DEEPSEEK_SPAWN=1` it dry-runs; a caller with the legacy `ANTHROPIC_BASE_URL` also exits 3; an unknown agent exits 2; no tmux window is created (dry run only).
 - `tests/test_opencode_config.py` (new) → `.opencode/opencode.json` parses, has `$schema`, and `model == "opencode-go/deepseek-v4.1-flash"`; `.opencode/agents/repo-qa.md` has `mode: subagent`, no `model:`, a deny-all rule followed by read/glob/grep allows, and no shell/edit; no config file contains a value starting `sk-`.
-- `tests/test_context_check.py` (extend) → OpenCode fixture: newest session by `directory` wins, `--session ses_…` overrides, context sums `input + cache.read + cache.write`, under/over threshold exits 0/2, a session with no assistant usage exits 1, `--transcript` still wins over both, and the Claude transcript path keeps its existing tests passing.
+- `tests/test_context_check.py` (extend) → OpenCode fixture: `MU_OPENCODE_SESSION` selects that session, `--session ses_…` overrides it, the newest-session fallback runs only with neither, context sums `input + cache.read + cache.write`, under/over threshold exits 0/2, a session with no assistant usage exits 1, `--transcript` still wins over both, and the Claude transcript path keeps its existing tests passing.
 - `tests/test_opencode_session.py` also asserts the wrapper never prints a secret.
 
 Run with `pytest -m "not integration" tests/test_opencode_session.py tests/test_spawn_agent.py tests/test_opencode_config.py tests/test_context_check.py`.
@@ -204,7 +204,7 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 - **Owns:** `tools/opencode_session.sh` (new), `tools/spawn_agent.sh`, `tests/test_opencode_session.py` (new), `tests/test_spawn_agent.py` (new)
 - **Reads:** `CLAUDE.md` § Starting other sessions, `docs/reference/AGENTS.md` § Model inboxes, `tools/spawn_agent.sh`
 - **Depends on:** none
-- **Done when:** `deepseek` launches the wrapper, `deepseek-claude` launches `$MU_DEEPSEEK_CMD`, the guard refuses from a DeepSeek-marked caller without the flag, and `--dry-run` stays side-effect free.
+- **Done when:** `deepseek` launches the wrapper, `deepseek-claude` launches `$MU_DEEPSEEK_CMD`, every launch gets a stable `MU_OPENCODE_SESSION` passed as `--session`, the guard refuses from a DeepSeek-marked caller without the flag, and `--dry-run` stays side-effect free.
 - **Verify:** `pytest -m "not integration" tests/test_spawn_agent.py tests/test_opencode_session.py` → all pass; `tools/spawn_agent.sh --dry-run b1 deepseek "/builder"` → the run line contains `opencode_session.sh --prompt /builder`.
 
 ### U2: Project OpenCode config and `/offline` agent
@@ -220,7 +220,7 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 - **Owns:** `tools/context_check.py`, `tests/test_context_check.py`, `.claude/skills/context-check/SKILL.md`
 - **Reads:** `tools/context_check.py`, `tests/test_context_check.py`, `docs/reference/AGENTS.md` § Model inboxes
 - **Depends on:** none
-- **Done when:** `python3 -m tools.context_check` inside an OpenCode session prints a real number and names its source, and the three exit codes still mean what the skill says.
+- **Done when:** `python3 -m tools.context_check` inside an OpenCode session prints a real number, names its source, and prefers `MU_OPENCODE_SESSION`; the three exit codes still mean what the skill says.
 - **Verify:** `pytest -m "not integration" tests/test_context_check.py` → all pass; in this session after merge, `python3 -m tools.context_check --json` → `tokens > 0` and `source` starts `opencode`.
 
 ### U4: Skill and reference docs
