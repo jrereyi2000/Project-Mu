@@ -1,6 +1,6 @@
 # Project Mu: Muse Ember Rotation Plan
 
-**Status:** approved by JR (2026-11-12); rewritten to the OpenCode agent route and retargeted to JR's two-step benchmark (Spark first, Ember on a pass) on 2026-11-12; not started.
+**Status:** approved by JR (2026-11-12); rewritten to the OpenCode agent route and retargeted to JR's two-step benchmark (Spark first, Ember on a pass) on 2026-11-12; building, wave 1 of 2.
 **Builds on:** [`OPENCODE_DEEPSEEK_ROUTE_PLAN.md`](../done/OPENCODE_DEEPSEEK_ROUTE_PLAN.md) (built 2026-11-12: the OpenCode launcher, spawn types, route markers and board inbox that this plan copies), PROJECT_SPEC §1.2 (agent routes), [`MADDEN_PILOT_AND_TUNING_PLAN.md`](../done/MADDEN_PILOT_AND_TUNING_PLAN.md), `docs/reference/AGENTS.md` § Model inboxes.
 
 **Goal:** Make a Muse model a first-class Project Mu agent, and find out whether it beats the native route. A Muse session starts in the OpenCode TUI through its own launcher, joins the board with its own label, inbox and commit trailer, takes builder work, and owns computer use by driving `tools/madden_pilot` from its own shell. No Meta API client and no `MODEL_API_KEY`: JR's decision (D6) is that the session is the computer-use route.
@@ -256,3 +256,10 @@ No path appears twice.
 | Q2 | **B2: top up OpenCode Zen for Ember**, only after G-S passes? | Yes, and the smallest sensible amount: step 2 is one sim week plus a handful of screen reads. |
 | Q3 | If Spark passes but Ember fails or is dearer, which becomes the Muse default? | Spark for the benchmark's scope, with the Zen spend stopped; revisit if JR later wants builder work, which should prefer Ember (no training endpoint). |
 | Q4 | Should a Muse session be allowed to spawn a DeepSeek builder for a large unit, instead of always handing that to JR? | **Always hand to JR** (D9; spawning is how a second class of builder proliferates). |
+
+## 9. Build log
+
+| Unit | Wave | Branch | Worktree | Result | Merge |
+|---|---|---|---|---|---|
+| U2 board inbox alias | 1 | `worktree-agent-acb4b652d0f0c81b5` | `.claude/worktrees/agent-acb4b652d0f0c81b5` | merged — `muse` key in `RECIPIENTS`, 5 tests | `dca6741` |
+| U1 launcher and spawn type | 1 | — | — | running | — |
