@@ -17,6 +17,15 @@
 - `docs/reference/MOD_CHECK.md` — how to define a mod's check, capture its references, run it and read the report
 - Reference check specs under `data/mod_checks/<slug>/` (git-ignored), one `pass`/`fail` pair and region per asset JR wants to verify
 
+**As built (deviations from the text above):**
+- **U1** reads `win_agent`'s record caps from that file's source with `ast`, because `win_agent.py` imports `win32api` and cannot be imported under WSL; the caps still have one source of truth.
+- A fixed-wait segment is written `"cue": "supersim_menu"` with no `after`, so a plan cannot silently time any other moment. `preroll_s` is in the plan and the report.
+- `report.json`'s `save` names the **clone** the run scored (the source save is in the runner's return dict and the CLI prints it), and a run with no checked assets is `unknown`, not a vacuous `pass`.
+- The vision description is one call per segment on its contact sheet, stored as `summary`; the current vision prompt asks for one sentence, so the "two sentences" wording above is as close as the API allows.
+- **Clone names carry a letter, not a digit** (`CAREER-TUNE-CHKA`, `CHKB`, …): spike S-1 measured that the pilot's tile OCR reads `1` as `I`, so `CAREER-TUNE-CHK1` was unfindable.
+- **`tools/madden_pilot/__main__.py` belongs to U2**, not to no unit: `watch-game` needs a CLI entry.
+- **`tools/madden_pilot/spike.py` gained `allow_space`** (JR, 2026-11-12), outside every unit's files, because an in-game frame has no OCR label to confirm Space against. It is in the spec's spike paragraph.
+
 ---
 
 ## 0. Survey (code facts that set the scope)
