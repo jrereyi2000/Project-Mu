@@ -20,11 +20,15 @@ engine (three seeds) and settle the two questions the verdict left open (sample 
 term moved).** It is a measurement, so it needs **no audit verdict** — which is why it can run while the audit
 lane is parked.
 
-> **Status, 2026-11-12: unit 1 is done.** Run in this session at JR's request; results in
+> **Status, 2026-11-12: unit 1 is done** (and extended at JR's request), results in
 > [`PROGRESSION_FIT_2026-11-12.md`](PROGRESSION_FIT_2026-11-12.md). Headline: the old “stable on all three
-> seeds” recommendation does **not** survive — `AGE_BAND_OFFSET[0]` is now 2 of 3 (seed 0 drops it), and the
-> largest move on two seeds is `AGE_BAND_OFFSET[1]` (24–26) −0.76 → −0.56. The league term's maximum is +1.50,
-> at the verdict's revisit line and never over it. Nothing was applied.
+> seeds” recommendation does **not** survive — `AGE_BAND_OFFSET[0]` is 2 of 3 on the sample calibration and
+> 4 of 5 with one dissent in direction on the full roster, and `AGE_BAND_OFFSET[1]` collapses from “largest gain
+> on two seeds” to 1 of 5 once the calibration is fixed. The tripwire is not tripped (development term +1.50 at
+> the line on the sample, +1.00 on the full roster). **The one clear result is structural:** calibrating on the
+> **full roster** beats the 400-player sample on start (0.9337 vs 0.9603), finish (0.8927 vs 0.9184) and — the
+> point of the term — the 90+ count it holds (92–95 across five seeds, against 82–102 on the sample). Nothing was
+> applied; the calibration change is P3-04b for JR.
 
 - **Checklist ID:** **P3-04** (its own recorded follow-up; it re-runs **P3-02**). Proposed as a new sub-row
   **P3-04a** in §5 below, because P3-04 and P3-02 are both ticked ☑ and the outstanding half has no row.
@@ -162,11 +166,15 @@ the only real headroom.
 
 **Add, under §5.1 (P3), after P3-04:**
 
-> | ☐ | **P3-04a** | **Re-run the P3-02 fit on the fixed league-shape engine** (P3-04's open follow-up, 2026-11-12). Three seeds against `CAREER-MU2026` after `ded2627`/`e93e417`, answer audit-2's sample-vs-full-roster question, write the numbers into a committed note, apply nothing. | Fresh `progression_fit_seed{0,1,2}` reports plus a committed note; `AGE_BAND_OFFSET[0]` recommendation stated per seed. | M |
+> | ☑ | **P3-04a** | **Re-run the P3-02 fit on the fixed league-shape engine** (P3-04's open follow-up, 2026-11-12). Three seeds against `CAREER-MU2026` after `ded2627`/`e93e417`, answer audit-2's sample-vs-full-roster question, write the numbers into a committed note, apply nothing. | Fresh `progression_fit_seed{0,1,2}` reports plus a committed note; `AGE_BAND_OFFSET[0]` recommendation stated per seed. | M |
 
-**Run 2026-11-12 — tick it when JR agrees.** The done-when evidence is in
-[`PROGRESSION_FIT_2026-11-12.md`](PROGRESSION_FIT_2026-11-12.md): three fresh reports, `AGE_BAND_OFFSET[0]` stated
-per seed (2 of 3, not 3 of 3), the sample-vs-roster table, and a committed note.
+**Run 2026-11-12 — tick it when JR agrees.** Evidence in
+[`PROGRESSION_FIT_2026-11-12.md`](PROGRESSION_FIT_2026-11-12.md): three sample-calibrated reports, five
+full-roster ones, `AGE_BAND_OFFSET[0]` stated per seed, the sample-vs-roster table, and the committed note.
+
+**Add, as the decision that measurement opened:**
+
+> | ☐ | **P3-04b** | **Settle the league-shape calibration: full roster or `CALIBRATION_SAMPLE`.** The fit says full roster on every measure (start, finish, and the 90+ count held at 92–95 against the sample's 82–102); the live engine still calibrates on a 400-player sample (`engines/progression.py:1753`). Change `CALIBRATION_SAMPLE`, or record why the sample stays, before the first shadow season — the term the season runs under depends on it. | A `/builder` change with a test (or a recorded decision), audited, and the term read in the first shadow season. | M |
 
 **Note on P3-02's tick (no status change):** append “the fitted numbers predate the 2026-11-11 league-shape
 fix; the re-run is P3-04a”.
