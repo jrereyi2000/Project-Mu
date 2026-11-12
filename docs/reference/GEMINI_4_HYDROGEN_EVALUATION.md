@@ -17,7 +17,7 @@
 3. **It satisfies the different-model rule cleanly.** `[M]` The rule (`AUDITOR_MODEL_EVALUATION.md` D5, `audit/SKILL.md:10`) is that the auditor must not be the builders' family: the builders are DeepSeek, Hydrogen is Google, and Argon (same Gemini 4 family) is already a sanctioned auditor. It never audits its own work because it would write nothing.
 4. **But the two things that stopped audit-5 are not fixed by it, and one of them is worse.** `[M]` audit-5 died at **5-hour 99% / weekly 72%** with no warning; an Antigravity auditor has **no local quota probe** (`agy` has no `usage` subcommand, `tools/usage_check.py` reads Claude's file, `tools/go_usage.py` reads Go's) — the same "runs until the API refuses" failure, exactly as `AUDITOR_MODEL_EVALUATION.md` §2.4 found for GLM. And there is **no EQ-Bench entry** for it `[M]`, so nothing published speaks to prose or to Mu's citation discipline.
 5. **For every writer tier it is the wrong model twice over.** It would cost **~$216/mo** at Mu's measured newsroom mix (inferred) against **~$29/mo** for the `glm-5.3-flash` that writes the desk today `[M]`, with no published voice score at all `[M]`. It is a Carbon-derived "everyday coding and agentic workflows" model `[P]`, not a voice model.
-6. **Direct answer on audit fitness:** on today's evidence it is **not auditor of record**, and it is a credible **second auditor** — after one blind re-audit (**run the same day: the known defect found first time, 24/24 citations resolved**, §3.5) and a quota watcher, which does not exist yet. That is a measurement recommendation, not a verdict — a DeepSeek-routed session never audits, and nothing below authorizes one. **JR decides.**
+6. **Direct answer on audit fitness:** the **capability gate is met** — two known defects found first time (mirror N1, fact-gate R1), 104/104 citations, a clean false-positive control (§3.5–§3.6) — and the **operational gate is not**: no Antigravity burn instrument, no multi-hour run, no quota meter. So: a credible **second auditor and first-pass sweeper**, not yet auditor of record for the expensive batches. That is a measurement recommendation, not a verdict — a DeepSeek-routed session never audits, and nothing below authorizes one. **JR decides.**
 7. **JR has since made it a first-class agent with auditor-class rights** (§7, 2026-11-12): `tools/spawn_agent.sh <label> hydrogen`, an `agy` route with route markers, the board inbox alias, the model-class skill, the audit skill's allowed list, and `tools/antigravity_usage` for the token accounting Antigravity does expose. Allowed is not proven — the H2 trial and a real quota instrument are still outstanding, and "never audit your own work" is unchanged.
 
 ---
@@ -57,7 +57,7 @@
 | FrontierCode 2.0 | 38.2% | — | Cognition | `[P]` |
 | **EQ-Bench Creative Writing v3** | **no entry** (0 occurrences of "hydrogen" in the leaderboard's embedded data; `gemini-4-argon` is present) | — | — | `[M]` |
 | **EQ-Bench Longform** | **no entry** (same check, 1.2 MB of chart data) | — | — | `[M]` |
-| Mu audit record | **one measured trial** (§3.5: known defect found first time, 24/24 citations, 8 min) — **no audit verdict**, and no report in `data/audit_reports/` | — | `[M]` |
+| Mu audit record | **two measured trials, no audit verdict** (§3.5–§3.6: both known defects found first time, 104/104 citations, a clean control, 14 minutes total) — and no report in `data/audit_reports/` | — | `[M]` |
 
 Two readings that matter. **Its agentic evidence is real but second-tier:** it beats Sonnet 5.5 on knowledge-work and computer-use-style tasks, loses to it on both terminal benchmarks, and sits between Sol and Argon on the independent TB 4.0. `[P]` **Its prose is simply unmeasured:** the model card sells "ready-to-go writing", but neither EQ-Bench table has a row, and the only writer-ish evidence in the repo is that Gemini-family models score mid-table on those benches (`gemini-4-argon` 1757.8 Elo / 80.9 longform; `gemini-3.8-flash` 1744.4 / 76.8) `[M]`.
 
@@ -197,6 +197,25 @@ JR started a Hydrogen session on the Antigravity CLI at 16:10 EST; it answered o
 
 **What the trial changes.** One batch is not the §5 gate ("≥2 of 3 known defects"), but the one known answer available was found first time, at the right line, with a repro, in under four minutes, and every citation in both reports resolves. On this evidence Hydrogen is a **credible second auditor and a plausible first-pass sweeper**, and it is still **not** auditor of record: the gate is unmet at 1 of 3 known answers, the burn is unmeasured, and the quota watcher does not exist. The next step is H2 (the fact-gate R1 range) on a clean tree — the board now carries that range's verdict, so it needs the same sealed setup — plus one more false-positive control that is scoped to a *single* change rather than a whole tree.
 
+### 3.6 The second trial, and the gate (2026-11-12, `gemini-4-hydrogen-high`)
+
+The same session type, started with `tools/spawn_agent.sh hydrogen-trial-2 hydrogen` and **no session-start ritual** (it reads one board message and the brief; the checkout is out of bounds), answered in **six minutes** (17:10–17:16) at M-0739.
+
+**Setup.** Sealed `git archive` trees with no `.git` and no `data/`: **H2** at `8cfa931`, the fact gate freshly wired into production article writes, audited against `docs/in_progress/ARTICLE_FACT_GATE_PLAN.md`; **H4** at `5f8ed4e` plus `changes/H4.diff` (`cd00131`, a review fix), audited **as a diff only** — the control the first run lacked.
+
+| Check (§5) | Result | Label |
+|---|---|---|
+| Known defect found | **Yes, and quantified.** F1: `EVIDENCE_LIMIT = 24000` is smaller than the task instruction alone (25,147 chars empty brief, 42,947 realistic), holds **29%** of the plan's own 82,642-char run, and drops **100% of tool results** on national articles — so real names come back `"not in evidence"` | `[M]` |
+| A second real defect, unprompted | F2: the capture/comparison path passes the **writer's** client to the checker (`client=client if capture is not None else None`), so a Go checker id reaches `genai.Client`. This is the defect separately fixed later at `45e58d1` ("a capture run is no longer gated") — independent corroboration that it was real at the pin | `[M]` |
+| Rest of the batch | F3 the `LEAGUE COACHING STAFFS` block is in the system instruction and absent from the evidence (the plan's own known artifact); F4 the weekly notice runs before the fantasy slate; F5 no checker cost/`llm_usage` metering and no U3 spec update. Every cited line says what the report says; whether each is a defect is an auditor's call, not this doc's | `[M]` |
+| 100% of citations resolve | **45/45** (H2) and **12/12** (H4) — **104/104 across both trials** | `[M]` |
+| Control clean | **H4: 0 findings**, with the fixture-ordering analysis that shows why the fix is safe. The control finally ran as designed | `[M]` |
+| Builder one-pass | Yes: numbers, the file set, the mechanism and the expected behaviour are all in the report | `[M]` |
+| Burn within 2×, six hours, quota watcher | **Still open**: the plan-level burn is unmeasurable, six hours is untested (6 minutes), and there is no quota meter | `[M]` / `[U]` |
+| Blindness | Zero answer-only tokens in either report; every citation is in-tree; H2's figures come from the plan and the code, not from the board | `[M]` |
+
+**Where the gate stands.** §5's six capability conditions are now **met**: **2 of 2 known answers found** (H1 mirror N1, H2 fact-gate R1), **104/104 citations**, a **clean control**, a one-pass report standard, and no contamination. What is **not** met is the operational half: the credit burn has no instrument, a multi-hour session has not been run, and the quota watcher does not exist. That is why the honest sentence is still "**credible second auditor, first-pass sweeper — not yet auditor of record**", and why the expensive batches (save writer, staff contracts, `league_office`) should keep an Opus/Codex auditor under `AUDITOR_MODEL_EVALUATION.md` D4 until the operational half is closed. Making it auditor of record is JR's call, not this doc's.
+
 ---
 
 ## 4. What it must not be used for
@@ -216,7 +235,7 @@ JR started a Hydrogen session on the Antigravity CLI at 16:10 EST; it answered o
 
 In rough order of leverage:
 
-1. **~~The blind re-audit (§3.4).~~ Done 2026-11-12 (§3.5): H1 found first time, 24/24 citations.** Next: **H2** (the fact-gate R1 range) on the same sealed setup, plus a false-positive control scoped to a single change, to complete §5's "≥2 of 3" and "clean control" conditions.
+1. **~~The blind re-audit (§3.4).~~ Done 2026-11-12: H1 found first time (§3.5), then H2 + a scoped control (§3.6) — the capability gate is met.** What remains is the operational half: a burn instrument for Antigravity, one multi-hour session that does not lose the pin, and a quota meter before any unattended run.
 2. **A quota number.** Either find Antigravity's usage API (a Console/plan endpoint, or a documented `agy` flag) or accept that the trial's own token count, taken by hand, is the sizing evidence. Without it, auditing on the plan route cannot be run unattended.
 3. **A `gemini:` backend in `tools/madden_pilot/vision.py`** and one `vision_bench` run on the same 202 frames — that is the only thing that can settle the screen-reader question, and it also gives the pilot an accuracy ceiling for a cloud model.
 4. **One judged article week** on the Week 18 archive (`tools/article_model_compare.py` + `article_factcheck.py`): if it outscores `glm-5.3-flash` on JR's read *and* on contradictions, the price question becomes real; if not, it is closed for the desk.
@@ -275,8 +294,9 @@ OpenCode install for no gain.
 **What "auditor-class" now means.** A Hydrogen session may run `/audit`, and the skill accepts it on the
 same independence basis as Argon — Google versus the DeepSeek builders — with the unchanged rules that
 no session audits its own work and that a trial result is not a verdict. It is **allowed**, which is not
-the same as **proven**: the remaining gate is §3.4's H2 plus a properly scoped false-positive control,
-and the quota meter is still only a floor.
+the same as **proven**: §3.6 closes the capability half of §5's gate (two known answers, 104/104
+citations, a clean control), while the operational half — a burn instrument, a multi-hour run, a quota
+meter — is still open.
 
 **The two gaps, stated rather than papered over:**
 1. **Plan quota has no local probe.** Antigravity publishes no usage endpoint and `agy` has no `usage`
