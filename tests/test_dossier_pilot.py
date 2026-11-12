@@ -452,3 +452,30 @@ def test_a_shared_client_run_b_then_a_does_not_double_ledger(monkeypatch, tmp_pa
     assert len(budget.rows) == 3
     assert len(_ledger_rows(tmp_path)) == 3
     assert [row['arm'] for row in budget.rows] == ['b', 'a', 'a']
+
+
+# --- P8-04: source labels that close the three dossier factual defects -------------------------
+
+def test_packet_requests_a_tackle_leaderboard_explicitly():
+    from tools.dossier_pilot import PACKET_DEFENSE_CATEGORIES
+    assert 'tackles' in PACKET_DEFENSE_CATEGORIES
+    # The interceptions list is no longer the only place tackle totals appear.
+    assert PACKET_DEFENSE_CATEGORIES.index('tackles') < PACKET_DEFENSE_CATEGORIES.index('field_goals')
+
+
+def test_packet_limitations_name_ranking_split_and_record_conflicts():
+    from tools.dossier_pilot import SHARED_LIMITATIONS
+    text = ' '.join(SHARED_LIMITATIONS)
+    assert 'ranks players by its own category only' in text
+    assert 'not necessarily the team tackle leader' in text
+    assert 'no pressure or hurry split is recorded' in text
+    assert 'source_conflict' in text and 'never broken or shattered' in text
+
+
+def test_policy_forbids_the_three_misreadings():
+    from tools.dossier_pilot import POLICY
+    policy = ' '.join(POLICY.split())
+    assert "ask for a category's own leaderboard (tackles for a tackle leaderboard)" in policy
+    assert 'not rates and not pressure splits' in policy
+    assert 'never describe one as a rate or as "when hurried"' in policy
+    assert 'never upgrade the mark to broken or "shattered"' in policy

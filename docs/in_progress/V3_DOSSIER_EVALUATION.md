@@ -168,3 +168,43 @@ Pricing, checked 2026-11-11 against the DeepSeek Models & Pricing page (`https:/
 The budget keeps the Gemini reservation/settlement protocol with a $1.00 default ceiling for DeepSeek: each request reserves the 1M-token input context at the call's rate plus twice the output cap, then settles against returned usage; a request with no usage retains its reservation. Live DeepSeek calls require `--live`, a positive budget, the pinned `deepseek-flash` model and `DEEPSEEK_API_KEY`. No live DeepSeek call was made by the build; tests use a fake client only.
 
 Truncation is detected rather than accepted as a complete article. Thinking tokens are part of `completion_tokens`, so a long think can consume the 8,192 cap and return `finish_reason == "length"` with a cut-off article that still passes a non-empty check. The loop records `finish_reason` on each `usage_calls` row, the pilot records it on each `usage.json` row and in `{arm}_result.json`, and when the article-producing call — the dossier call, the final ReAct turn or its synthesis follow-up — ends in `length`, the arm stops with `status="truncated"` and raises, keeping the settled cost. Tests cover a `length` response in each arm with a fake client (audit F1, M-0474).
+
+
+## P8-04: the three dossier factual defects closed at the source (2026-11-12)
+
+The corrected week-21 pair (above) left three named defects. They were reproduced offline from
+`verify_output/v3_pilot/20261030_195619_499948/packet.json` before any code changed, and fixed in the
+packet's source path (`newsroom/db_tools.py` + `tools/dossier_pilot.py`); neither article writer's
+routing, model choice nor settings changed.
+
+1. **Wrong tackle leader.** The packet's per-team leaderboards asked for sacks, interceptions and field
+   goals only, and `get_defense_special_teams_leaders` printed each player's full line without naming
+   the metric that ranked the rows. A writer read row 1 of the CAR interceptions list (Darby, 132
+   tackles) as the team tackle leader; the packet's own list had Galloway at 153 (row 2) and DuVall at
+   138. The payload now carries a `ranked_by` block and each line a `ranked by <category>: <value>
+   (list #n)` marker plus a note that row 1 is not automatically the tackle leader, and the pilot
+   requests the `tackles` leaderboard explicitly (`PACKET_DEFENSE_CATEGORIES`). Regression:
+   `tests/test_db_tools_dossier_facts.py` (Galloway first at 153 in the tackles listing; Darby's 132 is
+   labelled an interceptions-list row) and `tests/test_dossier_pilot.py`.
+2. **Interception-rate misdescription.** The QB split showed `interceptions: 0.6` and `+47%` for
+   `scoring_defense` (the opponent's points-allowed grade). The writer turned that per-game count
+   against strong scoring defenses into an "interception rate when hurried". The payload now labels
+   every figure (`metric_labels`, `metric_scope`: a per-game count is not a rate), scopes each split to
+   the opponent's season defensive grade (`dimension_scope`), and lists the splits that do not exist
+   (`not_recorded`: pressure, hurry, blitz, hit and time-to-throw; interception rate). Regression:
+   `test_split_metric_labels_say_interceptions_are_per_game_not_a_rate` and
+   `test_scheme_split_payload_carries_labels_and_denies_a_pressure_split`.
+3. **Record claim built on a stale `BOOK` row.** The 2035 receiving-TD seed says 27 while the recorded
+   2035 season line says 29, so the 2036 29 was reported `broke`; only `madden_v3_eval_20261030` had
+   been hand-corrected. `get_record_book` now cross-checks every previous value against the holder's
+   recorded season line and, on a real disagreement, emits `source_conflict` with both values and the
+   resolved result, sets `previous_record` from the recorded line and recomputes broke / tied / ranks.
+   The Davis event therefore reports **tied, 29** with `book_previous_record: 27` on a fresh database,
+   and `record_scope_note` tells every writer never to upgrade a tie or a flagged conflict to broken or
+   "shattered". Regression: `test_stale_book_row_is_re_resolved_from_the_recorded_season_line`,
+   `test_agreeing_book_row_is_left_alone` and `test_record_book_tool_flags_the_stale_row` (fake cursor;
+   no database written).
+
+The packet's `shared_limitations` and the shared `POLICY` carry the same three rules, so both arms see
+them. Offline only: no database write, no scratch database, no live model call, no PC. The first
+corrected paired run is still P8-05.

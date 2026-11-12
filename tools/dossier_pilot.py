@@ -29,6 +29,13 @@ must fit the recorded game script and box score; invented quotes must not introd
 false canonical facts. Unknown canonical numbers remain unknown, not zero or invented.
 Records and superlatives require the correct scope: distinguish tied from broken,
 team from league leaders, and per-game statistics from rates or pressure splits.
+A leaders list ranks players by its own category only: never read another figure in the
+line as that stat's ranking, and ask for a category's own leaderboard (tackles for a tackle
+leaderboard) before calling anyone the team or league leader.
+Scheme-split numbers are per-game counts and averages graded by the opponent's season
+defense, not rates and not pressure splits; never describe one as a rate or as "when hurried".
+A record event flagged source_conflict disagrees with its holder's recorded season line:
+use the recorded line in the flag, and never upgrade the mark to broken or "shattered".
 Latest-only ratings/roster/aggregate fields describe the shared archive snapshot, not
 proven historical weekly values. Do not present later totals as earlier-week facts.
 Keep analysis and predictions distinguishable from canonical outcomes.
@@ -45,6 +52,18 @@ DEEPSEEK_PRICE_SOURCE = 'https://api-docs.deepseek.com/quick_start/pricing'
 DEEPSEEK_PRICE_CHECKED = '2026-11-11'
 DEEPSEEK_INPUT_LIMIT = 1_000_000
 TEMPERATURE = 0.7
+# The packet's per-team defensive/special-teams leaderboards. Tackles is explicit so the
+# canonical tackle leader is in the evidence, not inferred from an interceptions list
+# (the P8-04 wrong-tackle-leader defect).
+PACKET_DEFENSE_CATEGORIES = ('sacks', 'interceptions', 'tackles', 'field_goals')
+SHARED_LIMITATIONS = [
+    'Archive snapshot values are shared, not reconstructed historical snapshots',
+    'Dossier coverage is an explicit pilot selection, not exhaustive research',
+    'A leaders list ranks players by its own category only; every other figure in a line is a season total, not a ranking, and the first row is not necessarily the team tackle leader',
+    'Scheme splits are per-game counts/averages graded by the opponent season defense, not rates, and no pressure or hurry split is recorded',
+    'A record-book event flagged source_conflict disagrees with its holder recorded season line; the recorded line wins and the mark is never broken or shattered',
+    'Human factual review required',
+]
 
 
 def dump(path, value):
@@ -166,7 +185,7 @@ def prepare(dsn, database, week, opponent):
             add('get_team_context', team_identifier=abbr)
             add('get_team_history', team_identifier=abbr)
             add('get_record_book', team_identifier=abbr, season=2036)
-            for category in ['sacks', 'interceptions', 'field_goals']:
+            for category in PACKET_DEFENSE_CATEGORIES:
                 add('get_defense_special_teams_leaders', team_identifier=abbr, season=2036, category=category, limit=5)
             # All roster players: named identities/production, with focused splits/contracts
             # for the top QB, back and receiver. Unknown categories remain unknown.
@@ -190,7 +209,7 @@ def prepare(dsn, database, week, opponent):
         raise ValueError('Evidence helper failures: ' + ', '.join(e['source'] for e in errors))
     rendered = '\n\n'.join(f"SOURCE {i}: {e['source']} {json.dumps(e['arguments'])}\n{e['result']}" for i, e in enumerate(evidence))
     packet = dict(schema_version=3, database=database, season=2036, week=week, game_id=game[0], opponent=opponent, writer=writer[0], evidence=evidence,
-                  shared_limitations=['Archive snapshot values are shared, not reconstructed historical snapshots', 'Dossier coverage is an explicit pilot selection, not exhaustive research', 'Human factual review required'],
+                  shared_limitations=list(SHARED_LIMITATIONS),
                   a=dict(system_instruction=prompt['system_instruction']+'\n'+POLICY, task_instruction=prompt['task_instruction']),
                   b=dict(system_instruction=dossier_instructions(prompt['system_instruction'])+'\n'+POLICY,
                          task_instruction=dossier_instructions(prompt['task_instruction'])+'\n\nCANONICAL EVIDENCE DOSSIER:\n'+rendered+'\n\nWrite the assigned article using supplied evidence. No tools are available. Do not invent canonical facts; creative texture is permitted where it does not contradict data.'))
