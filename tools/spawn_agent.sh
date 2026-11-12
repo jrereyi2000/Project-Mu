@@ -3,7 +3,7 @@
 # Any agent, or JR, may run it. It only ever OPENS a new window; it never types into an existing one
 # (agents must never `tmux send-keys` into another agent's window).
 #
-#   tools/spawn_agent.sh [--dry-run] <label> <claude|opus|deepseek|deepseek-claude|muse|codex|gemini> [prompt]
+#   tools/spawn_agent.sh [--dry-run] <label> <claude|opus|deepseek|deepseek-claude|muse|codex|gemini|argon|hydrogen> [prompt]
 #   e.g. tools/spawn_agent.sh builder-2 opus "/builder"
 #        tools/spawn_agent.sh gm-hiring codex "Pick up the HANDOFF addressed to gm-hiring on the board."
 #
@@ -28,6 +28,13 @@
 #   Claude Code at DeepSeek; it holds the API key and is never committed), kept until 2026-11-26.
 # - muse starts an OpenCode session on a Muse model through tools/muse_session.sh; the model is
 #   whatever MU_MUSE_MODEL says (Spark by default, Ember for the benchmark's second step).
+# - argon and hydrogen start a Google Antigravity CLI session (`agy`), the two Gemini 4 routes that
+#   serve this repo. argon runs MU_ARGON_MODEL (default gemini-4-argon-medium); hydrogen runs
+#   MU_HYDROGEN_MODEL (default gemini-4-hydrogen-high) and exports MU_AGENT_CLASS=hydrogen and
+#   MU_AGENT_MODEL so the audit skill and /context-check can tell the route. Both use `agy -i` so the
+#   prompt opens an interactive session, as `gemini -i` does (JR, 2026-11-12: Hydrogen is a
+#   first-class agent with auditor-class rights, after the blind trial in
+#   docs/reference/GEMINI_4_HYDROGEN_EVALUATION.md §3.5).
 # - The new session still does the full session start itself (spec, board, listener, NOTICE) and stops at
 #   its first permission prompt until someone answers it in that window.
 set -euo pipefail
@@ -40,7 +47,7 @@ caller_is_deepseek() {
 
 dry=0
 if [ "${1:-}" = "--dry-run" ]; then dry=1; shift; fi
-usage="usage: spawn_agent.sh [--dry-run] <label> <claude|opus|deepseek|deepseek-claude|muse|codex|gemini> [prompt]"
+usage="usage: spawn_agent.sh [--dry-run] <label> <claude|opus|deepseek|deepseek-claude|muse|codex|gemini|argon|hydrogen> [prompt]"
 label="${1:?$usage}"
 agent="${2:?$usage}"
 prompt="${3:-}"
@@ -68,7 +75,10 @@ case "$agent" in
   muse)            cmd=("$here/muse_session.sh" --prompt "$prompt") ;;
   codex)           cmd=(codex "$prompt") ;;
   gemini)          cmd=(gemini -i "$prompt") ;;
-  *) echo "spawn_agent: unknown agent '$agent' (claude, opus, deepseek, deepseek-claude, muse, codex, gemini)" >&2; exit 2 ;;
+  argon)           cmd=(agy --model "${MU_ARGON_MODEL:-gemini-4-argon-medium}" -i "$prompt") ;;
+  hydrogen)        cmd=(env MU_AGENT_CLASS=hydrogen MU_AGENT_MODEL="${MU_HYDROGEN_MODEL:-gemini-4-hydrogen-high}" \
+                        agy --model "${MU_HYDROGEN_MODEL:-gemini-4-hydrogen-high}" -i "$prompt") ;;
+  *) echo "spawn_agent: unknown agent '$agent' (claude, opus, deepseek, deepseek-claude, muse, codex, gemini, argon, hydrogen)" >&2; exit 2 ;;
 esac
 
 case "$agent" in

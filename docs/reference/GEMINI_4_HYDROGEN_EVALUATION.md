@@ -1,7 +1,7 @@
 # Gemini 4 Hydrogen: which tiers it can take in Project Mu, and whether it can audit
 
 **Date:** 2026-11-12 · **Asked by:** JR (via `closeout-status`, board M-0682) · **Session:** `gemini-hydrogen-eval` (`deepseek-v4.1-flash`)
-**Status:** research only. Nothing built, no default flipped, no audit verdict, no database or save touched, one reachability probe spent.
+**Status:** research plus the first-class-agent build (§7). The measurements and the trial are evidence only; the build is wiring and rules, with no audit verdict. No database or save touched, one reachability probe and one usage probe spent.
 **Question:** Gemini 4 Hydrogen launched today and JR has quota. Which tiers of implementation could it take here, and is it good enough to be the auditor?
 
 **Labels, used on every claim below:**
@@ -18,6 +18,7 @@
 4. **But the two things that stopped audit-5 are not fixed by it, and one of them is worse.** `[M]` audit-5 died at **5-hour 99% / weekly 72%** with no warning; an Antigravity auditor has **no local quota probe** (`agy` has no `usage` subcommand, `tools/usage_check.py` reads Claude's file, `tools/go_usage.py` reads Go's) — the same "runs until the API refuses" failure, exactly as `AUDITOR_MODEL_EVALUATION.md` §2.4 found for GLM. And there is **no EQ-Bench entry** for it `[M]`, so nothing published speaks to prose or to Mu's citation discipline.
 5. **For every writer tier it is the wrong model twice over.** It would cost **~$216/mo** at Mu's measured newsroom mix (inferred) against **~$29/mo** for the `glm-5.3-flash` that writes the desk today `[M]`, with no published voice score at all `[M]`. It is a Carbon-derived "everyday coding and agentic workflows" model `[P]`, not a voice model.
 6. **Direct answer on audit fitness:** on today's evidence it is **not auditor of record**, and it is a credible **second auditor** — after one blind re-audit (**run the same day: the known defect found first time, 24/24 citations resolved**, §3.5) and a quota watcher, which does not exist yet. That is a measurement recommendation, not a verdict — a DeepSeek-routed session never audits, and nothing below authorizes one. **JR decides.**
+7. **JR has since made it a first-class agent with auditor-class rights** (§7, 2026-11-12): `tools/spawn_agent.sh <label> hydrogen`, an `agy` route with route markers, the board inbox alias, the model-class skill, the audit skill's allowed list, and `tools/antigravity_usage` for the token accounting Antigravity does expose. Allowed is not proven — the H2 trial and a real quota instrument are still outstanding, and "never audit your own work" is unchanged.
 
 ---
 
@@ -200,7 +201,7 @@ JR started a Hydrogen session on the Antigravity CLI at 16:10 EST; it answered o
 
 ## 4. What it must not be used for
 
-1. **Not as auditor of record on this evidence.** No Mu report exists, no citation discipline has been measured, and the quota instrument is missing. Also, independently: **a DeepSeek-routed session never audits**, and no session audits its own work — this doc is not a verdict and does not stand in for one.
+1. **Not as auditor of record on this evidence — though it is now an *allowed* auditor** (JR, 2026-11-12; §7). Permission and proof are different things: no Mu report existed before the trial, one batch is not §5's "≥2 of 3", and the quota instrument is missing. Also, independently: **a DeepSeek-routed session never audits**, and no session audits its own work — this doc is not a verdict and does not stand in for one.
 2. **Not on the Antigravity route for save-writer, staff-contract or `league_office` verdicts** even after a trial passes, without JR's explicit word: `AUDITOR_MODEL_EVALUATION.md` D4 keeps the incumbent there because a wrong CLOSED on a save write is expensive. Start it on docs, stats, mirror and single-file fixes.
 3. **Not as a live game controller, and it never authorizes a key.** `LOCAL_VISION_LATENCY.md` already settled that vision describes and the catalog decides; cloud latency per frame is unmeasured, and a network-dependent model in the press loop is a new failure mode. It may *judge* frames offline; it may not press.
 4. **Not on the newsroom as a "free upgrade".** $216/mo, no EQ-Bench row, and it replaces a model that costs $29/mo and was chosen on JR's blind read. If it is ever tried, it is a side-by-side, not a default.
@@ -246,3 +247,46 @@ In rough order of leverage:
 - [OpenCode Zen docs](https://opencode.ai/docs/zen) — pay-as-you-go credits, zero-retention privacy except the named free models; Hydrogen is in the catalogue endpoint but **not yet in the docs pricing table** (released today).
 
 **Not established, on purpose:** Antigravity's per-plan limits and JR's exact tier; whether Zen credit is funded on this account; free-tier Hydrogen quotas; the Go Google-passthrough answer for it; per-frame vision latency and accuracy; whether it can hold an 18-hour session with batch subagents. Nothing here was billed except the single Antigravity probe, and no article, audit or pipeline run was executed.
+
+---
+
+## 7. First-class agent: what was built (2026-11-12)
+
+JR's decision after the trial: Hydrogen is a **first-class agent with auditor-class rights**, on the same
+footing as Opus 5.5, Codex and Argon. This section records the build (commits carry
+`Model: deepseek-v4.1-flash`; the rules are JR's, the wiring is this session's).
+
+**The route is Antigravity, not OpenCode.** `agy` gives Hydrogen the model natively at four thinking
+levels `[M]`, which is the harness Argon already uses and the one the trial proved; Go cannot buy it
+`[M]`, and routing it through Zen/OpenCode would put a second Gemini session inside a DeepSeek-pinned
+OpenCode install for no gain.
+
+| Piece | Change | Why |
+|---|---|---|
+| `tools/spawn_agent.sh` | new `hydrogen` type — `agy --model $MU_HYDROGEN_MODEL` (default `gemini-4-hydrogen-high`) with `MU_AGENT_CLASS=hydrogen` and `MU_AGENT_MODEL` exported; new `argon` type on the same mechanism (`MU_ARGON_MODEL`, default `gemini-4-argon-medium`), which the launcher had been missing | one command to start a session, and the route markers the audit skill and `/context-check` read |
+| `tools/agent_board_inbox.py` | `hydrogen` inbox: `hydrogen` plus the four `gemini-4-hydrogen-*` ids | `to: hydrogen` and `to: gemini-4-hydrogen-high` both reach it |
+| `.agents/skills/hydrogen/SKILL.md` | new: route, ids, inbox, trailer, what it may run, quota/context rules | the model-class skill the startup ritual loads |
+| `.claude/skills/audit/SKILL.md` | allowed list, model check, a Hydrogen quota branch, Antigravity subagent note | §1's check and §3's hand-over were Claude/Codex/Argon-only |
+| `CLAUDE.md` (= `AGENTS.md`, `GEMINI.md`) | startup route, "skills by model class", the spawn list | the standing rules name every class explicitly |
+| `docs/reference/AGENTS.md` | inbox row, recipients line, a Hydrogen paragraph, the `/audit` row | the agents index stays the single map |
+| `PROJECT_SPEC.md` | `.agents/skills/hydrogen/`, `spawn_agent.sh`, `agent_board_inbox.py`, `antigravity_usage.py`, the audit skill and "Agent routes" | spec matches the change, as CLAUDE.md requires |
+| `tools/antigravity_usage.py` + tests | new: record one `agy -p --output-format json` result's `usage` block to `data/usage/antigravity_usage.jsonl`, price it at list rates, judge `--max-tokens`/`--max-usd`, exit 2 over budget | the only quota measurement Antigravity exposes `[M]` |
+
+**What "auditor-class" now means.** A Hydrogen session may run `/audit`, and the skill accepts it on the
+same independence basis as Argon — Google versus the DeepSeek builders — with the unchanged rules that
+no session audits its own work and that a trial result is not a verdict. It is **allowed**, which is not
+the same as **proven**: the remaining gate is §3.4's H2 plus a properly scoped false-positive control,
+and the quota meter is still only a floor.
+
+**The two gaps, stated rather than papered over:**
+1. **Plan quota has no local probe.** Antigravity publishes no usage endpoint and `agy` has no `usage`
+   command `[M]`. `tools.antigravity_usage` therefore never prints a percentage; it accounts for
+   scripted runs only, and the Hydrogen skill requires a console check plus a HANDOFF every third batch
+   or 90 minutes. That is stricter than Argon's current "nothing", and still not a meter.
+2. **Context percentage has no reader.** `/context-check` reads a Claude Code transcript or an OpenCode
+   session id; there is no Antigravity equivalent `[M]`, so a Hydrogen session hands over on judgement
+   with the normal hand-over NOTICE.
+
+**How to start one:** `tools/spawn_agent.sh <label> hydrogen "/audit"` for the auditor, or select
+Gemini 4 Hydrogen in Antigravity for an interactive session. Both sign the board as
+`gemini-4-hydrogen-<effort> (<label>)` and commit with `Model: gemini-4-hydrogen-<effort>`.

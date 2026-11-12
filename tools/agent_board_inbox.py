@@ -13,6 +13,8 @@ RECIPIENTS = {
     "codex": {"codex", "chatgpt", "gpt", "gpt-6.1-sol"},
     "opus": {"opus", "claude-opus-5-5", "claude-opus-5-5-medium"},
     "argon": {"argon", "gemini-4-argon", "gemini-4-argon-low", "gemini-4-argon-medium", "gemini-4-argon-high"},
+    "hydrogen": {"hydrogen", "gemini-4-hydrogen", "gemini-4-hydrogen-low", "gemini-4-hydrogen-medium",
+                 "gemini-4-hydrogen-high", "gemini-4-hydrogen-xhigh"},
     "muse": {"muse", "muse-spark-1.3-contributor", "muse-ember", "muse-ember-1.0"},
 }
 

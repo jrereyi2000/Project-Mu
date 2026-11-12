@@ -37,6 +37,29 @@ One DeepSeek message addressed by several aliases.
         assert messages[0].startswith(f"## {expected}")
 
 
+def test_hydrogen_inbox_matches_its_aliases_and_stays_out_of_argon():
+    board = """# Agent Conversation
+Board rules.
+
+## M-0006 · Today · from: gpt-6.1-sol (audit) · to: Hydrogen, gemini-4-hydrogen-high
+**Kind:** HANDOFF · **Re:** —
+Review this batch.
+
+## M-0007 · Today · from: gemini-4-hydrogen-high (hydrogen-audit) · to: argon
+**Kind:** NOTICE · **Re:** —
+A Hydrogen session addressing Argon.
+"""
+    rules, messages = model_inbox(board, "hydrogen")
+    assert "Board rules." in rules
+    assert [m.splitlines()[0] for m in messages] == [
+        "## M-0006 · Today · from: gpt-6.1-sol (audit) · to: Hydrogen, gemini-4-hydrogen-high"
+    ]
+    _, argon_messages = model_inbox(board, "argon")
+    assert [m.splitlines()[0] for m in argon_messages] == [
+        "## M-0007 · Today · from: gemini-4-hydrogen-high (hydrogen-audit) · to: argon"
+    ]
+
+
 def test_model_inbox_skips_own_messages_and_keeps_duplicate_numbers():
     board = """## M-0001 · Today · from: gpt-6.1-sol (mine) · to: codex
 **Kind:** NOTICE · **Re:** —

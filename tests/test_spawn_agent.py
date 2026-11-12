@@ -184,7 +184,55 @@ def test_usage_lists_the_muse_type(env: dict[str, str]) -> None:
     result = _run(env)
 
     assert result.returncode == 1
-    assert "<claude|opus|deepseek|deepseek-claude|muse|codex|gemini>" in result.stderr
+    assert "<claude|opus|deepseek|deepseek-claude|muse|codex|gemini|argon|hydrogen>" in result.stderr
+    _assert_no_window(env)
+
+
+def test_hydrogen_dry_run_launches_antigravity_with_the_route_marker(env: dict[str, str]) -> None:
+    result = _run(env, "--dry-run", "hydrogen-audit", "hydrogen", "/audit")
+
+    assert result.returncode == 0, result.stderr
+    assert "agy --model gemini-4-hydrogen-high -i /audit" in result.stdout
+    assert "MU_AGENT_CLASS=hydrogen" in result.stdout
+    assert "MU_AGENT_MODEL=gemini-4-hydrogen-high" in result.stdout
+    _assert_no_window(env)
+
+
+def test_hydrogen_model_override_sets_both_flag_and_marker(env: dict[str, str]) -> None:
+    env["MU_HYDROGEN_MODEL"] = "gemini-4-hydrogen-xhigh"
+
+    result = _run(env, "--dry-run", "hydrogen-audit", "hydrogen", "/audit")
+
+    assert result.returncode == 0, result.stderr
+    assert "agy --model gemini-4-hydrogen-xhigh" in result.stdout
+    assert "MU_AGENT_MODEL=gemini-4-hydrogen-xhigh" in result.stdout
+    _assert_no_window(env)
+
+
+def test_hydrogen_needs_no_deepseek_spawn_flag(env: dict[str, str]) -> None:
+    env["MU_AGENT_CLASS"] = "deepseek"
+
+    result = _run(env, "--dry-run", "hydrogen-audit", "hydrogen", "/audit")
+
+    assert result.returncode == 0, result.stderr
+    assert "agy --model" in result.stdout
+    _assert_no_window(env)
+
+
+def test_argon_dry_run_launches_antigravity(env: dict[str, str]) -> None:
+    result = _run(env, "--dry-run", "argon-audit", "argon", "/audit")
+
+    assert result.returncode == 0, result.stderr
+    assert "agy --model gemini-4-argon-medium -i /audit" in result.stdout
+    _assert_no_window(env)
+
+
+def test_hydrogen_plain_prompt_gets_the_label_prefix(env: dict[str, str]) -> None:
+    result = _run(env, "--dry-run", "hydrogen-lab", "hydrogen", "read the spec")
+
+    assert result.returncode == 0, result.stderr
+    unquoted = result.stdout.replace("\\ ", " ")
+    assert "Your session label is hydrogen-lab. read the spec" in unquoted
     _assert_no_window(env)
 
 
