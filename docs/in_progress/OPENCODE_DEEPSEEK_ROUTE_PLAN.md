@@ -215,7 +215,7 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 
 ### U2: Project OpenCode config and `/offline` agent
 
-- **Owns:** `.opencode/opencode.json` (new), `.opencode/agents/repo-qa.md` (new), `.claude/skills/offline/SKILL.md`, `tests/test_opencode_config.py` (new)
+- **Owns:** `.opencode/opencode.json` (new), `.opencode/agents/repo-qa.md` (new), `tests/test_opencode_config.py` (new)
 - **Reads:** `.claude/agents/repo-qa.md`, `.claude/skills/offline/SKILL.md`, `.claude/skills/propose/plan_template.md`
 - **Depends on:** none
 - **Done when:** the config pins the model, `opencode debug agents` lists `repo-qa`, and `/offline` names both agent paths.
@@ -231,7 +231,7 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 
 ### U4: Skill and reference docs
 
-- **Owns:** `.claude/skills/deepseek/SKILL.md`, `.claude/skills/audit/SKILL.md`, `.claude/skills/builder/SKILL.md`, `.claude/skills/execute-plan/SKILL.md`, `docs/reference/AGENTS.md`, `docs/reference/MADDEN_SPIKE_AGENT.md`
+- **Owns:** `.claude/skills/deepseek/SKILL.md`, `.claude/skills/audit/SKILL.md`, `.claude/skills/builder/SKILL.md`, `.claude/skills/execute-plan/SKILL.md`, `.claude/skills/offline/SKILL.md`, `docs/reference/AGENTS.md`, `docs/reference/MADDEN_SPIKE_AGENT.md`
 - **Reads:** U1–U3's merged code, `CLAUDE.md`, this plan §2.2–2.7
 - **Depends on:** U1, U2, U3
 - **Done when:** every route mention leads with OpenCode Go, names `deepseek-claude` as the fallback until 2026-11-26, and the audit/builder checks use `MU_AGENT_CLASS` and the model id, not `ANTHROPIC_*` alone.
@@ -255,7 +255,7 @@ U1's wrapper refuses to start without U2's `.opencode/opencode.json`, so wave 1 
 | `.claude/skills/context-check/SKILL.md` | U3 |
 | `.claude/skills/deepseek/SKILL.md` | U4 |
 | `.claude/skills/execute-plan/SKILL.md` | U4 |
-| `.claude/skills/offline/SKILL.md` | U2 |
+| `.claude/skills/offline/SKILL.md` | U4 |
 | `.opencode/agents/repo-qa.md` | U2 |
 | `.opencode/opencode.json` | U2 |
 | `docs/reference/AGENTS.md` | U4 |
