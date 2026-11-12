@@ -4,7 +4,9 @@ Use an explicit scratch DATABASE_URL whose name begins madden_v3_eval_.
 No publication, memory updates, or database usage logging. Results are local files.
 --provider gemini (default) keeps the matched Gemini ReAct/dossier arms;
 --provider deepseek runs both arms on deepseek-flash through the OpenAI-compatible
-tool loop, priced at DeepSeek's peak or off-peak rate by each call's UTC time.
+tool loop, priced from the response's own list cost when the provider reports one
+(OpenCode Go does) and otherwise at DeepSeek's peak or off-peak rate by each call's
+UTC time.
 """
 import argparse
 import csv
@@ -65,8 +67,20 @@ def deepseek_rates(at=None):
 
 
 def cost(usage, provider='gemini', at=None, rates=None):
+    """Dollar cost of one call's usage.
+
+    DeepSeek calls prefer the provider's own reported ``list_cost_usd``: OpenCode Go
+    returns it on every response and it already includes peak pricing, so the local
+    table below is only a fallback for a response that does not report it (the
+    direct DeepSeek API, or a Go response with the field absent). A reported zero
+    means a free call and is returned as zero rather than repriced locally.
+    Gemini keeps its fixed PRICES table.
+    """
     cached = min(usage['cached_tokens'], usage['input_tokens'])
     if provider == 'deepseek':
+        reported = usage.get('list_cost_usd')
+        if reported is not None:
+            return float(reported)
         # DeepSeek's completion_tokens already include reasoning tokens, so
         # thinking is reported separately but billed once at the output rate.
         table = rates or deepseek_rates(at)[0]
@@ -186,8 +200,10 @@ def prepare(dsn, database, week, opponent):
 class Budget:
     """Reserve full model-limit cost per request; retain reservation on uncertain failure.
 
-    The same reservation/settlement applies to Gemini and DeepSeek. DeepSeek's
-    rate is chosen by each call's UTC time (peak or off-peak).
+    The same reservation/settlement applies to Gemini and DeepSeek. The reservation
+    is always a conservative local-table bound; settlement uses the provider's own
+    reported list cost when the response carries one (OpenCode Go) and otherwise
+    DeepSeek's table rate for the call's UTC time (peak or off-peak).
     """
     def __init__(self, limit, path, max_output, provider='gemini', input_limit=None):
         self.limit, self.path, self.max_output = limit, path, max_output
@@ -201,6 +217,7 @@ class Budget:
                         prices=dict(peak=DEEPSEEK_PEAK, off_peak=DEEPSEEK_OFF_PEAK),
                         peak_periods='Mon-Fri 01:00-04:00 and 06:00-10:00 UTC',
                         holiday_note='Chinese public holidays are off-peak on the provider price list; no holiday calendar is kept, so those weekdays are priced as peak',
+                        reported_cost_note='A response that reports its own list cost (OpenCode Go) is settled at that figure; the table above prices the reservation and any response that does not report one',
                         source=DEEPSEEK_PRICE_SOURCE, checked=DEEPSEEK_PRICE_CHECKED, calls=self.rows)
         return dict(limit=self.limit, provider=self.provider, prices=PRICES, source=PRICE_SOURCE, calls=self.rows)
 
@@ -230,6 +247,8 @@ class Budget:
                 raise RuntimeError('Missing usage: reserved cost retained; stopping')
             usage = extract_openai_usage(usage_obj)
             row.update(status='completed', usage=usage,
+                       price_source=('provider-list-cost' if usage.get('list_cost_usd') is not None
+                                     else f"local-{row.get('price_period', 'unknown')}"),
                        charged_or_reserved=cost(usage, provider='deepseek', rates=row.get('prices')))
         else:
             from db.llm_usage import _usage
@@ -322,9 +341,32 @@ def resolve_budget(provider, budget_usd):
 
 
 def deepseek_client():
-    """Build the DeepSeek OpenAI-compatible client with the pilot's retry policy."""
+    """Build the DeepSeek/Go OpenAI-compatible client with the pilot's retry policy.
+
+    ``deepseek`` is a deprecated alias for the ``opencode-go`` endpoint, so a live run
+    needs ``OPENCODE_GO_API_KEY`` unless ``DEEPSEEK_BASE_URL`` restores the direct API.
+    """
     from newsroom.tool_loop.openai_loop import build_default_client
     return build_default_client('deepseek', max_retries=0)
+
+
+def record_go_allowance(usage, model, label='dossier'):
+    """Append one Go allowance line for a pilot call that bypasses the tool loop.
+
+    Arm a's requests are recorded by ``run_openai_tool_loop`` itself (plan §2.4), so
+    only the single dossier call needs this. Best effort, exactly like the ledger:
+    a metering failure never stops a run.
+    """
+    if usage.get('allowance_usd') is None:
+        return
+    try:
+        from newsroom.tool_loop import go_allowance
+        go_allowance.record(at=dt.datetime.now(dt.timezone.utc), model=model, label=label,
+                            allowance_usd=usage.get('allowance_usd'),
+                            list_cost_usd=usage.get('list_cost_usd'),
+                            billing_source=usage.get('billing_source'))
+    except Exception as exc:
+        print(f'  (go allowance not recorded: {exc})')
 
 
 def run_deepseek_arm(packet, arm, tools, model, budget, directory, client=None):
@@ -334,12 +376,18 @@ def run_deepseek_arm(packet, arm, tools, model, budget, directory, client=None):
     temperature 0.7 and 8,192 output cap. DeepSeek runs in thinking mode by
     default and its docs say temperature has no effect there, so the recording
     keeps the value for parity but notes that the provider may ignore it.
+    Each call is priced from the response's reported list cost when it carries one
+    (OpenCode Go), else from the local peak/off-peak table.
     """
-    from newsroom.tool_loop.openai_loop import run_openai_tool_loop
+    from newsroom.tool_loop.openai_loop import apply_model_alias, run_openai_tool_loop
     from newsroom.run_context import article_run_context
     from tools.dossier_ab_compare import audit_article_quality
     if client is None:
         client = deepseek_client()
+    # The loop translates the deprecated `deepseek-flash` id for Go-billed providers
+    # itself; the single dossier call below does not pass through the loop, so the
+    # pilot applies the same rule and records the id it actually sent.
+    sent_model = apply_model_alias(model, 'deepseek')
     first_call = len(budget.rows)
     trace = []
     exposed = []
@@ -367,6 +415,8 @@ def run_deepseek_arm(packet, arm, tools, model, budget, directory, client=None):
         choices = getattr(response, 'choices', None) or []
         row['finish_reason'] = getattr(choices[0], 'finish_reason', None) if choices else None
         budget.complete(row, response)
+        if arm != 'a':                       # arm a is ledgered inside the tool loop
+            record_go_allowance(row.get('usage') or {}, sent_model)
         row['latency_s'] = time.perf_counter() - started
         row['arm'] = arm
         dump(budget.path, budget.document())
@@ -375,13 +425,14 @@ def run_deepseek_arm(packet, arm, tools, model, budget, directory, client=None):
         return response
     completions.create = metered
     started = time.perf_counter()
-    result = dict(arm=arm, provider='deepseek', model=model, status='failed', text='', factual_status='unreviewed')
+    result = dict(arm=arm, provider='deepseek', model=model, model_sent=sent_model,
+                  status='failed', text='', factual_status='unreviewed')
     try:
         with article_run_context(packet['season'], packet['week']):
             if arm == 'a':
                 loop = run_openai_tool_loop(client, model, packet['a']['system_instruction'],
                     packet['a']['task_instruction'], exposed, max_steps=25, temperature=TEMPERATURE,
-                    provider='deepseek', max_tokens=budget.max_output)
+                    provider='deepseek', max_tokens=budget.max_output, label='dossier')
                 result['iterations'] = loop.iterations
                 result['tool_calls_by_name'] = dict(loop.tool_calls_count)
                 if loop.error and not loop.text.strip():
@@ -391,7 +442,7 @@ def run_deepseek_arm(packet, arm, tools, model, budget, directory, client=None):
                 # the synthesis follow-up when the research turn returned no text.
                 finish = loop.usage_calls[-1].get('finish_reason') if loop.usage_calls else None
             else:
-                response = completions.create(model=model, messages=[
+                response = completions.create(model=sent_model, messages=[
                     dict(role='system', content=packet['b']['system_instruction']),
                     dict(role='user', content=packet['b']['task_instruction'])],
                     temperature=TEMPERATURE, max_tokens=budget.max_output)
@@ -458,7 +509,7 @@ def main():
                 from newsroom.tool_loop.openai_loop import resolve_endpoint
                 resolve_endpoint('deepseek')
             except ValueError as exc:
-                parser.error(f'DeepSeek live requires DEEPSEEK_API_KEY: {exc}')
+                parser.error(f'DeepSeek live requires an API key (OPENCODE_GO_API_KEY, or DEEPSEEK_API_KEY when DEEPSEEK_BASE_URL is set): {exc}')
     if args.repeats < 1:
         parser.error('repeats must be positive')
     dsn, database = configure_database()
@@ -474,11 +525,13 @@ def main():
     if args.provider == 'deepseek':
         packet['settings_note'] = ('DeepSeek deepseek-flash runs in thinking mode by default; its API docs state '
             'temperature has no effect in thinking mode, so 0.7 is recorded for parity but may be ignored. '
-            'Both arms share the writer prompt, cutoff and 8,192 output cap.')
+            'Both arms share the writer prompt, cutoff and 8,192 output cap. Requests go out as '
+            'deepseek-v4.1-flash through the opencode-go provider, where deepseek is a deprecated alias.')
         packet['pricing'] = dict(source=DEEPSEEK_PRICE_SOURCE, checked=DEEPSEEK_PRICE_CHECKED,
             peak=DEEPSEEK_PEAK, off_peak=DEEPSEEK_OFF_PEAK,
             peak_periods='Mon-Fri 01:00-04:00 and 06:00-10:00 UTC',
             holiday_note='Chinese public holidays are off-peak on the provider price list; no holiday calendar is kept, so those weekdays are priced as peak',
+            reported_cost_note='A response that reports its own list cost (OpenCode Go) is settled at that figure; this table prices the reservation and any response that does not report one',
             input_token_limit=DEEPSEEK_INPUT_LIMIT)
     packet['harness_sha256'] = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
     packet['editorial_adjustments'] = 'Original creative-texture directives retained in both arms; shared policy permits invention that does not contradict canonical data. Production configuration unchanged.'

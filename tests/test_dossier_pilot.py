@@ -124,6 +124,30 @@ def test_deepseek_reasoning_tokens_are_not_billed_twice():
         pytest.approx(cost(base, provider='deepseek', rates=DEEPSEEK_PEAK))
 
 
+def test_deepseek_cost_prefers_provider_reported_list_cost():
+    """A Go response's own list cost wins over the local table (§2.6)."""
+    usage = dict(input_tokens=1000, cached_tokens=400, uncached_tokens=600,
+                 output_tokens=200, thinking_tokens=100,
+                 cost_usd=0.0, list_cost_usd=0.01234, allowance_usd=0.0074,
+                 billing_source='go')
+    assert cost(usage, provider='deepseek') == pytest.approx(0.01234)
+    local = (600 * .30 + 400 * .006 + 200 * 1.20) / 1e6
+    assert cost(usage, provider='deepseek') != pytest.approx(local)
+    # A reported zero is a free call, not a missing field: it is not repriced locally.
+    assert cost(dict(usage, list_cost_usd=0.0), provider='deepseek') == 0
+
+
+def test_deepseek_cost_falls_back_to_local_table_without_reported_cost():
+    usage = dict(input_tokens=1000, cached_tokens=400, uncached_tokens=600,
+                 output_tokens=200, thinking_tokens=100, list_cost_usd=None)
+    expected = (600 * .30 + 400 * .006 + 200 * 1.20) / 1e6
+    assert cost(usage, provider='deepseek', rates=DEEPSEEK_PEAK) == pytest.approx(expected)
+    assert cost(usage, provider='deepseek', rates=DEEPSEEK_OFF_PEAK) == pytest.approx(expected / 2)
+    # A direct DeepSeek response has no such key at all; that behaves the same.
+    without_key = {k: v for k, v in usage.items() if k != 'list_cost_usd'}
+    assert cost(without_key, provider='deepseek', rates=DEEPSEEK_PEAK) == pytest.approx(expected)
+
+
 def test_deepseek_budget_reserves_peak_or_offpeak_by_call_time(tmp_path):
     peak_at = dt.datetime(2026, 11, 11, 2, 0, tzinfo=dt.timezone.utc)
     weekend_at = dt.datetime(2026, 11, 14, 2, 0, tzinfo=dt.timezone.utc)
@@ -150,9 +174,47 @@ def test_deepseek_budget_settles_openai_usage(tmp_path):
     budget.complete(row, response)
     assert row['status'] == 'completed'
     assert row['usage'] == dict(input_tokens=1000, cached_tokens=600, uncached_tokens=400,
-                                output_tokens=200, thinking_tokens=80)
+                                output_tokens=200, thinking_tokens=80,
+                                cost_usd=None, list_cost_usd=None, allowance_usd=None,
+                                billing_source=None)
+    assert row['price_source'] == 'local-peak'
     assert row['charged_or_reserved'] == pytest.approx(
         cost(row['usage'], provider='deepseek', rates=DEEPSEEK_PEAK))
+
+
+def test_deepseek_budget_settles_from_go_reported_cost_and_keeps_ceiling(tmp_path):
+    """Settlement uses Go's list cost, and the ceiling still holds over it."""
+    peak_at = dt.datetime(2026, 11, 11, 2, 0, tzinfo=dt.timezone.utc)
+    # 1,000 input tokens bound plus double the 8,192 output cap reserves $0.0199608.
+    budget = Budget(0.05, tmp_path / 'usage.json', 8192, provider='deepseek', input_limit=1000)
+    row = budget.reserve(at=peak_at)
+    assert row['charged_or_reserved'] == pytest.approx((1000 * .30 + 2 * 8192 * 1.20) / 1e6)
+    response = SimpleNamespace(usage={
+        'prompt_tokens': 100, 'completion_tokens': 40, 'cost': 0.0,
+        'opencode': {'list_cost': 0.0123, 'allowance': 0.0074, 'billing_source': 'go'}})
+    budget.complete(row, response)
+    assert row['status'] == 'completed'
+    assert row['usage']['list_cost_usd'] == pytest.approx(0.0123)
+    assert row['usage']['billing_source'] == 'go'
+    assert row['charged_or_reserved'] == pytest.approx(0.0123)
+    assert row['price_source'] == 'provider-list-cost'
+    # This call stayed inside the ceiling, so one more reservation still fits.
+    budget.reserve(at=peak_at)
+    assert len(budget.rows) == 2
+    document = json.loads((tmp_path / 'usage.json').read_text())
+    assert 'reported_cost_note' in document
+
+    # A price the provider reports above the ceiling still stops the run: the
+    # reservation fits, the settlement does not, and the next request is refused.
+    tight = Budget(0.03, tmp_path / 'tight.json', 8192, provider='deepseek', input_limit=1000)
+    spent = tight.reserve(at=peak_at)
+    tight.complete(spent, SimpleNamespace(usage={
+        'prompt_tokens': 100, 'completion_tokens': 40,
+        'opencode': {'list_cost': 0.05, 'allowance': 0.03, 'billing_source': 'go'}}))
+    assert spent['charged_or_reserved'] == pytest.approx(0.05)
+    assert sum(r['charged_or_reserved'] for r in tight.rows) > tight.limit
+    with pytest.raises(RuntimeError, match='Spend ceiling'):
+        tight.reserve(at=peak_at)
 
 
 def test_deepseek_missing_usage_retains_reservation(tmp_path):
@@ -220,7 +282,11 @@ def test_deepseek_react_arm_uses_openai_loop_and_meters_each_call(tmp_path):
     assert result['status'] == 'generated'
     assert result['provider'] == 'deepseek'
     assert len(calls) == 2
-    assert calls[0]['model'] == 'deepseek-flash'
+    # The loop translates the deprecated `deepseek-flash` id to the Go model id
+    # (OPENCODE_GO_PIPELINE_PLAN.md §2.2); the pilot still records the requested name.
+    assert calls[0]['model'] == 'deepseek-v4.1-flash'
+    assert result['model'] == DEEPSEEK_MODEL
+    assert result['model_sent'] == 'deepseek-v4.1-flash'
     assert calls[0]['temperature'] == .7
     assert calls[0]['max_tokens'] == 8192
     assert calls[0]['tools']
@@ -230,6 +296,32 @@ def test_deepseek_react_arm_uses_openai_loop_and_meters_each_call(tmp_path):
     assert budget.rows[0]['status'] == 'completed'
     assert (tmp_path / 'a_result.json').exists()
     assert (tmp_path / 'a_tool_trace.json').exists()
+
+
+def test_deepseek_dossier_arm_meters_go_reported_cost(monkeypatch, tmp_path):
+    """A Go response is settled at its list cost, metered per call and ledgered."""
+    monkeypatch.setenv('MU_GO_ALLOWANCE_FILE', str(tmp_path / 'go_allowance.jsonl'))
+    usage = {'prompt_tokens': 1000, 'prompt_cache_hit_tokens': 600,
+             'prompt_cache_miss_tokens': 400, 'completion_tokens': 200,
+             'completion_tokens_details': {'reasoning_tokens': 50}, 'cost': 0.0,
+             'opencode': {'list_cost': 0.008, 'allowance': 0.0048, 'billing_source': 'go'}}
+    client = _FakeClient([_deepseek_response(
+        content='# Game\n\n> **EXCERPT:** Both teams.\n\nBody.', usage=usage)])
+    budget = Budget(5, tmp_path / 'usage.json', 8192, provider='deepseek')
+    result = run_deepseek_arm(_packet(), 'b', [_get_matchup_edges], DEEPSEEK_MODEL,
+                              budget, tmp_path, client=client)
+    assert result['status'] == 'generated'
+    call = result['usage_calls'][0]
+    assert len(result['usage_calls']) == 1
+    assert call['usage']['list_cost_usd'] == pytest.approx(0.008)
+    assert call['usage']['allowance_usd'] == pytest.approx(0.0048)
+    assert call['usage']['billing_source'] == 'go'
+    assert call['price_source'] == 'provider-list-cost'
+    assert call['finish_reason'] == 'stop'
+    assert result['estimated_cost_usd'] == pytest.approx(0.008)
+    ledger = (tmp_path / 'go_allowance.jsonl').read_text().splitlines()
+    assert len(ledger) == 1
+    assert json.loads(ledger[0])['allowance_usd'] == pytest.approx(0.0048)
 
 
 def test_deepseek_dossier_arm_is_one_call_without_tools(tmp_path):
@@ -242,6 +334,7 @@ def test_deepseek_dossier_arm_is_one_call_without_tools(tmp_path):
     result = run_deepseek_arm(packet, 'b', [_get_matchup_edges], DEEPSEEK_MODEL,
                               budget, tmp_path, client=client)
     call = client.completions.calls[0]
+    assert call['model'] == 'deepseek-v4.1-flash'
     assert 'tools' not in call
     assert call['max_tokens'] == 8192
     assert [m['role'] for m in call['messages']] == ['system', 'user']

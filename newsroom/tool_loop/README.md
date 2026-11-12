@@ -22,6 +22,7 @@ newsroom/tool_loop/
 ├── models.py             # ToolLoopResult dataclass (text, usage, tool_calls_count, iterations, error)
 ├── schema.py             # python_func_to_openai_tool: schema inspection and converter
 ├── openai_loop.py        # run_openai_tool_loop: multi-turn loop with JSON parsing & error recovery
+├── go_allowance.py       # Per-call OpenCode Go allowance ledger (data/usage/go_allowance.jsonl)
 ├── gemini_loop.py        # run_gemini_tool_loop: encapsulated Gemini AFC loop with fallback synthesis
 ├── router.py             # execute_agent_tool_loop: provider dispatcher
 └── README.md             # This documentation
@@ -61,9 +62,9 @@ newsroom/tool_loop/
 ### 3.4 Router (`router.py`)
 `execute_agent_tool_loop(provider, client, model, system_instruction, prompt, tools, **kwargs)`:
 - Dispatches to `run_gemini_tool_loop` if `provider == "gemini"`.
-- Dispatches to `run_openai_tool_loop` if `provider in ("openai", "ollama", "vllm", "deepseek", "glm")`.
-- If `provider` is omitted, infers provider from the `model` name prefix (e.g. `ollama:`, `deepseek:`), an Ollama-style `name:tag` model (`qwen2.5:14b` → ollama), or the `LLM_PROVIDER` environment variable, else gemini. A prefix naming the provider is stripped before the API call (`ollama:qwen2.5:14b` is sent as `qwen2.5:14b`).
-- With `client=None`, the OpenAI-compatible loop builds a client for the resolved provider's endpoint (`PROVIDER_ENDPOINTS` in `openai_loop.py`; base URLs overridable by env, hosted providers need `DEEPSEEK_API_KEY` / `GLM_API_KEY` / `OPENAI_API_KEY`).
+- Dispatches to `run_openai_tool_loop` if `provider in ("openai", "ollama", "vllm", "deepseek", "opencode-go", "glm")`. `opencode-go` is OpenCode Go's OpenAI-compatible endpoint; `deepseek` is a deprecated alias that resolves to it (`deepseek-flash` is sent as `deepseek-v4.1-flash`).
+- If `provider` is omitted, infers provider from the `model` name prefix (e.g. `ollama:`, `deepseek:`, `opencode:`), an Ollama-style `name:tag` model (`qwen2.5:14b` → ollama), or the `LLM_PROVIDER` environment variable, else gemini. A prefix naming the provider is stripped before the API call (`ollama:qwen2.5:14b` is sent as `qwen2.5:14b`).
+- With `client=None`, the OpenAI-compatible loop builds a client for the resolved provider's endpoint (`PROVIDER_ENDPOINTS` in `openai_loop.py`; base URLs overridable by env, hosted providers need `OPENCODE_GO_API_KEY` / `DEEPSEEK_API_KEY` / `GLM_API_KEY` / `OPENAI_API_KEY`).
 
 ---
 
