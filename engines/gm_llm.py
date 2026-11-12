@@ -63,13 +63,17 @@ def make_llm(label, model=DEFAULT_MODEL, enabled=True, thinking_level=None, clie
     provider is unavailable."""
     if not enabled:
         return None
-    from engines.llm_provider import resolve_provider, ProviderText, llm_disabled
+    from engines.llm_provider import GoText, ProviderText, llm_disabled, resolve_model, resolve_provider
     if llm_disabled():
         return None
     prov = resolve_provider(label=label, model=model, provider=provider)
     key = api_key()
     if prov == "gemini" and not key and client is None:
         return None
+    if prov == "go" and client is None:
+        from newsroom.tool_loop.go_transport import go_api_key
+        if not go_api_key():
+            return None
     try:
         if prov == "ollama":
             return ProviderText(
@@ -81,6 +85,13 @@ def make_llm(label, model=DEFAULT_MODEL, enabled=True, thinking_level=None, clie
                 thinking_level=thinking_level,
                 client=client,
                 api_key=key,
+            )
+        if prov == "go":
+            return GoText(
+                label=label,
+                model=resolve_model("go", label=label, source=label, model=model),
+                thinking_level=thinking_level,
+                client=client,
             )
         return GeminiText(key, label, model, thinking_level=thinking_level, client=client)
     except Exception as e:
