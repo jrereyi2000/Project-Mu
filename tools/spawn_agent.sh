@@ -3,7 +3,7 @@
 # Any agent, or JR, may run it. It only ever OPENS a new window; it never types into an existing one
 # (agents must never `tmux send-keys` into another agent's window).
 #
-#   tools/spawn_agent.sh [--dry-run] <label> <claude|opus|deepseek|codex|gemini> [prompt]
+#   tools/spawn_agent.sh [--dry-run] <label> <claude|opus|deepseek|deepseek-claude|codex|gemini> [prompt]
 #   e.g. tools/spawn_agent.sh builder-2 opus "/builder"
 #        tools/spawn_agent.sh gm-hiring codex "Pick up the HANDOFF addressed to gm-hiring on the board."
 #
@@ -22,15 +22,23 @@
 # - A prompt that starts with `/` (a skill such as /builder or /audit) is passed unchanged, since skills
 #   choose their own label. Any other prompt, or none, is prefixed with "Your session label is <label>."
 #   so the new session signs the board with it.
-# - deepseek runs $MU_DEEPSEEK_CMD (default ~/bin/claude-deepseek, JR's local wrapper that points Claude
-#   Code at DeepSeek; it holds the API key and is never committed).
+# - deepseek starts an OpenCode Go session through tools/opencode_session.sh, the one DeepSeek launcher
+#   (it sets the route markers and the session id, then runs `opencode`). deepseek-claude is the
+#   fallback: it runs $MU_DEEPSEEK_CMD (default ~/bin/claude-deepseek, JR's local wrapper that points
+#   Claude Code at DeepSeek; it holds the API key and is never committed), kept until 2026-11-26.
 # - The new session still does the full session start itself (spec, board, listener, NOTICE) and stops at
 #   its first permission prompt until someone answers it in that window.
 set -euo pipefail
 
+caller_is_deepseek() {
+  [ "${MU_AGENT_CLASS:-}" = deepseek ] ||
+  [[ "${ANTHROPIC_BASE_URL:-}" == *deepseek* ]] ||
+  [[ "${ANTHROPIC_MODEL:-}" == deepseek-* ]]
+}
+
 dry=0
 if [ "${1:-}" = "--dry-run" ]; then dry=1; shift; fi
-usage="usage: spawn_agent.sh [--dry-run] <label> <claude|opus|deepseek|codex|gemini> [prompt]"
+usage="usage: spawn_agent.sh [--dry-run] <label> <claude|opus|deepseek|deepseek-claude|codex|gemini> [prompt]"
 label="${1:?$usage}"
 agent="${2:?$usage}"
 prompt="${3:-}"
@@ -51,20 +59,24 @@ elif [ -z "$prompt" ]; then
 fi
 
 case "$agent" in
-  claude)   cmd=(claude "$prompt") ;;
-  opus)     cmd=(claude --model claude-opus-5-5 --effort medium "$prompt") ;;
-  deepseek) cmd=("${MU_DEEPSEEK_CMD:-$HOME/bin/claude-deepseek}" "$prompt") ;;
-  codex)    cmd=(codex "$prompt") ;;
-  gemini)   cmd=(gemini -i "$prompt") ;;
-  *) echo "spawn_agent: unknown agent '$agent' (claude, opus, deepseek, codex, gemini)" >&2; exit 2 ;;
+  claude)          cmd=(claude "$prompt") ;;
+  opus)            cmd=(claude --model claude-opus-5-5 --effort medium "$prompt") ;;
+  deepseek)        cmd=("$here/opencode_session.sh" --prompt "$prompt") ;;
+  deepseek-claude) cmd=("${MU_DEEPSEEK_CMD:-$HOME/bin/claude-deepseek}" "$prompt") ;;
+  codex)           cmd=(codex "$prompt") ;;
+  gemini)          cmd=(gemini -i "$prompt") ;;
+  *) echo "spawn_agent: unknown agent '$agent' (claude, opus, deepseek, deepseek-claude, codex, gemini)" >&2; exit 2 ;;
 esac
 
-if [ "$agent" = "deepseek" ] && [ "${MU_ALLOW_DEEPSEEK_SPAWN:-0}" != "1" ] &&
-   { [[ "${ANTHROPIC_BASE_URL:-}" == *deepseek* ]] || [[ "${ANTHROPIC_MODEL:-}" == deepseek-* ]]; }; then
-  echo "spawn_agent: a DeepSeek-routed session may spawn another DeepSeek session for a hand-off or successor (JR's standing rule, CLAUDE.md)." >&2
-  echo "Rerun with MU_ALLOW_DEEPSEEK_SPAWN=1, after saying why on the board and giving the new label." >&2
-  exit 3
-fi
+case "$agent" in
+  deepseek|deepseek-claude)
+    if [ "${MU_ALLOW_DEEPSEEK_SPAWN:-0}" != "1" ] && caller_is_deepseek; then
+      echo "spawn_agent: a DeepSeek-routed session may spawn another DeepSeek session for a hand-off or successor (JR's standing rule, CLAUDE.md)." >&2
+      echo "Rerun with MU_ALLOW_DEEPSEEK_SPAWN=1, after saying why on the board and giving the new label." >&2
+      exit 3
+    fi
+    ;;
+esac
 
 inner="$(printf '%q ' "${cmd[@]}")"
 inner="${inner% }; exec bash"
