@@ -10,6 +10,7 @@ from engines.game_credit_engine import compute_game_credit, fetch_completed_game
 from engines.coty_engine import compute_coty, fetch_inputs as fetch_coty_inputs
 from engines.coach_profile import coach_profile, fetch_team_coach, fetch_team_staff, staff_matchup
 from engines.game_script_engine import get_script, render_script
+from engines import award_candidates as ac
 from engines import clutch_engine as clutch
 from engines.player_splits import (BLEND_GAMES, DIMENSIONS, MIN_GAMES, compute_splits, defense_groups,
                                    player_lines, stat_group, STATS as SPLIT_STATS)
@@ -4001,3 +4002,127 @@ def get_player_progression(player_identifier: str, season: int = 0) -> str:
         return json.dumps({"player_id": pid, "changes": rows, "events": reports, "note": note})
     except Exception:
         return "Progression history unavailable. Do not infer changes or causes."
+
+
+# ----------------------------------------------------------------------------------------------------------------
+# Award races (AWARDS_TRACKER): the candidate race for the six major awards, from engines/award_candidates.py. The
+# media panel (newsroom/award_ballots.py) votes on the same candidates, so this tool reports the race and never a
+# result: the base score and the metric z-scores are Mu-internal ranking numbers and are not quotable as an award.
+# ----------------------------------------------------------------------------------------------------------------
+
+AWARD_RACE_CODES = ("MVP", "OPOY", "DPOY", "OROY", "DROY", "COTY")
+AWARD_RACE_LIMIT = 10          # shown; engines.award_candidates.POOL (15) is what the media panel votes from
+AWARD_RACE_ROOKIE_CODES = ("OROY", "DROY")
+AWARD_RACE_LABELS = {
+    "MVP": "Most Valuable Player, offense (voters lean quarterback)",
+    "OPOY": "Offensive Player of the Year",
+    "DPOY": "Defensive Player of the Year",
+    "OROY": "Offensive Rookie of the Year, rookies only: years_of_experience 0",
+    "DROY": "Defensive Rookie of the Year, rookies only: years_of_experience 0",
+    "COTY": "Coach of the Year, head coaches",
+}
+AWARD_RACE_METRICS = (("production", "production"), ("efficiency", "efficiency"), ("wins", "wins"),
+                      ("record_pace", "record pace"))
+
+
+def _award_z(v) -> str:
+    try:
+        return f"{float(v):+.2f}"
+    except (TypeError, ValueError):
+        return "n/a"
+
+
+def _render_award_race(award: str, season: int, rows: list, experience: dict, team_abbrs: dict) -> str:
+    """Pure. The text get_award_race returns. rows are engines.award_candidates.candidates() in its order (best
+    base score first), experience is {player_id: years_of_experience}, team_abbrs is {team_id: abbreviation}."""
+    award = (award or "").strip().upper()
+    if not rows:
+        return (f"No candidates for {award} in season {season}: the league has no eligible {award} rows for "
+                f"{season} yet, so there is no candidate race to report. Don't name a candidate or a winner for "
+                f"this award from memory; say the race has no candidates and take any factual line from another tool.")
+
+    shown = list(rows)[:AWARD_RACE_LIMIT]
+    head = (f"{season} {award} candidate race ({AWARD_RACE_LABELS.get(award, award)}): the top {len(shown)} "
+            f"candidates in Mu's ranking order (the media panel votes from a pool of up to {ac.POOL}). "
+            "CANDIDATE RACE, NOT THE RESULT: no award has been won here, and the base score and metric z-scores "
+            "are Mu-internal ranking numbers, never to be quoted as award results, vote counts or stats.")
+    if award in AWARD_RACE_ROOKIE_CODES:
+        head += (" Rookies only by construction: every listed player has years_of_experience 0, so calling a "
+                 "listed player a second-year player or a veteran, or naming a rookie who is not on this list, "
+                 "contradicts this tool.")
+    elif award == "COTY":
+        head += " Head coaches only; each row shows his record inputs (win%) instead of years of experience."
+
+    lines = [head]
+    for i, c in enumerate(shown, 1):
+        metrics = c.get("metrics") or {}
+        team = team_abbrs.get(c.get("team_id")) or (
+            f"team {c.get('team_id')}" if c.get("team_id") is not None else "team unknown")
+        parts = [f"{i}. {c.get('name') or '(name missing)'}", team, c.get("position") or "pos unknown"]
+        if award == "COTY":
+            wins_z = metrics.get("wins")
+            try:
+                win_pct = (float(wins_z) + 2.0) / 4.0
+                parts.append(f"win% {win_pct:.3f}")
+            except (TypeError, ValueError):
+                parts.append("win% n/a")
+            parts.append(f"production {_award_z(metrics.get('production'))}, wins {_award_z(wins_z)}")
+        else:
+            parts.append(f"{c.get('games') if c.get('games') is not None else '?'} G")
+            yoe = experience.get(c.get("id"))
+            try:
+                yoe = int(yoe) if yoe is not None else None
+            except (TypeError, ValueError):
+                yoe = None
+            if yoe is None:
+                parts.append("YOE ?")
+            elif yoe == 0:
+                parts.append("YOE 0 (rookie)")
+            else:
+                parts.append(f"YOE {yoe}")
+            parts.append(", ".join(f"{label} {_award_z(metrics.get(key))}"
+                                   for key, label in AWARD_RACE_METRICS if key in metrics))
+        lines.append(" | ".join(parts))
+    return "\n".join(lines)
+
+
+@tool
+def get_award_race(award: str, season: int = 0) -> str:
+    """Fetch the candidate race for one of the six major season awards, for the article's season unless you pass one.
+
+    award (case-insensitive): MVP (Most Valuable Player, offense, voters lean quarterback), OPOY (Offensive Player
+    of the Year), DPOY (Defensive Player of the Year), OROY (Offensive Rookie of the Year), DROY (Defensive Rookie
+    of the Year), COTY (Coach of the Year, head coaches).
+
+    Returns the top 10 candidates in the order Mu's award model ranks them: rank, name, team abbreviation, position,
+    games, years_of_experience and the metric z-scores the voters weigh (production, efficiency, wins, record pace).
+    COTY lists head coaches with their record inputs (win%) and no experience.
+
+    OROY and DROY are rookies by construction: every listed player has years_of_experience 0. Never call a listed
+    player a second-year player or a veteran, and never name a rookie who is not on this list.
+
+    This is the candidate race, NOT the result. No award has been won in this tool: the base score and the
+    z-scores are Mu-internal ranking numbers and must not be quoted as award results, vote counts or stats. Use the
+    list to choose whom to write about, and take the player's real statistics from the other tools."""
+    try:
+        code = str(award or "").strip().upper()
+        if code not in AWARD_RACE_CODES:
+            return (f"Unknown award code '{award}'. Use one of: {', '.join(AWARD_RACE_CODES)} "
+                    "(case-insensitive) — MVP, OPOY, DPOY, OROY, DROY or COTY.")
+        s_val = resolve_season(season)
+        with psycopg.connect(db.db_conn_info) as conn:
+            with conn.cursor() as cur:
+                rows = ac.candidates(cur, s_val, code)[:AWARD_RACE_LIMIT]
+                if not rows:
+                    return _render_award_race(code, s_val, [], {}, {})
+                experience = {}
+                if code != "COTY":
+                    cur.execute("SELECT player_id, years_of_experience FROM player_seasons "
+                                "WHERE season = %s AND player_id = ANY(%s)",
+                                (s_val, [c["id"] for c in rows]))
+                    experience = {pid: yoe for pid, yoe in cur.fetchall()}
+                cur.execute("SELECT id, abbreviation FROM teams")
+                abbrs = {tid: abbr for tid, abbr in cur.fetchall() if abbr}
+        return _render_award_race(code, s_val, rows, experience, abbrs)
+    except Exception as e:
+        return f"Error: {str(e)}"
