@@ -175,7 +175,7 @@ python3 -m tools.madden_pilot watch-game --save CAREER-TUNE-<name> --franchise T
 
 ### U2: `watch-game` and its catalog entries
 
-- **Owns:** `tools/madden_pilot/jobs.py`, `tools/madden_pilot/catalog.json`, `tests/test_madden_pilot_jobs.py`, `tests/test_madden_pilot_nav.py`
+- **Owns:** `tools/madden_pilot/jobs.py`, `tools/madden_pilot/catalog.json`, `tools/madden_pilot/__main__.py`, `tests/test_madden_pilot_jobs.py`, `tests/test_madden_pilot_nav.py`
 - **Reads:** `MADDEN_PILOT.md` §5–§6, the spike's findings (S-1), `jobs.py`'s `quit_franchise`
 - **Depends on:** none (S-1's findings are written into the plan before the wave)
 - **Done when:** `watch-game` refuses a non-TUNE save and a running watcher; it presses nothing during a kickoff hold; it walks the D2 halftime recipe (supersim to end of Q1 → Q2 by play → resume under 20 s) and refuses to resume outside that window; it reports the autosave write; and the nav tests still prove roster cards and delete paths are never confirmed
@@ -206,6 +206,7 @@ python3 -m tools.madden_pilot watch-game --save CAREER-TUNE-<name> --franchise T
 | `tests/test_madden_pilot_nav.py` | U2 |
 | `tests/test_mod_check.py` | U1 |
 | `tests/test_mod_check_capture.py` | U1 |
+| `tools/madden_pilot/__main__.py` | U2 |
 | `tools/madden_pilot/catalog.json` | U2 |
 | `tools/madden_pilot/jobs.py` | U2 |
 | `tools/mod_check/__init__.py` | U1 |
