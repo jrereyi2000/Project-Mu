@@ -2275,11 +2275,17 @@ CREATE TABLE IF NOT EXISTS news_feed (
     reply_count INT,
     views INT,
     hashtags TEXT[],
-    post_shape VARCHAR(32)      -- the sampled social_writer.POST_SHAPES label (posts only; 2027_02_10)
+    post_shape VARCHAR(32),     -- the sampled social_writer.POST_SHAPES label (posts only; 2027_02_10)
+    -- The write-time fact gate's verdict, set when an ARTICLE is saved (2027_02_30_fact_gate.sql;
+    -- docs/in_progress/ARTICLE_FACT_GATE_PLAN.md). NULL = not checked (rows before the gate).
+    fact_gate_status VARCHAR(16) CONSTRAINT news_feed_fact_gate_status_check
+        CHECK (fact_gate_status IN ('clean', 'rewritten', 'flagged', 'skipped')),
+    fact_gate JSONB             -- counts, contradicted claims and their evidence quotes, checker model; never the article
 );
 CREATE INDEX IF NOT EXISTS idx_news_feed_social_week ON news_feed (season, week, content_type, posted_at);
 CREATE INDEX IF NOT EXISTS idx_news_feed_agent ON news_feed (agent_id);
 CREATE INDEX IF NOT EXISTS idx_news_feed_reply_to ON news_feed (reply_to_id);
+CREATE INDEX IF NOT EXISTS news_feed_fact_gate ON news_feed (season, week) WHERE fact_gate_status = 'flagged';
 
 -- Agent Wire weekly trends, computed from post tags and hashtags (docs/done/SOCIAL_MATRIX.md §4)
 CREATE TABLE IF NOT EXISTS social_trends (
@@ -4298,5 +4304,6 @@ INSERT INTO schema_migrations (version, filename, checksum, source) VALUES
     ('2027_02_26_league_shape_season', '2027_02_26_league_shape_season.sql', 'c953582968fad1e0de03b4fdde23627ab21d23e7f42e0612a63e7dcd45f45026', 'init_db.sql'),
     ('2027_02_27_nfl_mirror', '2027_02_27_nfl_mirror.sql', '7b5d61f3fc3427adaf9c029a5ceb6cfa75b55ba93654d27a52d845624204230c', 'init_db.sql'),
     ('2027_02_28_stats_loader_weeks', '2027_02_28_stats_loader_weeks.sql', '33c2d60765e497dfc353545ed60edba2eca28ddc6d8878ac7e6f2603201a105a', 'init_db.sql'),
-    ('2027_02_29_stats_counter_season_games', '2027_02_29_stats_counter_season_games.sql', 'ff13b1669af51461b5017d24a967b1c890aca5f389bb328f6686e9b904193151', 'init_db.sql')
+    ('2027_02_29_stats_counter_season_games', '2027_02_29_stats_counter_season_games.sql', 'ff13b1669af51461b5017d24a967b1c890aca5f389bb328f6686e9b904193151', 'init_db.sql'),
+    ('2027_02_30_fact_gate', '2027_02_30_fact_gate.sql', '9cbd17d5394a40287ed88847e53ae47e68cb19233278916e5555270099f59bb4', 'init_db.sql')
 ON CONFLICT (version) DO NOTHING;

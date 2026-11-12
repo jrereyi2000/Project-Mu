@@ -82,6 +82,30 @@ def fantasy_slate_exists(cur, season: int, week: int) -> bool:
     return _slate_exists(cur, season, week, FANTASY_SLOT_FILTER)
 
 
+def fact_gate_summary(cur, season: int, week: int) -> str | None:
+    """The week's fact-gate notice line, or None when this database cannot answer it.
+
+    One count over the week's ARTICLE rows (TWEET rows are never articles): `N articles written,
+    M fact-gated (K flagged)`. A database whose `news_feed` has no `fact_gate_status` column yet (the
+    migration is JR's to apply) raises on the query and gets None, so the run prints nothing and carries on.
+    """
+    try:
+        cur.execute("""
+            SELECT COUNT(*)                                                          AS articles,
+                   COUNT(*) FILTER (WHERE fact_gate_status IN ('clean', 'rewritten', 'flagged')) AS gated,
+                   COUNT(*) FILTER (WHERE fact_gate_status = 'flagged')             AS flagged
+            FROM news_feed
+            WHERE season = %s AND week = %s AND content_type = 'ARTICLE';
+        """, (season, week))
+        row = cur.fetchone()
+    except Exception:                       # a schema without the column prints nothing, never fails the run
+        return None
+    if not row:
+        return None
+    articles, gated, flagged = (int(row[0] or 0), int(row[1] or 0), int(row[2] or 0))
+    return f"{articles} articles written, {gated} fact-gated ({flagged} flagged)"
+
+
 def update_writer_relationships(conn_info: str, season: int, week: int) -> dict:
     """Weekly writer-bias upkeep (AGENT_WIRE_VOICE_PLAN §2.5): grade every season call the stored data can now
     decide, then apply last week's graded picks and calls to the writers' relationships; a season's first run
@@ -208,6 +232,9 @@ def run_weekly_swarm(
                         live=not dry_run, save_to_db=not dry_run, max_workers=max_workers, **kwargs,
                     )
                     todo["national"] = done
+                    summary = fact_gate_summary(cur, season, week)
+                    if summary:
+                        print(f"[Newsroom] Fact gate: {summary}.")
                 else:
                     print(f"[Newsroom] National slate: {todo['national']}.")
 
