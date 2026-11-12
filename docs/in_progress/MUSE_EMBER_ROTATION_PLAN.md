@@ -1,6 +1,6 @@
 # Project Mu: Muse Ember Rotation Plan
 
-**Status:** approved by JR (2026-11-12); rewritten to the OpenCode agent route and retargeted to JR's two-step benchmark (Spark first, Ember on a pass) on 2026-11-12; building, wave 1 of 2.
+**Status:** approved by JR (2026-11-12); rewritten to the OpenCode agent route and retargeted to JR's two-step benchmark (Spark first, Ember on a pass) on 2026-11-12; building, wave 2 of 2 (wave 1 merged `dca6741`, `c21dd4e`).
 **Builds on:** [`OPENCODE_DEEPSEEK_ROUTE_PLAN.md`](../done/OPENCODE_DEEPSEEK_ROUTE_PLAN.md) (built 2026-11-12: the OpenCode launcher, spawn types, route markers and board inbox that this plan copies), PROJECT_SPEC §1.2 (agent routes), [`MADDEN_PILOT_AND_TUNING_PLAN.md`](../done/MADDEN_PILOT_AND_TUNING_PLAN.md), `docs/reference/AGENTS.md` § Model inboxes.
 
 **Goal:** Make a Muse model a first-class Project Mu agent, and find out whether it beats the native route. A Muse session starts in the OpenCode TUI through its own launcher, joins the board with its own label, inbox and commit trailer, takes builder work, and owns computer use by driving `tools/madden_pilot` from its own shell. No Meta API client and no `MODEL_API_KEY`: JR's decision (D6) is that the session is the computer-use route.
@@ -263,3 +263,4 @@ No path appears twice.
 |---|---|---|---|---|---|
 | U2 board inbox alias | 1 | `worktree-agent-acb4b652d0f0c81b5` | `.claude/worktrees/agent-acb4b652d0f0c81b5` | merged — `muse` key in `RECIPIENTS`, 5 tests | `dca6741` |
 | U1 launcher and spawn type | 1 | `worktree-agent-ab63ffea117637746` | `.claude/worktrees/agent-ab63ffea117637746` | merged — `tools/muse_session.sh` + `muse` spawn type, 24 tests | `c21dd4e` |
+| U3 Muse skill and docs (wave 2) | 2 | `worktree-agent-aa7557de5da7c49cc` | `.claude/worktrees/agent-aa7557de5da7c49cc` | merged — `.claude/skills/muse/SKILL.md`, AGENTS.md row + paragraph, MADDEN_PILOT.md line | `7a4d71e` |
