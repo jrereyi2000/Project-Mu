@@ -1,10 +1,11 @@
 """Press conference reporter and coach agents (PRESS_CONFERENCE_PLAN §2.5; PROJECT_SPEC §7.14).
 
 This module is the agents half of a postgame presser. It writes prompts, calls one injected model per turn
-(``llm(prompt) -> str``; the default is ``engines.llm_provider.generate_text(prompt, source="press")``), validates
-the answer with ``newsroom.press_facts.check_line`` and returns plain dicts. It never opens a database connection,
-never commits, and never calls the network in tests: every database read is a guarded best-effort and a missing
-or failing module means neutral, never an exception.
+(``llm(prompt) -> str``; the default is ``engines.llm_provider.generate_text(prompt, source="press")``, whose
+model id decides the provider — ``press_room.MeteredLLM``/``press_room.press_provider``, so a Go id reaches
+OpenCode Go), validates the answer with ``newsroom.press_facts.check_line`` and returns plain dicts. It never
+opens a database connection, never commits, and never calls the network in tests: every database read is a guarded
+best-effort and a missing or failing module means neutral, never an exception.
 
 Public API (U6 imports exactly these names and shapes)::
 

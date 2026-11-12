@@ -1,11 +1,13 @@
 """How counterparts speak (FRONT_OFFICE_INBOX_PLAN.md §2.4, D7; U1). Fake models only; offline SQLite fake."""
 import json
 import time
+import types
 
 import pytest
 
 from engines.inbox import InboxError, actors, store, voice
 from engines.inbox.registry import ActResult
+from engines.llm_provider import GoText
 from tests.test_inbox_store import InboxDB, thread_row
 
 FACTS = {"player": "Bryce Young", "years": 3, "total": "$44.0M", "guaranteed": "$18.0M", "decision": "COUNTER"}
@@ -44,6 +46,26 @@ class FakeLLM:
 GOOD = {"message": "I want to stay, but get me to $18.0M guaranteed and we're done.",
         "appraisal": {"outcome": "positive", "significance": "routine", "mistreated": False,
                       "reason": "a fair, direct offer"}}
+
+
+class FakeGoClient:
+    """The client `engines.llm_provider.GoText` would build, without a network: one generate_content call."""
+
+    def __init__(self, text, delay=0.0):
+        self.text, self.delay, self.calls = text, delay, []
+        self.models = types.SimpleNamespace(generate_content=self.generate_content)
+
+    def generate_content(self, model=None, contents=None, config=None):
+        self.calls.append((model, contents))
+        if self.delay:
+            time.sleep(self.delay)
+        return types.SimpleNamespace(text=self.text)
+
+
+def go_llm(answer, delay=0.0):
+    """The inbox callable a Go model gets (`make_llm("inbox")` builds a GoText), over a fake client."""
+    raw = answer if isinstance(answer, str) else json.dumps(answer)
+    return GoText(label="inbox", model="glm-5.3-flash", client=FakeGoClient(raw, delay))
 
 
 @pytest.fixture
@@ -313,3 +335,69 @@ def test_a_talk_reply_does_not_walk_back_past_empty_facts(db, cur):
     store.add_message(cur, t["id"], "COUNTERPART", "Thanks, noted.", "TEMPLATE", facts={})
     voice.exchange(cur, FakeKind(), t["id"], option_id=None, note="Anything else?", llm=None)
     assert "extra" not in store.messages(cur, t["id"])[-1]["facts"]
+
+
+# --------------------------------------------------------------------------------- the model and its route ---
+
+def test_default_llm_reads_inbox_model(monkeypatch):
+    """GLM_5_3_UNIFICATION_PLAN §2.3: INBOX_MODEL picks the model and its id picks the provider."""
+    calls = []
+    import engines.gm_llm as gm_llm
+    monkeypatch.setattr(gm_llm, "make_llm", lambda label, **k: calls.append((label, k)) or "LLM")
+    for key in ("INBOX_MODEL", "LLM_PROVIDER_INBOX", "LLM_PROVIDER"):
+        monkeypatch.delenv(key, raising=False)
+    assert voice.default_llm() == "LLM"
+    assert calls == [("inbox", {})]                                   # unset: exactly today's call, still Gemini
+    monkeypatch.setenv("INBOX_MODEL", "glm-5.3-flash")
+    assert voice.default_llm() == "LLM"
+    assert calls[-1] == ("inbox", {"model": "glm-5.3-flash", "provider": "go"})
+    monkeypatch.setenv("INBOX_MODEL", "gemini-3.8-flash")
+    assert voice.default_llm() == "LLM"
+    assert calls[-1] == ("inbox", {"model": "gemini-3.8-flash", "provider": "gemini"})
+    monkeypatch.setenv("INBOX_MODEL", "glm-5.3-flash")
+    monkeypatch.setenv("LLM_PROVIDER_INBOX", "gemini")                # the env still wins over the model id
+    assert voice.default_llm() == "LLM"
+    assert calls[-1] == ("inbox", {"model": "glm-5.3-flash", "provider": "gemini"})
+
+
+def test_default_llm_honours_the_inbox_provider_env_alone(monkeypatch):
+    """LLM_PROVIDER_INBOX=go with no INBOX_MODEL: make_llm's own route resolves Go, so the call is unchanged."""
+    calls = []
+    import engines.gm_llm as gm_llm
+    monkeypatch.setattr(gm_llm, "make_llm", lambda label, **k: calls.append((label, k)) or "LLM")
+    monkeypatch.delenv("INBOX_MODEL", raising=False)
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
+    monkeypatch.setenv("LLM_PROVIDER_INBOX", "go")
+    assert voice.default_llm() == "LLM" and calls == [("inbox", {})]
+
+
+def test_a_go_voice_call_falls_back_on_a_timeout(cur):
+    """A slow Go reply is abandoned at the same INBOX_LLM_BUDGET_S and the kind's template speaks."""
+    started = time.monotonic()
+    text, source, ap = voice.write(cur, FakeKind(), gm_thread(cur), "COUNTER", FACTS, [],
+                                   llm=go_llm(GOOD, delay=0.6), budget_s=0.05)
+    assert source == "TEMPLATE" and ap is None and text.startswith("[COUNTER]")
+    assert time.monotonic() - started < 0.5
+    assert voice.INBOX_LLM_BUDGET_S == 4.0                            # the budget is unchanged
+
+
+def test_a_go_voice_call_falls_back_on_an_invalid_reply(cur):
+    """A Go reply is held to the same checks as a Gemini one: invented money, garbage or an empty message."""
+    bad = [
+        json.dumps(dict(GOOD, message="Make it $25.0M guaranteed and we're done.")),   # invented money
+        "not json",
+        json.dumps({"message": ""}),
+        json.dumps(dict(GOOD, message="Fine, we have a deal.")),                       # contradicts a REJECT
+    ]
+    t = gm_thread(cur)
+    for index, answer in enumerate(bad):
+        intent = "REJECT" if index == len(bad) - 1 else "COUNTER"
+        text, source, ap = voice.write(cur, FakeKind(), t, intent, FACTS, [], llm=go_llm(answer))
+        assert source == "TEMPLATE" and ap is None and text.startswith(f"[{intent}]")
+
+
+def test_a_go_voice_reply_is_kept_when_it_checks_out(cur):
+    llm = go_llm(GOOD)
+    text, source, ap = voice.write(cur, FakeKind(), gm_thread(cur), "COUNTER", FACTS, [], llm=llm)
+    assert source == "LLM" and text == GOOD["message"] and ap["outcome"] == "positive"
+    assert llm.client.calls[0][0] == "glm-5.3-flash"                 # the Go model wrote it

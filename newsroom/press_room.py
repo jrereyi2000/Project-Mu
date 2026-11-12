@@ -237,9 +237,22 @@ def _team_registry(cur) -> dict:
 
 
 # ------------------------------------------------------------------------------------------------ the LLM
+def press_provider(model=None) -> str:
+    """The provider a press call reaches, from its model id (GLM_5_3_UNIFICATION_PLAN §2.3).
+
+    The same model→provider rule agent memory and the inbox voice use (``agent_memory.model_provider``):
+    ``LLM_PROVIDER_PRESS``, an explicit ``go:``/``gemini:`` prefix or an explicitly injected model wins first;
+    otherwise a Go model id (anything that is not a ``gemini-*`` id) is an OpenCode Go call. So
+    ``PRESS_MODEL=glm-5.3-flash`` reaches Go without also setting ``LLM_PROVIDER_PRESS=go``, and with
+    ``PRESS_MODEL`` unset the route stays the provider default (Gemini).
+    """
+    return agent_memory.model_provider(model=model, label="press", source="press")
+
+
 class MeteredLLM:
     """A callable model that counts calls and tokens. ``llm=None`` routes through ``generate_text(source="press")``
-    (respecting ``LLM_PROVIDER_PRESS``), using ``PRESS_MODEL`` as the model override; otherwise the injected
+    (respecting ``LLM_PROVIDER_PRESS``), using ``PRESS_MODEL`` as the model override; the model id then decides the
+    provider (``press_provider``: a Go id reaches OpenCode Go, a Gemini id stays Gemini). Otherwise the injected
     callable is used and token counts stay 0."""
 
     def __init__(self, llm=None, model=None):
@@ -259,6 +272,7 @@ class MeteredLLM:
         kwargs = {"source": "press", "return_usage": True}
         if self.model:
             kwargs["model"] = self.model
+            kwargs["provider"] = press_provider(self.model)
         text, usage = generate_text(prompt, **kwargs)
         with self._lock:
             self.input_tokens += int((usage or {}).get("input_tokens") or 0)
