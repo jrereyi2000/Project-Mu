@@ -67,6 +67,12 @@ def resolve_tool_loop_provider(provider: Optional[str] = None, model: Optional[s
             return "vllm"
         if m.startswith(("openai:", "openai/")):
             return "openai"
+        # Any other bare id OpenCode Go serves (`muse-spark-1.3-contributor`, `glm-5.3-flash`, …) belongs to
+        # Go, not Gemini: a Go id must never reach Google's endpoint (AUDIT_QUEUE_INVENTORY.md R11).
+        if ":" not in m:
+            from newsroom.tool_loop.go_transport import is_go_model
+            if is_go_model(m):
+                return "opencode-go"
         # Ollama names models "name:tag" (qwen2.5:14b, gemma4:12b); Gemini and
         # hosted model ids never contain a colon.
         if ":" in m:

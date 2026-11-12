@@ -1,11 +1,14 @@
 """Agent Wire model comparison (docs/done/SOCIAL_MATRIX.md build step 4).
 
 Writes the same 20 social-desk assignments with each model and saves the posts, token usage and cost to a
-JSON file for side-by-side review. Reads the database; writes nothing to it. Needs GEMINI_API_KEY (or .env).
+JSON file for side-by-side review. Reads the database; writes nothing to it. Needs GEMINI_API_KEY (or .env)
+only when a `gemini-*` model is among `--models`: an OpenCode Go list runs on OPENCODE_GO_API_KEY, and its
+cost line says "Go allowance (not $0 free)" instead of a $0.00 that reads as free (AUDIT R6 F4).
 
   python3 tools/social_model_compare.py                      # 2035 Week 9, 3.8 Flash vs 3.5 Flash-Lite
   python3 tools/social_model_compare.py --week 18 --models gemini-3.8-flash gemini-3.5-flash-lite
   python3 tools/social_model_compare.py --models gemini-3.8-flash gemini-3.8-flash:low   # model:thinking level
+  python3 tools/social_model_compare.py --models glm-5.3-flash        # Go only: no GEMINI_API_KEY needed
 
 Prompt A/B (docs/done/AGENT_WIRE_VOICE_PLAN.md §2.6): `--prompts old|new|both` writes the same sampled
 assignments with the pre-U2 post writer (loaded from git at OLD_WRITER_REV) and/or the current one, side by side
@@ -174,9 +177,11 @@ def main():
     ap.add_argument("--out", help="output JSON (default: captures/social_compare/<season>_w<week>_<time>.json)")
     args = ap.parse_args()
 
+    from newsroom.tool_loop.go_transport import is_go_model
+    gemini_models = [m for m in args.models if not is_go_model(m)]
     key = load_api_key()
-    if not key and not args.dry_run:
-        sys.exit("GEMINI_API_KEY is not set (environment or .env).")
+    if gemini_models and not key and not args.dry_run:
+        sys.exit(f"GEMINI_API_KEY is not set (environment or .env) and {gemini_models[0]} is a Gemini model.")
 
     import psycopg
     if args.db:
@@ -243,7 +248,8 @@ def main():
                               "window": "", "facts": picks[i]["facts"]} for i, au in reply_pairs]
 
     client = None
-    if not args.dry_run:
+    if not args.dry_run and gemini_models:
+        # A Go-only list needs no Gemini client at all: write_post builds Go's from OPENCODE_GO_API_KEY.
         from google import genai
         client = genai.Client(api_key=key)
 
@@ -303,12 +309,10 @@ def main():
                 key_ = side_key(side, model, args.prompts)
                 label = model if args.prompts == "new" else f"{side}:{model}"
                 rows = [p["by_model"][key_] for p in results["posts"] if "usage" in p["by_model"].get(key_, {})]
-                cost = sum(r["cost_usd"] for r in rows)
                 tok = lambda k: sum(r["usage"][k] for r in rows)
                 flagged = sum(1 for r in rows if r["problems"])
-                print(f"{label}: {len(rows)} posts, ${cost:.4f} total, ${cost / max(1, len(rows)):.5f}/post "
-                      f"(≈${cost / max(1, len(rows)) * 100:.2f} per 100), input {tok('input')}, output {tok('output')}, "
-                      f"thinking {tok('thinking')} tokens; {flagged} flagged")
+                print(f"{label}: {len(rows)} posts, {cost_text(model, rows)}, input {tok('input')}, "
+                      f"output {tok('output')}, thinking {tok('thinking')} tokens; {flagged} flagged")
 
     out = args.out or os.path.join(ROOT, "captures", "social_compare",
                                    f"{args.season}_w{args.week}_{datetime.datetime.now():%Y%m%d_%H%M%S}.json")
@@ -320,6 +324,19 @@ def main():
         md = os.path.splitext(out)[0] + ".md"
         save_blind_markdown(md, results, args.season, args.week, args.prompts)
         print(f"Blind read: {md}")
+
+
+def cost_text(model: str, rows: list) -> str:
+    """The cost column of the summary: dollars for a per-token model, an allowance label for a Go one.
+
+    AUDIT R6 F4: an OpenCode Go post returns `cost_usd: 0.0` because the subscription pays for it, not because
+    it was free. Printing `$0.0000` next to Gemini's dollar cost reads as "free", so the label says otherwise."""
+    cost = sum(r.get("cost_usd", 0.0) for r in rows)
+    note = new_writer.cost_note(model)
+    if note:
+        return f"{note}, {len(rows)} posts"
+    per = cost / max(1, len(rows))
+    return f"${cost:.4f} total, ${per:.5f}/post (≈${per * 100:.2f} per 100)"
 
 
 def _safe(writer, client, model, system, prompt):

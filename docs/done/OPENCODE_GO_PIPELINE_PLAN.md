@@ -2,6 +2,8 @@
 
 **Status:** built and on main (2026-11-12).
 
+**Post-build audit (2026-11-12, `gemini-4-hydrogen-high (audit-go)`, `data/audit_reports/audit-go/report.md`):** verdict CONDITIONAL / needs fix, three findings, all fixed by `deepseek-v4.1-flash (fix-tooling)`. F1 (HIGH): `tests/test_go_usage.py` pinned a 5-hour ledger row to the wall clock, so it failed on `main` from 2026-11-12T16:00Z and three more tests would fail on later dates; the suite now injects the clock (`a59a186`). F2: `tools/go_usage.py` raised `TypeError` on `--monthly-limit 0` and printed negative percentages on a negative limit; a non-positive limit now takes the exit-1 dollars path (`f91cabd`). F3: `run_deepseek_arm` left its metered `completions.create` wrapper installed, so a shared injected client stacked wrappers and, in the b-then-a order, double-ledgered arm a; the wrapper is restored in a `finally` (`86ed78d`). A follow-up still open (not a verdict of this plan): `tools/madden_pilot/vision.py`'s `DEFAULT_FALLBACK` sends the un-aliased `deepseek-flash` id to Go (§3 of the report).
+
 **As built:**
 - U1's `run_openai_tool_loop` gained `label=None` (nothing threaded one before); it defaults to the provider name and is what the ledger stores. The model recorded is the one actually sent, after the alias.
 - U2 found that the single dossier call (arm b) bypasses the tool loop, so it applied the same `apply_model_alias` there and recorded its allowance directly; arm a is ledgered inside the loop. Every row now carries `price_source` (`provider-list-cost` or `local-peak`/`local-off-peak`). The reservation stays a conservative local bound on purpose, so the ceiling can be crossed by a settlement and the next `reserve()` refuses (tested).

@@ -79,6 +79,8 @@ def opencode_stub(tmp_path, monkeypatch, exports, listing=None):
     monkeypatch.delenv("MU_AGENT_HARNESS", raising=False)
     monkeypatch.delenv("CLAUDE_CODE_SESSION_ID", raising=False)
     monkeypatch.delenv("CLAUDECODE", raising=False)
+    monkeypatch.delenv("OPENCODE", raising=False)
+    monkeypatch.delenv("OPENCODE_SESSION_ID", raising=False)
     return script
 
 
@@ -438,3 +440,48 @@ def test_explicit_harness_opencode_accepts_a_session_id_without_the_ses_prefix(
     assert result["tokens"] == 42
     assert result["source"] == "opencode custom-id"
     assert captured.err == ""
+
+
+def test_a_bare_opencode_session_reads_its_own_session_id(tmp_path, monkeypatch, capsys):
+    """No MU_* marker, but OpenCode exports the session id; a Claude transcript in the same
+    directory must not win."""
+    opencode_stub(
+        tmp_path,
+        monkeypatch,
+        {
+            "ses_bare": {"messages": [assistant(input=500, read=40)]},
+            "ses_other": {"messages": [assistant(input=99_999)]},
+        },
+        listing=[{"id": "ses_other"}],
+    )
+    claude_project(tmp_path, monkeypatch, "claude-sid-123", 111)
+    monkeypatch.setenv("OPENCODE", "1")
+    monkeypatch.setenv("OPENCODE_SESSION_ID", "ses_bare")
+
+    assert cc.main(["--json"]) == 0
+    captured = capsys.readouterr()
+    result = json.loads(captured.out)
+    assert result["harness"] == "opencode"
+    assert result["tokens"] == 540
+    assert result["source"] == "opencode ses_bare"
+    assert captured.err == ""
+
+
+def test_mu_opencode_session_outranks_the_opencode_session_id(tmp_path, monkeypatch, capsys):
+    opencode_stub(
+        tmp_path,
+        monkeypatch,
+        {
+            "ses_mine": {"messages": [assistant(input=321)]},
+            "ses_shell": {"messages": [assistant(input=99_999)]},
+        },
+        listing=[{"id": "ses_shell"}],
+    )
+    monkeypatch.setenv("MU_OPENCODE_SESSION", "ses_mine")
+    monkeypatch.setenv("OPENCODE", "1")
+    monkeypatch.setenv("OPENCODE_SESSION_ID", "ses_shell")
+
+    assert cc.main(["--json"]) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["tokens"] == 321
+    assert result["source"] == "opencode ses_mine"

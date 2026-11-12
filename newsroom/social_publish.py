@@ -613,6 +613,8 @@ class _Writer:
         self.personas = load_personas()
         self.usage = collections.Counter()
         self.cost = 0.0
+        # How each post is paid for: an OpenCode Go post is covered by the subscription, not free (AUDIT R6 F4).
+        self.cost_notes = collections.Counter()
         try:                                            # every post's calls -> llm_usage (source agent_wire)
             from db.llm_usage import UsageMeter
             self.meter = getattr(client, "_usage_meter", None) or UsageMeter(client)
@@ -667,9 +669,20 @@ class _Writer:
             for k, v in (r.get("usage") or {}).items():
                 self.usage[k] += v
             self.cost += r.get("cost_usd", 0.0)
+            note = r.get("cost_note")
+            if note:
+                self.cost_notes[note] += 1
         if self.meter:
             self.meter.record("agent_wire")
         return results
+
+    def cost_line(self) -> str:
+        """`cost $0.0000`, plus the label that keeps 0.0 from reading as free for a Go/allowance run."""
+        line = f"cost ${self.cost:.4f}"
+        if self.cost_notes:
+            detail = ", ".join(f"{note}: {count} post(s)" for note, count in sorted(self.cost_notes.items()))
+            line += f" ({detail})"
+        return line
 
 
 def _gemini_client():
@@ -794,9 +807,9 @@ def run_social_week(conn_info: str, season: int, week: int, model: str = None, d
             conn.commit()
     total_saved = len(saved) + len(saved_r)
     log(f"[Agent Wire] Saved {total_saved} posts ({failed + failed_r} not saved); {len(trends)} trends. "
-        f"Tokens: {dict(writer.usage)}; cost ${writer.cost:.4f}.")
+        f"Tokens: {dict(writer.usage)}; {writer.cost_line()}.")
     return {"status": "published", "saved": total_saved, "not_saved": failed + failed_r, "trends": len(trends),
-            "cost_usd": round(writer.cost, 4), "usage": dict(writer.usage)}
+            "cost_usd": round(writer.cost, 4), "cost_notes": dict(writer.cost_notes), "usage": dict(writer.usage)}
 
 
 def run_team_social(conn_info: str, season: int, week: int, team_id: int, local_articles=(), model: str = None,
@@ -828,6 +841,6 @@ def run_team_social(conn_info: str, season: int, week: int, team_id: int, local_
             saved, failed = _publish(conn, cur, ctx, plan["assignments"], writer, followers, cfg, LOCAL_SLOT, tagger, log)
             trends = refresh_trends(cur, season, week, cfg)
             conn.commit()
-    log(f"[Agent Wire] Team {team_id}: saved {len(saved)} posts ({failed} not saved); cost ${writer.cost:.4f}.")
+    log(f"[Agent Wire] Team {team_id}: saved {len(saved)} posts ({failed} not saved); {writer.cost_line()}.")
     return {"status": "published", "saved": len(saved), "not_saved": failed, "trends": len(trends),
-            "cost_usd": round(writer.cost, 4)}
+            "cost_usd": round(writer.cost, 4), "cost_notes": dict(writer.cost_notes)}

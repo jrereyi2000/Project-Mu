@@ -2610,12 +2610,18 @@ If you need specific stats, use your database tools before producing your final 
         season: int,
         week: int,
         live: bool = False,
-        model: str = DEFAULT_WRITER_MODEL,
+        model: str | None = None,
         save_to_db: bool = False,
         max_workers: int = 5
     ):
         """Runs the on-demand local wakeup when a team page or Team Hub is viewed: the local beat portfolio, then
-        the team's Agent Wire posts (newsroom/social_publish.run_team_social), which also share the new articles."""
+        the team's Agent Wire posts (newsroom/social_publish.run_team_social), which also share the new articles.
+
+        `model=None` (the default) means each half keeps its own default: articles use the writer default
+        (`DEFAULT_WRITER_MODEL`) and Agent Wire Local follows `social_publish.load_config()` /
+        `SOCIAL_MODEL` (`gemini-3.8-flash` unless env says otherwise). A default Go model here silently moved
+        every live Agent Wire Local run to OpenCode Go, past `SOCIAL_MODEL` (AUDIT R6 F3, reverted; the model
+        decision waits on JR's P8-06b)."""
         print(f"\n📍 --- INITIATING LOCAL TEAM WAKEUP (Team {team_id}, Week {week}) ---")
         print(f"-> Concurrency Level: {max_workers} worker threads")
 
@@ -2698,7 +2704,8 @@ If you need specific stats, use your database tools before producing your final 
             prompt, t_id, art_type, writer_name, slot_name, at_id, agent_id = task
             print(f"🚀 [LOCAL WORKER] Starting [{slot_name}]: {art_type} by {writer_name}")
             res = self._execute_agent(
-                prompt, season, week, t_id, live=live, model=model, save_to_db=save_to_db, slot=slot_name, article_type=at_id
+                prompt, season, week, t_id, live=live, model=model or DEFAULT_WRITER_MODEL,
+                save_to_db=save_to_db, slot=slot_name, article_type=at_id
             )
             print(f"✅ [LOCAL WORKER] Completed [{slot_name}]: {art_type} by {writer_name}")
             if res and res.get("article_id"):

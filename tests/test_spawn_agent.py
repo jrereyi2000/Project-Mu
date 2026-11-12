@@ -449,6 +449,7 @@ def test_a_deepseek_child_mints_its_own_session_not_the_parents(
     _assert_no_window(env)
 
 
+@pytest.mark.skipif(not Path("/usr/bin/tmux").exists(), reason="needs a real tmux server")
 def test_a_spawned_window_does_not_inherit_the_callers_markers(
     env: dict[str, str], tmp_path: Path
 ) -> None:

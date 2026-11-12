@@ -269,6 +269,11 @@ def run_arm(packet, arm, tools, model, budget, directory):
     key = api_key()
     if not key:
         raise RuntimeError('No API key configured')
+    from newsroom.tool_loop.go_transport import is_go_model
+    if is_go_model(model) and ':' not in (model or ''):
+        # The Gemini arm builds a Google client: a Go id must never be sent to it (AUDIT_QUEUE_INVENTORY R11).
+        raise RuntimeError(f'{model} is served by OpenCode Go, not Gemini: run it with --provider deepseek '
+                           '(tools/dossier_pilot.py run_deepseek_arm)')
     first_call = len(budget.rows)
     trace = []
     exposed = []
@@ -461,6 +466,10 @@ def run_deepseek_arm(packet, arm, tools, model, budget, directory, client=None):
     except Exception as exc:
         result['error'] = str(exc)
     finally:
+        # R4 F3: put the client back the way it arrived. The wrapper used to stay installed, so a
+        # caller that injects one client across both arms stacked metered wrappers: double budget
+        # rows, and in the b-then-a order a double ledger row through the tool loop.
+        completions.create = original
         result['latency_s'] = time.perf_counter() - started
         result['tool_calls'] = len(trace)
         result['usage_calls'] = [r for r in budget.rows[first_call:] if r.get('arm') == arm]
