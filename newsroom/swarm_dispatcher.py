@@ -1513,9 +1513,21 @@ If you need specific stats, use your database tools before producing your final 
         model: str = "gemini-3.8-flash",
         save_to_db: bool = False,
         slot: str = None,
-        article_type: str = None
+        article_type: str = None,
+        client=None,
+        capture: dict = None,
     ):
-        """Prints prompt in debug mode or executes LLM, saving to news_feed only if save_to_db=True."""
+        """Prints prompt in debug mode or executes LLM, saving news_feed only if save_to_db=True.
+
+        `client` and `capture` exist for model comparison (tools/article_model_compare.py); every
+        existing caller leaves them None and nothing changes.
+
+        - `client`: a ready `google-genai` client (e.g. newsroom.tool_loop.go_transport.go_client())
+          used instead of one built from `self.api_key`.
+        - `capture`: a dict filled in place with `text`, `failure_reason`, `tool_calls`,
+          `rewrites` and `usage_calls`. A capture run **never** writes `llm_usage`: the caller
+          records the tokens itself.
+        """
         display = compiled_prompt["display_name"]
         handle = compiled_prompt["handle"]
         ctype = compiled_prompt["content_type"]
@@ -1545,6 +1557,9 @@ If you need specific stats, use your database tools before producing your final 
         failure_reason = None
         # media_voters active: the stored ballot results handed to the writer (awards / All-Pro articles).
         ballot = None
+        # Model comparison (tools/article_model_compare.py): a capture run records its own token usage.
+        tool_trace = capture.setdefault("tool_calls", []) if capture is not None else None
+        rewrites = capture.setdefault("rewrites", []) if capture is not None else None
 
         # Writer tools (newsroom/db_tools.py) read this article's season and hide results from its publication
         # week onward. Gemini runs the tools on this thread, so the context covers every tool call below.
@@ -1552,7 +1567,7 @@ If you need specific stats, use your database tools before producing your final 
 
         # Call Gemini if live mode is active
         if live:
-            if not self.api_key:
+            if client is None and not self.api_key:
                 print("\n⚠️  [GEMINI LIVE CALL SKIPPED]: GEMINI_API_KEY environment variable is not set.")
                 print("   Set it via: export GEMINI_API_KEY=\"your_key\" or pass --api-key YOUR_KEY")
                 failure_reason = "missing GEMINI_API_KEY"
@@ -1565,7 +1580,8 @@ If you need specific stats, use your database tools before producing your final 
                     from google.genai import types
                     from db.llm_usage import UsageMeter
 
-                    client = genai.Client(api_key=self.api_key)
+                    if client is None:
+                        client = genai.Client(api_key=self.api_key)
                     usage = UsageMeter(client)          # every call, the tool loop's included -> llm_usage
 
                     # media_voters active: the panel's ballots decide the results now, and the writer is handed
@@ -1587,13 +1603,20 @@ If you need specific stats, use your database tools before producing your final 
                                 call_idx = sum(tool_call_counts.values())
                                 call_repr = f"{inner_fn.__name__}({', '.join([str(a) for a in args] + [f'{k}={v}' for k, v in kwargs.items()])})"
                                 print(f"\n⚙️  [DATABASE TOOL #{call_idx} INVOKED] {call_repr}")
+                                entry = {"name": inner_fn.__name__, "args": {**kwargs} or {"args": args}, "result": None, "error": None}
                                 try:
                                     res = inner_fn(*args, **kwargs)
                                     preview = str(res)[:160] + "..." if len(str(res)) > 160 else str(res)
                                     print(f"   -> Result preview: {preview}")
+                                    if tool_trace is not None:
+                                        entry["result"] = str(res)[:4000]
+                                        tool_trace.append(entry)
                                     return str(res)
                                 except Exception as ex:
                                     print(f"   -> Tool Error: {ex}")
+                                    if tool_trace is not None:
+                                        entry["error"] = str(ex)
+                                        tool_trace.append(entry)
                                     return f"Tool Error: {ex}"
                             return tool_wrapper
                         tools_for_gemini.append(make_wrapper(fn))
@@ -1636,6 +1659,8 @@ If you need specific stats, use your database tools before producing your final 
                     if at_id == "POWER_RANKINGS" and generated_text:
                         _, pr_errors = parse_power_rankings(generated_text, self._power_rankings_team_index())
                         if pr_errors:
+                            if rewrites is not None:
+                                rewrites.append("POWER_RANKINGS")
                             print("\n⚠️ [POWER RANKINGS FAILED VALIDATION] Requesting one rewrite:\n   " + "\n   ".join(pr_errors))
                             retry = chat.send_message(power_rankings_fix_prompt(pr_errors))
                             retry_text = retry.text
@@ -1649,6 +1674,8 @@ If you need specific stats, use your database tools before producing your final 
                     if at_id == "OFFICIAL_AP_ALL_PRO_ROSTER" and generated_text:
                         _, ap_errors = parse_all_pro(generated_text, self._all_pro_roster_index(season))
                         if ap_errors:
+                            if rewrites is not None:
+                                rewrites.append("OFFICIAL_AP_ALL_PRO_ROSTER")
                             print("\n⚠️ [ALL-PRO ROSTER FAILED VALIDATION] Requesting one rewrite:\n   " + "\n   ".join(ap_errors[:8]))
                             retry = chat.send_message(all_pro_fix_prompt(ap_errors))
                             retry_text = retry.text
@@ -1662,6 +1689,8 @@ If you need specific stats, use your database tools before producing your final 
                     if at_id == "AWARDS_TRACKER" and week == 22 and generated_text:
                         _, aw_errors = parse_award_winners(generated_text, self._all_pro_roster_index(season), self._coach_index(season))
                         if aw_errors:
+                            if rewrites is not None:
+                                rewrites.append("AWARDS_TRACKER")
                             print("\n⚠️ [AWARDS WINNERS FAILED VALIDATION] Requesting one rewrite:\n   " + "\n   ".join(aw_errors[:8]))
                             retry = chat.send_message(award_winners_fix_prompt(aw_errors))
                             retry_text = retry.text
@@ -1684,6 +1713,8 @@ If you need specific stats, use your database tools before producing your final 
                                 self._coach_index(season))
                             stored_fix = lambda errs: stored_winners_fix_prompt(errs, ballot["stored"])  # noqa: E731
                         if stored_errors:
+                            if rewrites is not None:
+                                rewrites.append("STORED_BALLOT")
                             print("\n⚠️  [STORED BALLOT MISMATCH] Requesting one rewrite:\n   "
                                   + "\n   ".join(stored_errors[:8]))
                             retry = chat.send_message(stored_fix(stored_errors))
@@ -1698,6 +1729,8 @@ If you need specific stats, use your database tools before producing your final 
                     if at_id == "SUPER_BOWL_GAME_RECAP" and generated_text:
                         _, sb_errors = parse_sb_mvp(generated_text, self._all_pro_roster_index(season))
                         if sb_errors:
+                            if rewrites is not None:
+                                rewrites.append("SUPER_BOWL_GAME_RECAP")
                             print("\n⚠️ [SUPER BOWL MVP FAILED VALIDATION] Requesting one rewrite:\n   " + "\n   ".join(sb_errors[:8]))
                             retry = chat.send_message(sb_mvp_fix_prompt(sb_errors))
                             retry_text = retry.text
@@ -1734,7 +1767,10 @@ If you need specific stats, use your database tools before producing your final 
                     generated_text = f"Error calling Gemini: {e}"
                 finally:
                     if usage is not None:
-                        usage.record("newsroom", label=f"{handle} {at_id or ctype}", model=model)
+                        if capture is None:
+                            usage.record("newsroom", label=f"{handle} {at_id or ctype}", model=model)
+                        else:
+                            capture["usage_calls"] = list(usage.calls)
         else:
             t_mode = compiled_prompt.get("temporal_mode")
             r_week = compiled_prompt.get("recap_week") or (max(1, week - 1) if week > 1 else 1)
@@ -1744,6 +1780,11 @@ If you need specific stats, use your database tools before producing your final 
                 generated_text = f"[{ctype}] Mock analysis by {display} ({handle}) analyzing Week {week} action."
 
         reset_article_context(run_ctx_token)
+
+        if capture is not None:
+            capture["text"] = generated_text
+            capture["failure_reason"] = failure_reason
+            capture.setdefault("usage_calls", [])
 
         excerpt = None
         if ctype == "ARTICLE":
