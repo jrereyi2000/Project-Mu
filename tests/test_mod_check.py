@@ -3,7 +3,9 @@
 No PC, no database, no ntfy, no model: a fake driver writes Pillow frames, an injected clone
 hands back a CAREER-TUNE-CHK<letter> name, and every refusal is checked against its message.
 """
+import io
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -79,8 +81,8 @@ class FakeDriver:
         self.log.append(("start", save, pack))
         return {"status": "ok", "save": save, "pack": pack}
 
-    def wait_for(self, cue, timeout_s=180.0):
-        self.log.append(("wait", cue))
+    def wait_for(self, cue, timeout_s=180.0, hold_s=None):
+        self.log.append(("wait", cue, hold_s))
 
     def record(self, out_dir, seconds, fps, width):
         name = Path(out_dir).parent.name
@@ -400,7 +402,7 @@ def test_a_preroll_is_reported_and_slept_before_recording(mod):
 def test_a_missed_cue_stops_the_run_without_a_report(mod):
     root, folder = mod
     class Missing(FakeDriver):
-        def wait_for(self, cue, timeout_s=180.0):
+        def wait_for(self, cue, timeout_s=180.0, hold_s=None):
             raise runner.CueMissed(cue, "never seen")
     result = run_mod(root, Missing(fake_frames()), segments=["game_start"])
     assert result["status"] == "stopped"
@@ -451,7 +453,7 @@ def test_run_selects_only_the_named_segments(mod):
     driver = FakeDriver(fake_frames())
     run_mod(root, driver, segments=["halftime"])
     assert [entry[1] for entry in driver.log if entry[0] == "record"] == ["halftime"]
-    assert ("wait", "halftime_start") in driver.log
+    assert ("wait", "halftime_start", 22) in driver.log
 
 
 def test_a_run_refuses_a_run_dir_outside_the_check_folder(mod, tmp_path):
@@ -472,16 +474,202 @@ def test_one_report_per_run_under_the_check_folder(mod):
     assert (runs[0] / "report.md").is_file()
 
 
-# ---------------------------------------------------------------- the real driver's stops
-def test_pilot_driver_maps_a_segment_cue_to_watch_game_stops(monkeypatch):
-    """A cue names a moment; `watch-game --to` names the stop it drives to."""
-    driver = runner.PilotDriver()
+# ---------------------------------------------------------------- the real driver's hold
+def _write_step(native: Path, screen: str, number: int = 1) -> Path:
+    steps = Path(native) / "steps"
+    steps.mkdir(parents=True, exist_ok=True)
+    path = steps / f"{number:04d}_{screen}.json"
+    path.write_text(json.dumps({"step": number, "screen": screen}), encoding="utf-8")
+    return path
+
+
+class FakeProcess:
+    """A stand-in for the background ``watch-game`` process."""
+
+    def __init__(self, command, *, steps=None, result=None, exit_code=None, on_wait=None):
+        self.command = list(command)
+        self.native = Path(self.command[self.command.index("--run-dir") + 1])
+        self._returncode = exit_code
+        self.alive = exit_code is None
+        self.terminated = False
+        self.killed = False
+        self.waits = []
+        self.result = result
+        self.on_wait = on_wait
+        self.stdout = io.StringIO("watch-game: loading the franchise\n")
+        self.stderr = io.StringIO("")
+        for index, screen in enumerate(steps or [], 1):
+            _write_step(self.native, screen, index)
+
+    def poll(self):
+        return self._returncode
+
+    def wait(self, timeout=None):
+        self.waits.append(timeout)
+        if self._returncode is not None:
+            self.alive = False
+            return self._returncode
+        if self.on_wait is None and self.result is None:
+            raise subprocess.TimeoutExpired("watch-game", timeout)
+        if self.on_wait is not None:
+            self.on_wait(self)
+        if self.result is not None:
+            (self.native / "result.json").write_text(json.dumps(self.result), encoding="utf-8")
+        self._returncode, self.alive = 0, False
+        return 0
+
+    def terminate(self):
+        self.terminated, self.alive = True, False
+        self._returncode = -15
+
+    def kill(self):
+        self.killed, self.alive = True, False
+        self._returncode = -9
+
+
+def fake_popen(monkeypatch, **kwargs):
+    """Patch ``subprocess.Popen`` with a factory that records the process it handed out."""
+    made = []
+
+    def factory(command, **kw):
+        process = FakeProcess(command, **kwargs)
+        made.append(process)
+        return process
+
+    monkeypatch.setattr(runner.subprocess, "Popen", factory)
+    return made
+
+
+def test_pilot_driver_starts_watch_game_and_waits_for_the_kickoff_anchor(tmp_path, monkeypatch):
+    made = fake_popen(monkeypatch, steps=["GAME_PREGAME_READY", "GAME_KICKOFF"])
+    driver = runner.PilotDriver(run_dir=tmp_path)
     driver.start("CAREER-TUNE-CHKA")
+    driver.wait_for("kickoff", timeout_s=5, hold_s=28)
+    (process,) = made
+    command = process.command
+    assert command[:4] == ["python3", "-m", "tools.madden_pilot", "watch-game"]
+    assert command[command.index("--save") + 1] == "CAREER-TUNE-CHKA"
+    assert command[command.index("--to") + 1] == "kickoff"
+    assert command[command.index("--hold-seconds") + 1] == "28"
+    native = Path(command[command.index("--run-dir") + 1])
+    assert native == tmp_path / "watch-game" / "01_kickoff"
+    assert native.is_dir()
+    assert process.alive and not process.terminated      # the job is holding, not finished
+
+
+def test_pilot_driver_forwards_the_pack(tmp_path, monkeypatch):
+    made = fake_popen(monkeypatch, steps=["GAME_PREGAME_READY", "GAME_KICKOFF"])
+    driver = runner.PilotDriver(run_dir=tmp_path)
+    driver.start("CAREER-TUNE-CHKA", pack="Mu Test")
+    driver.wait_for("kickoff", hold_s=21)
+    (process,) = made
+    assert process.command[process.command.index("--pack") + 1] == "Mu Test"
+
+
+def test_a_kickoff_run_records_while_the_job_is_still_alive(mod, monkeypatch):
+    """The whole point: record during the hold, then take the job's own quit."""
+    root, folder = mod
+    made = fake_popen(monkeypatch, steps=["GAME_PREGAME_READY", "GAME_KICKOFF"],
+                      result={"quit": True, "quit_route": "quit-game",
+                              "autosave_written": True, "pack": "Mu Test",
+                              "end_screen": "FRANCHISE_LIST"})
+    from tools.madden_pilot import win
+    recordings = []
+
+    def fake_record(command, timeout=60):
+        process = made[0]
+        recordings.append(process.alive)
+        out = Path(command[command.index("--dir") + 1])
+        out.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (64, 64), RED).save(out / "frame_0000.png")
+        return {"ok": True}
+
+    monkeypatch.setattr(win, "call", fake_record)
+    result = runner.run("CAREER-TUNE-X", "demo", segments=["game_start"], data_dir=root,
+                        driver=runner.PilotDriver(run_dir=root / "runs" / "live"),
+                        watcher=lambda: False, clone=lambda src, prefix: "CAREER-TUNE-CHKA",
+                        describe=lambda png: "The mod is on screen.", sleep=lambda s: None,
+                        notice=lambda line: None)
+    assert result["status"] == "pass"
+    assert recordings == [True]                # recorded while watch-game held the game
+    assert made[0].alive is False              # finish collected the job
+    report = json.loads(Path(result["report_json"]).read_text())
+    assert report["pack"] == "Mu Test"
+    assert report["autosave_written"] is True
+
+
+def test_a_job_that_exits_before_the_cue_reports_its_last_screen(tmp_path, monkeypatch):
+    made = fake_popen(monkeypatch, steps=["FRANCHISE_LIST"], exit_code=1)
+    driver = runner.PilotDriver(run_dir=tmp_path)
+    driver.start("CAREER-TUNE-CHKA")
+    with pytest.raises(runner.CueMissed) as caught:
+        driver.wait_for("kickoff", timeout_s=5, hold_s=21)
+    message = str(caught.value)
+    assert "FRANCHISE_LIST" in message
+    assert "exited (1)" in message
+    assert "loading the franchise" in message
+    assert made[0].alive is False
+
+
+def test_a_job_short_of_the_cue_at_the_timeout_is_stopped(tmp_path, monkeypatch):
+    made = fake_popen(monkeypatch, steps=["FRANCHISE_LIST"])
+    driver = runner.PilotDriver(run_dir=tmp_path)
+    driver.start("CAREER-TUNE-CHKA")
+    with pytest.raises(runner.CueMissed) as caught:
+        driver.wait_for("kickoff", timeout_s=0.01, hold_s=21)
+    message = str(caught.value)
+    assert "did not reach GAME_KICKOFF" in message
+    assert "FRANCHISE_LIST" in message
+    assert made[0].terminated is True          # never leave a job behind
+    assert made[0].alive is False
+
+
+def test_finish_takes_the_jobs_own_quit_without_a_second_quit(tmp_path, monkeypatch):
+    made = fake_popen(monkeypatch, steps=["GAME_PREGAME_READY", "GAME_KICKOFF"],
+                      result={"quit": True, "quit_route": "quit-game",
+                              "autosave_written": True, "pack": "Mu Test",
+                              "end_screen": "FRANCHISE_LIST"})
+    driver = runner.PilotDriver(run_dir=tmp_path)
+    driver.start("CAREER-TUNE-CHKA", pack="Mu Test")
+    driver.wait_for("kickoff", hold_s=21)
+
+    def boom(*args, **kwargs):
+        raise AssertionError("finish must not run a second quit after a background job")
+
+    monkeypatch.setattr(driver, "_call", boom)
+    result = driver.finish()
+    assert result["quit"] is True
+    assert result["quit_route"] == "quit-game"
+    assert result["autosave_written"] is True
+    assert result["pack"] == "Mu Test"
+    assert result["end_screen"] == "FRANCHISE_LIST"
+    assert made[0].alive is False
+
+
+def test_finish_without_a_background_job_still_quits(tmp_path, monkeypatch):
+    driver = runner.PilotDriver(run_dir=tmp_path)
+    driver.start("CAREER-TUNE-CHKA", pack="Mu Test")
     calls = []
-    monkeypatch.setattr(driver, "_call", lambda *args, **kw: calls.append(args) or {"status": "ok"})
-    driver.wait_for("kickoff")
-    driver.wait_for("halftime_start")
-    assert calls == [("watch-game", "--save", "CAREER-TUNE-CHKA", "--to", "kickoff"),
-                     ("watch-game", "--save", "CAREER-TUNE-CHKA", "--to", "halftime")]
-    with pytest.raises(runner.CueMissed):
-        driver.wait_for("supersim_menu")        # a fixed-wait segment is never waited for
+    monkeypatch.setattr(driver, "_call",
+                        lambda *args, **kw: calls.append(args) or {"quit": True, "quit_route": "route"})
+    monkeypatch.setattr(driver, "saves", tmp_path / "saves")
+    result = driver.finish()
+    assert calls == [("quit", "--franchise", "TUNE-CHKA")]
+    assert result["quit"] is True
+    assert result["pack"] == "Mu Test"
+
+
+def test_halftime_and_supersim_are_documented_stops(tmp_path, monkeypatch):
+    def no_process(*args, **kwargs):
+        raise AssertionError("a stop must not start watch-game")
+
+    monkeypatch.setattr(runner.subprocess, "Popen", no_process)
+    driver = runner.PilotDriver(run_dir=tmp_path)
+    driver.start("CAREER-TUNE-CHKA")
+    with pytest.raises(runner.CueMissed) as halftime:
+        driver.wait_for("halftime_start", hold_s=30)
+    assert "never catalogued" in str(halftime.value)
+    assert "2.5a" in str(halftime.value)
+    with pytest.raises(runner.CueMissed) as supersim:
+        driver.wait_for("supersim_menu")
+    assert "fixed wait" in str(supersim.value)
