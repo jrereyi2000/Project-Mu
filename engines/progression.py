@@ -100,7 +100,8 @@ AGE_BAND_OFFSET = (-0.86, -0.76, -0.65, -0.28, -0.19, -0.19)
 # league's own first season, 2036 for the 2036 archive and its clones), the same number of 90+ players and the same
 # mean OVR. Madden's own turnover doesn't (its rookie classes come in ~10 OVR below the veterans they replace), so
 # each offseason a league term adds development to young players, sized by projecting the league's leavers and the
-# coming rookie class (calibrate_league_term). Weight of the term by age; 0 from 30 on.
+# coming rookie class (calibrate_league_term on every staying player and every rookie, not a stride sample: JR,
+# 2026-11-12, P3-04b). Weight of the term by age; 0 from 30 on.
 LEAGUE_TERM_WEIGHT = ((23, 1.0), (26, 0.75), (29, 0.35))
 # ... and by OVR: the term develops the young players below star level (who replace departing starters), not the
 # stars, so the 90+ count is left to ceilings and aging instead of being manufactured
@@ -1265,7 +1266,8 @@ def run_progression(
     terms are calibrated first so the league after the coming draft keeps the shape of the league's own reference
     season (`league_state.shape_season`): the league's projected leavers and the coming rookie class are modelled the
     way engines/tuning/progression_fit.py's replay does (league_shape_projection), and the class is drawn from that
-    season's real class (calibrate_league_term). The projection is for calibration only; it never retires, deletes
+    season's real class (calibrate_league_term on every staying player and every rookie, never a stride sample:
+    JR, 2026-11-12, P3-04b). The projection is for calibration only; it never retires, deletes
     or creates a real player.
     Phase C2 (§5.8-§5.13): durability (player_durability), mileage and wear (player_mileage), lasting injury damage,
     ceiling bands and breakthroughs (player_ceilings floor / spread / group_ceilings), upkeep above 90 inside the
@@ -1355,27 +1357,19 @@ def run_progression(
             leavers = len(roster) - len(keeping)
             by_pid = {item[0]["player_id"]: item for item in prepared}
             staying = [by_pid[p["pid"]] for p in keeping if p["pid"] in by_pid]
-            k = max(1, math.ceil(len(staying) / CALIBRATION_SAMPLE))    # one stride for both, so the mix holds
-            sample = _stratified(staying, k, key=lambda item: (-item[4]["ovr"], item[0]["player_id"]))
-            rookie_sample = _stratified(rookies, k, key=lambda r: -r["ovr"])
-            sample_size = len(sample) + len(rookie_sample)
-            frac = sample_size / max(1, len(staying) + len(rookies))
-            scaled = {"season": shape_season, "players": target["players"],
-                      "count_90_plus": target["count_90_plus"] * frac, "avg_ovr": target["avg_ovr"]}
-            terms, projected_sample = calibrate_league_term(
-                sample, [r["ovr"] for r in rookie_sample], scaled,
+            # The term calibrates on the whole league, every staying player and every rookie, never on a stride
+            # sample (JR, 2026-11-12, P3-04b; board M-0672). The sample's projected 90+ count swung 82-102 across
+            # five fit seeds where the full roster held 92-95, and on p2g it chose star +1.0 against the full
+            # roster's +1.5; run_simulation already calibrated this way.
+            terms, projected = calibrate_league_term(
+                *league_shape_pool(staying, rookies), target,
                 lambda item, dev, star: compute_player_delta(**item[4], league_adj=dev, star_adj=star)[1])
-            # The target is a league count and the projection is one on the stride sample: rescale the projection
-            # by 1/frac so the log and result compare like with like (P3-04's tripwire reads them).
-            projected = {"count_90_plus": round(projected_sample["count_90_plus"] / frac, 1) if frac else 0.0,
-                         "avg_ovr": projected_sample["avg_ovr"], "sample_size": sample_size,
-                         "frac": round(frac, 4)}
             shape = {"season": shape_season, "target": target, "leavers": leavers, "class_size": len(rookies),
-                     "terms": terms, "projected": projected}
+                     "calibrated": len(staying) + len(rookies), "terms": terms, "projected": projected}
             log(f"League shape: holding {target['season']} (90+={target['count_90_plus']}, "
                 f"mean {target['avg_ovr']:.2f}) with development term {terms[0]:+.1f} and star term "
                 f"{terms[1]:+.2f}; leavers={leavers} class_size={len(rookies)}, "
-                f"sample={sample_size} frac={frac:.3f}, projected 90+={projected['count_90_plus']}, "
+                f"calibrated={len(staying) + len(rookies)}, projected 90+={projected['count_90_plus']}, "
                 f"mean {projected['avg_ovr']:.2f}")
 
         for p, ceiling, c_source, c2, kwargs in prepared:
@@ -1750,7 +1744,6 @@ def run_backtest(conn, season: int = 2036, with_performance: bool = False, log=p
 RETIRE_AGE, RETIRE_AGE_KP = 37, 41
 CUT_QUANTILE, CUT_HAZARD = 0.10, 0.6
 EXIT_BASE, EXIT_PER_YEAR, EXIT_AGE = 0.05, 0.06, 29
-CALIBRATION_SAMPLE = 400
 
 
 SHAPE_SEASON_FIX = ("apply db/migrations/2027_02_26_league_shape_season.sql or set "
@@ -1792,11 +1785,6 @@ def _shape_quantile(values: List[int], q: float) -> Optional[float]:
     lo = math.floor(k)
     hi = min(lo + 1, len(s) - 1)
     return s[lo] + (s[hi] - s[lo]) * (k - lo)
-
-
-def _stratified(items: List[Any], k: int, key=None) -> List[Any]:
-    """Every k-th item by `key` (default: by OVR, best first), so the sample keeps the OVR spread."""
-    return sorted(items, key=key or (lambda p: (-p["ovr"], p["pid"])))[::k]
 
 
 def exit_hazard(p: Dict[str, Any], league: Dict[str, Any]) -> Optional[float]:
@@ -1888,6 +1876,13 @@ def league_shape_projection(roster: List[Dict[str, Any]], reference_rookies: Lis
                 "ovr": p["overall_rating"], "years_pro": p["years_pro"]} for p in roster]
     keeping, _, rookies = shape_exits_and_rookies(players, reference_rookies, season, seed=seed)
     return keeping, [{"ovr": r["ovr"], "position": r["position"]} for r in rookies]
+
+
+def league_shape_pool(staying: List[Any], rookies: List[Dict[str, Any]]) -> Tuple[List[Any], List[int]]:
+    """The pool the league term calibrates on: every staying player and every rookie, never a stride sample (JR,
+    2026-11-12, P3-04b). `league_shape_pool` is the single place the live engine, its simulation and the fit take
+    the pool from, so a sample cannot creep back into one of them. Returns (staying, rookie OVRs)."""
+    return staying, [r["ovr"] for r in rookies]
 
 
 def calibrate_league_term(players: List[Dict[str, Any]], rookie_ovrs: List[int], target: Dict[str, Any],
@@ -2084,7 +2079,7 @@ def run_simulation(
                 injury_weeks=0, season=sim_s, aging_curves=aging_curves, league_adj=dev, star_adj=star,
                 performance=performance_term(perf.get(p["player_id"])), upkeep=upkeep)[1]
 
-        terms = (calibrate_league_term(staying, [r["ovr"] for r in rookies], target, progress)[0]
+        terms = (calibrate_league_term(*league_shape_pool(staying, rookies), target, progress)[0]
                  if hold_shape else (0.0, 0.0))
         top_now, top_before = top_quarter(perf), top_quarter(previous_perf)
         bottom_now, bottom_before = bottom_quarter(perf), bottom_quarter(previous_perf)

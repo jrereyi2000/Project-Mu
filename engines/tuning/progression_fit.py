@@ -33,9 +33,9 @@ replay(snapshot, seasons=5, params=None, seed=0) -> league history
      yearly inflow; at least the forced retirements). So how many leave is Madden's, and who leaves (old, or
      overtaken) follows the progression.
   4. Progression for everyone who stays: age + 1 (as run_simulation), compute_player_delta with the games, IR and
-     missed weeks above, performance_term and upkeep_term, and the league-shape terms (calibrate_league_term on a
-     stratified sample of at most CALIBRATION_SAMPLE players, its target scaled to the sample) holding the start's
-     90+ count and mean OVR, as the engine does (hold_shape; off with hold_shape=False). Dev traits keep their
+     missed weeks above, performance_term and upkeep_term, and the league-shape terms (calibrate_league_term on
+     every staying player and every rookie, the target unscaled, as the engine does) holding the start's
+     90+ count and mean OVR (hold_shape; off with hold_shape=False). Dev traits keep their
      labels, as run_simulation (the engine has no dev lottery since the receipt-driven progression). Years pro + 1.
   5. Rookies: each leaver is replaced by a rookie of his position group on his team, cloned from the snapshot's own
      rookie class (players with years_pro 0: OVR +-1, position, age, dev), so the league keeps its size and mix.
@@ -59,15 +59,14 @@ fit(snapshot, budget=200, seed=0) -> {params, score_before, score_after, detail,
                    has players with stat lines); tolerance GAMES_TOL. The replay's value is the mean games of players
                    who played, by years pro, relative to its best band.
 Writes data/tuning/progression_fit.json (params, score before and after, per-target detail, the search history) and
-data/tuning/progression_fit.md (the report). Cost: one replay is about 0.8 s a season on a full league with the
-league term on, so --budget 200 --seasons 5 runs about 15 minutes.
+data/tuning/progression_fit.md (the report). Cost: one replay is about 8 s a season on a full league with the
+full-roster league term on (3,236 players, p2g), so --budget 200 --seasons 5 runs about two hours.
 """
 import argparse
 import contextlib
 import csv
 import datetime as dt
 import json
-import math
 import os
 import random
 import re
@@ -76,7 +75,7 @@ import time
 from collections import Counter, defaultdict
 
 from engines import progression as P
-from engines.progression import CALIBRATION_SAMPLE, CUT_QUANTILE, _stratified
+from engines.progression import CUT_QUANTILE
 from engines.trade_value import fit_aging
 from engines.tuning import compare as C
 from engines.tuning import targets as T
@@ -430,11 +429,11 @@ def _replay(league, seasons, seed, hold_shape):
 
         terms = (0.0, 0.0)
         if hold_shape and staying:
-            k = max(1, math.ceil(len(staying) / CALIBRATION_SAMPLE))      # one stride for both, so the mix holds
-            sample, rookie_sample = _stratified(staying, k), _stratified(rookies, k)
-            frac = (len(sample) + len(rookie_sample)) / max(1, len(staying) + len(rookies))
-            target = {"count_90_plus": base["count_90_plus"] * frac, "avg_ovr": base["avg_ovr"]}
-            terms = P.calibrate_league_term(sample, [r["ovr"] for r in rookie_sample], target, progress)[0]
+            # Every staying player and every rookie, as the live engine calibrates it (JR, 2026-11-12, P3-04b):
+            # the fit has to replay the engine that runs, not a stride sample of it. About five times the sample's
+            # cost a replay; the reports of both now describe the same calibration.
+            target = {"count_90_plus": base["count_90_plus"], "avg_ovr": base["avg_ovr"]}
+            terms = P.calibrate_league_term(*P.league_shape_pool(staying, rookies), target, progress)[0]
         advanced = []
         for p in staying:
             new_ovr = progress(p, *terms)

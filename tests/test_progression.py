@@ -232,6 +232,19 @@ def test_calibrate_league_term_hits_both_targets():
     assert abs(shape["avg_ovr"] - 76.0) <= 0.5
 
 
+def test_league_shape_pool_is_the_whole_league():
+    """P3-04b (JR 2026-11-12, board M-0672): the league term calibrates on every staying player and every rookie,
+    never on the 400-player stride sample the live engine used to take (900 staying players, 30 rookies here; the
+    old k = ceil(900 / 400) = 3 stride would have kept 300 and 10)."""
+    from engines.progression import league_shape_pool
+    staying = [{"ovr": 70 + (i % 20)} for i in range(900)]
+    rookies = [{"ovr": 65 + (i % 5)} for i in range(30)]
+    players, rookie_ovrs = league_shape_pool(staying, rookies)
+    assert players is staying and len(players) == 900
+    assert rookie_ovrs == [r["ovr"] for r in rookies]
+    assert len(players) > len(staying[::3])
+
+
 def test_rookie_class_follows_the_real_class():
     from engines.progression import rookie_class
     real = [{"ovr": o, "position": "WR", "age": 22} for o in (83, 76, 70, 67, 64, 62)]
