@@ -106,7 +106,7 @@ After the existing validation rewrites and before the `save_to_db` block:
 
 | # | Risk or unknown | How we find out | If it goes wrong |
 |---|---|---|---|
-| R1 | The checker flags true statements as CONTRADICTED (e.g. a fact from the brief, or arithmetic). | Re-run it over all 18 comparison articles with the new rubric and read every CONTRADICTED claim by hand; the target is zero false contradictions on those 18 before the gate blocks anything. | Keep the gate in `flag` mode (record, never block) for a week and tune the rubric. |
+| R1 | The checker flags true statements as CONTRADICTED (e.g. a fact from the brief, or arithmetic). **Found on 2026-11-12, first R1 run with U2's rubric: it does, badly** — see §3.1. | Re-run it over all 18 comparison articles with the new rubric and read every CONTRADICTED claim by hand; the target is zero false contradictions on those 18 before the gate blocks anything. | Keep the gate in `flag` mode (record, never block) for a week and tune the rubric. |
 | R2 | The gate adds 60–150 s and ~$0.006 per article. | Measured already (S10); re-measure on one weekly run. | Run it on the flagged article types only, or on the first N articles. |
 | R3 | The checker model may share a blind spot with the writer (both may believe a second-year player is a rookie). | The rubric forces the comparison against `years_of_experience` in the evidence, not against world knowledge. | Use two checkers from different families and require agreement on CONTRADICTED. |
 | R4 | The correction pass can make an article worse (the writer deletes a good section). | The gate re-checks after the rewrite and keeps whichever version has fewer contradictions; store both? No — store the better one and note the discarded count. | Disable the rewrite (`FACT_GATE_REWRITE=0`) and keep flagging. |
@@ -114,6 +114,17 @@ After the existing validation rewrites and before the `save_to_db` block:
 | R6 | A migration on `news_feed` needs care on the live franchise DB. | Standard: migration + `init_db.sql` mirror + `tests/test_migrate.py`; apply is JR's call. | Ship the gate in log-only mode with no column until JR applies it. |
 
 **Spike first:** none blocking. The one pre-build check is R1: re-run the checker over the 18 articles with the new rubric and confirm the Carson section is caught and true claims are not. That is a 20-minute run on DeepSeek (~$0.12). **Run after U2 merges** (the new rubric does not exist before it): the Carson fixture is U2's unit test, and the 18-article re-run is `python3 -m tools.article_factcheck --dir verify_output/model_compare/20261112_053537 --max-claims 60` with the shared rubric, read by hand for false contradictions.
+
+### 3.1 R1, first run (2026-11-12): failed, and why
+
+Run with U2's rubric at `--max-claims 60` over the same 18-article directory (copied to `/tmp/opencode/factcheck-r1`, original files untouched), 8 of 18 articles judged before the finding was clear: **CONTRADICTED is 20–62% of claims, and almost all of it is false.**
+
+Two causes, both structural, neither a model problem:
+
+1. **The evidence window drops most of the evidence.** `newsroom/fact_gate.py` bounds the evidence at 24,000 characters and the brief at 6,000, copied from the CLI. The 18 articles' evidence is 56,590–205,579 characters (median 97,004) and the *assignment alone* is 46,484–48,496 characters. So the checker sees under half the brief and **none of the tool results** in a production run — every name it cannot find is then, under the new rule, CONTRADICTED.
+2. **The absent-person rule is unqualified.** "A person absent from the evidence is CONTRADICTED with the quote `not in evidence`" was aimed at the invented Isaiah Carson. Against a truncated window it fires on every real coach and player the article mentions in passing: `Mike LaFleur is the Cardinals' head coach`, `Kyle Shanahan is the 49ers' head coach`, 37 such lines in one power-rankings article.
+
+The real contradictions the same run finds are exactly the class the gate is for and survive both fixes: the archive's Davis 29-vs-27 record claim, `the Jets' 469 points are second in the AFC` (evidence: Bengals 460, and 469 is first), `Indianapolis surrendered 27 second-half points` (halftime IND 20-6, final 33-27), and a swapped winner/score in the Muse Hero. **Fix, as U4 below: a truncation-aware evidence window, a scoped absent-person rule, and `FACT_GATE_REWRITE=0` (R4's switch) until the re-run is clean.**
 
 ## 4. Tests (synthetic, no live DB)
 
@@ -168,12 +179,21 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 
 **Implementation note (orchestrator, 2026-11-12):** in a live run there is no `capture` dict, so `_execute_agent` must collect the tool results it already prints (`entry["result"][:12000]`) into a local evidence list whenever the gate is on, and build `evidence` as the task instruction + those results — the same string shape `tools/article_model_compare.py` records. When a `capture` dict *is* passed, reuse its `tool_calls`. The gate runs only for `content_type == "ARTICLE"`, `live`, real text, no `failure_reason`, `MU_NO_LLM` unset and `FACT_GATE_ARTICLES != "0"`. Return the status in `_execute_agent`'s result dict (`"fact_gate_status"`, `"fact_gate"`) so `nightly`/weekly callers can count it without a second query; `newsroom/weekly_run.py` prints the one notice line from a count query over the week's `ARTICLE` rows.
 
+### U4: Rubric and evidence-window calibration (R1 follow-up)
+
+- **Owns:** `newsroom/fact_gate.py`, `tools/article_factcheck.py`, `newsroom/swarm_dispatcher.py` (the rewrite switch only), `tests/test_fact_gate.py`, `tests/test_swarm_fact_gate.py`
+- **Reads:** §3.1 above, the R1 output at `/tmp/opencode/factcheck-r1/veracity.jsonl` if it is still there, `tools/article_model_compare.py`'s evidence building
+- **Depends on:** U1, U2, U3
+- **Done when:** the checker sees the whole assignment and every tool result (up to a large, documented bound), absence is only a contradiction when the article attaches a statistic, role or status to the person **and** the evidence was not truncated, a truncation marker is in the prompt when evidence is cut, `FACT_GATE_REWRITE=0` skips the correction pass and still stores the verdict, and the tests pin each of those.
+- **Verify:** `pytest -m "not integration" tests/test_fact_gate.py tests/test_swarm_fact_gate.py` → all pass; then the R1 re-run over the 18 articles is read by hand for false contradictions.
+
 ## 6. Waves
 
 | Wave | Units | Needs merged first | Why together |
 |---|---|---|---|
 | 1 | U1, U2 | — | Different files, no shared state: the tool and the checker are independent. |
 | 2 | U3 | U1, U2 | Wires both into the writer path and adds the storage. |
+| 3 | U4 | U1, U2, U3 | R1's fix: one agent, the checker's own files. |
 
 **File ownership check:**
 
@@ -189,6 +209,11 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 | `tests/test_fact_gate.py` | U2 |
 | `tests/test_swarm_fact_gate.py` | U3 |
 | `tools/article_factcheck.py` | U2 |
+| `newsroom/fact_gate.py` (U4 revision) | U4 |
+| `tools/article_factcheck.py` (U4 revision) | U4 |
+| `newsroom/swarm_dispatcher.py` (U4: the rewrite switch) | U4 |
+| `tests/test_fact_gate.py` (U4 revision) | U4 |
+| `tests/test_swarm_fact_gate.py` (U4 revision) | U4 |
 
 ## 7. Spec changes when built
 
