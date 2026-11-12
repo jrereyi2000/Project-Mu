@@ -1,6 +1,6 @@
 # Project Mu: GLM-5.3-Flash Unification Plan
 
-**Status:** approved by JR (2026-11-12); building, wave 1 of 2 done. `/execute-plan` runs it as label `glm-unification` (DeepSeek session, 2026-11-12).
+**Status:** approved by JR (2026-11-12); building, wave 2 of 2 done. `/execute-plan` runs it as label `glm-unification` (DeepSeek session, 2026-11-12).
 **Builds on:** [`MODEL_ROUTING_EVALUATION.md`](../reference/MODEL_ROUTING_EVALUATION.md) §8.1 and [`ARTICLE_FACT_GATE_PLAN.md`](ARTICLE_FACT_GATE_PLAN.md) (both read the same measured week), PROJECT_SPEC §7.7 (agent memory), §7.8 (Agent Wire), §7.11 (personas), §2.21b (inbox voice), [`AGENT_WIRE_VOICE_PLAN.md`](../done/AGENT_WIRE_VOICE_PLAN.md) (**built 2026-11-09** — the voice rules are settled, so a model swap is a clean comparison), [`OPENCODE_GO_PIPELINE_PLAN.md`](../done/OPENCODE_GO_PIPELINE_PLAN.md) (the Go provider and allowance watchdog).
 
 **Goal:** one text model — `glm-5.3-flash` on OpenCode Go — writes everything Mu says in words: articles (already done, `ac8df19`), Agent Wire posts, season memories, press conferences, scouting prose, GM lines and inbox voice. Gemini stops being a text model for Mu and stays only where Go has no equivalent: **embeddings** and **vision**.
@@ -15,6 +15,8 @@
 - **U2 also owns `newsroom/social_publish.py`.** §1 names it in scope; §5's ownership table omitted it, and without it a Go social model still builds a Gemini client (`client = client or _gemini_client()` in `run_social_week` / `run_team_social`) and needs `GEMINI_API_KEY`. U2 changes only those client constructions to follow the model id.
 - **The §3 spikes run right after U1, not before wave 1.** `tools/latency_spike.py` drives `make_llm`/`generate_text`, so it can only reach a Go model once U1's `go:` model prefix exists (posted as M-0658). Nothing in U1–U3 depends on the result: no default flips in any unit (U4 is JR's).
 - **`SCOUT_MODEL` and `GM_MODEL` are not added by a unit.** §2.3's seam for scouting prose and GM lines is `gm_llm.make_llm` + the provider, which U1 already unlocks (`model="go:glm-5.3-flash"`, `LLM_PROVIDER_<LABEL>=go`); §5 assigns no unit `engines/gm_llm.py` or the scouting/commissioning callers, so the named envs belong with U4's flip, if JR wants them then.
+- **U2 as built:** the client follows the model id, so `SOCIAL_MODEL=glm-5.3-flash` reaches Go with no `GEMINI_API_KEY`; `provider="gemini"` stays the per-call rollback lever, and `social_model_compare` works unedited (a Go id swaps the Google-pointed client for the Go one). A Go post reports `cost_usd: 0.0` like Ollama — the allowance is metered by `tools/go_usage`/`UsageMeter` — and Go posts use the model's default thinking (no `low` cap); R2 measured no thinking cost either way.
+- **U3 as built:** one shared rule (`agent_memory.model_provider`, a 5-line sibling of `resolve_provider` in a file U3 owns) is used by memory, `press_room.press_provider` and `inbox.voice.default_llm`; it belongs beside `resolve_provider` if it ever has to be shared outside these sites. **It also restores a silently broken path:** `SwarmDispatcher._record_agent_memory` passes the *article's* model, and articles have been `glm-5.3-flash` since `ac8df19`, so takes extraction had been asking Gemini for a GLM model and failing with `MEMORY NOT RECORDED`; it now routes to Go, and `tools.llm_compare --task memory_takes` parses 3/3 on real prompts. Season summaries keep `AGENT_MEMORY_MODEL` (Gemini) until U4.
 - **U1 as built:** `DEFAULT_GO_MODEL` is defined from `MU_GO_TEXT_MODEL` at import as §2.1 says, but `resolve_model("go", ...)` reads `default_go_model()` at call time so a test or a run can set the env after import. `make_llm(provider="go")` returns `None` (its documented template contract) when no Go key exists, while `generate_text(..., provider="go")` raises the transport's `ValueError` — nothing ever answers a Go request with Gemini. `engines/llm_provider.estimate_cost` still prices a Go id at the Gemini rate (only `tools/llm_compare` reads it); the plan's measurements use `tools/go_usage`, so this waits for U4.
 - **The §5 U1 Verify named `tests/test_gm_llm.py`, which does not exist.** It now names `tests/test_llm_provider_go.py`, `test_llm_provider.py`, `test_llm_config.py`, `test_gm_personas.py`, `test_weekly_capture.py`, `test_inbox_voice.py` — 156 passed on main after the merge.
 - **`MEMORY_MODEL` already exists as `AGENT_MEMORY_MODEL`** (`newsroom/weekly_run.py:32`, default `gemini-3.8-flash`, read by `refresh_season_summaries`). U3 keeps that name and default; `SOCIAL_MODEL` (`weekly_run.py:33`) and `PRESS_MODEL` (`press_room.py:55`) already exist the same way. U3 adds `INBOX_MODEL` (and a provider route) for the inbox voice.
@@ -136,7 +138,7 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 
 ### U3: The remaining text sites
 
-- **Owns:** `newsroom/agent_memory.py`, `newsroom/press_room.py`, `newsroom/press_agents.py`, `engines/inbox/voice.py`, `tests/test_agent_memory.py` (extend), `tests/test_inbox_voice.py` (extend)
+- **Owns:** `newsroom/agent_memory.py`, `newsroom/press_room.py`, `newsroom/press_agents.py`, `engines/inbox/voice.py`, `tests/test_agent_memory.py` (extend), `tests/test_inbox_voice.py` (extend), `tests/test_press_room.py` (extend, one test for the model→provider rule)
 - **Reads:** each file's model construction, `engines/llm_provider.py`'s new branch, `docs/reference/P1_LATENCY_AND_INBOX_GATE.md`
 - **Depends on:** U1
 - **Done when:** each site takes its `*_MODEL` env, defaults to Gemini until flipped, and the inbox still degrades to templates on a timeout.
@@ -166,6 +168,7 @@ Not a build unit. One line per site in `PROJECT_SPEC.md` and the env block, afte
 | `newsroom/social_writer.py` | U2 |
 | `tests/test_agent_memory.py` | U3 |
 | `tests/test_inbox_voice.py` | U3 |
+| `tests/test_press_room.py` | U3 |
 | `tests/test_llm_provider_go.py` | U1 |
 | `tests/test_social_writer_go.py` | U2 |
 
@@ -191,3 +194,5 @@ Not a build unit. One line per site in `PROJECT_SPEC.md` and the env block, afte
 | Unit | Wave | Branch | Worktree | Result | Merge |
 |---|---|---|---|---|---|
 | U1 | 1 | `glm-u1-provider` | `.../worktree/404d9f/glm-u1-provider` | merged | `838a058` |
+| U2 | 2 | `glm-u2-wire` | `.../worktree/404d9f/glm-u2-wire` | merged | `80ec761` |
+| U3 | 2 | `glm-u3-sites` | `.../worktree/404d9f/glm-u3-sites` | merged | `effd0a7` |
