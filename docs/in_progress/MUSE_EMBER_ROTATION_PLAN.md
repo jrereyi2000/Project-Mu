@@ -262,4 +262,4 @@ No path appears twice.
 | Unit | Wave | Branch | Worktree | Result | Merge |
 |---|---|---|---|---|---|
 | U2 board inbox alias | 1 | `worktree-agent-acb4b652d0f0c81b5` | `.claude/worktrees/agent-acb4b652d0f0c81b5` | merged — `muse` key in `RECIPIENTS`, 5 tests | `dca6741` |
-| U1 launcher and spawn type | 1 | — | — | running | — |
+| U1 launcher and spawn type | 1 | `worktree-agent-ab63ffea117637746` | `.claude/worktrees/agent-ab63ffea117637746` | merged — `tools/muse_session.sh` + `muse` spawn type, 24 tests | `c21dd4e` |
