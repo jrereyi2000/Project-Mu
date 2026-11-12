@@ -248,6 +248,62 @@ def test_fact_gate_articles_zero_leaves_the_writer_path_as_today(monkeypatch):
     assert len(params) == 11
 
 
+def test_fact_gate_rewrite_zero_flags_without_a_correction_pass(monkeypatch, capsys):
+    """R4's switch: judge, store the verdict and the claims, never send the correction message."""
+    dispatcher, conn = _saving_dispatcher(columns=True)
+    client = _Client(["a draft that contradicts the evidence"])
+    monkeypatch.setenv("FACT_GATE_REWRITE", "0")
+    capture = {}
+    with mock.patch("newsroom.swarm_dispatcher.fact_gate.check", return_value=_gate(2)) as check, \
+         mock.patch("newsroom.swarm_dispatcher.fact_gate.rewrite_prompt") as prompt:
+        result = _save(dispatcher, conn, client, capture=capture)
+
+    check.assert_called_once()                       # one check, no re-check
+    prompt.assert_not_called()
+    assert client.models.calls == 1                  # one writer call, no correction call
+    assert capture["rewrites"] == []
+    assert result["fact_gate_status"] == "flagged"
+    payload = result["fact_gate"]
+    assert payload["rewritten"] is False
+    assert payload["contradicted_kept"] == 2
+    assert len(payload["claims"]) == 2
+    assert [a["counts"]["CONTRADICTED"] for a in payload["attempts"]] == [2]
+    (sql, params), = conn.cur.inserts()
+    assert params[-2] == "flagged"
+    stored = json.loads(params[-1])
+    assert stored["claims"] and stored["rewritten"] is False
+    assert stored["counts"]["CONTRADICTED"] == 2
+    assert "rewrite disabled" in capsys.readouterr().out.lower()
+
+
+@pytest.mark.parametrize("value", ["off", "false", "OFF"])
+def test_fact_gate_rewrite_also_accepts_off_and_false(monkeypatch, value):
+    dispatcher, conn = _saving_dispatcher(columns=True)
+    client = _Client(["a draft"])
+    monkeypatch.setenv("FACT_GATE_REWRITE", value)
+    with mock.patch("newsroom.swarm_dispatcher.fact_gate.check", return_value=_gate(1)) as check, \
+         mock.patch("newsroom.swarm_dispatcher.fact_gate.rewrite_prompt") as prompt:
+        result = _save(dispatcher, conn, client)
+
+    check.assert_called_once()
+    prompt.assert_not_called()
+    assert client.models.calls == 1
+    assert result["fact_gate_status"] == "flagged"
+
+
+def test_fact_gate_rewrite_defaults_on(monkeypatch):
+    """Unset means the correction pass runs, as every other gate test assumes."""
+    monkeypatch.delenv("FACT_GATE_REWRITE", raising=False)
+    dispatcher, conn = _saving_dispatcher(columns=True)
+    client = _Client(["first draft", "second draft"])
+    with mock.patch("newsroom.swarm_dispatcher.fact_gate.check", side_effect=[_gate(1), _gate(0)]), \
+         mock.patch("newsroom.swarm_dispatcher.fact_gate.rewrite_prompt", return_value="fix it"):
+        result = _save(dispatcher, conn, client)
+
+    assert result["fact_gate_status"] == "rewritten"
+    assert client.models.calls == 2
+
+
 def test_a_database_without_the_columns_still_saves_the_article(capsys):
     dispatcher, conn = _saving_dispatcher(columns=False)
     client = _Client(["a true article", "a rewrite"])

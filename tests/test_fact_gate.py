@@ -1,9 +1,10 @@
 """The write-time fact gate (`newsroom/fact_gate.py`). Offline: a fake google-genai client.
 
 The gate's fix is claim coverage, not the checker model: the rubric makes the three attribute and
-event passes before any number, and a person the evidence never mentions is CONTRADICTED, not
-UNSUPPORTED. These tests pin the verdict passthrough, the prompt/rubric, the rewrite message and
-the "a checker outage never fails a write" rule.
+event passes before any number, an invented person with a stat line is CONTRADICTED while a bare name
+is not, and the checker sees the whole evidence window (plan §3.1). These tests pin the verdict
+passthrough, the prompt/rubric and its truncation rule, the rewrite message and the "a checker
+outage never fails a write" rule.
 
 Run: pytest -m "not integration" tests/test_fact_gate.py
 """
@@ -111,6 +112,84 @@ def test_checker_is_asked_with_the_article_and_evidence_under_the_rubric():
     assert config.temperature == 0.0
     assert config.max_output_tokens == fact_gate.MAX_OUTPUT_TOKENS == 32768
     assert str(config.thinking_config.thinking_level).endswith("LOW")
+
+
+# ---------------------------------------------------------------- the whole evidence window (plan §3.1)
+
+def _writer_evidence(assignment_chars=46_000):
+    """The shape `_execute_agent` builds: a ~46k assignment, then three 12k-sensitive tool results."""
+    assignment = ("ASSIGNMENT: write the Week 18 slate recap from the tool results below. " * 900)
+    assignment = assignment[:assignment_chars]
+    blocks = []
+    for i in range(3):
+        body = (f"TOOL get_team_season(team={i}):\n" + f"team {i} 16-0, PF 869 PA 295. " * 400)[:11_930]
+        blocks.append(body)
+    blocks[-1] += "\nPlayer seasons: Elijah Vance, WR, years_of_experience 1."
+    return assignment, "\n\n".join(blocks)
+
+
+def test_the_whole_assignment_and_every_tool_result_reach_the_checker():
+    """The first run's bound was 24k against 97k of evidence; every real article must now fit."""
+    assignment, tools = _writer_evidence()
+    client = _Client(_answer([]))
+
+    result = fact_gate.check("Article body.", assignment + "\n\n" + tools,
+                             model="fake-checker", client=client)
+
+    prompt = client.models.prompts[0]
+    assert fact_gate.EVIDENCE_LIMIT >= 400_000
+    assert len(prompt) > len(assignment) + len(tools)
+    assert assignment[-40:] in prompt                    # the assignment is not cut
+    assert "Elijah Vance" in prompt                      # the last tool result is not cut
+    assert "EVIDENCE TRUNCATED" not in prompt
+    assert result["truncated"] is False
+
+
+def test_a_forced_cut_marks_the_gap_and_keeps_the_whole_assignment():
+    assignment = "ASSIGNMENT HEAD " + ("brief text. " * 200) + " ASSIGNMENT TAIL"
+    first = "TOOL get_standings():\nFIRST_TOOL_FACT " + ("a" * 2000)
+    middle = "TOOL get_leaders():\nMIDDLE_ONLY_FACT " + ("m" * 3000)
+    last = "TOOL get_schedule():\n" + ("l" * 2000) + " LAST_TOOL_FACT"
+    evidence = assignment + "\n\n" + "\n\n".join([first, middle, last])
+
+    shown, truncated = fact_gate.window_evidence(evidence, limit=len(assignment) + 4000)
+
+    assert truncated is True
+    assert shown.startswith(assignment)                  # the whole assignment survives, end included
+    assert "EVIDENCE TRUNCATED HERE" in shown
+    assert "characters of tool results not shown" in shown
+    assert "MIDDLE_ONLY_FACT" not in shown               # only tool text is dropped
+    assert "LAST_TOOL_FACT" in shown                     # the tail of the tool trace survives
+    assert len(shown) < len(assignment) + 4000 + 200     # the bound holds, marker aside
+
+
+def test_a_cut_evidence_window_adds_the_partial_evidence_rule(monkeypatch):
+    monkeypatch.setattr(fact_gate, "EVIDENCE_LIMIT", 3000)
+    assignment = ("ASSIGNMENT: write the recap. " * 100)[:1200]
+    evidence = assignment + "\n\nTOOL get_schedule():\n" + ("game result line. " * 1200)
+    client = _Client(_answer([]))
+
+    result = fact_gate.check("Article body.", evidence, model="fake-checker", client=client)
+
+    assert result["truncated"] is True
+    assert "EVIDENCE TRUNCATED HERE" in client.models.prompts[0]
+    assert "is PARTIAL" in client.models.configs[0].system_instruction
+
+
+def test_rubric_scopes_absence_and_only_a_cut_window_makes_it_proof_free():
+    rubric = fact_gate.RUBRIC
+    assert "Every named person a claim is attached to" in rubric
+    assert "not about whether every name is mentioned" in rubric
+    assert "only when the article attaches" in rubric
+    assert "A bare name in passing" in rubric
+    assert "is PARTIAL" not in rubric
+    assert "UNSUPPORTED, never CONTRADICTED" not in rubric
+
+    cut_rubric = fact_gate.build_rubric(fact_gate.MAX_CLAIMS, truncated=True)
+    assert cut_rubric.startswith(rubric)
+    assert "is PARTIAL" in cut_rubric
+    assert "UNSUPPORTED, never CONTRADICTED" in cut_rubric
+
 
 
 # ---------------------------------------------------------------- status words vs years_of_experience
