@@ -637,3 +637,59 @@ fact without typing into anyone's window.
   stageable until that builder's NOTICE.
 - **Any fix round from wave 2** — the P7 chain and fact-gate findings will need a fourth builder group once their
   reports land, and that is a new decision, not part of this staging.
+
+---
+
+## 11. Why the auditor windows could not sign off, and the fix now being built
+
+The seven sessions closed at M-0748 never posted a sign-off: a board message does not give an `agy` TUI session a
+**turn**, and only a turn makes it act. That is a harness gap, not a model failure, and it was spiked on JR's word
+the same evening.
+
+### 11.1 Measured, on this machine
+
+```
+agy --model gemini-4-hydrogen-high --output-format json -p="Reply with exactly: SPIKE-OK"
+{"conversation_id":"99333c9d-b6d2-4081-8dd8-a9f10f2b2aab","status":"SUCCESS","response":"SPIKE-OK","num_turns":1,
+ "usage":{"input_tokens":13160,"output_tokens":869,"thinking_tokens":861,"cache_read_tokens":0,"total_tokens":14029}}
+
+agy --model gemini-4-hydrogen-high --output-format json --conversation 99333c9d-… \
+    -p="What single word did you reply with a moment ago?"
+{"conversation_id":"99333c9d-…","status":"SUCCESS","response":"SPIKE-OK","num_turns":2,
+ "usage":{…,"cache_read_tokens":11106,…}}
+```
+
+Three facts follow:
+
+1. **A print-mode turn returns its `conversation_id`** and its token `usage` — the meter
+   `GEMINI_4_HYDROGEN_EVALUATION.md` §3.3 and the hydrogen skill both record as missing.
+2. **`--conversation <id> -p=` resumes that conversation from outside**, with context: `num_turns` 2, 11,106 cached
+   tokens, and it recalled its own previous answer. That is a wake.
+3. **An interactive `agy -i` session exposes no id** — no UUID in any live pane, no conversation store under
+   `~/.config/antigravity` — so the TUI shape cannot be woken at all. The six closed auditors were unwakeable
+   because of *how they were launched*, not because Hydrogen cannot listen.
+
+### 11.2 The shape this implies
+
+Auditors run as **print-mode batches** rather than TUI windows:
+
+```
+tools/agy_batch.sh --label audit-x brief.txt     # first turn; records the conversation id
+tools/agent_board_wake.py --harness agy --label audit-x --conversation <id> --state <path>
+```
+
+`tools/agent_board_wake.py` already has the right shape for Codex (`addressed_headers`, `save_state`, a singleton
+lock, `deliver()` shelling to `codex queue --resume`); the agy mode is the same watcher with an
+`agy --conversation <id> --print-timeout 0 -p=` deliverer that keeps Codex's honesty rule — a non-SUCCESS status
+or a "warning" is **not** a delivered wake.
+
+### 11.3 Dispatched
+
+One unit, `build-agy-wake` (DeepSeek, M-0750): the `agy` harness in the wake tool, `tools/agy_batch.sh`, and the
+skill/spec lines. Files: `tools/agent_board_wake.py`, `tests/test_agent_board_wake.py`, new `tools/agy_batch.sh`,
+`.agents/skills/hydrogen/SKILL.md`, its own spec hunks — deliberately **not** `tools/spawn_agent.sh`,
+`docs/reference/AGENTS.md` or their tests, which `fix-tooling` owns right now.
+
+**Still unverified when it lands, and named in the brief:** whether print mode permits *writes* (the trials only
+read and ran tests), whether `--print-timeout 0` blocks for a 20-minute batch, and whether a killed run leaves a
+resumable conversation. A wake that hangs on a permission prompt is worse than no wake.
