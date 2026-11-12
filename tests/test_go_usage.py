@@ -347,6 +347,50 @@ class TestLedgerSource(GoUsageTestCase):
         self.assertIn("month $1.5000 of $100.00", out)
 
 
+class TestUnpricedLedgerRows(GoUsageTestCase):
+    """AUDIT R6 F4 Deferral 1: a ledger line that carries tokens but no allowance amount must never be
+    priced as $0 (which reads as "this cost nothing"); the report says nothing is priced instead."""
+
+    def token_row(self, at):
+        return {"at": iso(at), "model": "glm-5.3-flash", "label": "social_writer",
+                "input_tokens": 200, "cached_tokens": 0, "output_tokens": 50}
+
+    def test_a_ledger_of_token_rows_only_says_it_cannot_price_them(self):
+        write_ledger(self.ledger, [self.token_row(NOW - timedelta(minutes=5))])
+        code, message, document = self.check(source="ledger", monthly_limit=60.0)
+        self.assertEqual(code, 1)
+        self.assertIn("no priced entries", message)
+        self.assertIn("1 entry carries no allowance amount", message)
+        self.assertNotIn("$0.0000", message)
+        self.assertEqual(document["windows"]["rolling"]["entries"], 0)
+        self.assertEqual(document["unpriced"], 1)
+
+    def test_a_mixed_ledger_reports_the_unpriced_rows_beside_the_dollars(self):
+        write_ledger(self.ledger, [
+            self.token_row(NOW - timedelta(minutes=5)),
+            ledger_row(iso(NOW - timedelta(hours=1)), 0.1),
+        ])
+        code, message, document = self.check(source="ledger")
+        self.assertEqual(code, 1)                       # still "limit unknown" without a limit
+        self.assertIn("5h $0.1000", message)
+        self.assertIn("1 unpriced", message)
+        self.assertEqual(document["unpriced"], 1)
+
+    def test_the_priced_row_shape_is_unchanged_when_nothing_is_unpriced(self):
+        write_ledger(self.ledger, [ledger_row(iso(NOW - timedelta(hours=1)), 0.1)])
+        code, message, document = self.check(source="ledger")
+        self.assertEqual(document["unpriced"], 0)
+        self.assertNotIn("unpriced", message)
+
+    def test_one_tiny_call_never_prints_as_zero_dollars(self):
+        write_ledger(self.ledger, [ledger_row(iso(NOW - timedelta(minutes=5)), 1.2e-05)])
+        code, message, document = self.check(source="ledger", monthly_limit=60.0)
+        self.assertEqual(code, 0)
+        self.assertIn("5h <$0.0001", message)
+        self.assertNotIn("$0.0000", message)
+        self.assertEqual(document["windows"]["rolling"]["usd"], 1.2e-05)
+
+
 class TestFrozenClockFormatting(GoUsageTestCase):
     def test_api_reset_labels_follow_the_injected_clock(self):
         with mock.patch("urllib.request.urlopen", return_value=FakeResponse(API_BODY)):

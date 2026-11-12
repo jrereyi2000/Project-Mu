@@ -24,6 +24,9 @@ Sources:
           weekly 50%, month 100%. Without a limit it prints dollars and exits 1 ("limit unknown"),
           the way tools/usage_check.py treats a stale file. A zero or negative limit is refused
           the same way (exit 1, no percentages), since Go has no free tier to divide by.
+          A line with tokens but no allowance amount is never counted as $0: it is reported as
+          unpriced ("no priced entries" when nothing else is priceable), because a Go call that
+          did not report an allowance is unknown spend, not free spend.
   auto    The default: try the api, fall back to the ledger when the key is missing or the
           request fails. --source api alone exits 1 instead of falling back.
 
@@ -175,7 +178,12 @@ def fetch_api_usage(api_key: Optional[str] = None, base_url: Optional[str] = Non
 
 def ledger_windows(path: Any = None, now: Optional[datetime] = None,
                    max_age_hours: float = DEFAULT_MAX_AGE_HOURS) -> Dict[str, Any]:
-    """Sum the allowance ledger over the rolling 5 hours, 7 days and the UTC month."""
+    """Sum the allowance ledger over the rolling 5 hours, 7 days and the UTC month.
+
+    A line without a numeric ``allowance_usd`` is counted in ``unpriced`` and never summed: it is
+    not a $0 call, it is a line this tool cannot price, and the report says so rather than printing
+    $0.0000 (AUDIT R6 F4).
+    """
     from newsroom.tool_loop import go_allowance
     now = now or datetime.now(timezone.utc)
     rows = go_allowance.entries(path)
@@ -184,6 +192,7 @@ def ledger_windows(path: Any = None, now: Optional[datetime] = None,
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     newest: Optional[datetime] = None
     total = 0
+    unpriced = 0
     for row in rows:
         at = go_allowance.to_datetime(row.get("at"))
         if at is None:
@@ -193,6 +202,7 @@ def ledger_windows(path: Any = None, now: Optional[datetime] = None,
             newest = at
         allowance = row.get("allowance_usd")
         if not isinstance(allowance, (int, float)) or isinstance(allowance, bool):
+            unpriced += 1
             continue
         for window in WINDOWS:
             if window == "monthly":
@@ -203,7 +213,8 @@ def ledger_windows(path: Any = None, now: Optional[datetime] = None,
                 sums[window] += float(allowance)
                 counts[window] += 1
     stale = newest is None or (now - newest) > timedelta(hours=max_age_hours)
-    return {"usd": sums, "counts": counts, "entries": total, "stale": stale, "newest": newest}
+    return {"usd": sums, "counts": counts, "entries": total, "unpriced": unpriced,
+            "stale": stale, "newest": newest}
 
 
 def _format_resets(value: Any, now: datetime) -> str:
@@ -241,6 +252,18 @@ def _thresholds_text(thresholds: Dict[str, float]) -> str:
     return f"{thresholds['rolling']:g}%/{thresholds['weekly']:g}%/{thresholds['monthly']:g}%"
 
 
+def _usd(value: float) -> str:
+    """Dollars at 4 decimals — but never `$0.0000` for a real amount smaller than that.
+
+    A single Go call costs ~1e-05, so a ledger whose only line is one call used to print
+    `$0.0000`, the same "this cost nothing" reading as a defaulted zero row (AUDIT R6 F4).
+    """
+    rate = float(value or 0.0)
+    if rate and abs(rate) < 0.00005:
+        return "<$0.0001"
+    return f"${rate:.4f}"
+
+
 def _api_report(windows: Dict[str, Dict[str, Any]], thresholds: Dict[str, float],
                 now: datetime) -> Tuple[int, str, Dict[str, Any]]:
     out = {}
@@ -270,6 +293,7 @@ def _api_report(windows: Dict[str, Dict[str, Any]], thresholds: Dict[str, float]
 def _ledger_report(ledger: Dict[str, Any], thresholds: Dict[str, float],
                    monthly_limit: Optional[float]) -> Tuple[int, str, Dict[str, Any]]:
     positive = monthly_limit is not None and monthly_limit > 0
+    unpriced = int(ledger.get("unpriced") or 0)
     out: Dict[str, Dict[str, Any]] = {}
     for window in WINDOWS:
         usd = float(ledger["usd"][window])
@@ -288,22 +312,29 @@ def _ledger_report(ledger: Dict[str, Any], thresholds: Dict[str, float],
     if not ledger["entries"]:
         return 1, ("go allowance: unknown (no readable ledger entries; "
                    "is any pipeline call reporting an allowance?)"), out
+    priced = ledger["entries"] - unpriced
+    if not priced:
+        return 1, (f"go allowance: unknown (no priced entries: {unpriced} "
+                   f"{'entry carries' if unpriced == 1 else 'entries carry'} no allowance amount, "
+                   f"so there is nothing to price)"), out
+    note = f" ({unpriced} unpriced)" if unpriced else ""
     if monthly_limit is not None and monthly_limit <= 0:
-        shown = " · ".join(f"{SHORT_NAMES[w]} ${out[w]['usd']:.4f}" for w in WINDOWS)
+        shown = " · ".join(f"{SHORT_NAMES[w]} {_usd(out[w]['usd'])}" for w in WINDOWS)
         return 1, (f"go allowance: {shown} (invalid monthly limit: {monthly_limit:g}; "
-                   f"it must be positive, like --monthly-limit 100 or MU_GO_MONTHLY_LIMIT=100)"), out
+                   f"it must be positive, like --monthly-limit 100 or MU_GO_MONTHLY_LIMIT=100)"
+                   f"{note}"), out
     if not positive:
-        shown = " · ".join(f"{SHORT_NAMES[w]} ${out[w]['usd']:.4f}" for w in WINDOWS)
+        shown = " · ".join(f"{SHORT_NAMES[w]} {_usd(out[w]['usd'])}" for w in WINDOWS)
         return 1, (f"go allowance: {shown} (limit unknown: pass --monthly-limit "
-                   f"or set MU_GO_MONTHLY_LIMIT)"), out
+                   f"or set MU_GO_MONTHLY_LIMIT){note}"), out
     over = _verdict(out, thresholds)
     shown = " · ".join(
-        f"{SHORT_NAMES[w]} ${out[w]['usd']:.4f} of ${out[w]['limit_usd']:.2f}"
+        f"{SHORT_NAMES[w]} {_usd(out[w]['usd'])} of ${out[w]['limit_usd']:.2f}"
         f" ({out[w]['percent']:.0f}%)" for w in WINDOWS
     )
     if over:
-        return 2, f"go allowance: {shown} - OVER: {'; '.join(over)}: stop drivers now", out
-    return 0, f"go allowance: {shown} - under {_thresholds_text(thresholds)}", out
+        return 2, f"go allowance: {shown} - OVER: {'; '.join(over)}: stop drivers now{note}", out
+    return 0, f"go allowance: {shown} - under {_thresholds_text(thresholds)}{note}", out
 
 
 def check(source: str = "auto", monthly_limit: Optional[float] = None,
@@ -330,7 +361,8 @@ def check(source: str = "auto", monthly_limit: Optional[float] = None,
     if api_error and source == "auto":
         message = f"{message} (api unavailable: {api_error})"
     return code, message, {"source": "ledger", "stale": bool(ledger["stale"]),
-                           "windows": out, "message": message}
+                           "windows": out, "message": message,
+                           "unpriced": int(ledger.get("unpriced") or 0)}
 
 
 def _monthly_limit(args) -> Optional[float]:
