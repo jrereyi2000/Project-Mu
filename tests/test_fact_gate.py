@@ -100,7 +100,7 @@ def test_rubric_runs_the_three_passes_before_numbers():
 
 
 def test_checker_is_asked_with_the_article_and_evidence_under_the_rubric():
-    client = _Client(_answer([]))
+    client = _Client(_answer([]), _answer([]))
     fact_gate.check("Article body.", "Evidence body.", model="fake-checker", client=client)
 
     prompt = client.models.prompts[0]
@@ -131,7 +131,7 @@ def _writer_evidence(assignment_chars=46_000):
 def test_the_whole_assignment_and_every_tool_result_reach_the_checker():
     """The first run's bound was 24k against 97k of evidence; every real article must now fit."""
     assignment, tools = _writer_evidence()
-    client = _Client(_answer([]))
+    client = _Client(_answer([]), _answer([]))
 
     result = fact_gate.check("Article body.", assignment + "\n\n" + tools,
                              model="fake-checker", client=client)
@@ -167,7 +167,7 @@ def test_a_cut_evidence_window_adds_the_partial_evidence_rule(monkeypatch):
     monkeypatch.setattr(fact_gate, "EVIDENCE_LIMIT", 3000)
     assignment = ("ASSIGNMENT: write the recap. " * 100)[:1200]
     evidence = assignment + "\n\nTOOL get_schedule():\n" + ("game result line. " * 1200)
-    client = _Client(_answer([]))
+    client = _Client(_answer([]), _answer([]))
 
     result = fact_gate.check("Article body.", evidence, model="fake-checker", client=client)
 
@@ -335,18 +335,123 @@ def test_transport_error_returns_skipped():
 
 
 def test_unparsable_answer_returns_skipped():
-    client = _Client("I could not check this article.")
+    """Two unparsable answers in a row: the gate opens rather than failing the write."""
+    client = _Client("I could not check this article.", "Still prose, still not JSON.")
 
     result = fact_gate.check("article", "evidence", model="fake-checker", client=client)
 
     assert result["ok"] is True
     assert result["skipped"] == "no checker"
+    assert len(client.models.prompts) == 2           # one call, one retry, never a loop
+
+
+# ---------------------------------------------------------------- parse resilience (plan §3.2, U5)
+
+def test_trailing_comma_before_a_brace_or_bracket_parses():
+    """The first malformation R1 hit: a 60-claim answer with a comma before `}` or `]`."""
+    raw = ('{"claims": [{"claim": "Carolina finished 12-5.", "verdict": "SUPPORTED", '
+           '"evidence": "Team season: 12-5", "derived": false},], "note": "ok",}')
+
+    answer = fact_gate.parse_answer(raw)
+
+    assert answer is not None
+    assert [c["claim"] for c in answer["claims"]] == ["Carolina finished 12-5."]
+    assert answer["note"] == "ok"
+
+
+def test_a_raw_newline_or_tab_inside_a_claim_string_parses():
+    """The second malformation: article text quoted with a real newline instead of `\\n`."""
+    raw = ('{"claims": [{"claim": "Carson caught 121 passes\nfor 1,755 yards\tand 20 scores", '
+           '"verdict": "CONTRADICTED", "evidence": "not in evidence", "derived": false}]}')
+
+    answer = fact_gate.parse_answer(raw)
+
+    assert answer is not None
+    claim = answer["claims"][0]["claim"]
+    assert "\n" in claim and "\t" in claim
+    assert claim.endswith("20 scores")
+
+
+def test_the_repair_leaves_the_text_inside_a_string_alone():
+    """A comma+brace inside a claim is content, not a trailing comma: the walk is string-aware."""
+    raw = ('{"claims": [{"claim": "A guard said \\"no,}\\": done", "verdict": "SUPPORTED", '
+           '"evidence": "quote", "derived": false},]}')
+
+    answer = fact_gate.parse_answer(raw)
+
+    assert answer["claims"][0]["claim"] == 'A guard said "no,}": done'
+
+
+def test_a_repairable_answer_is_judged_without_a_retry():
+    """Repair happens before the retry, so a damaged answer costs no extra call."""
+    raw = ('{"claims": [{"claim": "Carolina finished 12-5.", "verdict": "SUPPORTED", '
+           '"evidence": "Team season: 12-5", "derived": false},]}')
+    client = _Client(raw)
+
+    result = fact_gate.check("A clean recap.", CARSON_EVIDENCE, model="fake-checker", client=client)
+
+    assert len(client.models.prompts) == 1
+    assert result["ok"] is True
+    assert result["counts"] == {"SUPPORTED": 1, "CONTRADICTED": 0, "UNSUPPORTED": 0}
+
+
+def test_a_prose_first_answer_earns_exactly_one_retry_and_is_judged():
+    client = _Client("I could not check this article.", _answer([
+        _claim("Carolina finished 12-5.", "SUPPORTED", "Team season: 12-5"),
+        _claim("Bryce Young threw 31 touchdowns.", "SUPPORTED", "Bryce Young 4,102 yards, 31 TD"),
+    ]))
+
+    result = fact_gate.check("A clean recap.", CARSON_EVIDENCE, model="fake-checker", client=client)
+
+    assert len(client.models.prompts) == 2
+    assert len(client.models.models_seen) == 2
+    retry_prompt = client.models.prompts[1]
+    assert retry_prompt.startswith(client.models.prompts[0])       # the same question, again
+    assert fact_gate.REPAIR_INSTRUCTION in retry_prompt
+    assert "not valid JSON" in retry_prompt
+    assert "JSON only" in retry_prompt and "no prose" in retry_prompt
+    # The repair ask rides on the same rubric, so it cannot relax a rule.
+    assert (client.models.configs[0].system_instruction
+            == client.models.configs[1].system_instruction)
+    assert "skipped" not in result
+    assert result["ok"] is True
+    assert result["counts"] == {"SUPPORTED": 2, "CONTRADICTED": 0, "UNSUPPORTED": 0}
+
+
+def test_two_malformed_answers_are_two_calls_and_a_skip():
+    client = _Client("Prose.", "More prose, still not JSON.")
+
+    result = fact_gate.check("article", "evidence", model="fake-checker", client=client)
+
+    assert len(client.models.prompts) == 2          # one call, one retry, never a third
+    assert result == {"ok": True, "skipped": "no checker", "claims": [],
+                      "counts": {"SUPPORTED": 0, "CONTRADICTED": 0, "UNSUPPORTED": 0},
+                      "model": "fake-checker"}
+
+
+def test_a_valid_first_answer_never_retries():
+    client = _Client(_answer([_claim("Carolina finished 12-5.", "SUPPORTED", "Team season: 12-5")]))
+
+    result = fact_gate.check("A clean recap.", CARSON_EVIDENCE, model="fake-checker", client=client)
+
+    assert len(client.models.prompts) == 1
+    assert "not valid JSON" not in client.models.prompts[0]
+    assert result["counts"]["SUPPORTED"] == 1
+
+
+def test_parse_answer_never_raises():
+    assert fact_gate.parse_answer("") is None
+    assert fact_gate.parse_answer(None) is None
+    assert fact_gate.parse_answer("}{ not json at all") is None
+    assert fact_gate.parse_answer('[{"claims": 3}]') is None
+    assert fact_gate.parse_answer('{"claims": [{"claim": "unterminated') is None
 
 
 # ---------------------------------------------------------------- model resolution and the cap
 
 def test_model_resolution_argument_then_environment_then_default(monkeypatch):
-    client = _Client(_answer([]), _answer([]))
+    # Two answers each: an empty `claims` list earns the one repair retry (see `judge`).
+    client = _Client(_answer([]), _answer([]), _answer([]), _answer([]))
     monkeypatch.setenv("FACT_GATE_MODEL", "glm-5.3-flash")
 
     from_env = fact_gate.check("article", "evidence", client=client)
@@ -354,7 +459,8 @@ def test_model_resolution_argument_then_environment_then_default(monkeypatch):
 
     assert from_env["model"] == "glm-5.3-flash"
     assert from_arg["model"] == "gpt-6-luna"
-    assert client.models.models_seen == ["glm-5.3-flash", "gpt-6-luna"]
+    assert client.models.models_seen[0] == "glm-5.3-flash"
+    assert client.models.models_seen[2] == "gpt-6-luna"
 
     monkeypatch.delenv("FACT_GATE_MODEL")
     monkeypatch.setattr(fact_gate, "FACT_GATE_MODEL", "deepseek-v4.1-flash")
