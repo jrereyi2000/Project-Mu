@@ -19,7 +19,7 @@ To save Claude, Codex and Gemini quota, builds run primarily on a DeepSeek sessi
 3. Post a HANDOFF `to: build-<plan-slug>, all` with the plan path, JR's approval date, any spikes still owed and who runs them, the claims you hold for the plan (release them or pass them on), and any units already merged.
 4. Tell JR the new session's label and window. It waits at its first permission prompt until JR answers it there. Your part ends here. Never answer the new session's prompts and never type into its window.
 
-Build it yourself only when JR asks this session to by name, or when no DeepSeek route works (the spawn fails, or the wrapper is missing); then tell JR. A build that is already running when the hand-off is decided finishes its current wave and is then handed off as above. Review still comes from a different model: the §3 HANDOFF goes to the `audit` session, which is never DeepSeek-routed.
+Build it yourself only when JR asks this session to by name, or when no DeepSeek route works (the spawn fails, or the `.opencode` config or wrapper is missing); then tell JR. A build that is already running when the hand-off is decided finishes its current wave and is then handed off as above. Review still comes from a different model: the §3 HANDOFF goes to the `audit` session, which is never DeepSeek-routed.
 
 ## 0. Preconditions
 

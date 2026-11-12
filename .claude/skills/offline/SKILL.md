@@ -10,7 +10,8 @@ Question: $ARGUMENTS
 
 Answer-only. This session does not do the research itself and does not follow the session-start
 ritual for this question: no label, no board listener, no NOTICE, no edits, no commits. The side
-chat is the `repo-qa` subagent — read-only tools, Haiku, and not on the board.
+chat is the `repo-qa` subagent — read-only tools, not on the board. (It is Haiku under Claude Code;
+OpenCode's copy inherits the session's model.)
 
 1. If there is no question in `$ARGUMENTS`, ask JR for one and stop.
 2. Spawn `repo-qa` with `subagent_type: "repo-qa"` and a self-contained prompt: the question,
