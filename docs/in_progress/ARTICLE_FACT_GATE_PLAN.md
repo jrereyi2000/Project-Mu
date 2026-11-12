@@ -145,7 +145,7 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 
 ### U2: The fact gate module
 
-- **Owns:** `newsroom/fact_gate.py` (new), `tests/test_fact_gate.py` (new)
+- **Owns:** `newsroom/fact_gate.py` (new), `tests/test_fact_gate.py` (new), `tools/article_factcheck.py` (the rubric and parser this promotes move into the module, and the CLI imports them back)
 - **Reads:** `tools/article_factcheck.py` (the rubric and parser this promotes), `newsroom/tool_loop/go_transport.py`
 - **Depends on:** none
 - **Done when:** the Carson fixture is caught, true claims are not, and a missing checker never raises.
@@ -181,6 +181,7 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 | `tests/test_db_tools_award_race.py` | U1 |
 | `tests/test_fact_gate.py` | U2 |
 | `tests/test_swarm_fact_gate.py` | U3 |
+| `tools/article_factcheck.py` | U2 |
 
 ## 7. Spec changes when built
 
@@ -203,3 +204,5 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 
 | Unit | Wave | Branch | Worktree | Result | Merge |
 |---|---|---|---|---|---|
+| U1 | 1 | `fact-gate-u1` | `~/.local/share/opencode/worktree/404d9f/fact-gate-u1` | running | — |
+| U2 | 1 | `fact-gate-u2` | `~/.local/share/opencode/worktree/404d9f/fact-gate-u2` | running | — |
