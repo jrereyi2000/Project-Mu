@@ -16,7 +16,7 @@ from newsroom.roster_moves import (brief_block, cap_line, is_starter_rank, new_t
                                    trade_grades_due, trade_grades_target, trades_block)
 from newsroom.local_portfolio import PRIMER as LOCAL_PRIMER, plan_local_portfolio
 from newsroom.season_landscape import REGULAR_SEASON_FINAL_WEEK, division_standings, records_by_team
-from newsroom import agent_memory, personas as persona_lib
+from newsroom import agent_memory, fact_gate, personas as persona_lib
 from newsroom.playoff_overrides import find_active_override, normalize_temporal_mode, validate_playoff_overrides
 from newsroom.power_rankings import (
     FINAL_RANKINGS_WEEK,
@@ -62,6 +62,7 @@ from newsroom.db_tools import (
     get_advanced_game_analytics,
     get_opponent_adjusted_credit,
     get_coach_of_the_year_race,
+    get_award_race,
     get_clutch_profile,
     get_coach_profile,
     get_player_career,
@@ -851,6 +852,7 @@ class SwarmDispatcher:
             get_advanced_game_analytics,
             get_opponent_adjusted_credit,
             get_coach_of_the_year_race,
+            get_award_race,
             get_clutch_profile,
             get_coach_profile,
             get_player_career,
@@ -1562,6 +1564,18 @@ If you need specific stats, use your database tools before producing your final 
         tool_trace = capture.setdefault("tool_calls", []) if capture is not None else None
         rewrites = capture.setdefault("rewrites", []) if capture is not None else None
 
+        # Fact gate (docs/in_progress/ARTICLE_FACT_GATE_PLAN.md §2.3): every live ARTICLE is judged against the
+        # evidence its writer received. The evidence list is kept only when the gate can run, so a mock run or a
+        # switched-off gate costs nothing. `fact_gate_status` stays None unless this path judged an article.
+        fact_gate_enabled = (
+            live and ctype == "ARTICLE"
+            and os.environ.get("MU_NO_LLM", "").strip().lower() not in ("1", "on", "true", "yes")
+            and os.environ.get("FACT_GATE_ARTICLES", "").strip() != "0"
+        )
+        evidence_blocks = [] if fact_gate_enabled else None
+        fact_gate_status = None
+        fact_gate_payload = None
+
         # Writer tools (newsroom/db_tools.py) read this article's season and hide results from its publication
         # week onward. Gemini runs the tools on this thread, so the context covers every tool call below.
         run_ctx_token = set_article_context(season, week)
@@ -1617,12 +1631,16 @@ If you need specific stats, use your database tools before producing your final 
                                 entry = {"name": inner_fn.__name__, "args": {**kwargs} or {"args": args}, "result": None, "error": None}
                                 try:
                                     res = inner_fn(*args, **kwargs)
-                                    preview = str(res)[:160] + "..." if len(str(res)) > 160 else str(res)
+                                    res_text = str(res)
+                                    preview = res_text[:160] + "..." if len(res_text) > 160 else res_text
                                     print(f"   -> Result preview: {preview}")
                                     if tool_trace is not None:
-                                        entry["result"] = str(res)[:12000]   # grounding needs the tool text; 4k truncated real numbers
+                                        entry["result"] = res_text[:12000]   # grounding needs the tool text; 4k truncated real numbers
                                         tool_trace.append(entry)
-                                    return str(res)
+                                    if evidence_blocks is not None:
+                                        # The fact gate's evidence: what this writer actually retrieved.
+                                        evidence_blocks.append(f"TOOL {call_repr}:\n{res_text[:12000]}")
+                                    return res_text
                                 except Exception as ex:
                                     print(f"   -> Tool Error: {ex}")
                                     if tool_trace is not None:
@@ -1751,6 +1769,26 @@ If you need specific stats, use your database tools before producing your final 
                             if retry_text:
                                 generated_text = retry_text
 
+                    # Fact gate (plan §2.3): the article must not contradict the evidence its writer had.
+                    # One correction pass at most; the kept version is whichever has fewer contradictions.
+                    if live and ctype == "ARTICLE" and failure_reason is None and (generated_text or "").strip():
+                        if fact_gate_enabled:
+                            evidence = compiled_prompt.get("task_instruction") or ""
+                            if evidence_blocks:
+                                evidence += "\n\n" + "\n\n".join(evidence_blocks)
+                            try:
+                                fact_gate_status, fact_gate_payload, generated_text = self._apply_fact_gate(
+                                    chat, generated_text, evidence, rewrites,
+                                    # A capture/comparison run already owns a client for the model it measures and
+                                    # meters its own tokens: reuse it, so the gate never opens a second, unmetered
+                                    # one. The production path passes None and the checker builds its own client.
+                                    client=client if capture is not None else None)
+                            except Exception as exc:  # noqa: BLE001 - the gate must never fail a write
+                                print(f"⚠️  [FACT GATE] gate failed: {exc}")
+                                fact_gate_status, fact_gate_payload = "skipped", None
+                        else:
+                            fact_gate_status = "skipped"
+
                     if not (generated_text or "").strip():
                         failure_reason = "model returned no text"
                         generated_text = ""
@@ -1850,23 +1888,61 @@ If you need specific stats, use your database tools before producing your final 
             try:
                 with psycopg.connect(self.db.db_conn_info) as conn:
                     with conn.cursor() as cur:
-                        cur.execute("""
-                            INSERT INTO news_feed (season, week, team_id, content_type, persona, article_type, slot, headline, excerpt, content, agent_id, created_at)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
-                            RETURNING id;
-                        """, (
-                            season,
-                            week,
-                            team_id,
-                            ctype,
-                            compiled_prompt["archetype"],
-                            at_id,
-                            assigned_slot,
-                            headline,
-                            excerpt,
-                            generated_text,
-                            compiled_prompt.get("agent_id")
-                        ))
+                        # A live franchise database may not have the fact-gate columns yet (2027_02_30 is
+                        # JR's to apply). Probe once: without them the gate still ran and logged, so this is
+                        # a schema state, not an article failure — the old INSERT is used unchanged.
+                        if getattr(self, "_fact_gate_columns", None) is None:
+                            try:
+                                cur.execute("SELECT 1 FROM information_schema.columns "
+                                            "WHERE table_name = 'news_feed' AND column_name = 'fact_gate_status'")
+                                self._fact_gate_columns = cur.fetchone() is not None
+                            except Exception:
+                                self._fact_gate_columns = False
+                        store_fact_gate = bool(getattr(self, "_fact_gate_columns", False))
+
+                        if store_fact_gate:
+                            cur.execute("""
+                                INSERT INTO news_feed (season, week, team_id, content_type, persona, article_type, slot, headline, excerpt, content, agent_id, created_at, fact_gate_status, fact_gate)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), %s, %s)
+                                RETURNING id;
+                            """, (
+                                season,
+                                week,
+                                team_id,
+                                ctype,
+                                compiled_prompt["archetype"],
+                                at_id,
+                                assigned_slot,
+                                headline,
+                                excerpt,
+                                generated_text,
+                                compiled_prompt.get("agent_id"),
+                                fact_gate_status,
+                                json.dumps(fact_gate_payload) if fact_gate_payload is not None else None,
+                            ))
+                        else:
+                            if ctype == "ARTICLE" and not getattr(self, "_fact_gate_missing_notice", False):
+                                print("[FACT GATE COLUMN MISSING] news_feed has no fact_gate_status column "
+                                      "(apply db/migrations/2027_02_30_fact_gate.sql); the gate ran and logged, "
+                                      "and this article is saved without its verdict.")
+                                self._fact_gate_missing_notice = True
+                            cur.execute("""
+                                INSERT INTO news_feed (season, week, team_id, content_type, persona, article_type, slot, headline, excerpt, content, agent_id, created_at)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                                RETURNING id;
+                            """, (
+                                season,
+                                week,
+                                team_id,
+                                ctype,
+                                compiled_prompt["archetype"],
+                                at_id,
+                                assigned_slot,
+                                headline,
+                                excerpt,
+                                generated_text,
+                                compiled_prompt.get("agent_id")
+                            ))
                         row = cur.fetchone()
                         article_id = row[0] if row else None
 
@@ -1948,7 +2024,93 @@ If you need specific stats, use your database tools before producing your final 
             "slot": assigned_slot,
             "article_type": at_id,
             "error": failure_reason,
+            "fact_gate_status": fact_gate_status,
+            "fact_gate": fact_gate_payload,
         }
+
+    def _apply_fact_gate(self, chat, text: str, evidence: str, rewrites, client=None):
+        """Judge `text` against the evidence its writer had and correct it at most once (plan §2.3).
+
+        Returns `(status, payload, text)`: status is "clean", "rewritten", "flagged" or "skipped"; payload is
+        the small dict stored in `news_feed.fact_gate` (counts, contradicted claims and quotes, the checker
+        model, the attempts, the kept/discarded counts — never the article itself); text is the version to
+        publish. A checker outage is a skip and a failed rewrite leaves the article flagged; nothing here
+        ever raises into the save path.
+
+        `client` is a caller-owned client to check with (a capture run reuses the one it already meters);
+        None lets `fact_gate.check` build the checker's own client for `FACT_GATE_MODEL`.
+        """
+        try:
+            gate = fact_gate.check(text, evidence, client=client)
+        except Exception as exc:  # noqa: BLE001 - a gate outage must never fail a write
+            print(f"⚠️  [FACT GATE] checker failed: {exc}")
+            return "skipped", None, text
+        if gate.get("skipped"):
+            print(f"⚠️  [FACT GATE] skipped: {gate.get('skipped')}")
+            return "skipped", None, text
+
+        model = gate.get("model")
+        first_counts = dict(gate.get("counts") or {})
+        first_contradicted = int(first_counts.get("CONTRADICTED") or 0)
+        attempts = [{"counts": first_counts, "model": model}]
+        kept, kept_counts, kept_claims = text, first_counts, list(gate.get("claims") or [])
+        rewritten = False
+
+        if first_contradicted and "FACT_GATE" not in (rewrites or []):
+            contradicted = [c for c in kept_claims
+                            if str(c.get("verdict") or "").strip().upper() == "CONTRADICTED"]
+            rewritten = True
+            if rewrites is not None:
+                rewrites.append("FACT_GATE")
+            print(f"\n⚠️  [FACT GATE] {first_contradicted} contradicted claim(s); requesting one rewrite")
+            retry_text = ""
+            try:
+                retry = chat.send_message(fact_gate.rewrite_prompt(contradicted))
+                retry_text = getattr(retry, "text", "") or ""
+                if not retry_text and getattr(retry, "candidates", None):
+                    parts = retry.candidates[0].content.parts
+                    retry_text = "\n".join(p.text for p in parts if getattr(p, "text", None))
+            except Exception as exc:  # noqa: BLE001 - the correction pass is best-effort
+                print(f"⚠️  [FACT GATE] rewrite failed: {exc}")
+            if (retry_text or "").strip():
+                try:
+                    second = fact_gate.check(retry_text, evidence, client=client)
+                except Exception as exc:  # noqa: BLE001 - keep the first version when the re-check fails
+                    print(f"⚠️  [FACT GATE] re-check failed: {exc}")
+                    second = None
+                if second and not second.get("skipped"):
+                    second_counts = dict(second.get("counts") or {})
+                    attempts.append({"counts": second_counts, "model": second.get("model")})
+                    if int(second_counts.get("CONTRADICTED") or 0) < first_contradicted:
+                        # R4: a rewrite that made the article worse is discarded, not published.
+                        kept, kept_counts, kept_claims = (retry_text, second_counts,
+                                                          list(second.get("claims") or []))
+            else:
+                print("   -> The rewrite returned no text; the contradicting article stands (flagged).")
+
+        kept_contradicted = int(kept_counts.get("CONTRADICTED") or 0)
+        if not first_contradicted:
+            status = "clean"
+        elif kept_contradicted == 0:
+            status = "rewritten"
+        else:
+            status = "flagged"
+
+        payload = {
+            "model": model,
+            "counts": kept_counts,
+            "claims": [{"claim": c.get("claim"), "evidence": c.get("evidence")}
+                       for c in kept_claims
+                       if str(c.get("verdict") or "").strip().upper() == "CONTRADICTED"],
+            "attempts": attempts,
+            "rewritten": rewritten,
+            "contradicted_kept": kept_contradicted,
+            "contradicted_discarded": 0 if kept is text else first_contradicted - kept_contradicted,
+        }
+        mark = "⚠️ " if status == "flagged" else "✅"
+        print(f"{mark} [FACT GATE] {status}: {kept_contradicted} contradicted claim(s) kept of "
+              f"{first_contradicted} found")
+        return status, payload, kept
 
     def _record_agent_memory(self, compiled_prompt: dict, season: int, week: int, team_id, article_id: int,
                              headline: str, text: str, model: str):
