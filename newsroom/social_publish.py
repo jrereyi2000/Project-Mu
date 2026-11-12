@@ -602,6 +602,9 @@ class _Writer:
     """Builds prompts (needs the DB for memory blocks) and writes posts in parallel."""
 
     def __init__(self, cur, ctx, accounts_full, cfg, client, model, max_workers, log):
+        from newsroom.tool_loop.go_transport import is_go_model
+        if client is None and is_go_model(model):
+            client = _model_client(model)                # a Go run never needs GEMINI_API_KEY
         self.cur, self.ctx, self.cfg, self.client, self.log = cur, ctx, cfg, client, log
         self.accounts = accounts_full
         self.model, self.max_workers = model, max_workers
@@ -676,6 +679,16 @@ def _gemini_client():
     if not key:
         raise RuntimeError("GEMINI_API_KEY is not set (environment or .env)")
     return genai.Client(api_key=key)
+
+
+def _model_client(model: str):
+    """The client a social model runs on: OpenCode Go's Google-compatible client for a Go id (`glm-5.3-flash`,
+    `muse-spark-1.3-contributor`, …), else Gemini's. A Go id never needs GEMINI_API_KEY, and a missing Go key
+    raises from the transport rather than silently writing through Gemini."""
+    from newsroom.tool_loop.go_transport import go_client, is_go_model
+    if is_go_model(model):
+        return go_client()
+    return _gemini_client()
 
 
 def _load_accounts_full(cur) -> dict:
@@ -762,7 +775,7 @@ def run_social_week(conn_info: str, season: int, week: int, model: str = None, d
             if tagger is None:
                 from newsroom.swarm_dispatcher import EntityTaggingService
                 tagger = EntityTaggingService(conn_info)
-            client = client or _gemini_client()
+            client = client or _model_client(model)
             writer = _Writer(cur, ctx, _load_accounts_full(cur), cfg, client, model, max_workers, log)
 
             first = [a for a in plan["assignments"] if a["kind"] != "REPLY" and a.get("agent_id")]
@@ -809,7 +822,7 @@ def run_team_social(conn_info: str, season: int, week: int, team_id: int, local_
             if tagger is None:
                 from newsroom.swarm_dispatcher import EntityTaggingService
                 tagger = EntityTaggingService(conn_info)
-            client = client or _gemini_client()
+            client = client or _model_client(model)
             writer = _Writer(cur, ctx, _load_accounts_full(cur), cfg, client, model, max_workers, log)
             log(f"[Agent Wire] Team {team_id} wakeup: writing {len(plan['assignments'])} posts...")
             saved, failed = _publish(conn, cur, ctx, plan["assignments"], writer, followers, cfg, LOCAL_SLOT, tagger, log)

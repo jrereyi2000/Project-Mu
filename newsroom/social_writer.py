@@ -1,8 +1,9 @@
 """Agent Wire post writer (docs/done/SOCIAL_MATRIX.md §3, build step 4).
 
-Turns one social-desk assignment (newsroom/social_desk.py) into a prompt, calls Gemini once with no tools,
-and cleans the reply into a post. The facts packet is the only source of numbers; the account's tweet persona
-(agent_personas.json "archetypes") sets the voice. Nothing here writes to the database.
+Turns one social-desk assignment (newsroom/social_desk.py) into a prompt, calls Gemini (or an OpenCode Go model,
+or a local Ollama model) once with no tools, and cleans the reply into a post. The facts packet is the only
+source of numbers; the account's tweet persona (agent_personas.json "archetypes") sets the voice. Nothing here
+writes to the database.
 """
 import json
 import os
@@ -720,18 +721,38 @@ def _finish(raw: str, assignment, corpus, same_kind, fantasy_active, allowed, ru
     return post, similar
 
 
+def _is_go_client(client) -> bool:
+    """True when `client` can reach OpenCode Go: a genai.Client aimed at Go's Google-compatible endpoint, or a
+    test double (nothing to read HTTP options from, so the caller is trusted). A real Gemini client is not, so a
+    Go model never runs on the client a caller built for Google."""
+    if client is None:
+        return False
+    try:
+        from google import genai
+    except Exception:                                            # google-genai is optional at import time
+        return True
+    if not isinstance(client, genai.Client):
+        return True
+    options = getattr(getattr(client, "_api_client", None), "_http_options", None)
+    return "opencode" in str(getattr(options, "base_url", "") or "").lower()
+
+
 def write_post(client, model: str, system: str, prompt: str, temperature: float = 0.9, fantasy_active: bool = True,
                allowed=None, rumor: bool = False, provider: str | None = None,
                fallback_model: str | None = None, label: str | None = None,
                assignment: dict = None, corpus: list = None, same_kind: list = None) -> dict:
-    """One LLM call (no tools); supports Gemini or local Ollama with fallback to Gemini on network/timeout errors.
+    """One LLM call (no tools); supports Gemini, an OpenCode Go model (GLM-5.3-Flash and the other Go ids) or local
+    Ollama with fallback to Gemini on network/timeout errors.
     The reply is the OUTPUT_CONTRACT JSON (parse_post_json, resolved against `assignment`; plain text still works).
     If the post runs over 280 characters, names an ungrounded dollar figure, frames a rumor as a done deal, or is
     too_similar to `corpus` (the week's posts and the account's recent ones; `same_kind` for the opener check),
     asks once for a rewrite. Never falls back on bad answer / validation failure.
     Returns {"raw", "text", "hashtags", "problems", "about", "picks", "season_calls", "structured", "usage",
     "cost_usd", "seconds", "calls"}: parse_post_json's "calls" come back as "season_calls" because "calls" has
-    always been the number of LLM calls."""
+    always been the number of LLM calls.
+    The client follows the model: an `ollama:` model goes to Ollama, an explicit `provider="gemini"` or a
+    `gemini-*` id to `genai.Client`, and any other id (`glm-5.3-flash`, `muse-spark-1.3-contributor`) to
+    `go_transport.go_client()`, which raises when no Go key is set instead of falling back to Gemini."""
     from engines.llm_provider import (
         resolve_provider, resolve_model, resolve_fallback_model,
         call_ollama, OLLAMA_FALLBACK_EXCEPTIONS,
@@ -799,10 +820,18 @@ def write_post(client, model: str, system: str, prompt: str, temperature: float 
         return {"raw": raw, **post, "usage": usage_total, "cost_usd": 0.0,
                 "seconds": round(time.time() - start, 2), "calls": calls}
 
-    # Gemini provider flow
+    # Gemini and OpenCode Go share this flow: the same config, parse, cleaning, guards and one-rewrite pass. Only
+    # the client and the model resolution differ (`go_transport` serves Go through the same Google-shaped SDK).
     from engines.llm_config import make_content_config
+    from newsroom.tool_loop import go_transport
 
-    if client is None:
+    explicit = (provider or "").strip().lower()
+    go = prov == "go" or (prov == "gemini" and explicit != "gemini" and go_transport.is_go_model(model))
+    if go:
+        model = resolve_model("go", label="agent_wire", model=model)
+        if not _is_go_client(client):
+            client = go_transport.go_client()
+    elif client is None:
         from google import genai
         key = load_api_key()
         client = genai.Client(api_key=key)
