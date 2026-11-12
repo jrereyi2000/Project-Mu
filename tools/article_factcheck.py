@@ -37,10 +37,10 @@ if ROOT not in sys.path:
 # audit and the write-time gate judge claims by the same rules.
 from newsroom.fact_gate import (  # noqa: E402
     ask_checker,
-    build_prompt,
     client_for_model,
     count_claims,
     normalize_claims,
+    render_prompt,
 )
 
 
@@ -51,9 +51,9 @@ def _load(dirpath: str):
     return briefs, results
 
 
-def _prompt(result: dict, brief: str) -> str:
-    """The assignment brief, then the evidence (the brief is already its head), then the article."""
-    return build_prompt(result.get("text") or "", result.get("evidence") or "", brief)
+def _prompt(result: dict, brief: str) -> tuple[str, bool]:
+    """The prompt and whether its evidence was cut (the brief is already the evidence's head)."""
+    return render_prompt(result.get("text") or "", result.get("evidence") or "", brief)
 
 
 def verify(dirpath: str, model: str, slots: list | None, max_claims: int) -> int:
@@ -81,11 +81,11 @@ def verify(dirpath: str, model: str, slots: list | None, max_claims: int) -> int
         key = (result["slot"], result["model"])
         if key in done:
             continue
-        prompt = _prompt(result, briefs.get(result["slot"], ""))
+        prompt, truncated = _prompt(result, briefs.get(result["slot"], ""))
         answer = None
         try:
             # Temperature 0, low thinking, thinking-inclusive output cap (see newsroom/fact_gate.py).
-            answer = ask_checker(client, model, prompt, max_claims)
+            answer = ask_checker(client, model, prompt, max_claims, truncated)
         except Exception as exc:
             print(f"[factcheck] {key}: {type(exc).__name__}: {exc}")
         if not answer:
@@ -94,12 +94,14 @@ def verify(dirpath: str, model: str, slots: list | None, max_claims: int) -> int
         claims = normalize_claims(answer, max_claims)
         counts = count_claims(claims)
         row = {"slot": result["slot"], "model": result["model"], "claims": claims,
-               "counts": counts, "claim_total": len(claims), "note": answer.get("note", "")}
+               "counts": counts, "claim_total": len(claims), "note": answer.get("note", ""),
+               "evidence_truncated": truncated}
         with open(out_path, "a") as f:
             f.write(json.dumps(row) + "\n")
         print(f"[factcheck] {result['slot']:12s} {result['model']:30s} "
               f"claims={len(claims):3d} ok={counts['SUPPORTED']:3d} "
-              f"wrong={counts['CONTRADICTED']:3d} unknown={counts['UNSUPPORTED']:3d}")
+              f"wrong={counts['CONTRADICTED']:3d} unknown={counts['UNSUPPORTED']:3d}"
+              + ("  [truncated evidence]" if truncated else ""))
 
     rows = [json.loads(line) for line in open(out_path) if line.strip()] if os.path.exists(out_path) else []
     write_reports(dirpath, rows)

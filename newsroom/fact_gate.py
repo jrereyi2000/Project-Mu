@@ -9,9 +9,19 @@ Three verdicts per claim:
 
 - **SUPPORTED** — the evidence states it (including arithmetic the writer did on evidence values).
 - **CONTRADICTED** — the evidence states something different for the same thing (the real error),
-  or the claim names a person the evidence never mentions (an invented person is a fabrication,
-  not an omission).
+  or the article attaches a statistic, record, award, status word, team or role to a person the
+  evidence never mentions — an invented person with a stat line is a fabrication, not an omission.
+  A bare name in passing is UNSUPPORTED: absence alone is never a contradiction.
 - **UNSUPPORTED** — the evidence does not mention it. Not an error by itself.
+
+The window is the whole evidence. The first R1 run (docs/in_progress/ARTICLE_FACT_GATE_PLAN.md §3.1,
+2026-11-12) kept the CLI's 24,000-character evidence and 6,000-character brief bounds, so the checker
+never saw the tool results: the 18 compared articles carry 56,590-205,579 characters of evidence
+(median 97,004), and their assignment alone is 46,484-48,496. 20-62% of claims came back
+"contradicted", almost all falsely ("Mike LaFleur is the Cardinals' head coach" ×37 in one article);
+the bound was the bug. So `EVIDENCE_LIMIT` is 400,000 characters — past any real article and far
+inside DeepSeek V4.1 Flash's context — the assignment is never the part that is cut, and a cut is
+marked in the prompt and turns absence into UNSUPPORTED, never CONTRADICTED.
 
 The fix is coverage, not the model. The rubric runs three passes before it weighs any number:
 every named person's team and role, every status word against `years_of_experience`, and every
@@ -37,9 +47,23 @@ DEFAULT_MODEL = "deepseek-v4.1-flash"
 # A raised cap from the CLI's 40: the Carson section sat past the cut.
 MAX_CLAIMS = 60
 
-# Bounds on the prompt. The CLI used 24,000 / 6,000 and the gate keeps the same shape.
-EVIDENCE_LIMIT = 24000
-BRIEF_LIMIT = 6000
+# Bounds on the prompt. The first R1 run kept the CLI's 24,000 / 6,000 and the checker never saw the
+# tool results (plan §3.1): a real article's evidence is 56,590-205,579 characters, median 97,004, and
+# the assignment alone 46,484-48,496. The whole evidence now fits with room to spare — DeepSeek V4.1
+# Flash's context is far larger than this — and a cut, if it ever happens, is marked and never silent.
+EVIDENCE_LIMIT = 400_000
+BRIEF_LIMIT = 60_000
+# The writer records each tool result at 12,000 characters (newsroom/swarm_dispatcher.py
+# `res_text[:12000]`, which grounding needs); the gate takes whatever result it is handed.
+TOOL_RESULT_LIMIT = 12_000
+
+# A tool block starts at the beginning of a line: the evidence is "<assignment>\n\nTOOL name(args):\n
+# <result>\n\nTOOL ..." (newsroom/swarm_dispatcher.py `_execute_agent`).
+TOOL_MARKER = "TOOL "
+# Written into the prompt where the cut is, so the checker knows the evidence is partial. `{missing}`
+# is the exact number of tool-result characters dropped.
+TRUNCATION_MARKER = ("[... EVIDENCE TRUNCATED HERE: {missing:,} characters of tool results "
+                     "not shown ...]")
 
 # Thinking shares the output cap on Go's reasoning models: at 8,192 DeepSeek V4.1 Flash spent the
 # whole budget thinking and returned nothing. The cap is generous and thinking is asked low.
@@ -54,8 +78,10 @@ article's factual claims ONLY against that evidence.
 
 Make these three passes FIRST, before you judge any number. They are the claims the writers get \
 wrong most often, and a number does not excuse a wrong person, status or result:
-1. Every named person: is the name in the evidence at all, and does the evidence put him on the same \
-team and in the same role?
+1. Every named person a claim is attached to: for each person the article credits with a statistic, \
+a record, an award, a status word, a team or a role, is that person in the evidence, on the same team \
+and in the same role? This pass is about the claims attached to people, not about whether every name \
+is mentioned: a name that carries no claim is not an error.
 2. Every status word ("rookie", "second-year", "veteran", "undrafted"): check it against that \
 player's years_of_experience in the evidence (0 = rookie, 1 = second-year, 2 or more = veteran).
 3. Every game result: the winner, the loser and the exact score, as a (winner, loser, score) triple. \
@@ -70,8 +96,10 @@ For each claim output one of:
 the evidence positively says otherwise; never infer it from silence.
 - "UNSUPPORTED": the evidence does not mention it. This is not an error; say so and move on.
 
-A claim that names a person who does not appear anywhere in the evidence is CONTRADICTED, with the \
-evidence quote "not in evidence": silence about an invented person is the signal. Any other fact the \
+A claim is CONTRADICTED with the evidence quote "not in evidence" only when the article attaches \
+something to a person — a statistic, a record, an award, a status word, a team or a role — and that \
+person appears nowhere in the evidence: the whole line is invented. A bare name in passing, or a \
+coach named without a claim attached, is UNSUPPORTED, not a contradiction. Any other fact the \
 evidence simply does not mention is UNSUPPORTED.
 
 Rules:
@@ -87,9 +115,23 @@ Reply with JSON only:
 "derived": false}], "note": "one sentence on the article's overall accuracy"}"""
 
 
-def build_rubric(max_claims: int = MAX_CLAIMS) -> str:
-    """The checker's system instruction, with the claim cap it should honour."""
-    return RUBRIC_TEMPLATE.replace("{max_claims}", str(int(max_claims)))
+# Added to the rubric only when the evidence was cut. The first R1 run (plan §3.1) judged a truncated
+# window as if it were the whole evidence, which is how real coaches became "not in evidence".
+TRUNCATION_RULE = """The evidence shown to you is PARTIAL: it was longer than the window, so part of \
+the tool results is missing where the truncation marker sits. Absence is then never proof — a person \
+or fact that might sit in the omitted part is UNSUPPORTED, never CONTRADICTED."""
+
+
+def build_rubric(max_claims: int = MAX_CLAIMS, truncated: bool = False) -> str:
+    """The checker's system instruction, with the claim cap it should honour.
+
+    `truncated=True` adds the rule that makes a partial window safe: when the evidence shown has a
+    hole in it, absence is never proof, so anything that might sit in the omitted part is UNSUPPORTED.
+    """
+    rubric = RUBRIC_TEMPLATE.replace("{max_claims}", str(int(max_claims)))
+    if truncated:
+        rubric += "\n\n" + TRUNCATION_RULE
+    return rubric
 
 
 RUBRIC = build_rubric()
@@ -128,16 +170,74 @@ def client_for_model(model: str):
         return None, f"{type(exc).__name__}: {exc}"
 
 
-def build_prompt(text: str, evidence: str, brief: str = "") -> str:
-    """The assignment, the evidence and the article, each bounded. Same shape as the CLI's prompt."""
+def split_evidence(evidence: str) -> tuple[str, list]:
+    """(the assignment, the tool blocks) — the tool results start at the first "TOOL " line.
+
+    The writer's evidence is the assignment followed by one `TOOL name(args):\\n<result>` block per
+    call (newsroom/swarm_dispatcher.py `_execute_agent`). The boundary is what lets a cut fall on the
+    tool results only: the assignment is the writer's own instruction and is never dropped.
+    """
+    text = evidence or ""
+    start = None
+    for needle in ("\n\n" + TOOL_MARKER, "\n" + TOOL_MARKER):
+        idx = text.find(needle)
+        if idx >= 0 and (start is None or idx < start):
+            start = idx
+    if start is None:
+        return text, []
+    assignment = text[:start]
+    rest = text[start:].lstrip("\n")
+    parts = rest.split("\n" + TOOL_MARKER)
+    blocks = [TOOL_MARKER + parts[0]] + [TOOL_MARKER + part for part in parts[1:]]
+    return assignment, [block for block in blocks if block.strip()]
+
+
+def window_evidence(evidence: str, limit: int | None = None) -> tuple[str, bool]:
+    """(the evidence the checker sees, whether it was cut). The assignment is never the part cut.
+
+    Under the limit — any real article, and every article in the 18-article R1 run — the evidence is
+    returned whole. Over it, the tool results are cut from the middle outwards (the first and last
+    blocks are the ones the writer leaned on), the assignment is kept in full, and a marker carrying
+    the exact number of characters dropped is written at the cut.
+    """
+    limit = EVIDENCE_LIMIT if limit is None else limit
+    text = evidence or ""
+    if len(text) <= limit:
+        return text, False
+    assignment, blocks = split_evidence(text)
+    tool_text = "\n".join(blocks)
+    if not tool_text:
+        # Nothing but the assignment: there is no tool text to cut, so the window bounds it and says so.
+        kept = assignment[:limit].rstrip()
+        marker = TRUNCATION_MARKER.format(missing=len(assignment) - len(kept))
+        return f"{kept}\n{marker}", True
+    budget = max(limit - len(assignment), 0)
+    head_len = budget // 2
+    tail_len = budget - head_len
+    missing = len(tool_text) - head_len - tail_len
+    head = tool_text[:head_len].rstrip()
+    tail = tool_text[len(tool_text) - tail_len:].lstrip() if tail_len else ""
+    marker = TRUNCATION_MARKER.format(missing=missing)
+    shown = f"{head}\n{marker}\n{tail}" if head else f"{marker}\n{tail}"
+    return (f"{assignment.rstrip()}\n\n{shown}" if assignment.strip() else shown), True
+
+
+def render_prompt(text: str, evidence: str = "", brief: str = "") -> tuple[str, bool]:
+    """(the prompt, whether the evidence was cut). The prompt is the assignment, the evidence, the article."""
+    shown, truncated = window_evidence(evidence)
     sections = []
     if (brief or "").strip():
         sections.append("ASSIGNMENT (what the writer was asked to produce):\n"
                         f"{brief.strip()[:BRIEF_LIMIT]}")
     sections.append("EVIDENCE THE WRITER RETRIEVED (the only facts it may use):\n"
-                    f"{(evidence or '').strip()[:EVIDENCE_LIMIT]}")
+                    f"{shown.strip()}")
     sections.append(f"ARTICLE:\n{text or ''}")
-    return "\n\n".join(sections)
+    return "\n\n".join(sections), truncated
+
+
+def build_prompt(text: str, evidence: str = "", brief: str = "") -> str:
+    """The prompt alone, for callers that do not need the truncation flag (the CLI keeps this shape)."""
+    return render_prompt(text, evidence, brief)[0]
 
 
 def answer_text(response) -> str:
@@ -220,15 +320,16 @@ def count_claims(claims: list) -> dict:
     return counts
 
 
-def ask_checker(client, model: str, prompt: str, max_claims: int = MAX_CLAIMS) -> dict | None:
+def ask_checker(client, model: str, prompt: str, max_claims: int = MAX_CLAIMS,
+                truncated: bool = False) -> dict | None:
     """One checker call at temperature 0, low thinking and a thinking-inclusive output cap.
 
-    Returns the parsed answer, or None. Transport and SDK errors propagate; `check` swallows them
-    (the CLI prints them per article).
+    `truncated` selects the rubric that makes a partial evidence window safe. Returns the parsed
+    answer, or None. Transport and SDK errors propagate; `check` swallows them (the CLI prints them).
     """
     from google.genai import types
 
-    config = types.GenerateContentConfig(system_instruction=build_rubric(max_claims),
+    config = types.GenerateContentConfig(system_instruction=build_rubric(max_claims, truncated),
                                          temperature=0.0,
                                          max_output_tokens=MAX_OUTPUT_TOKENS)
     try:
@@ -257,13 +358,15 @@ def check(text: str, evidence: str, model: str | None = None, client=None) -> di
             client, _error = client_for_model(resolved)
             if client is None:
                 return _skipped(resolved)
-        answer = ask_checker(client, resolved, build_prompt(text, evidence))
+        prompt, truncated = render_prompt(text, evidence)
+        answer = ask_checker(client, resolved, prompt, MAX_CLAIMS, truncated=truncated)
         if not answer:
             return _skipped(resolved)
         claims = normalize_claims(answer, MAX_CLAIMS)
         counts = count_claims(claims)
         return {"claims": claims, "counts": counts,
-                "ok": counts["CONTRADICTED"] == 0, "model": resolved}
+                "ok": counts["CONTRADICTED"] == 0, "model": resolved,
+                "truncated": truncated}
     except Exception:
         return _skipped(resolved)
 

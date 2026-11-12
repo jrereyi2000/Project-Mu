@@ -2039,7 +2039,13 @@ If you need specific stats, use your database tools before producing your final 
 
         `client` is a caller-owned client to check with (a capture run reuses the one it already meters);
         None lets `fact_gate.check` build the checker's own client for `FACT_GATE_MODEL`.
+
+        `FACT_GATE_REWRITE=0` (also "off"/"false") is plan R4's switch: the check still runs and the
+        verdict and claims are still stored, but no correction message is sent and a contradicting
+        article is labelled "flagged" rather than "rewritten".
         """
+        # R4's switch. Unset or "1" means the correction pass runs; 0/off/false means judge and flag only.
+        rewrite_disabled = os.environ.get("FACT_GATE_REWRITE", "").strip().lower() in ("0", "off", "false")
         try:
             gate = fact_gate.check(text, evidence, client=client)
         except Exception as exc:  # noqa: BLE001 - a gate outage must never fail a write
@@ -2056,7 +2062,11 @@ If you need specific stats, use your database tools before producing your final 
         kept, kept_counts, kept_claims = text, first_counts, list(gate.get("claims") or [])
         rewritten = False
 
-        if first_contradicted and "FACT_GATE" not in (rewrites or []):
+        if first_contradicted and rewrite_disabled and "FACT_GATE" not in (rewrites or []):
+            print(f"\n⚠️  [FACT GATE] rewrite disabled (FACT_GATE_REWRITE=0): "
+                  f"{first_contradicted} contradicted claim(s) kept and flagged, no correction pass")
+
+        if first_contradicted and not rewrite_disabled and "FACT_GATE" not in (rewrites or []):
             contradicted = [c for c in kept_claims
                             if str(c.get("verdict") or "").strip().upper() == "CONTRADICTED"]
             rewritten = True
