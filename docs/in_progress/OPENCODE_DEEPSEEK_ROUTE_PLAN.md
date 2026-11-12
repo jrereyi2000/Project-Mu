@@ -1,6 +1,12 @@
 # Project Mu: OpenCode Go DeepSeek Route Plan
 
-**Status:** approved by JR (2026-11-12); building, wave 1 of 2.
+**Status:** approved by JR (2026-11-12); building, wave 1 of 2 done.
+
+**As built (wave 1):**
+- U1's route line also names the session id: `Project Mu DeepSeek route: <model> (harness opencode, session ses_mu_…)`. `deepseek` and `deepseek-claude` share one `caller_is_deepseek()` guard.
+- U2's config test asserts the file's key set is exactly `{$schema, model}`, so a later addition needs this plan's consent.
+- U3 resolves sources as `--transcript`, then an explicit `--harness`, then `--session`, `MU_OPENCODE_SESSION`, `MU_AGENT_HARNESS`, auto — an explicit `--harness` beats the env (the plan listed the env step first). A named OpenCode source never silently falls back to Claude; only auto-detect does. Claude report lines gained the same `(claude <path>)` source suffix.
+- `/offline`'s intro line still says the side chat is "read-only tools, Haiku"; that is only true on Claude Code. Left for U4.
 **Builds on:** [AGENTS.md](../reference/AGENTS.md) (model inboxes and launchers), `.claude/skills/deepseek/SKILL.md`, PROJECT_SPEC §1.2 (agents and parallel builds).
 
 **Goal:** DeepSeek sessions start in OpenCode on JR's OpenCode Go subscription instead of Claude Code pointed at DeepSeek's paid API. Nothing else about a DeepSeek session changes: same board, same label, same `Model: deepseek-v4.1-flash` trailer, same skills.
@@ -286,3 +292,6 @@ No path appears twice. `tests/test_context_check.py` already exists and is owned
 
 | Unit | Wave | Branch | Worktree | Result | Merge |
 |---|---|---|---|---|---|
+| U2 | 1 | `opencode-u2` | `.claude/worktrees/opencode-u2` | merged — config pin verified by `opencode debug config`; `repo-qa` listed by `opencode debug agents`; 8 tests pass | `c636b1d` |
+| U1 | 1 | `opencode-u1` | `.claude/worktrees/opencode-u1` | merged — 20 tests pass on main; `--dry-run b1 deepseek` runs `tools/opencode_session.sh --prompt /builder`, `deepseek-claude` runs `~/bin/claude-deepseek`; guard covers both types | `6d955e4` |
+| U3 | 1 | `opencode-u3` | `.claude/worktrees/opencode-u3` | merged — 18 tests pass on main; live `python3 -m tools.context_check --json` reads this session (195,496 tokens, 19.5%) and names `opencode ses_…` | `5982ea3` |
