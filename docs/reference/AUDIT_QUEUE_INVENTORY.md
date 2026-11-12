@@ -728,9 +728,11 @@ Everything below is quoted from the reports and NOTICEs named in §9 and §10; n
 | **R5b** `45e58d1` | CONDITIONAL PASS, 3 | same builder, in flight | owed |
 | **R1** stats3 | PARTIAL — R2a, R2b open | `fix-stats-id`, in flight | owed |
 | **R2** stats2b | PARTIAL — P1 open | same builder, in flight | owed |
-| **R7** visual mod check | 6 + a live round (F8/F12) | `visual-check-fixes-2` round 2 | `audit-visual-hydrogen` lane, live |
+| **R7** visual mod check | R1/R2/R3/F8/F10/F11 **closed** (F11 live on the PC), F12 open, **F13 and F14 new HIGH** (the launcher's JSON parse and a `border_highlight` regression that stops `watch-game`) | `visual-check-fixes-3` round 3, spawned 18:09 (M-0787) | owed after round 3, and it needs bounded **live PC acceptance** — the halftime footage and the supersim selected rows are blocked by F13/F14, not by a reviewer |
 
-**Counts.** Nine rows have produced findings (R8/R9/R10 came back clean, and they are the checkpoint-1 chain — that
+**Closing state (18:20).** The two re-checks came back as recorded above; `recheck-fact-gate` is running on
+`c3d5d06`; `fix-stats-id` is running; `fix-go-allowance` is running on the R6 F4 accounting; `visual-check-fixes-3`
+holds R7's round 3. **Counts.** Nine rows have produced findings (R8/R9/R10 came back clean, and they are the checkpoint-1 chain — that
 is the headline). About **13 findings have a fix on `main` and are awaiting a verdict** (R3 F1–F4, R4 F1–F3,
 R6 F1–F5 with R11). About **12 are in the fix lane right now** (R5a 6, R5b 3, R1 2, R2 1). **One is blocked on
 JR** (R3 F5). R7's round is with its own builder and re-checker.
