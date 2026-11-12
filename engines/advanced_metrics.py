@@ -525,7 +525,7 @@ STAT_COLUMNS = (
 
 TEAM_COLUMNS = ("team_pass_attempts", "team_total_plays")
 USABLE_STATUSES = ("OK", "NO_GAMES")
-WEEKS_UNKNOWN_STATUSES = ("TABLE_CHANGED", "RESET", "CROSS_SEASON")
+WEEKS_UNKNOWN_STATUSES = ("TABLE_CHANGED", "RESET", "CROSS_SEASON", "UNKNOWN_HISTORY")
 # A tracked Madden week's inside+outside-pocket attempts account for its PASSATTEMPTS. The audit measured
 # 1.000 for fully tracked teams and 0.49-0.84 for teams missing week 1's pocket data, so 0.9 separates them
 # (audit H3).
@@ -565,9 +565,12 @@ def _career_rows(cur, season: int, player_id: int) -> list[dict]:
     after a bye can be labelled with the bye week while its difference covers the game before it, and a
     sentinel row (PRESEASON/OFFSEASON/PROBOWL) covers the tail of the season it is credited to. The caller
     establishes which games a difference actually covers (audit-5 S3). Every status is returned so
-    `player_metrics` can count unknown weeks and lost games; only OK and NO_GAMES deltas are ever used.
+    `player_metrics` can count unknown weeks and lost games; only OK and NO_GAMES deltas are ever used. A
+    first row from before the load-time record is UNKNOWN_HISTORY and carries its upper bound separately
+    (`season_games_bound`), never as a lost-game count (audit-5 stats2b R1).
     """
-    columns = ("season", "week", "prev_season", "prev_week", "status", "delta", "games_covered")
+    columns = ("season", "week", "prev_season", "prev_week", "status", "delta", "games_covered",
+               "season_games_bound")
     sql = (f"SELECT {', '.join(columns)} FROM player_week_counters "
            "WHERE credited_season = %(season)s AND player_id = %(player_id)s ORDER BY load_seq")
     params = {"season": season, "player_id": player_id}
@@ -839,8 +842,10 @@ def player_metrics(cur, season: int, player_id: int, week: int | None = None) ->
     delta loaded after a bye or a skipped save can cover several games and a truncated schedule cannot prove
     otherwise (audit-5 S3/R1). When no delta is isolated to the requested week the box score
     (`game_stat_lines`) supplies the week's counters and the Career-only inputs stay None with a coverage
-    reason. A BASELINE, PARTIAL, TABLE_CHANGED, RESET, CROSS_SEASON or Madden-untracked row is not used;
-    unknown and untracked rows count in `weeks_unknown` the way the season view counts unknown weeks. The
+    reason. A BASELINE, PARTIAL, TABLE_CHANGED, RESET, CROSS_SEASON, UNKNOWN_HISTORY or Madden-untracked row is
+    not used; unknown and untracked rows count in `weeks_unknown` the way the season view counts unknown weeks,
+    and a first row from before the load-time record (UNKNOWN_HISTORY) is named in `reasons` with its labelled
+    upper bound, never as lost games (audit-5 stats2b R1). The
     stat line supplies only a counter the Career row does not carry, and a metric that would mix the two
     sources over different game counts is None.
 
@@ -926,8 +931,21 @@ def player_metrics(cur, season: int, player_id: int, week: int | None = None) ->
     untracked = 0
     games_lost = 0
     bad_targets = False
+    # A first row from before the load-time record makes its earlier games unknown, not zero: it is counted
+    # as an unknown week and its upper bound is named as a maximum, never as lost games (audit-5 stats2b R1).
+    # Counted over the scoped rows, because such a row can never be selected for a delta.
+    for row in scoped:
+        if row.get("status") != "UNKNOWN_HISTORY":
+            continue
+        weeks_unknown += 1
+        bound = row.get("season_games_bound")
+        _add_once(reasons,
+                  "the first Career row predates the load-time record of season games, so the games before "
+                  "it are unknown" + (f" (at most {int(bound)})" if bound is not None else ""))
     for row in selectable:
         status = row.get("status")
+        if status == "UNKNOWN_HISTORY":
+            continue                      # counted above, with its labelled bound
         if status in WEEKS_UNKNOWN_STATUSES:
             weeks_unknown += 1
         elif status == "PARTIAL":
@@ -1061,6 +1079,10 @@ def _print_player(season: int, player_id: int, week: int | None) -> None:
     print(f"Advanced metrics for player {player_id}, {where} "
           f"(weeks unknown: {result['weeks_unknown']}, games covered: {cov['games_covered']}"
           f"{line_note}{mixed_note})")
+    if cov["reasons"]:
+        print("\nCOVERAGE")
+        for reason in cov["reasons"]:
+            print(f"  - {reason}")
     print("\nINPUTS")
     for name in sorted(result["inputs"]):
         print(f"  {name:<28} {result['inputs'][name]}")

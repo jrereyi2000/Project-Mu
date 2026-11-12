@@ -35,13 +35,19 @@ def read_save(name):
 
 
 def test_the_upgrade_backfill_reads_only_the_row():
-    """Audit-5 stats2 R1: a database upgraded from 2027_02_28 takes the backfill path, and that backfill must
-    never copy the mutable live season line onto an earlier row. Offline: the migration's text."""
+    """Audit-5 stats2 R1 / stats2b R1: a database upgraded from 2027_02_28 takes the backfill path, and that
+    backfill must never copy the mutable live season line onto an earlier row. It must also never turn the
+    row-proved upper bound into an observation: the bound is kept in its own labelled column. Offline: the
+    migration's text."""
     body = migrate._strip_outer_transaction(pathlib.Path(MIGRATION).read_text())
     updates = re.findall(r"(?is)UPDATE\s+player_career_counters.*?;", body)
     assert updates, "the upgrade backfill is gone"
     assert all("season_stat_general" not in u for u in updates)
-    assert all("LEAST(" in u for u in updates)              # a row-proved bound, not a copied total
+    for update in updates:
+        if "LEAST(" in update:
+            assert "SET season_games_bound = LEAST(" in update      # a bound goes to the bound column...
+            assert "SET season_games = LEAST(" not in update        # ...never to the exact field
+    assert any("season_games_bound = LEAST(" in u for u in updates)
     assert "information_schema.columns" in body             # one-time: only when the column is created
 
 
@@ -58,10 +64,10 @@ class UpgradePathTest(unittest.TestCase):
         self.conn = psycopg.connect(ls.DSN)
         self.cur = self.conn.cursor()
         self.body = migrate._strip_outer_transaction(pathlib.Path(MIGRATION).read_text())
-        self.cur.execute("SELECT pg_get_viewdef('player_season_counters'::regclass)")
-        self.season_view = self.cur.fetchone()[0]
         self.cur.execute("DROP VIEW player_season_counters")
         self.cur.execute("DROP VIEW player_week_counters")
+        self.cur.execute("ALTER TABLE player_career_counters DROP COLUMN season_games_source")
+        self.cur.execute("ALTER TABLE player_career_counters DROP COLUMN season_games_bound")
         self.cur.execute("ALTER TABLE player_career_counters DROP COLUMN season_games")
 
     def tearDown(self):
@@ -100,9 +106,8 @@ class UpgradePathTest(unittest.TestCase):
                          (season, pid, games))
 
     def upgrade(self):
-        """Run the migration body, then put the (unchanged) season view back on the recreated week view."""
+        """Run the migration body; it recreates both views."""
         self.cur.execute(self.body)
-        self.cur.execute("CREATE OR REPLACE VIEW player_season_counters AS " + self.season_view)
 
     def week_rows(self, pid):
         return self.query("SELECT week, status, games_covered FROM player_week_counters "
@@ -110,6 +115,11 @@ class UpgradePathTest(unittest.TestCase):
 
     def season_row(self, pid, season=2026):
         return self.one("SELECT weeks_partial, games_lost, games_covered FROM player_season_counters "
+                        "WHERE player_id = %s AND season = %s", pid, season)
+
+    def coverage(self, pid, season=2026):
+        return self.one("SELECT weeks_partial, games_lost, weeks_unknown, weeks_history_unknown, "
+                        "games_history_bound, games_covered FROM player_season_counters "
                         "WHERE player_id = %s AND season = %s", pid, season)
 
     def test_a_provable_zero_game_baseline_stays_baseline(self):
@@ -122,26 +132,59 @@ class UpgradePathTest(unittest.TestCase):
         self.upgrade()
         self.assertEqual(self.week_rows(pid), [(0, "BASELINE", 0), (3, "OK", 3)])
         self.assertEqual(self.season_row(pid), (0, 0, 3))
-        self.assertEqual(self.one("SELECT season_games FROM player_career_counters "
-                                  "WHERE player_id = %s AND week = 0", pid), (None,))
+        self.assertEqual(self.coverage(pid), (0, 0, 0, 0, None, 3))
+        self.assertEqual(self.one("SELECT season_games, season_games_source FROM player_career_counters "
+                                  "WHERE player_id = %s AND week = 0", pid), (0, "LEGACY_ZERO"))
 
-    def test_a_midseason_first_row_keeps_only_the_lost_games_the_row_proves(self):
-        # Career 8 at a week-5 load: at most 5 of them can be this season's games (one per league week), so 5 is
-        # the defensible lost count -- not the career 8, and not the live season line's 11.
+    def test_a_midseason_first_row_reports_unknown_history_not_its_bound(self):
+        # audit-5 stats2b R1 / acceptance 1-2: career 8 at a first load in week 5 could mean 1, 3 or 5 season
+        # games, and the migration cannot tell which. LEAST(8, 5) = 5 is an upper bound, so the row is
+        # UNKNOWN_HISTORY with the bound kept apart, never PARTIAL 5 / games_lost 5.
         pid = self.new_player("U. Mid")
         self.legacy(pid, 2026, 5, "WEEK", 8, 1)
         self.legacy(pid, 2026, 8, "WEEK", 11, 2)
         self.season_line(pid, 2026, 11)
         self.upgrade()
-        self.assertEqual(self.week_rows(pid), [(5, "PARTIAL", 5), (8, "OK", 3)])
-        self.assertEqual(self.season_row(pid), (1, 5, 3))
+        self.assertEqual(self.week_rows(pid), [(5, "UNKNOWN_HISTORY", 0), (8, "OK", 3)])
+        self.assertEqual(self.coverage(pid), (0, 0, 1, 1, 5, 3))
+        self.assertEqual(self.query("SELECT season_games, season_games_source, season_games_bound "
+                                    "FROM player_career_counters WHERE player_id = %s ORDER BY load_seq", pid),
+                         [(None, "LEGACY_UNKNOWN", 5), (None, "LEGACY_UNKNOWN", None)])
+
+    def test_the_same_legacy_row_gives_the_same_unknown_for_every_original_history(self):
+        # Acceptance 2: the retained row is identical whether the first source season had 1 or 5 games, so the
+        # upgrade must not claim an exact common answer -- both are unknown with the same labelled bound.
+        one = self.new_player("U. One")
+        five = self.new_player("U. Five")
+        for pid in (one, five):
+            self.legacy(pid, 2026, 5, "WEEK", 8, 1)
+            self.legacy(pid, 2026, 8, "WEEK", 11, 2)
+        self.season_line(one, 2026, 1)
+        self.season_line(five, 2026, 5)
+        self.upgrade()
+        for pid in (one, five):
+            self.assertEqual(self.week_rows(pid), [(5, "UNKNOWN_HISTORY", 0), (8, "OK", 3)])
+            self.assertEqual(self.coverage(pid), (0, 0, 1, 1, 5, 3))
 
     def test_a_first_row_with_no_season_line_takes_the_same_bound(self):
-        # Nothing in season_stat_general: the same count, because the backfill never reads the live table.
+        # Nothing in season_stat_general: the same provenance, because the backfill never reads the live table.
         lone = self.new_player("U. Lone")
         self.legacy(lone, 2026, 6, "WEEK", 9, 1)
         self.upgrade()
-        self.assertEqual(self.week_rows(lone), [(6, "PARTIAL", 6)])
+        self.assertEqual(self.week_rows(lone), [(6, "UNKNOWN_HISTORY", 0)])
+        self.assertEqual(self.coverage(lone), (0, 0, 1, 1, 6, 0))
+
+    def test_a_legacy_offseason_first_row_is_unknown_not_a_clean_zero(self):
+        # Acceptance 3: the absence of a playable-week label is not evidence that no game was lost.
+        pid = self.new_player("U. Off")
+        self.legacy(pid, 2026, -1, "OFFSEASON", 8, 1)
+        self.season_line(pid, 2026, 3)
+        self.upgrade()
+        self.assertEqual(self.week_rows(pid), [(-1, "UNKNOWN_HISTORY", 0)])
+        self.assertEqual(self.coverage(pid), (0, 0, 1, 1, None, 0))
+        self.assertEqual(self.query("SELECT season_games, season_games_source, season_games_bound "
+                                    "FROM player_career_counters WHERE player_id = %s", pid),
+                         [(None, "LEGACY_UNKNOWN", None)])
 
     def test_replay_never_rewrites_a_later_load_s_own_observation(self):
         # Acceptance 3 and 4: a load after the migration whose save carried no season line stays a NULL
@@ -155,8 +198,9 @@ class UpgradePathTest(unittest.TestCase):
         self.upgrade()                                       # replay twice
         self.assertEqual(self.week_rows(pid), [(0, "BASELINE", 0), (3, "OK", 3)])
         self.assertEqual(self.season_row(pid), (0, 0, 3))
-        self.assertEqual(self.query("SELECT week, season_games FROM player_career_counters "
-                                    "WHERE player_id = %s ORDER BY load_seq", pid), [(0, None), (3, 3)])
+        self.assertEqual(self.query("SELECT week, season_games, season_games_source FROM player_career_counters "
+                                    "WHERE player_id = %s ORDER BY load_seq", pid),
+                         [(0, None, "LOAD"), (3, 3, "LOAD")])
 
     def test_a_known_load_time_value_is_never_recomputed(self):
         # Acceptance 4: a value the loader wrote is the load's own observation and survives an upgrade and
@@ -166,8 +210,24 @@ class UpgradePathTest(unittest.TestCase):
         self.load(pid, 2026, 4, "WEEK", 5, 1, season_games=5)   # the loader's value; LEAST(5, 4) would be 4
         self.upgrade()
         self.upgrade()
-        self.assertEqual(self.one("SELECT season_games FROM player_career_counters WHERE player_id = %s", pid), (5,))
+        self.assertEqual(self.one("SELECT season_games, season_games_source, season_games_bound "
+                                  "FROM player_career_counters WHERE player_id = %s", pid),
+                         (5, "LOAD", None))
         self.assertEqual(self.week_rows(pid), [(4, "PARTIAL", 5)])
+        self.assertEqual(self.coverage(pid), (1, 5, 0, 0, None, 0))
+
+    def test_a_replay_never_reclassifies_a_legacy_row(self):
+        # Acceptance 5: the provenance is written once, when the column is created; a replay leaves a legacy
+        # row unknown and its bound in the bound column.
+        pid = self.new_player("U. Legacy")
+        self.legacy(pid, 2026, 5, "WEEK", 8, 1)
+        self.upgrade()
+        self.upgrade()
+        self.assertEqual(self.query("SELECT season_games, season_games_source, season_games_bound "
+                                    "FROM player_career_counters WHERE player_id = %s", pid),
+                         [(None, "LEGACY_UNKNOWN", 5)])
+        self.assertEqual(self.week_rows(pid), [(5, "UNKNOWN_HISTORY", 0)])
+        self.assertEqual(self.coverage(pid), (0, 0, 1, 1, 5, 0))
 
 
 @pytest.mark.integration
