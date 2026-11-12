@@ -11,10 +11,12 @@ and stop, so the next builder session starts from the hand-over instead of a blo
 Two harnesses are supported. Sources are chosen in this order: --transcript (a Claude Code
 transcript); an explicit --harness (it beats the environment); --session (a Claude Code session
 id, or an OpenCode session when it starts ses_); MU_OPENCODE_SESSION; MU_AGENT_HARNESS
-(opencode or claude-code); and finally auto, where a Claude Code session wins over an
-`opencode` binary found on PATH. A session counts as Claude Code when CLAUDE_CODE_SESSION_ID or
-CLAUDECODE is set, or when this directory already has a transcript under ~/.claude/projects
-(its own Claude Code session), so an OpenCode install on PATH can no longer hijack it.
+(opencode or claude-code); and finally auto. In auto, a bare OpenCode session identifies itself
+through OPENCODE_SESSION_ID (or OPENCODE=1) and reads that exact session; otherwise a Claude Code
+session wins over an `opencode` binary found on PATH. A session counts as Claude Code when
+CLAUDE_CODE_SESSION_ID or CLAUDECODE is set, or when this directory already has a transcript under
+~/.claude/projects (its own Claude Code session), so an OpenCode install on PATH can no longer
+hijack it.
 
 Claude Code: context is input_tokens + cache_read_input_tokens + cache_creation_input_tokens of
 the newest assistant entry with a usage block. The transcript is found by CLAUDE_CODE_SESSION_ID
@@ -128,9 +130,10 @@ def opencode_session_id(session=None, accept_any=False):
     """The OpenCode session to export: --session ses_…, else the env id, else the newest."""
     if session and (accept_any or session.startswith("ses_")):
         return session
-    env_id = os.environ.get("MU_OPENCODE_SESSION")
-    if env_id:
-        return env_id
+    for name in ("MU_OPENCODE_SESSION", "OPENCODE_SESSION_ID"):
+        value = os.environ.get(name)
+        if value:
+            return value
     session_id = newest_opencode_session()
     print(
         "context_check: warning: no --session or MU_OPENCODE_SESSION; using the newest "
@@ -193,6 +196,11 @@ def choose_harness(args):
         return "opencode", True
     if env in ("claude", "claude-code"):
         return "claude", True
+    # A bare `opencode` session exports no MU_* marker, but the CLI does export its own session id,
+    # which names the exact session to read. It outranks the directory hint: an OpenCode session run
+    # from a directory that also has Claude Code transcripts must not read one of those.
+    if os.environ.get("OPENCODE_SESSION_ID") or os.environ.get("OPENCODE") == "1":
+        return "opencode", False
     # A Claude Code session never sets the MU_* markers, so its own signals come before the
     # binary probe: an `opencode` on PATH must not make it read another window's session.
     if os.environ.get("CLAUDE_CODE_SESSION_ID") or os.environ.get("CLAUDECODE"):
