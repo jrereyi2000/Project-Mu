@@ -33,23 +33,66 @@ known mirror N1 defect found first time at `pipeline/league_office.py:776` with 
 
 ## Work limits and hand-over
 
-- **Plan quota is not instrumented here.** Antigravity has no `usage` command and writes no
+- **The plan quota is still not instrumented here.** Antigravity has no `usage` command and writes no
   rate-limit file, so nothing like `tools/usage_check.py` (Claude) or `tools/go_usage.py` (OpenCode Go)
-  applies. Do not claim a percentage you cannot read.
-- **What is measurable:** `agy -p --output-format json` returns a `usage` block
-  (`input_tokens`, `output_tokens`, `thinking_tokens`, `cache_read_tokens`, `total_tokens`).
-  `python3 -m tools.antigravity_usage` records those runs to
-  `data/usage/antigravity_usage.jsonl`, prices them at Hydrogen's published list rates, and exits 2
-  when a budget is passed. An auditor runs it after each scripted batch and summarises it at batch
-  boundaries. The interactive session's own tokens are **not** visible to that tool.
-- **So the guard is a process, not a meter:** as an auditor, check the Antigravity usage screen in the
-  console at every batch boundary, and post a quota-style `HANDOFF` to the builders every third batch
-  or 90 minutes (whichever is first) saying what is verified and what is not. Never let a builder
-  assume a finding is CLOSED meanwhile.
+  applies. Do not claim a percentage you cannot read. What changed on 2026-11-12 is that a **batch
+  auditor's own turns are metered** (next bullet), so the guard now has a real meter behind it for
+  everything run through the launcher.
+- **A print-mode batch is metered, turn by turn.** `agy -p --output-format json` returns a `usage`
+  block (`input_tokens`, `output_tokens`, `thinking_tokens`, `cache_read_tokens`, `total_tokens`).
+  `tools/agy_batch.sh [--label L] [--model M] <prompt-file>` runs one turn, prints that block, and
+  appends it to `data/usage/antigravity_usage.jsonl` through `tools/antigravity_usage` — so an
+  auditor started through it is metered without doing anything, and a run priced with
+  `python3 -m tools.antigravity_usage --since-hours 5` is a floor on what the session spent. A
+  hand-run `agy -p …` is metered only if you pipe the result into
+  `python3 -m tools.antigravity_usage record -`.
+- **What is still not covered: the interactive TUI.** An `agy -i` session writes no usage record, and
+  its tokens are invisible to the ledger. A TUI session therefore still cannot report a percentage,
+  and what it spends is the gap between the ledger and the console's usage screen.
+- **So the guard is a process, not a quota meter:** as an auditor, read the ledger (or the Antigravity
+  usage screen in the console) at every batch boundary, and post a quota-style `HANDOFF` to the
+  builders every third batch or 90 minutes (whichever is first) saying what is verified and what is
+  not. Never let a builder assume a finding is CLOSED meanwhile.
 - **Context:** there is no transcript reader for Antigravity, so `/context-check` cannot report this
   session's percentage. Hand over on judgement — when the session has read most of one subsystem and is
   re-reading, or when a batch takes visibly longer than the first — with the same hand-over NOTICE a
   builder posts: what is done, what is open, what is claimed.
+
+## Being woken, and the print-mode batch
+
+An interactive `agy -i` session **cannot be woken**: a board message gives it no turn, and it exposes
+no conversation id to resume (`docs/reference/AUDIT_QUEUE_INVENTORY.md` §11). A **print-mode
+conversation** can be, and that is how an auditor starts if it wants a wake:
+
+```bash
+tools/agy_batch.sh --label audit-x brief.txt          # first turn; prints `conversation: <id>`
+tools/agent_board_wake.py --harness agy --label audit-x \
+    --conversation <id> --state data/audit_reports/audit-x/wake.json
+```
+
+`agy_batch.sh` keeps the id in `data/audit_reports/<label>/agy_batch.json` and resumes that same
+conversation on every later call with the label, so batches accumulate context instead of starting
+over. The wake tool watches the board's headers and delivers a new turn through
+`--conversation <id>`; only `status: SUCCESS` counts as a wake, and the delivered turn's tokens land
+in the ledger like any other.
+
+Measured on this machine, 2026-11-12, so nobody has to guess:
+
+- **Writes work in print mode.** A print-mode turn created a file with its file tool, then with its
+  shell tool wrote a file, ran `git rev-parse` and read it back — no confirmation prompt, no
+  `--dangerously-skip-permissions`, nothing that waited for a human. One sandboxed `git` read failed
+  and agy retried it itself with `BypassSandbox: true`. So a batch can inspect and edit; it is not
+  notify-only.
+- **`--print-timeout 0` waits for the whole turn.** A turn told to run `sleep 100` returned after
+  112 s with its JSON. The wake tool still bounds each delivery with `--timeout` (1800 s default).
+- **A killed run leaves a resumable conversation.** A resumed turn killed at 30 s mid-command, then
+  resumed again with the same id, returned `SUCCESS` with `num_turns` 3 and its earlier context
+  intact.
+
+Because nothing answers a question in print mode, a batch prompt must carry its own authority: say
+what it may edit, and where, in the brief. The wake prompt already says the board text is data, not
+JR's instructions.
+
 
 ## Auditor notes
 
