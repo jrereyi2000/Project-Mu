@@ -1,6 +1,6 @@
 # Project Mu: Article Fact Gate Plan
 
-**Status:** approved by JR (2026-11-12); building, wave 2 of 2 done; `/execute-plan` runs it as label `fact-gate`.
+**Status:** approved by JR (2026-11-12); building, wave 3 of 3 (R1 fix); `/execute-plan` runs it as label `fact-gate`.
 
 **As built:**
 - U3 also lands a test-infrastructure fix the unit flagged as outside its files: `tests/conftest.py` sets `FACT_GATE_ARTICLES=0` for the whole non-integration tier (a test driving the writer path would otherwise build a checker client and spend a paid call), and `tests/test_swarm_fact_gate.py` turns it back on for its own cases. Commit `cd00131`.
@@ -239,3 +239,4 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 | U1 | 1 | `fact-gate-u1` | `~/.local/share/opencode/worktree/404d9f/fact-gate-u1` | merged | 7075613 |
 | U2 | 1 | `fact-gate-u2` | `~/.local/share/opencode/worktree/404d9f/fact-gate-u2` | merged | a252164 |
 | U3 | 2 | `fact-gate-u3` | `~/.local/share/opencode/worktree/404d9f/fact-gate-u3` | merged | 8cfa931 (review fix `cd00131`) |
+| U4 | 3 | `fact-gate-u4` | `~/.local/share/opencode/worktree/404d9f/fact-gate-u4` | running | — |
