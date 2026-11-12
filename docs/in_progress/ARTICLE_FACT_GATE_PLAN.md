@@ -126,6 +126,19 @@ Two causes, both structural, neither a model problem:
 
 The real contradictions the same run finds are exactly the class the gate is for and survive both fixes: the archive's Davis 29-vs-27 record claim, `the Jets' 469 points are second in the AFC` (evidence: Bengals 460, and 469 is first), `Indianapolis surrendered 27 second-half points` (halftime IND 20-6, final 33-27), and a swapped winner/score in the Muse Hero. **Fix, as U4 below: a truncation-aware evidence window, a scoped absent-person rule, and `FACT_GATE_REWRITE=0` (R4's switch) until the re-run is clean.**
 
+### 3.2 R1, second run (2026-11-12, after U4): passes on precision, one coverage hole
+
+Same 18 articles, same directory seed, `--max-claims 60`, checker `deepseek-v4.1-flash`, U4's window and rubric. **14 of 18 judged, 771 claims: 652 SUPPORTED (84.6%), 52 CONTRADICTED (6.7%), 67 UNSUPPORTED.** All 52 read by hand: **about 39 are genuine** (75%) and 13 are the checker missing a name inside a 100–200k-character window.
+
+What it now catches, exactly as intended:
+- **the Carson fabrication**: `Isaiah Carson, WR, Panthers: 121 catches, 1,755 yards, 20 touchdowns as a rookie — not in evidence` (and again, `Isaiah Carson was a rookie with an ADP of 3.8` against `age 23 | exp 1`);
+- **status words**: five players with `exp 1` called rookies (Gordon, Herrera, Sullivan, Carmichael, Ellerbe);
+- **wrong results and records**: the Jets' 469 points called second in the AFC (they are first, Cincinnati 460), Davis "officially eclipsed" the record against `tied, 27`, five blown leads called tied-second against DEN/IND 6, a 3-game losing skid against `W 20-13`, `21-23` at halftime against `MIN 23-21`, `Arizona beat Denver` against `Broncos 27 @ Saints 30`, "six total touchdowns" against a seven-TD line, "four straight zero-point games" against five, a 0.7 INT rate / +50% against 0.8 / +71%, a five-game sample against four.
+
+What it still gets wrong: named coaches and linemen whose names *are* in the evidence (McDaniel, LaFleur, Stockton…) come back `not in evidence` — a recall limit of a single checker over a long window, which is R3's territory, not a rule bug. At 13 of 771 claims (1.7%) the cost is a correction pass that names no real error; it cannot block anything.
+
+**Coverage hole found: 4 of 18 articles returned no parsable answer** (Slot 1 for all three models, and GLM's Standalone) — the run treats that as a skip, so those articles would go ungated. Re-running one by hand produced a valid 60-claim answer, so it is intermittent malformation, not a size limit: the fix is a tolerant repair plus one retry (U5).
+
 ## 4. Tests (synthetic, no live DB)
 
 - `tests/test_fact_gate.py` →
@@ -187,6 +200,14 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 - **Done when:** the checker sees the whole assignment and every tool result (up to a large, documented bound), absence is only a contradiction when the article attaches a statistic, role or status to the person **and** the evidence was not truncated, a truncation marker is in the prompt when evidence is cut, `FACT_GATE_REWRITE=0` skips the correction pass and still stores the verdict, and the tests pin each of those.
 - **Verify:** `pytest -m "not integration" tests/test_fact_gate.py tests/test_swarm_fact_gate.py` → all pass; then the R1 re-run over the 18 articles is read by hand for false contradictions.
 
+### U5: Parse resilience (R1 follow-up)
+
+- **Owns:** `newsroom/fact_gate.py`, `tools/article_factcheck.py`, `tests/test_fact_gate.py`
+- **Reads:** §3.2's coverage hole, `parse_answer`/`json_blobs`/`ask_checker` in `newsroom/fact_gate.py`
+- **Depends on:** U4
+- **Done when:** a malformed answer is repaired where it can be (trailing commas, raw newlines or control characters inside a JSON string) and otherwise earns exactly one retry asking for JSON only, so an intermittent failure does not silently ungate an article; two failures still return the no-checker skip; the CLI and the gate share the path.
+- **Verify:** `pytest -m "not integration" tests/test_fact_gate.py tests/test_swarm_fact_gate.py` → all pass.
+
 ## 6. Waves
 
 | Wave | Units | Needs merged first | Why together |
@@ -194,6 +215,7 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 | 1 | U1, U2 | — | Different files, no shared state: the tool and the checker are independent. |
 | 2 | U3 | U1, U2 | Wires both into the writer path and adds the storage. |
 | 3 | U4 | U1, U2, U3 | R1's fix: one agent, the checker's own files. |
+| 4 | U5 | U4 | R1's coverage hole: the same files. |
 
 **File ownership check:**
 
@@ -212,6 +234,8 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 | `newsroom/fact_gate.py` (U4 revision) | U4 |
 | `tools/article_factcheck.py` (U4 revision) | U4 |
 | `newsroom/swarm_dispatcher.py` (U4: the rewrite switch) | U4 |
+| `newsroom/fact_gate.py` (U5 revision) | U5 |
+| `tests/test_fact_gate.py` (U5 revision) | U5 |
 | `tests/test_fact_gate.py` (U4 revision) | U4 |
 | `tests/test_swarm_fact_gate.py` (U4 revision) | U4 |
 
