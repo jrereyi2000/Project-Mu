@@ -1057,3 +1057,31 @@ def test_the_cutoff_is_always_applied(monkeypatch):
     assert press_room._resolve_cutoff_week(2037) == (0, None)        # a future season: nothing visible
     monkeypatch.setattr(run_context, "cutoff_week", lambda s: None)
     assert press_room._resolve_cutoff_week(2035) == (None, None)
+
+
+def test_press_model_decides_the_provider(monkeypatch):
+    """GLM_5_3_UNIFICATION_PLAN §2.3: PRESS_MODEL=glm-5.3-flash reaches OpenCode Go without LLM_PROVIDER_PRESS,
+    and with PRESS_MODEL unset the press route stays Gemini."""
+    for key in ("LLM_PROVIDER", "LLM_PROVIDER_PRESS", "MU_GO_TEXT_MODEL"):
+        monkeypatch.delenv(key, raising=False)
+    assert press_room.press_provider(None) == "gemini"                 # unset: the provider default
+    assert press_room.press_provider("gemini-3.8-flash") == "gemini"
+    assert press_room.press_provider("glm-5.3-flash") == "go"
+    assert press_room.press_provider("go:glm-5.3-flash") == "go"
+    monkeypatch.setenv("LLM_PROVIDER_PRESS", "gemini")                # the env still wins over the model id
+    assert press_room.press_provider("glm-5.3-flash") == "gemini"
+    monkeypatch.delenv("LLM_PROVIDER_PRESS")
+
+    sent = {}
+
+    def fake_generate_text(prompt, **kwargs):
+        sent.update(kwargs, prompt=prompt)
+        return "He did his job.", {"input_tokens": 3, "output_tokens": 2}
+
+    monkeypatch.setattr("engines.llm_provider.generate_text", fake_generate_text)
+    llm = press_room.MeteredLLM(model="glm-5.3-flash")
+    assert llm("Why the loss?") == "He did his job."
+    assert sent["prompt"] == "Why the loss?" and sent["source"] == "press"
+    assert (sent["model"], sent["provider"]) == ("glm-5.3-flash", "go")
+    assert (llm.calls, llm.input_tokens, llm.output_tokens) == (1, 3, 2)
+

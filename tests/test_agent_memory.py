@@ -2,11 +2,14 @@
 
 Run: python3 -m unittest tests.test_agent_memory
 """
+import os
 import unittest
+from unittest import mock
 
 from newsroom.agent_memory import (
-    build_memory_block, fetch_predictions, format_memory_block, grade_call, grade_prediction, parse_score_predictions,
-    parse_takes_json, summary_prompt,
+    build_memory_block, fetch_predictions, format_memory_block, gemini_text, grade_call, grade_prediction, llm_text,
+    model_provider, parse_score_predictions, parse_takes_json, refresh_season_summaries, summaries_enabled,
+    summary_prompt,
 )
 
 TEAMS = [(1, "Bills", "Buffalo", "BUF"), (2, "Dolphins", "Miami", "MIA"), (3, "Chiefs", "Kansas City", "KC"),
@@ -258,6 +261,93 @@ class PressMemoryTests(unittest.TestCase):
         take_lines = [s for s, _ in cur.calls if "kind = 'TAKE'" in s]
         self.assertTrue(take_lines)
         self.assertTrue(all("PRESS" not in s for s in take_lines))
+
+
+class ProviderRoutingTests(unittest.TestCase):
+    """GLM_5_3_UNIFICATION_PLAN §2.3: a Go model id reaches OpenCode Go, and the Gemini defaults stay Gemini.
+
+    The rule reads the per-site provider env, so each test starts from a clean slate (and the real value is put
+    back, since these tests run in-process with the rest of the suite)."""
+
+    ENV_KEYS = ("LLM_PROVIDER", "LLM_PROVIDER_AGENT_MEMORY", "LLM_PROVIDER_SUMMARY", "LLM_PROVIDER_PRESS",
+                "LLM_PROVIDER_INBOX", "MU_GO_TEXT_MODEL")
+
+    def setUp(self):
+        saved = {key: os.environ.get(key) for key in self.ENV_KEYS}
+        for key in self.ENV_KEYS:
+            os.environ.pop(key, None)
+
+        def restore():
+            for key, value in saved.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
+        self.addCleanup(restore)
+
+    def test_gemini_text_sends_a_go_model_through_the_go_provider(self):
+        calls = []
+
+        def fake_generate_text(prompt, **kwargs):
+            calls.append((prompt, kwargs))
+            return "summary text"
+
+        with mock.patch("engines.llm_provider.generate_text", fake_generate_text):
+            text = gemini_text(api_key=None, model="glm-5.3-flash", prompt="Summarize the season",
+                               label="summary 5")
+        self.assertEqual(text, "summary text")
+        prompt, kwargs = calls[0]
+        self.assertEqual(prompt, "Summarize the season")
+        self.assertEqual(kwargs["temperature"], 0.3)                       # the Gemini call's temperature
+        self.assertEqual(kwargs["provider"], "go")
+        self.assertEqual(kwargs["model"], "glm-5.3-flash")
+        self.assertEqual(kwargs["source"], "agent_memory")
+
+    def test_llm_text_routes_by_model_id_and_env(self):
+        self.assertEqual(model_provider(model="glm-5.3-flash"), "go")
+        self.assertEqual(model_provider(model="go:glm-5.3-flash"), "go")
+        self.assertEqual(model_provider(model="gemini-3.8-flash"), "gemini")
+        self.assertEqual(model_provider(model=None), "gemini")              # the unset default stays Gemini
+        # an explicit choice still wins over the Go id
+        self.assertEqual(model_provider(model="glm-5.3-flash", provider="gemini"), "gemini")
+        self.assertEqual(model_provider(model="gemini-3.8-flash", provider="go"), "go")
+        with mock.patch.dict(os.environ, {"LLM_PROVIDER_AGENT_MEMORY": "gemini"}):
+            self.assertEqual(model_provider(model="glm-5.3-flash"), "gemini")
+        with mock.patch.dict(os.environ, {"LLM_PROVIDER_AGENT_MEMORY": "go"}):
+            self.assertEqual(model_provider(model="gemini-3.8-flash"), "go")
+            self.assertEqual(model_provider(model=None), "go")              # MU's Go default model
+
+    def test_llm_text_passes_the_same_prompt_and_temperature(self):
+        sent = {}
+
+        def fake_generate_text(prompt, **kwargs):
+            sent.update(kwargs, prompt=prompt)
+            return "takes"
+
+        with mock.patch("engines.llm_provider.generate_text", fake_generate_text):
+            self.assertEqual(llm_text("Extract takes", label="takes #9", model="glm-5.3-flash"), "takes")
+        self.assertEqual(sent["prompt"], "Extract takes")
+        self.assertEqual((sent["provider"], sent["model"], sent["temperature"]), ("go", "glm-5.3-flash", 0.3))
+
+    def test_a_go_summary_needs_the_go_key_not_a_gemini_one(self):
+        with mock.patch("newsroom.tool_loop.go_transport.go_api_key", lambda: "oc_sk_test"):
+            self.assertTrue(summaries_enabled(None, "glm-5.3-flash"))       # no GEMINI_API_KEY, still a run
+            self.assertTrue(summaries_enabled("gemini-key", "gemini-3.8-flash"))
+        with mock.patch("newsroom.tool_loop.go_transport.go_api_key", lambda: None):
+            self.assertFalse(summaries_enabled(None, "glm-5.3-flash"))      # no key for the provider it chose
+            self.assertFalse(summaries_enabled(None, "gemini-3.8-flash"))   # the Gemini gate is unchanged
+        self.assertTrue(summaries_enabled("gemini-key", "glm-5.3-flash"))
+
+    def test_a_go_summary_run_opens_the_database_without_a_gemini_key(self):
+        import psycopg
+        with mock.patch("newsroom.tool_loop.go_transport.go_api_key", lambda: "oc_sk_test"), \
+                mock.patch.object(psycopg, "connect", side_effect=RuntimeError("reached")) as connect:
+            with self.assertRaises(RuntimeError):
+                refresh_season_summaries("dsn", None, "glm-5.3-flash", 2036, 5)
+            connect.assert_called_once()                                   # the gate let the run through
+        with mock.patch.object(psycopg, "connect", side_effect=RuntimeError("reached")) as connect:
+            self.assertEqual(refresh_season_summaries("dsn", None, "gemini-3.8-flash", 2036, 5), 0)
+            connect.assert_not_called()                                    # a keyless Gemini run still skips
 
 
 if __name__ == "__main__":

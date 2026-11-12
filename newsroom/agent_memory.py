@@ -16,6 +16,7 @@ Prompts read only memories from before the article's publication week, so regene
 takes, results or summaries.
 """
 import json
+import os
 import re
 
 from newsroom.power_rankings import resolve_team
@@ -549,17 +550,72 @@ def grade_season_calls(cur, season: int) -> int:
     return n
 
 
+def _model_prefix(model: str | None) -> str | None:
+    """The provider a ``go:``/``gemini:``/``ollama:`` model prefix names, or None."""
+    m = (model or "").strip().lower()
+    for name in ("ollama", "gemini", "go"):
+        if m.startswith((f"{name}:", f"{name}/")):
+            return name
+    return None
+
+
+def _env_provider(label: str = "", source: str = "") -> str | None:
+    """The provider ``LLM_PROVIDER_<SOURCE>``, ``LLM_PROVIDER_<LABEL>`` or ``LLM_PROVIDER`` names, or None.
+
+    The same keys, in the same order, ``engines.llm_provider.resolve_provider`` reads."""
+    for candidate in (source, label):
+        if candidate:
+            key = f"LLM_PROVIDER_{candidate.strip().lower().replace(' ', '_').upper()}"
+            value = os.environ.get(key, "").strip().lower()
+            if value in ("gemini", "ollama", "go"):
+                return value
+    value = os.environ.get("LLM_PROVIDER", "").strip().lower()
+    return value if value in ("gemini", "ollama", "go") else None
+
+
+def model_provider(model: str | None = None, provider: str | None = None,
+                   label: str = "", source: str = "agent_memory") -> str:
+    """The provider a text call reaches (GLM_5_3_UNIFICATION_PLAN §2.3).
+
+    ``engines.llm_provider.resolve_provider`` decides first, so an explicit ``provider``, a
+    ``go:``/``gemini:``/``ollama:`` model prefix, ``LLM_PROVIDER_<SOURCE|LABEL>`` and ``LLM_PROVIDER`` all win as
+    they always did. Only when nothing named a provider and the answer is just the Gemini default, a model id
+    OpenCode Go serves (``newsroom.tool_loop.go_transport.is_go_model``: anything that is not a ``gemini-*`` id)
+    is a Go call. So ``AGENT_MEMORY_MODEL=glm-5.3-flash``, ``PRESS_MODEL=glm-5.3-flash`` or
+    ``INBOX_MODEL=glm-5.3-flash`` reaches Go without also setting that site's ``LLM_PROVIDER_*``, and every
+    site's unset default stays Gemini.
+    """
+    from engines.llm_provider import resolve_provider
+    prov = resolve_provider(label=label, source=source, model=model, provider=provider)
+    named = str(provider or "").strip().lower() in ("gemini", "ollama", "go")
+    if prov != "gemini" or named or _model_prefix(model) or _env_provider(label, source):
+        return prov
+    from newsroom.tool_loop.go_transport import is_go_model
+    return "go" if is_go_model(model) else prov
+
+
+def summaries_enabled(api_key: str | None, model: str) -> bool:
+    """The ``refresh_season_summaries`` gate: a Gemini run needs its API key, exactly as before; a Go run needs
+    ``OPENCODE_GO_API_KEY`` instead, so a Go model is never skipped just because ``GEMINI_API_KEY`` is unset."""
+    if api_key:
+        return True
+    if model_provider(model=model, label="summary", source="agent_memory") != "go":
+        return False
+    from newsroom.tool_loop.go_transport import go_api_key
+    return bool(go_api_key())
+
+
 def llm_text(prompt: str, label: str = "agent_memory", model: str | None = None,
              thinking_level: str | None = None, api_key: str | None = None,
              client=None, provider: str | None = None, fallback_model: str | None = None) -> str:
-    """Provider-neutral text helper for agent memory, supporting Ollama and Gemini with fallback."""
+    """Provider-neutral text helper for agent memory, supporting Ollama, Gemini and OpenCode Go with fallback."""
     from engines.llm_provider import generate_text
     return generate_text(
         prompt=prompt,
         source="agent_memory",
         label=label,
         model=model,
-        provider=provider,
+        provider=model_provider(model=model, provider=provider, label=label or "agent_memory"),
         fallback_model=fallback_model,
         thinking_level=thinking_level,
         temperature=0.3,
@@ -569,12 +625,16 @@ def llm_text(prompt: str, label: str = "agent_memory", model: str | None = None,
 
 
 def gemini_text(api_key: str, model: str, prompt: str, label: str = "",
-                thinking_level: str | None = None, client=None) -> str:
-    """Provider-aware text helper for agent memory, maintaining backwards-compatible signature."""
+                thinking_level: str | None = None, client=None, provider: str | None = None) -> str:
+    """Provider-aware text helper for agent memory, maintaining backwards-compatible signature.
+
+    ``provider`` is a passthrough, so a Go model reaches OpenCode Go through
+    ``generate_text(..., provider="go")`` with the same prompt and the same 0.3 temperature as the Gemini call."""
     return llm_text(
         prompt=prompt,
         label=label or "agent_memory",
         model=model,
+        provider=provider,
         thinking_level=thinking_level,
         api_key=api_key,
         client=client,
@@ -587,7 +647,7 @@ def refresh_season_summaries(conn_info: str, api_key: str, model: str, season: i
     import psycopg
     from concurrent.futures import ThreadPoolExecutor
     through = week - 1
-    if through < 1 or not api_key:
+    if through < 1 or not summaries_enabled(api_key, model):
         return 0
     with psycopg.connect(conn_info) as conn, conn.cursor() as cur:
         if not tables_exist(cur):

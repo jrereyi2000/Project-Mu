@@ -17,7 +17,9 @@ used, and a template reply carries no appraisal (no model, no appraisal).
   exchange(cur, kind, thread_id, option_id, payload, note, ...) -> thread    one JR turn, in §2.4's order:
         act -> JR's line -> the counterpart's reply -> the relationship event (outbox). A null option with a
         note is talk (no engine act, no state/outcome change) unless the kind is in TYPED_TEXT_KINDS.
-  default_llm()                                                    make_llm("inbox") unless MU_INBOX_LLM == '0'
+  default_llm()                                                    make_llm("inbox") unless MU_INBOX_LLM == '0';
+                                                                   INBOX_MODEL names the model (a Go id reaches
+                                                                   OpenCode Go, §2.3), unset stays Gemini
 
 The relationship to JR's persona enters the prompt only through the relationships plan's relationship_context
 (once that module exists); before that the prompt has no relationship lines (D15, D17). Nothing here commits.
@@ -74,12 +76,23 @@ def _savepoint(cur, name):
 
 
 def default_llm():
-    """The inbox's model (make_llm("inbox")), or None for templates: MU_INBOX_LLM=0, no API key, or unavailable."""
+    """The inbox's model, or None for templates: MU_INBOX_LLM=0, no API key, or unavailable.
+
+    ``INBOX_MODEL`` names the model; unset means exactly today's ``make_llm("inbox")`` (the provider default,
+    Gemini). Its id decides the provider through the same rule as the other text sites
+    (``newsroom.agent_memory.model_provider``), so ``INBOX_MODEL=glm-5.3-flash`` reaches OpenCode Go without also
+    setting ``LLM_PROVIDER_INBOX``; ``LLM_PROVIDER_INBOX=go`` alone still reaches Go through ``make_llm``.
+    """
     if os.environ.get("MU_INBOX_LLM", "1").strip() == "0":
         return None
     try:
         from engines.gm_llm import make_llm
-        return make_llm("inbox")
+        model = (os.environ.get("INBOX_MODEL") or "").strip() or None
+        if not model:
+            return make_llm("inbox")
+        from newsroom.agent_memory import model_provider
+        return make_llm("inbox", model=model,
+                        provider=model_provider(model=model, label="inbox", source="inbox"))
     except Exception as e:
         print(f"[inbox] model unavailable, using templates: {e}", flush=True)
         return None
