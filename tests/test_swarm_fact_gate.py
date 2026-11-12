@@ -9,7 +9,15 @@ import json
 from types import SimpleNamespace
 from unittest import mock
 
+import pytest
+
 from tests.test_swarm_capture import _Client, _dispatcher, _prompt
+
+
+@pytest.fixture(autouse=True)
+def _gate_on(monkeypatch):
+    """tests/conftest.py switches the gate off for the unit tier; these tests are the gate."""
+    monkeypatch.setenv("FACT_GATE_ARTICLES", "1")
 
 
 CONTRADICTED_CLAIM = {

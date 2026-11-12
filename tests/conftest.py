@@ -227,6 +227,19 @@ def pytest_runtest_teardown(item, nextitem):
 
 
 @pytest.fixture(autouse=True)
+def disable_fact_gate_in_unit_tests(request, monkeypatch):
+    """Unit tests never let the write-time fact gate call a real checker model.
+
+    `SwarmDispatcher._execute_agent` gates every live ARTICLE against its evidence, and a test that drives the
+    writer path without injecting a checker would otherwise build a Go client and spend a paid call. A test
+    that exercises the gate turns it back on itself with FACT_GATE_ARTICLES=1 (tests/test_swarm_fact_gate.py).
+    """
+    is_integration = request.node.get_closest_marker("integration") is not None
+    if not is_integration:
+        monkeypatch.setenv("FACT_GATE_ARTICLES", "0")
+
+
+@pytest.fixture(autouse=True)
 def guard_llm_usage_logging_in_unit_tests(request, monkeypatch):
     """Prevent unit tests from attempting any real llm_usage database logging."""
     is_integration = request.node.get_closest_marker("integration") is not None
