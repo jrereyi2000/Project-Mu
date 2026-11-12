@@ -21,8 +21,9 @@ Sources:
           (DeepSeek V4.1 Flash $100, GLM-5.3-Flash $60, Kimi K3 $15, ...), so the tool does
           not guess one. It judges thresholds only when --monthly-limit (or
           MU_GO_MONTHLY_LIMIT) is given, using Go's fixed shares of that limit: 5-hour 20%,
-          weekly 50%, month 100%. Without a limit it prints dollars and exits 1 ("limit
-          unknown"), the way tools/usage_check.py treats a stale file.
+          weekly 50%, month 100%. Without a limit it prints dollars and exits 1 ("limit unknown"),
+          the way tools/usage_check.py treats a stale file. A zero or negative limit is refused
+          the same way (exit 1, no percentages), since Go has no free tier to divide by.
   auto    The default: try the api, fall back to the ledger when the key is missing or the
           request fails. --source api alone exits 1 instead of falling back.
 
@@ -268,10 +269,11 @@ def _api_report(windows: Dict[str, Dict[str, Any]], thresholds: Dict[str, float]
 
 def _ledger_report(ledger: Dict[str, Any], thresholds: Dict[str, float],
                    monthly_limit: Optional[float]) -> Tuple[int, str, Dict[str, Any]]:
+    positive = monthly_limit is not None and monthly_limit > 0
     out: Dict[str, Dict[str, Any]] = {}
     for window in WINDOWS:
         usd = float(ledger["usd"][window])
-        limit = monthly_limit * GO_SHARES[window] if monthly_limit else None
+        limit = monthly_limit * GO_SHARES[window] if positive else None
         percent = (usd / limit * 100.0) if limit else None
         out[window] = {
             "percent": percent,
@@ -286,7 +288,11 @@ def _ledger_report(ledger: Dict[str, Any], thresholds: Dict[str, float],
     if not ledger["entries"]:
         return 1, ("go allowance: unknown (no readable ledger entries; "
                    "is any pipeline call reporting an allowance?)"), out
-    if monthly_limit is None:
+    if monthly_limit is not None and monthly_limit <= 0:
+        shown = " · ".join(f"{SHORT_NAMES[w]} ${out[w]['usd']:.4f}" for w in WINDOWS)
+        return 1, (f"go allowance: {shown} (invalid monthly limit: {monthly_limit:g}; "
+                   f"it must be positive, like --monthly-limit 100 or MU_GO_MONTHLY_LIMIT=100)"), out
+    if not positive:
         shown = " · ".join(f"{SHORT_NAMES[w]} ${out[w]['usd']:.4f}" for w in WINDOWS)
         return 1, (f"go allowance: {shown} (limit unknown: pass --monthly-limit "
                    f"or set MU_GO_MONTHLY_LIMIT)"), out

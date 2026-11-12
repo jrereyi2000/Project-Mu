@@ -300,6 +300,31 @@ class TestLedgerSource(GoUsageTestCase):
         self.assertEqual(code, 0)
         self.assertAlmostEqual(document["windows"]["monthly"]["percent"], 1.5)
 
+    def test_zero_monthly_limit_is_refused_without_a_crash(self):
+        self.fixture()
+        code, document = self.run_json(["--source", "ledger", "--monthly-limit", "0"])
+        self.assertEqual(code, 1)
+        self.assertIn("invalid monthly limit: 0", document["message"])
+        self.assertIn("5h $0.1000", document["message"])
+        self.assertNotIn("%", document["message"])
+        for window in ("rolling", "weekly", "monthly"):
+            self.assertIsNone(document["windows"][window]["percent"])
+            self.assertIsNone(document["windows"][window]["limit_usd"])
+
+    def test_zero_monthly_limit_from_the_environment_is_refused(self):
+        self.fixture()
+        code, out = self.run_cli(["--source", "ledger"], env={"MU_GO_MONTHLY_LIMIT": "0"})
+        self.assertEqual(code, 1)
+        self.assertIn("invalid monthly limit: 0", out)
+
+    def test_negative_monthly_limit_never_prints_negative_percentages(self):
+        self.fixture()
+        code, out = self.run_cli(["--source", "ledger", "--monthly-limit", "-5"])
+        self.assertEqual(code, 1)
+        self.assertIn("invalid monthly limit: -5", out)
+        self.assertNotIn("-25%", out)
+        self.assertNotIn("$-", out)
+
     def test_cli_prints_dollars_for_the_ledger(self):
         self.fixture()
         code, out = self.run_cli(["--source", "ledger"])
