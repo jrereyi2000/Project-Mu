@@ -34,6 +34,7 @@ ROOT = Path(__file__).resolve().parents[2]
 MAX_STEPS_CAP = 200                 # section 2.2/2.3
 MAX_MINUTES_CAP = 45
 MAX_KEY_TIMES = 10
+MAX_SPACE_LIMIT = 20                # an allow_space entry is also bounded by max_steps
 MAX_RECORD_S = 30                   # the driver's own record caps (win_agent.MAX_RECORD_*)
 MAX_RECORD_FPS = 10
 TICKER_BAND = 0.08                  # the bottom 8% of the frame is the News Center ticker
@@ -81,6 +82,23 @@ class AllowConfirm:
 
 
 @dataclass(frozen=True)
+class AllowSpace:
+    """One ``allow_space`` entry: Space on a frame holding ``words`` and none of ``not_words``.
+
+    In-game screens carry no OCR option labels (a pregame or gameplay frame shows hints, not a
+    border on a named button), so ``spike-confirm`` cannot press Space there. A brief that needs
+    to advance such a screen says which words identify it; ``limit`` bounds how many presses one
+    entry may make in a run (JR, 2026-11-12).
+    """
+    words: tuple[str, ...] = ()
+    not_words: tuple[str, ...] = ()
+    limit: int = 1
+
+    def key(self) -> str:
+        return "|".join(norm(word) for word in self.words) or "(empty)"
+
+
+@dataclass(frozen=True)
 class Brief:
     id: str
     from_: str
@@ -97,6 +115,7 @@ class Brief:
     launch: str
     checks: tuple[dict, ...]
     checkpoints: tuple[dict, ...]
+    allow_space: tuple[AllowSpace, ...] = ()
 
 
 # --------------------------------------------------------------------------- brief
@@ -206,6 +225,38 @@ def _checkpoints(value, check_names: set[str]) -> tuple[dict, ...]:
     return tuple(points)
 
 
+def _space_entries(value) -> tuple[AllowSpace, ...]:
+    """Parse ``allow_space``: a list of ``{"on_words", "not_words", "limit"}`` objects."""
+    if value is None:
+        return ()
+    if not isinstance(value, list):
+        raise BriefError("allow_space", "must be a list")
+    entries = []
+    for index, item in enumerate(value):
+        if not isinstance(item, dict):
+            raise BriefError("allow_space", f"entry {index} must be an object")
+        words = item.get("on_words")
+        if isinstance(words, str):
+            words = [words]
+        if not isinstance(words, (list, tuple)) or not words or any(not isinstance(w, str) or not w.strip()
+                                                                   for w in words):
+            raise BriefError("allow_space", f"entry {index} needs a non-empty on_words list")
+        not_words = item.get("not_words")
+        if not_words is None:
+            not_words = []
+        if isinstance(not_words, str):
+            not_words = [not_words]
+        if not isinstance(not_words, (list, tuple)) or any(not isinstance(w, str) for w in not_words):
+            raise BriefError("allow_space", f"entry {index} not_words must be a list of strings")
+        limit = item.get("limit", 1)
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= MAX_SPACE_LIMIT:
+            raise BriefError("allow_space", f"entry {index} limit must be an integer in 1..{MAX_SPACE_LIMIT}")
+        entries.append(AllowSpace(tuple(str(w).strip() for w in words),
+                                  tuple(str(w).strip() for w in not_words if str(w).strip()),
+                                  limit))
+    return tuple(entries)
+
+
 def load_brief(path) -> Brief:
     """Read and validate one brief; raises ``BriefError`` naming the field (section 2.2)."""
     target = Path(path)
@@ -275,6 +326,7 @@ def load_brief(path) -> Brief:
         pack=pack.strip(), save=save, start=start, allow_confirm=allow_confirm,
         allow_keys=allow_keys, max_steps=max_steps, max_minutes=max_minutes, record=record,
         launch=launch, checks=checks, checkpoints=checkpoints,
+        allow_space=_space_entries(raw.get("allow_space")),
     )
 
 
@@ -522,6 +574,28 @@ class SpikeGuard:
         return self._result(ok=True)
 
     # ---------------------------------------------------------------- keys
+    def _space_allowed(self) -> str | None:
+        """None when a brief ``allow_space`` entry matches this frame and has presses left."""
+        if not self.brief.allow_space:
+            return "space is not allowed by this brief (add an allow_space entry)"
+        frame = self.pilot.frame
+        used = self.state.setdefault("space_presses", {})
+        seen = []
+        for entry in self.brief.allow_space:
+            if not all(frame.has(word) for word in entry.words):
+                seen.append(f"{list(entry.words)} (missing a word)")
+                continue
+            blocked = next((word for word in entry.not_words if frame.has(word)), None)
+            if blocked:
+                seen.append(f"{list(entry.words)} (frame holds {blocked!r})")
+                continue
+            if used.get(entry.key(), 0) >= entry.limit:
+                seen.append(f"{list(entry.words)} (limit {entry.limit} reached)")
+                continue
+            used[entry.key()] = used.get(entry.key(), 0) + 1
+            return None
+        return "no allow_space entry matches this frame: " + "; ".join(seen)
+
     def key(self, name, times=1, hold=0.08, describe: bool = False) -> dict:
         blocked = self._blocked()
         if blocked:
@@ -532,7 +606,20 @@ class SpikeGuard:
         if key not in KNOWN_KEYS:
             return self._result(ok=False, refused=f"{name!r} is not a driver key")
         if key in ("space", "enter"):
-            return self._result(ok=False, refused="Space and Enter are pressed only by spike-confirm")
+            if key == "enter":
+                return self._result(ok=False, refused="Enter is not pressable from a spike; Space "
+                                                       "is pressed by spike-confirm or allow_space")
+            if self.pilot.screen is None:
+                looked = self._look_once(describe=describe)
+                if not looked["ok"]:
+                    return looked
+            reason = self._space_allowed()
+            if reason:
+                return self._result(ok=False, refused=reason)
+            times = 1                       # one look, one press: never a blind burst
+            allowed_once = True
+        else:
+            allowed_once = False
         if self.pilot.screen is None:
             looked = self._look_once(describe=describe)
             if not looked["ok"]:
@@ -541,7 +628,7 @@ class SpikeGuard:
         banned = {str(k).lower() for k in spec.get("forbidden_keys", [])}
         if key in banned:
             return self._result(ok=False, refused=f"{key!r} is forbidden on {self.pilot.screen}")
-        if key not in ALWAYS_KEYS:
+        if key not in ALWAYS_KEYS and not allowed_once:
             entry = next((e for e in self.brief.allow_keys if norm(e.label).lower() == key), None)
             if entry is None:
                 return self._result(ok=False, refused=f"{key!r} is not in the brief's allow_keys")
@@ -564,7 +651,10 @@ class SpikeGuard:
             self._set_stopped("cap")
             return self._result(ok=False, refused=f"the step cap ({self.brief.max_steps}) would be passed")
         try:
-            self.pilot.press(key, times=times, hold=hold)
+            if allowed_once:
+                self.pilot.press("select", hold=hold, _confirm=True)
+            else:
+                self.pilot.press(key, times=times, hold=hold)
         except PilotStop as exc:
             return self._pilot_stop(exc)
         self.state["steps"] = self.steps + times

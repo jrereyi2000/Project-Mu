@@ -842,3 +842,60 @@ def test_spike_exit_codes():
     assert cli._spike_exit({"ok": True, "screen": "UNKNOWN"}) == 2
     assert cli._spike_exit({"ok": True, "screen": "FRANCHISE_LIST", "stopped": "cap"}) == 1
     assert cli._spike_exit({"ok": True, "screen": "FRANCHISE_LIST", "stopped": "ended"}) == 0
+
+
+# --------------------------------------------------------------------------- allow_space
+def test_allow_space_entry_needs_words_and_a_bounded_limit(tmp_path):
+    with pytest.raises(spike.BriefError) as exc:
+        brief_of(tmp_path, allow_space=[{"limit": 2}])
+    assert exc.value.field == "allow_space"
+    with pytest.raises(spike.BriefError):
+        brief_of(tmp_path, allow_space=[{"on_words": ["JUMP FORWARD"], "limit": 0}])
+    with pytest.raises(spike.BriefError):
+        brief_of(tmp_path, allow_space=[{"on_words": ["JUMP FORWARD"], "limit": 99}])
+    brief = brief_of(tmp_path, allow_space=[{"on_words": ["JUMP FORWARD"], "not_words": ["TRADE"],
+                                             "limit": 2}])
+    assert brief.allow_space[0].words == ("JUMP FORWARD",)
+    assert brief.allow_space[0].not_words == ("TRADE",)
+    assert brief.allow_space[0].limit == 2
+
+
+def test_space_is_pressed_only_on_an_allow_space_frame_and_only_to_its_limit(tmp_path):
+    """An in-game frame carries no OCR label; the brief's own words stand in for the border."""
+    brief = brief_of(tmp_path, start="HUB_WEEKLY",
+                     allow_space=[{"on_words": ["JUMP FORWARD"], "limit": 2}])
+    frame = frame_with_lines(tmp_path, ["JUMP FORWARD", "NEXT QUARTER", "END OF GAME"])
+    pilot = FakePilot(screen="UNKNOWN", frame=frame)
+    guard = make_guard(tmp_path, brief, pilot)
+
+    assert guard.key("space")["ok"] is True
+    assert pilot.keys[-1] == ("select", 1, True)          # Space, once, as a checked select
+    assert guard.key("space")["ok"] is True
+    third = guard.key("space")
+    assert third["ok"] is False and "allow_space" in third["refused"]
+    assert len([key for key in pilot.keys if key[0] == "select"]) == 2
+
+
+def test_allow_space_does_not_match_another_frame_or_a_naughty_word(tmp_path):
+    brief = brief_of(tmp_path, start="HUB_WEEKLY",
+                     allow_space=[{"on_words": ["JUMP FORWARD"], "not_words": ["TRADE"],
+                                   "limit": 3}])
+    other = FakePilot(screen="UNKNOWN", frame=frame_with_lines(tmp_path, ["ROSTER", "OVERALL"]))
+    refused = make_guard(tmp_path, brief, other).key("space")
+    assert refused["ok"] is False and "no allow_space entry matches" in refused["refused"]
+    assert not other.keys
+
+    guarded = FakePilot(screen="UNKNOWN",
+                        frame=frame_with_lines(tmp_path, ["JUMP FORWARD", "TRADE PLAYER"]))
+    blocked = make_guard(tmp_path, brief, guarded).key("space")
+    assert blocked["ok"] is False and "TRADE" in blocked["refused"]
+    assert not guarded.keys
+
+
+def test_space_is_refused_with_no_allow_space_entry_and_enter_stays_refused(tmp_path):
+    brief = brief_of(tmp_path, start="HUB_WEEKLY")
+    pilot = FakePilot(screen="UNKNOWN", frame=frame_with_lines(tmp_path, ["JUMP FORWARD"]))
+    guard = make_guard(tmp_path, brief, pilot)
+    assert guard.key("space")["ok"] is False
+    assert guard.key("enter")["ok"] is False
+    assert not pilot.keys
