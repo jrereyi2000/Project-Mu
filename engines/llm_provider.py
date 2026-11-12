@@ -146,6 +146,14 @@ def resolve_provider(
         if val in ("gemini", "ollama", "go"):
             return val
 
+    # A bare id OpenCode Go serves (`glm-5.3-flash`, `muse-spark-1.3-contributor`, …) is a Go call, never a
+    # Gemini one: sending it to Google's endpoint answers 404 (AUDIT_QUEUE_INVENTORY.md R11). Non-Go ids keep
+    # their old answer below, and an Ollama tag (`qwen2.5:14b`) is left to its own provider.
+    if model and ":" not in model.strip():
+        from newsroom.tool_loop.go_transport import is_go_model
+        if is_go_model(model):
+            return "go"
+
     return "gemini"
 
 
@@ -360,16 +368,19 @@ def call_gemini(
 _GO_CLIENT: Any = None
 
 
-def get_go_client(api_key: Optional[str] = None) -> Any:
+def get_go_client() -> Any:
     """The process's OpenCode Go client, built once by `go_transport.go_client()`.
 
-    Raises the transport's `ValueError` (`OPENCODE_GO_API_KEY is not set`) when no Go key is
-    configured: a Go call never falls back to a Gemini key or a Gemini answer.
+    The client is authenticated by `OPENCODE_GO_API_KEY` alone (AUDIT R6 F1): a caller's `api_key` is never
+    forwarded here, so a Gemini key can neither authenticate a Go call nor be cached as the Go client's
+    credential for the rest of the process. Raises the transport's `ValueError`
+    (`OPENCODE_GO_API_KEY is not set`) before any client is built or any network call is made: a Go call never
+    falls back to a Gemini key or a Gemini answer.
     """
     global _GO_CLIENT
     if _GO_CLIENT is None:
         from newsroom.tool_loop.go_transport import go_client
-        _GO_CLIENT = go_client(api_key=api_key)
+        _GO_CLIENT = go_client()
     return _GO_CLIENT
 
 
@@ -389,6 +400,8 @@ def call_go(
 
     Same shape as `call_gemini`: returns (text, usage_dict, resp). The client is the one
     `go_transport.go_client()` builds, unless a caller injects one (tests, comparisons).
+    `api_key` is accepted for signature compatibility and ignored: a Go call is authenticated by
+    `OPENCODE_GO_API_KEY` only, so a forwarded Gemini key can never reach Go (AUDIT R6 F1).
     """
     from db.llm_usage import _usage
 
@@ -407,7 +420,7 @@ def call_go(
         response_mime_type=response_mime_type,
     )
 
-    c = client if client is not None else get_go_client(api_key=api_key)
+    c = client if client is not None else get_go_client()
     resp = c.models.generate_content(model=clean_model, contents=prompt, config=config)
     usage = _usage(resp)
     return (resp.text or "").strip(), usage, resp
@@ -418,8 +431,10 @@ class GoText:
 
     The Go sibling of `engines.gm_llm.GeminiText`, with the same `.model`, `.label`, callable,
     `.flush()` and `.meter` interface, so `make_llm`, press and the inbox need no signature change.
-    The client is the shared per-process one from `newsroom/tool_loop/go_transport.go_client()`;
-    a missing key raises its `ValueError` instead of falling back to Gemini.
+    The client is the shared per-process one from `newsroom/tool_loop/go_transport.go_client()`, authenticated by
+    `OPENCODE_GO_API_KEY` only (AUDIT R6 F1: the `key` argument is kept for signature compatibility and ignored,
+    so a caller's Gemini key never becomes the Go client's credential); a missing key raises its `ValueError`
+    instead of falling back to Gemini.
     """
 
     def __init__(self, key=None, label="", model=None, temperature=0.7, thinking_level=None, client=None):
@@ -437,7 +452,7 @@ class GoText:
             thinking_level=self.thinking_level,
             temperature=temperature,
         )
-        self.client = client if client is not None else get_go_client(api_key=key)
+        self.client = client if client is not None else get_go_client()
         self.meter = UsageMeter(self.client)
 
     def __call__(self, prompt):

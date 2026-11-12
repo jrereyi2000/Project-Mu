@@ -786,10 +786,36 @@ class TestToolLoopRouter(unittest.TestCase):
         self.assertEqual(resolve_tool_loop_provider(model="ollama:qwen2.5:14b"), "ollama")
         self.assertEqual(resolve_tool_loop_provider(model="gemini-3.8-flash"), "gemini")
         self.assertEqual(resolve_tool_loop_provider(model="glm-4-plus"), "glm")
+        # A bare id OpenCode Go serves is Go, never Gemini (AUDIT_QUEUE_INVENTORY.md R11):
+        # the `glm`/`deepseek` substring whitelist missed every other Go family.
+        self.assertEqual(resolve_tool_loop_provider(model="muse-spark-1.3-contributor"), "opencode-go")
+        self.assertEqual(resolve_tool_loop_provider(model="glm-5.3-flash"), "glm")
+        self.assertEqual(resolve_tool_loop_provider(model="qwen2.5:14b"), "ollama")   # an Ollama tag stays Ollama
 
         # Unsupported
         with self.assertRaises(ValueError):
             resolve_tool_loop_provider("anthropic_bedrock")
+
+    def test_the_gemini_loop_routes_a_go_model_to_the_go_client(self):
+        """AUDIT_QUEUE_INVENTORY.md R11: a Go id on the Gemini AFC loop never reaches Google's endpoint."""
+
+        with mock.patch("newsroom.tool_loop.go_transport.go_client",
+                        side_effect=ValueError("OPENCODE_GO_API_KEY is not set")) as go_client, \
+                mock.patch("google.genai.Client", side_effect=AssertionError("a Gemini client was built")) as gemini:
+            result = run_gemini_tool_loop(None, "muse-spark-1.3-contributor", "sys", "prompt", [])
+
+        go_client.assert_called_once()
+        gemini.assert_not_called()
+        self.assertIn("OPENCODE_GO_API_KEY", result.error)
+
+    def test_the_gemini_loop_still_needs_its_gemini_key(self):
+        with mock.patch.dict(os.environ, {}, clear=True), \
+                mock.patch("pipeline.notify.env", lambda name: None), \
+                mock.patch("newsroom.tool_loop.go_transport.go_client") as go_client:
+            result = run_gemini_tool_loop(None, "gemini-3.8-flash", "sys", "prompt", [])
+
+        go_client.assert_not_called()
+        self.assertEqual(result.error, "missing GEMINI_API_KEY")
 
     @mock.patch("newsroom.tool_loop.router.run_gemini_tool_loop")
     @mock.patch("newsroom.tool_loop.router.run_openai_tool_loop")

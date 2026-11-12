@@ -81,3 +81,25 @@ def go_client(api_key: str | None = None, session: str | None = None):
             headers={"x-opencode-session": session or _env(SESSION_ENV) or go_session_id()},
         ),
     )
+
+
+def client_for_model(model: str, api_key: str | None = None, go_key: str | None = None,
+                     session: str | None = None):
+    """The one client a model id runs on: OpenCode Go's for a Go id, Google's for a Gemini id.
+
+    The shared factory for every `google-genai` site (AUDIT_QUEUE_INVENTORY.md R11): a Go model id
+    (`glm-5.3-flash`, `muse-spark-1.3-contributor`, …) can no longer be sent to Google's endpoint, and a
+    Gemini-only site no longer has to require `GEMINI_API_KEY` to run a Go model.
+
+    `api_key` is a **Gemini** key and `go_key` an **OpenCode Go** key. They are never interchangeable: a Gemini
+    key forwarded by mistake can neither authenticate a Go call nor become the Go client's credential
+    (AUDIT R6 F1). Without a Go key this raises `ValueError("OPENCODE_GO_API_KEY is not set")`; without a Gemini
+    key, `RuntimeError("GEMINI_API_KEY is not set")`. Either way it fails loudly, never to the other provider.
+    """
+    if is_go_model(model):
+        return go_client(api_key=go_key, session=session)
+    key = api_key or _env("GEMINI_API_KEY") or _env("GOOGLE_API_KEY")
+    if not key:
+        raise RuntimeError("GEMINI_API_KEY is not set")
+    from google import genai
+    return genai.Client(api_key=key)
