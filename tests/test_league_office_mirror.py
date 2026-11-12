@@ -457,6 +457,9 @@ def test_r4_a_promoting_trade_gets_the_new_deal_and_its_cap_salary():
     doc, _ = p.finalize()
     promoted = doc["trade"][0]["lists"][0]
     assert promoted["pgid"] == 6 and promoted["list"] == "Roster"
+    # The virtual status is canonical, not the native list name (audit-5 N1): every Signed reader, the real-chart
+    # filter included, must see the promoted man as active. The writer payload above keeps the list name "Roster".
+    assert p.roster_status(6) == ("Signed", 0)
     assert promoted["contract"]["Length"] == 4
     assert next(x for x in doc["players"] if x["pgid"] == 6)["set"]["PLYR_CAPSALARY"] == \
         lo._clamp(lo.block_hit(promoted["contract"], 0), lo.CAPSALARY_RANGE)
@@ -1231,6 +1234,7 @@ def test_r3_r4_actual_save_lists_and_trades_both_directions(tmp_path, mubase_sna
     assert doc["lists"] == [{"pgid": promote["pgid"], "team_index": promote["team_index"], "list": "Roster",
                              "contract": p.list_changes[0]["block"]}]
     assert "release" not in doc and "sign" not in doc
+    assert p.roster_status(promote["pgid"]) == ("Signed", promote["team_index"])   # same-team control
     out = tmp_path / "promote.save"
     after_snap, log = _write_read(base, doc, out)
     assert "list changes: 1 (1 promoted, 0 demoted)" in log
@@ -1276,6 +1280,17 @@ def test_r3_r4_actual_save_lists_and_trades_both_directions(tmp_path, mubase_sna
     assert doc["trade"][0]["lists"] == [{"pgid": promote["pgid"], "list": "Roster",
                                          "contract": p.trade_lists[promote["pgid"]]["contract"]}]
     assert [t["kind"] for t in p.db["mirror"]["transactions"]] == ["TRADE"]
+    # audit-5 N1: the plan's virtual status is canonical Signed, not the native list name, so the real-chart filter
+    # (league_office_mirror.py:199) places the promoted starter in this same write's chart. The card here mirrors the
+    # helper's RealWeek card (same gsis) with a first WR slot on the destination team.
+    assert p.roster_status(promote["pgid"]) == ("Signed", destination)
+    gsis = "00-U18-trade-promote"
+    code = _team_code(lom._team_codes(snap), destination)
+    chart_mirror = make_mirror(codes={destination: code}, links={gsis: promote["pgid"]},
+                               real=types.SimpleNamespace(season=2026, week=3, depth={code: {"WR": [gsis]}}))
+    adapter = lom.MirrorAdapter()
+    adapter.bind(chart_mirror, p)
+    assert adapter.chart_override(destination) == {"WR": [promote["pgid"]]}
     out = tmp_path / "trade-promote.save"
     after_snap, _ = _write_read(base, doc, out)
     row = next(x for x in after_snap["players"] if x["pgid"] == promote["pgid"])
@@ -1297,6 +1312,7 @@ def test_r3_r4_actual_save_lists_and_trades_both_directions(tmp_path, mubase_sna
                                                               label="trade-demote")
     assert [o["kind"] for o in result.ops] == ["trade"]
     assert doc["trade"][0]["lists"] == [{"pgid": demote["pgid"], "list": "PracticeSquad", "contract": None}]
+    assert p.roster_status(demote["pgid"]) == ("PracticeSquad", destination)   # a demotion is never Signed
     out = tmp_path / "trade-demote.save"
     after_snap, _ = _write_read(base, doc, out)
     row = next(x for x in after_snap["players"] if x["pgid"] == demote["pgid"])
@@ -1319,6 +1335,7 @@ def test_r3_r4_actual_save_lists_and_trades_both_directions(tmp_path, mubase_sna
                                                               label="trade-control")
     assert [o["kind"] for o in result.ops] == ["trade"] and "lists" not in doc["trade"][0]
     assert p.trade_lists == {}
+    assert p.roster_status(control["pgid"]) == ("Signed", destination)   # unchanged-list trade keeps its status
     out = tmp_path / "trade-control.save"
     after_snap, _ = _write_read(base, doc, out)
     row = next(x for x in after_snap["players"] if x["pgid"] == control["pgid"])

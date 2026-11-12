@@ -773,7 +773,10 @@ class Plan:
                     for i, v in enumerate(delta):
                         self.trade_cap_db[idx][i] += v
         self.trades.append((team, to_index, pgid))
-        self.view[pgid] = ("Roster" if lst == "Roster" else "PracticeSquad" if lst == "PracticeSquad" else status,
+        # Canonical status, never the native list name: a Roster promotion is Signed (audit-5 N1). The mirror's real
+        # chart filter and every other Signed reader trust `view`, so writing the literal "Roster" here left a promoted
+        # starter off the same write's chart even though the writer puts him on the active list.
+        self.view[pgid] = ("Signed" if lst == "Roster" else "PracticeSquad" if lst == "PracticeSquad" else status,
                            to_index)
         self.counts["trade"] += 1
         return self.note(tag, True, reason)
