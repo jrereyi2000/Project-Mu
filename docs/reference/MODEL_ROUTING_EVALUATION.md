@@ -8,12 +8,12 @@
 ## 1. Bottom line
 
 1. **No. The better models do not fit the newsroom's allowance — by 20× to 33×.** Kimi K3, Kimi K3.1 Pro, GLM-5.3, GLM-5.2, Grok 4.7, Qwen3.8 Max and Gemini 4 Argon all score far above Gemini 3.8 Flash on EQ-Bench, and all have a **$15–$30 monthly Go limit**. At Mu's current newsroom volume that allowance buys **2–8 articles a month**, not a week's slate. Go Plus ($40) does not close the gap either (Kimi K3 $60 buys ~10).
-2. **The models that do fit are mostly not better, and the one that is has a privacy string.** Only three Go models cover the whole desk at Go's $10 tier: **GLM-5.3-Flash** (~$29/mo of a $60 limit), **Muse Spark 1.3 Contributor** (~$10/mo of $60) and **DeepSeek V4.1 Flash** (~$18–36/mo of $100). Of those, DeepSeek V4.1 Flash scores *worse* than Gemini 3.8 Flash on both creative benchmarks; GLM-5.3-Flash is **unscored**; Muse Spark 1.3 scores **best of any Go model that fits** (longform 82.8 vs Gemini's 76.8) but its discounted price is paid for by **training on JR's prompts and completions**.
+2. **The models that do fit are mostly not better — except one, and JR has cleared its condition.** Only three Go models cover the whole desk at Go's $10 tier: **GLM-5.3-Flash** (~$29/mo of a $60 limit), **Muse Spark 1.3 Contributor** (~$10/mo of $60) and **DeepSeek V4.1 Flash** (~$18–36/mo of $100). DeepSeek V4.1 Flash scores *worse* than Gemini 3.8 Flash on both creative benchmarks and GLM-5.3-Flash is **unscored**. **Muse Spark 1.3 scores above Gemini on both** (longform 82.8 vs 76.8, Elo 1906.9 vs 1744.4) at 17% of its limit; its discounted price is paid for by training on prompts and completions, **which JR accepted on 2026-11-12** (D2). It is therefore the leading candidate, not a caveat.
 3. **Cash, not the allowance, is the real constraint.** Allowing Go's Extra Usage (list-priced, from Console credit) would let GLM-5.3 write the whole desk for ~**$260/mo** or Kimi K3 for ~**$500/mo**, against **~$125/mo** for Gemini 3.8 Flash today. That is a 2.1× or 4× bill for +5.0 or +2.8 longform points. Whether that is worth it is JR's call, not a capacity question.
-4. **The "free decision models" do not exist as described.** There is no `gemini-decision-1` in either catalogue (30 Go models, 37 Zen models, read live). The free Go models are **Beam Free, Iceman Contributor Free and LongCat 2.5 Free** — unlimited allowance, usable from our own client (correcting the earlier note that free models are OpenCode-only), but unscored, and **Iceman trains on request data**. In Mu the model does not decide anyway: the policy decides and the model speaks (§2.21b), so a "decision model" is a voice/judging model, not a decision-maker.
+4. **The "decision models" are not reachable from here.** `gemini-decision-1` and `jev-1.13-free` are **not in any catalogue this repo can read** — not the 30-model Go list, not the 41-model Zen list, not OpenCode's 40-entry Go registry in `models.dev`, and not served by the Go endpoint (they answer `400 Model is unavailable`, the same as any unknown id). What *is* real: the free Go models **Beam Free, Iceman Contributor Free and LongCat 2.5 Free** (unlimited allowance, callable from our own client, tool calls working), and a class of **TUI-only gated ids** that OpenCode lists but the API refuses (§7.4). In Mu the model does not decide anyway: the policy decides and the model speaks (§2.21b), so a "decision model" would be a voice/judging model, not a decision-maker.
 5. **The switch is cheap technically, and one spike made it cheaper.** Go translates every text model through a **Google-compatible endpoint**, and all 12 models I probed returned a correct `functionCall` with arguments through it. The newsroom's Gemini AFC loop could point at Go with a base URL and a model id instead of the hand-written OpenAI port `docs/done/OPENCODE_GO_PIPELINE_PLAN.md` assumed.
 
-**Recommendation:** do not switch the desk on benchmark scores alone. Run one judged side-by-side week (GLM-5.3-Flash, Muse Spark 1.3, Gemini 3.8 Flash on the same slate and prompts) before any change; decide the Muse privacy question separately; keep GLM-5.3/Kimi K3 for a small flagship slice only if the side-by-side shows Gemini is the limiting factor. §8 has the shape and the costs.
+**Recommendation:** run one judged side-by-side week with **Muse Spark 1.3 Contributor** as the candidate, since it is the only model that both fits the allowance and scores above Gemini 3.8 Flash, and JR has cleared the training condition. Keep **GLM-5.3-Flash** in the same test as the no-training fallback. If Muse wins, the desk moves to ~$10/mo inside its own allowance and the Gemini bill disappears; GLM-5.3 or Kimi K3 stay as a flagship-slice option only. §8 has the shape and the costs.
 
 ---
 
@@ -139,15 +139,27 @@ What this says, plainly:
 - **DeepSeek V4.1 Flash would be a downgrade for prose.** It is the cheapest sensible model on Go and the right choice for structured/decision calls, not for a 192-voice newsroom.
 - **Two things benchmarks don't measure here:** whether a model can hold a persona across a 50-call tool loop without inventing numbers (Mu's own bar), and whether it follows the article's structure directive. Both are exactly what a side-by-side week tests.
 
-**Privacy, separately:** Muse Spark 1.3/1.2 Contributor and Iceman Free are the only Go models that train on prompts; Muse also needs "Allow paid endpoints that train on request data" enabled and is limited to Meta's permitted regions. LongCat 2.5 Free is China-hosted and needs Global regions. Everything else in the table is "not used, 0-day retention". DeepSeek V4.1 Flash's ZDR agreement expires 2026-11-30 and is renewed monthly.
+**Privacy, separately:** Muse Spark 1.3/1.2 Contributor and Iceman Free are the only Go models that train on prompts; Muse also needs "Allow paid endpoints that train on request data" enabled and is limited to Meta's permitted regions. **JR accepted the Muse training term on 2026-11-12 (D2), and the workspace already answers on `muse-spark-1.3-contributor` (HTTP 200, `x-opencode-session` set), so nothing blocks it.** LongCat 2.5 Free is China-hosted and needs Global regions. Everything else in the table is "not used, 0-day retention". DeepSeek V4.1 Flash's ZDR agreement expires 2026-11-30 and is renewed monthly.
 
 ---
 
 ## 7. The other half of the question
 
-### 7.1 "Decision models" — what actually exists
+### 7.1 "Decision models" — what is reachable from here
 
-- **No `gemini-decision-1`.** The live Go catalogue has 30 models and Zen has 37; neither has a model with "decision" in its id or name. If JR saw a card for one, it is worth a screenshot, because it is not in the API list this repo can reach.
+JR reports seeing **Gemini Decision 1** and **jev-1.13-free** in OpenCode. I could not reach either, and the way they are unreachable matters:
+
+| Probe (2026-11-12) | Result |
+| :--- | :--- |
+| Go model list `GET /inference/go/v1/models` | 30 ids, neither present |
+| Zen model list `GET /inference/v1/models` | 41 ids, neither present |
+| OpenCode's own registry (`models.dev`, 235 providers) | 40 Go ids, neither present; the only "decision engine" text in the registry is Model Oracle AI's *router* |
+| `POST /chat/completions` with `model: "gemini-decision-1"` / `"jev-1.13-free"` | `400 Model is unavailable` |
+
+That 400 is worth reading carefully: it is the **generic unknown/unserved-id error**, not a deprecation. `minimax-m2.7` answers a precise `410 ModelDeprecated … Use minimax-m3.1-flash` through the same endpoint, so Go distinguishes "retired" from "not served here". Both of JR's ids fall on the "not served to this key" side.
+
+- **The likely class is the TUI-only gated ids.** OpenCode's registry lists 40 Go models but the API serves 30; the extras — `gemini-4-argon-contributor`, `space-bunny`, `muse-spark-1.3-contributor-free`, `step-5-preview-free`, `minimax-m3.1-flash-free`, `hy3-free`, `cat-jam-free`, `crouton-alpha-free`, `ll-alpha-free` — all answer `400 Model is unavailable` to our `oc_sk_…` key, while their non-free siblings answer 200. If JR sees his two models in the OpenCode model picker, they are almost certainly in this class: **visible in the TUI, not callable from a pipeline client**. That is decisive for the newsroom — Mu could not use them even if they were the best models in the world.
+- **If they are callable another way, the API id is what settles it.** What I need from JR is where he sees them (TUI picker, Console page, or a specific workspace setting) and whether a chat in the TUI actually answers on them. If one does, the id and a screenshot are enough for me to re-probe; until then this doc cannot price or benchmark them.
 - The real "decision model" family is **Liquid LFM3's d1-2B** (~2B, returns calibrated answers rather than text), which `docs/OPEN_MODEL_RESEARCH.md` §3.1 already flagged for beside-Madden work. It is a local model, not a Go one.
 - **Free Go models are real and callable.** I called `beam-free`, `iceman-contributor-free` and `longcat-2.5-free` from our own client through the Go endpoint: HTTP 200, `billing_source: "go"`, `allowance: 0`, `list_cost: 0`. This corrects the pipeline plan's S7 note (that was the *Zen* free tier, not Go). All three returned a correct tool call in §7.3's probe.
 - **But "free" is not "better".** None of the three has a creative-writing score; LongCat's family scored 35–47 longform, Iceman trains on data, LongCat 2.5 is China-hosted, and all three are "limited time". They are candidates for *cheap* work (classification, a first-pass summary), not for a persona's voice.
@@ -171,36 +183,47 @@ Consequence: a newsroom switch is **`base_url` + model id + a session header** i
 
 ## 8. Recommendation
 
-**Do not switch on benchmark scores.** Do this in order:
+Muse Spark 1.3 Contributor is now the target: it is the only Go model that both fits the desk's allowance and scores above Gemini 3.8 Flash, and D2 (the training term) is settled. Do this in order:
 
 1. **Re-measure** (one SQL query, §2). Everything below is priced off a 6-day October sample.
-2. **One judged side-by-side week, no production change** — the existing `tools/social_model_compare.py` / `tools/llm_compare.py` pattern: take a finished week's slate, re-run the same prompts and the same tool set through `gemini-3.8-flash`, `glm-5.3-flash` and `muse-spark-1.3-contributor` (via Go's Google endpoint), and judge on Mu's own bar — voice fidelity to the 192 personas, no invented numbers against `fact_sheet`, structure-directive compliance, tool-loop completion, slop. Cost: one week of the desk re-run three times ≈ **$10–15** at Go prices, plus a judge.
-3. **Decide the Muse privacy question separately.** If JR is willing to let Meta train on newsroom prompts, Muse Spark 1.3 is the strongest model that fits the allowance by a wide margin, and it would also cover the whole desk at 17% of its limit. If not, the only fitting candidate is GLM-5.3-Flash.
-4. **Only then** consider the flagship slice. With **Extra Usage on**, send the Hero slot and 2–3 marquee slots (≈16–24 articles/mo) to **GLM-5.3** for ~**$53–79/mo**, and keep the bulk on whichever model wins step 2. That is the one configuration where a demonstrably better writer costs single-digit dollars a week.
+2. **One judged side-by-side week, no production change** — the existing `tools/social_model_compare.py` / `tools/llm_compare.py` pattern: take a finished week's slate, re-run the same prompts and the same tool set through `gemini-3.8-flash`, `muse-spark-1.3-contributor` and `glm-5.3-flash` (via Go's Google endpoint), and judge on Mu's own bar — voice fidelity to the 192 personas, no invented numbers against `fact_sheet`, structure-directive compliance, tool-loop completion, slop. Cost: one week of the desk re-run three times ≈ **$10–15** at Go prices, plus a judge.
+3. **If Muse wins, switch the desk to it** (§8.1). That is a ~**$115/mo saving** against today's Gemini bill, inside a $60 allowance the desk would use at ~17%.
+4. **Keep a flagship slice as the stretch option, not the plan.** With **Extra Usage on**, send the Hero slot and 2–3 marquee slots (≈16–24 articles/mo) to **Kimi K3.1 Pro** (~$79–120/mo) or **GLM-5.3** (~$53–79/mo) and keep the bulk on Muse. Only worth it if the side-by-side shows Muse is the limiting factor on the big pieces.
 5. **For the short calls**, the cheapest real change is the same base-URL trick in `engines/llm_provider.py`: point `GeminiText` at Go with `deepseek-v4.1-flash` (or keep Gemini). It would cut ~$45/mo to ~$10 and needs thinking caps kept on. Do it only after step 2, because those calls are persona voices too.
 
 **Do not** move the desk to DeepSeek V4.1 Flash to "use the subscription": it is ~2.8 longform points and ~205 Elo *below* the model it replaces, on the one benchmark that measures this job.
 
 **Do not** plan around the free models for prose. They are unlimited and reachable, but unscored, one trains on data, one is China-hosted, and all three are temporary.
 
+### 8.1 What the Muse switch would look like (not built)
+
+- `newsroom/swarm_dispatcher.py`'s `genai.Client(api_key=…)` gains `base_url="https://opencode.ai/inference/go/google"` and a per-process `x-opencode-session` header; the model string becomes `muse-spark-1.3-contributor`.
+- The AFC tool loop stays as it is, except that its usage meter must read `usageMetadata.opencode.allowance` (the Go field) rather than assuming Gemini's pricing — `db/llm_usage` stores tokens only, so allowance goes to the existing `data/usage/go_allowance.jsonl` ledger that `newsroom/tool_loop/go_allowance.py` already writes.
+- Local `llm_usage.model` should keep the Go id so `tools/go_usage.py` and later audits can tell which model wrote which article.
+- The 50-call ceiling, the persona prompts and the review pass are unchanged. The one real risk is tool-loop reliability over the newsroom's ~40 real tools, which step 2 measures.
+- Muse Spark's vocabulary is narrower than Gemini's (EQ-Bench vocab complexity 12.42 vs 30.97) — it writes in plainer diction. That is a style decision for JR to hear in the side-by-side, not a defect to fix in code.
+
 ---
 
 ## 9. Decisions for JR
 
-| # | Question | Options |
+| # | Question | Status |
 | :--- | :--- | :--- |
-| D1 | Is a one-week judged side-by-side worth ~$15 and a day of work? | yes / no |
-| D2 | May newsroom prompts and article text go to a model that trains on them (Muse Spark 1.3)? | yes / no — if no, GLM-5.3-Flash is the only fitting candidate |
-| D3 | Is a 2.1× newsroom bill (~$260/mo) acceptable for GLM-5.3 quality, or a 4× bill (~$500/mo) for Kimi K3? | yes / no / flagship-slice only |
-| D4 | Should the short calls (agent_wire, memory, gm_*) move to Go independently of the desk? | yes / later / no |
-| D5 | Is "unlimited but temporary and unscored" acceptable for any production path? | which, if any |
+| D1 | Is a one-week judged side-by-side worth ~$15 and a day of work? | **open** — recommended |
+| D2 | May newsroom prompts and article text go to a model that trains on them (Muse Spark 1.3)? | **answered yes, 2026-11-12** — Muse is the leading candidate; GLM-5.3-Flash stays as the no-training fallback in the same test |
+| D3 | Is a 2.1× newsroom bill (~$260/mo) acceptable for GLM-5.3 quality, or a 4× bill (~$500/mo) for Kimi K3? | **open** — only matters as the flagship slice now that Muse fits |
+| D4 | Should the short calls (agent_wire, memory, gm_*) move to Go independently of the desk? | **open** |
+| D5 | Is "unlimited but temporary and unscored" acceptable for any production path? | **open** |
+| D6 | Where does JR see `gemini-decision-1` and `jev-1.13-free` (TUI picker, Console, a workspace setting)? A screenshot or the exact id would let me re-probe; both currently answer `400 Model is unavailable` to the pipeline key. | **open — needs JR** |
 
 ---
 
 ## 10. Sources
 
 - Console Go plan, limits, 5-hour/weekly shares, privacy table: `https://opencode.ai/docs/go` (read 2026-11-12)
-- Live model catalogue and prices: `GET https://opencode.ai/inference/go/v1/models` with the repo's `OPENCODE_GO_API_KEY`
+- Live model catalogue and prices: `GET https://opencode.ai/inference/go/v1/models` (30 ids) and `GET https://opencode.ai/inference/v1/models` (41 Zen ids) with the repo's `OPENCODE_GO_API_KEY`
+- OpenCode's own model registry: `https://models.dev/api.json` (235 providers, 40 ids for `opencode-go`), read 2026-11-12
+- Availability probes: `POST /inference/go/openai/v1/chat/completions` with `gemini-decision-1`, `jev-1.13-free`, `gemini-4-argon-contributor`, `muse-spark-1.3-contributor-free` (all `400 Model is unavailable`) against `muse-spark-1.3-contributor` (200) and `minimax-m2.7` (`410 ModelDeprecated`)
 - Live allowance: `GET https://opencode.ai/inference/go/v1/usage` (5h 5%, weekly 2%, month 1% at the time of writing)
 - EQ-Bench Creative Writing v3 leaderboard: `https://eqbench.com/creative_writing_chartdata.js` / `creative_writing.js` (embedded CSV, 146 models)
 - EQ-Bench Longform leaderboard: `https://eqbench.com/creative_writing_longform.js` (embedded CSV, 143 models)
