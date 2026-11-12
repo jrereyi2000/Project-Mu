@@ -4,7 +4,7 @@
     1. refuses anything but ``CAREER-TUNE-*`` (the same rule as ``sim-season``) and refuses while
        ``pipeline.watch_save`` runs, before touching anything;
     2. reads ``data/mod_checks/<mod>/segments.json`` and ``checks.json`` (``segments.load_plan``);
-    3. clones the save it was given into a fresh ``CAREER-TUNE-CHK<n>`` and scores *that* clone.
+    3. clones the save it was given into a fresh ``CAREER-TUNE-CHK<letter>`` and scores *that* clone.
        There is no ``--no-clone``: plan R1/D1 confirmed that quitting a game writes
        ``-AUTOSAVE``, so a check must never score the save JR is using. The clone callable is
        injectable; the default is ``default_clone``, the same file copy ``jobs.clone_save``
@@ -57,6 +57,22 @@ from tools.mod_check.segments import (
 
 CHK_PREFIX = "CAREER-TUNE-CHK"
 MAX_CHK = 99
+
+
+def clone_suffix(number: int) -> str:
+    """1 -> A, 26 -> Z, 27 -> AA.
+
+    Clone names carry letters, never digits: the pilot finds a franchise tile by reading its
+    name, and Windows OCR reads the digit 1 as I, so a ``CAREER-TUNE-CHK1`` tile was unfindable
+    on the PC (spike 20261112-1410, plan §2.5a).
+    """
+    if number < 1:
+        raise ValueError(f"a clone number starts at 1, not {number}")
+    letters = ""
+    while number:
+        number, rest = divmod(number - 1, 26)
+        letters = chr(ord("A") + rest) + letters
+    return letters
 FRAME_SUFFIXES = (".png", ".jpg", ".jpeg")
 CUE_TIMEOUT_S = 180.0
 DEFAULT_MARGIN = 0.05
@@ -111,7 +127,7 @@ def _rel(path: Path, base: Path) -> str:
 
 
 def default_clone(save: str, prefix: str = CHK_PREFIX, folder: str | Path | None = None) -> str:
-    """Copy ``save`` to the first free ``<prefix><n>`` (n from 1) and return that save's name.
+    """Copy ``save`` to the first free ``<prefix><letter>`` (A, B, ...) and return that save's name.
 
     This is ``jobs.clone_save``'s file copy without its capacity prune: a visual check records a
     few seconds of a game, it never advances a season, so the rows the prune frees are not
@@ -128,12 +144,12 @@ def default_clone(save: str, prefix: str = CHK_PREFIX, folder: str | Path | None
     existing = {p.name.upper() for p in saves.iterdir()} if saves.is_dir() else set()
     name = None
     for number in range(1, MAX_CHK + 1):
-        candidate = f"{prefix}{number}"
+        candidate = f"{prefix}{clone_suffix(number)}"
         if candidate.upper() not in existing:
             name = candidate
             break
     if name is None:
-        raise ValueError(f"no free {prefix}<n> name in {saves} (tried 1..{MAX_CHK})")
+        raise ValueError(f"no free {prefix}<letter> name in {saves} (tried A..{clone_suffix(MAX_CHK)})")
     destination = saves / name
     temp = saves / f".mu-mod-check-clone-{os.getpid()}.tmp"
     try:
@@ -300,7 +316,7 @@ def run(save: str, mod: str, segments: Sequence[str] | None = None, run_dir: str
         return _refused(f"could not clone {save}: {exc}", save=save, mod=plan.mod)
     if not valid_tune_save(scored) or scored.upper() == save.upper():
         return _refused(f"the clone callable returned {scored!r}; a run scores a fresh "
-                        f"{CHK_PREFIX}<n> save, never the one it was given", save=save, mod=plan.mod)
+                        f"{CHK_PREFIX}<letter> save, never the one it was given", save=save, mod=plan.mod)
 
     engine = check or assets.check_frame
     describer = describe or describe_segment

@@ -1,7 +1,7 @@
 """Visual mod check: segment plans, the synthetic run and the report (VISUAL_MOD_CHECK_PLAN U1).
 
 No PC, no database, no ntfy, no model: a fake driver writes Pillow frames, an injected clone
-hands back a CAREER-TUNE-CHK<n> name, and every refusal is checked against its message.
+hands back a CAREER-TUNE-CHK<letter> name, and every refusal is checked against its message.
 """
 import json
 from pathlib import Path
@@ -269,10 +269,10 @@ def test_default_clone_picks_the_first_free_chk_name(tmp_path):
     saves = tmp_path / "saves"
     saves.mkdir()
     (saves / "CAREER-TUNE-X").write_bytes(b"source")
-    (saves / "CAREER-TUNE-CHK1").write_bytes(b"old")
-    (saves / "career-tune-chk2").write_bytes(b"old")      # Windows is case-blind
+    (saves / "CAREER-TUNE-CHKA").write_bytes(b"old")
+    (saves / "career-tune-chkb").write_bytes(b"old")      # Windows is case-blind
     name = runner.default_clone("CAREER-TUNE-X", folder=saves)
-    assert name == "CAREER-TUNE-CHK3"
+    assert name == "CAREER-TUNE-CHKC"                    # letters, never digits: OCR reads 1 as I
     assert (saves / name).read_bytes() == b"source"
 
 
