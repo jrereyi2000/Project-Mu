@@ -70,9 +70,15 @@ def opencode_stub(tmp_path, monkeypatch, exports, listing=None):
     )
     monkeypatch.setenv("MU_OPENCODE_BIN", str(script))
     monkeypatch.setenv("MU_STUB_FIXTURES", str(fixtures))
+    # An empty ~/.claude/projects, so auto mode can't find this machine's own transcripts and
+    # pick Claude through the directory hint.
+    empty_projects = tmp_path / "projects-empty"
+    empty_projects.mkdir(exist_ok=True)
+    monkeypatch.setattr(cc, "PROJECTS", empty_projects)
     monkeypatch.delenv("MU_OPENCODE_SESSION", raising=False)
     monkeypatch.delenv("MU_AGENT_HARNESS", raising=False)
     monkeypatch.delenv("CLAUDE_CODE_SESSION_ID", raising=False)
+    monkeypatch.delenv("CLAUDECODE", raising=False)
     return script
 
 
@@ -310,3 +316,125 @@ def test_harness_env_selects_opencode_without_a_named_session(tmp_path, monkeypa
     assert result["tokens"] == 2_000
     assert result["source"] == "opencode ses_env"
     assert "warning:" in captured.err
+
+
+# --- auto must not hijack a Claude Code session (R3 F1) ----------------------------------------
+
+
+def claude_project(tmp_path, monkeypatch, session_id, tokens):
+    projects = tmp_path / "projects"
+    (projects / "-home-x").mkdir(parents=True)
+    path = write_transcript(
+        projects / "-home-x" / f"{session_id}.jsonl",
+        entry("assistant", {"input_tokens": tokens}),
+    )
+    monkeypatch.setattr(cc, "PROJECTS", projects)
+    return path
+
+
+def test_auto_prefers_a_claude_code_session_over_an_opencode_binary(tmp_path, monkeypatch, capsys):
+    opencode_stub(
+        tmp_path,
+        monkeypatch,
+        {"ses_other": {"messages": [assistant(input=99_999)]}},
+        listing=[{"id": "ses_other"}],
+    )
+    transcript = claude_project(tmp_path, monkeypatch, "claude-sid-123", 111)
+    monkeypatch.setenv("CLAUDE_CODE_SESSION_ID", "claude-sid-123")
+
+    assert cc.main(["--json"]) == 0
+    captured = capsys.readouterr()
+    result = json.loads(captured.out)
+    assert result["harness"] == "claude"
+    assert result["tokens"] == 111
+    assert result["source"] == str(transcript)
+    assert captured.err == ""
+
+
+def test_auto_uses_this_directories_transcript_without_a_session_id(tmp_path, monkeypatch, capsys):
+    opencode_stub(
+        tmp_path,
+        monkeypatch,
+        {"ses_other": {"messages": [assistant(input=99_999)]}},
+        listing=[{"id": "ses_other"}],
+    )
+    projects = tmp_path / "projects"
+    slug = re.sub(r"[^A-Za-z0-9]", "-", str(Path.cwd().resolve()))
+    (projects / slug).mkdir(parents=True)
+    transcript = write_transcript(
+        projects / slug / "cwd.jsonl", entry("assistant", {"input_tokens": 222})
+    )
+    monkeypatch.setattr(cc, "PROJECTS", projects)
+    monkeypatch.setenv("CLAUDECODE", "1")
+
+    assert cc.main(["--json"]) == 0
+    captured = capsys.readouterr()
+    result = json.loads(captured.out)
+    assert result["harness"] == "claude"
+    assert result["tokens"] == 222
+    assert result["source"] == str(transcript)
+    assert captured.err == ""
+
+
+def test_a_named_opencode_session_still_beats_a_claude_code_environment(
+    tmp_path, monkeypatch, capsys
+):
+    opencode_stub(
+        tmp_path,
+        monkeypatch,
+        {
+            "ses_one": {"messages": [assistant(input=100, read=20, write=5)]},
+            "ses_other": {"messages": [assistant(input=99_999)]},
+        },
+        listing=[{"id": "ses_other"}],
+    )
+    claude_project(tmp_path, monkeypatch, "claude-sid-123", 111)
+    monkeypatch.setenv("CLAUDE_CODE_SESSION_ID", "claude-sid-123")
+    monkeypatch.setenv("MU_OPENCODE_SESSION", "ses_one")
+
+    assert cc.main(["--json"]) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["harness"] == "opencode"
+    assert result["tokens"] == 125
+    assert result["source"] == "opencode ses_one"
+
+
+def test_mu_agent_harness_opencode_beats_a_claude_code_environment(
+    tmp_path, monkeypatch, capsys
+):
+    opencode_stub(
+        tmp_path,
+        monkeypatch,
+        {"ses_env": {"messages": [assistant(input=2_000)]}},
+        listing=[{"id": "ses_env"}],
+    )
+    claude_project(tmp_path, monkeypatch, "claude-sid-123", 111)
+    monkeypatch.setenv("CLAUDE_CODE_SESSION_ID", "claude-sid-123")
+    monkeypatch.setenv("MU_AGENT_HARNESS", "opencode")
+
+    assert cc.main(["--json"]) == 0
+    captured = capsys.readouterr()
+    result = json.loads(captured.out)
+    assert result["harness"] == "opencode"
+    assert result["tokens"] == 2_000
+
+
+def test_explicit_harness_opencode_accepts_a_session_id_without_the_ses_prefix(
+    tmp_path, monkeypatch, capsys
+):
+    opencode_stub(
+        tmp_path,
+        monkeypatch,
+        {
+            "custom-id": {"messages": [assistant(input=42)]},
+            "ses_other": {"messages": [assistant(input=99_999)]},
+        },
+        listing=[{"id": "ses_other"}],
+    )
+
+    assert cc.main(["--harness", "opencode", "--session", "custom-id", "--json"]) == 0
+    captured = capsys.readouterr()
+    result = json.loads(captured.out)
+    assert result["tokens"] == 42
+    assert result["source"] == "opencode custom-id"
+    assert captured.err == ""

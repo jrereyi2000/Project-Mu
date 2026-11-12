@@ -9,9 +9,12 @@ and stop, so the next builder session starts from the hand-over instead of a blo
                                    [--session ID] [--transcript PATH] [--json]
 
 Two harnesses are supported. Sources are chosen in this order: --transcript (a Claude Code
-transcript); --session (a Claude Code session id, or an OpenCode session when it starts ses_);
-MU_OPENCODE_SESSION; MU_AGENT_HARNESS (opencode or claude-code); and finally auto, which tries
-OpenCode when its binary is on PATH and otherwise uses the Claude Code transcript.
+transcript); an explicit --harness (it beats the environment); --session (a Claude Code session
+id, or an OpenCode session when it starts ses_); MU_OPENCODE_SESSION; MU_AGENT_HARNESS
+(opencode or claude-code); and finally auto, where a Claude Code session wins over an
+`opencode` binary found on PATH. A session counts as Claude Code when CLAUDE_CODE_SESSION_ID or
+CLAUDECODE is set, or when this directory already has a transcript under ~/.claude/projects
+(its own Claude Code session), so an OpenCode install on PATH can no longer hijack it.
 
 Claude Code: context is input_tokens + cache_read_input_tokens + cache_creation_input_tokens of
 the newest assistant entry with a usage block. The transcript is found by CLAUDE_CODE_SESSION_ID
@@ -121,9 +124,9 @@ def newest_opencode_session():
     return session_id
 
 
-def opencode_session_id(session=None):
+def opencode_session_id(session=None, accept_any=False):
     """The OpenCode session to export: --session ses_…, else the env id, else the newest."""
-    if session and session.startswith("ses_"):
+    if session and (accept_any or session.startswith("ses_")):
         return session
     env_id = os.environ.get("MU_OPENCODE_SESSION")
     if env_id:
@@ -171,6 +174,12 @@ def opencode_context_tokens(tokens):
     )
 
 
+def has_own_transcript():
+    """True when this directory already has a Claude Code transcript (its own session)."""
+    slug = re.sub(r"[^A-Za-z0-9]", "-", str(Path.cwd().resolve()))
+    return any((PROJECTS / slug).glob("*.jsonl"))
+
+
 def choose_harness(args):
     """Return (harness, strict). strict means a source was named, so there is no auto fallback."""
     if args.harness != "auto":
@@ -184,6 +193,12 @@ def choose_harness(args):
         return "opencode", True
     if env in ("claude", "claude-code"):
         return "claude", True
+    # A Claude Code session never sets the MU_* markers, so its own signals come before the
+    # binary probe: an `opencode` on PATH must not make it read another window's session.
+    if os.environ.get("CLAUDE_CODE_SESSION_ID") or os.environ.get("CLAUDECODE"):
+        return "claude", False
+    if has_own_transcript():
+        return "claude", False
     if shutil.which(opencode_bin()):
         return "opencode", False
     return "claude", False
@@ -197,7 +212,7 @@ def resolve_source(args):
     harness, strict = choose_harness(args)
     if harness == "opencode":
         try:
-            session_id = opencode_session_id(args.session)
+            session_id = opencode_session_id(args.session, accept_any=args.harness == "opencode")
             export = opencode_export(session_id)
         except SourceError:
             if strict:
