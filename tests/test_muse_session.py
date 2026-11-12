@@ -210,6 +210,19 @@ def test_session_only_creates_pins_and_prints_the_id(
     assert json.loads(api[1].split("--data ", 1)[1])["model"]["id"] == "muse-spark-1.3-contributor"
 
 
+def test_run_starts_the_session_headlessly(
+    checkout: Path, bin_dir: Path, tmp_path: Path
+) -> None:
+    """JR 2026-11-12: a spawned Spark session also runs inside OpenCode via `opencode run`."""
+    result = _run(checkout, _env(bin_dir, tmp_path), "--run", "/builder muse-1")
+
+    assert result.returncode == 0, result.stderr
+    values, args = _parse(result.stdout)
+    session = values["MU_OPENCODE_SESSION"]
+    assert args == ["run", "--session", session, "--format", "default", "/builder muse-1"]
+    assert len(_api_calls(tmp_path)) == 2          # created and pinned first
+
+
 def test_reuses_a_given_session_instead_of_minting_one(
     checkout: Path, bin_dir: Path, tmp_path: Path
 ) -> None:

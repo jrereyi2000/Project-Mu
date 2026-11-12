@@ -158,6 +158,18 @@ def test_session_only_creates_the_session_with_its_title_and_prints_the_id(
     assert f'"id":"{session.group(1)}"' in call
 
 
+def test_run_starts_the_session_headlessly(
+    checkout: Path, bin_dir: Path, tmp_path: Path
+) -> None:
+    """JR 2026-11-12: a spawned DeepSeek session runs inside OpenCode via `opencode run`."""
+    result = _run(checkout, _env(bin_dir, tmp_path), "--run", "/builder b1")
+
+    assert result.returncode == 0, result.stderr
+    values, args = _parse(result.stdout)
+    session = values["MU_OPENCODE_SESSION"]
+    assert args == ["run", "--session", session, "--format", "default", "/builder b1"]
+
+
 def test_session_only_still_prints_the_route_line(
     checkout: Path, bin_dir: Path, tmp_path: Path
 ) -> None:

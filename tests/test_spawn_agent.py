@@ -73,7 +73,7 @@ def test_deepseek_dry_run_creates_a_session_with_no_window(env: dict[str, str]) 
     assert result.returncode == 0, result.stderr
     assert "no_window=1" in result.stdout                       # JR 2026-11-12: no tmux window for DeepSeek
     assert "opencode_session.sh --session-only" in result.stdout
-    assert "prompt: /builder" in result.stdout
+    assert "--run /builder" in result.stdout                    # started inside OpenCode, not in a window
     assert "claude-deepseek" not in result.stdout
     _assert_no_window(env)
 
@@ -86,25 +86,36 @@ def test_deepseek_plain_prompt_gets_the_label_prefix(env: dict[str, str]) -> Non
     unquoted = result.stdout.replace("\\ ", " ")
     assert "Your session label is b1. fix the flaky test" in unquoted
     assert "opencode_session.sh --session-only" in result.stdout
+    assert "--run Your\\ session\\ label\\ is\\ b1.\\ fix\\ the\\ flaky\\ test" in result.stdout
     _assert_no_window(env)
 
 
-def test_deepseek_start_opens_no_window_and_prints_the_session(
+def test_deepseek_start_opens_no_window_and_runs_the_session_in_opencode(
     env: dict[str, str], tmp_path: Path
 ) -> None:
-    """The real path: the wrapper runs with a stub binary, so no session is started and no tab opened."""
+    """The real path: create the session, then drive it with `opencode run` in the background."""
+    calls = tmp_path / "calls.log"
     stub = tmp_path / "stub-bin" / "opencode"
     stub.parent.mkdir()
-    stub.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+    stub.write_text(f'#!/usr/bin/env bash\nprintf "%s\\n" "$*" >> "{calls}"\nexit 0\n', encoding="utf-8")
     stub.chmod(0o755)
     env["MU_OPENCODE_BIN"] = str(stub)
     env["MU_ALLOW_DEEPSEEK_SPAWN"] = "1"
+    env["MU_AGENT_LOG_DIR"] = str(tmp_path / "logs")
 
     result = _run(env, "b1", "deepseek", "/builder")
 
     assert result.returncode == 0, result.stderr
-    assert re.search(r"^session: ses_mu_\d{10}_\d{5}$", result.stdout, re.M)
-    assert "/builder" in result.stdout and "tab" in result.stdout
+    started = re.search(r"session (ses_mu_\d{10}_\d{5})$", result.stdout, re.M)
+    assert started, result.stdout
+    assert f"log: {tmp_path / 'logs' / 'b1.log'}" in result.stdout
+    for _ in range(50):                       # the run is backgrounded; wait for the stub to log it
+        if calls.exists() and "run --session" in calls.read_text(encoding="utf-8"):
+            break
+        time.sleep(0.05)
+    lines = calls.read_text(encoding="utf-8").splitlines()
+    assert any(line.startswith("api post /api/session ") for line in lines), lines
+    assert any(line == f"run --session {started.group(1)} --format default /builder" for line in lines), lines
     _assert_no_window(env)
 
 
@@ -189,7 +200,7 @@ def test_muse_dry_run_creates_a_session_with_no_window(env: dict[str, str]) -> N
     assert result.returncode == 0, result.stderr
     assert "no_window=1" in result.stdout                       # JR 2026-11-12: no tmux window for Spark
     assert "muse_session.sh --session-only" in result.stdout
-    assert "prompt: /builder" in result.stdout
+    assert "--run /builder" in result.stdout
     assert "opencode_session.sh" not in result.stdout
     _assert_no_window(env)
 
@@ -407,6 +418,15 @@ def test_a_windowed_child_command_unsets_the_callers_route_markers(env: dict[str
     assert "MU_AGENT_MODEL=claude-opus-5-5" in runs       # the child's own route still sets its actor
     _assert_no_window(env)
 
+    # The shared OpenCode path is scrubbed too (the session it creates must not resume the parent's).
+    deepseek = _run(env, "--dry-run", "child-ds", "deepseek", "/builder")
+    create = deepseek.stdout.split("create: ", 1)[1].splitlines()[0]
+    tokens = create.replace("\\", "").split()
+    unset = {tokens[i + 1] for i, token in enumerate(tokens) if token == "-u"}
+    for var in ROUTE_MARKERS:
+        assert var in unset, (var, create)
+    _assert_no_window(env)
+
 
 def test_a_deepseek_child_mints_its_own_session_not_the_parents(
     env: dict[str, str], tmp_path: Path
@@ -416,14 +436,16 @@ def test_a_deepseek_child_mints_its_own_session_not_the_parents(
     stub.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
     stub.chmod(0o755)
     env.update({"MU_OPENCODE_BIN": str(stub), "MU_ALLOW_DEEPSEEK_SPAWN": "1",
-                "MU_OPENCODE_SESSION": "ses_mu_PARENT_99999"})
+                "MU_OPENCODE_SESSION": "ses_mu_PARENT_99999",
+                "MU_AGENT_LOG_DIR": str(tmp_path / "logs")})
 
     result = _run(env, "child-ds", "deepseek", "/builder")
 
     assert result.returncode == 0, result.stderr
-    match = re.search(r"^session: (ses_mu_\d+_\d+)$", result.stdout, re.M)
+    match = re.search(r"^session: (ses_mu_\d+_\d+)$|session (ses_mu_\d+_\d+)$",
+                      result.stdout, re.M)
     assert match, result.stdout
-    assert match.group(1) != "ses_mu_PARENT_99999"
+    assert (match.group(1) or match.group(2)) != "ses_mu_PARENT_99999"
     _assert_no_window(env)
 
 

@@ -27,11 +27,10 @@
 #   fallback: it runs $MU_DEEPSEEK_CMD (default ~/bin/claude-deepseek, JR's local wrapper that points
 #   Claude Code at DeepSeek; it holds the API key and is never committed), kept until 2026-11-26.
 # - DeepSeek and Muse sessions get **no tmux window** (JR, 2026-11-12): new windows are only for
-#   codex, claude and agy routes. They live in the shared OpenCode window, so the launcher runs the
-#   wrapper with --session-only, which mints/pins the session and prints `session: <id>`; the
-#   launcher then prints the prompt and how to open it. The service has no way to open a TUI tab from
-#   outside (probed 2026-11-12: creating a session does not add a tab), so JR opens it from the tab /
-#   session list in that window.
+#   codex, claude and agy routes. They are started inside OpenCode instead: the wrapper creates the
+#   session, then a background `opencode run` drives it, and the launcher prints the session id and
+#   the log path (`$MU_AGENT_LOG_DIR`, default /tmp/opencode/<label>.log). That is how the activity
+#   sessions have been started all day; the session is visible in OpenCode while it works.
 # - muse starts an OpenCode session on a Muse model through tools/muse_session.sh; the model is
 #   whatever MU_MUSE_MODEL says (Spark by default, Ember for the benchmark's second step).
 # - argon and hydrogen start a Google Antigravity CLI session (`agy`), the two Gemini 4 routes that
@@ -142,17 +141,19 @@ case "$agent" in
 esac
 
 if [ -n "$shared_wrapper" ]; then
-  run=("${scrub[@]}" "$shared_wrapper" --session-only --title "Mu $label ($agent)")
+  create=("${scrub[@]}" "$shared_wrapper" --session-only --title "Mu $label ($agent)")
+  log="${MU_AGENT_LOG_DIR:-/tmp/opencode}/$label.log"
 else
+  create=()
+  log=""
   inner="$(printf '%q ' "${scrub[@]}" "${cmd[@]}")"
   inner="${inner% }; exec bash"
-  run=(bash -lic "$inner")
 fi
 
 if [ "$dry" = 1 ]; then
   if [ -n "$shared_wrapper" ]; then
-    printf 'session=%s no_window=1 dir=%s (shared OpenCode window)\nruns: %s\nprompt: %s\n' \
-      "$S" "$R" "$(printf '%q ' "${run[@]}")" "$prompt"
+    printf 'session=%s no_window=1 dir=%s (started in OpenCode)\ncreate: %s\nthen: %s --run %s\nlog: %s\n' \
+      "$S" "$R" "$(printf '%q ' "${create[@]}")" "$shared_wrapper" "$(printf '%q' "$prompt")" "$log"
   else
     printf 'session=%s window=%s dir=%s\nruns (in bash -lic): %s\n' "$S" "$label" "$R" "$inner"
   fi
@@ -160,14 +161,15 @@ if [ "$dry" = 1 ]; then
 fi
 
 if [ -n "$shared_wrapper" ]; then
-  out="$("${run[@]}")" || { echo "spawn_agent: could not create the $agent session" >&2; exit 1; }
-  printf '%s\n' "$out"
+  # JR, 2026-11-12: a DeepSeek/Spark session is started inside OpenCode and owns no tmux window. The
+  # wrapper mints the session, then `opencode run` drives that session headlessly; the log is the
+  # agent's console and the session is visible in OpenCode while it works.
+  out="$("${create[@]}")" || { echo "spawn_agent: could not create the $agent session" >&2; exit 1; }
   sid="$(printf '%s\n' "$out" | sed -n 's/^session: //p' | tail -1)"
-  cat <<MSG
-spawned $agent as '$label' with no tmux window (DeepSeek/Muse sessions live in the shared OpenCode window): session ${sid:-unknown}
-open it as a tab in the OpenCode window (tab/session list) and give it:
-  $prompt
-MSG
+  [ -n "$sid" ] || { echo "spawn_agent: $agent session id was not printed" >&2; exit 1; }
+  mkdir -p "$(dirname "$log")"
+  nohup "${scrub[@]}" env MU_OPENCODE_SESSION="$sid" "$shared_wrapper" --run "$prompt" > "$log" 2>&1 &
+  printf 'started %s as '\''%s'\'' in OpenCode (no tmux window): session %s\nlog: %s\n' "$agent" "$label" "$sid" "$log"
   exit 0
 fi
 

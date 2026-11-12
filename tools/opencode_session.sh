@@ -24,11 +24,13 @@
 set -euo pipefail
 
 session_only=0
+run_prompt=''
 title='Project Mu DeepSeek session'
 args=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --session-only) session_only=1; shift ;;
+    --run) run_prompt="${2:?--run needs a prompt}"; shift 2 ;;
     --title) title="${2:?--title needs a value}"; shift 2 ;;
     *) args+=("$1"); shift ;;
   esac
@@ -54,6 +56,12 @@ fi
 export MU_OPENCODE_SESSION
 
 echo "Project Mu DeepSeek route: $MU_OPENCODE_MODEL (harness opencode, session $MU_OPENCODE_SESSION)" >&2
+
+if [ "$run_prompt" != '' ]; then
+  # The headless way agents start each other (JR, 2026-11-12): the session runs in OpenCode, not in
+  # a tmux window the caller would have to own.
+  exec "${MU_OPENCODE_BIN:-opencode}" run --session "$MU_OPENCODE_SESSION" --format default "$run_prompt"
+fi
 
 if [ "$session_only" = 1 ]; then
   provider="${MU_OPENCODE_MODEL%%/*}"
