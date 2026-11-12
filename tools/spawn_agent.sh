@@ -3,7 +3,7 @@
 # Any agent, or JR, may run it. It only ever OPENS a new window; it never types into an existing one
 # (agents must never `tmux send-keys` into another agent's window).
 #
-#   tools/spawn_agent.sh [--dry-run] <label> <claude|opus|deepseek|deepseek-claude|muse|codex|gemini|argon|hydrogen> [prompt]
+#   tools/spawn_agent.sh [--dry-run] <label> <claude|opus|claude-personal|opus-personal|claude-auto|opus-auto|deepseek|deepseek-claude|muse|codex|gemini|argon|hydrogen> [prompt]
 #   e.g. tools/spawn_agent.sh builder-2 opus "/builder"
 #        tools/spawn_agent.sh gm-hiring codex "Pick up the HANDOFF addressed to gm-hiring on the board."
 #
@@ -33,6 +33,12 @@
 #   sessions have been started all day; the session is visible in OpenCode while it works.
 # - muse starts an OpenCode session on a Muse model through tools/muse_session.sh; the model is
 #   whatever MU_MUSE_MODEL says (Spark by default, Ember for the benchmark's second step).
+# - claude-personal and opus-personal open a normal Claude/Opus tmux window on JR's secondary Claude
+#   account. tools/claude_personal.sh sets CLAUDE_CONFIG_DIR=~/.claude-secondary (override with
+#   MU_CLAUDE_PERSONAL_CONFIG_DIR, or point MU_CLAUDE_PERSONAL_CMD at JR's `claude-personal` alias).
+#   claude-auto and opus-auto run tools/claude_account.py choose first: it compares the primary and
+#   personal usage files and starts whichever account is under its quota with more headroom. Model
+#   attribution is unchanged; the account is not a model class.
 # - argon and hydrogen start a Google Antigravity CLI session (`agy`), the two Gemini 4 routes that
 #   serve this repo. argon runs MU_ARGON_MODEL (default gemini-4-argon-medium); hydrogen runs
 #   MU_HYDROGEN_MODEL (default gemini-4-hydrogen-high) and exports MU_AGENT_CLASS=hydrogen and
@@ -69,7 +75,7 @@ caller_is_deepseek() {
 
 dry=0
 if [ "${1:-}" = "--dry-run" ]; then dry=1; shift; fi
-usage="usage: spawn_agent.sh [--dry-run] <label> <claude|opus|deepseek|deepseek-claude|muse|codex|gemini|argon|hydrogen> [prompt]"
+usage="usage: spawn_agent.sh [--dry-run] <label> <claude|opus|claude-personal|opus-personal|claude-auto|opus-auto|deepseek|deepseek-claude|muse|codex|gemini|argon|hydrogen> [prompt]"
 label="${1:?$usage}"
 agent="${2:?$usage}"
 prompt="${3:-}"
@@ -89,9 +95,31 @@ elif [ -z "$prompt" ]; then
   prompt="Your session label is $label. Do the session start in CLAUDE.md, then wait for JR."
 fi
 
+personal_cmd() {
+  printf '%s' "${MU_CLAUDE_PERSONAL_CMD:-$here/claude_personal.sh}"
+}
+
+choose_account() {
+  PYTHONPATH="$R" python3 -m tools.claude_account choose
+}
+
 case "$agent" in
   claude)          model="${MU_CLAUDE_MODEL:-unknown}"; cmd=(claude "$prompt") ;;
+  claude-personal) model="${MU_CLAUDE_MODEL:-unknown}"; cmd=("$(personal_cmd)" "$prompt") ;;
+  claude-auto)     model="${MU_CLAUDE_MODEL:-unknown}"
+                   account="$(choose_account)" || exit 3
+                   if [ "$account" = personal ]; then cmd=("$(personal_cmd)" "$prompt")
+                   else cmd=(claude "$prompt"); fi ;;
   opus)            model="${MU_OPUS_MODEL:-claude-opus-5-5}"; cmd=(claude --model "$model" --effort medium "$prompt") ;;
+  opus-personal)   model="${MU_OPUS_MODEL:-claude-opus-5-5}"
+                   cmd=("$(personal_cmd)" --model "$model" --effort medium "$prompt") ;;
+  opus-auto)       model="${MU_OPUS_MODEL:-claude-opus-5-5}"
+                   account="$(choose_account)" || exit 3
+                   if [ "$account" = personal ]; then
+                     cmd=("$(personal_cmd)" --model "$model" --effort medium "$prompt")
+                   else
+                     cmd=(claude --model "$model" --effort medium "$prompt")
+                   fi ;;
   deepseek)        model=""; cmd=("$here/opencode_session.sh" --prompt "$prompt") ;;
   deepseek-claude) model="deepseek-v4.1-flash"; cmd=("${MU_DEEPSEEK_CMD:-$HOME/bin/claude-deepseek}" "$prompt") ;;
   muse)            model=""; cmd=("$here/muse_session.sh" --prompt "$prompt") ;;
@@ -100,7 +128,7 @@ case "$agent" in
   argon)           model="${MU_ARGON_MODEL:-gemini-4-argon-medium}"; cmd=(agy --model "$model" -i "$prompt") ;;
   hydrogen)        model="${MU_HYDROGEN_MODEL:-gemini-4-hydrogen-high}"
                    cmd=(agy --model "$model" -i "$prompt") ;;
-  *) echo "spawn_agent: unknown agent '$agent' (claude, opus, deepseek, deepseek-claude, muse, codex, gemini, argon, hydrogen)" >&2; exit 2 ;;
+  *) echo "spawn_agent: unknown agent '$agent' (claude, opus, claude-personal, opus-personal, claude-auto, opus-auto, deepseek, deepseek-claude, muse, codex, gemini, argon, hydrogen)" >&2; exit 2 ;;
 esac
 
 # The route marker the switchboard reads. deepseek and muse set it inside their own wrappers.

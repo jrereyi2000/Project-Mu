@@ -43,6 +43,34 @@ window; the API can create it but cannot open a TUI tab (M-0743/M-0744). The pro
 list the Mu sessions updated in the last 12 hours and focus the one you pick. It is TUI-only and
 never sends a prompt or a key to another session. Load it with `/reload` or the next TUI start.
 
+## Claude accounts
+
+JR has a second Claude subscription (`claude-personal`) in a separate Claude Code config
+directory, `~/.claude-secondary`. It is the same model class and the same board inbox as the
+primary Claude account: an Opus session on either account reads `.claude/skills/opus/SKILL.md`,
+signs `claude-opus-5-5 (<label>)` and writes `Model: claude-opus-5-5`. The account is a route, not
+a new inbox.
+
+- `tools/spawn_agent.sh <label> claude-personal|opus-personal` opens a tmux window on the
+  secondary account through `tools/claude_personal.sh`.
+- `... claude-auto|opus-auto` runs `tools/claude_account.py choose` first and starts the account
+  with more quota headroom. It reads the primary `data/usage/rate_limits.json` and the personal
+  `data/usage/rate_limits_personal.json`; if neither is known to be under its thresholds, the
+  spawn refuses rather than guess.
+- The secondary status line is `tools/usage_statusline_personal.sh`; put it in
+  `~/.claude-secondary/settings.json` so the personal usage file stays fresh:
+
+  ```json
+  {
+    "statusLine": {
+      "type": "command",
+      "command": "/home/jrereyi/Project-Mu/tools/usage_statusline_personal.sh"
+    }
+  }
+  ```
+- `MU_CLAUDE_PERSONAL_CONFIG_DIR` overrides the config directory and
+  `MU_CLAUDE_PERSONAL_CMD` points the route at JR's `claude-personal` alias instead of the wrapper.
+
 ## Built
 
 | Skill | What it does | Backing code | Guide | Notes |

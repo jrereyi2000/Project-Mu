@@ -6,6 +6,7 @@ stub on PATH records any attempt to open a window so a test fails loudly if one 
 
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 import time
@@ -229,7 +230,7 @@ def test_usage_lists_the_muse_type(env: dict[str, str]) -> None:
     result = _run(env)
 
     assert result.returncode == 1
-    assert "<claude|opus|deepseek|deepseek-claude|muse|codex|gemini|argon|hydrogen>" in result.stderr
+    assert "<claude|opus|claude-personal|opus-personal|claude-auto|opus-auto|deepseek|deepseek-claude|muse|codex|gemini|argon|hydrogen>" in result.stderr
     _assert_no_window(env)
 
 
@@ -328,7 +329,9 @@ def test_the_opencode_wrappers_set_the_actor_themselves(env: dict[str, str]) -> 
     _assert_no_window(env)
 
 
-@pytest.mark.parametrize("agent", ["claude", "opus", "codex", "gemini", "argon", "hydrogen"])
+@pytest.mark.parametrize("agent", ["claude", "opus", "claude-personal", "opus-personal",
+                                   "claude-auto", "opus-auto", "codex", "gemini", "argon",
+                                   "hydrogen"])
 def test_only_codex_claude_and_agy_routes_get_a_window(env: dict[str, str], agent: str) -> None:
     """JR 2026-11-12: new windows are for codex, claude and agy; DeepSeek/Spark share the OpenCode one."""
     result = _run(env, "--dry-run", f"win-{agent}", agent, "/x")
@@ -336,6 +339,96 @@ def test_only_codex_claude_and_agy_routes_get_a_window(env: dict[str, str], agen
     assert result.returncode == 0, result.stderr
     assert f"window=win-{agent}" in result.stdout
     assert "no_window" not in result.stdout
+    _assert_no_window(env)
+
+
+def test_claude_personal_dry_run_uses_the_secondary_wrapper(env: dict[str, str]) -> None:
+    result = _run(env, "--dry-run", "personal-1", "claude-personal", "/builder")
+
+    assert result.returncode == 0, result.stderr
+    assert "claude_personal.sh /builder" in result.stdout
+    assert "MU_AGENT_MODEL=unknown" in result.stdout
+    assert "window=personal-1" in result.stdout
+    _assert_no_window(env)
+
+
+def test_opus_personal_keeps_the_opus_model(env: dict[str, str]) -> None:
+    result = _run(env, "--dry-run", "personal-2", "opus-personal", "/audit")
+
+    assert result.returncode == 0, result.stderr
+    assert "claude_personal.sh --model claude-opus-5-5 --effort medium /audit" in result.stdout
+    assert "MU_AGENT_MODEL=claude-opus-5-5" in result.stdout
+    _assert_no_window(env)
+
+
+def test_claude_personal_honours_the_command_override(env: dict[str, str], tmp_path: Path) -> None:
+    fake = tmp_path / "bin" / "claude-personal"
+    env["MU_CLAUDE_PERSONAL_CMD"] = str(fake)
+
+    result = _run(env, "--dry-run", "personal-3", "claude-personal", "/x")
+
+    assert result.returncode == 0, result.stderr
+    assert str(fake) in result.stdout
+    _assert_no_window(env)
+
+
+def test_opus_auto_picks_personal_when_primary_is_over(env: dict[str, str], tmp_path: Path) -> None:
+    now = 1_800_000_000
+    primary = tmp_path / "primary.json"
+    personal = tmp_path / "personal.json"
+    for path, pct in ((primary, 92), (personal, 10)):
+        path.write_text(json.dumps({
+            "seen_at": now,
+            "five_hour": {"used_percentage": pct, "resets_at": now + 3600},
+            "seven_day": {"used_percentage": 20, "resets_at": now + 86400},
+        }), encoding="utf-8")
+    env["MU_USAGE_FILE"] = str(primary)
+    env["MU_USAGE_PERSONAL_FILE"] = str(personal)
+
+    result = _run(env, "--dry-run", "auto-1", "opus-auto", "/builder")
+
+    assert result.returncode == 0, result.stderr
+    assert "claude_personal.sh --model claude-opus-5-5" in result.stdout
+    _assert_no_window(env)
+
+
+def test_opus_auto_picks_primary_when_it_has_more_room(env: dict[str, str], tmp_path: Path) -> None:
+    now = 1_800_000_000
+    primary = tmp_path / "primary.json"
+    personal = tmp_path / "personal.json"
+    for path, pct in ((primary, 10), (personal, 60)):
+        path.write_text(json.dumps({
+            "seen_at": now,
+            "five_hour": {"used_percentage": pct, "resets_at": now + 3600},
+            "seven_day": {"used_percentage": 20, "resets_at": now + 86400},
+        }), encoding="utf-8")
+    env["MU_USAGE_FILE"] = str(primary)
+    env["MU_USAGE_PERSONAL_FILE"] = str(personal)
+
+    result = _run(env, "--dry-run", "auto-2", "opus-auto", "/builder")
+
+    assert result.returncode == 0, result.stderr
+    assert "env MU_AGENT_MODEL=claude-opus-5-5 claude --model" in result.stdout
+    assert "claude_personal.sh" not in result.stdout
+    _assert_no_window(env)
+
+
+def test_claude_auto_refuses_when_both_accounts_are_over(env: dict[str, str], tmp_path: Path) -> None:
+    now = 1_800_000_000
+    for name, pct in (("primary", 92), ("personal", 90)):
+        (tmp_path / f"{name}.json").write_text(json.dumps({
+            "seen_at": now,
+            "five_hour": {"used_percentage": pct, "resets_at": now + 3600},
+            "seven_day": {"used_percentage": 20, "resets_at": now + 86400},
+        }), encoding="utf-8")
+    env["MU_USAGE_FILE"] = str(tmp_path / "primary.json")
+    env["MU_USAGE_PERSONAL_FILE"] = str(tmp_path / "personal.json")
+
+    result = _run(env, "--dry-run", "auto-3", "claude-auto", "/builder")
+
+    assert result.returncode == 3
+    assert "neither account" in result.stderr
+    assert result.stdout == ""
     _assert_no_window(env)
 
 
