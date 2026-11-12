@@ -7,6 +7,19 @@ seeds on a **full-roster calibration**.
 `engines/progression.py`, no file in the engine or the fit was edited, no database was read beyond the save
 snapshot. **Not an audit** — anything needing a correctness judgement is marked **unverified — needs audit**.
 
+## 0. Decisions — JR, 2026-11-12
+
+1. **No constant is applied.** The fit's recommendations below (both calibrations) are recorded and stay
+   unapplied. The constants question belongs to the first shadow season's reports (P5-06), not to this fit.
+2. **The league-shape calibration runs on the full roster.** The live engine calibrates `calibrate_league_term`
+   on every staying player and every rookie (`frac` 1.0), not on `CALIBRATION_SAMPLE`'s 400-player stride.
+   Reasons: it holds the projected 90+ count at 92–95 across five seeds where the sample swings 82–102, it starts
+   and finishes the fit better (0.9337 / 0.8927 against 0.9603 / 0.9184), and the auditor's own repro asked the
+   same question with the same answer (`data/audit_reports/league_shape_fix/report.md:159`, `repro_sample.py`:
+   live on p2g picks (1.5, 1.0) on the stride sample against (1.5, 1.5) on the full roster).
+   Handed to **builder-10** as **P3-04b**; the code change, its test and the spec line are the builder's, and an
+   audit verdict is still owed on it.
+
 Why it ran: [`PROGRESSION_DEVELOPMENT_VERDICT.md`](PROGRESSION_DEVELOPMENT_VERDICT.md) §5 — “fix the target
 season and the projected class, then re-run the P3-02 fit against the fixed engine” — and
 [`CLOSE_OUT_NEXT_STEP.md`](CLOSE_OUT_NEXT_STEP.md) §1 named it the next close-out unit.
@@ -138,16 +151,17 @@ argued, and the star term does the swinging.
   2.21, `career.years_share.0` 1.89, `shape.QB.p90` 1.83, `career.years_share.6+` 1.73; 6 of 34 targets average
   above 1.0, against 7 before the fix). The remaining gap is not the league term.
 
-## 7. For JR
+## 7. For JR — answered 2026-11-12
 
-1. **Calibrate on the full roster.** It is better on every measure here: the start (0.9337 vs 0.9603), the finish
-   (0.8927 vs 0.9184), and — decisively — the 90+ count the term exists to hold (92–95 across five seeds against
-   82–102 on the sample). The live change is `CALIBRATION_SAMPLE` in `engines/progression.py`; it needs a
-   `/builder` change and an audit before it means anything in production.
-2. **Do not apply a constant on this instrument.** Nothing is stable at one value across seeds, in either set —
-   `AGE_BAND_OFFSET[0]` is 2 of 3 (sample) and 4 of 5 with one dissent (full roster), and
-   `AGE_BAND_OFFSET[1]` −0.76 → −0.56 collapses from “largest gain on two seeds” to 1 of 5 once the calibration
-   is fixed. The constants question belongs to the first shadow season's reports (P5-06), not to this fit.
+1. **Calibrate on the full roster. ✅ Decided yes (2026-11-12)**, see §0. It is better on every measure here: the
+   start (0.9337 vs 0.9603), the finish (0.8927 vs 0.9184), and — decisively — the 90+ count the term exists to
+   hold (92–95 across five seeds against 82–102 on the sample). The live change is `CALIBRATION_SAMPLE` in
+   `engines/progression.py`; **builder-10** carries it as P3-04b, and it needs a builder change plus an audit
+   before it means anything in production.
+2. **Do not apply a constant on this instrument. ✅ Decided (2026-11-12): none applied.** Nothing is stable at one
+   value across seeds, in either set — `AGE_BAND_OFFSET[0]` is 2 of 3 (sample) and 4 of 5 with one dissent (full
+   roster), and `AGE_BAND_OFFSET[1]` −0.76 → −0.56 collapses from “largest gain on two seeds” to 1 of 5 once the
+   calibration is fixed. The constants question belongs to the first shadow season's reports (P5-06).
 3. **The freeze input that is now settled:** the tripwire is not tripped (A +1.50 at the line, B +1.00), so P3-04
    needs no revisit on those grounds.
 

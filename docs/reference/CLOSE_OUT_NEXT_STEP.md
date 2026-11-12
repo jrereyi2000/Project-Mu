@@ -27,8 +27,9 @@ lane is parked.
 > on two seeds” to 1 of 5 once the calibration is fixed. The tripwire is not tripped (development term +1.50 at
 > the line on the sample, +1.00 on the full roster). **The one clear result is structural:** calibrating on the
 > **full roster** beats the 400-player sample on start (0.9337 vs 0.9603), finish (0.8927 vs 0.9184) and — the
-> point of the term — the 90+ count it holds (92–95 across five seeds, against 82–102 on the sample). Nothing was
-> applied; the calibration change is P3-04b for JR.
+> point of the term — the 90+ count it holds (92–95 across five seeds, against 82–102 on the sample).
+> **JR decided 2026-11-12: no constant is applied (D1), and the calibration moves to the full roster (D2),
+> handed to `builder-10` as P3-04b.**
 
 - **Checklist ID:** **P3-04** (its own recorded follow-up; it re-runs **P3-02**). Proposed as a new sub-row
   **P3-04a** in §5 below, because P3-04 and P3-02 are both ticked ☑ and the outstanding half has no row.
@@ -174,7 +175,7 @@ full-roster ones, `AGE_BAND_OFFSET[0]` stated per seed, the sample-vs-roster tab
 
 **Add, as the decision that measurement opened:**
 
-> | ☐ | **P3-04b** | **Settle the league-shape calibration: full roster or `CALIBRATION_SAMPLE`.** The fit says full roster on every measure (start, finish, and the 90+ count held at 92–95 against the sample's 82–102); the live engine still calibrates on a 400-player sample (`engines/progression.py:1753`). Change `CALIBRATION_SAMPLE`, or record why the sample stays, before the first shadow season — the term the season runs under depends on it. | A `/builder` change with a test (or a recorded decision), audited, and the term read in the first shadow season. | M |
+> | ☐ | **P3-04b** | **Settle the league-shape calibration: full roster or `CALIBRATION_SAMPLE`.** **Decided by JR 2026-11-12: the full roster.** The fit said full roster on every measure (start, finish, and the 90+ count held at 92–95 against the sample's 82–102); the live engine still calibrates on a 400-player sample (`engines/progression.py:1753`). Change it, or record why the sample stays, before the first shadow season — the term the season runs under depends on it. | A `/builder` change with a test (or a recorded decision), audited, and the term read in the first shadow season. | M |
 
 **Note on P3-02's tick (no status change):** append “the fitted numbers predate the 2026-11-11 league-shape
 fix; the re-run is P3-04a”.
