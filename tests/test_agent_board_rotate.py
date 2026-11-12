@@ -69,6 +69,19 @@ def test_keep_flag_and_dry_run(tmp_path):
     assert nums(live) == ["M-0001", "M-0003"] and nums(archived) == ["M-0002"]
 
 
+def test_a_claim_named_in_the_reference_does_not_make_a_release_a_claim(tmp_path):
+    # Real headers put the Re: on the Kind line: "**Kind:** NOTICE / RELEASE · **Re:** M-0458 (CLAIM)".
+    # The Kind is the release; the word CLAIM belongs to the Re: text, so nothing here is an open claim.
+    text = board(
+        msg(1, "a (x)", "CLAIM", "files: f.py"),
+        msg(2, "a (x)", "NOTICE / RELEASE · **Re:** M-0001 (CLAIM)", "released M-0001"),
+        msg(3, "z (z)", "NOTICE"),
+    )
+    live, archived = run(tmp_path, text, "--apply", "--keep-last", "1")
+    assert nums(live) == ["M-0003"]
+    assert nums(archived) == ["M-0001", "M-0002"]
+
+
 def test_indented_example_in_header_is_not_a_message(tmp_path):
     header = HEADER.replace("rules", "   ## M-0002 · example · from: x (y) · to: all")
     text = header + msg(1, "a (x)", "NOTICE") + msg(2, "a (x)", "NOTICE")

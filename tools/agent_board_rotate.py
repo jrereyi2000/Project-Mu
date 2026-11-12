@@ -33,7 +33,9 @@ ARCHIVE_DIR = "/home/jrereyi/Project-Mu/docs/agent_board_archive"
 # The sender is the whole "model (label)" pair: claude-opus-5-5 (audit) and gemini (audit) are different sessions.
 HEADER_RE = re.compile(r"^## (M-\d{4}) · [^\n]*?· from: ([^(\n]*\([^)\n]+\))", re.M)
 MSG_START_RE = re.compile(r"^## M-\d{4} ", re.M)
-KIND_RE = re.compile(r"^\*\*Kind:\*\*([^\n]*)", re.M)
+# The Kind line often carries its Re: on the same line ("**Kind:** NOTICE / RELEASE · **Re:** M-0458 (CLAIM)").
+# Stop at the separator, or the Re: text lands in the Kind and a "(CLAIM)" in it reads as an open claim.
+KIND_RE = re.compile(r"^\*\*Kind:\*\*\s*([^\n·]*)", re.M)
 REF_RE = re.compile(r"M-(\d{4})")
 # "M-0245 … M-0252", "M-0245..M-0252", "M-0245–M-0252", "M-0245 to M-0252"
 RANGE_RE = re.compile(r"M-(\d{4})\s*(?:…|\.\.\.?|–|—|-|to)\s*M-(\d{4})")
