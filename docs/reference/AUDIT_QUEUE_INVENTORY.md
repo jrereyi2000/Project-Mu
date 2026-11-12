@@ -517,9 +517,37 @@ Three caveats specific to this route:
 
 ---
 
-## 7. What I did not do
+## 7. Pre-staged for the Hydrogen lane (2026-11-12 17:00)
+
+At JR's word this session built the pinned worktrees and opened the six auditor sessions for the Hydrogen lane.
+Nothing below is an audit result; it is the staging so the lane starts on the exact shas.
+
+| Label | Row | Worktree (detached at) | Report it will write |
+|---|---|---|---|
+| `audit-route` | R3 `dbdac5f^..8a972c0` | `.claude/worktrees/audit-8a972c0` | `data/audit_reports/audit-route/report.md` |
+| `audit-go` | R4 `dc96309^..fff897f` | `.claude/worktrees/audit-fff897f` | `data/audit_reports/audit-go/report.md` |
+| `audit-glm` | R6 `c70c714^..ec85c78` | `.claude/worktrees/audit-ec85c78` | `data/audit_reports/audit-glm/report.md` |
+| `audit-stats3` | R1 `26d1141` (re-check) | `.claude/worktrees/audit-26d1141` | `data/audit_reports/audit-stats3/report.md` |
+| `audit-stats2b` | R2 `07decd3` (re-check) | `.claude/worktrees/audit-07decd3` | `data/audit_reports/audit-stats2b/report.md` |
+| `audit-commission` | R11 | `.claude/worktrees/audit-c04150d` | `data/audit_reports/audit-commission/report.md` |
+
+Each session is `gemini-4-hydrogen-high` in its own tmux window in `mu`, started by `tools/spawn_agent.sh`
+(so it carries `MU_AGENT_CLASS=hydrogen`), with a self-contained prompt naming its one row, pin, worktree, the
+plan path, the builder's declared deviations, the tests to run and the report path. Scratch databases are the
+auditors' own (`mu_scratch_audit_<sha7>_test`), not pre-built here.
+
+**One thing to watch:** `agy` opens in **Auto mode** ("edits & safe commands auto-approved"), so "report-only" is
+a prompt instruction and not a harness guard. The sessions are pinned to detached-HEAD worktrees, so an
+unauthorised edit cannot reach `main`, but a stricter run wants `agy --mode plan` — `tools/spawn_agent.sh` does
+not expose `--mode` yet.
+
+---
+
+## 8. What I did not do
 
 No audit, no CLOSED / PARTIAL / OPEN verdict of my own, no commit-range review, no correctness claim about any
 row, no test run beyond reading the counters the builders reported, no database write, no `madden_*` query, no
 Madden PC, and no edit to `PROJECT_SPEC.md`, `docs/CLOSE_OUT_CHECKLIST.md`, `docs/reference/CLOSE_OUT_STATUS.md`
-or any range I describe. The board is read; my messages are M-0684 and M-0694.
+or any range I describe. The board is read; my messages are M-0684 and M-0694. At JR's word on
+2026-11-12 I also pre-staged six worktrees and opened six Hydrogen auditor sessions (§7) — staging, not
+auditing.
