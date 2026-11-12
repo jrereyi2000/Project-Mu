@@ -151,6 +151,43 @@ def test_a_claude_caller_may_spawn_a_deepseek_session(env: dict[str, str]) -> No
     _assert_no_window(env)
 
 
+def test_muse_dry_run_launches_the_muse_wrapper(env: dict[str, str]) -> None:
+    result = _run(env, "--dry-run", "muse-lab", "muse", "/builder")
+
+    assert result.returncode == 0, result.stderr
+    assert "muse_session.sh --prompt /builder" in result.stdout
+    assert "opencode_session.sh" not in result.stdout
+    _assert_no_window(env)
+
+
+def test_muse_plain_prompt_gets_the_label_prefix(env: dict[str, str]) -> None:
+    result = _run(env, "--dry-run", "muse-lab", "muse", "run the pilot")
+
+    assert result.returncode == 0, result.stderr
+    unquoted = result.stdout.replace("\\ ", " ")
+    assert "Your session label is muse-lab. run the pilot" in unquoted
+    assert "muse_session.sh --prompt" in result.stdout
+    _assert_no_window(env)
+
+
+def test_muse_needs_no_deepseek_spawn_flag(env: dict[str, str]) -> None:
+    env["MU_AGENT_CLASS"] = "deepseek"
+
+    result = _run(env, "--dry-run", "muse-lab", "muse", "/builder")
+
+    assert result.returncode == 0, result.stderr
+    assert "muse_session.sh --prompt /builder" in result.stdout
+    _assert_no_window(env)
+
+
+def test_usage_lists_the_muse_type(env: dict[str, str]) -> None:
+    result = _run(env)
+
+    assert result.returncode == 1
+    assert "<claude|opus|deepseek|deepseek-claude|muse|codex|gemini>" in result.stderr
+    _assert_no_window(env)
+
+
 def test_unknown_agent_exits_2(env: dict[str, str]) -> None:
     result = _run(env, "--dry-run", "b1", "bogus", "/builder")
 

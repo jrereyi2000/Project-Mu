@@ -3,7 +3,7 @@
 # Any agent, or JR, may run it. It only ever OPENS a new window; it never types into an existing one
 # (agents must never `tmux send-keys` into another agent's window).
 #
-#   tools/spawn_agent.sh [--dry-run] <label> <claude|opus|deepseek|deepseek-claude|codex|gemini> [prompt]
+#   tools/spawn_agent.sh [--dry-run] <label> <claude|opus|deepseek|deepseek-claude|muse|codex|gemini> [prompt]
 #   e.g. tools/spawn_agent.sh builder-2 opus "/builder"
 #        tools/spawn_agent.sh gm-hiring codex "Pick up the HANDOFF addressed to gm-hiring on the board."
 #
@@ -26,6 +26,8 @@
 #   (it sets the route markers and the session id, then runs `opencode`). deepseek-claude is the
 #   fallback: it runs $MU_DEEPSEEK_CMD (default ~/bin/claude-deepseek, JR's local wrapper that points
 #   Claude Code at DeepSeek; it holds the API key and is never committed), kept until 2026-11-26.
+# - muse starts an OpenCode session on a Muse model through tools/muse_session.sh; the model is
+#   whatever MU_MUSE_MODEL says (Spark by default, Ember for the benchmark's second step).
 # - The new session still does the full session start itself (spec, board, listener, NOTICE) and stops at
 #   its first permission prompt until someone answers it in that window.
 set -euo pipefail
@@ -38,7 +40,7 @@ caller_is_deepseek() {
 
 dry=0
 if [ "${1:-}" = "--dry-run" ]; then dry=1; shift; fi
-usage="usage: spawn_agent.sh [--dry-run] <label> <claude|opus|deepseek|deepseek-claude|codex|gemini> [prompt]"
+usage="usage: spawn_agent.sh [--dry-run] <label> <claude|opus|deepseek|deepseek-claude|muse|codex|gemini> [prompt]"
 label="${1:?$usage}"
 agent="${2:?$usage}"
 prompt="${3:-}"
@@ -63,9 +65,10 @@ case "$agent" in
   opus)            cmd=(claude --model claude-opus-5-5 --effort medium "$prompt") ;;
   deepseek)        cmd=("$here/opencode_session.sh" --prompt "$prompt") ;;
   deepseek-claude) cmd=("${MU_DEEPSEEK_CMD:-$HOME/bin/claude-deepseek}" "$prompt") ;;
+  muse)            cmd=("$here/muse_session.sh" --prompt "$prompt") ;;
   codex)           cmd=(codex "$prompt") ;;
   gemini)          cmd=(gemini -i "$prompt") ;;
-  *) echo "spawn_agent: unknown agent '$agent' (claude, opus, deepseek, deepseek-claude, codex, gemini)" >&2; exit 2 ;;
+  *) echo "spawn_agent: unknown agent '$agent' (claude, opus, deepseek, deepseek-claude, muse, codex, gemini)" >&2; exit 2 ;;
 esac
 
 case "$agent" in
