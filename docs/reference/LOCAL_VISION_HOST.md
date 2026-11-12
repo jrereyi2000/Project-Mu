@@ -1,6 +1,8 @@
 # Local vision host: Ollama on the M1 MacBook Pro
 
-**Status: working, verified 2026-11-12.** `qwen2.5vl:7b` answers single Madden frames from this PC over the Tailscale tailnet, through the pilot's own vision path. Nothing is wired into a pilot run by default; pointing Project Mu at this host is one line in `.env` (§6).
+**Status: working and verified 2026-11-12; not adopted.** JR's call the same day: the Mac's per-frame cost (6.2 s, §5) does not beat the PC's own model (2.2 s with Madden running, §5.1), so the PC stays the default vision host and nothing in the repo points at the Mac. This doc is kept because it records the measurements, the one-time setup and the traps, so the question is answered rather than reopened. `qwen2.5vl:7b` answers single Madden frames from this PC over the Tailscale tailnet, through the pilot's own vision path. Nothing is wired into a pilot run; §6 is how to point at it if it is ever wanted.
+
+Unconfirmed: whether the LaunchAgent in §3.4 or a hand-exported `OLLAMA_KEEP_ALIVE=-1` is what keeps the model resident. Keep-alive is observably active either way (`/api/ps` reports `expires_at` in the year 2319), but which mechanism is in place was never established with JR.
 
 Companion to [LOCAL_VISION_LATENCY.md](LOCAL_VISION_LATENCY.md), which measured the models on the PC's GPU and concluded that a 7B VLM is fast enough in principle but too weak to authorise a key. That conclusion stands and this doc does not change it. What this adds is a *host*: a machine that can serve a vision model without contending with Madden for the PC's GPU.
 
