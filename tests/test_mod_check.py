@@ -470,3 +470,18 @@ def test_one_report_per_run_under_the_check_folder(mod):
     assert runs[0].name.endswith("_demo")
     assert (runs[0] / "report.json").is_file()
     assert (runs[0] / "report.md").is_file()
+
+
+# ---------------------------------------------------------------- the real driver's stops
+def test_pilot_driver_maps_a_segment_cue_to_watch_game_stops(monkeypatch):
+    """A cue names a moment; `watch-game --to` names the stop it drives to."""
+    driver = runner.PilotDriver()
+    driver.start("CAREER-TUNE-CHKA")
+    calls = []
+    monkeypatch.setattr(driver, "_call", lambda *args, **kw: calls.append(args) or {"status": "ok"})
+    driver.wait_for("kickoff")
+    driver.wait_for("halftime_start")
+    assert calls == [("watch-game", "--save", "CAREER-TUNE-CHKA", "--to", "kickoff"),
+                     ("watch-game", "--save", "CAREER-TUNE-CHKA", "--to", "halftime")]
+    with pytest.raises(runner.CueMissed):
+        driver.wait_for("supersim_menu")        # a fixed-wait segment is never waited for

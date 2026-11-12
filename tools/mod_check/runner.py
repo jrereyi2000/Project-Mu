@@ -55,6 +55,9 @@ from tools.mod_check.segments import (
     CUES, PlanError, Segment, data_root, load_plan, mod_directory,
 )
 
+# A segment cue names a moment in the game; `watch-game --to` names a stop it drives to. The
+# static `supersim_menu` cue is a fixed wait, so nothing waits for it.
+WATCH_TARGETS = {"kickoff": "kickoff", "halftime_start": "halftime"}
 CHK_PREFIX = "CAREER-TUNE-CHK"
 MAX_CHK = 99
 
@@ -628,7 +631,9 @@ class PilotDriver:
     """The real driver. Needs unit U2's ``watch-game`` job merged for ``wait_for``.
 
     ``start`` remembers the clone and pack; each ``wait_for`` runs
-    ``python3 -m tools.madden_pilot watch-game --save <clone> --to <cue> [--pack P]``; frames
+    ``python3 -m tools.madden_pilot watch-game --save <clone> --to <target> [--pack P]``, where
+    the segment cue maps to the job's stop (``kickoff`` -> ``kickoff``, ``halftime_start`` ->
+    ``halftime``); frames
     come from ``win_agent record`` and ``finish`` quits through the ``quit`` job and reports
     whether the autosave appeared (plan R1/D1).
     """
@@ -667,9 +672,13 @@ class PilotDriver:
     def wait_for(self, cue: str, timeout_s: float = CUE_TIMEOUT_S) -> None:
         if cue not in CUES:
             raise CueMissed(cue, f"allowed cues are {', '.join(CUES)}")
+        target = WATCH_TARGETS.get(cue)
+        if target is None:
+            raise CueMissed(cue, f"{cue!r} is a fixed wait, not a stop watch-game drives to "
+                                 f"({', '.join(WATCH_TARGETS)})")
         if not self.save:
             raise CueMissed(cue, "start() was never called")
-        args = ["watch-game", "--save", self.save, "--to", cue]
+        args = ["watch-game", "--save", self.save, "--to", target]
         if self.pack:
             args += ["--pack", self.pack]
         try:
