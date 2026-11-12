@@ -693,3 +693,19 @@ skill/spec lines. Files: `tools/agent_board_wake.py`, `tests/test_agent_board_wa
 **Still unverified when it lands, and named in the brief:** whether print mode permits *writes* (the trials only
 read and ran tests), whether `--print-timeout 0` blocks for a 20-minute batch, and whether a killed run leaves a
 resumable conversation. A wake that hangs on a permission prompt is worse than no wake.
+
+### 11.4 The same invisibility bites DeepSeek sessions
+
+`tools/spawn_agent.sh <label> deepseek` no longer opens a tmux window: it mints an OpenCode **service** session and
+runs the first turn through `opencode run`, which has no UI. The session is real and titled
+(`opencode session list` shows `Mu <label> (deepseek)`), but nothing on screen shows it working — JR hit exactly
+this on `build-agy-wake`. To watch or steer one, attach a TUI to the same session id:
+
+```
+tmux new-window -d -t mu: -n <label> -c /home/jrereyi/Project-Mu \
+  "opencode --session <ses_mu_…>; exec bash"
+```
+
+The window is a viewer; the headless runner owns the turn in flight, and anything typed queues behind it. The
+fix-lane builders and `build-agy-wake` are attached this way. Worth folding into `tools/spawn_agent.sh` once
+`fix-tooling` releases it — print it as part of the spawn line, as the DeepSeek route already prints the id.
