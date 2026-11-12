@@ -51,9 +51,21 @@
 set -euo pipefail
 
 caller_is_deepseek() {
-  [ "${MU_AGENT_CLASS:-}" = deepseek ] ||
-  [[ "${ANTHROPIC_BASE_URL:-}" == *deepseek* ]] ||
-  [[ "${ANTHROPIC_MODEL:-}" == deepseek-* ]]
+  local cls
+  cls="$(printf '%s' "${MU_AGENT_CLASS:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+  if [ -n "$cls" ]; then
+    [ "$cls" = deepseek ]
+    return
+  fi
+  if [[ "${MU_AGENT_MODEL:-}" == deepseek-* ]] ||
+     [[ "${MU_OPENCODE_MODEL:-}" == *deepseek* ]] ||
+     [[ "${ANTHROPIC_BASE_URL:-}" == *deepseek* ]] ||
+     [[ "${ANTHROPIC_MODEL:-}" == deepseek-* ]]; then
+    return 0
+  fi
+  # A bare `opencode` session (started without tools/opencode_session.sh) exports no MU_* marker,
+  # but the CLI sets these for the session it runs, and it is the DeepSeek route (R3 F3).
+  [ "${OPENCODE:-}" = 1 ] || [ -n "${OPENCODE_SESSION_ID:-}" ]
 }
 
 dry=0
@@ -110,8 +122,16 @@ case "$agent" in
     ;;
 esac
 
-inner="$(printf '%q ' "${cmd[@]}")"
-inner="${inner% }; exec bash"
+# A child route must not inherit the caller's route markers (R3 F2). A Claude Code, Codex or
+# Antigravity child started from a DeepSeek session would otherwise look DeepSeek-routed (the spawn
+# guard, /audit's refusal, /context-check's harness) and a DeepSeek child would reserve the parent's
+# MU_OPENCODE_SESSION instead of minting its own. The child's own route re-sets what it needs
+# (opencode_session.sh and muse_session.sh export their markers; hydrogen sets MU_AGENT_CLASS).
+scrub=(env -u MU_AGENT_CLASS -u MU_AGENT_HARNESS -u MU_AGENT_MODEL -u MU_OPENCODE_MODEL \
+           -u MU_OPENCODE_SESSION -u MU_ALLOW_DEEPSEEK_SPAWN \
+           -u OPENCODE -u OPENCODE_SESSION_ID -u OPENCODE_TERMINAL)
+scrub_vars=(MU_AGENT_CLASS MU_AGENT_HARNESS MU_AGENT_MODEL MU_OPENCODE_MODEL MU_OPENCODE_SESSION \
+            MU_ALLOW_DEEPSEEK_SPAWN OPENCODE OPENCODE_SESSION_ID OPENCODE_TERMINAL)
 
 # DeepSeek and Muse sessions belong to the shared OpenCode window (JR, 2026-11-12): no tmux window,
 # no window name to collide with. The wrapper mints/pins the session and prints its id.
@@ -122,8 +142,10 @@ case "$agent" in
 esac
 
 if [ -n "$shared_wrapper" ]; then
-  run=(env -u MU_OPENCODE_SESSION "$shared_wrapper" --session-only --title "Mu $label ($agent)")
+  run=("${scrub[@]}" "$shared_wrapper" --session-only --title "Mu $label ($agent)")
 else
+  inner="$(printf '%q ' "${scrub[@]}" "${cmd[@]}")"
+  inner="${inner% }; exec bash"
   run=(bash -lic "$inner")
 fi
 
@@ -150,8 +172,17 @@ MSG
 fi
 
 command -v tmux >/dev/null || { echo "spawn_agent: tmux is not installed" >&2; exit 1; }
+created=0
 if ! tmux has-session -t "=$S" 2>/dev/null; then
   tmux new-session -d -s "$S" -n shell -c "$R"
+  created=1
+fi
+if [ "$created" = 1 ]; then
+  # Creating the session copied this caller's environment into tmux's global environment, which
+  # every later window inherits. Drop the route markers a child must never see (R3 F2).
+  for var in "${scrub_vars[@]}"; do
+    tmux set-environment -g -u "$var" 2>/dev/null || true
+  done
 fi
 if tmux list-windows -t "=$S" -F '#{window_name}' | grep -qxF "$label"; then
   echo "spawn_agent: window '$label' already exists in tmux session '$S'" >&2; exit 1
