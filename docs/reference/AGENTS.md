@@ -34,6 +34,15 @@ Gemini 4 Hydrogen runs in Antigravity too (`agy --model gemini-4-hydrogen-high`,
 
 Any model class except Muse may run `/builder`, `/execute-plan` and `/propose`; the Muse limits sit in its paragraph above. `/audit` is restricted to Opus 5.5, Codex, Argon and Gemini 4 Hydrogen: a DeepSeek-routed session never audits, because review has to come from a different model from the builders (JR, 2026-11-10). An Opus, Codex or Argon session may spawn a DeepSeek session for builder or task-implementation work with `tools/spawn_agent.sh <label> deepseek "/builder"`, after saying why on the board; they coordinate so they run the fewest DeepSeek sessions. A DeepSeek session may spawn its own hand-off or successor DeepSeek session (JR, 2026-11-11), running the script with `MU_ALLOW_DEEPSEEK_SPAWN=1` and saying why on the board first; it does not need `opus`, `argon` or `codex` to spawn one for it. The spawn guard counts a caller as DeepSeek-routed when `MU_AGENT_CLASS` says so in any case or with surrounding spaces, when `MU_AGENT_MODEL`/`MU_OPENCODE_MODEL`/`ANTHROPIC_MODEL` names a DeepSeek model, when `ANTHROPIC_BASE_URL` points at DeepSeek, or when the caller is a bare `opencode` session (`OPENCODE=1` / `OPENCODE_SESSION_ID`), which exports no `MU_*` marker of its own. Every window or shared session the script starts is scrubbed of the caller's route markers first (`MU_AGENT_CLASS`, `MU_AGENT_HARNESS`, `MU_AGENT_MODEL`, `MU_OPENCODE_MODEL`, `MU_OPENCODE_SESSION`, `MU_ALLOW_DEEPSEEK_SPAWN`, `OPENCODE*`), so a child never looks DeepSeek-routed to `/audit`, `/context-check` or the guard, and a DeepSeek child mints its own session instead of resuming its parent's.
 
+## Session tabs
+
+`tools/spawn_agent.sh <label> deepseek|muse` creates the session headlessly in the shared OpenCode
+window; the API can create it but cannot open a TUI tab (M-0743/M-0744). The project TUI plugin
+`.opencode/plugins/mu-sessions/tui.js` closes that gap: it opens a tab for every **new**
+`Mu <label> (<agent>)` session after the plugin loads, and adds `/mu-sessions` (alias `/mu`) to
+list the Mu sessions updated in the last 12 hours and focus the one you pick. It is TUI-only and
+never sends a prompt or a key to another session. Load it with `/reload` or the next TUI start.
+
 ## Built
 
 | Skill | What it does | Backing code | Guide | Notes |

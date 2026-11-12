@@ -52,6 +52,8 @@ Project Mu/
 │       └── execute-plan/      #     /execute-plan <plan>: SKILL.md (a session that isn't DeepSeek-routed writes JR's approval into the plan and hands the build to a DeepSeek session, reused or spawned with tools/spawn_agent.sh build-<plan-slug> deepseek (JR 2026-11-11); JR's approval check, move to in_progress, per wave ≤3 background worktree subagents, review + merge each unit into main, apply the units' reported spec changes, remove its own worktrees/branches, move to done), unit_prompt.md (self-contained subagent prompt and report format), combine_conflicts.py (classifies merge conflicts: different lines → combine with --write, exit 0; same line / add-add / delete-modify → exit 1, ask JR); units touching staff contracts or coach save-writes report tools.offseason_check tables, which the Finish audit handoff carries
 ├── .opencode/                 # OpenCode project config; DeepSeek sessions run here on OpenCode Go
 │   ├── opencode.json          #   Project model pin: opencode-go/deepseek-v4.1-flash
+│   ├── plugins/
+│   │   └── mu-sessions/tui.js #   TUI plugin (JR, 2026-11-12): opens a tab for each NEW `Mu <label> (<agent>)` session and adds /mu-sessions (alias /mu) to focus a recent one; TUI-only, never prompts or presses a key in another session
 │   └── agents/
 │       └── repo-qa.md         #   Read-only repo-qa subagent for /offline (deny all, then read/glob/grep; no shell, edit or web tools; `ask` on `*.env` / `*.env.*` and `allow` on `*.env.example` restored after `allow read *`, since the last matching rule wins)
 ├── GEMINI.md                  # Same session rules for Gemini agents
