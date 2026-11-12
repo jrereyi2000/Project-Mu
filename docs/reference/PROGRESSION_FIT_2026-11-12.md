@@ -7,18 +7,25 @@ seeds on a **full-roster calibration**.
 `engines/progression.py`, no file in the engine or the fit was edited, no database was read beyond the save
 snapshot. **Not an audit** — anything needing a correctness judgement is marked **unverified — needs audit**.
 
+**Docs updated 2026-11-12 by `deepseek-v4.1-flash (r9-doc-cleanup)`:** P3-04b landed afterwards (`46d1716`,
+merged `c82f13b`), so the full-roster calibration described below is the engine's own path and the
+`CALIBRATION_SAMPLE` / `_stratified` sample path it was measured against no longer exists. The measurements are
+unchanged; the notes below say where a claim was about the engine as it stood at `a252164`.
+
 ## 0. Decisions — JR, 2026-11-12
 
 1. **No constant is applied.** The fit's recommendations below (both calibrations) are recorded and stay
    unapplied. The constants question belongs to the first shadow season's reports (P5-06), not to this fit.
 2. **The league-shape calibration runs on the full roster.** The live engine calibrates `calibrate_league_term`
-   on every staying player and every rookie (`frac` 1.0), not on `CALIBRATION_SAMPLE`'s 400-player stride.
+   on every staying player and every rookie, through `league_shape_pool` (`engines/progression.py`), not on a
+   400-player stride sample: `CALIBRATION_SAMPLE` and its `_stratified` helper are gone (P3-04b, below), so the
+   sample path no longer exists to run.
    Reasons: it holds the projected 90+ count at 92–95 across five seeds where the sample swings 82–102, it starts
    and finishes the fit better (0.9337 / 0.8927 against 0.9603 / 0.9184), and the auditor's own repro asked the
    same question with the same answer (`data/audit_reports/league_shape_fix/report.md:159`, `repro_sample.py`:
    live on p2g picks (1.5, 1.0) on the stride sample against (1.5, 1.5) on the full roster).
-   Handed to **builder-10** as **P3-04b**; the code change, its test and the spec line are the builder's, and an
-   audit verdict is still owed on it.
+   Handed to **builder-10** as **P3-04b** and **landed** as `46d1716` (merged `c82f13b`, spec `fe0c44e`); the code
+   change, its test and the spec line are the builder's, and the audit verdict is **PASS** (R8, board M-0772).
 
 Why it ran: [`PROGRESSION_DEVELOPMENT_VERDICT.md`](PROGRESSION_DEVELOPMENT_VERDICT.md) §5 — “fix the target
 season and the projected class, then re-run the P3-02 fit against the fixed engine” — and
@@ -31,13 +38,14 @@ season and the projected class, then re-run the P3-02 fit against the fixed engi
 - **Snapshot:** `CAREER-MU2026` read read-only through `pc_save_reader.mjs` on 2026-11-12 12:10 (2.2 s):
   **2,366 rostered players, 349 rookies, 94 players at 90+, mean OVR 71.79, mean age 26.06, calendar 2026.**
   Identical to the league the 2026-11-10 run used, so every difference below is **code, not population**.
-- **Fit A — sample calibration (the engine's live path):** seeds 0–2,
+- **Fit A — sample calibration (the engine's live path at `a252164`):** seeds 0–2,
   `progression_fit … --seasons 5 --budget 200 --seed {0,1,2}`, 200 replays each, ≈ 5 s a replay.
 - **Fit B — full-roster calibration:** seeds 0–4, same flags, with `calibrate_league_term` fed **every** staying
   player and every rookie instead of the 400-player stratified sample. Done by a scratch runner
   (`/tmp/opencode/p3fit/fit_fullroster.py`) that sets `progression_fit._stratified` to identity, which makes the
   fit's own `frac` 1.0. **No repo file changed**; the report header of each B file says so. ≈ 28.5 s a replay,
-  ≈ 118 min for the five (run concurrently).
+  ≈ 118 min for the five (run concurrently). (That runner reproduced P3-04b's change at the pin; `_stratified`
+  and `frac` are both gone on `main` now, since the fit takes the pool from `league_shape_pool`.)
 - **Why the numbers had to move:** `ded2627` moved the exit/rookie step into `engines/progression.py`
   (`shape_exits_and_rookies`) so the fit and the live engine cannot drift, and `e93e417` keyed the exit draw on
   `season:seed`. The fit's replay uses that shared step (`engines/tuning/progression_fit.py:33`), so the three
@@ -94,7 +102,7 @@ One replayed season (2027, seed 0), same snapshot, one calibration each:
 
 | calibration | development | star | projected 90+ | projected mean |
 |---|---|---|---|---|
-| **sample (A, the live path today)** | **0.00** | **+0.75** | **99** (start 94) | 71.69 |
+| **sample (A, the live path at `a252164`)** | **0.00** | **+0.75** | **99** (start 94) | 71.69 |
 | **full roster (B)** | **+0.50** | **+0.25** | **94** (start 94) | 71.89 |
 
 The five-seed run shows the same thing at league scale. Projected 90+ count per replayed season, target 94:
@@ -112,8 +120,10 @@ this document, and it points one way: **calibrate on the full roster**.
 
 Cost, for the live engine: the calibration is the only part that grows — one replayed season costs 5.7 s on the
 full roster against 1.1 s on the sample for this league (2,366 players), so an offseason pass would spend a few
-seconds more of CPU. It is a cheap change in principle; it is still a change to `engines/progression.py`
-(`CALIBRATION_SAMPLE`), which `V2 core U7` owns and JR approves — **unverified — needs audit**.
+seconds more of CPU. It is a cheap change in principle; it was a change to `engines/progression.py`
+(the 400-player `CALIBRATION_SAMPLE`), which `V2 core U7` owns and JR approves. **It landed** as P3-04b
+(`46d1716`): the sample is deleted and the live engine, its simulation and the fit all take the pool from
+`league_shape_pool`; audited **PASS** (R8, board M-0772).
 
 ---
 
@@ -155,9 +165,10 @@ argued, and the star term does the swinging.
 
 1. **Calibrate on the full roster. ✅ Decided yes (2026-11-12)**, see §0. It is better on every measure here: the
    start (0.9337 vs 0.9603), the finish (0.8927 vs 0.9184), and — decisively — the 90+ count the term exists to
-   hold (92–95 across five seeds against 82–102 on the sample). The live change is `CALIBRATION_SAMPLE` in
-   `engines/progression.py`; **builder-10** carries it as P3-04b, and it needs a builder change plus an audit
-   before it means anything in production.
+   hold (92–95 across five seeds against 82–102 on the sample). The live change was the 400-player
+   `CALIBRATION_SAMPLE` in `engines/progression.py`; **builder-10** carried it as P3-04b and it **landed** as
+   `46d1716` (the pool now comes from `league_shape_pool`), audited **PASS** (R8, board M-0772), so it is on
+   `main`; the term it produces is read in the first shadow season.
 2. **Do not apply a constant on this instrument. ✅ Decided (2026-11-12): none applied.** Nothing is stable at one
    value across seeds, in either set — `AGE_BAND_OFFSET[0]` is 2 of 3 (sample) and 4 of 5 with one dissent (full
    roster), and `AGE_BAND_OFFSET[1]` −0.76 → −0.56 collapses from “largest gain on two seeds” to 1 of 5 once the

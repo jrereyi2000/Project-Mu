@@ -63,7 +63,8 @@ lane is parked.
      a different before/after score from the 2026-11-10 set (0.9804→0.9399 / 0.9856→0.9234 / 0.9488→0.8887);
   2. the `AGE_BAND_OFFSET[0]` recommendation stated for each seed, and whether it is still the one stable one;
   3. audit-2's open question answered with a number: `calibrate_league_term` on the stratified sample
-     (`CALIBRATION_SAMPLE`) vs the full roster, star term each way (the verdict records +1.5 vs +1.0 on p2g);
+     (`CALIBRATION_SAMPLE`, since deleted by P3-04b) vs the full roster, star term each way (the verdict records
+     +1.5 vs +1.0 on p2g);
   4. a **committed** note with those numbers (the fit writes into git-ignored `data/tuning/`, so the record has
      to be a doc — see §5);
   5. explicitly: nothing applied to `engines/progression.py`.
@@ -175,7 +176,7 @@ full-roster ones, `AGE_BAND_OFFSET[0]` stated per seed, the sample-vs-roster tab
 
 **Add, as the decision that measurement opened:**
 
-> | ☐ | **P3-04b** | **Settle the league-shape calibration: full roster or `CALIBRATION_SAMPLE`.** **Decided by JR 2026-11-12: the full roster.** The fit said full roster on every measure (start, finish, and the 90+ count held at 92–95 against the sample's 82–102); the live engine still calibrates on a 400-player sample (`engines/progression.py:1753`). Change it, or record why the sample stays, before the first shadow season — the term the season runs under depends on it. | A `/builder` change with a test (or a recorded decision), audited, and the term read in the first shadow season. | M |
+> | ☐ | **P3-04b** | **Settle the league-shape calibration: full roster or the 400-player `CALIBRATION_SAMPLE`.** **Decided by JR 2026-11-12: the full roster**, and **landed** as `46d1716` (merged `c82f13b`, spec `fe0c44e`): the stride sample and its `_stratified` helper are deleted, and the live engine, its simulation and the fit all calibrate through `league_shape_pool` on every staying player and every rookie. The fit said full roster on every measure (start, finish, and the 90+ count held at 92–95 against the sample's 82–102), audited **PASS** (R8, `audit-p3-chain`, M-0772). The box stays open on one done-when only: the term read in the first shadow season. | A `/builder` change with a test — done; audited — done (R8 PASS); the term read in the first shadow season — outstanding. | M |
 
 **Note on P3-02's tick (no status change):** append “the fitted numbers predate the 2026-11-11 league-shape
 fix; the re-run is P3-04a”.
