@@ -20,6 +20,12 @@ engine (three seeds) and settle the two questions the verdict left open (sample 
 term moved).** It is a measurement, so it needs **no audit verdict** — which is why it can run while the audit
 lane is parked.
 
+> **Status, 2026-11-12: unit 1 is done.** Run in this session at JR's request; results in
+> [`PROGRESSION_FIT_2026-11-12.md`](PROGRESSION_FIT_2026-11-12.md). Headline: the old “stable on all three
+> seeds” recommendation does **not** survive — `AGE_BAND_OFFSET[0]` is now 2 of 3 (seed 0 drops it), and the
+> largest move on two seeds is `AGE_BAND_OFFSET[1]` (24–26) −0.76 → −0.56. The league term's maximum is +1.50,
+> at the verdict's revisit line and never over it. Nothing was applied.
+
 - **Checklist ID:** **P3-04** (its own recorded follow-up; it re-runs **P3-02**). Proposed as a new sub-row
   **P3-04a** in §5 below, because P3-04 and P3-02 are both ticked ☑ and the outstanding half has no row.
 - **Why it is the true next one, not the next unchecked row:** the first unchecked rows in document order are
@@ -62,11 +68,12 @@ unblocked by the one before it:
 
 | # | Unit | ID | Needs | Why here |
 |---|---|---|---|---|
-| 1 | Re-run the fit on the fixed engine, 3 seeds; sample-vs-roster; committed note | **P3-04a** (new) | save read only | last offline input to the constants freeze; no audit needed |
+| 1 | Re-run the fit on the fixed engine, 3 seeds; sample-vs-roster; committed note | **P3-04a** (new) | save read only | last offline input to the constants freeze; no audit needed. **Done 2026-11-12** |
 | 2 | Tuning DB to head (144; `madden_tune_p2g` is at **138**, no `shape_season` column) and prove every feature reaches `shadow` | **P5-01** | a `madden_tune_*` write | S, an hour; the gateway to the shadow seasons, and its precondition is not met today |
 | 3 | First shadow season on the PC (`producers` + `relationships`), then the per-feature loop | **P5-02** → P5-14 | Madden PC + a full season per feature | the long pole; it waits on the PC, so it cannot be unit 1 |
 
 Unit 1 is the one to start; unit 2 can run in the same sitting while unit 1's fit is in the background.
+**With unit 1 done, unit 2 (P5-01) is next** — it is still the only PC-free step of the shadow-season phase.
 
 ---
 
@@ -156,6 +163,10 @@ the only real headroom.
 **Add, under §5.1 (P3), after P3-04:**
 
 > | ☐ | **P3-04a** | **Re-run the P3-02 fit on the fixed league-shape engine** (P3-04's open follow-up, 2026-11-12). Three seeds against `CAREER-MU2026` after `ded2627`/`e93e417`, answer audit-2's sample-vs-full-roster question, write the numbers into a committed note, apply nothing. | Fresh `progression_fit_seed{0,1,2}` reports plus a committed note; `AGE_BAND_OFFSET[0]` recommendation stated per seed. | M |
+
+**Run 2026-11-12 — tick it when JR agrees.** The done-when evidence is in
+[`PROGRESSION_FIT_2026-11-12.md`](PROGRESSION_FIT_2026-11-12.md): three fresh reports, `AGE_BAND_OFFSET[0]` stated
+per seed (2 of 3, not 3 of 3), the sample-vs-roster table, and a committed note.
 
 **Note on P3-02's tick (no status change):** append “the fitted numbers predate the 2026-11-11 league-shape
 fix; the re-run is P3-04a”.
