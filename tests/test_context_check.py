@@ -1,8 +1,33 @@
-"""tools/context_check.py: reading a session transcript and tripping at the over-context line."""
+"""tools/context_check.py: reading a session transcript or OpenCode session and tripping at the
+over-context line."""
 
 import json
+import re
+import sys
+from pathlib import Path
 
 from tools import context_check as cc
+
+STUB = """#!{python}
+import json, os, sys
+
+with open(os.environ["MU_STUB_FIXTURES"]) as f:
+    fixtures = json.load(f)
+argv = sys.argv[1:]
+if argv[:2] == ["session", "list"]:
+    print(json.dumps(fixtures.get("list", [])))
+    sys.exit(0)
+if argv[:2] == ["session", "export"]:
+    sid = argv[2] if len(argv) > 2 else None
+    exports = fixtures.get("exports", {{}})
+    if sid not in exports:
+        print("no such session", file=sys.stderr)
+        sys.exit(1)
+    print(json.dumps(exports[sid]))
+    sys.exit(0)
+print("unexpected arguments: %r" % (argv,), file=sys.stderr)
+sys.exit(2)
+"""
 
 
 def entry(role, usage=None):
@@ -15,6 +40,40 @@ def entry(role, usage=None):
 def write_transcript(path, *lines):
     path.write_text("\n".join(lines) + "\n")
     return path
+
+
+def assistant(*, input=0, read=0, write=0, output=0, reasoning=0):
+    return {
+        "type": "assistant",
+        "tokens": {
+            "input": input,
+            "output": output,
+            "reasoning": reasoning,
+            "cache": {"read": read, "write": write},
+        },
+    }
+
+
+def opencode_stub(tmp_path, monkeypatch, exports, listing=None):
+    """Install a stub `opencode` and point MU_OPENCODE_BIN at it."""
+    script = tmp_path / "opencode"
+    script.write_text(STUB.format(python=sys.executable))
+    script.chmod(0o755)
+    fixtures = tmp_path / "fixtures.json"
+    fixtures.write_text(
+        json.dumps(
+            {
+                "exports": exports,
+                "list": listing if listing is not None else [{"id": k} for k in exports],
+            }
+        )
+    )
+    monkeypatch.setenv("MU_OPENCODE_BIN", str(script))
+    monkeypatch.setenv("MU_STUB_FIXTURES", str(fixtures))
+    monkeypatch.delenv("MU_OPENCODE_SESSION", raising=False)
+    monkeypatch.delenv("MU_AGENT_HARNESS", raising=False)
+    monkeypatch.delenv("CLAUDE_CODE_SESSION_ID", raising=False)
+    return script
 
 
 def test_context_tokens_sums_prompt_buckets_only():
@@ -89,3 +148,165 @@ def test_find_transcript_by_session_id(tmp_path, monkeypatch):
 def test_main_reports_a_missing_transcript(tmp_path, capsys):
     assert cc.main(["--transcript", str(tmp_path / "nope.jsonl")]) == 1
     assert "context_check:" in capsys.readouterr().err
+
+
+# --- OpenCode sessions -------------------------------------------------------------------------
+
+
+def test_opencode_context_sums_input_and_cache_only():
+    assert cc.opencode_context_tokens(
+        {"input": 5, "cache": {"read": 7, "write": 3}, "output": 999, "reasoning": 500}
+    ) == 15
+    assert cc.opencode_context_tokens({}) == 0
+    assert cc.opencode_context_tokens({"input": 4, "cache": None}) == 4
+
+
+def test_last_opencode_tokens_takes_the_newest_assistant_usage():
+    export = {
+        "messages": [
+            {"type": "user", "tokens": {"input": 1}},
+            assistant(input=10),
+            {"type": "assistant", "content": "no usage here"},
+            assistant(input=20, read=5, write=5),
+            {"type": "user"},
+        ]
+    }
+    assert cc.opencode_context_tokens(cc.last_opencode_tokens(export)) == 30
+    assert cc.last_opencode_tokens({"messages": [{"type": "user"}]}) is None
+
+
+def test_mu_opencode_session_selects_that_session(tmp_path, monkeypatch, capsys):
+    opencode_stub(
+        tmp_path,
+        monkeypatch,
+        {
+            "ses_one": {"messages": [assistant(input=100, read=20, write=5)]},
+            "ses_two": {"messages": [assistant(input=999_999)]},
+        },
+        listing=[{"id": "ses_two"}, {"id": "ses_one"}],
+    )
+    monkeypatch.setenv("MU_OPENCODE_SESSION", "ses_one")
+
+    assert cc.main(["--limit", "1000", "--threshold", "60"]) == 0
+    captured = capsys.readouterr()
+    assert "125 / 1,000 tokens" in captured.out
+    assert "(opencode ses_one)" in captured.out
+    assert "ses_two" not in captured.out
+    assert captured.err == ""
+
+
+def test_session_flag_overrides_the_env_session(tmp_path, monkeypatch, capsys):
+    opencode_stub(
+        tmp_path,
+        monkeypatch,
+        {
+            "ses_one": {"messages": [assistant(input=100)]},
+            "ses_two": {"messages": [assistant(input=42, read=8)]},
+        },
+        listing=[{"id": "ses_one"}],
+    )
+    monkeypatch.setenv("MU_OPENCODE_SESSION", "ses_one")
+
+    assert cc.main(["--session", "ses_two", "--json"]) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["tokens"] == 50
+    assert result["source"] == "opencode ses_two"
+    assert result["harness"] == "opencode"
+
+
+def test_newest_session_fallback_only_without_a_named_session(tmp_path, monkeypatch, capsys):
+    opencode_stub(
+        tmp_path,
+        monkeypatch,
+        {
+            "ses_new": {"messages": [assistant(input=1_000)]},
+            "ses_old": {"messages": [assistant(input=7_000)]},
+        },
+        listing=[{"id": "ses_new"}, {"id": "ses_old"}],
+    )
+
+    assert cc.main(["--limit", "10000"]) == 0
+    captured = capsys.readouterr()
+    assert "1,000 / 10,000 tokens" in captured.out
+    assert "(opencode ses_new)" in captured.out
+    assert "warning:" in captured.err and "ses_new" in captured.err
+
+
+def test_opencode_over_the_threshold_exits_2(tmp_path, monkeypatch, capsys):
+    opencode_stub(
+        tmp_path,
+        monkeypatch,
+        {"ses_x": {"messages": [assistant(input=500_000, read=90_000, write=10_000)]}},
+    )
+    monkeypatch.setenv("MU_OPENCODE_SESSION", "ses_x")
+
+    assert cc.main(["--limit", "1000000", "--threshold", "60"]) == 2
+    out = capsys.readouterr().out
+    assert "600,000 / 1,000,000" in out
+    assert "OVER 60%: hand over now" in out
+    assert "(opencode ses_x)" in out
+
+
+def test_opencode_session_without_assistant_usage_exits_1(tmp_path, monkeypatch, capsys):
+    opencode_stub(
+        tmp_path,
+        monkeypatch,
+        {"ses_fresh": {"info": {"tokens": {"input": 500}}, "messages": [{"type": "user"}]}},
+    )
+    monkeypatch.setenv("MU_OPENCODE_SESSION", "ses_fresh")
+
+    assert cc.main([]) == 1
+    assert "no usage yet" in capsys.readouterr().err
+
+
+def test_transcript_still_wins_over_opencode(tmp_path, monkeypatch, capsys):
+    opencode_stub(
+        tmp_path, monkeypatch, {"ses_one": {"messages": [assistant(input=999_999)]}}
+    )
+    monkeypatch.setenv("MU_OPENCODE_SESSION", "ses_one")
+    p = write_transcript(tmp_path / "t.jsonl", entry("assistant", {"input_tokens": 10}))
+
+    assert cc.main(["--transcript", str(p), "--json"]) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["tokens"] == 10
+    assert result["harness"] == "claude"
+    assert result["source"] == str(p)
+    assert result["transcript"] == str(p)
+
+
+def test_harness_claude_ignores_opencode(tmp_path, monkeypatch, capsys):
+    opencode_stub(
+        tmp_path, monkeypatch, {"ses_one": {"messages": [assistant(input=999_999)]}}
+    )
+    monkeypatch.setenv("MU_OPENCODE_SESSION", "ses_one")
+    monkeypatch.setenv("MU_AGENT_HARNESS", "opencode")
+    projects = tmp_path / "projects"
+    slug = re.sub(r"[^A-Za-z0-9]", "-", str(Path.cwd().resolve()))
+    (projects / slug).mkdir(parents=True)
+    p = write_transcript(
+        projects / slug / "cwd.jsonl", entry("assistant", {"input_tokens": 321})
+    )
+    monkeypatch.setattr(cc, "PROJECTS", projects)
+
+    assert cc.main(["--harness", "claude", "--json"]) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["harness"] == "claude"
+    assert result["tokens"] == 321
+    assert result["source"] == str(p)
+
+
+def test_harness_env_selects_opencode_without_a_named_session(tmp_path, monkeypatch, capsys):
+    opencode_stub(
+        tmp_path,
+        monkeypatch,
+        {"ses_env": {"messages": [assistant(input=2_000)]}},
+        listing=[{"id": "ses_env"}],
+    )
+    monkeypatch.setenv("MU_AGENT_HARNESS", "opencode")
+
+    assert cc.main(["--limit", "10000", "--json"]) == 0
+    captured = capsys.readouterr()
+    result = json.loads(captured.out)
+    assert result["tokens"] == 2_000
+    assert result["source"] == "opencode ses_env"
+    assert "warning:" in captured.err
