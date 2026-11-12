@@ -649,6 +649,27 @@ def test_cli_default_run_dir():
     assert d.parent.name == "pilot_runs" and d.parent.parent.name == "data" and d.name.endswith("_sim-season")
 
 
+def test_run_dirs_never_share_a_steps_folder(tmp_path, monkeypatch, notices):
+    # the pilot numbers step PNGs per process: two invocations in one second must not overwrite
+    # each other's frames (spike S-1 lost most of its in-game frames that way)
+    import datetime as dt
+    import types
+
+    class Frozen(dt.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2026, 11, 12, 14, 0, 0)
+
+    monkeypatch.setattr(cli, "ROOT", tmp_path)
+    monkeypatch.setattr(cli, "datetime", types.SimpleNamespace(datetime=Frozen))
+    first = cli.run_dir_for("watch-game")
+    first.mkdir(parents=True)
+    second = cli.run_dir_for("watch-game")
+    assert second != first and second.name == first.name + "-2"
+    second.mkdir()
+    assert cli.run_dir_for("watch-game").name == first.name + "-3"
+
+
 def test_loading_frames_are_unknown():
     fake, _ = fake_madden()
     from tools.madden_pilot.screens import classify
@@ -793,3 +814,296 @@ def test_load_accepts_the_same_season_and_week(tmp_path, notices, monkeypatch):
     p = make_pilot(tmp_path, fake)
     out = jobs.sim_season(p, save="CAREER-TUNE-X", to="week 2", watcher=lambda: False, folder=tmp_path / "none")
     assert out["status"] == "ok" and out["end_week"] == 2
+
+
+# ---------------------------------------------------------------- the game clock (watch_game)
+def _clock(lines):
+    return jobs.read_game_clock(Frame(None, lines=lines))
+
+
+def test_read_game_clock_reads_the_scorebug():
+    assert _clock(["CHI 0 CAR 0", "1st 10:21"]) == {"quarter": 1, "seconds": 621}
+    assert _clock(["2ND 0:18"]) == {"quarter": 2, "seconds": 18}
+    assert _clock(["3RD 0:04", ":40"]) == {"quarter": 3, "seconds": 4}
+    assert _clock(["4TH 15:00"]) == {"quarter": 4, "seconds": 900}
+    assert _clock(["1st 11:00"]) == {"quarter": 1, "seconds": 660}
+
+
+def test_read_game_clock_never_mistakes_the_play_clock_a_stat_line_or_a_partial_read():
+    assert _clock([":40"]) is None                     # the play clock on its own
+    assert _clock([":40", "2ND"]) is None              # ... next to a quarter word
+    assert _clock([":40", "53.3", "72.2"]) is None     # passer numbers
+    assert _clock(["2ND & 18"]) is None                # a down marker, not a clock
+    assert _clock(["2ND 0:1"]) is None                 # seconds always read as two digits
+    assert _clock(["CHI 0 CAR 0"]) is None
+    assert _clock([]) is None
+    assert jobs.read_game_clock(None) is None
+
+
+def test_read_game_clock_pairs_the_scorebug_split_across_two_lines():
+    # S-1's pause frame (data/spikes/20261112-1410-game-start-halftime/run/steps/0048_UNKNOWN.json)
+    # reads "2nd" and "2:54" as two OCR lines on one row, beside the down marker "1st & 35".
+    words = [{"text": "2nd", "box": [821, 288, 78, 22], "line": 13},
+             {"text": "2:54", "box": [922, 288, 89, 22], "line": 17},
+             {"text": "1st", "box": [1162, 288, 57, 22], "line": 23},
+             {"text": "35", "box": [1269, 288, 50, 22], "line": 23}]
+    assert jobs.read_game_clock(Frame(None, words)) == {"quarter": 2, "seconds": 174}
+    down_only = [{"text": "1st", "box": [1162, 288, 57, 22], "line": 0},
+                 {"text": "35", "box": [1269, 288, 50, 22], "line": 0}]
+    assert jobs.read_game_clock(Frame(None, down_only)) is None
+
+
+# ---------------------------------------------------------------- watch_game
+class WatchMadden(ScriptedMadden):
+    """A ScriptedMadden that marks where the kickoff hold and the RESUME start, and can write the
+    autosave when the franchise is quit (spike S-1: quitting writes <save>-AUTOSAVE)."""
+
+    def __init__(self, *a, autosave=None, **kw):
+        super().__init__(*a, **kw)
+        self.autosave = autosave
+        self.kick_at = None
+        self.resume_at = None
+
+    def on_key(self, name):
+        before, label = self.screen, self.highlight
+        super().on_key(name)
+        select = self.keymap.get("select", "space")
+        if before == "GAME_KICKOFF" and name == select:
+            self.kick_at = len(self.keys)
+        elif before == "PAUSE_MENU" and name == select and label == "RESUME":
+            self.resume_at = len(self.keys)
+        elif before == "QUIT_CONFIRM" and label == "YES" and self.screen == "FRANCHISE_LIST" and self.autosave:
+            self.autosave.write_bytes(b"autosave")
+
+
+def _watch(tmp_path, fake, **kw):
+    p = make_pilot(tmp_path, fake)
+    kw.setdefault("folder", tmp_path / "none")
+    return p, jobs.watch_game(p, save=kw.pop("save", "CAREER-TUNE-X"), watcher=lambda: False, **kw)
+
+
+@pytest.mark.parametrize("save", [None, "CAREER-MU2026", "TUNE-X", "career-tunex", "CAREER-TUNE-a b"])
+def test_watch_game_refuses_non_tune_saves_before_pressing(tmp_path, notices, save):
+    fake, _ = fake_madden()
+    out = jobs.watch_game(make_pilot(tmp_path, fake), save=save, watcher=lambda: False, folder=tmp_path)
+    assert out["status"] == "refused" and "CAREER-TUNE-" in out["why"]
+    assert fake.keys == [] and fake.looks == 0
+    assert result_json(tmp_path)["status"] == "refused"
+
+
+def test_watch_game_refuses_a_running_watcher_a_bad_target_and_a_bad_hold(tmp_path, notices):
+    fake, _ = fake_madden()
+    p = make_pilot(tmp_path, fake)
+    out = jobs.watch_game(p, save="CAREER-TUNE-X", watcher=lambda: True, folder=tmp_path)
+    assert out["status"] == "refused" and "watch_save" in out["why"]
+    for to in ("super-bowl", "kick off", "", None):
+        out = jobs.watch_game(p, save="CAREER-TUNE-X", to=to, watcher=lambda: False, folder=tmp_path)
+        assert out["status"] == "refused" and "kickoff or halftime" in out["why"], out
+    for hold in (0, 601, -5, "soon", 2.5):
+        out = jobs.watch_game(p, save="CAREER-TUNE-X", hold_seconds=hold, watcher=lambda: False, folder=tmp_path)
+        assert out["status"] == "refused" and "hold-seconds" in out["why"], out
+    out = jobs.watch_game(p, save="CAREER-TUNE-X", franchise="ALLUSER", watcher=lambda: False, folder=tmp_path)
+    assert out["status"] == "refused" and "TUNE-*" in out["why"]
+    assert fake.keys == [] and fake.looks == 0
+
+
+def test_watch_game_kickoff_starts_the_game_then_presses_nothing(tmp_path, notices):
+    log = []
+    fake = WatchMadden(CAT, tiles=["TUNE-X"], out=log.append)
+    p, out = _watch(tmp_path, fake, hold_seconds=7)
+    assert out["status"] == "ok", out
+    assert (out["route"], out["to"], out["hold_seconds"]) == ("kickoff", "kickoff", 7)
+    assert out["pack"] is None and out["franchise"] == "TUNE-X"
+    assert out["clock"] == {"quarter": 1, "seconds": 660}          # 1st 11:00, S-1's kickoff
+    text = "\n".join(log)
+    assert "HUB_GAMEDAY on PLAY SEASON GAME -> GAME_PREGAME_PIVOT" in text
+    assert "GAME_PREGAME_PIVOT -> GAME_PREGAME_READY" in text
+    assert "GAME_PREGAME_READY on READY -> GAME_KICKOFF" in text
+    assert "GAME_KICKOFF on DEEP KICK -> GAME_PLAY" in text
+    # the whole point: the kick is the last press there is. Nothing is pressed for the hold.
+    assert fake.kick_at is not None and len(fake.keys) == fake.kick_at
+    assert out["end_screen"] == "UNKNOWN"                           # in play, an uncatalogued screen
+    assert result_json(tmp_path)["job"] == "watch-game"
+
+
+def test_watch_game_adds_play_season_game_to_the_pilot_policy_only(tmp_path, notices):
+    fake = WatchMadden(CAT, tiles=["TUNE-X"], out=lambda s: None)
+    p = make_pilot(tmp_path, fake)
+    jobs.watch_game(p, save="CAREER-TUNE-X", hold_seconds=2, watcher=lambda: False, folder=tmp_path / "none")
+    assert p.policy["HUB_GAMEDAY"] == ["PLAY SEASON GAME"]
+    assert CAT["screens"]["HUB_GAMEDAY"]["confirm_ok"] == ["ADVANCE WEEK"]
+
+
+def test_watch_game_watches_an_already_loaded_franchise_in_place(tmp_path, notices):
+    log = []
+    fake = WatchMadden(CAT, start="HUB_GAMEDAY", tiles=["TUNE-X"], out=log.append)
+    p = make_pilot(tmp_path, fake)
+    out = jobs.watch_game(p, save="CAREER-TUNE-X", franchise="TUNE-X", hold_seconds=2,
+                          watcher=lambda: False, folder=tmp_path / "none")
+    assert out["status"] == "ok" and out["franchise"] == "TUNE-X", out
+    assert not any("look  -> FRANCHISE_LIST" in ln for ln in log)    # it never went back to the list
+    assert "HUB_GAMEDAY on PLAY SEASON GAME -> GAME_PREGAME_PIVOT" in "\n".join(log)
+
+
+def test_watch_game_halftime_walks_the_supersim_recipe(tmp_path, notices):
+    log = []
+    fake = WatchMadden(CAT, tiles=["TUNE-X"], out=log.append)
+    p, out = _watch(tmp_path, fake, to="halftime", hold_seconds=7)
+    assert out["status"] == "ok", out
+    assert out["route"] == "supersim"
+    assert out["clock"]["quarter"] == 2 and out["clock"]["seconds"] < 20
+    text = "\n".join(log)
+    assert "PAUSE_MENU on SUPER -> SUPERSIM_MENU" in text
+    assert "SUPERSIM_MENU on JUMP FORWARD -> SUPERSIM_JUMP_FORWARD" in text
+    assert text.count("SUPERSIM_JUMP_FORWARD on NEXT QUARTER") == 1
+    assert text.count("SUPERSIM_JUMP_FORWARD on CHANGE OF POSSESSION") == 2
+    assert text.count("SUPERSIM_MENU on JUMP TO NEXT PLAY") > 1      # Q2 by play, not "sim to end"
+    assert "PAUSE_MENU on RESUME -> GAME_PLAY" in text
+    # JR's control rule: the sim loop never plays football. The only snaps are the half's last,
+    # after RESUME, and the hold presses nothing at all.
+    assert sum(1 for ln in log if ln.startswith("  key   space     GAME_PLAY")) == 2
+    assert len(fake.keys) == fake.resume_at + 2
+    assert "QUIT GAME" not in text
+
+
+def test_watch_game_halftime_stops_stuck_instead_of_resuming_outside_the_window(tmp_path, notices,
+                                                                              monkeypatch):
+    class FrozenClock(WatchMadden):
+        def game_key(self, name, label, select):
+            if self.screen == "SUPERSIM_MENU" and label == "JUMP TO NEXT PLAY":
+                self.pending = [LOADING]
+                self.go("SUPERSIM_MENU")          # the clock never moves: Q2 11:00 every read
+                return True
+            return super().game_key(name, label, select)
+
+    monkeypatch.setattr(jobs, "HALFTIME_MAX_PLAY_PRESSES", 3)
+    fake = FrozenClock(CAT, tiles=["TUNE-X"], out=lambda s: None)
+    _, out = _watch(tmp_path, fake, to="halftime", hold_seconds=2)
+    assert out["status"] == "stopped" and out["kind"] == "Stuck", out
+    assert "not resuming the half at the wrong moment" in out["reason"]
+    assert fake.resume_at is None                    # RESUME was never confirmed
+    assert json.loads((tmp_path / "stop.json").read_text())["kind"] == "Stuck"
+
+
+def test_watch_game_halftime_stops_when_the_sim_leaves_q2(tmp_path, notices):
+    class PastHalftime(WatchMadden):
+        def game_key(self, name, label, select):
+            if self.screen == "SUPERSIM_JUMP_FORWARD" and label == "NEXT QUARTER":
+                self.pending = [LOADING]
+                self.game_quarter, self.game_seconds = 3, 900
+                self.go("SUPERSIM_MENU")
+                return True
+            return super().game_key(name, label, select)
+
+    fake = PastHalftime(CAT, tiles=["TUNE-X"], out=lambda s: None)
+    _, out = _watch(tmp_path, fake, to="halftime", hold_seconds=2)
+    assert out["status"] == "stopped" and out["kind"] == "Stuck"
+    assert "reached Q3" in out["reason"] and fake.resume_at is None
+
+
+def test_watch_game_reports_the_autosave_written_by_the_quit(tmp_path, notices, monkeypatch):
+    saves = tmp_path / "saves"
+    saves.mkdir()
+    (saves / "CAREER-TUNE-X").write_bytes(b"save")
+    autosave = saves / "CAREER-TUNE-X-AUTOSAVE"
+
+    class EndedGame(WatchMadden):
+        """The game ends during the hold: the next frame is the franchise hub again."""
+
+        def call(self, cmd):
+            if cmd[0] == "look" and self.kick_at and self.screen == "GAME_PLAY":
+                self.go("HUB_WEEKLY")
+            return super().call(cmd)
+
+    calls = []
+
+    def fake_quit_now(pilot, franchise=None, allow_quit=False):
+        calls.append({"franchise": franchise, "allow_quit": allow_quit})
+        autosave.write_bytes(b"autosave")          # quitting writes it (S-1, plan D1)
+        return {"screen": "FRANCHISE_LIST", "quit": True, "franchise": pilot.loaded_franchise}
+
+    monkeypatch.setattr(jobs, "_quit_now", fake_quit_now)
+    fake = EndedGame(CAT, tiles=["TUNE-X"], out=lambda s: None)
+    p, out = _watch(tmp_path, fake, hold_seconds=2, folder=saves)
+    assert out["status"] == "ok", out
+    assert calls == [{"franchise": "CAREER-TUNE-X", "allow_quit": False}]
+    assert out["quit"] is True and out["end_screen"] == "FRANCHISE_LIST"
+    assert out["written"] == {"save": False, "autosave": True} and out["autosave_written"] is True
+    assert out["autosave_path"] == str(autosave) and autosave.is_file()
+
+
+def test_watch_game_leaves_a_live_game_open_rather_than_confirm_quit_game(tmp_path, notices):
+    log = []
+    fake = WatchMadden(CAT, tiles=["TUNE-X"], out=log.append)
+    _, out = _watch(tmp_path, fake, hold_seconds=2)
+    assert out["status"] == "ok"
+    assert out["quit"] is False and "QUIT GAME" in out["quit_why"]
+    assert "on QUIT GAME" not in "\n".join(log)
+    assert len(fake.keys) == fake.kick_at              # nothing was pressed to leave
+
+
+def test_watch_game_repins_the_pause_menu_instead_of_walking_to_quit_game(tmp_path, notices):
+    # A pause menu re-opened from the sim screen can keep SUPER SIM selected while the pilot's own
+    # cursor resets with the screen change: five Downs from there would land on QUIT GAME, so the
+    # menu is pinned from its top item first (one Up per option).
+    class RememberingMenu(WatchMadden):
+        def go(self, screen):
+            back_from_sim = screen == "PAUSE_MENU" and self.screen == "SUPERSIM_MENU"
+            super().go(screen)
+            if back_from_sim:
+                self.idx = 5                      # SUPER SIM is still selected on the way back
+
+    log = []
+    fake = RememberingMenu(CAT, tiles=["TUNE-X"], out=log.append)
+    _, out = _watch(tmp_path, fake, to="halftime", hold_seconds=2)
+    assert out["status"] == "ok", out
+    text = "\n".join(log)
+    assert "on QUIT GAME" not in text
+    assert text.count("PAUSE_MENU on SUPER -> SUPERSIM_MENU") >= 1
+    assert text.count("PAUSE_MENU on RESUME -> GAME_PLAY") == 1
+
+
+def test_watch_game_refuses_a_missing_save_file(tmp_path, notices):
+    saves = tmp_path / "saves"
+    saves.mkdir()
+    fake = WatchMadden(CAT, tiles=["TUNE-X"], out=lambda s: None)
+    out = jobs.watch_game(make_pilot(tmp_path, fake), save="CAREER-TUNE-X", watcher=lambda: False, folder=saves)
+    assert out["status"] == "refused" and "clone-save" in out["why"]
+    assert fake.keys == []
+
+
+# ---------------------------------------------------------------- CLI dry runs (watch-game)
+def test_cli_dry_run_watch_game_prints_the_route_and_touches_nothing(tmp_path, notices, monkeypatch):
+    monkeypatch.setattr(jobs, "watcher_running", lambda: False)
+    lines = []
+    rc = cli.main(["watch-game", "--save", "CAREER-TUNE-X", "--hold-seconds", "5", "--dry-run",
+                   "--run-dir", str(tmp_path)], out=lines.append)
+    assert rc == 0
+    text = "\n".join(lines)
+    assert lines[0].startswith("[dry-run] watch-game: FRANCHISE_LIST > highlight TUNE-X")
+    assert "PLAY SEASON GAME" in lines[0] and "hold 5s pressing nothing" in lines[0]
+    assert "GAME_KICKOFF on DEEP KICK -> GAME_PLAY" in text
+    res = result_json(tmp_path)
+    assert res["status"] == "ok" and res["dry_run"] is True and res["route"] == "kickoff"
+    assert notices == []
+
+
+def test_cli_dry_run_watch_game_halftime(tmp_path, notices, monkeypatch):
+    monkeypatch.setattr(jobs, "watcher_running", lambda: False)
+    lines = []
+    rc = cli.main(["watch-game", "--save", "CAREER-TUNE-X", "--to", "halftime", "--hold-seconds", "2",
+                   "--dry-run", "--run-dir", str(tmp_path / "h")], out=lines.append)
+    assert rc == 0
+    text = "\n".join(lines)
+    assert "SUPERSIM_JUMP_FORWARD on NEXT QUARTER" in text and "PAUSE_MENU on RESUME" in text
+    res = result_json(tmp_path / "h")
+    assert res["status"] == "ok" and res["route"] == "supersim"
+
+
+def test_cli_dry_run_watch_game_refuses_a_bad_target(tmp_path, notices, monkeypatch):
+    monkeypatch.setattr(jobs, "watcher_running", lambda: False)
+    lines = []
+    rc = cli.main(["watch-game", "--save", "CAREER-TUNE-X", "--to", "endgame", "--dry-run",
+                   "--run-dir", str(tmp_path)], out=lines.append)
+    assert rc == 1 and result_json(tmp_path)["status"] == "refused"
+    assert notices == []

@@ -3,6 +3,8 @@
     python3 -m tools.madden_pilot launch      [--pack "Mu Base"]
     python3 -m tools.madden_pilot clone-save  [--from CAREER-MU2026] --to CAREER-TUNE-<name>
     python3 -m tools.madden_pilot sim-season  --save CAREER-TUNE-<name> [--to "week N"|regular-season-end|playoffs-end]
+    python3 -m tools.madden_pilot advance     --save CAREER-TUNE-<name> [--no-quit]
+    python3 -m tools.madden_pilot watch-game  --save CAREER-TUNE-<name> [--to kickoff|halftime] [--hold-seconds N]
     python3 -m tools.madden_pilot catch-up    --save CAREER-<name> [--to-week N] [--dsn ...]
     python3 -m tools.madden_pilot set-setting --path "Settings>Gameplay>Accel Clamp" --value Off
     python3 -m tools.madden_pilot verify-mods --check first_down_line
@@ -35,6 +37,14 @@ from tools.madden_pilot.screens import UNKNOWN, Frame, classify, load_catalog, n
 LOADING = "LOADING"            # a frame with no catalogued words (classifies as UNKNOWN)
 POSTSEASON = "POSTSEASON"      # stands in for the post-season screens, which aren't catalogued yet
 REGULAR_WEEKS = 18
+# The in-game screens (watch-game, VISUAL_MOD_CHECK_PLAN 2.5): the fake Madden shows a scorebug
+# on them and sims the clock the way the supersim controls do.
+GAME_SCREENS = ("GAME_KICKOFF", "GAME_PLAY", "PAUSE_MENU", "SUPERSIM_MENU", "SUPERSIM_JUMP_FORWARD")
+FAKE_SIM_STEP_SECONDS = 25     # a JUMP TO NEXT PLAY press. Madden moves ~4 s (S-1); the fake
+                              # moves a quarter in a couple of dozen presses so a dry run is short
+FAKE_POSSESSION_SECONDS = 120  # CHANGE OF POSSESSION: one drive, about two minutes (S-1)
+FAKE_SNAP_SECONDS = 6          # a snap burns a few seconds of clock
+QUARTER_WORDS = {1: "1st", 2: "2ND", 3: "3RD", 4: "4TH"}   # mixed case, like the scorebug's OCR
 
 
 class ScriptedMadden:
@@ -45,7 +55,13 @@ class ScriptedMadden:
     Weekly Hub, NEXT WEEK sims (a few loading frames), adds a week and shows COACH_PROGRESS for
     three Space presses, and Tab (savepoint) shows a loading frame. After week 18 the header
     reads WILD CARD, and NEXT WEEK from there opens an uncatalogued screen (UNKNOWN), as the
-    real post-season will until its screens are catalogued."""
+    real post-season will until its screens are catalogued.
+
+    A season game is scripted too (spike S-1's route): PLAY SEASON GAME > the pregame pivot >
+    READY > a loading intro > GAME_KICKOFF > the kick (a Space hold) > GAME_PLAY, with Escape to
+    the pause menu, SUPER SIM to the supersim screen, JUMP FORWARD to its three choices, and a
+    scorebug clock that NEXT QUARTER, CHANGE OF POSSESSION and JUMP TO NEXT PLAY move.
+    """
 
     def __init__(self, catalog, start="FRANCHISE_LIST", tiles=("TUNE-SPIKE",), year=2026, week=1,
                  intro=0, out=print):
@@ -58,6 +74,8 @@ class ScriptedMadden:
         self.t = 0.0
         self.keys = []
         self.looks = 0
+        self.game_quarter = 1
+        self.game_seconds = 660       # "1st 11:00": the kickoff scorebug spike S-1 read
         self.pending = [LOADING] * intro      # frames shown before the current screen
         self.progress_tabs = 0
         self.moves = {}
@@ -104,6 +122,11 @@ class ScriptedMadden:
     def highlight(self):
         return self.options[self.idx] if self.options else None
 
+    @property
+    def game_clock(self):
+        """The scorebug's game clock, in the shape the pilot reads ("1st 11:00", "2ND 0:18")."""
+        return f"{QUARTER_WORDS[self.game_quarter]} {self.game_seconds // 60}:{self.game_seconds % 60:02d}"
+
     def header(self):
         if self.week > REGULAR_WEEKS:
             return f"{self.year}. WILD CARD"
@@ -111,18 +134,26 @@ class ScriptedMadden:
 
     def lines(self, screen):
         if screen not in self.screens:
-            return [] if screen == LOADING else ["PLAYOFF PICTURE", "WILD CARD ROUND"] if screen == POSTSEASON \
-                else [screen]
-        spec = self.screens[screen]
-        lines = list(spec.get("all", [])) + list(spec.get("any", [])[:1])
-        if screen == "FRANCHISE_LIST":
-            lines += self.tiles + ["CREATE NEW LEAGUE"]
+            base = [] if screen == LOADING else \
+                ["PLAYOFF PICTURE", "WILD CARD ROUND"] if screen == POSTSEASON else [screen]
         else:
-            lines += self.options
-        if screen in ("HUB_WEEKLY", "QUIT_CONFIRM"):
-            lines.append(self.header())
+            spec = self.screens[screen]
+            words = list(spec.get("all", [])) + list(spec.get("any", [])[:1])
+            if screen == "FRANCHISE_LIST":
+                base = words + self.tiles + ["CREATE NEW LEAGUE"]
+            elif self.options:
+                # Lay the option rows out first, where the screen really draws them: a menu's
+                # `all` word is often also one of its options (PAUSE_MENU's RESUME), and the
+                # pilot reads a highlight's direction from the option boxes' own row.
+                base = list(self.options) + [w for w in words if w not in self.options]
+            else:
+                base = words
+            if screen in ("HUB_WEEKLY", "QUIT_CONFIRM"):
+                base.append(self.header())
+        if screen in GAME_SCREENS:
+            base = base + [self.game_clock, ":40"]      # the play clock is not the game clock
         out = []
-        for ln in lines:
+        for ln in base:
             if ln not in out:
                 out.append(ln)
         return out
@@ -202,6 +233,14 @@ class ScriptedMadden:
             self.idx = max(0, min(len(self.options) - 1, self.idx + (1 if name == fwd else -1)))
             return
         label = self.highlight
+        if name == "esc" and self.screen == "GAME_PLAY":
+            self.go("PAUSE_MENU")
+            return
+        if name == "backspace" and self.screen == "SUPERSIM_MENU":
+            self.go("PAUSE_MENU")
+            return
+        if self.game_key(name, label, select):
+            return
         if name == select:
             if spec.get("loads_franchise") and label:
                 self.pending = [LOADING]
@@ -226,6 +265,52 @@ class ScriptedMadden:
         target = self.moves.get((self.screen, name, norm(label) if name == select and label else None))
         if target:
             self.go(target)
+
+    def game_key(self, name, label, select):
+        """The in-game route the catalog can't script: the game-start chain and the sim controls.
+
+        Scripted rather than an exit because the pivot's only control has no OCR label and the
+        intro between READY and kickoff is unattended, and because the sim controls move the fake
+        clock rather than a screen. True when it handled the key.
+        """
+        if name != select:
+            return False
+        if self.screen == "HUB_GAMEDAY" and label == "PLAY SEASON GAME":
+            self.pending = [LOADING]
+            self.go("GAME_PREGAME_PIVOT")
+        elif self.screen == "GAME_PREGAME_PIVOT":
+            self.pending = [LOADING]
+            self.go("GAME_PREGAME_READY")
+        elif self.screen == "GAME_PREGAME_READY" and label == "READY":
+            self.pending = [LOADING] * 3          # the ~40 s broadcast intro, no press needed
+            self.go("GAME_KICKOFF")
+        elif self.screen == "GAME_KICKOFF":
+            self.go("GAME_PLAY")
+        elif self.screen == "PAUSE_MENU" and label == "SUPER":
+            self.pending = [LOADING]
+            self.go("SUPERSIM_MENU")
+        elif self.screen == "PAUSE_MENU" and label == "RESUME":
+            self.go("GAME_PLAY")
+        elif self.screen == "SUPERSIM_MENU" and label == "JUMP FORWARD":
+            self.go("SUPERSIM_JUMP_FORWARD")
+        elif self.screen == "SUPERSIM_MENU" and label == "JUMP TO NEXT PLAY":
+            self.pending = [LOADING]
+            self.game_seconds = max(0, self.game_seconds - FAKE_SIM_STEP_SECONDS)
+            self.go("SUPERSIM_MENU")      # the sim screen comes back with the top item selected
+        elif self.screen == "SUPERSIM_JUMP_FORWARD" and label == "NEXT QUARTER":
+            self.pending = [LOADING]
+            self.game_quarter = min(4, self.game_quarter + 1)
+            self.game_seconds = 900
+            self.go("SUPERSIM_MENU")
+        elif self.screen == "SUPERSIM_JUMP_FORWARD" and label == "CHANGE OF POSSESSION":
+            self.pending = [LOADING]
+            self.game_seconds = max(0, self.game_seconds - FAKE_POSSESSION_SECONDS)
+            self.go("SUPERSIM_MENU")
+        elif self.screen == "GAME_PLAY":
+            self.game_seconds = max(0, self.game_seconds - FAKE_SNAP_SECONDS)
+        else:
+            return False
+        return True
 
 
 class DryMirrorStore:
@@ -262,6 +347,12 @@ ROUTES = {
     "set-setting": "walk {path} by OCR labels on catalogued screens > Right until the row reads {value} > back",
     "verify-mods": "run checks/{check}.py",
     "clone-save": "copy {src} to {dst} in MADDEN_SAVES_DIR",
+    "watch-game": "FRANCHISE_LIST > highlight {tile} > Space > PROGRESSION_WARNING (Proceed) > hub > GAMEDAY > "
+                  "highlight PLAY SEASON GAME > Space (this job's policy; the catalog still allows ADVANCE WEEK "
+                  "only) > GAME_PREGAME_PIVOT > Space > GAME_PREGAME_READY (READY) > ~40 s intro > GAME_KICKOFF > "
+                  "Space held 1.5 s > {to} > hold {hold_seconds}s pressing nothing [halftime also: Esc > PAUSE_MENU > "
+                  "SUPER > SUPERSIM_MENU > JUMP FORWARD > NEXT QUARTER > CHANGE OF POSSESSION x2 > JUMP TO NEXT PLAY "
+                  "until the clock reads under 20 s in Q2 > Backspace > RESUME > the half's last snap]",
 }
 
 
@@ -289,6 +380,15 @@ def build_parser():
     s.add_argument("--save", required=True)
     s.add_argument("--no-quit", action="store_true", help="stay in the franchise after the advance")
     s.add_argument("--franchise", help="the TUNE-* franchise already loaded: advance it in place")
+    s = sub.add_parser("watch-game", parents=[common],
+                       help="start a CAREER-TUNE-* season game and hold still while it is recorded")
+    s.add_argument("--save", required=True)
+    s.add_argument("--to", default="kickoff", help="kickoff, or halftime for the supersim recipe")
+    s.add_argument("--hold-seconds", type=int, default=60,
+                   help="how long to press nothing once the segment starts (1-600)")
+    s.add_argument("--pack", help="the pack the game was launched with; recorded in the result")
+    s.add_argument("--franchise", help="the TUNE-* franchise already loaded: watch it in place")
+    s.add_argument("--no-quit", action="store_true", help="leave the game/franchise open afterwards")
     s = sub.add_parser("catch-up", parents=[common],
                        help="sim the real CAREER-* franchise one week at a time, waiting for the NFL mirror")
     s.add_argument("--save", required=True)
@@ -352,21 +452,30 @@ def build_parser():
 
 
 def run_dir_for(job, given=None, dry_run=False):
+    """One run directory per invocation. A second run started in the same second gets a suffix:
+    the pilot numbers step PNGs from 1 in each process, so two runs sharing `steps/` would
+    overwrite each other's frames (spike S-1 lost most of its in-game frames that way)."""
     if given:
         return Path(given)
     stamp = datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")
-    return ROOT / "data" / "pilot_runs" / f"{stamp}_{job}{'_dry-run' if dry_run else ''}"
+    base = ROOT / "data" / "pilot_runs" / f"{stamp}_{job}{'_dry-run' if dry_run else ''}"
+    out, n = base, 1
+    while out.exists():
+        n += 1
+        out = base.with_name(f"{base.name}-{n}")
+    return out
 
 
 def dry_pilot(catalog, run_dir, args, out=print):
     start, intro = {"launch": ("MAIN_MENU", 2), "sim-season": ("FRANCHISE_LIST", 0), "quit": ("HUB_WEEKLY", 0),
                     "advance": ("FRANCHISE_LIST", 0), "catch-up": ("FRANCHISE_LIST", 0),
+                    "watch-game": ("FRANCHISE_LIST", 0),
                     "set-setting": ("HUB_WEEKLY", 0),
                     "verify-mods": ("MAIN_MENU", 0)}.get(args.job, ("MAIN_MENU", 0))
-    if args.job in ("sim-season", "advance") and getattr(args, "franchise", None):
+    if args.job in ("sim-season", "advance", "watch-game") and getattr(args, "franchise", None):
         start = "HUB_WEEKLY"
     tiles = ["TUNE-SPIKE"]
-    if args.job in ("sim-season", "advance", "catch-up"):
+    if args.job in ("sim-season", "advance", "catch-up", "watch-game"):
         tile = jobs.tile_name(args.save).upper()
         tiles = ["ALLUSER-AUTOSAVE", tile] + (["TUNE-SPIKE"] if tile != "TUNE-SPIKE" else [])
     fake = ScriptedMadden(catalog, start=start, tiles=tiles, intro=intro, out=out)
@@ -384,7 +493,7 @@ def main(argv=None, out=print):
     run_dir = run_dir_for(args.job, args.run_dir, args.dry_run)
     catalog = load_catalog()
     fmt = {k: v for k, v in vars(args).items() if v is not None}
-    if args.job in ("sim-season", "advance", "catch-up"):
+    if args.job in ("sim-season", "advance", "catch-up", "watch-game"):
         fmt["tile"] = jobs.tile_name(args.save)
     real_notice = navigate.send_notice
     try:
@@ -425,6 +534,15 @@ def _run(args, run_dir, catalog, fmt, out):
             watcher = lambda: False  # noqa: E731
         result = jobs.advance(pilot, save=args.save, watcher=watcher, quit=not args.no_quit,
                               franchise=args.franchise)
+    elif args.job == "watch-game":
+        watcher = jobs.watcher_running
+        if args.dry_run:
+            if jobs.watcher_running():
+                out("[dry-run] WARNING: pipeline.watch_save is running; a live run would refuse")
+            watcher = lambda: False  # noqa: E731
+        result = jobs.watch_game(pilot, save=args.save, franchise=args.franchise, to=args.to,
+                                 hold_seconds=args.hold_seconds, pack=args.pack, watcher=watcher,
+                                 quit=not args.no_quit)
     elif args.job == "catch-up":
         kw = {}
         if args.dry_run:
