@@ -19,6 +19,230 @@
     "savepoint": "tab"
   },
   "screens": {
+    "GAME_PREGAME_READY": {
+      "note": "Spike S-1 (2026-11-12, data/spikes/20261112-1410-game-start-halftime/report.md): the second pregame screen of a season game, READY highlighted on arrival plus VIEW SUPERSTAR X-FACTORS / ADVANCED SETTINGS / EDIT UNIFORMS. Space on READY starts the ~40 s broadcast intro, which then needs no press. Anchored on READY plus one of its own three options, so the Advance menu's READY TO ADVANCE can never match it. Only READY starts a game; the other three are never confirmed.",
+      "all": [
+        "READY"
+      ],
+      "any": [
+        "VIEW SUPERSTAR X-FACTORS",
+        "ADVANCED SETTINGS",
+        "EDIT UNIFORMS"
+      ],
+      "none": [
+        "READY TO ADVANCE",
+        "FORCE ADVANCE",
+        "MANAGE ROSTER",
+        "CURRENT FRANCHISES"
+      ],
+      "options": [
+        "READY",
+        "VIEW SUPERSTAR X-FACTORS",
+        "ADVANCED SETTINGS",
+        "EDIT UNIFORMS"
+      ],
+      "default": "READY",
+      "nav": "vertical",
+      "highlight": "border",
+      "confirm_ok": [
+        "READY"
+      ],
+      "exits": {}
+    },
+    "GAME_KICKOFF": {
+      "note": "Spike S-1: the pre-snap kickoff of a season game (the kicking team's kicker with a green/blue aim arc and a KICKOFF panel, 1 DEEP KICK / 2 PLACEMENT / 3 POWER SQUIB) over the scorebug (CHI 0 - CAR 0, 1st 11:00). The ball is kicked by HOLDING Space about 1.5 s, not by a tap (JR), so watch-game presses press('select', hold=1.5, _confirm=True) and confirm_ok stays empty: no tap here may start the game. The game is not under way yet, so it must never be treated as a live play.",
+      "all": [
+        "KICKOFF"
+      ],
+      "any": [
+        "DEEP KICK",
+        "PLACEMENT",
+        "POWER SQUIB"
+      ],
+      "none": [
+        "MANAGE ROSTER",
+        "CURRENT FRANCHISES",
+        "RESUME",
+        "QUIT GAME"
+      ],
+      "options": [
+        "DEEP KICK",
+        "PLACEMENT",
+        "POWER SQUIB"
+      ],
+      "default": "DEEP KICK",
+      "nav": "vertical",
+      "highlight": null,
+      "confirm_ok": [],
+      "forbidden_keys": [
+        "enter"
+      ],
+      "exits": {}
+    },
+    "PAUSE_MENU": {
+      "note": "Spike S-1's pause frame (run/steps/0048_UNKNOWN.json): Escape over a live game. RESUME / INSTANT REPLAY / VIEW HIGHLIGHTS / CALL TIMEOUT / CHALLENGE PLAY / SUPER SIM / CELEBRATIONS / STATS / COACHING / OPTIONS / QUIT GAME, with RESUME bordered on arrival. Only RESUME's selection border reads back (the others return scorebug text), so the list is driven by ocr_order from RESUME: SUPER SIM is five Downs, and its list line OCRs as SUPER SIM or just SUPER. Only RESUME and SUPER may be confirmed. QUIT GAME is never pressed (plan 2.5, JR): it is left out of confirm_ok, the catalog's only per-label guard, and Enter, which would also activate an item, is forbidden.",
+      "all": [
+        "RESUME",
+        "QUIT GAME"
+      ],
+      "any": [
+        "SUPER SIM",
+        "SUPER",
+        "INSTANT REPLAY",
+        "CALL TIMEOUT",
+        "CELEBRATIONS"
+      ],
+      "none": [
+        "MANAGE ROSTER",
+        "CURRENT FRANCHISES",
+        "ADVANCE WEEK"
+      ],
+      "options": [
+        "RESUME",
+        "INSTANT REPLAY",
+        "VIEW HIGHLIGHTS",
+        "CALL TIMEOUT",
+        "CHALLENGE PLAY",
+        "SUPER",
+        "CELEBRATIONS",
+        "STATS",
+        "COACHING",
+        "OPTIONS",
+        "QUIT GAME"
+      ],
+      "default": "RESUME",
+      "nav": "vertical",
+      "highlight": "ocr_order",
+      "confirm_ok": [
+        "RESUME",
+        "SUPER",
+        "SUPER SIM"
+      ],
+      "forbidden_keys": [
+        "enter"
+      ],
+      "exits": {
+        "SUPERSIM_MENU": [
+          [
+            "highlight",
+            "SUPER"
+          ],
+          [
+            "confirm",
+            "SUPER"
+          ]
+        ]
+      }
+    },
+    "SUPERSIM_JUMP_FORWARD": {
+      "note": "Spike S-1: JUMP FORWARD's modal over the sim screen \u2014 CHANGE OF POSSESSION (one drive, about 2 min of clock), NEXT QUARTER (stops at the next quarter's start) and END OF GAME. S-1 did not record which item is selected on arrival (its frame was overwritten), so it is driven by ocr_order from CHANGE OF POSSESSION, the top item; a wrong default would press a neighbouring sim control, never a football key, and watch-game's clock check stops the recipe before any resume. END OF GAME is never confirmed.",
+      "all": [
+        "CHANGE OF POSSESSION"
+      ],
+      "any": [
+        "NEXT QUARTER",
+        "END OF GAME"
+      ],
+      "none": [
+        "QUIT GAME",
+        "CURRENT FRANCHISES"
+      ],
+      "options": [
+        "CHANGE OF POSSESSION",
+        "NEXT QUARTER",
+        "END OF GAME"
+      ],
+      "default": "CHANGE OF POSSESSION",
+      "nav": "vertical",
+      "highlight": "ocr_order",
+      "confirm_ok": [
+        "CHANGE OF POSSESSION",
+        "NEXT QUARTER"
+      ],
+      "forbidden_keys": [
+        "enter"
+      ],
+      "exits": {
+        "SUPERSIM_MENU": [
+          [
+            "back",
+            1
+          ]
+        ]
+      },
+      "todo": true
+    },
+    "SUPERSIM_MENU": {
+      "note": "Spike S-1: Space on SUPER SIM opens the super-sim screen \u2014 left column CUSTOM PLAY OPTIONS / JUMP TO NEXT PLAY / JUMP FORWARD, hints SELECT, SPEED: FAST, BACK, and a VIEW ALL PLAY HISTORY pane. Its selection border returns scorebug text, so it is driven by ocr_order from the top item (JUMP FORWARD is two Downs, JUMP TO NEXT PLAY one). Backspace returns to the pause menu. JUMP TO NEXT PLAY moves about 4 s of clock a press and CHANGE OF POSSESSION about two minutes, which is why a quarter is simmed, never played.",
+      "all": [
+        "JUMP FORWARD"
+      ],
+      "any": [
+        "CUSTOM PLAY OPTIONS",
+        "JUMP TO NEXT PLAY",
+        "SPEED: FAST"
+      ],
+      "none": [
+        "QUIT GAME",
+        "CURRENT FRANCHISES"
+      ],
+      "options": [
+        "CUSTOM PLAY OPTIONS",
+        "JUMP TO NEXT PLAY",
+        "JUMP FORWARD"
+      ],
+      "default": "CUSTOM PLAY OPTIONS",
+      "nav": "vertical",
+      "highlight": "ocr_order",
+      "confirm_ok": [
+        "JUMP TO NEXT PLAY",
+        "JUMP FORWARD"
+      ],
+      "forbidden_keys": [
+        "enter"
+      ],
+      "exits": {
+        "SUPERSIM_JUMP_FORWARD": [
+          [
+            "highlight",
+            "JUMP FORWARD"
+          ],
+          [
+            "confirm",
+            "JUMP FORWARD"
+          ]
+        ],
+        "PAUSE_MENU": [
+          [
+            "back",
+            1
+          ]
+        ]
+      },
+      "todo": true
+    },
+    "GAME_PREGAME_PIVOT": {
+      "note": "Spike S-1: the full-screen pregame pivot card a season game opens on (both team logos, AWAY/HOME, OVR, the two teams' key players, the stadium). Its only control is a SELECT hint at the bottom left that does not OCR as a label, so there is no confirm label: watch-game presses Space once with press('select', _confirm=True), the same allowance the spike's guard needed as allow_space. Anchored on OVR + BACK with every hub word excluded, because a GAMEDAY frame also reads OVR and BACK (S-1's own hub frame).",
+      "all": [
+        "OVR",
+        "BACK"
+      ],
+      "any": [],
+      "none": [
+        "MANAGE ROSTER",
+        "CURRENT FRANCHISES",
+        "ADVANCE WEEK",
+        "PLAY SEASON GAME",
+        "RESUME",
+        "QUIT GAME",
+        "KICKOFF",
+        "READY"
+      ],
+      "options": [],
+      "highlight": null,
+      "confirm_ok": [],
+      "exits": {}
+    },
     "DELETE_CONFIRM": {
       "note": "Not seen. Any dialog about deleting a franchise stops the run.",
       "all": [

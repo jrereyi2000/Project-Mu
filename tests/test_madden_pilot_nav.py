@@ -30,6 +30,13 @@ SCREEN_LINES = {
                                "SELECT", "BACK"],
     "CHOOSE_TEAM": ["OFFLINE", "NFL PRESEASON ROSTER", "CHOOSE TEAM", "CUSTOMIZE", "JAGUARS", "RANDOM TEAM", "BACK"],
     "DELETE_CONFIRM": ["DELETE FRANCHISE", "Are you sure? This cannot be undone.", "YES", "NO"],
+    "GAME_PREGAME_PIVOT": ["OVR", "AWAY", "HOME", "BACK", "SELECT"],
+    "GAME_PREGAME_READY": ["READY", "VIEW SUPERSTAR X-FACTORS", "ADVANCED SETTINGS", "EDIT UNIFORMS", "BACK"],
+    "GAME_KICKOFF": ["KICKOFF", "DEEP KICK", "PLACEMENT", "POWER SQUIB", "1st 11:00", "BACK"],
+    "PAUSE_MENU": ["RESUME", "INSTANT REPLAY", "VIEW HIGHLIGHTS", "CALL TIMEOUT", "CHALLENGEPLAY", "SUPER SIM",
+                   "CELEBRATIONS", "STATS", "COACHING", "OPTIONS", "QUIT GAME", "2nd", "2:54", "SELECT", "BACK"],
+    "SUPERSIM_MENU": ["CUSTOM PLAY OPTIONS", "JUMP TO NEXT PLAY", "JUMP FORWARD", "SPEED: FAST", "BACK"],
+    "SUPERSIM_JUMP_FORWARD": ["CHANGE OF POSSESSION", "NEXT QUARTER", "END OF GAME", "SELECT", "BACK"],
     "LOADING": [],
 }
 OPTIONS = {
@@ -38,6 +45,10 @@ OPTIONS = {
     "QUIT_CONFIRM": (["YES", "NO"], 1),
     "HUB_GAMEDAY": (["ADVANCE WEEK", "PLAY SEASON GAME"], 0),
     "ADVANCE_MENU": (["READY TO ADVANCE", "FORCE ADVANCE", "SIM TO MIDSEASON"], 0),
+    "PAUSE_MENU": (["RESUME", "INSTANT REPLAY", "VIEW HIGHLIGHTS", "CALL TIMEOUT", "CHALLENGE PLAY", "SUPER",
+                    "CELEBRATIONS", "STATS", "COACHING", "OPTIONS", "QUIT GAME"], 0),
+    "SUPERSIM_MENU": (["CUSTOM PLAY OPTIONS", "JUMP TO NEXT PLAY", "JUMP FORWARD"], 0),
+    "SUPERSIM_JUMP_FORWARD": (["CHANGE OF POSSESSION", "NEXT QUARTER", "END OF GAME"], 0),
 }
 
 
@@ -122,6 +133,10 @@ DEFAULT_MOVES = {
     ("QUIT_CONFIRM", "space"): lambda h: "FRANCHISE_LIST" if h == "YES" else "HUB_WEEKLY",
     ("ROSTER_DECISION_PROMPT", "backspace"): "HUB_WEEKLY",
     ("COACH_PROGRESS", "space"): "HUB_WEEKLY",
+    ("PAUSE_MENU", "space"): lambda h: {"SUPER": "SUPERSIM_MENU", "RESUME": "GAME_PLAY"}.get(h, "PAUSE_MENU"),
+    ("SUPERSIM_MENU", "space"): lambda h: "SUPERSIM_JUMP_FORWARD" if h == "JUMP FORWARD" else "SUPERSIM_MENU",
+    ("SUPERSIM_MENU", "backspace"): "PAUSE_MENU",
+    ("SUPERSIM_JUMP_FORWARD", "space"): lambda h: "SUPERSIM_MENU",
 }
 
 
@@ -315,6 +330,88 @@ def test_forbidden_keys_and_bare_space(tmp_path, notices):
     assert fake.keys == []
     p.press("right")
     assert fake.keys == ["right"]
+
+
+# ---------------------------------------------------------------- the in-game screens
+def test_the_game_screens_are_catalogued_and_the_guards_hold():
+    s = CAT["screens"]
+    for name in ("GAME_PREGAME_PIVOT", "GAME_PREGAME_READY", "GAME_KICKOFF", "PAUSE_MENU",
+                 "SUPERSIM_MENU", "SUPERSIM_JUMP_FORWARD"):
+        assert name in s, name
+    # starting a game is watch-game's own policy; the catalog still permits ADVANCE WEEK alone
+    assert s["HUB_GAMEDAY"]["confirm_ok"] == ["ADVANCE WEEK"]
+    # the pause menu's QUIT GAME is the one thing the job must never press, and Enter, which
+    # would also activate an item, is refused outright
+    assert s["PAUSE_MENU"]["confirm_ok"] == ["RESUME", "SUPER", "SUPER SIM"]
+    assert "QUIT GAME" not in s["PAUSE_MENU"]["confirm_ok"]
+    assert "enter" in s["PAUSE_MENU"]["forbidden_keys"]
+    # the kick is a 1.5 s hold, not a tap: no label may start it
+    assert s["GAME_KICKOFF"]["confirm_ok"] == []
+    # the sim controls the job presses are allowed; END OF GAME and QUIT GAME are not
+    assert s["SUPERSIM_MENU"]["confirm_ok"] == ["JUMP TO NEXT PLAY", "JUMP FORWARD"]
+    assert s["SUPERSIM_JUMP_FORWARD"]["confirm_ok"] == ["CHANGE OF POSSESSION", "NEXT QUARTER"]
+    assert s["GAME_PREGAME_READY"]["confirm_ok"] == ["READY"]
+    # roster cards and the delete dialog keep their guards
+    assert s["ROSTER_DECISION_PROMPT"]["never_select"] and s["ROSTER_DECISION_PROMPT"]["forbidden_confirm"]
+    assert s["DELETE_CONFIRM"]["forbidden"]
+
+
+def test_quit_game_is_never_confirmable_on_the_pause_menu(tmp_path, notices):
+    fake = FakeMadden("PAUSE_MENU")
+    p = make_pilot(tmp_path, fake)
+    p.look()
+    with pytest.raises(Forbidden):
+        p.confirm_on("PAUSE_MENU", "QUIT GAME")
+    with pytest.raises(Forbidden):
+        p.press("enter")                       # Enter activates the highlighted item too
+    assert fake.keys == [] and fake.screen == "PAUSE_MENU"
+    p.highlight("SUPER")                       # RESUME + five Downs, read from the screen's rows
+    assert p.highlighted() == "SUPER" and fake.highlight == "SUPER"
+    p.confirm_on("PAUSE_MENU", "SUPER")
+    assert fake.keys == ["down"] * 5 + ["space"]
+    assert fake.screen == "SUPERSIM_MENU"
+
+
+def test_the_pause_menu_from_spike_s1_ocr_is_recognised():
+    # the exact OCR lines of S-1's pause frame (run/steps/0048_UNKNOWN.json): INSTANT REPLAY and
+    # VIEW HIGHLIGHTS did not read, CHALLENGE PLAY read as one word, SUPER SIM as one line
+    lines = ["RESUME", "CALL TIMEOUT", "CHALLENGEPLAY", "SUPER SIM", "CELEBRATIONS", "STATS", "COACHING",
+             "OPTIONS", "QUIT GAME", "E,XSPORTS", "KEY PLAYERS", "CALEB WILLIAMS", "TDS", "2nd", "YDS",
+             "2:54", "STATS", "z", "COMPO/O", "53.3", "1st & 35", "ABILITIES", "SELECT", "BACK"]
+    assert classify(frame_of(lines), CAT) == "PAUSE_MENU"
+
+
+def test_the_pregame_pivot_never_matches_a_gameday_frame():
+    # S-1's GAMEDAY frame carries both of the pivot's anchors (OVR and BACK)
+    lines = TABS + ["HS", "OVR", "DEF", "WEEK 1", "CHICAGO", "BEARS", "ADVANCE WEEK", "PLAY SEASON GAME",
+                    "SELECT", "BACK"]
+    assert classify(frame_of(lines), CAT) == "HUB_GAMEDAY"
+
+
+def test_the_supersim_screens_classify_even_over_the_scorebug():
+    menu = ["CUSTOM PLAY OPTIONS", "JUMP TO NEXT PLAY", "JUMP FORWARD", "SPEED: FAST", "2nd", "2:54", ":40",
+            "SELECT", "BACK"]
+    assert classify(frame_of(menu), CAT) == "SUPERSIM_MENU"
+    forward = ["CHANGE OF POSSESSION", "NEXT QUARTER", "END OF GAME", "2nd", "0:18", "SELECT", "BACK"]
+    assert classify(frame_of(forward), CAT) == "SUPERSIM_JUMP_FORWARD"
+
+
+def test_the_supersim_route_is_walkable_from_the_pause_menu(tmp_path, notices):
+    fake = FakeMadden("PAUSE_MENU")
+    p = make_pilot(tmp_path, fake)
+    p.goto("SUPERSIM_JUMP_FORWARD")
+    assert fake.screen == "SUPERSIM_JUMP_FORWARD"
+    assert fake.keys == ["down"] * 5 + ["space"] + ["down"] * 2 + ["space"]
+    p.highlight("NEXT QUARTER")                     # CHANGE OF POSSESSION + one Down
+    p.confirm_on("SUPERSIM_JUMP_FORWARD", "NEXT QUARTER")
+    assert fake.screen == "SUPERSIM_MENU"
+
+
+def test_pause_menu_resume_returns_to_play(tmp_path, notices):
+    fake = FakeMadden("PAUSE_MENU")
+    p = make_pilot(tmp_path, fake)
+    p.confirm_on("PAUSE_MENU", "RESUME")
+    assert fake.screen == "GAME_PLAY" and fake.keys == ["space"]
 
 
 # ---------------------------------------------------------------- confirm_on
