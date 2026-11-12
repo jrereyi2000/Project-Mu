@@ -30,6 +30,8 @@ SCREEN_LINES = {
                                "SELECT", "BACK"],
     "CHOOSE_TEAM": ["OFFLINE", "NFL PRESEASON ROSTER", "CHOOSE TEAM", "CUSTOMIZE", "JAGUARS", "RANDOM TEAM", "BACK"],
     "DELETE_CONFIRM": ["DELETE FRANCHISE", "Are you sure? This cannot be undone.", "YES", "NO"],
+    "QUIT_GAME_CONFIRM": ["QUIT GAME", "CANCEL", "Are you sure you want to quit this game?",
+                          "Your progress will be lost.", "SELECT"],
     "GAME_PREGAME_PIVOT": ["OVR", "AWAY", "HOME", "BACK", "SELECT"],
     "GAME_PREGAME_READY": ["READY", "VIEW SUPERSTAR X-FACTORS", "ADVANCED SETTINGS", "EDIT UNIFORMS", "BACK"],
     "GAME_KICKOFF": ["KICKOFF", "DEEP KICK", "PLACEMENT", "POWER SQUIB", "1st 11:00", "BACK"],
@@ -49,6 +51,7 @@ OPTIONS = {
                     "CELEBRATIONS", "STATS", "COACHING", "OPTIONS", "QUIT GAME"], 0),
     "SUPERSIM_MENU": (["CUSTOM PLAY OPTIONS", "JUMP TO NEXT PLAY", "JUMP FORWARD"], 0),
     "SUPERSIM_JUMP_FORWARD": (["CHANGE OF POSSESSION", "NEXT QUARTER", "END OF GAME"], 0),
+    "QUIT_GAME_CONFIRM": (["QUIT GAME", "CANCEL"], 1),
 }
 
 
@@ -133,7 +136,9 @@ DEFAULT_MOVES = {
     ("QUIT_CONFIRM", "space"): lambda h: "FRANCHISE_LIST" if h == "YES" else "HUB_WEEKLY",
     ("ROSTER_DECISION_PROMPT", "backspace"): "HUB_WEEKLY",
     ("COACH_PROGRESS", "space"): "HUB_WEEKLY",
-    ("PAUSE_MENU", "space"): lambda h: {"SUPER": "SUPERSIM_MENU", "RESUME": "GAME_PLAY"}.get(h, "PAUSE_MENU"),
+    ("PAUSE_MENU", "space"): lambda h: {"SUPER": "SUPERSIM_MENU", "RESUME": "GAME_PLAY",
+                                        "QUIT GAME": "QUIT_GAME_CONFIRM"}.get(h, "PAUSE_MENU"),
+    ("QUIT_GAME_CONFIRM", "space"): lambda h: "FRANCHISE_LIST" if h == "QUIT GAME" else "PAUSE_MENU",
     ("SUPERSIM_MENU", "space"): lambda h: "SUPERSIM_JUMP_FORWARD" if h == "JUMP FORWARD" else "SUPERSIM_MENU",
     ("SUPERSIM_MENU", "backspace"): "PAUSE_MENU",
     ("SUPERSIM_JUMP_FORWARD", "space"): lambda h: "SUPERSIM_MENU",
@@ -340,11 +345,17 @@ def test_the_game_screens_are_catalogued_and_the_guards_hold():
         assert name in s, name
     # starting a game is watch-game's own policy; the catalog still permits ADVANCE WEEK alone
     assert s["HUB_GAMEDAY"]["confirm_ok"] == ["ADVANCE WEEK"]
-    # the pause menu's QUIT GAME is the one thing the job must never press, and Enter, which
-    # would also activate an item, is refused outright
+    # the pause menu's QUIT GAME is never a catalog confirm: only watch-game's own policy lifts it
+    # for one run (JR, 2026-11-12), and Enter, which would also activate an item, is refused
     assert s["PAUSE_MENU"]["confirm_ok"] == ["RESUME", "SUPER", "SUPER SIM"]
     assert "QUIT GAME" not in s["PAUSE_MENU"]["confirm_ok"]
     assert "enter" in s["PAUSE_MENU"]["forbidden_keys"]
+    # the confirmation that follows is its own screen, forbidden to every other job, and even
+    # watch-game may only quit a TUNE-* franchise from it (the same guard QUIT_CONFIRM has)
+    assert s["QUIT_GAME_CONFIRM"]["confirm_ok"] == ["QUIT GAME"]
+    assert s["QUIT_GAME_CONFIRM"]["forbidden_confirm"] is True
+    assert s["QUIT_GAME_CONFIRM"]["quit_guard"] == "QUIT GAME"
+    assert s["QUIT_GAME_CONFIRM"]["todo"] is True
     # the kick is a 1.5 s hold, not a tap: no label may start it
     assert s["GAME_KICKOFF"]["confirm_ok"] == []
     # the sim controls the job presses are allowed; END OF GAME and QUIT GAME are not
@@ -405,6 +416,46 @@ def test_the_supersim_route_is_walkable_from_the_pause_menu(tmp_path, notices):
     p.highlight("NEXT QUARTER")                     # CHANGE OF POSSESSION + one Down
     p.confirm_on("SUPERSIM_JUMP_FORWARD", "NEXT QUARTER")
     assert fake.screen == "SUPERSIM_MENU"
+
+
+def test_the_quit_game_confirmation_is_forbidden_without_the_jobs_policy(tmp_path, notices):
+    fake = FakeMadden("QUIT_GAME_CONFIRM")
+    p = make_pilot(tmp_path, fake)
+    p.look()
+    with pytest.raises(Forbidden):
+        p.confirm_on("QUIT_GAME_CONFIRM", "QUIT GAME")
+    with pytest.raises(Forbidden):
+        p.confirm_on("QUIT_GAME_CONFIRM", "CANCEL")       # a cancel is never a catalog confirm
+    with pytest.raises(Forbidden):
+        p.press("enter")
+    assert fake.keys == [] and fake.screen == "QUIT_GAME_CONFIRM"
+    # with the job's policy for this run the one allowed label works and reaches the list
+    p.policy["QUIT_GAME_CONFIRM"] = ["QUIT GAME"]
+    p.loaded_franchise = "TUNE-SPIKE"
+    p.highlight("QUIT GAME")
+    p.confirm_on("QUIT_GAME_CONFIRM", "QUIT GAME")
+    assert fake.screen == "FRANCHISE_LIST"
+
+
+def test_the_quit_game_confirmation_still_refuses_a_non_tune_franchise(tmp_path, notices):
+    fake = FakeMadden("QUIT_GAME_CONFIRM")
+    p = make_pilot(tmp_path, fake, policy={"QUIT_GAME_CONFIRM": ["QUIT GAME"]})
+    p.look()
+    p.loaded_franchise = "ALLUSER"
+    with pytest.raises(Forbidden):
+        p.confirm_on("QUIT_GAME_CONFIRM", "QUIT GAME")
+    assert "space" not in fake.keys
+    assert "ALLUSER" in read_stop(tmp_path)["reason"]
+
+
+def test_the_pause_menu_is_not_read_as_the_quit_game_confirmation():
+    # the dialog is drawn over the pause list, whose words stay readable (S-1's EXIT MADDEN frame
+    # keeps the landing page's): the dialog's own question is the discriminator
+    dialog = ["RESUME", "SUPER SIM", "QUIT GAME", "Are you sure you want to quit this game?",
+              "Your progress will be lost.", "QUIT GAME", "CANCEL", "SELECT", "BACK"]
+    assert classify(frame_of(dialog), CAT) == "QUIT_GAME_CONFIRM"
+    pause = SCREEN_LINES["PAUSE_MENU"]
+    assert classify(frame_of(pause), CAT) == "PAUSE_MENU"
 
 
 def test_pause_menu_resume_returns_to_play(tmp_path, notices):

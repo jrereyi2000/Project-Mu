@@ -19,6 +19,47 @@
     "savepoint": "tab"
   },
   "screens": {
+    "QUIT_GAME_CONFIRM": {
+      "note": "NOT SEEN: the dialog Madden draws after the pause menu's QUIT GAME (spike S-1 never pressed it; JR's 2026-11-12 decision lets watch-game quit a live CAREER-TUNE-* game). The words are the best reading of a quit-game dialog and a live run is what confirms them: an 'are you sure / your progress will be lost' question with QUIT GAME and CANCEL. Madden draws dialogs over the screen behind them and that screen's words stay readable (S-1's EXIT MADDEN frame keeps the landing page's), so the pause list is deliberately NOT excluded here: the discriminator is the dialog's own question. A pause menu misread as this dialog only makes the job stop, never press twice — it has no label in this screen's options. forbidden_confirm: only watch-game lifts it, with the one label this screen allows; quit_guard: even then a quit is refused unless the loaded franchise is TUNE-* (the same rule QUIT_CONFIRM has); and that label is never cancel-shaped — CANCEL, NO, BACK, DELETE and TRADE are refused by the job before any press.",
+      "all": [
+        "QUIT GAME"
+      ],
+      "any": [
+        "ARE YOU SURE",
+        "PROGRESS"
+      ],
+      "none": [
+        "CURRENT FRANCHISES"
+      ],
+      "options": [
+        "QUIT GAME",
+        "CANCEL"
+      ],
+      "default": "CANCEL",
+      "nav": "vertical",
+      "highlight": "ocr_order",
+      "confirm_ok": [
+        "QUIT GAME"
+      ],
+      "forbidden_confirm": true,
+      "quit_guard": "QUIT GAME",
+      "forbidden_keys": [
+        "enter"
+      ],
+      "exits": {
+        "FRANCHISE_LIST": [
+          [
+            "highlight",
+            "QUIT GAME"
+          ],
+          [
+            "confirm",
+            "QUIT GAME"
+          ]
+        ]
+      },
+      "todo": true
+    },
     "GAME_PREGAME_READY": {
       "note": "Spike S-1 (2026-11-12, data/spikes/20261112-1410-game-start-halftime/report.md): the second pregame screen of a season game, READY highlighted on arrival plus VIEW SUPERSTAR X-FACTORS / ADVANCED SETTINGS / EDIT UNIFORMS. Space on READY starts the ~40 s broadcast intro, which then needs no press. Anchored on READY plus one of its own three options, so the Advance menu's READY TO ADVANCE can never match it. Only READY starts a game; the other three are never confirmed.",
       "all": [
