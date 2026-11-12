@@ -15,16 +15,21 @@ from personality import features as pf
 LEAGUE = 4242
 UNIVERSE = 'mu:00000000-0000-4000-8000-000000000001'
 MIGRATION = Path(__file__).resolve().parent.parent / 'db' / 'migrations' / '2027_01_31_personality_feature_modes.sql'
+PRODUCERS_VERSION = '2027_01_28_relationship_producers'
+LEDGER_VERSIONS = {pf.version_of(pf.MIGRATIONS / m) for _, m in pf.REQUIREMENTS.values() if m}
 
 
 class FakeCursor:
     def __init__(self, ready=True, batch=False, league_state=(LEAGUE, 2027, 5)):
         self.ready, self.batch, self.league_state = ready, batch, league_state
         self.modes, self.changes, self.clearances = {}, [], {}
+        self.ledger = set(LEDGER_VERSIONS)          # schema_migrations: every requirement applied by default
+        self.queries = []
         self._out = []
 
     def execute(self, sql, params=()):
         tag = re.search(r'/\* q:(\w+) \*/', sql).group(1)
+        self.queries.append(tag)
         getattr(self, 'q_' + tag)(params)
 
     def fetchone(self):
@@ -36,6 +41,9 @@ class FakeCursor:
     # -- queries
     def q_ready(self, p):
         self._out = [(self.ready, self.ready, self.ready)]
+
+    def q_migration(self, p):
+        self._out = [(1,)] if p[0] in self.ledger else []
 
     def q_universe_ready(self, p):
         self._out = [(True,)]
@@ -111,6 +119,9 @@ def activate_all_before(cur, feature, now=NOW):
 @pytest.fixture(autouse=True)
 def everything_installed(monkeypatch):
     monkeypatch.setattr(pf, 'installed', lambda feature: (True, None))
+    # The actor chain falls back to the harness env; keep the offline tests deterministic.
+    monkeypatch.delenv('MU_SET_BY', raising=False)
+    monkeypatch.delenv('MU_AGENT_MODEL', raising=False)
 
 
 # ---------------------------------------------------------------------------------------------- reads ---
@@ -240,6 +251,91 @@ def test_writes_refuse_without_tables():
         pf.set_mode(FakeCursor(ready=False), LEAGUE, 'producers', 'shadow', version='v1', review_ref='r', now=NOW)
 
 
+def test_shadow_refused_when_the_database_ledger_lacks_the_migration():
+    """P5-01a: installed() reads the repo; the target database's schema_migrations is the second half."""
+    cur = FakeCursor()
+    cur.ledger.discard(PRODUCERS_VERSION)
+    with pytest.raises(pf.FeatureRefused,
+                       match=r'2027_01_28_relationship_producers\.sql is not applied.*db\.migrate apply'):
+        pf.set_mode(cur, LEAGUE, 'producers', 'shadow', version='v1', review_ref='r', now=NOW)
+    assert pf.mode(cur, LEAGUE, 'producers') == 'off'
+    assert pf.check(cur, LEAGUE, 'producers', 'shadow', version='v1', now=NOW).startswith(
+        'producers code is not installed on this database')
+
+
+def test_shadow_allowed_when_the_database_ledger_has_the_migration():
+    cur = FakeCursor()
+    assert pf.set_mode(cur, LEAGUE, 'producers', 'shadow', version='v1', review_ref='r',
+                       now=NOW)['to_mode'] == 'shadow'
+
+
+def test_no_ledger_query_for_a_feature_without_a_migration():
+    cur = FakeCursor()
+    cur.ledger.clear()
+    pf.set_mode(cur, LEAGUE, 'development_learning', 'shadow', version='v1', review_ref='r', now=NOW)
+    assert 'migration' not in cur.queries
+    assert pf.REQUIREMENTS['development_learning'][1] is None
+
+
+def test_show_reports_the_blocked_next_step(monkeypatch):
+    cur = FakeCursor()
+    cur.ledger.discard(PRODUCERS_VERSION)
+    monkeypatch.setattr(pf, 'connect', lambda dsn: FakeConn(cur))
+    out = []
+    assert pf.main(['show', '--dsn', 'postgresql://u@localhost/madden_tune'],
+                   out=out.append, err=lambda m: None) == 0
+    shown = json.loads(out[-1])['features'][0]
+    assert shown['feature'] == 'producers' and shown['next'] == 'shadow'
+    assert shown['allowed'] is False and '2027_01_28_relationship_producers.sql' in shown['why']
+
+
+def test_off_is_allowed_on_a_database_with_an_empty_ledger():
+    cur = FakeCursor()
+    shadow(cur, 'producers')
+    cur.ledger.clear()
+    cur.queries.clear()
+    assert pf.check(cur, LEAGUE, 'producers', 'off', version='v1', now=NOW) is None
+    assert pf.set_mode(cur, LEAGUE, 'producers', 'off', version='v1', review_ref='r',
+                       now=NOW)['to_mode'] == 'off'
+    assert 'migration' not in cur.queries
+
+
+def test_active_still_needs_d3_with_the_migration_applied():
+    cur = FakeCursor()
+    activate_all_before(cur, 'producers')
+    with pytest.raises(pf.FeatureRefused, match='D3'):
+        pf.set_mode(cur, LEAGUE, 'producers', 'active', version='v1', review_ref='r', now=NOW)
+
+
+def test_set_by_precedence_flag_then_env_then_model_then_jr(monkeypatch):
+    cur = FakeCursor()
+    receipt = pf.set_mode(cur, LEAGUE, 'producers', 'shadow', version='v1', review_ref='r', now=NOW,
+                          set_by='builder-11')
+    assert receipt['set_by'] == 'builder-11'
+    assert pf.config(cur, LEAGUE, 'producers')['set_by'] == 'builder-11'
+    assert pf.history(cur, LEAGUE, 'producers')[0]['set_by'] == 'builder-11'
+
+    monkeypatch.setenv('MU_SET_BY', 'session-name')
+    monkeypatch.setenv('MU_AGENT_MODEL', 'some-model')
+    assert pf.set_mode(FakeCursor(), LEAGUE, 'producers', 'shadow', version='v1', review_ref='r',
+                       now=NOW)['set_by'] == 'session-name'
+
+    monkeypatch.delenv('MU_SET_BY')
+    assert pf.set_mode(FakeCursor(), LEAGUE, 'producers', 'shadow', version='v1', review_ref='r',
+                       now=NOW)['set_by'] == 'some-model'
+
+    monkeypatch.delenv('MU_AGENT_MODEL')
+    assert pf.set_mode(FakeCursor(), LEAGUE, 'producers', 'shadow', version='v1', review_ref='r',
+                       now=NOW)['set_by'] == 'JR'
+
+
+def test_empty_actor_is_a_bad_request(monkeypatch):
+    monkeypatch.setenv('MU_SET_BY', 'session-name')
+    with pytest.raises(pf.FeatureError, match='set_by must be non-empty text'):
+        pf.set_mode(FakeCursor(), LEAGUE, 'producers', 'shadow', version='v1', review_ref='r', now=NOW,
+                    set_by='  ')
+
+
 def test_next_step_explains():
     cur = FakeCursor()
     assert pf.next_step(cur, LEAGUE, 'producers', now=NOW) == {'next': 'shadow', 'allowed': True, 'why': 'allowed'}
@@ -366,6 +462,31 @@ def test_cli_clearance_round_trip(monkeypatch, tmp_path):
     assert pf.main(['import-clearance', str(doc_path), '--dsn', dsn], out=lambda m: None) == 0
     assert pf.main(['activate-cleared', '--review', 'go', '--dsn', dsn], out=lambda m: None) == 0
     assert pf.mode(real, LEAGUE, 'producers') == 'active'
+
+
+def test_cli_set_by_and_cleared_by_flags(monkeypatch, tmp_path):
+    """P5-01a gap 1: the CLI records who threw the switch, not an assumed 'JR'."""
+    tune, real = FakeCursor(), FakeCursor()
+    shadow(tune, 'producers', season=2025)
+    path = report(tmp_path)
+    doc_path = tmp_path / 'clear.json'
+    dsn = 'postgresql://u@localhost/madden_tune'
+    monkeypatch.setattr(pf, 'connect', lambda d: FakeConn(tune))
+    assert pf.main(['export-clearance', 'producers', '--label', 'CAREER-TUNE-a', '--out', str(doc_path),
+                    '--report', path, '--dsn', dsn], out=lambda m: None) == 0
+    monkeypatch.setattr(pf, 'connect', lambda d: FakeConn(real))
+    assert pf.main(['import-clearance', str(doc_path), '--cleared-by', 'audit-5', '--dsn', dsn],
+                   out=lambda m: None) == 0
+    assert pf._clearance(real, LEAGUE, 'producers', 'v1')['cleared_by'] == 'audit-5'
+    assert pf.main(['activate-cleared', '--review', 'go', '--set-by', 'builder-11', '--dsn', dsn],
+                   out=lambda m: None) == 0
+    assert pf.config(real, LEAGUE, 'producers')['set_by'] == 'builder-11'
+    monkeypatch.setenv('MU_AGENT_MODEL', 'deepseek-v4.1-flash')      # no flag: the harness env names the actor
+    out = []
+    assert pf.main(['set', 'producers', 'shadow', '--version', 'v1', '--review', 'r', '--dsn', dsn],
+                   out=out.append, err=lambda m: None) == 0
+    assert json.loads(out[-1])['set_by'] == 'deepseek-v4.1-flash'
+    assert pf.history(real, LEAGUE, 'producers')[-1]['set_by'] == 'deepseek-v4.1-flash'
 
 
 # -------------------------------------------------------------------------------------------- migration ---

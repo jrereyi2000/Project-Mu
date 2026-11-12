@@ -7,15 +7,18 @@ Nothing here switches a feature on by itself: a missing row (or a database witho
 
   mode(cur, league_id, feature) -> 'off' | 'shadow' | 'active'          missing row -> 'off'
   config(cur, league_id, feature) -> {mode, version, config, review_ref, review_note, shadow_since}
-  set_mode(cur, league_id, feature, mode, *, version, config, review_ref, now, force_reason=None, set_by='JR')
+  set_mode(cur, league_id, feature, mode, *, version, config, review_ref, now, force_reason=None, set_by=None)
   snapshot(cur, league_id) -> {league_id, source, features: {feature: config}}   frozen once per ingest / write
   check(cur, league_id, feature, mode, *, version, now) -> refusal reason | None   (no write)
   relationship_policy(feature_config) -> relationships policy | None   off None, shadow observe, active enabled
   next_step(cur, league_id, feature, *, now) -> {next, allowed, why}
   history(cur, league_id, feature=None) -> [change]
   export_clearance(cur, league_id, feature, *, source_label, now, report_path=None) -> clearance document
-  import_clearance(cur, league_id, document, *, cleared_by='JR') -> clearance row
-  activate_cleared(cur, league_id, *, now, review_ref, set_by='JR') -> [result]
+  import_clearance(cur, league_id, document, *, cleared_by=None) -> clearance row
+  activate_cleared(cur, league_id, *, now, review_ref, set_by=None) -> [result]
+
+`set_by`/`cleared_by` name the actor that threw the switch: the argument, else MU_SET_BY, else MU_AGENT_MODEL,
+else 'JR' (_actor). Nothing here writes 'JR' on an agent's behalf when the environment names one.
 
 `league_id` is the league's integer id; a lifecycle universe id ('mu:<uuid>') is accepted too and resolved through
 persona_lifecycle_universes (the contract store's read_contract_activation passes one). `now` is the franchise time
@@ -26,7 +29,8 @@ Rules (set_mode; each refusal says why):
       inventory batch is applied for the league's universe);
   D3  going active needs a full simulated season in shadow on this franchise (shadow_since at or before tick 24 of
       the previous season, for the same version) or an imported clearance for this feature and version (D4);
-  shadow (and active) need the feature's code installed: its module importable and its migration file present;
+  shadow (and active) need the feature's code installed: its module importable, its migration file present in
+      db/migrations/, and that migration's row in this database's own schema_migrations ledger;
   force_reason skips D2 and D3 and is recorded; going off is always allowed; every change writes history.
 'producers' and 'relationships' only ever mean "observe" in shadow: consumers stay neutral until they are active.
 
@@ -48,6 +52,8 @@ import os
 from pathlib import Path
 import re
 import sys
+
+from db.migrate import LEDGER, version_of
 
 FEATURES = ('producers', 'relationships', 'profiles', 'evolution', 'focus_refresh', 'contracts_ambition',
             'contracts_relationships', 'development_learning', 'trade_requests', 'retirement',
@@ -115,6 +121,17 @@ def _text(value, label):
     if not isinstance(value, str) or not value.strip():
         raise FeatureError(f'{label} must be non-empty text')
     return value
+
+
+def _actor(name, label):
+    """Who threw the switch: the argument, else MU_SET_BY, else MU_AGENT_MODEL, else 'JR'."""
+    if name is not None:
+        return _text(name, label).strip()
+    for env in ('MU_SET_BY', 'MU_AGENT_MODEL'):
+        value = (os.environ.get(env) or '').strip()
+        if value:
+            return value
+    return 'JR'
 
 
 def _now(now):
@@ -302,6 +319,20 @@ def installed(feature):
     return True, None
 
 
+def migration_applied(cur, feature):
+    """(True, None) when the feature's migration is recorded in this database's ledger, else (False, why).
+    Features with no migration of their own (REQUIREMENTS[...][1] is None) are never checked."""
+    migration = REQUIREMENTS[_feature(feature)][1]
+    if not migration:
+        return True, None
+    version = version_of(MIGRATIONS / migration)       # the filename stem is the ledger's key (db.migrate)
+    cur.execute(f'/* q:migration */ SELECT 1 FROM {LEDGER} WHERE version = %s', (version,))
+    if cur.fetchone():
+        return True, None
+    return False, (f'{feature} code is not installed on this database (migration {migration} is not applied; '
+                   f'run python3 -m db.migrate apply)')
+
+
 # ------------------------------------------------------------------------------------------------- rules ---
 def _is_active(cur, league, rows, feature):
     if (rows.get(feature) or {}).get('mode') == 'active':
@@ -314,6 +345,9 @@ def _refusal(cur, league, rows, feature, target, version, now, force_reason):
     if target == 'off':
         return None
     ok, why = installed(feature)
+    if not ok:
+        return why
+    ok, why = migration_applied(cur, feature)
     if not ok:
         return why
     if target == 'shadow' or force_reason:
@@ -358,12 +392,12 @@ def check(cur, league_id, feature, target, *, version, now, force_reason=None):
 
 
 def set_mode(cur, league_id, feature, mode, *, version, config=None, review_ref=None, now, force_reason=None,
-             set_by='JR'):
+             set_by=None):
     """Change one feature's mode under D2/D3 (module docstring). Returns the change receipt. config None keeps the
-    current config (or, going active on a clearance, the clearance's config)."""
+    current config (or, going active on a clearance, the clearance's config). set_by is resolved by _actor."""
     _feature(feature), _mode(mode)
     _text(version, 'version')
-    _text(set_by, 'set_by')
+    set_by = _actor(set_by, 'set_by')
     now = _now(now)
     if force_reason is not None:
         _text(force_reason, 'force_reason')
@@ -484,12 +518,12 @@ def _validate_document(doc):
     return frm, to
 
 
-def import_clearance(cur, league_id, document, *, cleared_by='JR'):
+def import_clearance(cur, league_id, document, *, cleared_by=None):
     """On the real franchise: store a tuning franchise's clearance after checking feature, version, the full
     shadow season and the report hash (the report must still read the same). Re-importing the same clearance is a
-    replay; a different one for the same feature and version is refused."""
+    replay; a different one for the same feature and version is refused. cleared_by is resolved by _actor."""
     frm, to = _validate_document(document)
-    _text(cleared_by, 'cleared_by')
+    cleared_by = _actor(cleared_by, 'cleared_by')
     league = _league(cur, league_id)
     _require_tables(cur)
     path = document['report_path']
@@ -518,11 +552,13 @@ def import_clearance(cur, league_id, document, *, cleared_by='JR'):
             'status': 'imported'}
 
 
-def activate_cleared(cur, league_id, *, now, review_ref, set_by='JR'):
+def activate_cleared(cur, league_id, *, now, review_ref, set_by=None):
     """On the real franchise: set every cleared feature active in FEATURES order with its clearance's version and
-    config; stops at the first feature that is neither active nor cleared. Returns one result per feature reached."""
+    config; stops at the first feature that is neither active nor cleared. Returns one result per feature reached.
+    set_by is resolved once by _actor and lands on every change."""
     now = _now(now)
     _text(review_ref, 'review_ref')
+    set_by = _actor(set_by, 'set_by')
     league = _league(cur, league_id)
     _require_tables(cur)
     out = []
@@ -611,6 +647,8 @@ def parser():
     p.add_argument('--review', required=True, help="JR's review note")
     p.add_argument('--config', help='JSON file with the feature config')
     p.add_argument('--force', metavar='REASON', help='skip the order and shadow-season rules (recorded)')
+    p.add_argument('--set-by', metavar='TEXT',
+                   help='who is throwing the switch (default: MU_SET_BY, else MU_AGENT_MODEL, else JR)')
     p = add('history', 'every mode change')
     p.add_argument('--feature', choices=FEATURES)
     p = add('export-clearance', "write a tuning franchise's shadow-season clearance")
@@ -620,8 +658,12 @@ def parser():
     p.add_argument('--report', help="the feature's shadow report (default config.report_path)")
     p = add('import-clearance', 'import a clearance into this franchise')
     p.add_argument('path')
+    p.add_argument('--cleared-by', metavar='TEXT',
+                   help='who imported it (default: MU_SET_BY, else MU_AGENT_MODEL, else JR)')
     p = add('activate-cleared', 'switch on every cleared feature in order (real franchise, before 2026 week 1)')
     p.add_argument('--review', required=True)
+    p.add_argument('--set-by', metavar='TEXT',
+                   help='who is throwing the switch (default: MU_SET_BY, else MU_AGENT_MODEL, else JR)')
     return ap
 
 
@@ -643,7 +685,7 @@ def run_cli(args, out=print):
                 except (OSError, ValueError) as e:
                     raise FeatureError(f'--config: {e}') from None
             result = set_mode(cur, league, args.feature, args.mode, version=args.version, config=cfg,
-                              review_ref=args.review, now=now, force_reason=args.force)
+                              review_ref=args.review, now=now, force_reason=args.force, set_by=args.set_by)
         elif args.command == 'export-clearance':
             result = export_clearance(cur, league, args.feature, source_label=args.label, now=now,
                                       report_path=args.report)
@@ -653,9 +695,9 @@ def run_cli(args, out=print):
                 doc = json.loads(Path(args.path).read_text())
             except (OSError, ValueError) as e:
                 raise FeatureError(f'{args.path}: {e}') from None
-            result = import_clearance(cur, league, doc)
+            result = import_clearance(cur, league, doc, cleared_by=args.cleared_by)
         else:
-            result = activate_cleared(cur, league, now=now, review_ref=args.review)
+            result = activate_cleared(cur, league, now=now, review_ref=args.review, set_by=args.set_by)
         if args.command in ('set', 'import-clearance', 'activate-cleared'):
             conn.commit()
         else:

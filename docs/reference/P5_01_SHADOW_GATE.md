@@ -247,16 +247,18 @@ Each row is `off → shadow`, confirmed by its own `show`, then `shadow → off`
 - 40 rows in `personality_feature_mode_changes` (20 `None→shadow`, 20 `shadow→off`), all at 2027 tick 1, all version
   `p501-gate-1`, `personality_feature_clearances` still empty. They are the receipt for this gate and are left in
   place; `show` and every consumer read only `personality_feature_modes`, which is all `off`.
-- `set_mode`'s CLI does not expose `set_by`, so the history rows read `set_by = JR`. They are this probe's, not a
-  tuning decision by JR.
+- `set_mode`'s CLI did not expose `set_by` when this probe ran, so the history rows read `set_by = JR`. They are
+  this probe's, not a tuning decision by JR; P5-01a adds the flag but leaves these rows as they are.
 
 ---
 
 ## 5. What can block a feature from reaching `shadow`
 
-`set_mode(feature, 'shadow')` runs exactly one gate — `installed(feature)` in `personality/features.py:291`, after
-`_require_tables` and the league lookup. Everything else (D2 order, D3 shadow season) applies only to `active`.
-So the ways a feature can fail to reach shadow are:
+`set_mode(feature, 'shadow')` runs two gates — `installed(feature)` in `personality/features.py` (the module
+imports and the requirement's migration **file** is in `db/migrations/`) and `migration_applied(feature)`, which
+reads this database's own `schema_migrations` for that file's name (its version is the filename stem, via
+`db.migrate.version_of`) — after `_require_tables` and the league lookup. Everything else (D2 order, D3 shadow
+season) applies only to `active`. So the ways a feature can fail to reach shadow are:
 
 | Blocker | The message you get | Fix |
 |---|---|---|
@@ -264,12 +266,14 @@ So the ways a feature can fail to reach shadow are:
 | `league_state.madden_league_id` is NULL (no save loaded) | `error: league_state.madden_league_id is not set (load a save first)` | load the clone (§2 step 2) |
 | The feature's module does not import — `REQUIREMENTS[feature][0]` | `… code is not installed (module <module> not found)` | the feature's own code must be on the branch |
 | The feature's migration **file** is not in `db/migrations/` — `REQUIREMENTS[feature][1]` | `… code is not installed (migration <file> not present)` | write the migration (not just apply it — the check is on the file's presence) |
+| The feature's migration is **not applied on this database** — its row is absent from `schema_migrations` | `… code is not installed on this database (migration <file> is not applied; run python3 -m db.migrate apply)` | `db.migrate apply` after backing up (§1/§2) |
 | DSN names `madden_2036` or `postgres` | `refusing database …` | use the tuning database |
 
-**Today, nothing blocks.** Every module in `REQUIREMENTS` imports on `main`, every requirement migration file
-exists, and every one of them is **applied** on `madden_tune_p2g` (checked against `schema_migrations`: none
-pending). The three features with no migration of their own — `development_learning`, `development_opportunity`,
-`coaching_tree_hiring` — are the only ones whose requirement is module-only.
+**Today, nothing blocks on `madden_tune_p2g`.** Every module in `REQUIREMENTS` imports on `main`, every
+requirement migration file exists, and every one of them is **applied** on `madden_tune_p2g` (checked against
+`schema_migrations`: none pending). The three features with no migration of their own — `development_learning`,
+`development_opportunity`, `coaching_tree_hiring` — are the only ones whose requirement is module-only; they skip
+the ledger query entirely. Going `off` is allowed on any database, ledger or not.
 
 The one that used to block is historical and is closed: `owner_patience`, `owner_hiring`, `owner_spending`,
 `owner_meddling`, `scout_directors` and `media_voters` all require `2027_02_02_owners_scouts_voters.sql`, the owners
@@ -278,16 +282,21 @@ It is written and applied; P5-13's remaining dependency on it is now only "the f
 
 ### What the gate does **not** prove
 
-- **It does not prove the feature's own migration is applied on the target database.** `installed()` looks at the
-  repo (the module imports, the file exists), not at `schema_migrations` or the catalog. A database can hold a
-  feature in `shadow` while its tables are missing, and the feature will then fail at write time, not at `set` time.
-  Run the check in §5.1 after migrating and before shadowing.
+- **It proves the ledger row, not the tables.** `migration_applied()` reads `schema_migrations`; a row recorded on
+  a database whose objects were later dropped, or by a hasty `baseline`, still passes. Run the check in §5.1 when
+  you suspect the schema, not just the ledger.
+- **It does not prove the feature's migration ran in this database's history with its current checksum.**
+  `db.migrate status` reports drift (a file edited after it was applied); `set` does not.
 - **It does not prove a shadow season runs.** Shadow is a mode, not an execution: P5-02 is the first run that puts
   `producers` and `relationships` through a real season, and P5-14 the first with all 20 at once.
 - **It says nothing about becoming `active`** — that needs D2 order, a full shadow season (D3) or a clearance (D4),
   and JR's own decision in P6.
 
 ### 5.1 The missing-catalog check (run it per database, not per repo)
+
+Since unit P5-01a the per-feature check is built in: `set FEATURE shadow` refuses (exit 4) on a database whose
+`schema_migrations` lacks the feature's migration, and `show` reports `allowed: false` with the file named. The
+script below is the bulk pre-flight over all 20 features at once, still worth running after a migration:
 
 ```bash
 python3 - <<'EOF'
@@ -323,5 +332,9 @@ Result on `madden_tune_p2g`: `unapplied: none`.
 2. **P5-02's target.** The runbook in §2 creates its own fresh database from a fresh `CAREER-TUNE-*` clone. `p2g` is
    at head and holds the 2026 offseason, but it is not a week-1 neutral clone, so it is not the P5-02 season
    vehicle — it is the migrated fallback. Say the word if P5-02 should instead resume from `p2g`.
-3. **The `set` CLI cannot record `set_by`** and does not check the database's own migration state (§5). Both are
-   small fixes to `personality/features.py`; neither is in P5-01's scope and neither blocks the gate.
+3. **The `set` CLI could not record `set_by`** and did not check the database's own migration state (§5).
+   **Both fixed in unit P5-01a (2026-11-12):** `set` and `activate-cleared` take `--set-by`, `import-clearance`
+   takes `--cleared-by`, and the value falls back flag → `MU_SET_BY` → `MU_AGENT_MODEL` → `'JR'`; `set` refuses a
+   feature whose requirement migration is absent from the database's `schema_migrations`. The 40 history rows
+   P5-01 wrote still read `set_by = JR` — they were not rewritten. Open for JR: whether the flag should be
+   **required** on a `shadow`/`active` write instead of defaulting.
