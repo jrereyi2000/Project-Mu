@@ -11,6 +11,7 @@ result dict. `status` is one of:
     launch(pilot, pack="Mu Base")
     clone_save(pilot, src="CAREER-MU2026", dst="CAREER-TUNE-<name>")
     sim_season(pilot, save="CAREER-TUNE-<name>", to="week N" | "regular-season-end" | "playoffs-end")
+    sim_season(pilot, save="CAREER-MU<name>", to="week N", managed=True)
     advance(pilot, save="CAREER-TUNE-<name>")
     watch_game(pilot, save="CAREER-TUNE-<name>", to="kickoff" | "halftime" | "supersim")
     catch_up(pilot, save="CAREER-<name>", to_week=None, dsn=None)
@@ -23,6 +24,13 @@ the clone never overwrites a file that isn't CAREER-TUNE-*; sim_season refuses w
 pipeline.watch_save runs (a clone keeps the original's LeagueID, so the watcher would ingest it
 into the real franchise database); quitting a franchise that isn't TUNE-* is refused unless
 allow_quit (quitting writes <save>-AUTOSAVE).
+
+The managed-save allowance (CLOSE_OUT_CHECKLIST P7-00e, JR 2026-11-12) adds one explicit second
+class and loosens nothing: sim_season also accepts a CAREER-MU* save, but only when the caller
+passes managed=True (`--managed`), and CAREER-MUBASE is refused even then because it is the
+hash-pinned baseline that must never be simulated (P7-00a). Without --managed a CAREER-MU* save
+is refused exactly as before, and every other name is refused with or without it. clone_save,
+advance and watch_game stay CAREER-TUNE-* only.
 
 catch_up is the opposite of sim_season (NFL_WEEKLY_MIRROR_PLAN.md section 2.12): the real
 CAREER-* franchise, with pipeline.watch_save running. It sims one week, saves, quits to the main
@@ -55,6 +63,8 @@ from tools.madden_pilot.screens import UNKNOWN, label_match, norm
 
 DEFAULT_SAVES_DIR = "/mnt/c/Users/jrere/Documents/Madden NFL 27/saves/"
 TUNE_SAVE_PREFIX = "CAREER-TUNE-"
+MANAGED_SAVE_PREFIX = "CAREER-MU"      # the canonical franchise's managed saves (CAREER-MU2026)
+PINNED_BASELINE_SAVE = "CAREER-MUBASE"  # hash-pinned; never simulated (P7-00a)
 CAREER_PREFIX = "CAREER-"
 BASELINE_SAVE = "CAREER-MU2026"
 DEFAULT_PACK = "Mu Base"
@@ -364,6 +374,45 @@ def _refuse(why, **extra):
     return {"status": "refused", "why": why, **extra}
 
 
+def save_name_refusal(save, managed=False, verb="simmed"):
+    """Why `save` may not be driven, or None when it may (CLOSE_OUT_CHECKLIST P7-00e).
+
+    Two save classes only:
+      CAREER-TUNE-*  disposable tuning clones, always allowed — the class the pilot exists for;
+      CAREER-MU*     the canonical franchise's managed saves, allowed only with `managed`
+                     (`sim-season --managed`), because driving the real franchise is a decision
+                     the caller has to state.
+    Every other name is refused with or without the flag, and CAREER-MUBASE is refused even with
+    `managed`: it is the hash-pinned baseline (data/baselines/CAREER-MUBASE.sha256) and must never
+    be simulated (P7-00a)."""
+    upper = str(save or "").upper()
+    if save and _valid_save_name(save):
+        if upper.startswith(TUNE_SAVE_PREFIX):
+            return None
+        if upper.startswith(MANAGED_SAVE_PREFIX):
+            if not managed:
+                return (f"{save} is a managed save: it is {verb} only with --managed "
+                        f"({TUNE_SAVE_PREFIX}* stays for disposable clones)")
+            if upper.startswith(PINNED_BASELINE_SAVE):
+                return (f"{PINNED_BASELINE_SAVE} is the pinned baseline and is never {verb}, "
+                        f"not even with --managed (P7-00a)")
+            return None
+    allowed = f"{TUNE_SAVE_PREFIX}* or {MANAGED_SAVE_PREFIX}*" if managed else f"{TUNE_SAVE_PREFIX}*"
+    return f"only {allowed} saves are {verb}, not {save!r}"
+
+
+def _allow_tile(pilot, tile):
+    """Let CURRENT FRANCHISES confirm exactly `tile` for this run, and nothing else.
+
+    The catalog permits only TUNE-* tiles. Two jobs drive a save outside that class by design: the
+    catch-up (the real franchise) and `sim-season --managed` (the canonical one), so each allows its
+    own tile here. `_walk_to_tile` still stops on any other tile's border."""
+    pilot.policy.setdefault("FRANCHISE_LIST", [])
+    if tile not in pilot.policy["FRANCHISE_LIST"]:
+        pilot.policy["FRANCHISE_LIST"].append(tile)
+    return tile
+
+
 # ------------------------------------------------------------------------------- clone_save
 PRUNER = ROOT / "pipeline" / "save_reader" / "prune_capacity.mjs"
 
@@ -408,8 +457,16 @@ def clone_save(pilot, src=BASELINE_SAVE, dst=None, folder=None, dry_run=False, p
     existing CAREER-TUNE-* file is replaced, anything else never is. The copy gets a fresh
     mtime, so Madden lists it first. The copy is then capacity-pruned (prune_capacity) so
     every tuning run starts with the headroom the season needs; a refused prune leaves the
-    plain copy and reports itself in the result."""
+    plain copy and reports itself in the result.
+
+    The managed class (P7-00e) is deliberately not clonable: sim_season's `--managed` drives the
+    one canonical CAREER-MU* save in place, and a second CAREER-MU* file would keep the real
+    LeagueID while also sitting inside the watcher's CAREER-MU* scope."""
     folder = Path(folder) if folder else saves_dir()
+    if dst and str(dst).upper().startswith(MANAGED_SAVE_PREFIX):
+        return _refuse(f"{dst} is a managed save: it is the canonical franchise, driven in place by "
+                       f"sim-season --managed and under the watcher's {MANAGED_SAVE_PREFIX}* scope; "
+                       f"clone to {TUNE_SAVE_PREFIX}<name> instead", src=src, dst=dst)
     if not dst or not str(dst).upper().startswith(TUNE_SAVE_PREFIX) or len(dst) <= len(TUNE_SAVE_PREFIX):
         return _refuse(f"destination must be {TUNE_SAVE_PREFIX}<name>, not {dst!r}", src=src, dst=dst)
     if not _valid_save_name(dst) or not _valid_save_name(src):
@@ -1033,15 +1090,23 @@ def _mtime(path):
 
 @job("sim-season")
 def sim_season(pilot, save=None, to="regular-season-end", watcher=None, folder=None, quit=True, progress=None,
-               franchise=None):
+               franchise=None, managed=False):
     """Load CAREER-TUNE-<name> from the franchise list, sim with NEXT WEEK until `to`, create a
     savepoint, and quit back to the franchise list. Refuses other saves and a running watcher
     before touching the PC. `franchise` (a TUNE-* tile name) says that franchise is already
-    loaded: sim it in place instead of quitting to the list and loading it again."""
-    if not save or not str(save).upper().startswith(TUNE_SAVE_PREFIX) or not _valid_save_name(save):
-        return _refuse(f"only {TUNE_SAVE_PREFIX}* saves are simmed, not {save!r}", save=save)
-    if franchise and not norm(tile_name(franchise)).startswith("TUNE"):
-        return _refuse(f"only a TUNE-* franchise may be simmed in place, not {franchise!r}", save=save)
+    loaded: sim it in place instead of quitting to the list and loading it again.
+
+    `managed=True` (`--managed`) is the managed-save allowance (P7-00e): it also accepts a
+    CAREER-MU* save, the canonical franchise, and allows that save's own tile on CURRENT
+    FRANCHISES for the run. CAREER-MUBASE stays refused (P7-00a). The watcher rule is unchanged:
+    a managed run still needs `pipeline.watch_save` stopped and ingests its weeks afterwards."""
+    why = save_name_refusal(save, managed=managed, verb="simmed")
+    if why:
+        return _refuse(why, save=save)
+    if franchise:
+        wanted = "MU" if str(save).upper().startswith(MANAGED_SAVE_PREFIX) else "TUNE"
+        if not norm(tile_name(franchise)).startswith(wanted):
+            return _refuse(f"only a {wanted}-* franchise may be simmed in place, not {franchise!r}", save=save)
     try:
         kind, n = parse_target(to)
     except ValueError as e:
@@ -1055,7 +1120,11 @@ def sim_season(pilot, save=None, to="regular-season-end", watcher=None, folder=N
         return _refuse(f"no save {save} in {folder} (clone-save first)", save=save)
     before = {"save": _mtime(save_path), "autosave": _mtime(auto_path)}
     tile = tile_name(save)
-    progress.update(save=save, to=to, weeks_simmed=0)
+    if managed and str(save).upper().startswith(MANAGED_SAVE_PREFIX):
+        # CURRENT FRANCHISES lets only TUNE-* tiles be confirmed; a managed save's own tile is
+        # allowed for this run and nothing else (the catch-up does the same for the real save).
+        _allow_tile(pilot, tile)
+    progress.update(save=save, to=to, weeks_simmed=0, managed=bool(managed))
 
     if franchise:
         # The operator says this franchise is already loaded: go straight to its hub. Checking
@@ -1109,11 +1178,15 @@ def sim_season(pilot, save=None, to="regular-season-end", watcher=None, folder=N
         saved = "autosave (copied to the named save)"
     progress.update(saved=saved)
     if quit:
-        pilot.goto("FRANCHISE_LIST")
+        # A managed save is the real franchise, and quitting writes its autosave — which is exactly
+        # how this job makes the named save and closes the franchise for the league office. `--managed`
+        # is the operator's explicit permission, so it lifts the TUNE-only quit guard (catalog
+        # `quit_guard`) for this route only, through the same switch the `quit` job calls allow_quit.
+        pilot.goto("FRANCHISE_LIST", allow_quit=managed)
     after = {"save": _mtime(save_path), "autosave": _mtime(auto_path)}
     return {"status": "ok", "save": save, "to": to, "save_path": str(save_path), "autosave_path": str(auto_path),
             "start_week": progress.get("start_week"), "end_week": head.get("week"), "end_phase": head["phase"],
-            "weeks_simmed": weeks, "saved": saved, "quit": quit,
+            "weeks_simmed": weeks, "saved": saved, "quit": quit, "managed": bool(managed),
             "written": {k: (after[k] is not None and after[k] != before[k]) for k in after}}
 
 
@@ -1890,10 +1963,7 @@ def catch_up(pilot, save=None, to_week=None, dsn=None, progress=None, *, watcher
     # The catalog lets CURRENT FRANCHISES confirm only TUNE-* tiles; the catch-up is the one job
     # allowed the real franchise, so it allows exactly this tile's name for this run (and nothing
     # else: _walk_to_tile still stops on any other tile's border).
-    tile = tile_name(save)
-    pilot.policy.setdefault("FRANCHISE_LIST", [])
-    if tile not in pilot.policy["FRANCHISE_LIST"]:
-        pilot.policy["FRANCHISE_LIST"].append(tile)
+    tile = _allow_tile(pilot, tile_name(save))
     folder = Path(folder) if folder else saves_dir()
     save_path, auto_path = folder / save, folder / f"{save}-AUTOSAVE"
     if folder.is_dir() and not save_path.is_file() and not getattr(pilot, "dry_run", False):
