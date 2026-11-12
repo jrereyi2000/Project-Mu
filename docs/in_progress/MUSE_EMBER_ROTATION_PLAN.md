@@ -1,6 +1,6 @@
 # Project Mu: Muse Ember Rotation Plan
 
-**Status:** approved by JR (2026-11-12); rewritten to the OpenCode agent route and retargeted to JR's two-step benchmark (Spark first, Ember on a pass) on 2026-11-12; waves 1–2 merged (`dca6741`, `c21dd4e`, `7a4d71e`, `31f54f8`); wave 3 (the benchmark) waits on B1 and JR's PC.
+**Status:** approved by JR (2026-11-12); rewritten to the OpenCode agent route and retargeted to JR's two-step benchmark (Spark first, Ember on a pass) on 2026-11-12; waves 1–2 merged (`dca6741`, `c21dd4e`, `7a4d71e`, `31f54f8`); **B1 cleared** (JR turned on the training-endpoint setting; Spark answers, 04:28 EST) and **wave 0 spike S-M1 done** (2026-11-12: TUI route verified, a launcher defect found and fixed — see [`MUSE_EMBER_EVALUATION.md`](../reference/MUSE_EMBER_EVALUATION.md) §1); wave 3 (the benchmark, U4 step 1) now waits only on **JR's PC and JR's word**. B2 (Zen credit for Ember) still open and, per D10, correctly parked behind a G-S pass.
 **Builds on:** [`OPENCODE_DEEPSEEK_ROUTE_PLAN.md`](../done/OPENCODE_DEEPSEEK_ROUTE_PLAN.md) (built 2026-11-12: the OpenCode launcher, spawn types, route markers and board inbox that this plan copies), PROJECT_SPEC §1.2 (agent routes), [`MADDEN_PILOT_AND_TUNING_PLAN.md`](../done/MADDEN_PILOT_AND_TUNING_PLAN.md), `docs/reference/AGENTS.md` § Model inboxes.
 
 **Goal:** Make a Muse model a first-class Project Mu agent, and find out whether it beats the native route. A Muse session starts in the OpenCode TUI through its own launcher, joins the board with its own label, inbox and commit trailer, takes builder work, and owns computer use by driving `tools/madden_pilot` from its own shell. No Meta API client and no `MODEL_API_KEY`: JR's decision (D6) is that the session is the computer-use route.
@@ -87,10 +87,11 @@ tools/muse_session.sh [--prompt TEXT] [any opencode arguments]
 1. Refuse to run outside a checkout with `.opencode/opencode.json` (exit 2), the same check as `opencode_session.sh`.
 2. `MU_MUSE_MODEL="${MU_MUSE_MODEL:-opencode-go/muse-spark-1.3-contributor}"` — step 2 is the same script with `MU_MUSE_MODEL=opencode/muse-ember-1.0`.
 3. Export the markers derived from it: `MU_AGENT_CLASS=muse`, `MU_AGENT_HARNESS=opencode`, `MU_AGENT_MODEL="${MU_MUSE_MODEL#*/}"` (→ `muse-spark-1.3-contributor` or `muse-ember-1.0`), `MU_OPENCODE_MODEL="$MU_MUSE_MODEL"`, and `MU_OPENCODE_SESSION` (given, or a fresh `ses_mu_<epoch>_<5 digits>`).
-4. Print the route line.
-5. `exec "${MU_OPENCODE_BIN:-opencode}" --model "$MU_OPENCODE_MODEL" --session "$MU_OPENCODE_SESSION" "$@"`.
+4. **Pin the model on the session** (spike S-M1): `opencode api post /api/session` with `{id, title, model: {id, providerID}, location: {directory: <repo root>}}`, then `opencode api post /api/session/<id>/model` with the same model — a create on an existing id leaves that session's model alone, so the second call is what makes a resume follow `MU_MUSE_MODEL`. On either failing, exit 3 with the reason: a window that fell back to the DeepSeek project pin would misattribute its board messages and commits.
+5. Print the route line.
+6. `exec "${MU_OPENCODE_BIN:-opencode}" --session "$MU_OPENCODE_SESSION" "$@"`.
 
-`MU_AGENT_MODEL` is derived, not written twice, because the board signature, the commit trailer and `context_check.py` all read it — one value, one model. `--model` is on the command line because the project pin is DeepSeek (S7). `MU_OPENCODE_BIN` exists for tests, as in the DeepSeek wrapper. The script is a deliberate copy of `tools/opencode_session.sh` with the class and model lines changed; a shared script with a class argument was rejected because it would rewrite the just-built DeepSeek route.
+The model cannot go on the command line: **OpenCode v2.2.7's TUI has no `--model`** and exits 1 with `Unrecognized flag: --model in command opencode` (only `run` and `mini` accept it). That was S7's assumption and it is wrong — spike S-M1 found it, and step 4 is the fix. `MU_AGENT_MODEL` is derived, not written twice, because the board signature, the commit trailer and `context_check.py` all read it — one value, one model. `MU_OPENCODE_BIN` exists for tests, as in the DeepSeek wrapper. The script is a deliberate copy of `tools/opencode_session.sh` with the class, model and pin lines changed; a shared script with a class argument was rejected because it would rewrite the just-built DeepSeek route, which needs no pin at all (its model is the project default).
 
 ### 2.3 `tools/spawn_agent.sh`
 
@@ -160,17 +161,17 @@ On either pass, `/madden` gains one line saying a Muse session may run the jobs,
 |---|---|---|---|
 | R1 | **B1: Spark needs the "train on request data" setting on** (S3). | JR flips it at `…/settings/privacy#training`; the smoke call answers. | Step 1 cannot run; U1–U3 still build. |
 | R2 | **B2: Ember is Zen-only with no balance** (S2). | JR tops up, after G-S. | Step 2 is not run; the report recommends staying on Spark or on the catalog. |
-| R3 | The TUI may ignore `--model` and fall back to the DeepSeek project pin (S7). | Spike S-M1: one window through the wrapper, then the model name in the TUI. | If the TUI cannot override, keep the benchmark on `opencode run` (headless) and put the TUI route behind a per-model `.opencode` config; the plan changes with it. |
+| R3 | ~~The TUI may ignore `--model` and fall back to the DeepSeek project pin (S7).~~ **Resolved by spike S-M1 (2026-11-12): worse than feared — the TUI has no `--model` at all and exits 1.** | Fixed: the launcher pins the model on the session via `POST /api/session` + `…/<id>/model`, then opens the TUI with `--session` (§2.2 step 4). Verified live — a window answers as `muse-spark-1.3-contributor` in the repo. | R3's plan-level fallback (keep the benchmark on `opencode run`) is no longer needed; the benchmark can use real Muse sessions. A failed pin exits 3 rather than opening a DeepSeek window. |
 | R4 | Muse Spark is a small model; builder quality is unproven on this repo's plans. | Job B, and the first Muse `/builder` unit. | Muse stays a computer-use session; JR decides after step 1. |
 | R5 | An agent session driving the pilot is slower than catalog-only jobs. | Job A vs the 30–40 s baseline. | The catalog driver keeps routine jobs; Muse handles the unknown screens, which is where it is useful. |
 | R6 | The shared OpenCode service now serves a second model class; one bad config affects both. | The spike starts a DeepSeek and a Muse window side by side. | `opencode service restart`; the `--standalone` fallback. |
 | R7 | **Spark's requests train Meta's model.** Repo source, plan text and pilot frames go to a training endpoint. | JR's judgement before B1 is flipped. | Keep step 1 to computer-use frames only; no builder work on Spark until JR says so, and prefer Ember (no training endpoint) for builder work. |
 
-**Spike first (S-M1, ~20 minutes, after B1 clears):** `tools/muse_session.sh --prompt "Reply with exactly: SPARK READY"` in a throwaway tmux window. Confirm three things: the model answers as `muse-spark-1.3-contributor` (not DeepSeek), a second window on DeepSeek still answers as `deepseek-v4.1-flash`, and the TUI's model indicator shows the Spark id. Then one file edit through the build agent in a scratch worktree, to prove tools work. Findings go in `docs/reference/MUSE_EMBER_EVALUATION.md` §1.
+**Spike S-M1 — DONE 2026-11-12 (~30 minutes, no Madden PC).** All three checks passed and the file-edit proof passed: a Muse window answers as `muse-spark-1.3-contributor` in the repo checkout, a side-by-side DeepSeek window still answers as `deepseek-v4.1-flash`, the TUI shows `Build · Muse Spark 1.3 Contributor · OpenCode Go`, and the build agent wrote `SPIKE_SPARK.md` in a scratch worktree through `opencode run --model`. The spike's real finding was R3 arriving early: the merged launcher passed `--model` to a TUI that has no such flag, so **no Muse session could start**, and U1's stub-based tests had encoded that assumption. Fixed in `tools/muse_session.sh` + `tests/test_muse_session.py` (session-pinned model, exit 3 on a failed pin, 31 tests green); findings in [`MUSE_EMBER_EVALUATION.md`](../reference/MUSE_EMBER_EVALUATION.md) §1. Next: U4 step 1 on JR's word and PC.
 
 ## 4. Tests (synthetic, no live DB, no network)
 
-- `tests/test_muse_session.py` (new) → exits 2 outside a configured checkout; with a stub `opencode` on `PATH` it exports `MU_AGENT_CLASS=muse`, `MU_AGENT_HARNESS=opencode`, `MU_AGENT_MODEL` derived from `MU_MUSE_MODEL` (Spark default, Ember override), `MU_OPENCODE_MODEL` equal to it, and `MU_OPENCODE_SESSION` (minted or reused); passes `--model <id> --session <id>` to OpenCode; prints the Muse route line; never prints a secret.
+- `tests/test_muse_session.py` (new) → exits 2 outside a configured checkout; with a stub `opencode` on `PATH` it exports `MU_AGENT_CLASS=muse`, `MU_AGENT_HARNESS=opencode`, `MU_AGENT_MODEL` derived from `MU_MUSE_MODEL` (Spark default, Ember override), `MU_OPENCODE_MODEL` equal to it, and `MU_OPENCODE_SESSION` (minted or reused); pins the model on the session through two `opencode api post` calls and passes only `--session <id>` to the TUI (never `--model`); exits 3 without opening a window when the pin fails; prints the Muse route line; never prints a secret.
 - `tests/test_spawn_agent.py` (extend) → `--dry-run b1 muse "/builder"` prints `muse_session.sh --prompt /builder`; a DeepSeek-marked caller still needs `MU_ALLOW_DEEPSEEK_SPAWN=1` for `deepseek` but not for `muse`; an unknown type still exits 2.
 - `tests/test_agent_board_inbox.py` (extend) → `muse` matches `to: muse`, `to: muse-ember-1.0`, `to: muse-spark-1.3-contributor` and comma lists; it does not match `deepseek`; a label filter still skips the session's own messages.
 
@@ -185,7 +186,7 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 - **Owns:** `tools/muse_session.sh` (new), `tools/spawn_agent.sh`, `tests/test_muse_session.py` (new), `tests/test_spawn_agent.py`
 - **Reads:** `tools/opencode_session.sh`, `tools/spawn_agent.sh`, `docs/done/OPENCODE_DEEPSEEK_ROUTE_PLAN.md` §2.3–2.4
 - **Depends on:** none (no live model call)
-- **Done when:** `tools/spawn_agent.sh --dry-run muse-lab muse "/builder"` prints the Muse wrapper line, and the wrapper's markers, derived `MU_AGENT_MODEL` and `--model` are asserted by tests.
+- **Done when:** `tools/spawn_agent.sh --dry-run muse-lab muse "/builder"` prints the Muse wrapper line, and the wrapper's markers, derived `MU_AGENT_MODEL` and session-pinned model (no `--model`) are asserted by tests. *(Corrected during spike S-M1: the first build asserted `--model`, which the TUI rejects; the tests now assert the two `api post` pins and a `--session`-only exec.)*
 - **Verify:** `pytest -m "not integration" tests/test_muse_session.py tests/test_spawn_agent.py` → all pass.
 
 ### U2: Board inbox alias
@@ -216,7 +217,7 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 
 | Wave | Units | Needs merged first | Why together |
 |---|---|---|---|
-| 0 | spike S-M1 (no unit) | B1 cleared | Confirms the TUI model override before any code freezes a route line |
+| 0 | spike S-M1 (no unit) | B1 cleared | **DONE 2026-11-12** — TUI route verified on Spark, launcher defect found and fixed (§2.2, §3) |
 | 1 | U1, U2 | none (code only) | Different files; neither needs the other or a model |
 | 2 | U3 | U1, U2 | Writes the docs against merged code |
 | 3 | U4 step 1 | U1–U3, B1, JR's PC | The live Spark benchmark |
@@ -264,3 +265,4 @@ No path appears twice.
 | U2 board inbox alias | 1 | `worktree-agent-acb4b652d0f0c81b5` | `.claude/worktrees/agent-acb4b652d0f0c81b5` | merged — `muse` key in `RECIPIENTS`, 5 tests | `dca6741` |
 | U1 launcher and spawn type | 1 | `worktree-agent-ab63ffea117637746` | `.claude/worktrees/agent-ab63ffea117637746` | merged — `tools/muse_session.sh` + `muse` spawn type, 24 tests | `c21dd4e` |
 | U3 Muse skill and docs (wave 2) | 2 | `worktree-agent-aa7557de5da7c49cc` | `.claude/worktrees/agent-aa7557de5da7c49cc` | merged — `.claude/skills/muse/SKILL.md`, AGENTS.md row + paragraph, MADDEN_PILOT.md line | `7a4d71e` |
+| Wave 0 spike S-M1 (no unit) | 0 | `ses_mu_1794477210_09304` throwaway | OpenCode worktree `spike-muse-session` (removed) | done — route verified, R3 found: TUI has no `--model`; launcher fixed to pin the model on the session, tests 31 green, findings in `docs/reference/MUSE_EMBER_EVALUATION.md` §1 | follow-up commit, `tools/muse_session.sh` + `tests/test_muse_session.py` |

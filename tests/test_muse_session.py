@@ -2,10 +2,15 @@
 
 Offline only: the wrapper is run against a throwaway git checkout and a stub `opencode`
 (MU_OPENCODE_BIN), so nothing starts a real OpenCode session and no network is touched.
+
+The wrapper pins the model on the session through `opencode api` instead of passing `--model`,
+because the OpenCode TUI has no `--model` in v2.2.7 (spike S-M1): the stub therefore answers the two
+`api post` calls and records them, and only a real `--session` invocation reaches the ARG= lines.
 """
 
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 from pathlib import Path
@@ -16,6 +21,11 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 WRAPPER = REPO_ROOT / "tools" / "muse_session.sh"
 
 STUB = """#!/usr/bin/env bash
+if [ "${1:-}" = "api" ]; then
+  if [ "${STUB_API_FAIL:-}" = "1" ]; then exit 1; fi
+  if [ -n "${STUB_API_LOG:-}" ]; then printf '%s\\n' "$*" >> "$STUB_API_LOG"; fi
+  exit 0
+fi
 for arg in "$@"; do printf 'ARG=%s\\n' "$arg"; done
 printf 'MU_AGENT_CLASS=%s\\n' "${MU_AGENT_CLASS:-}"
 printf 'MU_AGENT_HARNESS=%s\\n' "${MU_AGENT_HARNESS:-}"
@@ -60,6 +70,7 @@ def _env(bin_dir: Path, tmp_path: Path, **overrides: str) -> dict[str, str]:
         "HOME": str(home),
         "LANG": "C.UTF-8",
         "MU_OPENCODE_BIN": str(bin_dir / "opencode"),
+        "STUB_API_LOG": str(tmp_path / "api.log"),
     }
     env.update(overrides)
     return env
@@ -86,6 +97,14 @@ def _parse(stdout: str) -> tuple[dict[str, str], list[str]]:
             key, _, value = line.partition("=")
             values[key] = value
     return values, args
+
+
+def _api_calls(tmp_path: Path) -> list[str]:
+    """The stub's record of every `opencode api ...` call the wrapper made."""
+    log = tmp_path / "api.log"
+    if not log.exists():
+        return []
+    return [line for line in log.read_text(encoding="utf-8").splitlines() if line]
 
 
 def test_refuses_outside_a_git_checkout(tmp_path: Path, bin_dir: Path) -> None:
@@ -133,22 +152,44 @@ def test_honours_the_ember_model_override(checkout: Path, bin_dir: Path, tmp_pat
     result = _run(checkout, env)
 
     assert result.returncode == 0, result.stderr
-    values, args = _parse(result.stdout)
+    values, _ = _parse(result.stdout)
+    api = _api_calls(tmp_path)
     assert values["MU_OPENCODE_MODEL"] == EMBER_MODEL
     assert values["MU_AGENT_MODEL"] == "muse-ember-1.0"
-    assert args[:2] == ["--model", EMBER_MODEL]
+    assert any('"providerID":"opencode"' in call and '"id":"muse-ember-1.0"' in call for call in api)
 
 
-def test_mints_a_session_id_and_passes_model_and_session(
+def test_creates_the_session_with_the_model_and_pins_it(
     checkout: Path, bin_dir: Path, tmp_path: Path
 ) -> None:
+    result = _run(checkout, _env(bin_dir, tmp_path))
+
+    assert result.returncode == 0, result.stderr
+    values, _ = _parse(result.stdout)
+    api = _api_calls(tmp_path)
+    session = values["MU_OPENCODE_SESSION"]
+    assert len(api) == 2, api
+    create, pin = api
+    assert create.startswith("api post /api/session ")
+    payload = json.loads(create.split("--data ", 1)[1])
+    assert payload["id"] == session
+    assert payload["model"] == {"id": "muse-spark-1.3-contributor", "providerID": "opencode-go"}
+    assert payload["location"]["directory"] == str(checkout)
+    assert pin.startswith(f"api post /api/session/{session}/model ")
+    assert json.loads(pin.split("--data ", 1)[1]) == {
+        "model": {"id": "muse-spark-1.3-contributor", "providerID": "opencode-go"}
+    }
+
+
+def test_never_passes_model_to_the_tui(checkout: Path, bin_dir: Path, tmp_path: Path) -> None:
+    """The TUI rejects `--model` (spike S-M1); the session carries the model instead."""
     result = _run(checkout, _env(bin_dir, tmp_path))
 
     assert result.returncode == 0, result.stderr
     values, args = _parse(result.stdout)
     session = values["MU_OPENCODE_SESSION"]
     assert SESSION_RE.match(session), session
-    assert args[:4] == ["--model", DEFAULT_MODEL, "--session", session]
+    assert args == ["--session", session]
 
 
 def test_reuses_a_given_session_instead_of_minting_one(
@@ -160,8 +201,11 @@ def test_reuses_a_given_session_instead_of_minting_one(
 
     assert result.returncode == 0, result.stderr
     values, args = _parse(result.stdout)
+    api = _api_calls(tmp_path)
     assert values["MU_OPENCODE_SESSION"] == "ses_mu_1700000000_04242"
-    assert args[:4] == ["--model", DEFAULT_MODEL, "--session", "ses_mu_1700000000_04242"]
+    assert args == ["--session", "ses_mu_1700000000_04242"]
+    # A create on an existing id leaves that session's model alone, so the model is re-pinned.
+    assert any(call.startswith("api post /api/session/ses_mu_1700000000_04242/model ") for call in api)
 
 
 def test_passes_the_remaining_arguments_through_unchanged(
@@ -172,7 +216,18 @@ def test_passes_the_remaining_arguments_through_unchanged(
     assert result.returncode == 0, result.stderr
     values, args = _parse(result.stdout)
     session = values["MU_OPENCODE_SESSION"]
-    assert args == ["--model", DEFAULT_MODEL, "--session", session, "--prompt", "/builder", "--extra=1"]
+    assert args == ["--session", session, "--prompt", "/builder", "--extra=1"]
+
+
+def test_refuses_to_start_when_the_model_cannot_be_pinned(
+    checkout: Path, bin_dir: Path, tmp_path: Path
+) -> None:
+    result = _run(checkout, _env(bin_dir, tmp_path, STUB_API_FAIL="1"))
+
+    assert result.returncode == 3
+    assert result.stdout == ""
+    assert "refusing to start" in result.stderr
+    assert DEFAULT_MODEL in result.stderr
 
 
 def test_prints_the_route_line(checkout: Path, bin_dir: Path, tmp_path: Path) -> None:
