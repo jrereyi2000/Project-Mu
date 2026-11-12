@@ -735,7 +735,15 @@ is the headline). About **13 findings have a fix on `main` and are awaiting a ve
 R6 F1–F5 with R11). About **12 are in the fix lane right now** (R5a 6, R5b 3, R1 2, R2 1). **One is blocked on
 JR** (R3 F5). R7's round is with its own builder and re-checker.
 
-**What the backlog needs next:** four re-check batches. **Two are now open** (17:49): `recheck-tooling` on
+**17:57–18:05 update.** The two re-checks came back: **R3 F1–F5 all CLOSED** (F5 was fixed properly at `8cf19e4`, so
+it is no longer blocked on JR) and **R4 F1–F3 all CLOSED**, with R4 F1 proved clock-independent rather than lucky.
+**R6 F1/F2/F3/F5 CLOSED; R11's primary and all four sibling paths CLOSED**; **R6 F4 is PARTIAL** and its two
+deferrals are **OPEN** — `go_transport.go_client()` writes `0` entries to `data/usage/go_allowance.jsonl`, and
+`estimate_cost("glm-5.3-flash")` still prices at Gemini's fallback. That is one small unit, not a re-check.
+`fix-fact-gate` then landed all nine of its findings at **`c3d5d06`** and signed off, so **`recheck-fact-gate` is
+owed now**; `fix-stats-id` is still running and its re-check follows its NOTICE.
+
+**What the backlog needed next:** four re-check batches. **Two were opened** (17:49): `recheck-tooling` on
 `R3 + R4` at `a2d21ec` (worktree `audit-a2d21ec`), and `recheck-go-voice` on `R6 + R11` at `190a5fc` (worktree
 `audit-190a5fc`), each with the original report, its repro scripts and the builder's NOTICE as the brief. The
 other two start when `fix-stats-id` and `fix-fact-gate` post theirs. Nothing is waiting on the queue itself any
