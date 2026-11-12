@@ -160,3 +160,40 @@ def test_main_skips_a_model_when_the_go_window_is_full(tmp_path):
     assert code == 0
     client_for.assert_not_called()                    # refused before any client is built
     assert json.loads((tmp_path / "results.json").read_text()) == []
+
+
+def test_a_killed_run_resumes_without_repeating_finished_articles(tmp_path):
+    job = {"slot": "Hero Slot", "article_type_id": "MACRO_SLATE_RECAP", "article_type_name": "Slate Recap",
+           "display_name": "Tester", "handle": "TESTER", "archetype": "TESTER", "team_id": 1,
+           "desk": "national", "desk_note": None, "system_instruction": "sys", "task_instruction": "task"}
+    finished = {"slot": "Hero Slot", "model": "muse-spark-1.3-contributor", "repeat": 0,
+                "article_type_id": "MACRO_SLATE_RECAP", "handle": "TESTER", "display_name": "Tester",
+                "desk": "national", "seconds": 1.0, "text": "done already", "words": 2,
+                "failure_reason": None, "rewrites": [], "tool_calls": [], "tool_call_count": 0,
+                "usage_calls": [], "tokens": compare.token_totals([]), "cost_usd": 0.0, "evidence": ""}
+    (tmp_path / "results.jsonl").write_text(json.dumps(finished) + "\n")
+    with mock.patch("tools.llm_compare.use_database_read_only"), \
+         mock.patch("newsroom.swarm_dispatcher.SwarmDispatcher", return_value=mock.MagicMock()), \
+         mock.patch.object(compare, "plan_jobs", return_value=[job]), \
+         mock.patch.object(compare, "go_allowance", return_value={"windows": {"five_hour": {"percent": 5},
+                                                                             "monthly": {"percent": 2}}}), \
+         mock.patch.object(compare, "client_for") as client_for:
+        code = compare.main(["--season", "2036", "--week", "18", "--models", "muse-spark-1.3-contributor",
+                             "--no-judge", "--out", str(tmp_path)])
+    assert code == 0
+    client_for.assert_not_called()                   # nothing left to run
+    assert json.loads((tmp_path / "results.json").read_text())[0]["text"] == "done already"
+
+
+def test_parse_verdict_tolerates_fences_prose_and_thinking_noise():
+    fenced = '```json\n{"winner": "b", "a": {}, "b": {}}\n```'
+    assert compare._parse_verdict(fenced)["winner"] == "b"
+    prose = 'Here is my answer: {"winner": "a"} — because it reads better.'
+    assert compare._parse_verdict(prose)["winner"] == "a"
+    assert compare._parse_verdict("no json here") is None
+    assert compare._parse_verdict('{"score": 4}') is None
+
+
+def test_clip_words_bounds_a_runaway_article():
+    assert compare._clip_words("one two three", 5) == "one two three"
+    assert compare._clip_words("one two three four", 2).startswith("one two [")

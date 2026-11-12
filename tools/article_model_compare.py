@@ -307,6 +307,31 @@ def grounding_flags(result: dict) -> list:
     return out
 
 
+def load_done(path: str) -> dict:
+    """Results already written by an earlier pass, so a killed run resumes instead of re-spending."""
+    done = {}
+    if not os.path.exists(path):
+        return done
+    with open(path) as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                record = json.loads(line)
+            except Exception:
+                continue
+            done[(record.get("slot"), record.get("model"), record.get("repeat", 0))] = record
+    return done
+
+
+def append_result(path: str, record: dict, lock) -> None:
+    with lock:
+        with open(path, "a") as f:
+            f.write(json.dumps(record) + "\n")
+            f.flush()
+
+
 def blind_read(records: list, jobs: list, models: list, season: int, week: int, path: str):
     """A/B/C per article with the model names stripped, answer key at the end."""
     by_key = {(r["slot"], r["model"], r.get("repeat", 0)): r for r in records}
@@ -393,22 +418,85 @@ def write_summary(records: list, models: list, jobs: list, directory: str, allow
 
 # ---------------------------------------------------------------- judge
 
-def _judge_call(client, model: str, system: str, prompt: str) -> dict | None:
-    from google.genai import types
-    response = client.models.generate_content(
-        model=model,
-        contents=prompt,
-        config=types.GenerateContentConfig(system_instruction=system, temperature=0.0, max_output_tokens=1200),
-    )
+def _answer_text(response) -> str:
+    """The model's answer text, from `response.text` or the non-thought parts (some Go models only fill parts)."""
     text = getattr(response, "text", "") or ""
-    match = re.search(r"\{.*\}", text, re.S)
-    if not match:
-        return None
+    if text.strip():
+        return text
+    chunks = []
     try:
-        data = json.loads(match.group(0))
+        for part in response.candidates[0].content.parts:
+            if not getattr(part, "thought", False) and getattr(part, "text", None):
+                chunks.append(part.text)
     except Exception:
+        pass
+    return "\n".join(chunks)
+
+
+def _json_blobs(text: str) -> list:
+    """Every balanced `{...}` object in the text, string-aware, so nested JSON parses cleanly."""
+    blobs, start, depth, in_string, escape = [], None, 0, False, False
+    for i, ch in enumerate(text or ""):
+        if start is None:
+            if ch == "{":
+                start, depth, in_string, escape = i, 1, False, False
+            continue
+        if in_string:
+            if escape:
+                escape = False
+            elif ch == "\\":
+                escape = True
+            elif ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+        elif ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                blobs.append(text[start:i + 1])
+                start = None
+    return blobs
+
+
+def _parse_verdict(text: str) -> dict | None:
+    """The last JSON object in the text that names a winner, fences and prose tolerated."""
+    if not text:
         return None
-    return data if data.get("winner") in ("a", "b", "tie") else None
+    candidates = _json_blobs(text) or [text]
+    for blob in reversed(candidates):
+        try:
+            data = json.loads(blob)
+        except Exception:
+            continue
+        if data.get("winner") in ("a", "b", "tie"):
+            return data
+    return None
+
+
+def _judge_call(client, model: str, system: str, prompt: str) -> dict | None:
+    """One verdict. Thinking shares the output cap on Go models, so the cap is generous and the
+    answer is read from the parts when `response.text` comes back empty."""
+    from google.genai import types
+    config = types.GenerateContentConfig(system_instruction=system, temperature=0.0, max_output_tokens=2048)
+    response = client.models.generate_content(model=model, contents=prompt, config=config)
+    verdict = _parse_verdict(_answer_text(response))
+    if verdict:
+        return verdict
+    retry = client.models.generate_content(
+        model=model, contents=prompt + "\n\nReply with the JSON object and nothing else.",
+        config=config)
+    return _parse_verdict(_answer_text(retry))
+
+
+def _clip_words(text: str, limit: int) -> str:
+    """First `limit` words, so one runaway article cannot eat the judge's context (or the allowance)."""
+    words = (text or "").split()
+    if len(words) <= limit:
+        return text
+    return " ".join(words[:limit]) + " [...]"
 
 
 def judge_pairs(records: list, jobs: list, models: list, judge_model: str, directory: str) -> dict:
@@ -424,14 +512,24 @@ def judge_pairs(records: list, jobs: list, models: list, judge_model: str, direc
                 b = by_key.get((job["slot"], model_b, 0)) or {}
                 if not (a.get("text") and b.get("text")):
                     continue
-                trace = ((a.get("evidence") or "")[-9000:] + "\n" + (b.get("evidence") or "")[-9000:])[:18000]
+                trace = ((a.get("evidence") or "")[-3000:] + "\n" + (b.get("evidence") or "")[-3000:])[:6000]
+                text_a = _clip_words(a["text"], 1100)
+                text_b = _clip_words(b["text"], 1100)
                 head = (f"ASSIGNMENT: {job['article_type_name']} by {job['handle']} "
                         f"({job['archetype']}). Desk note: {job.get('desk_note') or 'none'}.\n\n"
                         f"TOOL TRACE (the only facts allowed):\n{trace}\n\n")
-                prompt = head + f"VERSION 1:\n{a['text']}\n\nVERSION 2:\n{b['text']}"
-                first = _judge_call(client, judge_model, JUDGE_RUBRIC, prompt)
-                swapped = head + f"VERSION 1:\n{b['text']}\n\nVERSION 2:\n{a['text']}"
-                second = _judge_call(client, judge_model, JUDGE_RUBRIC, swapped)
+                prompt = head + f"VERSION 1:\n{text_a}\n\nVERSION 2:\n{text_b}"
+                try:
+                    first = _judge_call(client, judge_model, JUDGE_RUBRIC, prompt)
+                except Exception as exc:                 # a limit or a bad response ends this pair only
+                    first = None
+                    print(f"[compare] judge call failed ({job['slot']} {model_a}/{model_b}): {type(exc).__name__}: {exc}")
+                swapped = head + f"VERSION 1:\n{text_b}\n\nVERSION 2:\n{text_a}"
+                try:
+                    second = _judge_call(client, judge_model, JUDGE_RUBRIC, swapped)
+                except Exception as exc:
+                    second = None
+                    print(f"[compare] judge call failed (swapped, {job['slot']}): {type(exc).__name__}: {exc}")
                 if not first or not second:
                     verdict = "unjudged"
                 else:
@@ -490,6 +588,7 @@ def main(argv=None) -> int:
     ap.add_argument("--judge", default="glm-5.3", help="judge model ('' or --no-judge to skip)")
     ap.add_argument("--no-judge", action="store_true")
     ap.add_argument("--dry-run", action="store_true", help="compile and save prompts; make no model calls")
+    ap.add_argument("--judge-only", action="store_true", help="judge results already in --out; no article calls")
     ap.add_argument("--out", default=None)
     args = ap.parse_args(argv)
 
@@ -514,19 +613,38 @@ def main(argv=None) -> int:
         print(f"[compare] dry run: prompts written to {directory}")
         return 0
 
-    records = []
+    import threading
+    results_path = os.path.join(directory, "results.jsonl")
+    done = load_done(results_path)
+    records = list(done.values())
+    write_lock = threading.Lock()
+    if done:
+        print(f"[compare] resuming: {len(done)} result(s) already written")
+    if args.judge_only:
+        if not records:
+            print(f"[compare] no results in {directory}")
+            return 1
+        present = [m for m in args.models if any(r["model"] == m for r in records)]
+        print(f"[compare] judging {len(present)} model(s) from existing results with {args.judge}")
+        verdict = judge_pairs(records, jobs, present, args.judge, directory)
+        print("[compare] judge:", json.dumps(verdict.get("scoreboard", verdict.get("error"))))
+        return 0
     allowance = {"before": go_allowance()}
     for model in args.models:
         reason = allowance_guard(model, allowance["before"])
         if reason:
             print(f"[compare] skipping {model}: {reason}")
             continue
+        jobs_for_model = [(job, repeat) for job in jobs for repeat in range(max(1, args.repeats))
+                          if (job["slot"], model, repeat) not in done]
+        if not jobs_for_model:
+            print(f"[compare] {model}: already complete")
+            continue
         client, error = client_for(model)
         if client is None:
             print(f"[compare] skipping {model}: {error}")
             continue
-        print(f"[compare] {model}: {len(jobs)} article(s)")
-        jobs_for_model = [(job, repeat) for job in jobs for repeat in range(max(1, args.repeats))]
+        print(f"[compare] {model}: {len(jobs_for_model)} article(s)")
 
         def one(pair):
             job, repeat = pair
@@ -539,6 +657,7 @@ def main(argv=None) -> int:
                           "rewrites": [], "tool_calls": [], "tool_call_count": 0, "usage_calls": [],
                           "tokens": token_totals([]), "cost_usd": 0.0, "evidence": ""}
             result["repeat"] = repeat
+            append_result(results_path, result, write_lock)
             print(f"[compare]   {job['slot']} #{repeat}: {result['words']} words, "
                   f"{result['tool_call_count']} tools, {result['seconds']}s, ${result['cost_usd']}")
             return result
