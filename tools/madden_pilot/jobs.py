@@ -523,7 +523,7 @@ def _wait_window(pilot, timeout, poll=3.0):
 
 @job("launch")
 def launch(pilot, pack=DEFAULT_PACK, run=None, madden_running=None, timeout=LAUNCH_TIMEOUT, progress=None,
-           manager_running=None):
+           manager_running=None, process_identity=None, fingerprint=None):
     """Start Madden through the MMC Mod Manager with `pack` (unless Madden already runs), wait
     for its window, then press through the cold boot (ACCOUNT ERROR, splash, title) to a menu:
     the vanilla main menu, the Franchise panel a one-mode menu such as Mu Franchise Only opens
@@ -545,8 +545,26 @@ def launch(pilot, pack=DEFAULT_PACK, run=None, madden_running=None, timeout=LAUN
         run(argv)
     _wait_window(pilot, timeout)
     _, screen = wait_menu(pilot, timeout)
+    # Provenance for a later same-process fixture (F6): the Windows PID + start time make the
+    # instance identifiable, and the applied-pack fingerprint makes its pack state checkable.
+    # A machine that cannot read either records it as unverified; that is not a launch failure,
+    # it just makes this receipt unusable for attachment.
+    try:
+        from pipeline.gpu_queue import process_check
+        identity = (process_identity or process_check.madden_process_identity)()
+    except Exception:                        # noqa: BLE001 - record provenance, never guess it
+        identity = None
+    try:
+        from pipeline import mod_packs
+        applied = (fingerprint or mod_packs.pack_fingerprint)(pack)
+    except Exception:                        # noqa: BLE001
+        applied = None
+    identity = identity if isinstance(identity, dict) else None
+    applied = applied if isinstance(applied, dict) else None
     return {"status": "ok", "pack": pack, "command": argv, "already_running": bool(running), "screen": screen,
-            "cwd": progress.get("cwd")}
+            "cwd": progress.get("cwd"),
+            "process": identity, "process_verified": bool(identity),
+            "applied": applied, "applied_verified": bool(applied and applied.get("pack") == pack)}
 
 
 # ------------------------------------------------------------------------------- sim_season
@@ -1143,17 +1161,24 @@ SIM_SCREENS = ("SUPERSIM_MENU", "SUPERSIM_JUMP_FORWARD")
 
 
 def _start_game(pilot):
-    """GAMEDAY's PLAY SEASON GAME → pregame → READY → the intro → GAME_KICKOFF, kicked.
+    """GAMEDAY's PLAY SEASON GAME → pregame → READY → the intro → kickoff, and how it started.
 
     Only this job starts a game. HUB_GAMEDAY's `confirm_ok` stays `["ADVANCE WEEK"]`: PLAY
     SEASON GAME is added to the pilot's own policy for this run, exactly as the spike's guard
     did (spike S-1; the catalog is never widened). The pregame pivot's only control is a SELECT
     hint that does not OCR as a label, so its Space is pressed directly; READY is highlighted
     on arrival and confirmed through the catalog. The ~40 s broadcast intro needs no press.
+
+    Returns ``(screen, how)``. ``how`` is ``"kicking"`` when this team kicks (the catalogued
+    GAME_KICKOFF, Space held 1.5 s), ``"receiving"`` when the receiving view auto-advanced to
+    the play call (F8: the CPU kicks, no agent key), or ``"in-play"`` when the kickoff frame was
+    already gone by the first look (a late attach). The receiving view is never sent the
+    kicker's Space hold: it carries no kick controls and its measured transition needs none.
     """
     pilot.policy.setdefault("HUB_GAMEDAY", [])
     if "PLAY SEASON GAME" not in pilot.policy["HUB_GAMEDAY"]:
         pilot.policy["HUB_GAMEDAY"].append("PLAY SEASON GAME")
+    start_screens = ["GAME_PREGAME_READY", "GAME_KICKOFF", "GAME_KICKOFF_RECEIVE", "GAME_PLAY_CALL"]
     _, screen = wait_known(pilot, HUBS, PREGAME_TIMEOUT, poll=1.0, what="a franchise hub")
     if screen != "HUB_GAMEDAY":
         pilot.goto("HUB_GAMEDAY", timeout=PREGAME_TIMEOUT)
@@ -1163,14 +1188,29 @@ def _start_game(pilot):
                            poll=1.0, what="the pregame")
     if screen == "GAME_PREGAME_PIVOT":
         pilot.press("select", _confirm=True, wait=2.5)
-        _, screen = wait_known(pilot, ["GAME_PREGAME_READY", "GAME_KICKOFF"], PREGAME_TIMEOUT,
-                               poll=1.0, what="the ready screen")
+        _, screen = wait_known(pilot, start_screens, PREGAME_TIMEOUT, poll=1.0,
+                               what="the ready screen")
     if screen == "GAME_PREGAME_READY":
         pilot.highlight("READY")
         pilot.confirm_on("GAME_PREGAME_READY", "READY", wait=3.0)
-    _, screen = wait_known(pilot, ["GAME_KICKOFF"], GAME_INTRO_TIMEOUT, poll=2.0, what="kickoff")
-    pilot.press("select", hold=KICK_HOLD, _confirm=True, wait=2.0)     # a hold, not a tap (S-1)
-    return screen
+        screen = None
+    if screen is None:
+        _, screen = wait_known(pilot, start_screens[1:], GAME_INTRO_TIMEOUT, poll=2.0,
+                               what="kickoff")
+    if screen == "GAME_KICKOFF":
+        pilot.press("select", hold=KICK_HOLD, _confirm=True, wait=2.0)   # a hold, not a tap (S-1)
+        return screen, "kicking"
+    if screen == "GAME_KICKOFF_RECEIVE":
+        # Measured: the receiving view needs no key; the CPU kicks and Madden advances to the
+        # offensive play call on its own (F8). Require the scorebug clock as context so a
+        # KICKOFF ticker alone can never start this branch, then wait for the real transition.
+        if read_game_clock(pilot.frame) is None:
+            pilot.stop("watch-game: the receiving kickoff frame has no readable scorebug clock; "
+                       "not sending any key to a kick state nobody has measured", Stuck)
+        _, screen = wait_known(pilot, ["GAME_PLAY_CALL"], GAME_INTRO_TIMEOUT, poll=2.0,
+                               what="the automatic receiving kickoff transition to the play call")
+        return screen, "receiving"
+    return screen, "in-play"
 
 
 def _write_ready(pilot, save, target, hold, clock, ready_token=None, started=None):
@@ -1192,6 +1232,12 @@ def _write_ready(pilot, save, target, hold, clock, ready_token=None, started=Non
         "hold_until_epoch": now + float(hold),
         "hold_until": (stamp + datetime.timedelta(seconds=float(hold))).isoformat(timespec="seconds"),
     }
+    if target == "halftime":
+        # F1 stays open: nothing in this job has observed the show itself. The marker says so,
+        # so a later reader cannot mistake "holding after the last-play route" for the show.
+        payload["show_observed"] = False
+        payload["show_note"] = ("the halftime show itself is unmeasured; this marker only says the "
+                                "route reached its last-play hold")
     Path(pilot.run_dir).mkdir(parents=True, exist_ok=True)
     (Path(pilot.run_dir) / READY_FILE).write_text(json.dumps(payload, indent=1, default=str))
 
@@ -1211,12 +1257,21 @@ def _visible_options(pilot):
 
     The catalog's option list is what the menu can contain, not what this game state shows
     (F7: the live pause menu has 9 rows, not the catalog's 11). A row is found by its own OCR
-    text; ``SUPER`` and its ``SUPER SIM`` tooltip are the same row.
+    text; ``SUPER`` and its ``SUPER SIM`` tooltip are the same row. A screen's ``aliases`` map
+    covers a measured truncated reading of the same row (``JUMP TO NEXT`` for JUMP TO NEXT
+    PLAY, F9) without matching a different action.
     """
-    options = [str(option) for option in (pilot.spec().get("options") or [])]
+    spec = pilot.spec()
+    options = [str(option) for option in (spec.get("options") or [])]
+    aliases = spec.get("aliases") or {}
     found = []
     for index, option in enumerate(options):
         box = pilot.frame.find(option) if pilot.frame else None
+        if box is None:
+            for reading in aliases.get(option) or []:
+                box = pilot.frame.find(reading) if pilot.frame else None
+                if box:
+                    break
         if box is None and norm(option) == "SUPER":
             box = pilot.frame.find("SUPER SIM") if pilot.frame else None
         if box is None and norm(option) == "SUPER SIM":
@@ -1273,7 +1328,9 @@ def _supersim_menu(pilot, timeout=SUPERSIM_TIMEOUT):
         return frame
     if screen == "PAUSE_MENU":
         pass
-    elif screen in (UNKNOWN, "GAME_KICKOFF"):
+    elif screen in (UNKNOWN, "GAME_KICKOFF", "GAME_PLAY_CALL"):
+        # Real play-call and the receiving kickoff pause with the same measured Escape (F8/F10);
+        # GAME_PLAY_CALL is what a super-sim Back actually returns to (2026-11-12).
         pilot.press("esc", wait=2.5)
         frame, screen = wait_known(pilot, ["PAUSE_MENU"], PAUSE_TIMEOUT, poll=1.0, what="the pause menu")
     else:
@@ -1385,26 +1442,42 @@ def _to_halftime(pilot, progress):
         frame, _ = _supersim_press(pilot, "JUMP TO NEXT PLAY", timeout=SUPERSIM_PLAY_TIMEOUT)
         progress.update(halftime_presses=presses)
     progress.update(halftime_presses=presses, halftime_clock=clock)
-    pilot.press("back", wait=2.5)                      # the supersim screen → the pause menu
-    _, screen = wait_known(pilot, ["PAUSE_MENU"], PAUSE_TIMEOUT, poll=1.0, what="the pause menu")
-    _pin_highlight(pilot, "RESUME")
-    pilot.confirm_on("PAUSE_MENU", "RESUME", wait=3.0)
+    # MEASURED 2026-11-12: Back from the sim screen returns to the offensive play call, not the
+    # pause menu (live_quit_prepare). Recognise both landings; never wait for Pause forever and
+    # never confirm a RESUME that the measured route does not show (F10).
+    landing = _return_from_supersim(pilot)
+    if landing == "PAUSE_MENU":
+        _pin_highlight(pilot, "RESUME")
+        pilot.confirm_on("PAUSE_MENU", "RESUME", wait=3.0)
+    elif landing != "GAME_PLAY_CALL":
+        pilot.stop(f"watch-game: leaving super-sim landed on {landing}, not the measured play call "
+                   f"or pause menu; not resuming a half from an unmeasured screen", Stuck)
+    # Re-read the real clock immediately before the only allowed last-play snap: the transition
+    # burns game clock, so the 1..19 s Q2 window must still hold at this instant (F10/R4).
+    clock = read_game_clock(pilot.look()[0])
+    if not (clock and clock["quarter"] == 2
+            and HALFTIME_MIN_CLOCK <= clock["seconds"] < HALFTIME_WINDOW):
+        pilot.stop(f"watch-game: the clock read {clock!r} after leaving super-sim; only a live Q2 "
+                   f"clock of {HALFTIME_MIN_CLOCK}-{HALFTIME_WINDOW - 1}s may take the half's last "
+                   f"play, so no snap is pressed", Stuck)
     _take_one_snap(pilot)                              # the half's last play
     return pilot.screen, clock
 
 
-def _quit_game(pilot):
-    """Leave a live game: Escape → the pause menu's QUIT GAME → its confirmation → the list.
+def _quit_game(pilot, save=None):
+    """Leave a live game: Escape → the pause menu's QUIT GAME → the measured EXIT GAME modal.
 
     JR (2026-11-12): a `CAREER-TUNE-*` clone may have its game quit, because leaving a mod check
     sitting in a live game was worse. QUIT GAME is added to the pilot's policy for THIS RUN only,
     exactly as PLAY SEASON GAME is: the catalog's `PAUSE_MENU.confirm_ok` still allows RESUME and
-    SUPER alone, so no other job can reach the label. The dialog that follows was never seen in
-    spike S-1, so it is its own catalogued screen (`QUIT_GAME_CONFIRM`) and the run stops rather
-    than press a second blind time when Madden lands anywhere else.
+    SUPER alone, so no other job can reach the label. The modal that follows is the MEASURED
+    EXIT GAME dialog (F11), and its only allowed affirmative is YES - EXIT TO MENU; the landing
+    after that choice is still unmeasured, so the job reports where it lands and, when it is
+    still a loaded franchise hub, finishes with the existing safe TUNE quit.
     """
-    _leave_supersim(pilot)
-    _pause(pilot)
+    screen = _return_from_supersim(pilot)
+    if screen != "PAUSE_MENU":
+        _pause(pilot)                                  # measured Escape recovery from play-call
     pilot.policy.setdefault("PAUSE_MENU", [])
     if "QUIT GAME" not in pilot.policy["PAUSE_MENU"]:
         pilot.policy["PAUSE_MENU"].append("QUIT GAME")
@@ -1413,27 +1486,40 @@ def _quit_game(pilot):
     _, screen = _wait_quit_landing(pilot)
     if screen == "QUIT_GAME_CONFIRM":
         _confirm_quit_game(pilot)
-        _, screen = wait_known(pilot, ["FRANCHISE_LIST"], LEAVE_TIMEOUT, poll=1.0,
-                               what="the franchise list")
+        _, screen = wait_known(pilot, ["FRANCHISE_LIST", *HUBS, "FRANCHISE_LANDING", "MAIN_MENU"],
+                               LEAVE_TIMEOUT, poll=1.0,
+                               what="the landing after YES - EXIT TO MENU")
+        if screen in HUBS:
+            # EXIT TO MENU can leave the franchise loaded on a hub; finish with the existing
+            # safe TUNE quit rather than assuming it reached CURRENT FRANCHISES (F11).
+            _quit_now(pilot, franchise=save, allow_quit=False)
+            screen = "FRANCHISE_LIST"
     return screen
 
 
-def _leave_supersim(pilot, timeout=SUPERSIM_TIMEOUT):
-    """Backspace out of the super-sim screens to the pause menu before QUIT GAME.
+def _return_from_supersim(pilot, timeout=SUPERSIM_TIMEOUT):
+    """Back out of the super-sim screens and report the measured landing.
 
-    The supersim screen's own catalogued exit is Backspace, not Escape: Escape is real play's
-    pause key, so a hold that ends on SUPERSIM_MENU (the `--to supersim` route) must back out
-    once (twice from JUMP FORWARD) before `_quit_game` can pin QUIT GAME.
+    MEASURED 2026-11-12 (live_quit_prepare): Back on SUPERSIM_MENU returns to the offensive
+    play call (GAME_PLAY_CALL), not the pause menu. The jump-forward modal still backs out to
+    the sim menu first. A pause landing is also accepted for a variant that shows it; anything
+    else is returned as-is so the caller can stop rather than press into it.
     """
     for _ in range(2):
-        if pilot.screen == "SUPERSIM_MENU":
-            pilot.press("back", wait=2.0)
-            wait_known(pilot, ["PAUSE_MENU"], PAUSE_TIMEOUT, poll=1.0, what="the pause menu")
-            return
         if pilot.screen == "SUPERSIM_JUMP_FORWARD":
             pilot.press("back", wait=2.0)
+            _, screen = wait_known(pilot, ["SUPERSIM_MENU", "GAME_PLAY_CALL", "PAUSE_MENU"],
+                                   timeout, poll=1.0, what="the screen behind the jump-forward modal")
+            if screen != "SUPERSIM_MENU":
+                return screen
             continue
-        return
+        if pilot.screen == "SUPERSIM_MENU":
+            pilot.press("back", wait=2.5)
+            _, screen = wait_known(pilot, ["GAME_PLAY_CALL", "PAUSE_MENU"], timeout, poll=1.0,
+                                   what="the measured return from super-sim")
+            return screen
+        return pilot.screen
+    return pilot.screen
 
 
 def _pause(pilot, tries=3, wait=PAUSE_TIMEOUT, poll=1.0):
@@ -1463,11 +1549,12 @@ def _pause(pilot, tries=3, wait=PAUSE_TIMEOUT, poll=1.0):
 
 
 def _wait_quit_landing(pilot, timeout=LEAVE_TIMEOUT, poll=1.0):
-    """Where QUIT GAME lands: the quit-game confirmation, or the list when there is no dialog.
+    """Where QUIT GAME lands: the measured EXIT GAME modal, or the list when there is no dialog.
 
     A loading frame (UNKNOWN) is waited out; any other screen is a Stuck — catalogued or not —
     because the game is left exactly once and a screen nobody has seen is a report, not a second
-    blind press (`QUIT_GAME_CONFIRM` is only a guess until a live run reads its words).
+    blind press. The modal is the measured EXIT GAME / ARE YOU SURE / YES - EXIT TO MENU screen
+    (F11), not the pause menu's QUIT GAME tooltip, which classifies as PAUSE_MENU.
     """
     end = pilot.clock() + timeout
     with patience(pilot, timeout + 10 * poll, poll):
@@ -1487,21 +1574,30 @@ def _cancel_shaped(label):
     return bool(set(norm(label).replace("-", " ").split()) & set(CANCEL_WORDS))
 
 
-def _confirm_quit_game(pilot):
-    """Leave through the quit-game confirmation: its one allowed label, never a cancel-shaped one.
+def _destructive_shape(label):
+    """True for a label a game-quit workflow must never confirm (cancel/no/back/delete/trade,
+    or EXIT TO DESKTOP: the per-run TUNE quit may only choose YES - EXIT TO MENU, F11)."""
+    tokens = set(norm(label).replace("-", " ").split())
+    return bool(tokens & set(CANCEL_WORDS)) or "DESKTOP" in tokens
 
-    The catalog decides which label is the affirmative (`QUIT_GAME_CONFIRM.confirm_ok`);
-    `forbidden_confirm` means only this job's policy can press it, and the policy is given that
-    one label only. A dialog whose allowed labels all look like cancel/no/back/delete/trade stops
-    the run rather than pick one.
+
+def _confirm_quit_game(pilot):
+    """Leave through the measured EXIT GAME modal: its one allowed label, never a destructive one.
+
+    The catalog decides which labels are affirmative (`QUIT_GAME_CONFIRM.confirm_ok` = YES -
+    EXIT TO MENU); `forbidden_confirm` means only this job's policy can press it, and the policy
+    is given that one label only. A modal whose allowed labels all look like cancel/no/back/
+    delete/trade or EXIT TO DESKTOP stops the run rather than pick one. The selection is read by
+    containment, so a missing selected NO can never authorize its neighbouring YES - EXIT TO
+    MENU row: the guard moves the selection and re-reads it before Space (F9/F11).
     """
     if pilot.screen != "QUIT_GAME_CONFIRM":
         pilot.look()
     allowed = [label for label in (pilot.spec("QUIT_GAME_CONFIRM").get("confirm_ok") or [])
-               if not _cancel_shaped(label)]
+               if not _destructive_shape(label)]
     if not allowed:
         pilot.stop("watch-game: the quit-game confirmation's allowed labels all look like "
-                   "cancel/no/back/delete/trade; not choosing one", Stuck)
+                   "cancel/no/back/delete/trade/desktop; not choosing one", Stuck)
     pilot.policy.setdefault("QUIT_GAME_CONFIRM", [])
     for label in allowed:
         if label not in pilot.policy["QUIT_GAME_CONFIRM"]:
@@ -1521,7 +1617,7 @@ def _leave_franchise(pilot, save):
     pilot's policy for this run and followed by its own confirmation dialog.
     """
     if pilot.screen != "FRANCHISE_LIST" and pilot.plan(pilot.screen, "FRANCHISE_LIST") is None:
-        screen = _quit_game(pilot)
+        screen = _quit_game(pilot, save=save)
         return {"quit": True, "quit_route": "quit-game", "end_screen": screen}
     out = _quit_now(pilot, franchise=save, allow_quit=False)
     return {"quit": bool(out.get("quit")), "quit_route": "route",
@@ -1585,9 +1681,13 @@ def watch_game(pilot, save=None, franchise=None, to="kickoff", hold_seconds=60, 
         pilot.loaded_franchise = norm(tile_name(franchise))
     else:
         _load_franchise(pilot, tile, save=save, folder=folder)
-    _start_game(pilot)
+    _, how = _start_game(pilot)
     route = "kickoff"
     if target == "kickoff":
+        if how != "kicking":
+            pilot.stop("watch-game: this game started on the receiving side and its kickoff view "
+                       "was already gone (the CPU kicks and Madden advances on its own); there is "
+                       "no kicking kickoff screen to record, so nothing is recorded", Stuck)
         clock = read_game_clock(pilot.frame)
     elif target == "supersim":
         _supersim_menu(pilot)

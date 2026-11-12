@@ -1,0 +1,493 @@
+{
+ "fixture": "pause_quit_tooltip_0010",
+ "source": "data/audit_reports/visual_mod_check/live_quit_selected/steps/0010_QUIT_GAME_CONFIRM",
+ "screen": "QUIT_GAME_CONFIRM",
+ "lines": [
+  "RESUME",
+  "CALL TIMEOUT",
+  "CHALLENGEPLAY",
+  "CELEBRATIONS",
+  "STATS",
+  "10:10",
+  "COACHING",
+  "OPTIONS",
+  "QUIT GAME",
+  "E,XSPORTS",
+  "KEY PLAYERS",
+  "CALEB WILLIAMS",
+  "TDS",
+  "O",
+  "1st",
+  "YDS",
+  "O",
+  "z",
+  "STATS",
+  "ABILITIES",
+  "Any unsaved progress will be lost.",
+  "COMPO/O",
+  "0.0",
+  "2nd & 35",
+  "BRYCE YOUNG",
+  "TDS",
+  "O",
+  "YDS",
+  "-a",
+  "COMPO/O",
+  "100.0",
+  "SELECT",
+  "BACK"
+ ],
+ "words": [
+  {
+   "text": "RESUME",
+   "box": [
+    87,
+    84,
+    63,
+    21
+   ],
+   "line": 0
+  },
+  {
+   "text": "CALL",
+   "box": [
+    87,
+    127,
+    36,
+    21
+   ],
+   "line": 1
+  },
+  {
+   "text": "TIMEOUT",
+   "box": [
+    127,
+    127,
+    71,
+    21
+   ],
+   "line": 1
+  },
+  {
+   "text": "CHALLENGEPLAY",
+   "box": [
+    87,
+    170,
+    130,
+    21
+   ],
+   "line": 2
+  },
+  {
+   "text": "CELEBRATIONS",
+   "box": [
+    87,
+    213,
+    116,
+    21
+   ],
+   "line": 3
+  },
+  {
+   "text": "STATS",
+   "box": [
+    87,
+    256,
+    50,
+    21
+   ],
+   "line": 4
+  },
+  {
+   "text": "10:10",
+   "box": [
+    915,
+    288,
+    100,
+    22
+   ],
+   "line": 5
+  },
+  {
+   "text": "COACHING",
+   "box": [
+    87,
+    299,
+    80,
+    21
+   ],
+   "line": 6
+  },
+  {
+   "text": "OPTIONS",
+   "box": [
+    87,
+    342,
+    68,
+    21
+   ],
+   "line": 7
+  },
+  {
+   "text": "QUIT",
+   "box": [
+    98,
+    397,
+    41,
+    25
+   ],
+   "line": 8
+  },
+  {
+   "text": "GAME",
+   "box": [
+    144,
+    397,
+    50,
+    20
+   ],
+   "line": 8
+  },
+  {
+   "text": "E,XSPORTS",
+   "box": [
+    623,
+    291,
+    109,
+    17
+   ],
+   "line": 9
+  },
+  {
+   "text": "KEY",
+   "box": [
+    634,
+    514,
+    32,
+    20
+   ],
+   "line": 10
+  },
+  {
+   "text": "PLAYERS",
+   "box": [
+    670,
+    514,
+    75,
+    20
+   ],
+   "line": 10
+  },
+  {
+   "text": "CALEB",
+   "box": [
+    640,
+    590,
+    47,
+    21
+   ],
+   "line": 11
+  },
+  {
+   "text": "WILLIAMS",
+   "box": [
+    691,
+    590,
+    79,
+    21
+   ],
+   "line": 11
+  },
+  {
+   "text": "TDS",
+   "box": [
+    752,
+    647,
+    45,
+    16
+   ],
+   "line": 12
+  },
+  {
+   "text": "O",
+   "box": [
+    767,
+    676,
+    16,
+    31
+   ],
+   "line": 13
+  },
+  {
+   "text": "1st",
+   "box": [
+    832,
+    288,
+    57,
+    22
+   ],
+   "line": 14
+  },
+  {
+   "text": "YDS",
+   "box": [
+    838,
+    647,
+    45,
+    16
+   ],
+   "line": 15
+  },
+  {
+   "text": "O",
+   "box": [
+    853,
+    676,
+    16,
+    31
+   ],
+   "line": 16
+  },
+  {
+   "text": "z",
+   "box": [
+    938,
+    414,
+    12,
+    16
+   ],
+   "line": 17
+  },
+  {
+   "text": "STATS",
+   "box": [
+    985,
+    412,
+    56,
+    20
+   ],
+   "line": 18
+  },
+  {
+   "text": "ABILITIES",
+   "box": [
+    1073,
+    411,
+    75,
+    21
+   ],
+   "line": 19
+  },
+  {
+   "text": "Any",
+   "box": [
+    97,
+    428,
+    31,
+    15
+   ],
+   "line": 20
+  },
+  {
+   "text": "unsaved",
+   "box": [
+    133,
+    428,
+    68,
+    12
+   ],
+   "line": 20
+  },
+  {
+   "text": "progress",
+   "box": [
+    207,
+    431,
+    74,
+    12
+   ],
+   "line": 20
+  },
+  {
+   "text": "will",
+   "box": [
+    286,
+    428,
+    28,
+    12
+   ],
+   "line": 20
+  },
+  {
+   "text": "be",
+   "box": [
+    320,
+    428,
+    19,
+    12
+   ],
+   "line": 20
+  },
+  {
+   "text": "lost.",
+   "box": [
+    344,
+    428,
+    37,
+    12
+   ],
+   "line": 20
+  },
+  {
+   "text": "COMPO/O",
+   "box": [
+    919,
+    647,
+    87,
+    16
+   ],
+   "line": 21
+  },
+  {
+   "text": "0.0",
+   "box": [
+    942,
+    676,
+    42,
+    31
+   ],
+   "line": 22
+  },
+  {
+   "text": "2nd",
+   "box": [
+    1152,
+    288,
+    77,
+    22
+   ],
+   "line": 23
+  },
+  {
+   "text": "&",
+   "box": [
+    1241,
+    288,
+    30,
+    22
+   ],
+   "line": 23
+  },
+  {
+   "text": "35",
+   "box": [
+    1281,
+    288,
+    50,
+    22
+   ],
+   "line": 23
+  },
+  {
+   "text": "BRYCE",
+   "box": [
+    1200,
+    590,
+    48,
+    21
+   ],
+   "line": 24
+  },
+  {
+   "text": "YOUNG",
+   "box": [
+    1251,
+    590,
+    53,
+    21
+   ],
+   "line": 24
+  },
+  {
+   "text": "TDS",
+   "box": [
+    1312,
+    647,
+    45,
+    16
+   ],
+   "line": 25
+  },
+  {
+   "text": "O",
+   "box": [
+    1327,
+    676,
+    16,
+    31
+   ],
+   "line": 26
+  },
+  {
+   "text": "YDS",
+   "box": [
+    1398,
+    647,
+    45,
+    16
+   ],
+   "line": 27
+  },
+  {
+   "text": "-a",
+   "box": [
+    1407,
+    676,
+    29,
+    31
+   ],
+   "line": 28
+  },
+  {
+   "text": "COMPO/O",
+   "box": [
+    1479,
+    647,
+    87,
+    16
+   ],
+   "line": 29
+  },
+  {
+   "text": "100.0",
+   "box": [
+    1486,
+    676,
+    72,
+    31
+   ],
+   "line": 30
+  },
+  {
+   "text": "SELECT",
+   "box": [
+    95,
+    1043,
+    45,
+    16
+   ],
+   "line": 31
+  },
+  {
+   "text": "BACK",
+   "box": [
+    203,
+    1043,
+    32,
+    16
+   ],
+   "line": 32
+  }
+ ],
+ "png": "pause_quit_tooltip_0010.png"
+}

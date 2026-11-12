@@ -71,6 +71,7 @@ def build_report(save: str, mod: str, segments: Iterable[Mapping[str, Any]], min
                  pack: str | None = None, autosave_written: bool | None = None, *,
                  pack_required: str | None = None, pack_actual: str | None = None,
                  pack_verified: bool = False, launch: Mapping[str, Any] | None = None,
+                 provenance: Mapping[str, Any] | None = None,
                  quit: bool | None = None, quit_route: str | None = None,
                  end_screen: str | None = None,
                  operational: Mapping[str, Any] | None = None) -> dict:
@@ -91,6 +92,7 @@ def build_report(save: str, mod: str, segments: Iterable[Mapping[str, Any]], min
             "pack": pack, "pack_required": pack_required, "pack_actual": pack_actual,
             "pack_verified": bool(pack_verified),
             "launch": dict(launch) if launch is not None else None,
+            "provenance": dict(provenance) if provenance is not None else None,
             "quit": quit, "quit_route": quit_route, "end_screen": end_screen,
             "operational": status, "autosave_written": autosave_written}
 
@@ -138,11 +140,23 @@ def markdown(report: Mapping[str, Any]) -> str:
                  f"verified: {'yes' if report.get('pack_verified') else 'no'})"
                  if report.get("pack") else
                  f"- pack: unknown (required `{report.get('pack_required')}`; the launch did not verify one)")
+    provenance = report.get("provenance") or {}
+    process = provenance.get("process") or {}
+    applied = provenance.get("applied") or {}
+    provenance_text = (
+        "- launch provenance: "
+        + ("**reused** the verified process" if provenance.get("reused") else "cold launch recorded")
+        + f" (process identity {'verified' if provenance.get('process_verified') else 'UNVERIFIED'}"
+        + (f", pid {process.get('pid')}" if process.get("pid") else "")
+        + f"; applied pack {'verified' if provenance.get('applied_verified') else 'UNVERIFIED'}"
+        + (f", fingerprint {str(applied.get('fingerprint'))[:12]}" if applied.get("fingerprint") else "")
+        + ")")
     lines = [
         f"# Mod check: {report.get('mod')}",
         "",
         f"- save: `{report.get('save')}`",
         pack_text,
+        provenance_text,
         f"- autosave written: {autosave_text}",
         f"- game quit: {quit_text}"
         + (f" via {report.get('quit_route')}" if report.get("quit_route") else "")

@@ -39,7 +39,8 @@ POSTSEASON = "POSTSEASON"      # stands in for the post-season screens, which ar
 REGULAR_WEEKS = 18
 # The in-game screens (watch-game, VISUAL_MOD_CHECK_PLAN 2.5): the fake Madden shows a scorebug
 # on them and sims the clock the way the supersim controls do.
-GAME_SCREENS = ("GAME_KICKOFF", "GAME_PLAY", "PAUSE_MENU", "SUPERSIM_MENU", "SUPERSIM_JUMP_FORWARD")
+GAME_SCREENS = ("GAME_KICKOFF", "GAME_KICKOFF_RECEIVE", "GAME_PLAY", "GAME_PLAY_CALL",
+                "PAUSE_MENU", "SUPERSIM_MENU", "SUPERSIM_JUMP_FORWARD")
 FAKE_SIM_STEP_SECONDS = 25     # a JUMP TO NEXT PLAY press. Madden moves ~4 s (S-1); the fake
                               # moves a quarter in a couple of dozen presses so a dry run is short
 FAKE_POSSESSION_SECONDS = 120  # CHANGE OF POSSESSION: one drive, about two minutes (S-1)
@@ -174,12 +175,20 @@ class ScriptedMadden:
     def check(self):
         """Screens whose generated words don't classify back to themselves (should be none)."""
         bad = []
-        for name in self.screens:
-            if not self.screens[name].get("all") and not self.screens[name].get("any"):
-                continue
-            got = classify(Frame(None, self.words(self.lines(name))), self.catalog)
-            if got != name:
-                bad.append((name, got))
+        current = self.screen
+        try:
+            for name in self.screens:
+                if not self.screens[name].get("all") and not self.screens[name].get("any"):
+                    continue
+                # Build the frame as that screen, not as whatever the fake is standing on: the
+                # franchise-list tile layout is per-screen and would otherwise leak into every
+                # other screen's OCR (a `line_is` check would then never see a whole line).
+                self.screen = name
+                got = classify(Frame(None, self.words(self.lines(name))), self.catalog)
+                if got != name:
+                    bad.append((name, got))
+        finally:
+            self.screen = current
         return bad
 
     # ------------------------------------------------------------ driver
@@ -237,7 +246,8 @@ class ScriptedMadden:
             self.go("PAUSE_MENU")
             return
         if name == "backspace" and self.screen == "SUPERSIM_MENU":
-            self.go("PAUSE_MENU")
+            # measured 2026-11-12: Back returns to the offensive play call, not the pause menu (F10)
+            self.go("GAME_PLAY_CALL")
             return
         if self.game_key(name, label, select):
             return
@@ -294,6 +304,9 @@ class ScriptedMadden:
         elif self.screen == "PAUSE_MENU" and label == "QUIT GAME":
             self.pending = [LOADING]
             self.go("QUIT_GAME_CONFIRM")
+        elif self.screen == "QUIT_GAME_CONFIRM" and label == "YES - EXIT TO MENU":
+            self.pending = [LOADING]
+            self.go("FRANCHISE_LIST")
         elif self.screen == "SUPERSIM_MENU" and label == "JUMP FORWARD":
             self.go("SUPERSIM_JUMP_FORWARD")
         elif self.screen == "SUPERSIM_MENU" and label == "JUMP TO NEXT PLAY":
@@ -309,7 +322,7 @@ class ScriptedMadden:
             self.pending = [LOADING]
             self.game_seconds = max(0, self.game_seconds - FAKE_POSSESSION_SECONDS)
             self.go("SUPERSIM_MENU")
-        elif self.screen == "GAME_PLAY":
+        elif self.screen in ("GAME_PLAY", "GAME_PLAY_CALL"):
             self.game_seconds = max(0, self.game_seconds - FAKE_SNAP_SECONDS)
         else:
             return False
@@ -353,12 +366,15 @@ ROUTES = {
     "watch-game": "FRANCHISE_LIST > highlight {tile} > Space > PROGRESSION_WARNING (Proceed) > hub > GAMEDAY > "
                   "highlight PLAY SEASON GAME > Space (this job's policy; the catalog still allows ADVANCE WEEK "
                   "only) > GAME_PREGAME_PIVOT > Space > GAME_PREGAME_READY (READY) > ~40 s intro > GAME_KICKOFF > "
-                  "Space held 1.5 s > ready.json > hold {hold_seconds}s pressing nothing [halftime also: Esc > PAUSE_MENU > "
-                  "SUPER > SUPERSIM_MENU > JUMP FORWARD > NEXT QUARTER > CHANGE OF POSSESSION x2 > JUMP TO NEXT PLAY "
-                  "until the clock reads 1-19 s in Q2 > Backspace > RESUME > the half's last snap; supersim stops on "
-                  "SUPERSIM_MENU] > leave: "
+                  "Space held 1.5 s (a receiving start shows GAME_KICKOFF_RECEIVE instead: no key, wait for the "
+                  "CPU kick to reach GAME_PLAY_CALL) > ready.json > hold {hold_seconds}s pressing nothing "
+                  "[halftime also: Esc > PAUSE_MENU > SUPER > SUPERSIM_MENU > JUMP FORWARD > NEXT QUARTER > "
+                  "CHANGE OF POSSESSION x2 > JUMP TO NEXT PLAY until the clock reads 1-19 s in Q2 > Backspace > "
+                  "GAME_PLAY_CALL (or PAUSE_MENU + RESUME) > re-read the Q2 clock > the half's last snap; supersim "
+                  "stops on SUPERSIM_MENU] > leave: "
                   "PAUSE_MENU > highlight QUIT GAME (this job's policy; the catalog does not allow it) > Space > "
-                  "QUIT_GAME_CONFIRM > highlight QUIT GAME > Space > FRANCHISE_LIST",
+                  "QUIT_GAME_CONFIRM (EXIT GAME modal) > highlight YES - EXIT TO MENU > Space > "
+                  "where it lands (FRANCHISE_LIST reported, not assumed)",
 }
 
 

@@ -79,6 +79,7 @@ READY_FILE = "ready.json"            # watch-game's current-process ready-for-re
 READY_MARGIN_S = 5.0                 # IPC/record margin the remaining hold must still cover
 JOB_QUIT_GRACE_S = 180.0            # how long after its hold a job may take to quit
 CUE_POLL_S = 0.5                    # how often the job's ready marker is read while it holds
+LAUNCH_RECEIPT = "launch.json"      # the mod folder's last verified launch, reused by --reuse-launch
 CHK_PREFIX = "CAREER-TUNE-CHK"
 MAX_CHK = 99
 LAUNCH_TIMEOUT_S = 900.0
@@ -301,6 +302,17 @@ def _notify(message: str) -> bool:
         return False
 
 
+def _check_hold(pilot: Any, seconds: int) -> None:
+    """Ask the real driver whether its job is still alive and holding (F3/R1).
+
+    Fake drivers used by the offline tests need no seam; the real PilotDriver re-checks the
+    live process, its own accepted ready marker and the remaining hold.
+    """
+    check = getattr(pilot, "check_hold", None)
+    if callable(check):
+        check(seconds)
+
+
 def _finish(driver: Any) -> tuple[dict, str | None]:
     """Best-effort finish that never hides its own failure: ``(state, error)``."""
     try:
@@ -398,7 +410,9 @@ def default_launch(pack: str, run_dir: str | Path, python: str | None = None,
     This is the only trustworthy pack provenance available: the run starts the plan's test pack
     itself, so the pack it asked Frosty for is the pack in the report. An already-running Madden
     is refused — its loaded pack cannot be verified — and so is a launch that reports a different
-    pack or a non-ok status. A caller can inject its own launch callable in tests.
+    pack or a non-ok status. A caller can inject its own launch callable in tests. The receipt
+    also carries the launch job's process identity and applied-pack fingerprint (F6), which
+    ``attach_launch`` re-verifies before a later fixture may reuse this same process.
     """
     try:
         from pipeline.gpu_queue import process_check
@@ -431,6 +445,78 @@ def default_launch(pack: str, run_dir: str | Path, python: str | None = None,
     return receipt
 
 
+def _receipt_path(folder: str | Path) -> Path:
+    return Path(folder) / LAUNCH_RECEIPT
+
+
+def read_launch_receipt(folder: str | Path) -> dict | None:
+    """The last launch receipt a run stored in the mod folder, or None."""
+    try:
+        data = json.loads(_receipt_path(folder).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def write_launch_receipt(folder: str | Path, receipt: Mapping[str, Any]) -> Path:
+    """Store the cold launch's receipt so a later fixture can attach to the same process (F6)."""
+    path = _receipt_path(folder)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(dict(receipt), indent=1, default=str), encoding="utf-8")
+    return path
+
+
+def attach_launch(receipt: Mapping[str, Any] | None, pack: str,
+                  identity: Callable[[], Mapping[str, Any] | None] | None = None,
+                  fingerprint: Callable[[str], Mapping[str, Any] | None] | None = None) -> dict:
+    """Verify that the running Madden is the *same verified instance* a cold launch started.
+
+    The trusted attach of F6, for consecutive fixtures that must not relaunch or change pack:
+    the stored receipt must name the plan's pack, report a cold launch, carry a verified Windows
+    process identity (pid + start time) and a verified applied-pack fingerprint; the *current*
+    Madden must still have that identity (Windows reuses PIDs, so the start time is the check),
+    and the applied pack's fingerprint must be unchanged. Unknown, stale, wrong-pack and changed
+    applied state all raise LaunchError before anything is cloned, recorded or scored. A caller
+    string or a selected-pack name alone is never enough.
+    """
+    if not isinstance(receipt, Mapping) or receipt.get("status") != "ok":
+        raise LaunchError("no successful launch receipt to reuse: run once without --reuse-launch "
+                          "on this mod so the launch's provenance is recorded (plan R6/F6)")
+    if receipt.get("already_running") is not False:
+        raise LaunchError("the receipt says its launch attached to an already-running Madden; "
+                          "that process's pack is unknown, so it cannot be reused (plan R6/F6)")
+    if receipt.get("pack") != pack:
+        raise LaunchError(f"the stored launch ran pack {receipt.get('pack')!r}, not the plan's "
+                          f"{pack!r}; refusing to attach to a different pack")
+    saved = receipt.get("process")
+    applied = receipt.get("applied")
+    if not receipt.get("process_verified") or not isinstance(saved, Mapping):
+        raise LaunchError("the stored launch has no verified Windows process identity (pid and "
+                          "start time); an attached game's instance cannot be proved (F6)")
+    if not receipt.get("applied_verified") or not isinstance(applied, Mapping):
+        raise LaunchError("the stored launch has no verified applied-pack fingerprint; the pack "
+                          "state of an attached game cannot be proved (F6)")
+    from pipeline.gpu_queue import process_check
+    current = (identity or process_check.madden_process_identity)()
+    if current is None:
+        raise LaunchError("cannot read the running Madden process; its identity is unknown, so "
+                          "the verified launch cannot be matched (F6)")
+    if not process_check.same_process_identity(saved, current):
+        raise LaunchError(f"the running Madden is not the launched instance (saved pid/start "
+                          f"{dict(saved)!r}, current {dict(current)!r}); relaunch instead of "
+                          f"attaching (F6)")
+    from pipeline import mod_packs
+    now = (fingerprint or mod_packs.pack_fingerprint)(pack)
+    if not isinstance(now, Mapping):
+        raise LaunchError(f"cannot read the applied pack {pack!r} from the Mod Manager config; "
+                          f"its state is unknown, so no attach (F6)")
+    if now.get("fingerprint") != applied.get("fingerprint"):
+        raise LaunchError(f"the applied pack {pack!r} changed since the launch (fingerprint "
+                          f"{applied.get('fingerprint')!r} -> {now.get('fingerprint')!r}); relaunch "
+                          f"instead of attaching (F6)")
+    return dict(receipt)
+
+
 # --------------------------------------------------------------------------- run
 def run(save: str, mod: str, segments: Sequence[str] | None = None, run_dir: str | Path | None = None,
         dry_run: bool = False, driver: Any = None, describe: Callable | None = None,
@@ -438,7 +524,9 @@ def run(save: str, mod: str, segments: Sequence[str] | None = None, run_dir: str
         clone: Callable | None = None, progress: Callable | None = None, *,
         pack: str | None = None, check: Callable | None = None,
         notice: Callable | None = None, sleep: Callable | None = None,
-        launch: Callable | None = None) -> dict:
+        launch: Callable | None = None, reuse: bool = False,
+        identity: Callable[[], Mapping[str, Any] | None] | None = None,
+        fingerprint: Callable[[str], Mapping[str, Any] | None] | None = None) -> dict:
     """Run one visual mod check and return the report.
 
     ``status`` is the pixel verdict only when the run also finished cleanly; a cleanup problem
@@ -488,6 +576,18 @@ def run(save: str, mod: str, segments: Sequence[str] | None = None, run_dir: str
     else:
         target = _inside(_unique_run_dir(root, plan.mod), root, "the run directory")
 
+    attached_receipt: dict | None = None
+    if reuse:
+        # A refused attach must not clone a save or touch the PC at all (F6).
+        try:
+            attached_receipt = attach_launch(read_launch_receipt(folder), plan.pack,
+                                            identity=identity, fingerprint=fingerprint)
+        except (LaunchError, DriverError, OSError) as exc:
+            return {"status": "stopped", "stop": "attach", "why": str(exc), "save": save,
+                    "source_save": save, "mod": plan.mod, "run_dir": None,
+                    "pack_required": plan.pack, "pack_actual": None, "pack_verified": False,
+                    "attached": False}
+
     maker = clone or default_clone
     try:
         scored = str(maker(save, CHK_PREFIX) or "").strip()
@@ -498,34 +598,53 @@ def run(save: str, mod: str, segments: Sequence[str] | None = None, run_dir: str
                         f"{CHK_PREFIX}<letter> save, never the one it was given", save=save, mod=plan.mod)
 
     target.mkdir(parents=True, exist_ok=True)
-    launcher = launch or (lambda wanted: default_launch(wanted, target / "launch"))
-    try:
-        receipt = launcher(plan.pack) or {}
-    except (DriverError, OSError) as exc:
-        return {"status": "stopped", "stop": "launch", "why": str(exc), "save": scored,
-                "source_save": save, "mod": plan.mod, "run_dir": str(target),
-                "pack_required": plan.pack, "pack_actual": None, "pack_verified": False}
-    if (not isinstance(receipt, dict) or receipt.get("status") != "ok"
-            or receipt.get("pack") != plan.pack or receipt.get("already_running") is not False):
-        return {"status": "stopped", "stop": "launch",
-                "why": f"the launch receipt does not verify the plan's pack {plan.pack!r}: "
-                       f"{receipt!r}", "save": scored, "source_save": save, "mod": plan.mod,
-                "run_dir": str(target), "pack_required": plan.pack,
-                "pack_actual": (receipt or {}).get("pack"), "pack_verified": False}
+    if reuse:
+        # Consecutive fixtures on one verified launch (F6): no relaunch and no new process.
+        receipt = attached_receipt
+    else:
+        launcher = launch or (lambda wanted: default_launch(wanted, target / "launch"))
+        try:
+            receipt = launcher(plan.pack) or {}
+        except (DriverError, OSError) as exc:
+            return {"status": "stopped", "stop": "launch", "why": str(exc), "save": scored,
+                    "source_save": save, "mod": plan.mod, "run_dir": str(target),
+                    "pack_required": plan.pack, "pack_actual": None, "pack_verified": False,
+                    "attached": False}
+        if (not isinstance(receipt, dict) or receipt.get("status") != "ok"
+                or receipt.get("pack") != plan.pack or receipt.get("already_running") is not False):
+            return {"status": "stopped", "stop": "launch",
+                    "why": f"the launch receipt does not verify the plan's pack {plan.pack!r}: "
+                           f"{receipt!r}", "save": scored, "source_save": save, "mod": plan.mod,
+                    "run_dir": str(target), "pack_required": plan.pack,
+                    "pack_actual": (receipt or {}).get("pack"), "pack_verified": False,
+                    "attached": False}
+        receipt = dict(receipt)
+        try:
+            write_launch_receipt(folder, receipt)
+        except OSError:
+            pass                                   # the report still carries the receipt
     actual_pack = str(receipt["pack"])
+    provenance = {
+        "reused": bool(reuse),
+        "process": receipt.get("process"),
+        "process_verified": bool(receipt.get("process_verified")),
+        "applied": receipt.get("applied"),
+        "applied_verified": bool(receipt.get("applied_verified")),
+        "receipt": str(_receipt_path(folder)),
+    }
 
     engine = check or assets.check_frame
     describer = describe or describe_segment
     sleeper = sleep or time.sleep
     pilot = driver or PilotDriver(run_dir=target)
+    entries: list[dict] = []
     try:
         started = pilot.start(scored, pack=actual_pack) or {}
     except DriverError as exc:
         finished, finish_error = _finish(pilot)
         return _stopped_run("driver", str(exc), finished, finish_error, scored, save,
-                            plan, target, actual_pack)
+                            plan, target, actual_pack, entries)
 
-    entries: list[dict] = []
     try:
         for index, segment in enumerate(chosen, 1):
             segment_dir = target / "segments" / segment.name
@@ -537,8 +656,10 @@ def run(save: str, mod: str, segments: Sequence[str] | None = None, run_dir: str
                                timeout_s=CUE_TIMEOUTS.get(segment.cue, CUE_TIMEOUT_S),
                                hold_s=hold_s,
                                record_s=int(math.ceil(segment.record_s + segment.preroll_s)))
+                _check_hold(pilot, segment.record_s)       # still this process and still holding
             if segment.preroll_s:
                 sleeper(segment.preroll_s)
+                _check_hold(pilot, segment.record_s)       # the preroll can outlast the hold
             record_started = time.time()
             returned = pilot.record(frames_dir, segment.record_s, segment.fps, segment.width)
             frames = _frame_paths(returned, frames_dir, since=record_started)
@@ -554,11 +675,11 @@ def run(save: str, mod: str, segments: Sequence[str] | None = None, run_dir: str
     except CueMissed as exc:
         finished, finish_error = _finish(pilot)
         return _stopped_run("cue_missed", str(exc), finished, finish_error, scored, save,
-                            plan, target, actual_pack)
+                            plan, target, actual_pack, entries)
     except DriverError as exc:
         finished, finish_error = _finish(pilot)
         return _stopped_run("driver", str(exc), finished, finish_error, scored, save,
-                            plan, target, actual_pack)
+                            plan, target, actual_pack, entries)
 
     finished, finish_error = _finish(pilot)
     operational = _operational(finished, finish_error)
@@ -567,7 +688,7 @@ def run(save: str, mod: str, segments: Sequence[str] | None = None, run_dir: str
         scored, plan.mod, entries, minutes,
         pack=actual_pack, autosave_written=_autosave_flag(finished),
         pack_required=plan.pack, pack_actual=actual_pack, pack_verified=True,
-        launch=receipt, quit=finished.get("quit"),
+        launch=receipt, provenance=provenance, quit=finished.get("quit"),
         quit_route=finished.get("quit_route"), end_screen=finished.get("end_screen"),
         operational=operational)
     json_path, md_path = report_mod.write_report(result, target)
@@ -579,17 +700,19 @@ def run(save: str, mod: str, segments: Sequence[str] | None = None, run_dir: str
     status = result["verdict"] if operational["status"] == "complete" else "incomplete"
     return {"status": status, "verdict": result["verdict"], **result, "run_dir": str(target),
             "report_json": str(json_path), "report_md": str(md_path),
-            "source_save": save, "clone": scored}
+            "source_save": save, "clone": scored, "attached": bool(reuse),
+            "provenance": provenance}
 
 
 def _stopped_run(stop: str, why: str, finished: Mapping[str, Any], finish_error: str | None,
                  scored: str, source: str, plan: Any, target: Path,
-                 actual_pack: str) -> dict:
-    """A stopped run keeps its cleanup state instead of silently discarding it."""
+                 actual_pack: str, entries: Sequence[Mapping[str, Any]] = ()) -> dict:
+    """A stopped run keeps its cleanup state and every earlier pixel row it already scored."""
     operational = _operational(finished, finish_error)
     return {"status": "stopped", "stop": stop, "why": why, "save": scored,
             "source_save": source, "mod": plan.mod, "run_dir": str(target),
             "pack_required": plan.pack, "pack_actual": actual_pack, "pack_verified": True,
+            "segments": list(entries),
             "quit": finished.get("quit"), "quit_route": finished.get("quit_route"),
             "end_screen": finished.get("end_screen"), "operational": operational}
 
@@ -666,14 +789,53 @@ def _find_segment_frames(run_dir: Path, segment: str) -> list[Path]:
     return []
 
 
+def _run_allocation(name: str, mod: str) -> tuple[datetime.datetime, int] | None:
+    """(started at, allocation number) for a run directory this mod owns, else None.
+
+    ``_unique_run_dir`` names runs ``<stamp>_<mod>`` and, for a same-second collision,
+    ``<stamp>_<mod>-2``, ``-3`` ... ``-10``. The unsuffixed name is allocation 1, and the
+    number is compared as an integer, so ``-10`` is newer than ``-9``. Exactly this mod's
+    names match: another mod whose slug merely ends with the same words is not a candidate.
+    """
+    match = re.fullmatch(r"(\d{4}-\d{2}-\d{2}_\d{6})_" + re.escape(mod) + r"(?:-(\d+))?",
+                         name)
+    if not match:
+        return None
+    try:
+        started = datetime.datetime.strptime(match.group(1), "%Y-%m-%d_%H%M%S")
+    except ValueError:
+        return None
+    return started, int(match.group(2) or 1)
+
+
 def _newest_run(root: Path, mod: str) -> Path | None:
+    """The newest run this mod owns, by allocation (timestamp then same-second number).
+
+    A run's report may name the mod it scored; a directory whose report names another mod is
+    skipped (a renamed/replaced check must not calibrate on it). An incomplete run with no
+    report is still the newest allocation: capture then finds no frames and refuses, rather
+    than silently cutting an older run's frames (plan R3).
+    """
     runs = root / "runs"
     if not runs.is_dir():
         return None
-    candidates = sorted((path for path in runs.iterdir()
-                         if path.is_dir() and path.name.endswith(f"_{mod}")),
-                        key=lambda path: path.name)
-    return candidates[-1] if candidates else None
+    candidates: list[tuple[tuple[datetime.datetime, int], Path]] = []
+    for path in runs.iterdir():
+        if not path.is_dir():
+            continue
+        key = _run_allocation(path.name, mod)
+        if key is None:
+            continue
+        try:
+            report = json.loads((path / "report.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            report = None
+        if isinstance(report, dict) and report.get("mod") not in (None, mod):
+            continue
+        candidates.append((key, path))
+    if not candidates:
+        return None
+    return max(candidates, key=lambda item: item[0])[1]
 
 
 def capture(mod: str, segment: str, pass_at: str, fail_at: str, *, asset: str | None = None,
@@ -682,7 +844,9 @@ def capture(mod: str, segment: str, pass_at: str, fail_at: str, *, asset: str | 
             data_dir: str | Path | None = None, clone: Callable | None = None,
             watcher: Callable | None = None, notice: Callable | None = None,
             sleep: Callable | None = None, progress: Callable | None = None,
-            launch: Callable | None = None) -> dict:
+            launch: Callable | None = None, reuse: bool = False,
+            identity: Callable[[], Mapping[str, Any] | None] | None = None,
+            fingerprint: Callable[[str], Mapping[str, Any] | None] | None = None) -> dict:
     """Cut one segment's two named moments into ``refs/`` after a human ``yes`` (plan 2.3/R3).
 
     Returns ``{status, asset, segment, pass_at, fail_at, pass_seconds, fail_seconds, frames,
@@ -750,19 +914,32 @@ def capture(mod: str, segment: str, pass_at: str, fail_at: str, *, asset: str | 
                                 f"a fresh {CHK_PREFIX}<letter> save, never the one it was given",
                                 mod=plan.mod)
             target.mkdir(parents=True, exist_ok=True)
-            launcher = launch or (lambda wanted: default_launch(wanted, target / "launch"))
-            try:
-                receipt = launcher(plan.pack) or {}
-            except (DriverError, OSError) as exc:
-                return {"status": "stopped", "stop": "launch", "why": str(exc), "mod": plan.mod,
-                        "pack_required": plan.pack}
-            if (not isinstance(receipt, dict) or receipt.get("status") != "ok"
-                    or receipt.get("pack") != plan.pack
-                    or receipt.get("already_running") is not False):
-                return {"status": "stopped", "stop": "launch",
-                        "why": f"the launch receipt does not verify the plan's pack "
-                               f"{plan.pack!r}: {receipt!r}", "mod": plan.mod,
-                        "pack_required": plan.pack}
+            if reuse:
+                try:
+                    receipt = attach_launch(read_launch_receipt(folder), plan.pack,
+                                            identity=identity, fingerprint=fingerprint)
+                except (LaunchError, DriverError, OSError) as exc:
+                    return {"status": "stopped", "stop": "attach", "why": str(exc),
+                            "mod": plan.mod, "pack_required": plan.pack, "attached": False}
+            else:
+                launcher = launch or (lambda wanted: default_launch(wanted, target / "launch"))
+                try:
+                    receipt = launcher(plan.pack) or {}
+                except (DriverError, OSError) as exc:
+                    return {"status": "stopped", "stop": "launch", "why": str(exc), "mod": plan.mod,
+                            "pack_required": plan.pack, "attached": False}
+                if (not isinstance(receipt, dict) or receipt.get("status") != "ok"
+                        or receipt.get("pack") != plan.pack
+                        or receipt.get("already_running") is not False):
+                    return {"status": "stopped", "stop": "launch",
+                            "why": f"the launch receipt does not verify the plan's pack "
+                                   f"{plan.pack!r}: {receipt!r}", "mod": plan.mod,
+                            "pack_required": plan.pack, "attached": False}
+                receipt = dict(receipt)
+                try:
+                    write_launch_receipt(folder, receipt)
+                except OSError:
+                    pass
             actual_pack = str(receipt["pack"])
             live = driver or PilotDriver(run_dir=target)
             started = False
@@ -778,8 +955,10 @@ def capture(mod: str, segment: str, pass_at: str, fail_at: str, *, asset: str | 
                                   timeout_s=CUE_TIMEOUTS.get(chosen.cue, CUE_TIMEOUT_S),
                                   hold_s=hold_s,
                                   record_s=int(math.ceil(chosen.record_s + chosen.preroll_s)))
+                    _check_hold(live, chosen.record_s)
                 if chosen.preroll_s:
                     (sleep or time.sleep)(chosen.preroll_s)
+                    _check_hold(live, chosen.record_s)
                 frames_dir = target / "segments" / segment / "frames"
                 frames_dir.mkdir(parents=True, exist_ok=True)
                 record_started = time.time()
@@ -800,7 +979,12 @@ def capture(mod: str, segment: str, pass_at: str, fail_at: str, *, asset: str | 
                          "end_screen": finished.get("end_screen"),
                          "pack": actual_pack, "pack_required": plan.pack,
                          "pack_actual": actual_pack, "pack_verified": True,
-                         "launch": receipt}
+                         "launch": receipt, "attached": bool(reuse),
+                         "provenance": {"reused": bool(reuse),
+                                        "process": receipt.get("process"),
+                                        "process_verified": bool(receipt.get("process_verified")),
+                                        "applied": receipt.get("applied"),
+                                        "applied_verified": bool(receipt.get("applied_verified"))}}
             if stop:
                 return {**stop, **live_info}
         elif not paths:
@@ -1065,12 +1249,51 @@ class PilotDriver:
         result["job_status"] = result.get("status")
         return result
 
+    @staticmethod
+    def _job_problem(job: dict, result: Mapping[str, Any]) -> str | None:
+        """Why a previous job's cleanup is not confirmed, or None when it is (F4/R2).
+
+        One shared rule for the live-hold gate and the final report: a missing result, a
+        non-zero exit, a stopped/timeout job or an unconfirmed quit all mean the game is not
+        known to be released, so no later PC action may start.
+        """
+        if not result:
+            return "wrote no result.json"
+        code = result.get("exit_code")
+        if code not in (None, 0):
+            return f"exited {code}"
+        status = result.get("job_status")
+        if status not in (None, "ok"):
+            return f"reported {status}"
+        if result.get("quit") is not True:
+            why = result.get("why") or result.get("reason")
+            return "did not confirm quitting the game" + (f": {why}" if why else "")
+        stopped = job.get("stopped")
+        if stopped:
+            return f"was stopped ({stopped})"
+        return None
+
     def _collect_running(self) -> None:
-        """A previous segment's hold must end before the next job loads the same franchise."""
+        """Every previous job is collected once — exited ones included — before the next action.
+
+        A previous segment that did not confirm its quit (failed, no result, non-zero exit,
+        stopped, timed out) must stop the run *before* the next job loads the franchise or
+        drives Windows, rather than being aggregated after a dangerous overlap (R2). The
+        collected result is kept on the job so ``finish`` never asks for it twice.
+        """
+        problems: list[str] = []
         for job in self._jobs:
-            process = job.get("process")
-            if process is not None and process.poll() is None:
-                self._collect_job(job)
+            if "collected" not in job:
+                job["collected"] = self._collect_job(job)
+            problem = self._job_problem(job, job["collected"])
+            if problem:
+                job["failure"] = problem
+                problems.append(f"{job.get('cue') or 'watch-game'}: {problem}")
+        if problems:
+            raise DriverError("the previous segment's cleanup is not confirmed ("
+                              + "; ".join(problems)
+                              + "); not starting another PC action — leave the game by hand and "
+                                "check the run report")
 
     def _autosave_seen(self) -> bool | None:
         if not self.save:
@@ -1162,7 +1385,52 @@ class PilotDriver:
                                      + (f"; {tail}" if tail else ""))
             time.sleep(min(CUE_POLL_S, max(0.01, deadline - time.monotonic())))
 
+    def check_hold(self, seconds: int) -> dict:
+        """Refuse to record unless the job just waited for is alive and still holds (F3/R1).
+
+        Readiness is checked when the ready marker arrives; a preroll of up to 10 s then runs
+        between that check and the recorder, so the process can die or the hold can run out in
+        the gap. This is the same check again, at the moment the recorder is about to take the
+        screen. There is no unmanaged path: a raw ``record`` with no watch-game job is refused
+        because there is nothing that says the screen is this game and this invocation.
+        """
+        job = None
+        for candidate in reversed(self._jobs):
+            if candidate.get("ready") is not None:
+                job = candidate
+                break
+        if job is None:
+            raise DriverError("record() has no accepted watch-game job to verify; the driver "
+                              "records only the job it waited for (call wait_for first)")
+        process = job.get("process")
+        if process is None:
+            raise DriverError("the accepted watch-game job has no process to verify")
+        try:
+            code = process.poll()
+        except Exception as exc:
+            raise DriverError(f"cannot read the watch-game process state: {exc}") from exc
+        if code is not None:
+            job["stopped"] = job.get("stopped") or "exited-before-record"
+            raise DriverError(f"watch-game exited ({code}) before the recording started; its "
+                              f"screen is no longer the game, so nothing is recorded")
+        try:
+            remaining = float((job.get("ready") or {}).get("hold_until_epoch")) - time.time()
+        except (TypeError, ValueError):
+            remaining = None
+        needed = float(seconds) + READY_MARGIN_S
+        if remaining is None:
+            raise DriverError("the watch-game ready marker has no hold deadline; not recording "
+                              "past a hold nobody can bound")
+        if remaining < needed:
+            job["stopped"] = job.get("stopped") or "hold-too-short-before-record"
+            raise DriverError(f"the job's hold has {remaining:.1f}s left but recording "
+                              f"{seconds:g}s plus a {READY_MARGIN_S:g}s margin needs {needed:g}s; "
+                              f"not recording past its hold")
+        return job
+
     def record(self, out_dir: Path, seconds: int, fps: int, width: int) -> list[Path]:
+        """Record through ``win_agent``. Only an accepted, live watch-game job may be recorded."""
+        self.check_hold(int(seconds))
         from tools.madden_pilot import win
         from tools.madden_pilot.navigate import TITLE
         folder = Path(out_dir)
@@ -1180,7 +1448,8 @@ class PilotDriver:
     def finish(self) -> dict:
         """Collect the background job(s): their own quit, not a second one."""
         if self._jobs:
-            collected = [self._collect_job(job) for job in self._jobs]
+            collected = [job["collected"] if "collected" in job else self._collect_job(job)
+                         for job in self._jobs]
             last = collected[-1] if collected else {}
             statuses = [entry.get("job_status") for entry in collected]
             bad = [status for status in statuses if status not in (None, "ok")]
@@ -1200,6 +1469,8 @@ class PilotDriver:
             result["autosave_written"] = any(written) if written else self._autosave_seen()
             whys = [str(entry.get("why") or entry.get("reason")) for entry in collected
                     if entry.get("why") or entry.get("reason")]
+            whys += [f"{job.get('cue') or 'watch-game'}: {job['failure']}"
+                     for job in self._jobs if job.get("failure")]
             if whys:
                 result["why"] = "; ".join(dict.fromkeys(whys))
             stopped = [job["stopped"] for job in self._jobs if job.get("stopped")]

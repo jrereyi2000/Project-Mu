@@ -3,12 +3,13 @@
   "doc": [
     "Madden 27 (PC) screens for the pilot (docs/in_progress/MADDEN_PILOT_AND_TUNING_PLAN.md section 2.2).",
     "Words are what Windows OCR read in spikes P-a and P-b (C:/Madden27Modding/MuPilot/spike/). Matching is upper-case, punctuation-blind and bounded by whole words inside one OCR line.",
-    "classify() takes the FIRST screen whose 'all' words are all present, at least one 'any' word is present (when 'any' is listed) and no 'none' word is present, so order matters: most specific first.",
+    "classify() takes the FIRST screen whose 'all' words are all present, at least one 'any' word is present (when 'any' is listed), no 'none' word is present and every 'line_is' phrase is one whole OCR line, so order matters: most specific first. 'line_is' exists for the same word inside a longer ticker line: the receiving kickoff's standalone KICKOFF banner is not '(...) KICKOFF ON CHI 35'.",
     "keys: logical names used in exits and press(); select is Space and is only ever pressed through confirm_on().",
     "exits: {TARGET: [step, ...]}. A step is [key, times] (a logical or raw key), ['hold', KEY] (hold the key ~1.2 s, for Madden's HOLD TO DELEGATE), ['highlight', LABEL] (move the highlight onto LABEL along 'nav') or ['confirm', LABEL] (confirm_on this screen with LABEL).",
     "confirm_ok: the labels Space may accept on this screen (fnmatch patterns, e.g. TUNE-*). An empty list means Space is never pressed here.",
     "options / default / nav: the choices on the screen in on-screen order, the one highlighted on arrival, and the axis the arrow keys move along (vertical: up/down, horizontal: left/right).",
-    "highlight: how to tell which option is highlighted. 'border' = Madden draws a white outline (and on dialogs a light fill) around the selected option, so the screenshot is read: the option with a bright line running along its width just above or below its OCR box wins (screens.border_highlight; 'border_reach' sets how far, as a fraction of the height, default 0.06). OCR alone can't tell. 'ocr_order' = the highlight can't be read from the picture, so the pilot assumes 'default' on arrival and counts its own arrow presses through 'options' (in on-screen OCR order). null = no options; Space just continues.",
+    "aliases: {CATALOG LABEL: [other real OCR readings of the SAME row]}. A measured truncated label ('JUMP TO NEXT' for JUMP TO NEXT PLAY, 2026-11-12) can still be recognized, without letting any generic phrase match a different action; the selection reader still requires containment.",
+    "highlight: how to tell which option is highlighted. 'border' = Madden draws a white outline (and on dialogs a light fill) around the selected option, so the screenshot is read: the required label box must lie INSIDE the selected rectangle (a filled row containing the text, or an outline whose two border runs both span the label with agreeing left edges), and two or more candidate labels inside one region is ambiguous and reads as None (screens.border_highlight; 'border_reach' sets how far above/below the label box to look, as a fraction of the height, default 0.06). 'ocr_order' = the selection is read the same way from the frame; the catalog's index is a hint only and NEVER authorizes a press (F7/F9). null = no options; Space just continues.",
     "Flags: forbidden (whole screen: stop on sight), forbidden_keys (keys never pressed here, e.g. q = Delete on the franchise list), forbidden_confirm (Space is refused here unless the pilot is given a policy for this screen), quit_guard (the confirm label that quits a franchise; refused unless the loaded franchise starts with TUNE- or allow_quit is passed, because quitting writes <save>-AUTOSAVE), loads_franchise (confirming here loads the highlighted franchise), wait_or_back (a video: Backspace steps through it and the frames between are UNKNOWN), repeat (how many times the pilot may land on this same screen in a row while leaving it, e.g. three progress tabs), never_select (Space is never pressed here; no policy can lift it), no_route (never a goto target or a hop), todo (not seen yet or not fully mapped; words are guesses)."
   ],
   "keys": {
@@ -20,45 +21,38 @@
   },
   "screens": {
     "QUIT_GAME_CONFIRM": {
-      "note": "NOT SEEN: the dialog Madden draws after the pause menu's QUIT GAME (spike S-1 never pressed it; JR's 2026-11-12 decision lets watch-game quit a live CAREER-TUNE-* game). The words are the best reading of a quit-game dialog and a live run is what confirms them: an 'are you sure / your progress will be lost' question with QUIT GAME and CANCEL. Madden draws dialogs over the screen behind them and that screen's words stay readable (S-1's EXIT MADDEN frame keeps the landing page's), so the pause list is deliberately NOT excluded here: the discriminator is the dialog's own question. A pause menu misread as this dialog only makes the job stop, never press twice — it has no label in this screen's options. forbidden_confirm: only watch-game lifts it, with the one label this screen allows; quit_guard: even then a quit is refused unless the loaded franchise is TUNE-* (the same rule QUIT_CONFIRM has); and that label is never cancel-shaped — CANCEL, NO, BACK, DELETE and TRADE are refused by the job before any press.",
+      "note": "MEASURED 2026-11-12 (live_quit_once/steps/0002_UNKNOWN.*, one visually established QUIT GAME press under the TUNE policy): heading EXIT GAME, question 'Are you sure you want to exit the game?', top row YES - EXIT TO DESKTOP, middle row YES - EXIT TO MENU, bottom row NO selected by default (NO is entirely absent from Windows OCR). Its own heading/question is the discriminator; the pause menu's expanded QUIT GAME tooltip ('Any unsaved progress will be lost.') is NOT this screen and classifies as PAUSE_MENU (F11). Only YES - EXIT TO MENU may ever be confirmed: DESKTOP is destructive and NO cancels, and watch-game adds the one MENU label to its per-run policy (F11). Selection is read by containment (screens.border_highlight): the filled NO row is below the MENU text, so MENU is never credited with NO's highlight when NO is unreadable — the guard moves the selection and re-reads it instead. The landing after YES - EXIT TO MENU is still unmeasured, so this screen has no catalogued exit; watch-game waits and reports where it actually lands.",
       "all": [
-        "QUIT GAME"
+        "EXIT GAME"
       ],
       "any": [
         "ARE YOU SURE",
-        "PROGRESS"
+        "YES - EXIT TO MENU",
+        "YES - EXIT TO DESKTOP"
       ],
       "none": [
-        "CURRENT FRANCHISES"
+        "RESUME",
+        "QUIT GAME",
+        "CURRENT FRANCHISES",
+        "ADVANCE WEEK"
       ],
       "options": [
-        "QUIT GAME",
-        "CANCEL"
+        "YES - EXIT TO DESKTOP",
+        "YES - EXIT TO MENU",
+        "NO"
       ],
-      "default": "CANCEL",
+      "default": "NO",
       "nav": "vertical",
-      "highlight": "ocr_order",
+      "highlight": "border",
       "confirm_ok": [
-        "QUIT GAME"
+        "YES - EXIT TO MENU"
       ],
       "forbidden_confirm": true,
-      "quit_guard": "QUIT GAME",
+      "quit_guard": "YES - EXIT TO MENU",
       "forbidden_keys": [
         "enter"
       ],
-      "exits": {
-        "FRANCHISE_LIST": [
-          [
-            "highlight",
-            "QUIT GAME"
-          ],
-          [
-            "confirm",
-            "QUIT GAME"
-          ]
-        ]
-      },
-      "todo": true
+      "exits": {}
     },
     "GAME_PREGAME_READY": {
       "note": "Spike S-1 (2026-11-12, data/spikes/20261112-1410-game-start-halftime/report.md): the second pregame screen of a season game, READY highlighted on arrival plus VIEW SUPERSTAR X-FACTORS / ADVANCED SETTINGS / EDIT UNIFORMS. Space on READY starts the ~40 s broadcast intro, which then needs no press. Anchored on READY plus one of its own three options, so the Advance menu's READY TO ADVANCE can never match it. Only READY starts a game; the other three are never confirmed.",
@@ -91,7 +85,7 @@
       "exits": {}
     },
     "GAME_KICKOFF": {
-      "note": "Spike S-1: the pre-snap kickoff of a season game (the kicking team's kicker with a green/blue aim arc and a KICKOFF panel, 1 DEEP KICK / 2 PLACEMENT / 3 POWER SQUIB) over the scorebug (CHI 0 - CAR 0, 1st 11:00). The ball is kicked by HOLDING Space about 1.5 s, not by a tap (JR), so watch-game presses press('select', hold=1.5, _confirm=True) and confirm_ok stays empty: no tap here may start the game. The game is not under way yet, so it must never be treated as a live play.",
+      "note": "Spike S-1: the pre-snap kickoff of a season game (the kicking team's kicker with a green/blue aim arc and a KICKOFF panel, 1 DEEP KICK / 2 PLACEMENT / 3 POWER SQUIB) over the scorebug (CHI 0 - CAR 0, 1st 11:00). The ball is kicked by HOLDING Space about 1.5 s, not by a tap (JR), so watch-game presses press('select', hold=1.5, _confirm=True) and confirm_ok stays empty: no tap here may start the game. The game is not under way yet, so it must never be treated as a live play. This is the KICKING team's view only: the receiving team's kickoff is GAME_KICKOFF_RECEIVE and must never receive this hold (F8).",
       "all": [
         "KICKOFF"
       ],
@@ -120,8 +114,73 @@
       ],
       "exits": {}
     },
+    "GAME_KICKOFF_RECEIVE": {
+      "note": "MEASURED 2026-11-12 (data/pilot_runs/audit-visual-supersim-0806e87/steps/0047_UNKNOWN.*): the receiving team's pre-snap kickoff. KICKOFF as its own banner line over the scorebug (1st 11:00), Carolina receiver selected, players downfield, and none of the kicking panel's controls. The receiver does not kick: the CPU kicks and the game advances on its own to the offensive play call (same run: Q1 10:56 COACH SUGGESTIONS/PLAY CALL, no agent key). No Space, Enter or any other key is pressed here; watch-game waits for GAME_PLAY_CALL and then uses the existing guarded pause/supersim route. `line_is` is what keeps a later '(...) KICKOFF ON CHI 35' ticker from counting as this pre-snap state, and no player surname is used as an anchor because it changes with the roster.",
+      "all": [
+        "KICKOFF"
+      ],
+      "line_is": [
+        "KICKOFF"
+      ],
+      "any": [],
+      "none": [
+        "DEEP KICK",
+        "PLACEMENT",
+        "POWER SQUIB",
+        "RESUME",
+        "QUIT GAME",
+        "CURRENT FRANCHISES",
+        "MANAGE ROSTER",
+        "COACH SUGGESTIONS"
+      ],
+      "options": [],
+      "default": null,
+      "nav": "vertical",
+      "highlight": null,
+      "confirm_ok": [],
+      "forbidden_keys": [
+        "enter"
+      ],
+      "exits": {}
+    },
+    "GAME_PLAY_CALL": {
+      "note": "MEASURED 2026-11-12 (live_quit_prepare/steps/0004_UNKNOWN.* and 0022_UNKNOWN.*): the offensive play-call screen a super-sim Back returns to, not the pause menu. Its persistent anchors are COACH SUGGESTIONS with PLAYSHEETS/FORMATION/CONCEPT/PERSONNEL GROUP tabs; the frame's OCR can garble the leading word ('z COACH SUGGESTIONS'), so every other anchor is independent of that label. Nothing is confirmed here: a quit presses Escape through _pause and verifies PAUSE_MENU before QUIT GAME, and the halftime route takes the last play only after re-reading a 1..19 s Q2 clock. An UNKNOWN/referee/video frame is not this screen and must not be routed as one (F10).",
+      "all": [
+        "COACH SUGGESTIONS"
+      ],
+      "any": [
+        "PLAYSHEETS",
+        "FORMATION",
+        "PERSONNEL GROUP",
+        "CONCEPT"
+      ],
+      "none": [
+        "RESUME",
+        "QUIT GAME",
+        "CURRENT FRANCHISES",
+        "ADVANCE WEEK",
+        "CUSTOM PLAY OPTIONS",
+        "CHANGE OF POSSESSION"
+      ],
+      "options": [],
+      "default": null,
+      "nav": "vertical",
+      "highlight": null,
+      "confirm_ok": [],
+      "forbidden_keys": [
+        "enter"
+      ],
+      "exits": {
+        "PAUSE_MENU": [
+          [
+            "esc",
+            1
+          ]
+        ]
+      }
+    },
     "PAUSE_MENU": {
-      "note": "Spike S-1's pause frame (run/steps/0048_UNKNOWN.json): Escape over a live game. RESUME / INSTANT REPLAY / VIEW HIGHLIGHTS / CALL TIMEOUT / CHALLENGE PLAY / SUPER SIM / CELEBRATIONS / STATS / COACHING / OPTIONS / QUIT GAME, with RESUME bordered on arrival. Only RESUME's selection border reads back (the others return scorebug text), so the list is driven by ocr_order from RESUME: SUPER SIM is five Downs, and its list line OCRs as SUPER SIM or just SUPER. Only RESUME and SUPER may be confirmed. QUIT GAME is never pressed (plan 2.5, JR): it is left out of confirm_ok, the catalog's only per-label guard, and Enter, which would also activate an item, is forbidden.",
+      "note": "Spike S-1's pause frame (run/steps/0048_UNKNOWN.json): Escape over a live game. RESUME / INSTANT REPLAY / VIEW HIGHLIGHTS / CALL TIMEOUT / CHALLENGE PLAY / SUPER SIM / CELEBRATIONS / STATS / COACHING / OPTIONS / QUIT GAME, with RESUME bordered on arrival. MEASURED 2026-11-12: the live menu has nine selectable rows (INSTANT REPLAY / VIEW HIGHLIGHTS did not read, the SUPER SIM row OCRs as SUPER) and the selected row is a filled rectangle, so the pilot reads the rows that are actually on the frame and the row actually selected (screens.border_highlight, F7). Selecting QUIT GAME expands 'Any unsaved progress will be lost.' as a tooltip on the same row; that tooltip is NOT a confirmation (the real modal is EXIT GAME/QUIT_GAME_CONFIRM, F11). Only RESUME and SUPER may be confirmed; QUIT GAME is added only by watch-game's per-run policy for a TUNE-* clone, and Enter, which would also activate an item, is forbidden.",
       "all": [
         "RESUME",
         "QUIT GAME"
@@ -214,7 +273,7 @@
       "todo": true
     },
     "SUPERSIM_MENU": {
-      "note": "Spike S-1: Space on SUPER SIM opens the super-sim screen \u2014 left column CUSTOM PLAY OPTIONS / JUMP TO NEXT PLAY / JUMP FORWARD, hints SELECT, SPEED: FAST, BACK, and a VIEW ALL PLAY HISTORY pane. Its selection border returns scorebug text, so it is driven by ocr_order from the top item (JUMP FORWARD is two Downs, JUMP TO NEXT PLAY one). Backspace returns to the pause menu. JUMP TO NEXT PLAY moves about 4 s of clock a press and CHANGE OF POSSESSION about two minutes, which is why a quarter is simmed, never played.",
+      "note": "Spike S-1: Space on SUPER SIM opens the super-sim screen — left column CUSTOM PLAY OPTIONS / JUMP TO NEXT PLAY / JUMP FORWARD, hints SELECT, SPEED: FAST, BACK, and a VIEW ALL PLAY HISTORY pane. MEASURED 2026-11-12: Backspace from here returns to the offensive play-call screen (GAME_PLAY_CALL), NOT the pause menu; that is the catalogued edge below, and the pause is reached from play-call with Escape. The selected row is read by containment (screens.border_highlight): OCR on the real frame truncated JUMP TO NEXT PLAY to JUMP TO NEXT, and the old nearest-border reader credited JUMP FORWARD with it (F9); the alias below lets the real row be named without matching any other JUMP phrase. JUMP TO NEXT PLAY moves about 4 s of clock a press and CHANGE OF POSSESSION about two minutes, which is why a quarter is simmed, never played.",
       "all": [
         "JUMP FORWARD"
       ],
@@ -232,6 +291,11 @@
         "JUMP TO NEXT PLAY",
         "JUMP FORWARD"
       ],
+      "aliases": {
+        "JUMP TO NEXT PLAY": [
+          "JUMP TO NEXT"
+        ]
+      },
       "default": "CUSTOM PLAY OPTIONS",
       "nav": "vertical",
       "highlight": "ocr_order",
@@ -253,7 +317,7 @@
             "JUMP FORWARD"
           ]
         ],
-        "PAUSE_MENU": [
+        "GAME_PLAY_CALL": [
           [
             "back",
             1

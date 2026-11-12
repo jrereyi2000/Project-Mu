@@ -13,7 +13,7 @@ from contextlib import contextmanager
 import os
 import shutil
 import subprocess
-from typing import Callable, Generator, List, Optional, Sequence, Union
+from typing import Callable, Generator, List, Mapping, Optional, Sequence, Union
 
 DEFAULT_MADDEN_PROCESS_NAMES = ["Madden27.exe", "Madden27", "madden27.exe"]
 
@@ -149,3 +149,79 @@ def is_madden_running(process_names: Optional[Sequence[str]] = None) -> bool:
         else:
             names = list(DEFAULT_MADDEN_PROCESS_NAMES)
     return is_process_running(names)
+
+
+# A process's start time is what makes its PID an *identity*: Windows reuses PIDs, so a saved
+# PID alone cannot prove the same game instance is still the one a launch verified (F6).
+_IDENTITY_SCRIPT = (
+    "$names = {names}; "
+    "$p = Get-Process -Name $names -ErrorAction SilentlyContinue | "
+    "Sort-Object StartTime | Select-Object -First 1; "
+    "if ($p) {{ "
+    "$u = $p.StartTime.ToUniversalTime(); "
+    "$e = [int64]($u.Subtract([datetime]::new(1970,1,1,0,0,0,[DateTimeKind]::Utc)).TotalSeconds); "
+    "Write-Output ('{{0}}|{{1}}|{{2}}' -f $p.Id, $e, $p.ProcessName) }}"
+)
+
+
+def madden_process_identity(process_names: Optional[Sequence[str]] = None,
+                            run: Optional[Callable] = None) -> Optional[dict]:
+    """The running Madden's {pid, started (UTC epoch seconds), name}, or None when unknown.
+
+    The mod check's trusted attach (F6) binds a launch receipt to this identity: a PID alone is
+    reused by Windows, so the start time travels with it. Uses PowerShell's Get-Process (the
+    StartTime is readable for a normal user process). Any failure — no PowerShell, no process,
+    an unreadable start time — returns None, which callers must treat as "provenance unknown"
+    and refuse to attach. `run` is injectable for tests and never touches Windows there.
+    """
+    if process_names is None:
+        env_names = os.environ.get("MADDEN_PROCESS_NAME")
+        names = ([n.strip() for n in env_names.split(",") if n.strip()] if env_names
+                 else list(DEFAULT_MADDEN_PROCESS_NAMES))
+    elif isinstance(process_names, str):
+        names = [process_names]
+    else:
+        names = list(process_names)
+    stems = []
+    for name in names:
+        stem = name.strip()
+        if stem.lower().endswith(".exe"):
+            stem = stem[:-4]
+        if stem:
+            stems.append(stem)
+    if not stems:
+        return None
+    quoted = ",".join("'" + stem.replace("'", "''") + "'" for stem in stems)
+    script = _IDENTITY_SCRIPT.format(names=f"@({quoted})")
+    runner = run or subprocess.run
+    try:
+        result = runner(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
+                        capture_output=True, text=True, timeout=15.0, check=False)
+    except Exception:                     # no PowerShell, timeout, anything: unknown
+        return None
+    if getattr(result, "returncode", 1) != 0:
+        return None
+    for line in (getattr(result, "stdout", "") or "").splitlines():
+        parts = [part.strip() for part in line.strip().split("|")]
+        if len(parts) != 3:
+            continue
+        try:
+            pid, started = int(parts[0]), float(parts[1])
+        except ValueError:
+            continue
+        if pid > 0:
+            return {"pid": pid, "started": started, "name": parts[2]}
+    return None
+
+
+def same_process_identity(saved: Optional[Mapping], current: Optional[Mapping],
+                          tolerance: float = 2.0) -> bool:
+    """True when two identities name the same process instance (PID and start time agree)."""
+    if not saved or not current:
+        return False
+    try:
+        same_pid = int(saved["pid"]) == int(current["pid"])
+        drift = abs(float(saved["started"]) - float(current["started"]))
+    except (KeyError, TypeError, ValueError):
+        return False
+    return same_pid and drift <= float(tolerance)

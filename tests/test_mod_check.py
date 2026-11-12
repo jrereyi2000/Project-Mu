@@ -361,6 +361,7 @@ def test_the_report_has_exactly_the_plan_shape(mod):
     report = json.loads(Path(result["report_json"]).read_text())
     assert set(report) == {"save", "mod", "segments", "verdict", "minutes",
                            "pack", "pack_required", "pack_actual", "pack_verified", "launch",
+                           "provenance",
                            "quit", "quit_route", "end_screen", "operational",
                            "autosave_written"}
     assert report["minutes"] >= 0

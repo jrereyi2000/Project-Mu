@@ -138,16 +138,21 @@ def frame_with_lines(tmp_path, lines, screen="FRANCHISE_LIST", size=(2560, 1440)
 
 
 def border_frame(tmp_path, bordered="TEAM SETTINGS"):
-    """A frame with Madden's white selection border under one label."""
+    """A frame with Madden's white selection rectangle around one label.
+
+    The rectangle must *contain* the label's own text: a lone bright line near a label is not
+    selection evidence any more (F9: the nearest-line reader credited the row below a selected
+    row with its border when the selected row's OCR was missing).
+    """
     from PIL import Image, ImageDraw
 
     png = tmp_path / f"border-{bordered.replace(' ', '-')}.png"
     img = Image.new("RGB", (400, 400), (0, 0, 0))
     draw = ImageDraw.Draw(img)
     if bordered == "TEAM SETTINGS":
-        draw.rectangle([100, 90, 250, 94], fill=(255, 255, 255))
+        draw.rectangle([90, 88, 260, 142], outline=(255, 255, 255), width=3)
     else:
-        draw.rectangle([100, 290, 250, 294], fill=(255, 255, 255))
+        draw.rectangle([90, 288, 260, 342], outline=(255, 255, 255), width=3)
     img.save(png)
     words = [
         {"text": "TEAM", "box": [100, 100, 60, 30], "line": 0},
