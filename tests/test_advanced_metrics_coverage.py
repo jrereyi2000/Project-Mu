@@ -286,3 +286,256 @@ class SameGamesMetricsTest(unittest.TestCase):
         for key in keys:
             self.assertEqual(am.METRICS[key].status, am.BLOCKED, key)
             self.assertNotIn(key, am.compute({}))
+
+
+@unittest.skipUnless(IS_SCRATCH, f"needs a seeded mu_scratch_* database and {DSN_ENV}")
+@pytest.mark.integration
+class IdentityAndIsolationTest(unittest.TestCase):
+    """audit-5 stats3 R1/R2 on real PostgreSQL: per-game isolation and per-historical-game clubs.
+
+    Every fixture is inserted into one transaction that is rolled back; no save is read. The tables, views and
+    the public `player_metrics` path run unchanged.
+    """
+
+    def setUp(self):
+        self.conn = psycopg.connect(SCRATCH_DSN)
+        self.cur = self.conn.cursor()
+
+    def tearDown(self):
+        self.conn.rollback()
+        self.conn.close()
+
+    def team(self, name):
+        self.cur.execute("INSERT INTO teams (name) VALUES (%s) RETURNING id", (name,))
+        return self.cur.fetchone()[0]
+
+    def player(self, name, team_id, season):
+        self.cur.execute("INSERT INTO players (player_name, full_name) VALUES (%s, %s) RETURNING id",
+                         (name, f"{name} fixture"))
+        pid = self.cur.fetchone()[0]
+        self.cur.execute("INSERT INTO player_seasons (player_id, team_id, season) VALUES (%s, %s, %s)",
+                         (pid, team_id, season))
+        return pid
+
+    def game(self, season, week, team_id, attempts=None, plays=100):
+        """One game with the club as home team, and its box when `attempts` is given."""
+        self.cur.execute("INSERT INTO games (season, week, home_team_id) VALUES (%s, %s, %s) RETURNING id",
+                         (season, week, team_id))
+        gid = self.cur.fetchone()[0]
+        if attempts is not None:
+            self.cur.execute("INSERT INTO team_stats (game_id, team_name, passing_attempts, total_plays) "
+                             "SELECT %s, name, %s, %s FROM teams WHERE id = %s",
+                             (gid, attempts, plays, team_id))
+        return gid
+
+    def both_game(self, season, week, home_id, away_id, home_attempts, away_attempts):
+        """One game between two candidate clubs, with both boxes."""
+        self.cur.execute("INSERT INTO games (season, week, home_team_id, away_team_id) "
+                         "VALUES (%s, %s, %s, %s) RETURNING id", (season, week, home_id, away_id))
+        gid = self.cur.fetchone()[0]
+        for team_id, attempts in ((home_id, home_attempts), (away_id, away_attempts)):
+            self.cur.execute("INSERT INTO team_stats (game_id, team_name, passing_attempts, total_plays) "
+                             "SELECT %s, name, %s, 100 FROM teams WHERE id = %s", (gid, attempts, team_id))
+        return gid
+
+    def line(self, game_id, player_id, team_id, **box):
+        """The player's own game line (the per-game club identity)."""
+        columns = ", ".join(box)
+        placeholders = ", ".join(["%s"] * len(box))
+        self.cur.execute(
+            f"INSERT INTO player_stats (game_id, player_id, player_name, team_id, {columns}) "
+            f"VALUES (%s, %s, 'Fixture', %s, {placeholders})",
+            (game_id, player_id, team_id, *box.values()))
+
+    def career(self, season, player_id, week, games, load_seq, **counters):
+        self.cur.execute(
+            "INSERT INTO player_career_counters (season, week, stage, player_id, madden_table, counters, "
+            "games_played, load_seq) VALUES (%s, %s, %s, %s, 'CareerOffensiveStats', %s, %s, %s)",
+            (season, week, "PRESEASON" if week <= 0 else "REGULAR", player_id, json.dumps(counters),
+             games, load_seq))
+
+    def season_games(self, season, player_id, games):
+        self.cur.execute("INSERT INTO season_stat_general (season, player_id, games_played) VALUES (%s, %s, %s)",
+                         (season, player_id, games))
+
+    def test_r1_a_truncated_schedule_cannot_lend_a_two_game_delta_to_one_week(self):
+        season = 2096
+        team = self.team("B9-R1-TEAM")
+        pid = self.player("B9 R1", team, season)
+        g2 = self.game(season, 2, team, attempts=50)
+        self.line(g2, pid, team, receptions=4, rec_yards=40)
+        self.career(season, pid, 0, 0, 1, GAMESPLAYED=0)
+        self.career(season, pid, 2, 2, 2, GAMESPLAYED=2, TARGETS=20, RECEIVECATCHES=10)
+
+        week2 = am.player_metrics(self.cur, season, pid, week=2)
+
+        self.assertEqual(week2["inputs"]["receptions"], 4)
+        self.assertEqual(week2["inputs"]["rec_yards"], 40)
+        self.assertIsNone(week2["inputs"].get("targets"))
+        self.assertIsNone(week2["metrics"]["catch_rate"])
+        self.assertIsNone(week2["metrics"]["target_share"])
+        self.assertEqual(week2["coverage"]["games_covered"], 0)
+        self.assertFalse(week2["coverage"]["same_games"])
+        self.assertTrue(any("cannot be isolated" in reason for reason in week2["coverage"]["reasons"]))
+
+        # Control: storing the missing week-1 game and box changes no counter or week-2 line, and the same
+        # call must refuse as a split rather than publish either delta.
+        self.game(season, 1, team, attempts=50)
+        control = am.player_metrics(self.cur, season, pid, week=2)
+        self.assertEqual(control["inputs"]["receptions"], 4)
+        self.assertEqual(control["inputs"]["rec_yards"], 40)
+        self.assertIsNone(control["inputs"].get("targets"))
+        self.assertIsNone(control["metrics"]["target_share"])
+        self.assertTrue(any("cannot be split" in reason for reason in control["coverage"]["reasons"]))
+
+    def test_r1_a_missing_earlier_game_in_a_longer_interval_is_refused(self):
+        season = 2096
+        team = self.team("B9-R1B-TEAM")
+        pid = self.player("B9 R1B", team, season)
+        g3 = self.game(season, 3, team, attempts=40)
+        self.line(g3, pid, team, receptions=5, rec_yards=55)
+        self.career(season, pid, 1, 0, 1, GAMESPLAYED=0)
+        self.career(season, pid, 3, 2, 2, GAMESPLAYED=2, TARGETS=11, RECEIVECATCHES=7)
+
+        week3 = am.player_metrics(self.cur, season, pid, week=3)
+
+        self.assertEqual(week3["inputs"]["receptions"], 5)
+        self.assertIsNone(week3["inputs"].get("targets"))
+        self.assertEqual(week3["coverage"]["games_covered"], 0)
+        self.assertTrue(any("cannot be isolated" in reason for reason in week3["coverage"]["reasons"]))
+
+    def test_r1_a_missing_box_and_an_absent_game_are_named_differently(self):
+        season = 2096
+        team = self.team("B9-R1C-TEAM")
+        pid = self.player("B9 R1C", team, season)
+        self.game(season, 5, team, attempts=None)          # the game is stored without its box
+        self.career(season, pid, 4, 0, 1, GAMESPLAYED=0)
+        self.career(season, pid, 5, 1, 2, GAMESPLAYED=1, TARGETS=9, RECEIVECATCHES=6)
+
+        missing_box = am.player_metrics(self.cur, season, pid, week=5)
+        self.assertEqual(missing_box["metrics"]["catch_rate"], pytest.approx(6 / 9))
+        self.assertIsNone(missing_box["metrics"]["target_share"])
+        self.assertEqual(missing_box["coverage"]["team_denominator"], "week 5: missing team box")
+
+        self.game(season, 6, team, attempts=30)            # week 6 exists for the club...
+        self.career(season, pid, 7, 1, 3, GAMESPLAYED=2, TARGETS=4, RECEIVECATCHES=3)
+        absent = am.player_metrics(self.cur, season, pid, week=7)   # ...but not week 7
+        self.assertIsNone(absent["inputs"].get("targets"))
+        self.assertEqual(absent["coverage"]["games_covered"], 0)
+        self.assertEqual(absent["coverage"]["team_denominator"],
+                         "week 7: no game in the team's stored schedule")
+        self.assertTrue(any("no game" in reason for reason in absent["coverage"]["reasons"]))
+
+    def test_r1_a_genuine_aligned_one_game_delta_still_publishes(self):
+        season = 2096
+        team = self.team("B9-R1D-TEAM")
+        pid = self.player("B9 R1D", team, season)
+        g8 = self.game(season, 8, team, attempts=40)
+        self.line(g8, pid, team, receptions=5, rec_yards=60)
+        self.career(season, pid, 7, 0, 1, GAMESPLAYED=0)
+        self.career(season, pid, 8, 1, 2, GAMESPLAYED=1, TARGETS=7, RECEIVECATCHES=5)
+
+        week8 = am.player_metrics(self.cur, season, pid, week=8)
+
+        self.assertEqual(week8["inputs"]["targets"], 7)
+        self.assertEqual(week8["inputs"]["team_pass_attempts"], 40)
+        self.assertEqual(week8["coverage"]["games_covered"], 1)
+        self.assertTrue(week8["coverage"]["same_games"])
+        self.assertAlmostEqual(week8["metrics"]["target_share"], 7 / 40, places=10)
+
+    def test_r2_a_traded_player_s_season_denominator_is_bound_per_historical_game(self):
+        season = 2095
+        club_a = self.team("B9-R2-A")
+        club_b = self.team("B9-R2-B")
+        pid = self.player("B9 R2", club_b, season)          # the latest club
+        g_a1 = self.game(season, 1, club_a, attempts=50)
+        self.game(season, 1, club_b, attempts=100)          # club B's own, unrelated week-1 game
+        g_b2 = self.game(season, 2, club_b, attempts=60)
+        self.line(g_a1, pid, club_a, receptions=6)
+        self.line(g_b2, pid, club_b, receptions=4)
+        self.season_games(season, pid, 2)
+        self.career(season, pid, 0, 0, 1, GAMESPLAYED=0)
+        self.career(season, pid, 2, 2, 2, GAMESPLAYED=2, TARGETS=20, RECEIVECATCHES=10)
+
+        season_out = am.player_metrics(self.cur, season, pid)
+
+        self.assertEqual(season_out["inputs"]["team_pass_attempts"], 110)
+        self.assertEqual(season_out["inputs"]["targets"], 20)
+        self.assertAlmostEqual(season_out["metrics"]["target_share"], 20 / 110, places=10)
+        self.assertTrue(season_out["coverage"]["same_games"])
+        self.assertIsNone(season_out["coverage"]["team_denominator"])
+
+    def test_r2_an_unknown_historical_club_refuses_the_share(self):
+        season = 2095
+        club_a = self.team("B9-R2C-A")
+        club_b = self.team("B9-R2C-B")
+        pid = self.player("B9 R2C", club_b, season)
+        g_a1 = self.game(season, 1, club_a, attempts=50)
+        g_b2 = self.game(season, 2, club_b, attempts=60)
+        self.line(g_a1, pid, club_a, receptions=6)
+        self.line(g_b2, pid, club_b, receptions=4)
+        self.both_game(season, 3, club_a, club_b, 40, 40)   # both candidates play week 3
+        self.season_games(season, pid, 3)
+        self.career(season, pid, 0, 0, 1, GAMESPLAYED=0)
+        self.career(season, pid, 3, 3, 2, GAMESPLAYED=3, TARGETS=20, RECEIVECATCHES=10)
+
+        season_out = am.player_metrics(self.cur, season, pid)
+
+        self.assertIsNone(season_out["metrics"]["target_share"])
+        self.assertIsNone(season_out["inputs"]["team_pass_attempts"])
+        self.assertIn("week 3", season_out["coverage"]["team_denominator"])
+        self.assertIn("historical club cannot be established",
+                      season_out["coverage"]["team_denominator"])
+
+    def test_r2_a_same_season_return_binds_each_club_s_own_game(self):
+        season = 2094
+        club_a = self.team("B9-R2D-A")
+        club_b = self.team("B9-R2D-B")
+        pid = self.player("B9 R2D", club_b, season)
+        g_a1 = self.game(season, 1, club_a, attempts=50)
+        g_b2 = self.game(season, 2, club_b, attempts=60)
+        g_a3 = self.game(season, 3, club_a, attempts=40)
+        self.line(g_a1, pid, club_a, receptions=2)
+        self.line(g_b2, pid, club_b, receptions=3)
+        self.line(g_a3, pid, club_a, receptions=4)
+        self.season_games(season, pid, 3)
+        self.career(season, pid, 0, 0, 1, GAMESPLAYED=0)
+        self.career(season, pid, 3, 3, 2, GAMESPLAYED=3, TARGETS=18, RECEIVECATCHES=9)
+
+        season_out = am.player_metrics(self.cur, season, pid)
+
+        self.assertEqual(season_out["inputs"]["team_pass_attempts"], 150)
+        self.assertAlmostEqual(season_out["metrics"]["target_share"], 18 / 150, places=10)
+        self.assertIsNone(season_out["coverage"]["team_denominator"])
+
+    def test_r2_a_row_is_checked_against_its_own_club_s_tracking(self):
+        season = 2097
+        club_a = self.team("B9-R2E-A")
+        club_b = self.team("B9-R2E-B")
+        receiver = self.player("B9 R2E", club_b, season)
+        qb_a = self.player("B9 R2E-QA", club_a, season)
+        qb_b = self.player("B9 R2E-QB", club_b, season)
+        g_a1 = self.game(season, 1, club_a, attempts=50)
+        g_b2 = self.game(season, 2, club_b, attempts=60)
+        self.line(g_a1, receiver, club_a, receptions=6)
+        self.line(g_b2, receiver, club_b, receptions=2)
+        # Club A's week 1 was not tracked (no pocket attempts); club B's week 2 was.
+        self.career(season, qb_a, 0, 0, 1, GAMESPLAYED=0)
+        self.career(season, qb_a, 1, 1, 2, GAMESPLAYED=1, PASSATTEMPTS=50,
+                    INSIDEPOCKETTHROW_ATTEMPTS=0, OUTSIDEPOCKETTHROW_ATTEMPTS=0)
+        self.career(season, qb_b, 0, 0, 1, GAMESPLAYED=0)
+        self.career(season, qb_b, 2, 1, 2, GAMESPLAYED=1, PASSATTEMPTS=60,
+                    INSIDEPOCKETTHROW_ATTEMPTS=60, OUTSIDEPOCKETTHROW_ATTEMPTS=0)
+        self.career(season, receiver, 0, 0, 1, GAMESPLAYED=0)
+        self.career(season, receiver, 1, 1, 2, GAMESPLAYED=1, TARGETS=9, RECEIVECATCHES=6)
+        # cumulative counters: the week-2 row adds 5 targets and 2 catches to the week-1 totals
+        self.career(season, receiver, 2, 2, 3, GAMESPLAYED=2, TARGETS=14, RECEIVECATCHES=8)
+
+        season_out = am.player_metrics(self.cur, season, receiver)
+
+        # The week-1 row belongs to untracked club A and is excluded; only the tracked week-2 row is used.
+        self.assertEqual(season_out["coverage"]["untracked_weeks"], 1)
+        self.assertEqual(season_out["inputs"]["targets"], 5)
+        self.assertEqual(season_out["coverage"]["games_covered"], 1)
+        self.assertEqual(season_out["inputs"]["team_pass_attempts"], 60)
+        self.assertAlmostEqual(season_out["metrics"]["target_share"], 5 / 60, places=10)

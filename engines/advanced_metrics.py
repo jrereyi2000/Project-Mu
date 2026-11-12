@@ -574,65 +574,101 @@ def _career_rows(cur, season: int, player_id: int) -> list[dict]:
     return _fetch_rows(cur, columns, sql, params)
 
 
-def _team_games(cur, team_id, season: int) -> list[dict]:
-    """The team's stored games in a season: game id, week and whether the team's box (`team_stats`) exists.
+def _career_game_teams(cur, season: int, player_id: int) -> dict[int, int]:
+    """The club the player's own game line names for each week: {week: team_id}.
+
+    A season line names one club, so after a trade it cannot say which club a historical game belonged to.
+    The player's per-game lines can, and they are the only stored per-game identity (audit-5 stats3 R2).
+    """
+    sql = ("SELECT week, team_id FROM game_stat_lines "
+           "WHERE season = %(season)s AND player_id = %(player_id)s AND team_id IS NOT NULL "
+           "ORDER BY week")
+    params = {"season": season, "player_id": player_id}
+    teams: dict[int, int] = {}
+    for row in _fetch_rows(cur, ("week", "team_id"), sql, params):
+        teams.setdefault(int(row["week"]), row["team_id"])
+    return teams
+
+
+def _team_games(cur, team_ids, season: int) -> list[dict]:
+    """The clubs' stored games in a season: club, game id, week and whether the club's box exists.
 
     A bye leaves no game row, so this is what establishes which weeks a Career difference actually covers
     (a week label alone does not), and whether a team denominator has every game it needs. A game without a
-    box, or with a NULL pass-attempt value, is not a usable denominator (audit-5 S1/S3).
+    box, or with a NULL pass-attempt value, is not a usable denominator (audit-5 S1/S3). Several clubs are
+    read at once because a player's season can span a trade (audit-5 stats3 R2).
     """
-    if team_id is None:
+    ids = sorted({int(team_id) for team_id in team_ids if team_id is not None})
+    if not ids:
         return []
     sql = """
-        SELECT g.id AS game_id, g.week,
+        SELECT t.id AS team_id, g.id AS game_id, g.week,
                (ts.game_id IS NOT NULL AND ts.passing_attempts IS NOT NULL) AS has_box
         FROM games g
         JOIN teams t ON (g.home_team_id = t.id OR g.away_team_id = t.id)
         LEFT JOIN team_stats ts ON ts.game_id = g.id AND ts.team_name = t.name
-        WHERE t.id = %(team_id)s AND g.season = %(season)s
+        WHERE t.id = ANY(%(team_ids)s) AND g.season = %(season)s
           AND COALESCE(g.status, 'COMPLETED') <> 'BYE'
-        ORDER BY g.week, g.id"""
-    params = {"team_id": team_id, "season": season}
-    return _fetch_rows(cur, ("game_id", "week", "has_box"), sql, params)
+        ORDER BY g.week, g.id, t.id"""
+    params = {"team_ids": ids, "season": season}
+    return _fetch_rows(cur, ("team_id", "game_id", "week", "has_box"), sql, params)
 
 
-def _team_tracking(cur, team_id, season: int) -> dict:
-    """The team's tracked pocket attempts per career-row range: {(week, prev_week, prev_season): (att, pocket)}.
+def _team_tracking(cur, team_ids, season: int) -> dict:
+    """Tracked pocket attempts per club and career-row range: {(team_id, week, prev_week, prev_season)}.
 
-    Summed over every usable Career delta of the team's players, so a receiver's row is checked against the
-    team's pass attempts (a receiver's own `PASSATTEMPTS` is zero).
+    Summed over every usable Career delta of each club's players, so a receiver's row is checked against the
+    club it played for (a receiver's own `PASSATTEMPTS` is zero). The club is carried in the key so a traded
+    player's row is checked against its own historical clubs, not one substituted season team (audit-5
+    stats3 R2).
     """
-    if team_id is None:
+    ids = sorted({int(team_id) for team_id in team_ids if team_id is not None})
+    if not ids:
         return {}
-    # The team's player ids are an array constant, so the planner can apply it inside the view before its
-    # per-player window functions; the view then reads only the club's rows instead of every player's.
+    # The clubs' player ids are an array constant, so the planner can apply it inside the view before its
+    # per-player window functions; the view then reads only those clubs' rows instead of every player's.
     sql = """
         WITH team_rows AS MATERIALIZED (
-            SELECT w.week, w.prev_week, w.prev_season, w.delta
+            SELECT w.week, w.prev_week, w.prev_season, w.delta,
+                   (SELECT MIN(ps.team_id) FROM player_seasons ps
+                    WHERE ps.player_id = w.player_id AND ps.season = %(season)s
+                      AND ps.team_id = ANY(%(team_ids)s)) AS team_id
             FROM player_week_counters w
             WHERE w.player_id = ANY(ARRAY(
                       SELECT ps.player_id FROM player_seasons ps
-                      WHERE ps.team_id = %(team_id)s AND ps.season = %(season)s))
+                      WHERE ps.team_id = ANY(%(team_ids)s) AND ps.season = %(season)s))
               AND w.credited_season = %(season)s
               AND w.status IN ('OK', 'NO_GAMES') AND w.delta IS NOT NULL
         )
-        SELECT week, prev_week, prev_season,
+        SELECT team_id, week, prev_week, prev_season,
                COALESCE(SUM((delta ->> 'PASSATTEMPTS')::int), 0) AS pass_att,
                COALESCE(SUM((delta ->> 'INSIDEPOCKETTHROW_ATTEMPTS')::int), 0)
              + COALESCE(SUM((delta ->> 'OUTSIDEPOCKETTHROW_ATTEMPTS')::int), 0) AS pocket_att
         FROM team_rows
-        GROUP BY week, prev_week, prev_season"""
-    params = {"team_id": team_id, "season": season}
-    columns = ("week", "prev_week", "prev_season", "pass_att", "pocket_att")
-    return {(row["week"], row["prev_week"], row["prev_season"]): (row["pass_att"], row["pocket_att"])
+        GROUP BY team_id, week, prev_week, prev_season"""
+    params = {"team_ids": ids, "season": season}
+    columns = ("team_id", "week", "prev_week", "prev_season", "pass_att", "pocket_att")
+    return {(row["team_id"], row["week"], row["prev_week"], row["prev_season"]):
+            (row["pass_att"], row["pocket_att"])
             for row in _fetch_rows(cur, columns, sql, params)}
 
 
-def _is_untracked(row: dict, team_tracking: dict) -> bool:
-    """True when Madden did not track this row's games: the team's tracked pocket attempts do not account
-    for its pass attempts."""
+def _row_team_ids(row: dict, game_teams: dict[int, int], candidate_ids) -> list[int]:
+    """The clubs a Career row's covered weeks belong to (the row's own games), or every candidate club when
+    the weeks carry no per-game identity."""
+    teams = {game_teams[week] for week in _row_weeks(row) if week in game_teams}
+    return sorted(teams) if teams else sorted(candidate_ids)
+
+
+def _is_untracked(row: dict, team_tracking: dict, team_ids) -> bool:
+    """True when Madden did not track this row's games: the clubs' tracked pocket attempts do not account
+    for their pass attempts over the row's range."""
     key = (row.get("week"), row.get("prev_week"), row.get("prev_season"))
-    pass_att, pocket_att = team_tracking.get(key, (0, 0))
+    pass_att = pocket_att = 0
+    for team_id in team_ids:
+        att, pocket = team_tracking.get((team_id,) + key, (0, 0))
+        pass_att += att
+        pocket_att += pocket
     return pass_att > 0 and pocket_att < TRACKED_POCKET_RATIO * pass_att
 
 
@@ -679,19 +715,22 @@ def _line_row(cur, season: int, player_id: int, week: int | None) -> dict:
     return _fetch_row(cur, columns, sql, params)
 
 
-def _team_totals(cur, team_id, season: int, weeks: list[int]) -> dict:
-    """Team denominators over the same game weeks as the numerator (`weeks`; empty means no games)."""
-    if team_id is None:
+def _team_totals(cur, game_pairs) -> dict:
+    """Team denominators summed over exactly the (club, game) pairs the numerator covers.
+
+    Pairing the club with the game id is what keeps a traded player's historical games apart: a club's
+    unrelated game in the same week is never substituted for the player's game (audit-5 stats3 R2).
+    """
+    pairs = sorted({(int(team_id), int(game_id)) for team_id, game_id in game_pairs})
+    if not pairs:
         return {name: None for name in TEAM_COLUMNS}
     sql = """
         SELECT COALESCE(SUM(ts.passing_attempts), 0) AS team_pass_attempts,
                COALESCE(SUM(ts.total_plays), 0) AS team_total_plays
-        FROM team_stats ts
-        JOIN games g ON g.id = ts.game_id
-        JOIN teams t ON t.name = ts.team_name
-        WHERE t.id = %(team_id)s AND g.season = %(season)s
-          AND g.week = ANY(%(weeks)s)"""
-    params = {"team_id": team_id, "season": season, "weeks": list(weeks)}
+        FROM unnest(%(team_ids)s::int[], %(game_ids)s::int[]) AS pair(team_id, game_id)
+        JOIN teams t ON t.id = pair.team_id
+        JOIN team_stats ts ON ts.game_id = pair.game_id AND ts.team_name = t.name"""
+    params = {"team_ids": [pair[0] for pair in pairs], "game_ids": [pair[1] for pair in pairs]}
     return _fetch_row(cur, TEAM_COLUMNS, sql, params)
 
 
@@ -729,6 +768,38 @@ def _game_weeks(row: dict, team_weeks: set[int], schedule_known: bool) -> set[in
     return weeks
 
 
+def _denominator_games(weeks, game_teams: dict[int, int], games_by_team: dict):
+    """The (club, game) pairs whose boxes are the season denominator, or why a game cannot be bound.
+
+    A covered week the player's own game line names takes that line's club. A covered week with no line
+    takes the one candidate club that played it; two candidate clubs playing means the historical club
+    cannot be told, so the denominator is refused rather than the current club substituted (audit-5
+    stats3 R2). A week no candidate club played is a bye and contributes no game. The games are those of
+    the covered weeks, so a player inactive for a club game still counts it (the DNP question is separate).
+    """
+    playing: dict[int, list[tuple[int, dict]]] = {}
+    for team_id, games in games_by_team.items():
+        for game in games:
+            playing.setdefault(int(game["week"]), []).append((team_id, game))
+    bound: list[tuple[int, dict]] = []
+    for week in weeks:
+        club = game_teams.get(week)
+        if club is not None:
+            game = next((game for team_id, game in playing.get(week, []) if team_id == club), None)
+            if game is None:
+                return [], f"week {week}: no stored game for the club the player's line names"
+            bound.append((club, game))
+            continue
+        candidates = playing.get(week, [])
+        if not candidates:
+            continue
+        if len(candidates) > 1:
+            return [], (f"week {week}: the player has no game line and more than one club played; "
+                        "the historical club cannot be established")
+        bound.append(candidates[0])
+    return bound, None
+
+
 def _denominator_reason(games_covered: int, played: list[dict]) -> str | None:
     """Why a team denominator is not complete over the games the numerator covers, or None when it is.
 
@@ -763,36 +834,51 @@ def player_metrics(cur, season: int, player_id: int, week: int | None = None) ->
 
     Every value comes from the Career deltas of the games it is meant to describe. The season sums the
     player's usable `player_week_counters` rows credited to `season`; a week query reads the whole credited
-    season and then keeps only a delta whose covered games are exactly that week (its label range cut to the
-    team's stored schedule), because a delta loaded after a bye or a skipped save can cover several games and
-    cannot be split. When no delta is isolated to the requested week the box score (`game_stat_lines`)
-    supplies the week's counters and the Career-only inputs stay None with a coverage reason. A BASELINE,
-    PARTIAL, TABLE_CHANGED, RESET, CROSS_SEASON or Madden-untracked row is not used; unknown and untracked
-    rows count in `weeks_unknown` the way the season view counts unknown weeks. The stat line supplies only a
-    counter the Career row does not carry, and a metric that would mix the two sources over different game
-    counts is None.
+    season and then keeps only a delta that covers exactly one game, the requested one: its label range cut
+    to the team's stored schedule must be that week alone and its own `games_covered` must be one, because a
+    delta loaded after a bye or a skipped save can cover several games and a truncated schedule cannot prove
+    otherwise (audit-5 S3/R1). When no delta is isolated to the requested week the box score
+    (`game_stat_lines`) supplies the week's counters and the Career-only inputs stay None with a coverage
+    reason. A BASELINE, PARTIAL, TABLE_CHANGED, RESET, CROSS_SEASON or Madden-untracked row is not used;
+    unknown and untracked rows count in `weeks_unknown` the way the season view counts unknown weeks. The
+    stat line supplies only a counter the Career row does not carry, and a metric that would mix the two
+    sources over different game counts is None.
 
-    Team denominators are used only when the team's stored games and boxes cover exactly the games the
-    numerator covers (audit-5 S1); otherwise `team_denominator` names the gap and the denominator inputs are
-    None. `coverage` reports games covered, stat-line games, untracked weeks and lost games, plus
-    `mixed_sources` when a metric was suppressed for mixing sources, `invalid_inputs` when a counter
-    contradicts another (receptions above targets would publish a catch rate over one, audit-5 S4), and
-    `reasons` for a week that could not be isolated.
+    Team denominators are bound per historical game: the player's own game lines say which club each covered
+    week belonged to, so a traded player's games are summed club by club rather than through one season team
+    (audit-5 stats3 R2). They are used only when every bound game and box covers the games the numerator
+    covers (audit-5 S1); otherwise `team_denominator` names the gap and the denominator inputs are None.
+    `coverage` reports games covered, stat-line games, untracked weeks and lost games, plus `mixed_sources`
+    when a metric was suppressed for mixing sources, `invalid_inputs` when a counter contradicts another
+    (receptions above targets would publish a catch rate over one, audit-5 S4), and `reasons` for a week that
+    could not be isolated.
     """
     line = _line_row(cur, season, player_id, week)
-    team_id = line.get("team_id")
-    if team_id is None:
+    season_team = line.get("team_id")
+    if season_team is None:
         # A stat line without a team (a season row written before the team was known, or a week with no line)
         # still has the player's season team; the denominators need one (audit-4 stats suspicion 1).
-        team_id = _fetch_row(cur, ("team_id",),
-                             "SELECT team_id FROM player_seasons "
-                             "WHERE season = %(season)s AND player_id = %(player_id)s",
-                             {"season": season, "player_id": player_id}).get("team_id")
+        season_team = _fetch_row(cur, ("team_id",),
+                                 "SELECT team_id FROM player_seasons "
+                                 "WHERE season = %(season)s AND player_id = %(player_id)s",
+                                 {"season": season, "player_id": player_id}).get("team_id")
     rows = _career_rows(cur, season, player_id)
-    team_games = _team_games(cur, team_id, season)
+    if week is None:
+        # A season can span a trade, so the clubs come from the player's own game lines (audit-5 stats3 R2).
+        game_teams = _career_game_teams(cur, season, player_id)
+        candidate_ids = {team for team in (season_team, *game_teams.values()) if team is not None}
+    else:
+        # The requested week's own game line names the club the player played for that week.
+        game_teams = {}
+        club = line.get("team_id") if line.get("team_id") is not None else season_team
+        candidate_ids = {club} if club is not None else set()
+    team_games = _team_games(cur, candidate_ids, season)
     schedule_known = bool(team_games)
     team_weeks = {int(game["week"]) for game in team_games if game.get("week") is not None}
-    team_tracking = _team_tracking(cur, team_id, season)
+    games_by_team: dict[int, list[dict]] = {}
+    for game in team_games:
+        games_by_team.setdefault(game["team_id"], []).append(game)
+    team_tracking = _team_tracking(cur, candidate_ids, season)
 
     reasons: list[str] = []
     invalid: list[str] = []
@@ -800,27 +886,40 @@ def player_metrics(cur, season: int, player_id: int, week: int | None = None) ->
         scoped = rows
         selectable = rows
     else:
-        # Only a delta that covers exactly the requested game can describe it (audit-5 S3). A row labelled
-        # with the week is not proof: a bye or a skipped save makes its range cover other games too.
+        # Only a delta that covers exactly one game, the requested one, can describe it (audit-5 S3). A row
+        # labelled with the week is not proof: a bye or a skipped save makes its range cover other games too.
+        # Nor is a truncated schedule proof: the delta's own game count must agree with the game set the
+        # stored schedule can place it in, or the missing history would turn a two-game delta into one game
+        # (audit-5 stats3 R1).
         scoped = [row for row in rows if week in _row_weeks(row)]
         selectable = []
-        if schedule_known and week not in team_weeks:
-            _add_once(reasons, f"week {week}: no game in the team's stored schedule")
-        elif not schedule_known:
+        if not schedule_known:
             _add_once(reasons, "no stored team schedule, so a week cannot be placed")
+        elif week not in team_weeks:
+            _add_once(reasons, f"week {week}: no game in the team's stored schedule")
         for row in scoped:
+            claimed = int(row.get("games_covered") or 0)
             covered = _game_weeks(row, team_weeks, schedule_known)
-            if covered == {week}:
-                selectable.append(row)
-            elif week in covered:
+            if not schedule_known:
+                # Without a schedule only a one-week, one-game delta can still be trusted.
+                if claimed == 1 and len(_row_weeks(row)) == 1:
+                    selectable.append(row)
+                continue
+            if week not in covered:
+                continue
+            if covered != {week}:
                 _add_once(reasons,
                           f"week {week}: a Career delta covers weeks {_weeks_text(covered)} and cannot "
                           "be split")
-        if not schedule_known:
-            # Without a schedule only a delta whose own range is one week can still be trusted.
-            selectable = [row for row in scoped if len(_row_weeks(row)) == 1]
-            if not selectable and scoped:
-                _add_once(reasons, f"week {week}: no one-week Career delta and no schedule to place one")
+                continue
+            if claimed != 1:
+                _add_once(reasons,
+                          f"week {week}: a Career delta covers {claimed} games but the stored team schedule "
+                          f"places it in week {week} alone; the delta cannot be isolated to one game")
+                continue
+            selectable.append(row)
+        if not schedule_known and not selectable and scoped:
+            _add_once(reasons, f"week {week}: no one-week Career delta and no schedule to place one")
 
     used: list[dict] = []
     weeks_unknown = 0
@@ -834,7 +933,7 @@ def player_metrics(cur, season: int, player_id: int, week: int | None = None) ->
         elif status == "PARTIAL":
             games_lost += int(row.get("games_covered") or 0)
         if status in USABLE_STATUSES and row.get("delta"):
-            if _is_untracked(row, team_tracking):
+            if _is_untracked(row, team_tracking, _row_team_ids(row, game_teams, candidate_ids)):
                 untracked += 1
                 weeks_unknown += 1
             else:
@@ -868,24 +967,30 @@ def player_metrics(cur, season: int, player_id: int, week: int | None = None) ->
 
     if week is None:
         game_weeks = sorted({w for row in used for w in _row_weeks(row)})
-    else:
-        game_weeks = [week]
-    merged.update(_team_totals(cur, team_id, season, game_weeks))
-
-    if week is None:
-        played = [game for game in team_games if int(game.get("week") or 0) in set(game_weeks)]
-        denominator_reason = (_denominator_reason(games_covered, played)
-                              if game_weeks else "no Career game covered")
+        if game_weeks:
+            bound, denominator_reason = _denominator_games(game_weeks, game_teams, games_by_team)
+            if denominator_reason is None:
+                denominator_reason = _denominator_reason(games_covered, [game for _, game in bound])
+        else:
+            bound, denominator_reason = [], "no Career game covered"
+        pairs = [(team_id, game["game_id"]) for team_id, game in bound]
     else:
         played = [game for game in team_games if int(game.get("week") or 0) == week]
+        pairs = [(game["team_id"], game["game_id"]) for game in played]
         if not schedule_known:
             denominator_reason = "no stored team schedule"
         elif not played:
             denominator_reason = f"week {week}: no game in the team's stored schedule"
         elif not all(game.get("has_box") for game in played):
             denominator_reason = f"week {week}: missing team box"
+        elif games_covered > len(played):
+            # The same completeness invariant as the season: the numerator cannot claim more games than the
+            # week's stored team game (audit-5 stats3 R1).
+            denominator_reason = (f"week {week}: Career rows cover {games_covered} games but the week has "
+                                  f"{len(played)} stored team game")
         else:
             denominator_reason = None
+    merged.update(_team_totals(cur, pairs))
     if denominator_reason is not None:
         for name in TEAM_COLUMNS:
             merged[name] = None
