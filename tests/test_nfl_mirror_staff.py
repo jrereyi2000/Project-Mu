@@ -354,6 +354,69 @@ def test_cross_team_promotion_without_a_replacement_refuses_the_source_team():
     assert refused["reason"] == "promoted to HC with no named DC replacement"
 
 
+# ---------- audit-5 close-out C1: a promotion never takes a user team's coordinator record ----------
+
+def _buf_promotes_spagnuolo():
+    """Buffalo (a non-user team) names Kansas City's DC Steve Spagnuolo its head coach."""
+    return StaffChange(team="BUF", role="HC", out_name="Sean McDermott", in_name="Steve Spagnuolo", week=8)
+
+
+def test_user_team_promotion_source_is_skipped_without_a_replacement():
+    """C1: KC is JR's team, so BUF's promotion of KC's DC is skipped whole — no coach row, profile move or tenure
+    write — and KC's DC still resolves to the one Madden record he has."""
+    conn, cur = _league()
+    before = _snapshot(conn)
+    (move,) = staff.apply_staff_changes(cur, SEASON, [_buf_promotes_spagnuolo()], user_team_ids={1})
+    assert move["status"] == "SKIPPED" and move["to_team_id"] == 2
+    assert move["reason"] == "promotion would take user team KC's current DC: Mu never changes JR's staff"
+    assert move["detail"]["protected_seat"] == {"team": "KC", "role": "DC", "person_kind": "COORD", "person_id": 101}
+    assert _snapshot(conn) == before                       # no coach row, profile move or tenure write
+    assert conn.execute("SELECT person_kind, position FROM coach_madden_profiles WHERE presentation_id = 4"
+                        ).fetchone() == ("COORD", "DefensiveCoordinator")
+    wanted = cs._wanted(cur, SEASON)
+    assert (wanted[(1, "DC")]["person_id"], wanted[(1, "DC")]["name"]) == (101, "Steve Spagnuolo")
+    assert wanted[(2, "HC")]["name"] == "Sean McDermott"   # Buffalo's seat is unchanged too
+    again = staff.apply_staff_changes(cur, SEASON, [_buf_promotes_spagnuolo()], user_team_ids={1})
+    assert [m["status"] for m in again] == ["SKIPPED"] and _snapshot(conn) == before
+
+
+def test_user_team_promotion_source_is_skipped_even_with_a_named_replacement():
+    """The named replacement is a user-team change, so it cannot resolve the seat: the promotion is still skipped,
+    in either change order, and nothing is written."""
+    conn, cur = _league()
+    before = _snapshot(conn)
+    changes = [_buf_promotes_spagnuolo(),
+               StaffChange(team="KC", role="DC", out_name="Steve Spagnuolo", in_name="Dave Aranda", week=8,
+                           source="CSV")]
+    moves = staff.apply_staff_changes(cur, SEASON, changes, user_team_ids={1})
+    assert [m["status"] for m in moves] == ["SKIPPED", "SKIPPED"]
+    assert "user team" in moves[1]["reason"]
+    assert _snapshot(conn) == before
+    reversed_moves = staff.apply_staff_changes(cur, SEASON, list(reversed(changes)), user_team_ids={1})
+    assert [m["status"] for m in reversed_moves] == ["SKIPPED", "SKIPPED"]
+    assert _snapshot(conn) == before
+
+
+def test_user_team_promotion_source_is_skipped_for_an_existing_coach_row_without_a_profile():
+    """The existing-coach path would store a COACH profile through `promote_from`, so it is guarded the same way."""
+    conn, cur = _league()
+    conn.execute("INSERT INTO coaches (id, coach_name) VALUES (30, 'Steve Spagnuolo')")
+    before = _snapshot(conn)
+    (move,) = staff.apply_staff_changes(cur, SEASON, [_buf_promotes_spagnuolo()], user_team_ids={1})
+    assert move["status"] == "SKIPPED" and "user team KC" in move["reason"]
+    assert _snapshot(conn) == before                       # no COACH profile invented, no coach tenure
+
+
+def test_an_unrelated_user_team_does_not_block_a_normal_promotion():
+    """The guard names the source seat, not the user-team set: with AZ (3) as JR's team a KC-to-BUF promotion
+    writes as before."""
+    conn, cur = _league()
+    conn.execute("INSERT INTO teams (id, abbreviation) VALUES (3, 'AZ')")
+    changes = _promotion("Dave Aranda", team="BUF", out_name="Sean McDermott", source_team="KC")
+    moves = staff.apply_staff_changes(cur, SEASON, changes, user_team_ids={3})
+    assert [m["status"] for m in moves] == ["PLANNED", "PLANNED"]
+
+
 def test_normal_head_coach_and_coordinator_changes_are_unchanged():
     """A non-promotion change is untouched: no source-seat work, no REFUSED move."""
     conn, cur = _league()
@@ -431,7 +494,8 @@ class ExistingIdentityWithoutProfile(unittest.TestCase):
     """Audit F1 required regression: an existing HC and an existing OC/DC with no `coach_madden_profiles` row are
     mirrored in (one CREATED profile for the same person id, no second person row), then apply + the real downstream
     `coach_save_sync.plan_staff_edits` produce one assign/create per changed seat and no skipped profile. A second
-    apply emits no moves, and an existing SAVE profile keeps its presentation id and source.
+    apply emits no moves, and an existing SAVE profile keeps its presentation id and source. Also audit-5 C1: a
+    promotion of a user team's current coordinator is skipped whole, so his one profile and seat survive.
 
     Real PostgreSQL in a `mu_scratch_u9_*` database built from db/init_db.sql; each test's transaction is rolled back
     and the database is dropped in tearDownClass.
@@ -577,3 +641,32 @@ class ExistingIdentityWithoutProfile(unittest.TestCase):
         assigns = [a for a in plan["staff"] if a["action"] == "assign"]
         assert assigns == [{"action": "assign", "pgid": 777, "team_index": 0, "position": "HeadCoach"}]
         assert [a for a in plan["staff"] if a["action"] == "create"] == []
+
+    def test_user_team_coordinator_is_never_promoted_away(self):
+        """C1 on real PostgreSQL: JR's KC DC is not promoted to non-user BUF, with or without a named KC
+        replacement, in either change order. His profile row, tenure and `_wanted` seat stay exactly as they were,
+        and BUF's seat is untouched."""
+        kc, buf = self._team("KC"), self._team("BUF")
+        self._coach("Andy Reid", kc, 2025)
+        self._coach("Sean McDermott", buf, 2025)
+        dc = self._coord("Steve Spagnuolo", kc, "DC", 2025)
+        self._profile_row("COORD", dc, "DefensiveCoordinator", source="SAVE", presentation_id=4)
+
+        def state():
+            return (self._profile("COORD", dc),
+                    self.cur.execute("SELECT end_season FROM coordinator_tenures WHERE coordinator_id = %s",
+                                     (dc,)).fetchone(),
+                    self._count("coaches"), self._count("coach_tenures"), self._count("coach_madden_profiles"))
+
+        before = state()
+        promotion = StaffChange(team="BUF", role="HC", out_name="Sean McDermott", in_name="Steve Spagnuolo", week=9)
+        replacement = StaffChange(team="KC", role="DC", out_name="Steve Spagnuolo", in_name="Dave Aranda", week=9,
+                                  source="CSV")
+        for changes in ([promotion], [promotion, replacement], [replacement, promotion]):
+            moves = staff.apply_staff_changes(self.cur, SEASON, changes, user_team_ids={kc})
+            assert [m["status"] for m in moves] == ["SKIPPED"] * len(changes), changes
+            assert all("user team" in m["reason"] for m in moves)
+        assert state() == before
+        wanted = cs._wanted(self.cur, SEASON)
+        assert (wanted[(kc, "DC")]["person_id"], wanted[(kc, "DC")]["name"]) == (dc, "Steve Spagnuolo")
+        assert wanted[(buf, "HC")]["name"] == "Sean McDermott"

@@ -21,7 +21,9 @@ A promotion's *source* coordinator seat needs an explicit decision (plan §8 Q2)
 that team + OC/DC, that change ends the promoted man's coordinator tenure and installs the named replacement, so
 `_wanted` asks for each man once and every seat resolves to its own profile. With no named replacement the source
 seat is returned as a REFUSED STAFF move carrying its reason, and its tenure rows are left untouched: Mu never
-invents a successor, and the week must not read as cleanly written. A team in `user_team_ids` is never touched.
+invents a successor, and the week must not read as cleanly written. A team in `user_team_ids` is never touched, and
+neither is its staff: a promotion of a man who currently coordinates for a user team is skipped whole, before any
+coach row, profile or tenure is written, because a promotion would move that team's one Madden record (audit-5 C1).
 Re-applying a change whose incoming person already holds the seat does nothing, except that a promotion whose source
 seat is still unresolved keeps returning its REFUSED move. The function returns the STAFF moves for
 `store.record_moves`.
@@ -306,6 +308,25 @@ def _current_coordinator_seats(cur, coordinator_id, season):
     return seats
 
 
+def _protected_promotion_source(cur, season, change, user_team_ids):
+    """(team_id, role, coordinator_id) for a user-team coordinator seat `change`'s incoming head coach holds, else None.
+
+    A promotion keeps the man's one Madden record (carousel D2): the profile moves from COORD to COACH, which would
+    leave a user team's current coordinator without a profile even though his tenure stays (audit-5 U18 close-out C1).
+    The coupled promotion is therefore skipped before any coach row, profile or tenure is written: a user team's staff
+    is never changed by the mirror, whatever team the promotion is to.
+    """
+    if change.role != "HC" or not change.in_name or not user_team_ids:
+        return None
+    coordinator_id = _find_coordinator(cur, change.in_name)
+    if coordinator_id is None:
+        return None
+    for team_id, role in _current_coordinator_seats(cur, coordinator_id, season):
+        if team_id in user_team_ids:
+            return team_id, role, coordinator_id
+    return None
+
+
 def _unresolved_source_seat_moves(cur, season, change, team_ids, targets):
     """REFUSED moves for each coordinator seat a promoted head coach still holds with no named replacement.
 
@@ -342,10 +363,11 @@ def apply_staff_changes(cur, season, changes, user_team_ids=frozenset()):
     """Write `changes` into the tenure tables for `season` and return their STAFF moves (see the module docs).
 
     A change for a user team, an unknown team or with no incoming name is returned as a SKIPPED move and writes
-    nothing. A change whose incoming person already holds the seat returns nothing, except that a promotion whose
-    source coordinator seat is still unresolved keeps returning that seat's REFUSED move. A promotion whose old seat
-    is filled by a change in `changes` writes normally; one with no named replacement returns a REFUSED move for the
-    source seat and leaves its tenure rows untouched."""
+    nothing, as is a head-coach promotion of a man who currently holds a coordinator seat on a user team (his user
+    team's profile would move with him; audit-5 C1). A change whose incoming person already holds the seat returns
+    nothing, except that a promotion whose source coordinator seat is still unresolved keeps returning that seat's
+    REFUSED move. A promotion whose old seat is filled by a change in `changes` writes normally; one with no named
+    replacement returns a REFUSED move for the source seat and leaves its tenure rows untouched."""
     season = int(season)
     user_team_ids = frozenset(user_team_ids or ())
     changes = list(changes or ())
@@ -378,6 +400,19 @@ def apply_staff_changes(cur, season, changes, user_team_ids=frozenset()):
             continue
 
         if change.role == "HC":
+            protected = _protected_promotion_source(cur, season, change, user_team_ids)
+            if protected is not None:
+                seat_team, seat_role, coordinator_id = protected
+                abbr_by_id = {team_id: abbr for abbr, team_id in team_ids.items()}
+                moves.append({"kind": "STAFF", "to_team_id": team_id, "status": "SKIPPED",
+                              "reason": (f"promotion would take user team {abbr_by_id.get(seat_team)}'s current "
+                                         f"{seat_role}: Mu never changes JR's staff"),
+                              "detail": {"team": change.team, "role": change.role, "out_name": change.out_name,
+                                         "in_name": change.in_name, "week": change.week, "source": change.source,
+                                         "date": change.date, "note": change.note,
+                                         "protected_seat": {"team": abbr_by_id.get(seat_team), "role": seat_role,
+                                                            "person_kind": "COORD", "person_id": coordinator_id}}})
+                continue
             person_id, created = _incoming_coach(cur, change.in_name, current)
         else:
             person_id, created = _incoming_coordinator(cur, change.in_name, change.role, current)
