@@ -31,10 +31,13 @@
     refused: that pair would decide nothing, and a wrong pair is the one way a check can lie
     (plan R3).
 
-``PilotDriver`` is the real driver. It shells out to ``python3 -m tools.madden_pilot
-watch-game --save <clone> --to <cue> [--pack P]`` for each segment (that job is unit U2's and
-may not exist yet), records through ``win_agent record`` and quits through the ``quit`` job. The
-class imports and constructs without U2 merged; only ``wait_for`` needs the new job.
+``PilotDriver`` is the real driver. It starts ``python3 -m tools.madden_pilot watch-game`` as a
+*background* process for each cued segment, so the job holds the game while this process records
+(``watch-game`` only leaves when its hold ends). It polls the job's own ``steps/*.json`` for the
+cue's anchor screen (``GAME_KICKOFF`` for ``kickoff``), records through ``win_agent record`` while
+the job is still alive, and collects the job's ``result.json`` as its ``finish``. The halftime
+show and the static super-sim screen have no catalogued anchor, so those cues stop with a reason
+instead of recording the wrong moment.
 """
 from __future__ import annotations
 
@@ -55,9 +58,17 @@ from tools.mod_check.segments import (
     CUES, PlanError, Segment, data_root, load_plan, mod_directory,
 )
 
-# A segment cue names a moment in the game; `watch-game --to` names a stop it drives to. The
-# static `supersim_menu` cue is a fixed wait, so nothing waits for it.
-WATCH_TARGETS = {"kickoff": "kickoff", "halftime_start": "halftime"}
+# The anchor screen a cue waits for, by the catalog's own name (`catalog.json`). `watch-game`
+# writes one `steps/NNNN_<screen>.json` per look into its run directory, so the anchor is read
+# from a file instead of a new look (a look refocuses Madden and would disturb the hold).
+CUE_ANCHORS = {"kickoff": "GAME_KICKOFF"}
+# `watch-game --to` names the stops it drives to; only kickoff is recordable today.
+CUE_STOPS = {"kickoff": "kickoff"}
+HALFTIME_GAP = ("the halftime show's screen was never catalogued (plan 2.5a/R4), so there is no "
+                "anchor to record from; stopping beats recording the wrong moment")
+STATIC_GAP = "supersim_menu is a fixed wait, not a stop watch-game drives to"
+JOB_QUIT_GRACE_S = 180.0            # how long after its hold a job may take to quit
+CUE_POLL_S = 0.5                    # how often the job's steps are read while it holds
 CHK_PREFIX = "CAREER-TUNE-CHK"
 MAX_CHK = 99
 
@@ -324,7 +335,7 @@ def run(save: str, mod: str, segments: Sequence[str] | None = None, run_dir: str
     engine = check or assets.check_frame
     describer = describe or describe_segment
     sleeper = sleep or time.sleep
-    pilot = driver or PilotDriver()
+    pilot = driver or PilotDriver(run_dir=target)
     target.mkdir(parents=True, exist_ok=True)
     try:
         started = pilot.start(scored, pack=pack) or {}
@@ -339,7 +350,8 @@ def run(save: str, mod: str, segments: Sequence[str] | None = None, run_dir: str
             frames_dir = segment_dir / "frames"
             frames_dir.mkdir(parents=True, exist_ok=True)
             if segment.cued:
-                pilot.wait_for(segment.cue, timeout_s=CUE_TIMEOUT_S)
+                pilot.wait_for(segment.cue, timeout_s=CUE_TIMEOUT_S,
+                               hold_s=segment.record_s + 20)
             if segment.preroll_s:
                 sleeper(segment.preroll_s)
             returned = pilot.record(frames_dir, segment.record_s, segment.fps, segment.width)
@@ -517,11 +529,12 @@ def capture(mod: str, segment: str, pass_at: str, fail_at: str, *, asset: str | 
                 scored = str(maker(save, CHK_PREFIX) or "").strip()
             except (OSError, ValueError) as exc:
                 return _refused(f"could not clone {save}: {exc}", mod=plan.mod)
-            live = driver or PilotDriver()
+            live = driver or PilotDriver(run_dir=target)
             try:
                 live.start(scored, pack=None)
                 if chosen.cued:
-                    live.wait_for(chosen.cue, timeout_s=CUE_TIMEOUT_S)
+                    live.wait_for(chosen.cue, timeout_s=CUE_TIMEOUT_S,
+                                  hold_s=chosen.record_s + 20)
                 if chosen.preroll_s:
                     (sleep or time.sleep)(chosen.preroll_s)
                 frames_dir = target / "segments" / segment / "frames"
@@ -628,25 +641,36 @@ def _last_json(text: str) -> dict:
 
 
 class PilotDriver:
-    """The real driver. Needs unit U2's ``watch-game`` job merged for ``wait_for``.
+    """The real driver: ``watch-game`` holds the game while this driver records it.
 
-    ``start`` remembers the clone and pack; each ``wait_for`` runs
-    ``python3 -m tools.madden_pilot watch-game --save <clone> --to <target> [--pack P]``, where
-    the segment cue maps to the job's stop (``kickoff`` -> ``kickoff``, ``halftime_start`` ->
-    ``halftime``); frames
-    come from ``win_agent record`` and ``finish`` quits through the ``quit`` job and reports
-    whether the autosave appeared (plan R1/D1).
+    ``start`` remembers the clone and pack. Each cued segment starts
+    ``python3 -m tools.madden_pilot watch-game --save <clone> --to <stop>
+    --hold-seconds <record_s + 20> --run-dir <this run's native dir> [--pack P]`` as a
+    background process, then polls that directory's ``steps/*.json`` until a step's ``screen``
+    is the cue's anchor (``GAME_KICKOFF`` for ``kickoff``). The job is *holding* then, so
+    ``record`` runs while it is still alive; when the hold ends the job quits the franchise on
+    its own and ``finish`` collects its ``result.json`` (``quit``, ``quit_route``,
+    ``autosave_written``, ``pack``) rather than starting a second quit.
+
+    Two cues have no anchor, so they stop with their reason instead of recording the wrong
+    moment: ``halftime_start`` (the show's screen was never catalogued, plan 2.5a/R4) and
+    ``supersim_menu`` (a fixed wait, not a stop). A process that exits before its anchor, or
+    one still short of it at ``timeout_s``, is collected/killed and reported as ``CueMissed``.
     """
 
     def __init__(self, python: str | None = None, cwd: str | Path | None = None,
-                 timeout_s: float = 900.0):
+                 timeout_s: float = 900.0, run_dir: str | Path | None = None):
         self.python = python or os.environ.get("MU_PILOT_PYTHON") or "python3"
         self.cwd = Path(cwd) if cwd else Path(__file__).resolve().parents[2]
         self.timeout_s = timeout_s
+        self.run_dir = Path(run_dir) if run_dir else None
         self.save: str | None = None
         self.pack: str | None = None
         self.saves = jobs.saves_dir()
         self._before: dict[str, float | None] = {}
+        self._jobs: list[dict] = []
+        self._job_number = 0
+        self._temp: Path | None = None
 
     def _call(self, *args: str, timeout: float | None = None) -> dict:
         command = [self.python, "-m", "tools.madden_pilot", *args]
@@ -669,22 +693,166 @@ class PilotDriver:
                         "autosave": _mtime(self.saves / f"{save}-AUTOSAVE")}
         return {"status": "ok", "save": save, "pack": pack}
 
-    def wait_for(self, cue: str, timeout_s: float = CUE_TIMEOUT_S) -> None:
+    # ---------------------------------------------------------------- the background job
+    def _work_root(self) -> Path:
+        """Where the job's own steps/ and result.json go: the run's dir, else a temp dir."""
+        if self.run_dir is not None:
+            return self.run_dir
+        if self._temp is None:
+            import tempfile
+            self._temp = Path(tempfile.mkdtemp(prefix="mu-mod-check-watch-"))
+        return self._temp
+
+    @staticmethod
+    def _step_screens(native: Path) -> list[str]:
+        """Every screen the job has looked at, newest first, from its own ``steps/*.json``."""
+        steps_dir = Path(native) / "steps"
+        steps = sorted(steps_dir.glob("*.json")) if steps_dir.is_dir() else []
+        screens: list[str] = []
+        for path in reversed(steps):
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            if isinstance(data, dict) and data.get("screen"):
+                screens.append(str(data["screen"]))
+        return screens
+
+    @staticmethod
+    def _read_result(native: Path) -> dict | None:
+        try:
+            data = json.loads((Path(native) / "result.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        return data if isinstance(data, dict) else None
+
+    @staticmethod
+    def _tail(process: Any, limit: int = 600) -> str:
+        """The last of the job's stdout/stderr, read once it has exited."""
+        try:
+            if process.poll() is None:
+                return "(still running)"
+        except Exception:
+            return ""
+        parts = []
+        for name in ("stdout", "stderr"):
+            stream = getattr(process, name, None)
+            if stream is None:
+                continue
+            try:
+                text = stream.read()
+            except Exception:
+                text = ""
+            if text:
+                parts.append(f"{name}: {str(text).strip()}")
+        return " | ".join(parts)[-limit:]
+
+    @staticmethod
+    def _stop(process: Any, grace: float = 5.0) -> None:
+        """Terminate, then kill: never leave a job behind (its own hold could be long)."""
+        for action in ("terminate", "kill"):
+            try:
+                getattr(process, action)()
+            except Exception:
+                pass
+            try:
+                process.wait(timeout=grace)
+                return
+            except subprocess.TimeoutExpired:
+                continue
+            except Exception:
+                return
+
+    def _collect_job(self, job: dict) -> dict:
+        """Wait (bounded) for one job, then take its own result.json."""
+        process = job.get("process")
+        if process is None:
+            return {}
+        if process.poll() is None:
+            try:
+                process.wait(timeout=float(job.get("exit_timeout") or 60.0))
+            except subprocess.TimeoutExpired:
+                self._stop(process)
+                job["stopped"] = "finish-timeout"
+        result = self._read_result(Path(job["dir"]))
+        if result is None:
+            return {"quit": False, "quit_route": None, "autosave_written": None,
+                    "pack": self.pack,
+                    "why": f"watch-game wrote no result.json ({self._tail(process)})"}
+        return result
+
+    def _collect_running(self) -> None:
+        """A previous segment's hold must end before the next job loads the same franchise."""
+        for job in self._jobs:
+            process = job.get("process")
+            if process is not None and process.poll() is None:
+                self._collect_job(job)
+
+    def _autosave_seen(self) -> bool | None:
+        if not self.save:
+            return None
+        after = _mtime(self.saves / f"{self.save}-AUTOSAVE")
+        before = self._before.get("autosave")
+        return bool(after is not None and (before is None or after > before))
+
+    def wait_for(self, cue: str, timeout_s: float = CUE_TIMEOUT_S,
+                 hold_s: int = 60) -> None:
+        """Start ``watch-game`` in the background and return once its anchor screen is on."""
+        if cue == "halftime_start":
+            raise CueMissed(cue, HALFTIME_GAP)
+        if cue == "supersim_menu":
+            raise CueMissed(cue, STATIC_GAP)
         if cue not in CUES:
             raise CueMissed(cue, f"allowed cues are {', '.join(CUES)}")
-        target = WATCH_TARGETS.get(cue)
-        if target is None:
-            raise CueMissed(cue, f"{cue!r} is a fixed wait, not a stop watch-game drives to "
-                                 f"({', '.join(WATCH_TARGETS)})")
+        target, anchor = CUE_STOPS.get(cue), CUE_ANCHORS.get(cue)
+        if not target or not anchor:
+            raise CueMissed(cue, f"no watch-game stop and anchor are known for {cue!r}")
         if not self.save:
             raise CueMissed(cue, "start() was never called")
-        args = ["watch-game", "--save", self.save, "--to", target]
-        if self.pack:
-            args += ["--pack", self.pack]
         try:
-            self._call(*args, timeout=max(self.timeout_s, timeout_s))
-        except DriverError as exc:
-            raise CueMissed(cue, str(exc)) from exc
+            hold = int(hold_s)
+        except (TypeError, ValueError):
+            raise CueMissed(cue, f"hold_s must be whole seconds, not {hold_s!r}") from None
+        self._collect_running()
+        self._job_number += 1
+        native = self._work_root() / "watch-game" / f"{self._job_number:02d}_{target}"
+        native.mkdir(parents=True, exist_ok=True)
+        command = [self.python, "-m", "tools.madden_pilot", "watch-game",
+                   "--save", self.save, "--to", target,
+                   "--hold-seconds", str(hold), "--run-dir", str(native)]
+        if self.pack:
+            command += ["--pack", self.pack]
+        try:
+            process = subprocess.Popen(command, cwd=str(self.cwd), stdout=subprocess.PIPE,
+                                       stderr=subprocess.PIPE, text=True)
+        except OSError as exc:
+            raise DriverError(f"could not start watch-game: {exc}") from exc
+        job = {"process": process, "dir": native, "hold": hold, "cue": cue,
+               "exit_timeout": max(60.0, hold + JOB_QUIT_GRACE_S), "stopped": None}
+        self._jobs.append(job)
+
+        deadline = time.monotonic() + max(0.0, float(timeout_s))
+        last: str | None = None
+        while True:
+            screens = self._step_screens(native)
+            if screens:
+                last = screens[0]
+            if anchor in screens:
+                return
+            code = process.poll()
+            if code is not None:
+                detail = f"last screen {last or 'none'}"
+                tail = self._tail(process)
+                raise CueMissed(cue, f"watch-game exited ({code}) before {anchor}: {detail}"
+                                     + (f"; {tail}" if tail else ""))
+            if time.monotonic() >= deadline:
+                self._stop(process)
+                job["stopped"] = "timeout"
+                tail = self._tail(process)
+                raise CueMissed(cue, f"watch-game did not reach {anchor} in {timeout_s:g}s "
+                                     f"(last screen {last or 'none'}); stopped it"
+                                     + (f"; {tail}" if tail else ""))
+            time.sleep(min(CUE_POLL_S, max(0.01, deadline - time.monotonic())))
 
     def record(self, out_dir: Path, seconds: int, fps: int, width: int) -> list[Path]:
         from tools.madden_pilot import win
@@ -701,15 +869,33 @@ class PilotDriver:
         return _frame_paths(None, folder)
 
     def finish(self) -> dict:
-        result: dict[str, Any] = {}
+        """Collect the background job(s): their own quit, not a second one."""
+        if self._jobs:
+            collected = [self._collect_job(job) for job in self._jobs]
+            last = collected[-1] if collected else {}
+            result: dict[str, Any] = {
+                "quit": bool(last.get("quit")),
+                "quit_route": last.get("quit_route"),
+                "autosave_written": last.get("autosave_written"),
+                "end_screen": last.get("end_screen"),
+                "pack": last.get("pack") or self.pack,
+            }
+            written = [entry.get("autosave_written") for entry in collected
+                       if entry.get("autosave_written") is not None]
+            result["autosave_written"] = any(written) if written else self._autosave_seen()
+            if last.get("why"):
+                result["why"] = last["why"]
+            stopped = [job["stopped"] for job in self._jobs if job.get("stopped")]
+            if stopped:
+                result["stopped"] = stopped
+            return result
+        # No background job was started: the old fallback quits through the pilot's own job.
+        result = {}
         if self.save:
             try:
                 result = self._call("quit", "--franchise", jobs.tile_name(self.save))
             except DriverError as exc:
                 result = {"quit": False, "why": str(exc)}
-            autosave = self.saves / f"{self.save}-AUTOSAVE"
-            after = _mtime(autosave)
-            before = self._before.get("autosave")
-            result["autosave_written"] = bool(after is not None and (before is None or after > before))
+            result["autosave_written"] = self._autosave_seen()
         result["pack"] = self.pack
         return result

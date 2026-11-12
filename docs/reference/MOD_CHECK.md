@@ -98,7 +98,7 @@ segment game_start: no after cue. Only the static supersim_menu screen may be a 
 
 `preroll_s` is the plan's answer to a cue landing slightly early (R2): the run sleeps it after the cue and before recording, and the report carries the segment's `cue`, not the preroll, so anything timed rather than cued is visible in the plan file.
 
-**Two facts to design around.** First, the driver records *after* `watch-game` returns, and `watch-game` quits the franchise when it returns (§12). Second, an asset passes on its **latest decisive frame** in the segment, so a segment must show the asset for its whole length — a logo that is only in frame for the first second of an 8 s recording will be scored on the last frame, which no longer has it. Keep `record_s` short and the `region` on something that stays put (a scorebug, a field logo under a static camera), or cut the segment to the moment.
+**Two facts to design around.** First, the driver starts `watch-game` in the background and records *during its hold*; the job quits the franchise when the hold ends, and `finish` collects that quit (§12). Second, an asset passes on its **latest decisive frame** in the segment, so a segment must show the asset for its whole length — a logo that is only in frame for the first second of an 8 s recording will be scored on the last frame, which no longer has it. Keep `record_s` short and the `region` on something that stays put (a scorebug, a field logo under a static camera), or cut the segment to the moment.
 
 ## 4. `checks.json`: what to score
 
@@ -444,7 +444,7 @@ The report rows in steps 4–6 come from `tools/mod_check`'s own scorer run over
 
 ## 12. Limits and the known gap
 
-- **A run records after the game has been left.** As merged, `PilotDriver.wait_for` runs `watch-game` to completion (`runner.py`, `_call` is a blocking `subprocess.run`) and `watch-game` quits the franchise on its way out (`quit=not args.no_quit`, and the driver never passes `--no-quit`); only then does `PilotDriver.record` start `win_agent record`. So a live run today captures what the pilot left on screen — the franchise list — not the kickoff. Until `runner.py` is fixed (run the job with `--no-quit`, or record during its hold in a second process), do the recording by hand:
+- **A `kickoff` segment is recorded during `watch-game`'s hold.** `PilotDriver.wait_for` starts `watch-game --save <clone> --to kickoff --hold-seconds <record_s + 20> --run-dir <run>/watch-game/NN_kickoff` as a background process, then polls that directory's `steps/*.json` until a step's `screen` is `GAME_KICKOFF`. It returns while the job is still holding, so `win_agent record` captures the game; when the hold ends the job quits on its own and `finish` collects its `result.json` (`quit`, `quit_route`, `autosave_written`, `pack`) instead of quitting a second time. If the job exits before `GAME_KICKOFF` appears — or is still short of it at `timeout_s` (180 s) — the run stops as a driver `stopped` with the last screen and the job's output tail, rather than score whatever is on screen. A by-hand recording is still useful only to debug the pilot itself (and `watch-game --no-quit` is the tool for that):
 
   ```
   python3 -m tools.madden_pilot watch-game --save CAREER-TUNE-CHKA --to kickoff --hold-seconds 60 --no-quit
@@ -457,8 +457,8 @@ The report rows in steps 4–6 come from `tools/mod_check`'s own scorer run over
   PY
   ```
 
-  then leave the game by hand and cut the references with `capture --run-dir <a folder with segments/game_start/frames>`. A `report.md` whose `frame` is a franchise list is this gap, not a mod problem.
-- **A fixed-wait `supersim_menu` segment has nothing to park on.** The cue is allowed by the plan and accepted by the plan loader, but no driver route leaves the game standing on the super-sim screen, and a cued segment's `watch-game` has quit by the time recording starts. A `supersim` segment therefore scores whatever is on screen; treat its checks as `unknown` until the driver is fixed.
+  then leave the game by hand and cut the references with `capture --run-dir <a folder with segments/game_start/frames>`. A `report.md` whose `frame` is a franchise list on this code means the job never reached `GAME_KICKOFF` (read the stop's `why`), not that the mod failed.
+- **`halftime_start` still stops; `supersim_menu` still has no route.** The halftime show's screen was never catalogued (plan §2.5a/R4), so `wait_for("halftime_start")` raises `CueMissed` with that reason rather than record the wrong moment; the segment is not scored. A fixed-wait `supersim_menu` segment is never waited for at all (it is a timing-based segment, not a stop), and no `watch-game` route leaves the game standing on the super-sim screen, so a `supersim` segment scores whatever is on screen — treat its checks as `unknown` until an anchor for that screen exists.
 - **`--pack` is recorded, not verified.** It does not launch Madden and it cannot check what the game actually loaded (plan R6), so a `pass` with the wrong pack looks exactly like a `pass`. Launch with `python3 -m tools.madden_pilot launch --pack "Mu Test"` and read the `- pack:` line.
 - **The halftime show itself is unverified.** The recipe in §7 reproduces down to the clock in a dry run, but no live run has yet seen the show (plan §2.5a, R4). A stop during the recipe is the recipe, not the mod.
 - **A clone keeps the original's LeagueID**, so never run a check while the watcher is up, and never leave a `CAREER-TUNE-CHK*` clone where the league office can mistake it for a franchise to advance.
