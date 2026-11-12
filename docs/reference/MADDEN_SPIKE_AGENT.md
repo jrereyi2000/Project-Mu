@@ -216,6 +216,8 @@ A check answers "did this mod asset render" from pixels, with no model:
 - It passes when every given measure passes, fails when every measure points the other way, and is
   `unknown` otherwise — never a guessed pass. A frame with no pixels is `unknown` too.
 
+A **standing** (non-spike) check of the same specs is `tools/mod_check/` (`python3 -m tools.mod_check run --save CAREER-TUNE-<name> --mod <slug>`): it clones a TUNE save, records the mod's game-start and halftime segments through the pilot's `watch-game` job and scores them the same way, writing a pass/fail table per asset. See [`MOD_CHECK.md`](MOD_CHECK.md); use a spike when the screen itself is unknown, a mod check when the screens are catalogued and you want the answer again next week.
+
 `spike-check --check NAME` runs named checks on the live frame; `spike-check --checkpoint NAME`
 captures a full-resolution frame, runs the checkpoint's checks, records them in `state.json["checkpoints"]`
 and records its `record_s` clip. `spike-analyze` runs every check again on the checkpoint frames.
