@@ -391,9 +391,88 @@ python3 -c "R=lambda i,d,f: i+d+120*(f-1); print(R(2081,90,20)/850*9.8)"   # 5.2
 
 ---
 
-## 6. What I did not do
+## 6. Wall clock if JR parallelises it hard
+
+**Subagents do not create quota. They only shorten the wall clock of a fixed token budget**, so the answer has two
+parts: how fast the *work* goes, and how fast the *week's allowance* drains.
+
+### 6.1 The work side
+
+One batch is one pinned worktree, one scratch DB and one subagent reading a range — independent of every other
+batch. The measured wall clock per batch is **under an hour for a capable agent on a big row**: `audit-visual`
+reviewed the largest range in this queue (R7, 6,648 review units, 302 tests) between its M-0685 notice at 15:55
+and the report at `data/audit_reports/visual_mod_check/report.md` 15:58, with the tests themselves taking 10 s.
+The 1.32 h/batch in §2.1 is therefore a **token** measure, not a reading-speed measure — audit-5's day was
+quota-throttled, not attention-throttled.
+
+At **8 concurrent batch subagents** (audit-5's own peak shape: 8 `thread_spawn` children plus the parent), the
+ten rows run as **one wave**, and the wall clock is set by the slowest row (fact-gate, R5) rather than by the sum:
+**~2–3 h of agent time for all 33.3 batches**, against 44 h one-deep. Nothing in the audit skill caps concurrency;
+the binding practical caps are the Postgres cluster and the parent session.
+
+| Non-scaling constraint | Why it caps | What it means |
+|---|---|---|
+| Postgres cluster | Each DB-backed batch clones a template (`madden_tune_p2g` alone dumps at 120 MB; 4 of 11 GB RAM in use) | **≤3–4 DB-backed batches at once.** Only R8, R9, R10 and the R1/R2 re-checks need a DB; the four plan reviews do not |
+| The parent session | It reads every report and writes one fix brief per batch, serially (~10–15 min each) | ~2 h of parent time across ten reports; overlaps the subagents, but it, not the agents, is the tail |
+| The fix → re-check loop | Findings go to a builder, come back as a fix, and the auditor re-reads at the new sha | One extra round, +15% per row; the builders are DeepSeek on Go (8% of a 5-hour window, 44% weekly), so **the fix side costs no Claude quota** |
+| The skill's own 85% rule | At 85% of the 5-hour window the auditor posts a hand-off and stops | Max parallelism reaches that line in **~1.5–2 h**, not 5 |
+
+### 6.2 The quota side — the only number nobody has
+
+Claude's per-session token cost has never been measured on this box (`AUDITOR_MODEL_EVALUATION.md` §4.2: "only
+the plan percentage"). The queue needs **~326M input tokens**, which is **2.4× audit-5's whole day** (137.2M, which
+was 99% of a 5-hour Codex window and 72% of a Codex week). So the calendar answer is a function of what a Claude
+week holds, and only JR's console knows:
+
+| If a Claude week carries | The queue takes | First useful result |
+|---|---|---|
+| **≥ ~33 batches (≥ ~326M)** — the whole queue fits | **All ten audited in one ~3 h wave**; fixes the same evening on Go; re-check next window. **~1 day end to end** | P7 chain verdict in the first hour |
+| **~14 batches (~137M, one audit-5 day)** | **~2.4 windows ≈ 10–12 h of clock time**, two or three waves across a day and a half | P7 chain in wave 1 (~2 h) |
+| **~7 batches** | **~5 windows ≈ 2–2.5 days**; the P7 chain is one window on its own | P7 chain only, rest waits |
+
+### 6.3 The order to launch in (8 slots, first wave)
+
+Quota is fixed, so the order *is* the decision — the first wave gets the whole window:
+
+1. **R8** P3-04b `2087aae..HEAD` — the live engine change; smallest row, highest leverage.
+2. **R10** `e93e417` — the exit-draw fix nothing has read.
+3. **R9** the `ded2627` residual re-read — a re-read, ~30 min.
+4. **R5a** fact-gate own commits (highest-stakes fresh read: writer path + migration + frontend).
+5. **R5b** `45e58d1` (API/view + the capture exclusion) as its own batch.
+6. **R3** the DeepSeek route plan (~8.8 with R4: the safest block for a first non-Codex auditor).
+7. **R4** the Go pipeline plan.
+8. **R6** glm-unification.
+
+**Hold back:** R1 and R2 (re-reads against reports already on disk — the parent can do both inside the same
+window for ~10% of their estimate), and R7 (already audited; its six fixes are landing now).
+
+**Second wave, next window:** the re-checks of whatever the builders fixed, then whatever is left of R3/R4/R6.
+
+### 6.4 What to do in the three hours before the quota lands
+
+The prep is the part that makes a 3 h wave possible instead of a 6 h one, and none of it spends quota:
+
+1. Ten pinned worktrees, one per row, at the exact shas in §1 — `git worktree add ... <sha>`.
+2. Ten briefs written from §1's table (range, plan path, what the builder claimed, the known open questions,
+   the tests to run, the report path). This is the parent's serial work; doing it in advance removes it from the tail.
+3. Three scratch DBs pre-cloned (`p2g` template, `2036`, fresh `init_db.sql`) for R8/R9/R10.
+4. Pause or accept the `commit_audit.py` hook: its headless Claude reviews have already failed 92 times on Claude
+   usage limits, and a burst will starve it again.
+
+### 6.5 Honest caveats
+
+- **Parallelism multiplies the burn, not the output.** Eight subagents burn a 5-hour window in about a fifth of
+  the time one does. If the week's allowance is one audit-5 day, max parallelism finishes the same 14 batches in
+  ~2 h and then sits idle for 3 h — it does not add work.
+- **The 2–3 h wave figure assumes no re-reads.** With the fix round, count a second, shorter wave.
+- **One observation, not a benchmark:** "R7 in under an hour" is one agent on one range today. A model with a
+  sloppier tool loop will be slower, and the estimate band in §2.5 still applies to the tokens.
+
+---
+
+## 7. What I did not do
 
 No audit, no CLOSED / PARTIAL / OPEN verdict of my own, no commit-range review, no correctness claim about any
 row, no test run beyond reading the counters the builders reported, no database write, no `madden_*` query, no
 Madden PC, and no edit to `PROJECT_SPEC.md`, `docs/CLOSE_OUT_CHECKLIST.md`, `docs/reference/CLOSE_OUT_STATUS.md`
-or any range I describe. The board is read; my NOTICE is M-0684.
+or any range I describe. The board is read; my messages are M-0684 and M-0694.
