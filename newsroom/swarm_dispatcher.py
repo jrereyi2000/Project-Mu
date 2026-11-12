@@ -1609,7 +1609,7 @@ If you need specific stats, use your database tools before producing your final 
                                     preview = str(res)[:160] + "..." if len(str(res)) > 160 else str(res)
                                     print(f"   -> Result preview: {preview}")
                                     if tool_trace is not None:
-                                        entry["result"] = str(res)[:4000]
+                                        entry["result"] = str(res)[:12000]   # grounding needs the tool text; 4k truncated real numbers
                                         tool_trace.append(entry)
                                     return str(res)
                                 except Exception as ex:

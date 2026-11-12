@@ -480,7 +480,7 @@ def _judge_call(client, model: str, system: str, prompt: str) -> dict | None:
     """One verdict. Thinking shares the output cap on Go models, so the cap is generous and the
     answer is read from the parts when `response.text` comes back empty."""
     from google.genai import types
-    config = types.GenerateContentConfig(system_instruction=system, temperature=0.0, max_output_tokens=2048)
+    config = types.GenerateContentConfig(system_instruction=system, temperature=0.0, max_output_tokens=8192)
     response = client.models.generate_content(model=model, contents=prompt, config=config)
     verdict = _parse_verdict(_answer_text(response))
     if verdict:
@@ -505,12 +505,27 @@ def judge_pairs(records: list, jobs: list, models: list, judge_model: str, direc
         return {"error": error, "pairs": []}
     by_key = {(r["slot"], r["model"], r.get("repeat", 0)): r for r in records}
     pairs, verdicts = [], []
+    pairs_path = os.path.join(directory, "judge.jsonl")
+    seen = set()
+    if os.path.exists(pairs_path):
+        with open(pairs_path) as f:
+            for line in f:
+                try:
+                    pair = json.loads(line)
+                except Exception:
+                    continue
+                pairs.append(pair)
+                verdicts.append(pair.get("verdict"))
+                seen.add((pair["slot"], pair["a"], pair["b"]))
+        print(f"[compare] judge resuming: {len(pairs)} pair(s) already decided")
     for job in jobs:
         for i, model_a in enumerate(models):
             for model_b in models[i + 1:]:
                 a = by_key.get((job["slot"], model_a, 0)) or {}
                 b = by_key.get((job["slot"], model_b, 0)) or {}
                 if not (a.get("text") and b.get("text")):
+                    continue
+                if (job["slot"], model_a, model_b) in seen:
                     continue
                 trace = ((a.get("evidence") or "")[-3000:] + "\n" + (b.get("evidence") or "")[-3000:])[:6000]
                 text_a = _clip_words(a["text"], 1100)
@@ -546,9 +561,12 @@ def judge_pairs(records: list, jobs: list, models: list, judge_model: str, direc
                     one = normalise(first, False)
                     two = normalise(second, True)
                     verdict = one if one == two else "order-dependent"
-                pairs.append({"slot": job["slot"], "a": model_a, "b": model_b, "first": first,
-                              "second": second, "verdict": verdict})
+                record = {"slot": job["slot"], "a": model_a, "b": model_b, "first": first,
+                          "second": second, "verdict": verdict}
+                pairs.append(record)
                 verdicts.append(verdict)
+                with open(pairs_path, "a") as f:
+                    f.write(json.dumps(record) + "\n")
     table = {}
     for model in models:
         table[model] = {"wins": 0, "losses": 0, "ties": 0, "order_dependent": 0}

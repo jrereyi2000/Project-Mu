@@ -195,7 +195,28 @@ Muse Spark 1.3 Contributor is now the target: it is the only Go model that both 
 
 **Do not** plan around the free models for prose. They are unlimited and reachable, but unscored, one trains on data, one is China-hosted, and all three are temporary.
 
-### 8.1 What the Muse switch would look like (not built)
+### 8.1 First measured result — 2036 Week 18, six slots, three models (2026-11-12)
+
+Run with `tools/article_model_compare.py` on the `madden_2036` archive, read-only, no `news_feed` or `llm_usage` writes. Six slots: `Hero Slot`, `Slot 1`, `Slot 4` (it resolved to `AWARDS_TRACKER`), `Slot 7`, `Standalone` (`POWER_RANKINGS`) and `Fantasy 1`. Same compiled prompts and the same ~40 tools for every model; only the client and the model id changed. Artifacts: `verify_output/model_compare/20261112_053537/`.
+
+| Model | Articles | Words | Tool calls | Wall time | List cost | Cost/article |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `gemini-3.8-flash` | 6 | 14,978 | 121 | 911.7 s | **$2.560** | $0.427 |
+| `muse-spark-1.3-contributor` | 6 | 13,126 | 202 | 1,054.1 s | **$0.177** | $0.030 |
+| `glm-5.3-flash` | 6 | 11,999 | 129 | 583.3 s | **$0.317** | $0.053 |
+
+What the run already settles:
+
+1. **The Go path works on the real desk.** No failures, no validation rewrites fired, no tool-schema errors, and no writes to the archive — the AFC loop drove the same tool set for all three models. The `missing GEMINI_API_KEY` branch was never hit, so the injected client really did replace the Gemini one.
+2. **The cost gap is 8–14×.** Muse Spark wrote the same six slots for $0.18 against Gemini's $2.56, and GLM-5.3-Flash for $0.32. At the desk's ~80 articles a month, that is ~$2.40 (Muse) or ~$4.20 (GLM-5.3-Flash) against ~$34 for Gemini — the whole "$125/mo newsroom" in the June numbers prices out far lower here because this archive's prompts cache heavily.
+3. **Muse researches hardest, GLM-5.3-Flash researches least.** 202 tool calls (Muse) vs 129 (Gemini) vs 129 (GLM-5.3-Flash); GLM-5.3-Flash's `Hero Slot` used **5** calls and produced 1,127 words where the others used 20–25 and wrote 1,423–1,504. Whether that is efficiency or thin grounding is exactly what the blind read decides — the grounding sheet flags numbers absent from the model's own trace, but it over-reports because tool results are clipped, so it is a screening aid, not a verdict.
+4. **Wall time:** GLM-5.3-Flash is the fastest (583 s for six), Gemini 912 s, Muse 1,054 s. Nothing near the 50-call ceiling.
+5. **The judge did not produce verdicts.** Two attempts at the pairwise GLM-5.3 judge returned no parsable answer: on prompts this size its thinking consumed the output cap, so the text came back empty. The tool now reads the non-thought parts, parses nested JSON, raises the cap to 8,192, clips the inputs, and writes each pair to `judge.jsonl` so a re-run resumes. The judging leg needs one more run after the Go 5-hour window resets (13:04Z on 2026-11-12); the failed attempts, not the articles, are what took the window to 89% — the 18 article runs together cost ~$0.5 of Go allowance.
+6. **The archive has no agent-memory block** (`nfl_mirror_picks.pick_type` predates the column), so all three models saw the same prompt without it. Fair between them, not identical to production.
+
+**Still to do:** JR's blinded read (`blind_read.md`, answer key at the end), and the judge re-run. Only then does this become P8-05 evidence.
+
+### 8.2 What the Muse switch would look like (not built)
 
 - `newsroom/swarm_dispatcher.py`'s `genai.Client(api_key=…)` gains `base_url="https://opencode.ai/inference/go/google"` and a per-process `x-opencode-session` header; the model string becomes `muse-spark-1.3-contributor`.
 - The AFC tool loop stays as it is, except that its usage meter must read `usageMetadata.opencode.allowance` (the Go field) rather than assuming Gemini's pricing — `db/llm_usage` stores tokens only, so allowance goes to the existing `data/usage/go_allowance.jsonl` ledger that `newsroom/tool_loop/go_allowance.py` already writes.
