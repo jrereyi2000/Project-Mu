@@ -1,0 +1,267 @@
+{
+ "fixture": "franchise_list_0087",
+ "source": "data/audit_reports/audit-visual-hydrogen/live_step3_halftime/watch_game/steps/0087_FRANCHISE_LIST",
+ "screen": "FRANCHISE_LIST",
+ "png": "franchise_list_0087.png",
+ "size": [
+  1920,
+  1080
+ ],
+ "lines": [
+  "CURRENT FRANCHISES",
+  "TUNE-CHKB",
+  "11/12/2026 1 PM",
+  "CREATENPWLEAGUE",
+  "ACCEPT DELETE BACK",
+  "TUNE-CHKA-AUTOSAVE",
+  "11/12/2026 1 PM",
+  "O",
+  "O LEAGUES",
+  "TUNE-CHKA",
+  "11/12/2026 1 PM",
+  "TUNE-CHECK-",
+  "11/12/2026 1"
+ ],
+ "words": [
+  {
+   "text": "CURRENT",
+   "box": [
+    77,
+    42,
+    113,
+    32
+   ],
+   "line": 0
+  },
+  {
+   "text": "FRANCHISES",
+   "box": [
+    198,
+    42,
+    151,
+    32
+   ],
+   "line": 0
+  },
+  {
+   "text": "TUNE-CHKB",
+   "box": [
+    272,
+    670,
+    101,
+    22
+   ],
+   "line": 1
+  },
+  {
+   "text": "11/12/2026",
+   "box": [
+    213,
+    705,
+    103,
+    25
+   ],
+   "line": 2
+  },
+  {
+   "text": "1",
+   "box": [
+    323,
+    703,
+    3,
+    27
+   ],
+   "line": 2
+  },
+  {
+   "text": "PM",
+   "box": [
+    405,
+    706,
+    26,
+    22
+   ],
+   "line": 2
+  },
+  {
+   "text": "CREATENPWLEAGUE",
+   "box": [
+    276,
+    915,
+    99,
+    12
+   ],
+   "line": 3
+  },
+  {
+   "text": "ACCEPT",
+   "box": [
+    94,
+    1043,
+    49,
+    16
+   ],
+   "line": 4
+  },
+  {
+   "text": "DELETE",
+   "box": [
+    206,
+    1043,
+    45,
+    16
+   ],
+   "line": 4
+  },
+  {
+   "text": "BACK",
+   "box": [
+    313,
+    1043,
+    32,
+    16
+   ],
+   "line": 4
+  },
+  {
+   "text": "TUNE-CHKA-AUTOSAVE",
+   "box": [
+    727,
+    670,
+    203,
+    22
+   ],
+   "line": 5
+  },
+  {
+   "text": "11/12/2026",
+   "box": [
+    719,
+    705,
+    103,
+    25
+   ],
+   "line": 6
+  },
+  {
+   "text": "1",
+   "box": [
+    829,
+    703,
+    3,
+    27
+   ],
+   "line": 6
+  },
+  {
+   "text": "PM",
+   "box": [
+    911,
+    706,
+    26,
+    22
+   ],
+   "line": 6
+  },
+  {
+   "text": "O",
+   "box": [
+    828,
+    841,
+    39,
+    39
+   ],
+   "line": 7
+  },
+  {
+   "text": "O",
+   "box": [
+    812,
+    915,
+    6,
+    12
+   ],
+   "line": 8
+  },
+  {
+   "text": "LEAGUES",
+   "box": [
+    821,
+    915,
+    41,
+    12
+   ],
+   "line": 8
+  },
+  {
+   "text": "TUNE-CHKA",
+   "box": [
+    1284,
+    670,
+    102,
+    22
+   ],
+   "line": 9
+  },
+  {
+   "text": "11/12/2026",
+   "box": [
+    1224,
+    705,
+    103,
+    25
+   ],
+   "line": 10
+  },
+  {
+   "text": "1",
+   "box": [
+    1334,
+    703,
+    3,
+    27
+   ],
+   "line": 10
+  },
+  {
+   "text": "PM",
+   "box": [
+    1417,
+    706,
+    26,
+    22
+   ],
+   "line": 10
+  },
+  {
+   "text": "TUNE-CHECK-",
+   "box": [
+    1734,
+    670,
+    119,
+    22
+   ],
+   "line": 11
+  },
+  {
+   "text": "11/12/2026",
+   "box": [
+    1733,
+    705,
+    103,
+    25
+   ],
+   "line": 12
+  },
+  {
+   "text": "1",
+   "box": [
+    1843,
+    703,
+    3,
+    27
+   ],
+   "line": 12
+  }
+ ]
+}

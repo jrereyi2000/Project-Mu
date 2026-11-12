@@ -266,13 +266,34 @@ def pack_fingerprint(name, path=None, mods_dir=None):
     entries = parse_pack(raw)
     selected = (game.get("Options") or {}).get("SelectedPack")
     folder = Path(mods_dir) if mods_dir else Path(manager_dir()) / "Mods"
+    # MMC keeps .fbmod files both in Mods/ and in per-game subfolders (Mods/Madden27/ on
+    # 2026-11-12), so a direct Mods/<name> lookup reported every enabled file missing and the
+    # fingerprint never covered them (F6). Index the tree once and match by relative path or,
+    # failing that, by file name.
+    index = {}
+    try:
+        for found in folder.rglob("*.fbmod"):
+            try:
+                index[found.relative_to(folder).as_posix()] = found
+            except ValueError:
+                continue
+    except OSError:
+        index = {}
+    by_name = {}
+    for relative, found in index.items():
+        by_name.setdefault(Path(relative).name, found)
     files = []
     for mod, enabled in entries:
         if not enabled:
             continue
+        found = index.get(mod) or by_name.get(Path(mod).name)
+        if found is None:
+            files.append([mod, None, None])
+            continue
         try:
-            stat = (folder / mod).stat()
-            files.append([mod, int(stat.st_size), int(stat.st_mtime_ns)])
+            stat = found.stat()
+            files.append([Path(mod).as_posix(), int(stat.st_size), int(stat.st_mtime_ns),
+                          str(found.relative_to(folder).as_posix())])
         except OSError:
             files.append([mod, None, None])
     payload = {
