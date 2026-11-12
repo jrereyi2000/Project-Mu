@@ -346,6 +346,39 @@ def launch_command(pack):
         return ["cmd.exe", "/c", "start", "", exe, "-launch", pack]
 
 
+def manager_dir():
+    """The Mod Manager's own folder in WSL form: MMC_MOD_MANAGER_EXE's directory when set (a Windows
+    form is converted), else MMC_MANAGER_DIR, else the default."""
+    exe = os.environ.get("MMC_MOD_MANAGER_EXE")
+    if exe:
+        m = re.match(r"^([a-zA-Z]):[\\/](.*)$", exe)
+        if m:
+            converted = "/mnt/" + m.group(1).lower() + "/" + m.group(2).replace("\\", "/")
+            return os.path.dirname(converted) or DEFAULT_MANAGER_DIR
+        return os.path.dirname(exe) or DEFAULT_MANAGER_DIR
+    return os.environ.get("MMC_MANAGER_DIR", DEFAULT_MANAGER_DIR)
+
+
+def launch_cwd():
+    """Where cmd.exe must run for `-launch` to work: the Mod Manager's own folder.
+
+    Frosty resolves the pack against its own directory. Started from anywhere else — this job used
+    `cwd="/mnt/c"` — the executor throws "errors occurred while attempting to load the following
+    mod: <name>" and no Madden window ever appears, which read as a broken mod and as a launch
+    timeout for three attempts on 2026-11-12 before the working directory was found to be the
+    difference (docs/reference/MUSE_EMBER_EVALUATION.md §2.2)."""
+    return manager_dir()
+
+
+def _manager_running():
+    """True when MMCModManager.exe is open. A machine without tasklist (Linux tests, CI) reads False."""
+    try:
+        from pipeline.mod_packs import manager_running
+        return bool(manager_running())
+    except (SystemExit, Exception):        # noqa: B014 - SystemExit is what mod_packs raises unwrapped
+        return False
+
+
 def _madden_running():
     from pipeline.gpu_queue import process_check
     return process_check.is_madden_running()
@@ -410,21 +443,31 @@ def _wait_window(pilot, timeout, poll=3.0):
 
 
 @job("launch")
-def launch(pilot, pack=DEFAULT_PACK, run=None, madden_running=None, timeout=LAUNCH_TIMEOUT, progress=None):
+def launch(pilot, pack=DEFAULT_PACK, run=None, madden_running=None, timeout=LAUNCH_TIMEOUT, progress=None,
+           manager_running=None):
     """Start Madden through the MMC Mod Manager with `pack` (unless Madden already runs), wait
     for its window, then press through the cold boot (ACCOUNT ERROR, splash, title) to a menu:
     the vanilla main menu, the Franchise panel a one-mode menu such as Mu Franchise Only opens
     on (FRANCHISE_LANDING), CURRENT FRANCHISES on a warm start, or a hub. A screen that stays
-    unrecognised stops as Unknown with its screenshot."""
-    run = run or (lambda argv: subprocess.run(argv, check=True, cwd="/mnt/c"))
+    unrecognised stops as Unknown with its screenshot.
+
+    The manager runs with its own folder as the working directory (launch_cwd), and the job
+    refuses while another MMCModManager.exe is open: `start` would only focus that window, so the
+    pack would never be applied and the run would wait 300 s for nothing."""
+    run = run or (lambda argv: subprocess.run(argv, check=True, cwd=launch_cwd()))
     running = (madden_running or _madden_running)()
     argv = launch_command(pack)
-    progress.update(pack=pack, command=argv, already_running=bool(running))
+    progress.update(pack=pack, command=argv, already_running=bool(running), cwd=launch_cwd())
     if not running:
+        if (manager_running or _manager_running)():
+            return _refuse("MMCModManager.exe is already open: close it and launch again — a second "
+                           "`start` only focuses the open window (and two managers race over ModData), "
+                           "so the pack is never applied", **progress)
         run(argv)
     _wait_window(pilot, timeout)
     _, screen = wait_menu(pilot, timeout)
-    return {"status": "ok", "pack": pack, "command": argv, "already_running": bool(running), "screen": screen}
+    return {"status": "ok", "pack": pack, "command": argv, "already_running": bool(running), "screen": screen,
+            "cwd": progress.get("cwd")}
 
 
 # ------------------------------------------------------------------------------- sim_season

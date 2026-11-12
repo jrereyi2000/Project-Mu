@@ -78,6 +78,17 @@ def windows_path(path: str) -> str:
     return path
 
 
+def mod_packs_dir() -> str:
+    """The Mod Manager's own folder, the working directory `-launch` needs: started from anywhere
+    else, Frosty's executor fails to load the pack and the game never starts (2026-11-12,
+    docs/reference/MUSE_EMBER_EVALUATION.md §2.2)."""
+    exe = manager_exe()
+    m = re.match(r"^([a-zA-Z]):[\\/](.*)$", exe)
+    if m:                                   # a Windows path for the exe -> WSL form of its folder
+        return "/mnt/" + m.group(1).lower() + "/" + m.group(2).replace("\\", "/").rsplit("/", 1)[0]
+    return os.path.dirname(exe) or mod_packs.DEFAULT_MANAGER_DIR
+
+
 def command(exe: str, pack: str) -> list:
     return ["cmd.exe", "/c", "start", "", windows_path(exe), "-launch", pack]
 
@@ -134,7 +145,7 @@ def _launch(cur, team: str, season, week, dry_run: bool) -> dict:
     except SystemExit as e:
         return _result(pack, text, refused=str(e), game=game)
     mod_packs.write_pack(path, pack, entries)
-    subprocess.run(argv, check=True, cwd="/mnt/c")
+    subprocess.run(argv, check=True, cwd=mod_packs_dir())
     return _result(pack, text, started=True, game=game)
 
 

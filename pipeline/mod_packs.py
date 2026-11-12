@@ -232,8 +232,11 @@ def launch(pack_name):
     manager_dir = os.environ.get("MMC_MANAGER_DIR", DEFAULT_MANAGER_DIR)
     exe = subprocess.run(["wslpath", "-w", os.path.join(manager_dir, "MMCModManager.exe")], capture_output=True,
                          text=True, check=True).stdout.strip()
-    # start detaches it; the exe is set to run as Administrator, so Windows asks for consent
-    subprocess.run(["cmd.exe", "/c", "start", "", exe, "-launch", pack_name], check=True, cwd="/mnt/c")
+    # start detaches it; the exe is set to run as Administrator, so Windows asks for consent.
+    # cwd is the manager's own folder: started from anywhere else, Frosty's executor fails to load
+    # the pack ("errors occurred while attempting to load the following mod"), so the game never
+    # starts (2026-11-12, docs/reference/MUSE_EMBER_EVALUATION.md §2.2).
+    subprocess.run(["cmd.exe", "/c", "start", "", exe, "-launch", pack_name], check=True, cwd=manager_dir)
 
 
 # --------------------------------------------------------------------------------------------- database ---

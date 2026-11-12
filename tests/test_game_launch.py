@@ -1,5 +1,6 @@
 """pipeline/game_launch.py: refusals (pending moves, Madden running, no game), the pack chosen for the game and the
 dry-run command, with a fake cursor and mod_packs' config / process calls patched (no database, nothing run)."""
+import os
 import unittest
 from unittest import mock
 
@@ -52,7 +53,6 @@ class LaunchTest(unittest.TestCase):
         self.run_mock = gl.subprocess.run
         process_check.set_process_check_mock(lambda: False)
         self.addCleanup(process_check.set_process_check_mock, None)
-        import os
         os.environ.pop("MMC_MOD_MANAGER_EXE", None)
 
     def test_refuses_with_pending_moves(self):
@@ -101,6 +101,16 @@ class LaunchTest(unittest.TestCase):
         argv = self.run_mock.call_args[0][0]
         self.assertEqual(argv, ["cmd.exe", "/c", "start", "", "C:\\Madden27Modding\\MMC\\MMCModManager.exe",
                                 "-launch", out["pack"]])
+        # the manager runs from its own folder: from anywhere else Frosty fails to load the pack
+        # and the game never starts (2026-11-12, MUSE_EMBER_EVALUATION.md §2.2)
+        self.assertEqual(self.run_mock.call_args[1]["cwd"], "/mnt/c/Madden27Modding/MMC")
+
+    def test_mod_packs_dir_converts_a_windows_exe_path(self):
+        self.assertEqual(gl.mod_packs_dir(), "/mnt/c/Madden27Modding/MMC")
+        with mock.patch.dict(os.environ, {"MMC_MOD_MANAGER_EXE": "D:\\Tools\\MMCModManager.exe"}):
+            self.assertEqual(gl.mod_packs_dir(), "/mnt/d/Tools")
+        with mock.patch.dict(os.environ, {"MMC_MOD_MANAGER_EXE": "/mnt/e/Other/MMCModManager.exe"}):
+            self.assertEqual(gl.mod_packs_dir(), "/mnt/e/Other")
 
     def test_refuses_while_manager_open(self):
         with mock.patch.object(mod_packs, "manager_running", lambda: True):

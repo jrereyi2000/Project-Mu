@@ -180,3 +180,26 @@ class ConfigTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_launch_runs_the_manager_from_its_own_folder(monkeypatch):
+    """2026-11-12: from cwd=/mnt/c Frosty's executor failed to load the pack and no Madden window
+    appeared; the same -launch from the manager's own folder applied cleanly. The manager's
+    directory is the working directory the launch needs (MUSE_EMBER_EVALUATION.md §2.2)."""
+    calls = []
+
+    class Done:
+        stdout = "C:\\MMC\\MMCModManager.exe"
+
+    def fake_run(argv, **kwargs):
+        calls.append((argv, kwargs))
+        return Done()
+
+    monkeypatch.setattr(mp.subprocess, "run", fake_run)
+    monkeypatch.setenv("MMC_MANAGER_DIR", "/mnt/c/MMC")
+
+    mp.launch("Mu Test")
+
+    assert len(calls) == 2
+    assert calls[1][0][-2:] == ["-launch", "Mu Test"]
+    assert calls[1][1]["cwd"] == "/mnt/c/MMC"

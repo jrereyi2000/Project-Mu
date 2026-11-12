@@ -357,11 +357,56 @@ def test_sim_never_loads_a_non_tune_tile(tmp_path, notices):
 def test_launch_runs_manager_and_waits_for_menu(tmp_path, notices):
     fake, _ = fake_madden(start="MAIN_MENU", intro=3)
     ran = []
-    out = jobs.launch(make_pilot(tmp_path, fake), pack="Mu Test", run=ran.append, madden_running=lambda: False)
+    out = jobs.launch(make_pilot(tmp_path, fake), pack="Mu Test", run=ran.append, madden_running=lambda: False,
+                      manager_running=lambda: False)
     assert out["status"] == "ok" and out["screen"] == "MAIN_MENU"
     assert len(ran) == 1 and ran[0][:4] == ["cmd.exe", "/c", "start", ""]
     assert ran[0][4].endswith("MMCModManager.exe") and ran[0][5:] == ["-launch", "Mu Test"]
     assert fake.keys == []
+
+
+def test_launch_runs_the_manager_from_its_own_folder(tmp_path, notices, monkeypatch):
+    # 2026-11-12: launched with cwd=/mnt/c, Frosty's executor failed to load the pack ("errors
+    # occurred while attempting to load the following mod") and no Madden window ever appeared;
+    # the same -launch from the manager's own folder applied cleanly and started the game.
+    fake, _ = fake_madden(start="MAIN_MENU")
+    calls = []
+
+    def fake_run(argv, **kwargs):
+        calls.append((argv, kwargs))
+
+    monkeypatch.setattr(jobs.subprocess, "run", fake_run)
+    out = jobs.launch(make_pilot(tmp_path, fake), run=None, madden_running=lambda: False,
+                      manager_running=lambda: False)
+
+    assert out["status"] == "ok", out
+    assert len(calls) == 1
+    assert calls[0][1]["cwd"] == jobs.launch_cwd() == jobs.DEFAULT_MANAGER_DIR
+    assert out["cwd"] == jobs.DEFAULT_MANAGER_DIR
+
+
+def test_launch_cwd_follows_the_manager_dir_overrides(monkeypatch):
+    monkeypatch.setenv("MMC_MANAGER_DIR", "/mnt/d/MMC")
+    monkeypatch.delenv("MMC_MOD_MANAGER_EXE", raising=False)
+    assert jobs.launch_cwd() == "/mnt/d/MMC"
+
+    monkeypatch.setenv("MMC_MOD_MANAGER_EXE", "C:\\Tools\\MMC\\MMCModManager.exe")
+    assert jobs.launch_cwd() == "/mnt/c/Tools/MMC"
+
+    monkeypatch.setenv("MMC_MOD_MANAGER_EXE", "/mnt/e/Other/MMCModManager.exe")
+    assert jobs.launch_cwd() == "/mnt/e/Other"
+
+
+def test_launch_refuses_while_the_mod_manager_is_open(tmp_path, notices):
+    # `start` on an open manager only focuses that window, so the pack is never applied and the
+    # job would sit out its 300 s window wait for nothing.
+    fake, _ = fake_madden(start="MAIN_MENU")
+    ran = []
+    out = jobs.launch(make_pilot(tmp_path, fake), run=ran.append, madden_running=lambda: False,
+                      manager_running=lambda: True)
+    assert out["status"] == "refused"
+    assert "MMCModManager.exe is already open" in out["why"]
+    assert ran == []
 
 
 def test_launch_skips_start_when_running(tmp_path, notices):
