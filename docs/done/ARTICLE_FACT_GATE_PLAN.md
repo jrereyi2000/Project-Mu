@@ -1,6 +1,6 @@
 # Project Mu: Article Fact Gate Plan
 
-**Status:** approved by JR (2026-11-12); building, wave 3 of 3 (R1 fix); `/execute-plan` runs it as label `fact-gate`.
+**Status:** built and on main (2026-11-12); `/execute-plan` ran it as label `fact-gate` (5 units, 4 waves; wave 3 and 4 came from R1's own check).
 
 **As built:**
 - U3 also lands a test-infrastructure fix the unit flagged as outside its files: `tests/conftest.py` sets `FACT_GATE_ARTICLES=0` for the whole non-integration tier (a test driving the writer path would otherwise build a checker client and spend a paid call), and `tests/test_swarm_fact_gate.py` turns it back on for its own cases. Commit `cd00131`.
@@ -137,6 +137,8 @@ What it now catches, exactly as intended:
 
 What it still gets wrong: named coaches and linemen whose names *are* in the evidence (McDaniel, LaFleur, Stockton…) come back `not in evidence` — a recall limit of a single checker over a long window, which is R3's territory, not a rule bug. At 13 of 771 claims (1.7%) the cost is a correction pass that names no real error; it cannot block anything.
 
+**Final set after U5 (2026-11-12): 17 of 18 judged, 950 claims — 753 SUPPORTED (79.3%), 94 CONTRADICTED (9.9%), 103 UNSUPPORTED.** Per writer: Gemini 8.8%, GLM-5.3-Flash 14.6%, Muse 7.4%. The three Slot 1 league-wide recaps carry most of it (16, 18, 8) and they are the recap-precision class the model comparison already measured (wrong streak, wrong "two weeks ago", a flipped record, an interception attributed to the wrong side); their coach names are the measurement's one artifact — the comparison tool's evidence is the JSON brief plus tool results and does **not** carry the `LEAGUE COACHING STAFFS` block that production passes in the task instruction, so a name that is in the evidence twice still comes back "not in evidence" in a few cases. One article (GLM's Standalone) still failed to parse after the retry; the gate treats that as a skip, and it is the only unjudged one.
+
 **Coverage hole found: 4 of 18 articles returned no parsable answer** (Slot 1 for all three models, and GLM's Standalone) — the run treats that as a skip, so those articles would go ungated. Re-running one by hand produced a valid 60-claim answer, so it is intermittent malformation, not a size limit: the fix is a tolerant repair plus one retry (U5).
 
 ## 4. Tests (synthetic, no live DB)
@@ -264,4 +266,4 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 | U2 | 1 | `fact-gate-u2` | `~/.local/share/opencode/worktree/404d9f/fact-gate-u2` | merged | a252164 |
 | U3 | 2 | `fact-gate-u3` | `~/.local/share/opencode/worktree/404d9f/fact-gate-u3` | merged | 8cfa931 (review fix `cd00131`) |
 | U4 | 3 | `fact-gate-u4` | `~/.local/share/opencode/worktree/404d9f/fact-gate-u4` | merged | 7b87a4e |
-| U5 | 4 | `fact-gate-u5` | `~/.local/share/opencode/worktree/404d9f/fact-gate-u5` | running | — |
+| U5 | 4 | `fact-gate-u5` | `~/.local/share/opencode/worktree/404d9f/fact-gate-u5` | merged | a3d22fe |
