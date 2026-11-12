@@ -37,6 +37,11 @@
 #   docs/reference/GEMINI_4_HYDROGEN_EVALUATION.md §3.5).
 # - The new session still does the full session start itself (spec, board, listener, NOTICE) and stops at
 #   its first permission prompt until someone answers it in that window.
+# - Every route this script starts carries MU_AGENT_MODEL so the switchboard records the actor that threw a
+#   switch (personality/features.py _actor), not an assumed JR: the route's own model pin for opus, codex,
+#   argon, hydrogen and deepseek-claude; the OpenCode wrappers export it for deepseek and muse; bare `claude`
+#   and `gemini` have no pinned model, so they record `unknown` (CLAUDE.md: never guess a model) unless
+#   MU_CLAUDE_MODEL / MU_GEMINI_MODEL names it.
 set -euo pipefail
 
 caller_is_deepseek() {
@@ -68,18 +73,26 @@ elif [ -z "$prompt" ]; then
 fi
 
 case "$agent" in
-  claude)          cmd=(claude "$prompt") ;;
-  opus)            cmd=(claude --model claude-opus-5-5 --effort medium "$prompt") ;;
-  deepseek)        cmd=("$here/opencode_session.sh" --prompt "$prompt") ;;
-  deepseek-claude) cmd=("${MU_DEEPSEEK_CMD:-$HOME/bin/claude-deepseek}" "$prompt") ;;
-  muse)            cmd=("$here/muse_session.sh" --prompt "$prompt") ;;
-  codex)           cmd=(codex "$prompt") ;;
-  gemini)          cmd=(gemini -i "$prompt") ;;
-  argon)           cmd=(agy --model "${MU_ARGON_MODEL:-gemini-4-argon-medium}" -i "$prompt") ;;
-  hydrogen)        cmd=(env MU_AGENT_CLASS=hydrogen MU_AGENT_MODEL="${MU_HYDROGEN_MODEL:-gemini-4-hydrogen-high}" \
-                        agy --model "${MU_HYDROGEN_MODEL:-gemini-4-hydrogen-high}" -i "$prompt") ;;
+  claude)          model="${MU_CLAUDE_MODEL:-unknown}"; cmd=(claude "$prompt") ;;
+  opus)            model="${MU_OPUS_MODEL:-claude-opus-5-5}"; cmd=(claude --model "$model" --effort medium "$prompt") ;;
+  deepseek)        model=""; cmd=("$here/opencode_session.sh" --prompt "$prompt") ;;
+  deepseek-claude) model="deepseek-v4.1-flash"; cmd=("${MU_DEEPSEEK_CMD:-$HOME/bin/claude-deepseek}" "$prompt") ;;
+  muse)            model=""; cmd=("$here/muse_session.sh" --prompt "$prompt") ;;
+  codex)           model="${MU_CODEX_MODEL:-gpt-6.1-sol}"; cmd=(codex "$prompt") ;;
+  gemini)          model="${MU_GEMINI_MODEL:-unknown}"; cmd=(gemini -i "$prompt") ;;
+  argon)           model="${MU_ARGON_MODEL:-gemini-4-argon-medium}"; cmd=(agy --model "$model" -i "$prompt") ;;
+  hydrogen)        model="${MU_HYDROGEN_MODEL:-gemini-4-hydrogen-high}"
+                   cmd=(agy --model "$model" -i "$prompt") ;;
   *) echo "spawn_agent: unknown agent '$agent' (claude, opus, deepseek, deepseek-claude, muse, codex, gemini, argon, hydrogen)" >&2; exit 2 ;;
 esac
+
+# The route marker the switchboard reads. deepseek and muse set it inside their own wrappers.
+env_args=()
+if [ "$agent" = hydrogen ]; then env_args+=("MU_AGENT_CLASS=hydrogen"); fi
+if [ -n "$model" ]; then env_args+=("MU_AGENT_MODEL=$model"); fi
+if [ ${#env_args[@]} -gt 0 ]; then
+  cmd=(env "${env_args[@]}" "${cmd[@]}")
+fi
 
 case "$agent" in
   deepseek|deepseek-claude)

@@ -236,6 +236,53 @@ def test_hydrogen_plain_prompt_gets_the_label_prefix(env: dict[str, str]) -> Non
     _assert_no_window(env)
 
 
+@pytest.mark.parametrize(("agent", "expected"), [
+    ("opus", "claude-opus-5-5"),
+    ("codex", "gpt-6.1-sol"),
+    ("argon", "gemini-4-argon-medium"),
+    ("hydrogen", "gemini-4-hydrogen-high"),
+    ("deepseek-claude", "deepseek-v4.1-flash"),
+])
+def test_each_route_names_its_actor_for_the_switchboard(
+    env: dict[str, str], agent: str, expected: str
+) -> None:
+    """JR 2026-11-12: every route exports MU_AGENT_MODEL, so features._actor records the model, not JR."""
+    result = _run(env, "--dry-run", f"actor-{agent}", agent, "/x")
+
+    assert result.returncode == 0, result.stderr
+    assert f"MU_AGENT_MODEL={expected}" in result.stdout
+    _assert_no_window(env)
+
+
+def test_a_bare_route_records_unknown_rather_than_jr(env: dict[str, str]) -> None:
+    for agent in ("claude", "gemini"):
+        result = _run(env, "--dry-run", f"bare-{agent}", agent, "/x")
+
+        assert result.returncode == 0, result.stderr
+        assert "MU_AGENT_MODEL=unknown" in result.stdout
+    _assert_no_window(env)
+
+
+def test_route_model_overrides_reach_the_export(env: dict[str, str]) -> None:
+    env.update({"MU_CLAUDE_MODEL": "claude-fable-5-1", "MU_CODEX_MODEL": "gpt-6.1-sol-xhigh",
+                "MU_GEMINI_MODEL": "gemini-4-argon-high", "MU_OPUS_MODEL": "claude-opus-5-6"})
+
+    assert "MU_AGENT_MODEL=claude-fable-5-1" in _run(env, "--dry-run", "o1", "claude", "/x").stdout
+    assert "MU_AGENT_MODEL=gpt-6.1-sol-xhigh" in _run(env, "--dry-run", "o2", "codex", "/x").stdout
+    assert "MU_AGENT_MODEL=gemini-4-argon-high" in _run(env, "--dry-run", "o3", "gemini", "/x").stdout
+    opus = _run(env, "--dry-run", "o4", "opus", "/x").stdout
+    assert "MU_AGENT_MODEL=claude-opus-5-6" in opus and "--model claude-opus-5-6" in opus
+    _assert_no_window(env)
+
+
+def test_the_opencode_wrappers_set_the_actor_themselves(env: dict[str, str]) -> None:
+    deepseek = _run(env, "--dry-run", "wrap-ds", "deepseek", "/x").stdout
+    assert "MU_AGENT_MODEL=" not in deepseek and "opencode_session.sh --prompt /x" in deepseek
+    muse = _run(env, "--dry-run", "wrap-muse", "muse", "/x").stdout
+    assert "MU_AGENT_MODEL=" not in muse and "muse_session.sh --prompt /x" in muse
+    _assert_no_window(env)
+
+
 def test_unknown_agent_exits_2(env: dict[str, str]) -> None:
     result = _run(env, "--dry-run", "b1", "bogus", "/builder")
 
