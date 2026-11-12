@@ -231,7 +231,25 @@ What that says:
 - **Muse Spark wins the feature slot and nothing else.** Best on Slot 4, tied first on Fantasy, but last on the Hero and last on Power Rankings. Its cost is the lowest ($0.18 for six against $0.32), so it is a candidate for long-form features, not for the front page.
 - **The spread is one point across three models over six articles.** That is not a decisive separation, and it is one week, six slots and one reader. It is enough to retire Gemini as the default; it is not enough to choose the winner between the two Go models on quality alone.
 
-**Recommended routing for P8-06 (not built):** default writer `glm-5.3-flash`, feature/Hero alternatives `muse-spark-1.3-contributor`, Gemini 3.8 Flash kept only as the comparison control and a per-slot fallback. Confirm with a **second week on the two Go models only** (no Gemini arm, ~$0.5 of allowance) before the production switch, since the tiebreaker is thin.
+#### Veracity of the same 18 articles (2026-11-12)
+
+`tools/article_factcheck.py` then judged every claim in each article against **that article's own evidence** — the assignment brief plus the tool results its writer received — with a checker model (`deepseek-v4.1-flash`, a different family from all three contestants). Three verdicts: SUPPORTED, CONTRADICTED (the evidence says otherwise), UNSUPPORTED (the evidence does not mention it — not an error by itself, since the brief and the writer's own arithmetic hold facts too). 40 claims per article, the most load-bearing first.
+
+| Model | Claims | Supported | Contradicted | Unsupported | Contradicted % | Grounded % |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `gemini-3.8-flash` | 240 | 128 | 6 | 106 | 2.5% | 53.3% |
+| `glm-5.3-flash` | 239 | 128 | 13 | 98 | **5.4%** | 53.6% |
+| `muse-spark-1.3-contributor` | 240 | 122 | 16 | 102 | 6.7% | 50.8% |
+
+What it means, and what it does not:
+
+- **Nobody was clean, and the spread is small.** Gemini carries the lowest contradiction rate on this sample; GLM-5.3-Flash about twice that; Muse the highest. Grounding share (claims the evidence actively supports) is within three points across all three.
+- **A large share of the "contradictions" is one archive bug, not three model errors.** The same claim — *"Trey'Mane Davis has 29 receiving touchdowns"* — is flagged in the Gemini, Muse **and** GLM articles on four slots, because the archive's record tool says 27 (tied) while its stats tool says 29. `PROJECT_SPEC` already records this as a seeded-record error in `madden_2036` ("the isolated evaluation database corrects Davis's 2035 seeded receiving-TD record to the save-confirmed 29"). Excluding those, the counts are roughly Gemini 4, GLM 9, Muse 12.
+- **The errors that remain are mostly recap precision: wrong opponent or wrong score in one sentence.** Muse wrote "New England just beat San Francisco 24-21" against a trace saying *Cardinals 34 @ Patriots 6*; GLM wrote "Cincinnati's recent stretch was capped by a 45-21 loss to the Jets" against *Bengals 38 @ Raiders 17*; both are the kind of sentence that survives a grammar read and fails a box-score check. That is the argument for a post-write fact gate, not against the switch.
+- **JR's hypothesis about Slot 4 does not hold.** On the slot where he ranked GLM-5.3-Flash last, the checker found **0** contradictions in its article against 2 (Gemini) and 3 (Muse). Its loss there tracks depth rather than accuracy — 16 tool calls against 32 and 44 — so the fix is more research, not a different model.
+- **The checker is a screen, not a verdict.** It sees 40 claims, its evidence is clipped, and it cannot tell a brief-sourced fact from an invented one. Two conclusions are safe from it: no model invents wholesale, and recap details are where all of them slip.
+
+**Recommended routing for P8-06 (not built):** default writer `glm-5.3-flash`, feature/Hero alternatives `muse-spark-1.3-contributor`, Gemini 3.8 Flash kept only as the comparison control and a per-slot fallback. **JR took the default half of this on 2026-11-12** and `ac8df19` puts every article on `glm-5.3-flash`; the follow-up worth doing is a **post-write fact gate** on recap claims (run `article_factcheck` against the writer's own capture and force one correction pass on a CONTRADICTED verdict), since that is where every model slipped.
 
 ### 8.2 What the Muse switch would look like (not built)
 
