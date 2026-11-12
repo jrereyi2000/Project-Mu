@@ -1,6 +1,13 @@
 # Project Mu: Article Fact Gate Plan
 
-**Status:** approved by JR (2026-11-12); building, wave 1 of 2 done. `/execute-plan` runs it as label `fact-gate`.
+**Status:** approved by JR (2026-11-12); building, wave 2 of 2 done; `/execute-plan` runs it as label `fact-gate`.
+
+**As built:**
+- U3 also lands a test-infrastructure fix the unit flagged as outside its files: `tests/conftest.py` sets `FACT_GATE_ARTICLES=0` for the whole non-integration tier (a test driving the writer path would otherwise build a checker client and spend a paid call), and `tests/test_swarm_fact_gate.py` turns it back on for its own cases. Commit `cd00131`.
+- The gate rewrites at most once per article and keeps whichever version has fewer contradictions (R4), storing the discarded count in `fact_gate` rather than dropping the good text.
+- `news_feed.fact_gate_status` is written only when the column exists; a live database without `2027_02_30` still saves, logs `[FACT GATE COLUMN MISSING]` once and prints no notice line. The migration is JR's to apply (R6).
+- The reading-view badge in §2.5 is **not** in this plan's units (no unit owns `server/api.py` or the frontend) and is not built; `/api/news/week` does not yet select the new column. Open for JR.
+
 **Builds on:** [`MODEL_ROUTING_EVALUATION.md`](../reference/MODEL_ROUTING_EVALUATION.md) §8.1 (the measured comparison and the Carson fabrication it exposed), PROJECT_SPEC §7.3 (editorial slate) and §2.5/§2.26 (award candidates, media panel), [`NEWSROOM_MODEL_SIDE_BY_SIDE_PLAN.md`](../done/NEWSROOM_MODEL_SIDE_BY_SIDE_PLAN.md) (the comparison tool and the `capture` seam this reuses).
 
 **Goal:** an article cannot reach `news_feed` with a claim that contradicts the evidence its writer had. Every article is checked claim by claim after it is written, a contradiction earns **one** correction pass that shows the writer the evidence, and an article that still contradicts it is stored *flagged* rather than published silently (or blocked — JR's call, §8).
@@ -206,4 +213,4 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 |---|---|---|---|---|---|
 | U1 | 1 | `fact-gate-u1` | `~/.local/share/opencode/worktree/404d9f/fact-gate-u1` | merged | 7075613 |
 | U2 | 1 | `fact-gate-u2` | `~/.local/share/opencode/worktree/404d9f/fact-gate-u2` | merged | a252164 |
-| U3 | 2 | `fact-gate-u3` | `~/.local/share/opencode/worktree/404d9f/fact-gate-u3` | running | — |
+| U3 | 2 | `fact-gate-u3` | `~/.local/share/opencode/worktree/404d9f/fact-gate-u3` | merged | 8cfa931 (review fix `cd00131`) |
