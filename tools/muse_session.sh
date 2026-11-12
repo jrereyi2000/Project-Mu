@@ -33,11 +33,13 @@
 set -euo pipefail
 
 session_only=0
+run_prompt=''
 title='Project Mu Muse session'
 args=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --session-only) session_only=1; shift ;;
+    --run) run_prompt="${2:?--run needs a prompt}"; shift 2 ;;
     --title) title="${2:?--title needs a value}"; shift 2 ;;
     *) args+=("$1"); shift ;;
   esac
@@ -87,6 +89,11 @@ echo "Project Mu Muse route: $MU_OPENCODE_MODEL (harness opencode, model $MU_AGE
 if [ "$session_only" = 1 ]; then
   echo "session: $MU_OPENCODE_SESSION"
   exit 0
+fi
+
+if [ "$run_prompt" != '' ]; then
+  # Headless start inside OpenCode (JR, 2026-11-12), the same pattern the activity sessions use.
+  exec "$bin" run --session "$MU_OPENCODE_SESSION" --format default "$run_prompt"
 fi
 
 exec "$bin" --session "$MU_OPENCODE_SESSION" ${args[@]+"${args[@]}"}
