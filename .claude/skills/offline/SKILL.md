@@ -16,10 +16,12 @@ chat is the `repo-qa` subagent — read-only tools, Haiku, and not on the board.
 2. Spawn `repo-qa` with `subagent_type: "repo-qa"` and a self-contained prompt: the question,
    the repo root `/home/jrereyi/Project-Mu`, and a reminder to answer from `PROJECT_SPEC.md` and
    the code with `path:line` references. Record the agent ID from the spawn result.
-   - Agent definitions load at session start. If the harness answers "Agent type 'repo-qa' not
-     found", fall back to `subagent_type: "general-purpose"` with `model: "haiku"`, and put the
-     rules from `.claude/agents/repo-qa.md` at the top of the prompt (read-only, no shell, not a
-     session, no board). Tell JR once that a restart gives the dedicated read-only agent.
+   - Agent definitions load at session start, and each harness reads its own copy: Claude Code
+     reads `.claude/agents/repo-qa.md`, OpenCode reads `.opencode/agents/repo-qa.md`. If the
+     harness answers "Agent type 'repo-qa' not found", fall back to
+     `subagent_type: "general-purpose"` with `model: "haiku"`, and put the rules from your
+     harness's agent file at the top of the prompt (read-only, no shell, not a session, no
+     board). Tell JR once that a restart gives the dedicated read-only agent.
 3. When the answer arrives (the side chat may run in the background), relay it trimmed of filler.
    Do not add research of your own.
 4. A follow-up question in the same session goes to the same side chat: `SendMessage` to that
