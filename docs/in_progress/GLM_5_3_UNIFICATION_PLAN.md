@@ -1,6 +1,6 @@
 # Project Mu: GLM-5.3-Flash Unification Plan
 
-**Status:** approved by JR (2026-11-12); `/execute-plan` runs it as label `glm-unification`.
+**Status:** approved by JR (2026-11-12); building, wave 1 of 2. `/execute-plan` runs it as label `glm-unification` (DeepSeek session, 2026-11-12).
 **Builds on:** [`MODEL_ROUTING_EVALUATION.md`](../reference/MODEL_ROUTING_EVALUATION.md) §8.1 and [`ARTICLE_FACT_GATE_PLAN.md`](ARTICLE_FACT_GATE_PLAN.md) (both read the same measured week), PROJECT_SPEC §7.7 (agent memory), §7.8 (Agent Wire), §7.11 (personas), §2.21b (inbox voice), [`AGENT_WIRE_VOICE_PLAN.md`](../done/AGENT_WIRE_VOICE_PLAN.md) (**built 2026-11-09** — the voice rules are settled, so a model swap is a clean comparison), [`OPENCODE_GO_PIPELINE_PLAN.md`](../done/OPENCODE_GO_PIPELINE_PLAN.md) (the Go provider and allowance watchdog).
 
 **Goal:** one text model — `glm-5.3-flash` on OpenCode Go — writes everything Mu says in words: articles (already done, `ac8df19`), Agent Wire posts, season memories, press conferences, scouting prose, GM lines and inbox voice. Gemini stops being a text model for Mu and stays only where Go has no equivalent: **embeddings** and **vision**.
@@ -10,6 +10,12 @@
 - `newsroom/social_writer.py` running on Go, keeping its JSON contract, rewrite pass and voice rules.
 - `SOCIAL_MODEL`, `MEMORY_MODEL`, `PRESS_MODEL`, `INBOX_MODEL`, `SCOUT_MODEL`, `GM_MODEL` — one env per site, all defaulting to `glm-5.3-flash`, all overridable back to a Gemini id.
 - A measurement worksheet (`docs/reference/GLM_UNIFICATION_MEASUREMENTS.md`) with the latency and JSON-parse numbers each site had to pass.
+
+**As built (orchestrator, 2026-11-12):**
+- **U2 also owns `newsroom/social_publish.py`.** §1 names it in scope; §5's ownership table omitted it, and without it a Go social model still builds a Gemini client (`client = client or _gemini_client()` in `run_social_week` / `run_team_social`) and needs `GEMINI_API_KEY`. U2 changes only those client constructions to follow the model id.
+- **The §3 spikes run right after U1, not before wave 1.** `tools/latency_spike.py` drives `make_llm`/`generate_text`, so it can only reach a Go model once U1's `go:` model prefix exists (posted as M-0658). Nothing in U1–U3 depends on the result: no default flips in any unit (U4 is JR's).
+- **`SCOUT_MODEL` and `GM_MODEL` are not added by a unit.** §2.3's seam for scouting prose and GM lines is `gm_llm.make_llm` + the provider, which U1 already unlocks (`model="go:glm-5.3-flash"`, `LLM_PROVIDER_<LABEL>=go`); §5 assigns no unit `engines/gm_llm.py` or the scouting/commissioning callers, so the named envs belong with U4's flip, if JR wants them then.
+- **`MEMORY_MODEL` already exists as `AGENT_MEMORY_MODEL`** (`newsroom/weekly_run.py:32`, default `gemini-3.8-flash`, read by `refresh_season_summaries`). U3 keeps that name and default; `SOCIAL_MODEL` (`weekly_run.py:33`) and `PRESS_MODEL` (`press_room.py:55`) already exist the same way. U3 adds `INBOX_MODEL` (and a provider route) for the inbox voice.
 
 ---
 
@@ -120,7 +126,7 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 
 ### U2: Agent Wire on Go
 
-- **Owns:** `newsroom/social_writer.py`, `tests/test_social_writer_go.py` (new)
+- **Owns:** `newsroom/social_writer.py`, `newsroom/social_publish.py` (the two client constructions only), `tests/test_social_writer_go.py` (new)
 - **Reads:** `newsroom/social_writer.py:780-860`, `tools/social_model_compare.py`, `AGENT_WIRE_VOICE_PLAN.md` §2.6
 - **Depends on:** U1
 - **Done when:** `SOCIAL_MODEL=glm-5.3-flash` writes the week's posts through Go and the blind-read artefacts can be produced with `social_model_compare` including a Go model.
@@ -154,6 +160,7 @@ Not a build unit. One line per site in `PROJECT_SPEC.md` and the env block, afte
 | `newsroom/agent_memory.py` | U3 |
 | `newsroom/press_agents.py` | U3 |
 | `newsroom/press_room.py` | U3 |
+| `newsroom/social_publish.py` | U2 |
 | `newsroom/social_writer.py` | U2 |
 | `tests/test_agent_memory.py` | U3 |
 | `tests/test_inbox_voice.py` | U3 |
@@ -176,3 +183,8 @@ Not a build unit. One line per site in `PROJECT_SPEC.md` and the env block, afte
 | Q3 | Does the inbox move if p95 lands above 4 s? | **No.** Keep Gemini for the inbox; one slow site must not make a conversation feel broken. |
 | Q4 | One model everywhere, or a per-site mix? | **Start with GLM-5.3-Flash everywhere it passes**; a site that fails keeps Gemini by env, no code change. If the Sunday 5-hour window gets tight, split social onto a cheaper Go model. |
 | Q5 | Do the short-call thinking levels stay capped? | Yes — `low` wherever the model honours it; measure the tokens, since thinking is most of the short-call bill. |
+
+## 9. Build log
+
+| Unit | Wave | Branch | Worktree | Result | Merge |
+|---|---|---|---|---|---|
