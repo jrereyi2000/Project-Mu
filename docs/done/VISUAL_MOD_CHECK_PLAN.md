@@ -1,6 +1,6 @@
 # Project Mu: Visual Mod Check Plan
 
-**Status:** approved by JR (2026-11-12), with his answers folded in below. Building, wave 1 of 2 done (wave 0 spike S-1 run 2026-11-12, status partial — see §2.5a).
+**Status:** approved by JR (2026-11-12), with his answers folded in below. Built and on main (2026-11-12). Wave 0 spike S-1 ran the same day, status partial — see §2.5a; the halftime show itself was never seen, so that segment is written for and not yet measured.
 **Builds on:** PROJECT_SPEC §1.1 (repository layout), [`MUSE_EMBER_ROTATION_PLAN.md`](../done/MUSE_EMBER_ROTATION_PLAN.md) (the Muse route and the computer-use rules), [`MADDEN_PILOT.md`](../reference/MADDEN_PILOT.md) §5 (jobs) and §6 (safety), [`MADDEN_SPIKE_AGENT.md`](../reference/MADDEN_SPIKE_AGENT.md) §7 (asset checks, checkpoints, clips), [`LOCAL_VISION_LATENCY.md`](../reference/LOCAL_VISION_LATENCY.md) (what a local model measured at), `docs/reference/LOCAL_VISION_HOST.md` (the Mac host, being set up by `mac-vision-setup`).
 
 **Goal:** replace the manual Codex loop JR uses to test visual mods. One command loads a `CAREER-TUNE-*` save, records the game-start and halftime segments, and answers *"did this mod's assets appear?"* with a number per asset plus a short written summary — deterministic pixel checks for the verdict, a vision model (hosted on JR's always-on M1 Mac, never on Madden's GPU) for the description and for unknown screens. JR stops describing frames by hand and starts reading pass/fail lines.
@@ -254,3 +254,5 @@ No path appears twice.
 |---|---|---|---|---|---|
 | U1 | 1 | `worktree-vmc-u1` | `.claude/worktrees/vmc-u1` | merged | `32f554b` |
 | U2 | 1 | `worktree-vmc-u2` | `.claude/worktrees/vmc-u2` | merged | `9b1006f`, `a7a5620` |
+| U3 | 2 | `worktree-vmc-u3` | `.claude/worktrees/vmc-u3` | merged | `855696b` |
+| U1 fix (orchestrator follow-up) | 2 | `worktree-vmc-u1b` | `.claude/worktrees/vmc-u1b` | merged | `e1d36ca` |

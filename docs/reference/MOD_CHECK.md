@@ -380,7 +380,7 @@ The reference files do not exist yet, so the run would refuse. Dry run once the 
 mod_check: checks.json: midfield_logo: reference pass file is missing: refs/midfield_logo_pass.png (looked for /tmp/opencode/vmc-doc/pink-cfb/refs/midfield_logo_pass.png)
 ```
 
-**3. Capture the pair.** Record the segment first: on a live chain that means a run whose frames do show the game, and until the driver gap in §12 is fixed, a recording made by hand. `capture` then reads the newest run for the mod, or the folder `--run-dir` names:
+**3. Capture the pair.** Record the segment first: on a live chain a `run` records the kickoff segment itself, while `watch-game` holds the game, so its frames are the ones to cut from. `capture` then reads the newest run for the mod, or the folder `--run-dir` names:
 
 ```
 python3 -m tools.mod_check capture --mod pink-cfb --segment game_start --pass-at 0:00 --fail-at 0:06
@@ -429,7 +429,7 @@ followed by `report.md` (§8), whose table is the one quoted there: both assets 
 | midfield_logo | fail | similarity_pass=0.879; similarity_fail=1.000; reference_margin=0.040 | segments/game_start/frames/frame_0039.jpg | similarity fail 1.000 beats pass 0.879 by 0.04 |
 | pink_ball | fail | colour_share=0.000; colour_pass_at=0.020 | segments/game_start/frames/frame_0039.jpg | colour share 0.000 < 0.02 (hue [300, 350]) |
 
-Before blaming the mod, check the pack (`- pack:` in the report) and open the `frame` — a franchise-list frame means the recording happened after the game was left (§12).
+Before blaming the mod, check the pack (`- pack:` in the report) and open the `frame` — a franchise-list frame means the segment was recorded after the game was left, which the driver no longer does for `kickoff` (§12).
 
 **6. When it reads `unknown`, nothing decided.** A frame the checks could neither match nor reject:
 
