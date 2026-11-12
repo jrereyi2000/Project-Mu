@@ -196,10 +196,25 @@ A second frame, `2026-11-10_124258_sim-season/steps/0003_FRANCHISE_LIST.png`, re
 
 Two things to read off that:
 
-- **~6.2 s a frame at steady state, and it is all model time.** The tailnet adds about a tenth of a second, so a faster Mac is the only lever on the rest. That is seconds-scale, which is what the visual mod-check use case needs, and roughly 15× slower than the same model on the PC's 5070 Ti (0.4 s warm) — the price of not sharing the GPU.
+- **~6.2 s a frame at steady state, and it is all model time.** The tailnet adds about a tenth of a second, so a faster Mac is the only lever on the rest. That is seconds-scale, which is what the visual mod-check use case needs.
 - **One outlier at 16.52 s** on the Franchise List frame, then 5.68–6.20 s on three repeats of the same frame. Not reproducible, so not a token-count effect (131 tokens both times). Most likely contention on the Mac — both `qwen2.5vl:7b` (5.4 GB) and `gemma4:12b` (7.7 GB) have been resident in 16 GB at different times. **Budget p95 above the median, not at it**, and the pilot's default `describe` timeout is 30 s, which this comfortably clears.
 
 For comparison, the model that was on the Mac first, `gemma4:12b`, is a *thinking* model and is disqualified for this use: **38.2 / 61.3 / 80.3 s** warm, 524–1179 tokens a frame, because its budget goes to reasoning before the answer. This matches LOCAL_VISION_LATENCY.md §2. Deleting it from the Mac would remove the memory contention above.
+
+### 5.1 Against the PC, on the same frame, with Madden running
+
+The Mac is **not** the faster host. Measured on the identical frame and model while a game was paused mid-play (`Madden27.exe`, 1.6 GB RAM, GPU at 43% utilisation, 7.4 GB of 16.3 GB already used):
+
+| | same frame, `qwen2.5vl:7b` |
+|---|---|
+| PC, first call (model had been evicted) | **13.39 s**, of which **9.94 s loading** |
+| PC, warm ×2 | **2.26 / 2.23 s** |
+| Mac, warm ×3 (§5) | 6.83 / 6.41 / 6.49 — median **6.49 s** |
+| PC GPU after load | **14,064 MiB of 16,303 — 86%** |
+
+So the PC answers in about a third of the Mac's time even with Madden live, and it costs 86% of the GPU to do it. LOCAL_VISION_LATENCY.md §1's **0.4 s** is the wrong figure to compare against: that was one lucky frame, and the same doc's 202-frame median is **1.48 s**. Comparing 0.4 s to the Mac's median overstated the gap by about 5×; the real ratio is roughly 3×.
+
+The reason to host on the Mac is therefore **isolation, not speed**: on the PC the model and Madden share one 16 GB pool, the model alone takes it to 86%, and every time Madden needs the memory back the next frame pays a ~10 s reload. The Mac pays its 8 s load once in the morning and then keeps the model resident forever, and Madden never sees it. What is still unmeasured, and is the real argument either way: **whether a resident VLM causes in-game stutter on the shared GPU**. A paused game is not a game in play, so 2.23 s is a floor, not the number during a snap. If JR would rather have the 3× and accepts the contention, `OLLAMA_HOST=localhost` goes straight back to the PC's model and this Mac host becomes optional.
 
 ## 6. Pointing Project Mu at it
 
