@@ -57,7 +57,7 @@ img { display: block; max-width: 100%; }
 .brand b { font-size: var(--fs-20); line-height: .9; letter-spacing: -.05em; font-style: italic; }
 .brand small { margin-top: 5px; font: 600 var(--fs-10)/1 var(--font-mono); letter-spacing: .12em; }
 .nav-links { height: 100%; display: flex; align-items: center; gap: 38px; }
-.nav-links > a, .teams-trigger, .stats-trigger { height: 100%; padding: 0; border: 0; background: none; cursor: pointer; display: flex; align-items: center; gap: 8px; position: relative; font-size: var(--fs-13); font-weight: 750; text-transform: uppercase; letter-spacing: .03em; }
+.nav-links > a, .teams-trigger, .stats-trigger, .fantasy-trigger { height: 100%; padding: 0; border: 0; background: none; cursor: pointer; display: flex; align-items: center; gap: 8px; position: relative; font-size: var(--fs-13); font-weight: 750; text-transform: uppercase; letter-spacing: .03em; }
 .nav-links > a:after, .teams-trigger:after, .stats-trigger:after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--team-color, var(--red)); transform: scaleX(0); transition: transform .2s; }
 .nav-links > a:hover:after, .teams-trigger:hover:after, .teams-trigger.active:after, .stats-trigger:hover:after, .stats-trigger.active:after { transform: scaleX(1); }
 .teams-trigger svg, .stats-trigger svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; transition: transform .2s; }
@@ -398,7 +398,7 @@ main { max-width: var(--container); margin: 0 auto; padding: 0 var(--gutter) 80p
 .schedule-team strong { font-size: var(--fs-12); line-height: 1.1; }
 .schedule-team small { color: var(--text-muted); font: 600 var(--fs-10) var(--font-mono); }
 .schedule-team b { font: 700 var(--fs-20) var(--font-mono); }
-.versus { color: var(--gray-300); font: 700 var(--fs-12) var(--font-mono); text-align: center; }
+.versus { color: var(--text-muted); font: 700 var(--fs-12) var(--font-mono); text-align: center; }
 .game-details { color: var(--text-muted); font: 700 var(--fs-10) var(--font-mono); text-align: right; text-transform: uppercase; }
 .game-details span { margin-left: 3px; color: var(--accent-text, var(--red-text)); }
 .game-details:hover { color: var(--accent-text, var(--red-text)); }
@@ -528,7 +528,7 @@ main { max-width: var(--container); margin: 0 auto; padding: 0 var(--gutter) 80p
 .league-stats-table th button { width: 100%; height: 100%; padding: 0; border: 0; color: inherit; background: transparent; display: flex; align-items: center; justify-content: center; gap: 5px; font: inherit; letter-spacing: inherit; cursor: pointer; white-space: nowrap; }
 .league-stats-table th:nth-child(2) button { justify-content: flex-start; }
 .league-stats-table th button:hover { color: var(--ink); }
-.league-stats-table th button i { color: var(--gray-300); font-size: var(--fs-10); font-style: normal; }
+.league-stats-table th button i { color: var(--text-muted); font-size: var(--fs-10); font-style: normal; }
 .league-stats-table th[aria-sort="ascending"] button, .league-stats-table th[aria-sort="descending"] button { color: var(--accent-text, var(--red-text)); }
 .league-stats-table th[aria-sort="ascending"] button i, .league-stats-table th[aria-sort="descending"] button i { color: var(--accent-text, var(--red-text)); }
 .league-stats-table th:nth-child(2) { min-width: 190px; text-align: left; }
@@ -589,7 +589,7 @@ main { max-width: var(--container); margin: 0 auto; padding: 0 var(--gutter) 80p
 .standings-table th button { width: 100%; height: 100%; padding: 0; border: 0; color: inherit; background: transparent; display: flex; align-items: center; justify-content: center; gap: 5px; font: inherit; letter-spacing: inherit; cursor: pointer; white-space: nowrap; }
 .standings-table th:first-child button { justify-content: flex-start; }
 .standings-table th button:hover { color: var(--ink); }
-.standings-table th button i { color: var(--gray-300); font-size: var(--fs-10); font-style: normal; }
+.standings-table th button i { color: var(--text-muted); font-size: var(--fs-10); font-style: normal; }
 .standings-table th[aria-sort="ascending"] button, .standings-table th[aria-sort="descending"] button { color: var(--accent-text, var(--red-text)); }
 .standings-table th[aria-sort="ascending"] button i, .standings-table th[aria-sort="descending"] button i { color: var(--accent-text, var(--red-text)); }
 .standings-table th:first-child { width: 245px; color: var(--ink); text-align: left; text-transform: uppercase; }
@@ -597,7 +597,7 @@ main { max-width: var(--container); margin: 0 auto; padding: 0 var(--gutter) 80p
 .standings-table tbody tr:hover { background: #f5f4f1; }
 .standings-table td:first-child { text-align: left; }
 .standings-table td:first-child a { display: grid; grid-template-columns: 20px 29px 1fr; align-items: center; gap: 9px; color: var(--ink); }
-.standings-table td:first-child a > span { color: var(--gray-300); font: 700 var(--fs-10) var(--font-mono); }
+.standings-table td:first-child a > span { color: var(--text-muted); font: 700 var(--fs-10) var(--font-mono); }
 .standings-table td:first-child img { width: 28px; height: 28px; object-fit: contain; }
 .standings-table td:first-child strong { font-family: var(--font-sans); font-size: var(--fs-10); }
 .standings-table td b { color: var(--ink); }
@@ -1544,8 +1544,16 @@ footer > div:last-child { margin-left: auto; display: flex; gap: 22px; font-size
 @media (max-width: 1080px) {
   .brand { margin-right: 34px; }
   .nav-links { gap: 22px; }
-  .nav-links > a, .teams-trigger, .stats-trigger { font-size: var(--fs-11); }
+  .nav-links > a, .teams-trigger, .stats-trigger, .fantasy-trigger { font-size: var(--fs-11); }
   .nav-tools { gap: 14px; }
+}
+
+@media (max-width: 900px) {
+  .nav-inner { padding: 0 20px; }
+  .brand { margin-right: 18px; }
+  .nav-links { gap: 13px; }
+  .nav-links > a, .teams-trigger, .stats-trigger, .fantasy-trigger { font-size: var(--fs-10); }
+  .nav-tools { gap: 10px; }
 }
 
 @media (max-width: 800px) {
@@ -1554,7 +1562,7 @@ footer > div:last-child { margin-left: auto; display: flex; gap: 22px; font-size
   .brand { margin-right: 25px; }
   .brand small, .nav-tools .live-dot { display: none; }
   .nav-links { gap: 17px; }
-  .nav-links > a, .teams-trigger, .stats-trigger { font-size: var(--fs-10); }
+  .nav-links > a, .teams-trigger, .stats-trigger, .fantasy-trigger { font-size: var(--fs-10); }
   .mega-wrap { top: 64px; }
   .stats-dropdown-wrap { top: 64px; }
   .mega-scrim { inset: 118px 0 0; }
@@ -2181,7 +2189,7 @@ a.social-follow-row:hover { background: #171c22; }
 .author-section-title span {
   display: block;
   font: 700 var(--fs-10) var(--font-mono);
-  color: var(--author-team-color, var(--red));
+  color: var(--accent-text, var(--red-text));
   letter-spacing: .08em;
   text-transform: uppercase;
   margin-bottom: 4px;
@@ -2223,7 +2231,7 @@ a.social-follow-row:hover { background: #171c22; }
   font: 700 var(--fs-10) var(--font-mono);
 }
 .author-card-header .kicker {
-  color: var(--author-team-color, var(--red));
+  color: var(--accent-text, var(--red-text));
   font: 700 var(--fs-10) var(--font-mono);
   letter-spacing: .06em;
   text-transform: uppercase;
@@ -2236,7 +2244,7 @@ a.social-follow-row:hover { background: #171c22; }
   color: var(--ink);
 }
 .author-card-body a:hover h3 {
-  color: var(--author-team-color, var(--red));
+  color: var(--accent-text, var(--red-text));
 }
 .author-card-body p {
   margin: 0 0 16px;
@@ -2272,7 +2280,7 @@ a.social-follow-row:hover { background: #171c22; }
   color: var(--white);
 }
 .author-card-footer small {
-  color: var(--author-team-color, var(--red));
+  color: var(--accent-text, var(--red-text));
   font: 700 var(--fs-10) var(--font-mono);
   text-transform: uppercase;
 }

@@ -48,7 +48,7 @@ const ROLE = { OC: "Offensive Coordinator", DC: "Defensive Coordinator" };
 
 // A collapsible Personality row on a staff card (docs/done/PERSONALITY_DISPLAY_PLAN.md §2.2). The panel
 // mounts (and fetches) only once the row is opened.
-const SUMMARY_STYLE = { cursor: "pointer", color: "var(--gray-500)", font: "700 9px var(--font-mono)", letterSpacing: ".07em", textTransform: "uppercase" } as const;
+const SUMMARY_STYLE = { cursor: "pointer", color: "var(--text-muted)", font: "700 var(--fs-10) var(--font-mono)", letterSpacing: ".07em", textTransform: "uppercase" } as const;
 
 export function PersonalityRow({ kind, id }: { kind: PersonalityKind; id?: number | null }) {
   const [open, setOpen] = useState(false);

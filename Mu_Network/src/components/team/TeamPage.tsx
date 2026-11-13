@@ -204,7 +204,7 @@ export function TeamPage({ team }: { team: Team }) {
                 return feedItems.map((article, index) => (
                   <article className="team-feed-card" key={article.id || `${article.title}-${index}`}>
                     <div className="team-feed-card-top">
-                      <span className="story-number">{index + 1 < 10 ? `0${index + 1}` : index + 1}</span>
+                      <span className="story-number" aria-hidden="true">{index + 1 < 10 ? `0${index + 1}` : index + 1}</span>
                       <span className="kicker">{article.week ? `WK ${article.week} · ` : ""}{article.label}</span>
                     </div>
                     <div className="team-feed-card-body">
