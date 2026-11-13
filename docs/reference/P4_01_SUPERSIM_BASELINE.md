@@ -86,13 +86,18 @@ credited too freely), punting volume and net (too many punts, too many yards), a
 
 ## 5. Obstacles hit (report only — no code was changed)
 
-1. **`clone-save`'s capacity prune refuses on a fresh `CAREER-MU2026` clone.** `prune_capacity.mjs` must write a
-   compressed stream **no longer than the original**, and node zlib cannot beat Madden's own stream: re-deflating
-   the same 20,458,364-byte image gives 3,146,840 B at level 6 and 3,101,408 B at level 9 against the save's
-   **3,056,682 B**, and the Highlight-only rebuild gives 3,138,000–3,141,000 B. So every clone today starts with
-   **513 KB** of the 20 MiB headroom instead of the ~1.08 MB the prune buys
-   (`docs/done/SAVE_CAPACITY_PRUNE_PLAN.md` §9). A 2026 **regular season** still fits (prior runs reached the Wild
-   Card at 20.83 MB); a postseason from this clone would not.
+1. **`clone-save`'s capacity prune refused on this run's clone** (it has since been fixed by another session). At
+   20:05 and 20:31 the pruner refused with *"rebuilt stream (3137978) is longer than the original (3056682)"*: it
+   must write a compressed stream no longer than the original, and node zlib's default options could not beat
+   Madden's own stream (re-deflating the same 20,458,364-byte image gave 3,146,840 B at level 6 and 3,101,408 B at
+   level 9 against the save's **3,056,682 B**). So `CAREER-TUNE-BASE26` ran the P4-01 season with **513 KB** of the
+   20 MiB headroom instead of the ~1.08 MB the prune buys (`docs/done/SAVE_CAPACITY_PRUNE_PLAN.md` §9). A 2026
+   **regular season** fits (prior runs reached the Wild Card at 20.83 MB, and this one did too); a postseason from
+   an unpruned clone would not. **The refusal is not deterministic and is already owned:** while this session ran,
+   `fix-clone-prune` changed `pipeline/save_reader/prune_capacity.mjs` to try harder zlib options (`level 9,
+   memLevel 5, strategy 1`, with a ladder of fallbacks), and a clone made at **20:59** pruned cleanly — `1 tables,
+   596736 bytes freed`, stream 3,056,682 → 2,915,086 B, read-back clean. Any run from now on starts pruned; this
+   baseline did not.
 2. **A bye week stops `sim-season`** (`tools/madden_pilot/jobs.py`, `_week_now` ~:684, MEDIUM): the early
    `HUB_BYE` return only fires when the *first* look classifies as `HUB_BYE`. When the hub opens on the **GAMEDAY**
    tab on a bye week, `read_header` is `None`, and the fallback `goto("HUB_WEEKLY")` can never match — the Weekly
