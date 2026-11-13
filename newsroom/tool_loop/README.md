@@ -1,6 +1,6 @@
 # Newsroom Tool Loop: Dual ReAct Execution Engine
 
-**Reference:** `docs/done/PC_MIGRATION_PLAN.md` §7.3, §7.4; `docs/not_started/PRE_PC_WORK_2.md` Item A6.
+**Reference:** `docs/done/PC_MIGRATION_PLAN.md` §7.3, §7.4; `docs/done/PRE_PC_WORK_2.md` Item A6.
 
 ---
 

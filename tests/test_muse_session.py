@@ -192,6 +192,37 @@ def test_never_passes_model_to_the_tui(checkout: Path, bin_dir: Path, tmp_path: 
     assert args == ["--session", session]
 
 
+def test_session_only_creates_pins_and_prints_the_id(
+    checkout: Path, bin_dir: Path, tmp_path: Path
+) -> None:
+    """JR 2026-11-12: a Spark session belongs to the shared OpenCode window, so the launcher only
+    creates and pins it, then prints the id for the tab."""
+    result = _run(checkout, _env(bin_dir, tmp_path), "--session-only", "--title", "Mu muse-1 (muse)")
+
+    assert result.returncode == 0, result.stderr
+    session = re.search(r"^session: (ses_mu_\d{10}_\d{5})$", result.stdout, re.M)
+    assert session, result.stdout
+    _, args = _parse(result.stdout)
+    assert "--session" not in args                     # no TUI exec
+    api = _api_calls(tmp_path)
+    assert len(api) == 2, api
+    assert json.loads(api[0].split("--data ", 1)[1])["title"] == "Mu muse-1 (muse)"
+    assert json.loads(api[1].split("--data ", 1)[1])["model"]["id"] == "muse-spark-1.3-contributor"
+
+
+def test_run_starts_the_session_headlessly(
+    checkout: Path, bin_dir: Path, tmp_path: Path
+) -> None:
+    """JR 2026-11-12: a spawned Spark session also runs inside OpenCode via `opencode run`."""
+    result = _run(checkout, _env(bin_dir, tmp_path), "--run", "/builder muse-1")
+
+    assert result.returncode == 0, result.stderr
+    values, args = _parse(result.stdout)
+    session = values["MU_OPENCODE_SESSION"]
+    assert args == ["run", "--session", session, "--format", "default", "/builder muse-1"]
+    assert len(_api_calls(tmp_path)) == 2          # created and pinned first
+
+
 def test_reuses_a_given_session_instead_of_minting_one(
     checkout: Path, bin_dir: Path, tmp_path: Path
 ) -> None:

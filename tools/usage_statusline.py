@@ -1,6 +1,8 @@
 """Claude Code status line that also records the Claude plan quota for tools/usage_check.py (JR, 2026-11-10).
 
-Claude Code runs this on each status-line refresh with the session's JSON on stdin. On a Claude.ai subscription that
+Claude Code runs this on each status-line refresh with the session's JSON on stdin. The secondary
+account uses tools/usage_statusline_personal.sh, which sets MU_USAGE_FILE to
+data/usage/rate_limits_personal.json so tools/claude_account.py can compare both accounts. On a Claude.ai subscription that
 JSON carries `rate_limits.five_hour` / `rate_limits.seven_day` ({used_percentage, resets_at}) after the session's first
 reply. When it does, they're written atomically to data/usage/rate_limits.json with the time they were seen. The limits
 are account-wide, so whichever Claude session refreshed last keeps the file current. Sessions without them (API key, the

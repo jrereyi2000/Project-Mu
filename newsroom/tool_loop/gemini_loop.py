@@ -38,27 +38,39 @@ def run_gemini_tool_loop(
         ToolLoopResult with generated text, token usage, tool counts, and iterations.
     """
     if client is None:
-        api_key = os.environ.get("GEMINI_API_KEY")
-        if not api_key:
+        from newsroom.tool_loop.go_transport import go_client, is_go_model
+        if is_go_model(model) and ":" not in (model or ""):
+            # A Go id on the Gemini AFC loop runs on Go's Google-compatible client, never on Google's endpoint
+            # (AUDIT_QUEUE_INVENTORY.md R11 sibling path).
             try:
-                from pipeline.notify import env
-                api_key = env("GEMINI_API_KEY")
-            except Exception:
-                api_key = None
-        if not api_key:
-            print("\n⚠️  [GEMINI LIVE CALL SKIPPED]: GEMINI_API_KEY environment variable is not set.")
-            return ToolLoopResult(
-                text="Gemini execution skipped: Missing GEMINI_API_KEY.",
-                error="missing GEMINI_API_KEY",
-            )
-        try:
-            from google import genai
-            client = genai.Client(api_key=api_key)
-        except Exception as e:
-            return ToolLoopResult(
-                text=f"Error initializing Gemini client: {e}",
-                error=str(e),
-            )
+                client = go_client(label="gemini_loop")
+            except Exception as e:
+                return ToolLoopResult(
+                    text=f"OpenCode Go client unavailable: {e}",
+                    error=f"go client unavailable: {e}",
+                )
+        else:
+            api_key = os.environ.get("GEMINI_API_KEY")
+            if not api_key:
+                try:
+                    from pipeline.notify import env
+                    api_key = env("GEMINI_API_KEY")
+                except Exception:
+                    api_key = None
+            if not api_key:
+                print("\n⚠️  [GEMINI LIVE CALL SKIPPED]: GEMINI_API_KEY environment variable is not set.")
+                return ToolLoopResult(
+                    text="Gemini execution skipped: Missing GEMINI_API_KEY.",
+                    error="missing GEMINI_API_KEY",
+                )
+            try:
+                from google import genai
+                client = genai.Client(api_key=api_key)
+            except Exception as e:
+                return ToolLoopResult(
+                    text=f"Error initializing Gemini client: {e}",
+                    error=str(e),
+                )
 
     from google.genai import types
 

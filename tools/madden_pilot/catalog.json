@@ -21,7 +21,7 @@
   },
   "screens": {
     "QUIT_GAME_CONFIRM": {
-      "note": "MEASURED 2026-11-12 (live_quit_once/steps/0002_UNKNOWN.*, one visually established QUIT GAME press under the TUNE policy): heading EXIT GAME, question 'Are you sure you want to exit the game?', top row YES - EXIT TO DESKTOP, middle row YES - EXIT TO MENU, bottom row NO selected by default (NO is entirely absent from Windows OCR). Its own heading/question is the discriminator; the pause menu's expanded QUIT GAME tooltip ('Any unsaved progress will be lost.') is NOT this screen and classifies as PAUSE_MENU (F11). Only YES - EXIT TO MENU may ever be confirmed: DESKTOP is destructive and NO cancels, and watch-game adds the one MENU label to its per-run policy (F11). Selection is read by containment (screens.border_highlight): the filled NO row is below the MENU text, so MENU is never credited with NO's highlight when NO is unreadable — the guard moves the selection and re-reads it instead. The landing after YES - EXIT TO MENU is still unmeasured, so this screen has no catalogued exit; watch-game waits and reports where it actually lands.",
+      "note": "MEASURED 2026-11-12 (live_quit_once/steps/0002_UNKNOWN.*, one visually established QUIT GAME press under the TUNE policy): heading EXIT GAME, question 'Are you sure you want to exit the game?', top row YES - EXIT TO DESKTOP, middle row YES - EXIT TO MENU, bottom row NO selected by default (NO is entirely absent from Windows OCR). Its own heading/question is the discriminator; the pause menu's expanded QUIT GAME tooltip ('Any unsaved progress will be lost.') is NOT this screen and classifies as PAUSE_MENU (F11). Only YES - EXIT TO MENU may ever be confirmed: DESKTOP is destructive and NO cancels, and watch-game adds the one MENU label to its per-run policy (F11). Selection is read by containment (screens.border_highlight): the filled NO row is below the MENU text, so MENU is never credited with NO's highlight when NO is unreadable — the guard moves the selection and re-reads it instead. MEASURED 2026-11-12 (live): YES - EXIT TO MENU lands on HUB_WEEKLY (the franchise is still loaded), from which the normal TUNE quit reaches CURRENT FRANCHISES. The screen keeps no catalogued exit: watch-game waits for the landing, reports it, and finishes a loaded hub through that quit rather than inventing a route.",
       "all": [
         "EXIT GAME"
       ],
@@ -1197,7 +1197,7 @@
       }
     },
     "TITLE_SCREEN": {
-      "note": "Seen 2026-11-10 in the P2-01 retries: EA SPORTS / MADDEN NFL title with PRESS ANY BUTTON. The button sits below the captured client area (step 0021 of 2026-11-10_014049_sim-season), so OCR only reads the MADDEN logo; the screen is matched on that word with every menu/hub word excluded. One Space continues to the main menu; nothing else on this screen can be chosen.",
+      "note": "Seen 2026-11-10 in the P2-01 retries: EA SPORTS / MADDEN NFL title with PRESS ANY BUTTON. The button sits below the captured client area (step 0021 of 2026-11-10_014049_sim-season), so OCR only reads the MADDEN logo; the screen is matched on that word with every menu/hub word excluded. One Space continues to the main menu; nothing else on this screen can be chosen. MEASURED 2026-11-12 (F12): a live field frame carries the MADDEN watermark over a scorebug, so a quarter word, KICKOFF or a play-call label now excludes this screen; the title never shows them.",
       "all": [
         "MADDEN"
       ],
@@ -1209,7 +1209,15 @@
         "CURRENT FRANCHISES",
         "FRANCHISE",
         "LEVEL",
-        "TEAM PASS"
+        "TEAM PASS",
+        "1ST",
+        "2ND",
+        "3RD",
+        "4TH",
+        "OT",
+        "KICKOFF",
+        "COACH SUGGESTIONS",
+        "CUSTOM PLAY OPTIONS"
       ],
       "confirm_ok": [
         "PRESS ANY BUTTON",

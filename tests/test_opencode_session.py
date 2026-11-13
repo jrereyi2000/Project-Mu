@@ -134,6 +134,52 @@ def test_honours_a_model_override(checkout: Path, bin_dir: Path, tmp_path: Path)
     assert values["MU_OPENCODE_MODEL"] == "other-provider/other-model"
 
 
+def test_session_only_creates_the_session_with_its_title_and_prints_the_id(
+    checkout: Path, tmp_path: Path
+) -> None:
+    """JR 2026-11-12: a DeepSeek session belongs to the shared OpenCode window, so the launcher only
+    creates it (title from the spawn label) and prints the id instead of opening a TUI."""
+    log = tmp_path / "api.log"
+    stub = tmp_path / "logging-bin" / "opencode"
+    stub.parent.mkdir()
+    stub.write_text(f'#!/usr/bin/env bash\nprintf "%s\\n" "$*" >> "{log}"\nexit 0\n', encoding="utf-8")
+    stub.chmod(0o755)
+    env = _env(stub.parent, tmp_path, MU_OPENCODE_BIN=str(stub))
+
+    result = _run(checkout, env, "--session-only", "--title", "Mu builder-12 (deepseek)")
+
+    assert result.returncode == 0, result.stderr
+    session = re.search(r"^session: (ses_mu_\d{10}_\d{5})$", result.stdout, re.M)
+    assert session, result.stdout
+    assert "--session" not in result.stdout               # no TUI exec
+    call = log.read_text(encoding="utf-8")
+    assert call.startswith("api post /api/session ")
+    assert '"title":"Mu builder-12 (deepseek)"' in call
+    assert f'"id":"{session.group(1)}"' in call
+
+
+def test_run_starts_the_session_headlessly(
+    checkout: Path, bin_dir: Path, tmp_path: Path
+) -> None:
+    """JR 2026-11-12: a spawned DeepSeek session runs inside OpenCode via `opencode run`."""
+    result = _run(checkout, _env(bin_dir, tmp_path), "--run", "/builder b1")
+
+    assert result.returncode == 0, result.stderr
+    values, args = _parse(result.stdout)
+    session = values["MU_OPENCODE_SESSION"]
+    assert args == ["run", "--session", session, "--format", "default", "/builder b1"]
+
+
+def test_session_only_still_prints_the_route_line(
+    checkout: Path, bin_dir: Path, tmp_path: Path
+) -> None:
+    result = _run(checkout, _env(bin_dir, tmp_path), "--session-only")
+
+    assert result.returncode == 0, result.stderr
+    assert "Project Mu DeepSeek route:" in result.stderr
+    assert re.search(r"^session: ses_mu_\d{10}_\d{5}$", result.stdout, re.M)
+
+
 def test_mints_a_session_id_and_passes_it_as_session(
     checkout: Path, bin_dir: Path, tmp_path: Path
 ) -> None:

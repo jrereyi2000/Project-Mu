@@ -3,6 +3,13 @@ import { SystemContext } from "../../context/SystemContext";
 import { localStories, logo, stories } from "../../lib/gridiron";
 import type { PowerRankingsResponse } from "./PowerRankingsPage";
 
+const FACT_CHECK_FLAG = "⚠ FACT-CHECK FLAG";
+
+/** The fact gate's verdict on one card, inside the card's own label (R5b F2): one rule for every surface. */
+function withFactGateFlag(story: any, label: string): string {
+  return story?.fact_gate_status === "flagged" ? `${FACT_CHECK_FLAG} · ${label}` : label;
+}
+
 interface NewsroomHomePageProps {
   week: number;
   setWeek: (week: number) => void;
@@ -81,7 +88,7 @@ export function NewsroomHomePage({
             const heroAuthor = hero?.author?.display_name || "Bill Barnwell";
             const heroInitials = heroAuthor.split(" ").map((p: string) => p[0]).join("").slice(0, 2).toUpperCase() || "BB";
             const heroRole = hero?.author?.archetype ? hero.author.archetype.replace(/_/g, " ") : "National Writer";
-            const heroSlotLabel = (hero?.fact_gate_status === "flagged" ? "⚠ FACT-CHECK FLAG · " : "") + (hero?.slot ? hero.slot.toUpperCase() : (week === 24 ? "OFFSEASON LEAD · SUPER BOWL RECAP" : "GAME OF THE WEEK"));
+            const heroSlotLabel = withFactGateFlag(hero, hero?.slot ? hero.slot.toUpperCase() : (week === 24 ? "OFFSEASON LEAD · SUPER BOWL RECAP" : "GAME OF THE WEEK"));
 
             return (
               <article className="hero-story">
@@ -124,7 +131,7 @@ export function NewsroomHomePage({
                     return (
                       <article key={story.id} className="historic-record-spotlight-card">
                         <div className="historic-card-top">
-                          <span className="record-slot-chip">{story.slot || "Historic Milestone"}</span>
+                          <span className="record-slot-chip">{withFactGateFlag(story, story.slot || "Historic Milestone")}</span>
                           <span className="record-exclusive-tag">COMMEMORATIVE FEATURE</span>
                         </div>
                         <a href={`#article-${story.id}`}>
@@ -182,7 +189,7 @@ export function NewsroomHomePage({
                       <article className="story-card" key={story.id || title} style={{ borderLeft: idx % 2 === 1 ? "1px solid var(--gray-300)" : undefined }}>
                         <span className="story-number">0{idx + 1}</span>
                         <div className="story-copy">
-                          <span className="kicker">{kicker}</span>
+                          <span className="kicker">{withFactGateFlag(story, kicker)}</span>
                           <a href={artLink}><h3>{title}</h3></a>
                           <p>{blurb}</p>
                           <div className="author-row">
@@ -247,7 +254,7 @@ export function NewsroomHomePage({
                       >
                         <span className="story-number">0{idx + 3}</span>
                         <div className="story-copy">
-                          <span className="kicker">{kicker}</span>
+                          <span className="kicker">{withFactGateFlag(story, kicker)}</span>
                           <a href={artLink}><h3 style={{ fontSize: "20px" }}>{title}</h3></a>
                           <p>{blurb}</p>
                           <div className="author-row">
@@ -283,7 +290,7 @@ export function NewsroomHomePage({
                         <article className="story-card" key={story.id || title}>
                           <span className="story-number">0{idx + 6}</span>
                           <div className="story-copy">
-                            <span className="kicker">{kicker}</span>
+                            <span className="kicker">{withFactGateFlag(story, kicker)}</span>
                             <a href={artLink}><h3>{title}</h3></a>
                             <p>{blurb}</p>
                             <div className="author-row">
@@ -333,7 +340,7 @@ export function NewsroomHomePage({
                       : story.article_type
                         ? story.article_type.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase())
                         : (story.kicker || "Analysis");
-                    const shownKicker = story.fact_gate_status === "flagged" ? `⚠ FACT-CHECK FLAG · ${kicker}` : kicker;
+                    const shownKicker = withFactGateFlag(story, kicker);
                     const readTime = story.read || "7 min read";
 
                     return (
@@ -380,7 +387,7 @@ export function NewsroomHomePage({
                         <article className="market-story" key={story.id}>
                           <span className="rank">{String(index + 1).padStart(2, "0")}</span>
                           <div className="market-copy">
-                            <span className="team-tag"><img src={logo(teamAbbr)} alt="" />{teamName} Beat</span>
+                            <span className="team-tag"><img src={logo(teamAbbr)} alt="" />{withFactGateFlag(story, `${teamName} Beat`)}</span>
                             <a href={`#article-${story.id}`}><h3>{story.headline}</h3></a>
                             <p>By {author} <span>·</span> Beat Reporter</p>
                           </div>

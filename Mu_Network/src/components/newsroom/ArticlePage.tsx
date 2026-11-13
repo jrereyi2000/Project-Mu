@@ -21,7 +21,26 @@ export function ArticlePage({ articleId }: { articleId: string }) {
   }, [articleId, isDbArticle]);
 
   const factGateStatus: string | null = dbArticle?.fact_gate_status ?? null;
-  const factGateClaims: any[] = Array.isArray(dbArticle?.fact_gate?.claims) ? dbArticle.fact_gate.claims : [];
+  // Normalise the stored claims once (R5b F3): a hand-seeded or malformed JSONB row may hold nulls,
+  // strings or nested objects, and rendering any of them directly threw.
+  const asClaimText = (value: any): string => {
+    if (value == null) return "";
+    if (typeof value === "string") return value;
+    if (typeof value === "number" || typeof value === "boolean") return String(value);
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return "";
+    }
+  };
+  const factGateClaims: { claim: string; evidence: string }[] = (() => {
+    const raw = dbArticle?.fact_gate?.claims;
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .filter((entry: any) => entry && typeof entry === "object")
+      .map((entry: any) => ({ claim: asClaimText(entry.claim), evidence: asClaimText(entry.evidence) }))
+      .filter((entry) => entry.claim || entry.evidence);
+  })();
 
   const nationalMatch = articleId.match(/^national-(\d+)$/);
   const localMatch = articleId.match(/^local-([a-z]+)$/);

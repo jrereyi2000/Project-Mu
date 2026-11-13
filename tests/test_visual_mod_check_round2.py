@@ -39,7 +39,7 @@ FIXTURES = Path(__file__).parent / "fixtures" / "visual_mod_check"
 def fixture_frame(name):
     data = json.loads((FIXTURES / f"{name}.json").read_text(encoding="utf-8"))
     png = str(FIXTURES / data["png"]) if data.get("png") else None
-    return Frame(png, data["words"], data["lines"])
+    return Frame(png, data["words"], data["lines"], data.get("size"))
 
 
 def fixture_lines(name):
@@ -366,6 +366,64 @@ def test_alternate_supersim_back_landing_on_pause_needs_no_extra_escape(tmp_path
     assert text.count("PAUSE_MENU on QUIT GAME") == 1
 
 
+def test_halftime_marker_names_the_post_snap_screen_not_pause(tmp_path, notices):
+    """F1: the pre-snap Pause was reported; the marker must name what is on screen after the snap."""
+    class PauseLanding(WatchMadden):
+        def on_key(self, name):
+            if name == "backspace" and self.screen == "SUPERSIM_MENU":
+                self.go("PAUSE_MENU")
+                return
+            super().on_key(name)
+
+    fake = PauseLanding(CAT, tiles=["TUNE-X"], out=lambda s: None)
+    p = make_pilot(tmp_path, fake, highlight_reader=lambda frame, labels, spec: fake.highlight)
+    out = jobs.watch_game(p, save="CAREER-TUNE-X", to="halftime", hold_seconds=2,
+                          watcher=lambda: False, folder=tmp_path / "none", ready_token="t1")
+    assert out["status"] == "ok", out
+    ready = json.loads((tmp_path / jobs.READY_FILE).read_text())
+    assert ready["screen"] != "PAUSE_MENU"
+    assert ready["show_observed"] is False
+
+
+def test_the_ready_marker_names_the_post_snap_screen_when_the_game_changes(tmp_path, notices,
+                                                                          monkeypatch):
+    """N2: the fake leaves the play call at the snap, so only a post-snap look can name the screen.
+
+    The older F1 fakes never changed screen at the snap, so `ready.json` happened to match on
+    `45d1ee1` too and could not tell the fix from the bug. Here the half's last snap hands over to
+    the uncatalogued halftime show: the marker and `_to_halftime` must both report UNKNOWN (the
+    pre-fix pin reports the pre-snap GAME_PLAY_CALL).
+    """
+    class HalftimeShow(WatchMadden):
+        snaps = 0
+
+        def on_key(self, name):
+            before = self.screen
+            super().on_key(name)
+            if before == "GAME_PLAY_CALL" and name == self.keymap.get("select", "space"):
+                self.snaps += 1
+                if self.snaps == 2:                    # the snap itself
+                    self.go("HALFTIME_SHOW")            # a real show frame is uncatalogued
+
+    returned = {}
+    real = jobs._to_halftime
+
+    def spy(pilot, progress):
+        screen, clock = real(pilot, progress)
+        returned["screen"] = screen
+        return screen, clock
+
+    monkeypatch.setattr(jobs, "_to_halftime", spy)
+    fake = HalftimeShow(CAT, tiles=["TUNE-X"], out=lambda s: None)
+    _, out = watch(tmp_path, fake, to="halftime", hold_seconds=2, quit=False)
+    assert out["status"] == "ok", out
+    assert fake.snaps == 2
+    ready = json.loads((tmp_path / jobs.READY_FILE).read_text())
+    assert returned["screen"] == "UNKNOWN"
+    assert ready["screen"] == "UNKNOWN"
+    assert ready["show_observed"] is False
+
+
 @pytest.mark.parametrize("clock_line,reason", [
     ("2nd 0:00", "no last"), ("3rd 12:40", "Q2"), ("2nd :40", "clock read None")])
 def test_halftime_revalidates_the_clock_before_the_last_snap(tmp_path, notices, clock_line, reason):
@@ -455,6 +513,56 @@ def test_pack_fingerprint_tracks_the_pack_and_its_enabled_files(tmp_path):
     second = mod_packs.pack_fingerprint("Mu Test", path=str(config), mods_dir=str(mods))
     assert second["fingerprint"] != first["fingerprint"]
     assert mod_packs.pack_fingerprint("Nope", path=str(config), mods_dir=str(mods)) is None
+
+
+def test_pack_fingerprint_finds_models_in_mmcs_per_game_subfolder(tmp_path):
+    """F6: MMC keeps enabled .fbmod files in Mods/Madden27/, not directly in Mods/."""
+    from pipeline import mod_packs
+    config = tmp_path / "manager_config.json"
+    mods = tmp_path / "Mods"
+    nested = mods / "Madden27"
+    nested.mkdir(parents=True)
+    (nested / "a.fbmod").write_bytes(b"aaa")
+    config.write_text(json.dumps({"Games": {"Madden27": {
+        "Options": {"SelectedPack": "Mu Test"},
+        "Packs": {"Mu Test": "a.fbmod:True"}}}}), encoding="utf-8")
+    first = mod_packs.pack_fingerprint("Mu Test", path=str(config), mods_dir=str(mods))
+    assert first["files_complete"] is True and first["enabled"] == 1
+    time.sleep(0.01)
+    (nested / "a.fbmod").write_bytes(b"changed")
+    second = mod_packs.pack_fingerprint("Mu Test", path=str(config), mods_dir=str(mods))
+    assert second["fingerprint"] != first["fingerprint"]
+
+
+def test_pack_fingerprint_hashes_both_copies_and_refuses_another_games_folder(tmp_path):
+    """N4: a stale Mods/ root copy must not hide the live Mods/Madden27/ one, and another game's
+    folder is not this pack's file. Both measured on 2026-11-12 as the remaining F6 edge cases."""
+    from pipeline import mod_packs
+    config = tmp_path / "manager_config.json"
+    mods = tmp_path / "Mods"
+    nested = mods / "Madden27"
+    nested.mkdir(parents=True)
+    (mods / "a.fbmod").write_bytes(b"stale root copy")
+    (nested / "a.fbmod").write_bytes(b"live nested copy")
+    config.write_text(json.dumps({"Games": {"Madden27": {
+        "Options": {"SelectedPack": "Mu Test"},
+        "Packs": {"Mu Test": "a.fbmod:True"}}}}), encoding="utf-8")
+    first = mod_packs.pack_fingerprint("Mu Test", path=str(config), mods_dir=str(mods))
+    assert first["files_complete"] is True
+    time.sleep(0.01)
+    (nested / "a.fbmod").write_bytes(b"changed nested copy")
+    second = mod_packs.pack_fingerprint("Mu Test", path=str(config), mods_dir=str(mods))
+    assert second["fingerprint"] != first["fingerprint"]
+    time.sleep(0.01)
+    (mods / "a.fbmod").write_bytes(b"changed root copy")
+    third = mod_packs.pack_fingerprint("Mu Test", path=str(config), mods_dir=str(mods))
+    assert third["fingerprint"] != second["fingerprint"]
+    # another game's subfolder is never accepted by the file-name fallback
+    other = tmp_path / "Other"
+    (other / "Madden26").mkdir(parents=True)
+    (other / "Madden26" / "a.fbmod").write_bytes(b"the wrong game")
+    only_other = mod_packs.pack_fingerprint("Mu Test", path=str(config), mods_dir=str(other))
+    assert only_other["files_complete"] is False
 
 
 def _receipt(**over):
@@ -812,3 +920,171 @@ def test_capture_uses_the_newest_same_second_run_not_an_older_one(tmp_path):
     assert result["saved"] is True
     with Image.open(folder / "refs/red_pass.png") as opened:
         assert opened.convert("RGB").getpixel((32, 32)) == (255, 0, 0)
+
+
+# --------------------------------------------------------------------------- F12/F13/F14/F15 follow-up
+def test_read_game_clock_never_reads_the_bottom_broadcast_ticker():
+    """F12: an unreadable main scorebug plus a readable other-game ticker must be None."""
+    frame = fixture_frame("clock_ticker_0067")
+    from tools.madden_pilot.jobs import read_game_clock
+    assert frame.has("1ST 14:53")                     # the ticker line is really there
+    assert read_game_clock(frame) is None
+    # the same rule for the word-pair path
+    ticker_words = [{"text": "2ND", "box": [40, 1052, 40, 16], "line": 0},
+                    {"text": "0:18", "box": [90, 1052, 50, 16], "line": 0}]
+    assert read_game_clock(Frame(None, ticker_words, ["2ND 0:18"], [1920, 1080])) is None
+    # the kickoff fixture's real scorebug still reads
+    assert read_game_clock(fixture_frame("receiving_kickoff_0047")) == {"quarter": 1,
+                                                                        "seconds": 660}
+
+
+def test_the_ticker_cutoff_still_reads_a_genuine_low_scorebug():
+    """N3: OCR placed two real main scorebugs at centre y≈1033 (0.956 h), under the old 0.94 band.
+
+    `live_field_0049` is one of them: `ISt 10:56` is the main scorebug (the pin read None); the
+    ticker frame above stays a miss, so the band still keeps another game's clock out.
+    """
+    from tools.madden_pilot.jobs import read_game_clock
+    assert read_game_clock(fixture_frame("live_field_0049")) == {"quarter": 1, "seconds": 656}
+    assert read_game_clock(fixture_frame("clock_ticker_0067")) is None
+
+
+def test_a_live_field_watermark_is_not_the_title_screen():
+    """F12: the field's MADDEN watermark over a scorebug used to match TITLE_SCREEN."""
+    assert classify(fixture_frame("live_field_0049"), CAT) != "TITLE_SCREEN"
+    assert classify(Frame(None, [{"text": "MADDEN", "line": 0},
+                                 {"text": "PRESS ANY BUTTON", "line": 1}]), CAT) == "TITLE_SCREEN"
+
+
+def test_last_json_parses_the_pilots_pretty_printed_result():
+    """F13: the pilot prints json.dumps(indent=1); the old line parser returned {}."""
+    payload = {"status": "ok", "pack": "Mu Test", "already_running": False,
+               "screen": "FRANCHISE_LANDING", "applied": {"pack": "Mu Test"}}
+    stdout = "[17:00] [launch] start\n" + json.dumps(payload, indent=1, default=str) + "\n"
+    assert runner._last_json(stdout) == payload
+    assert runner._last_json("no json here {broken") == {}
+    assert runner._last_json("") == {}
+
+
+def test_default_launch_reads_a_real_multiline_receipt(monkeypatch):
+    from pipeline.gpu_queue import process_check
+    monkeypatch.setattr(process_check, "is_madden_running", lambda: False)
+    receipt = {"status": "ok", "pack": "Mu Test", "already_running": False,
+               "screen": "FRANCHISE_LANDING", "process_verified": True,
+               "applied_verified": True,
+               "process": {"pid": 1, "started": 1.0},
+               "applied": {"pack": "Mu Test", "fingerprint": "x"}}
+    stdout = "[launch] log line\n" + json.dumps(receipt, indent=1) + "\n"
+
+    class Done:
+        returncode = 0
+        stderr = ""
+        stdout = ""
+
+    Done.stdout = stdout
+    monkeypatch.setattr(runner.subprocess, "run", lambda *a, **k: Done())
+    got = runner.default_launch("Mu Test", "/tmp/unused")
+    assert got["pack"] == "Mu Test" and got["process_verified"] is True
+
+
+def test_pilot_driver_call_keeps_a_structured_multiline_result(monkeypatch, tmp_path):
+    payload = {"status": "ok", "quit": True, "quit_route": "route",
+               "end_screen": "FRANCHISE_LIST"}
+
+    class Done:
+        returncode = 0
+        stderr = ""
+
+    Done.stdout = json.dumps(payload, indent=1)
+    monkeypatch.setattr(runner.subprocess, "run", lambda *a, **k: Done())
+    driver = runner.PilotDriver(run_dir=tmp_path)
+    assert driver._call("quit", "--franchise", "TUNE-X") == payload
+
+
+def test_real_franchise_list_selected_tile_and_its_neighbours():
+    """F14: the tall portrait card's border is 542 px above its name; neighbours must lose."""
+    frame = fixture_frame("franchise_list_0087")
+    labels = ["TUNE-CHKB", "TUNE-CHKA-AUTOSAVE", "TUNE-CHKA", "TUNE-CHECK-"]
+    assert border_highlight(frame, labels, reach=0.075) == "TUNE-CHKB"
+    assert border_highlight(frame, ["TUNE-CHKA-AUTOSAVE"], reach=0.075) is None
+    assert border_highlight(frame, ["TUNE-CHKA"], reach=0.075) is None
+
+
+# ------------------------------------------------------------------ N1: ADVANCE_MENU reads
+# The F14 tall-card pairing is not only for cards: on ADVANCE_MENU the selected row's white fill
+# (above) and the ADVANCE WEEK button's outline (below) are two rules that both span every
+# unselected row, so before the fix every row between them counted as highlighted and the reader
+# returned None (or FORCE ADVANCE while READY TO ADVANCE was selected). These are the auditor's
+# three captured frames (data/audit_reports/audit-visual-r4/recheck-5f76c43.md, N1); the expected
+# values are what `45d1ee1` read, measured over all 907 captured ADVANCE frames.
+ADVANCE_OPTIONS = ["READY TO ADVANCE", "FORCE ADVANCE", "SIM TO MIDSEASON"]
+
+
+def test_advance_menu_force_selected_reads_force_and_nothing_else():
+    """0061: FORCE ADVANCE has the fill; READY and SIM TO MIDSEASON must not read as selected."""
+    frame = fixture_frame("advance_menu_force_0061")
+    assert border_highlight(frame, ADVANCE_OPTIONS, reach=0.06) == "FORCE ADVANCE"
+    assert border_highlight(frame, ["SIM TO MIDSEASON"], reach=0.06) is None
+    assert border_highlight(frame, ["READY TO ADVANCE"], reach=0.06) is None
+
+
+def test_advance_menu_ready_selected_reads_ready_and_nothing_else():
+    """0024: READY TO ADVANCE has the fill; the two rows below must not read as selected."""
+    frame = fixture_frame("advance_menu_ready_0024")
+    assert border_highlight(frame, ADVANCE_OPTIONS, reach=0.06) == "READY TO ADVANCE"
+    assert border_highlight(frame, ["FORCE ADVANCE"], reach=0.06) is None
+    assert border_highlight(frame, ["SIM TO MIDSEASON"], reach=0.06) is None
+
+
+def test_advance_menu_unreadable_ready_never_reads_force():
+    """p2g stop_01/0020: OCR drops READY's text; the reader must not hand back FORCE ADVANCE."""
+    frame = fixture_frame("advance_menu_ready_unread_p2g0020")
+    assert border_highlight(frame, ADVANCE_OPTIONS, reach=0.06) is None
+
+
+class _Keys:
+    """A driver that records the keys it is asked to press and never touches the PC."""
+
+    def __init__(self, frame):
+        self.frame = frame
+        self.keys = []
+
+    def call(self, cmd):
+        if cmd[0] == "key":
+            self.keys.append(cmd[cmd.index("--name") + 1])
+            return {"ok": True}
+        raise AssertionError(f"unexpected driver call {cmd!r}")
+
+
+def test_confirm_on_does_not_press_space_when_ready_is_the_selected_row(tmp_path, notices):
+    """N1's live failure: the pilot pressed Space on READY TO ADVANCE thinking it was FORCE."""
+    frame = fixture_frame("advance_menu_ready_unread_p2g0020")
+    driver = _Keys(frame)
+    pilot = Pilot(CAT, tmp_path, driver=driver, sleep=lambda s: None, clock=lambda: 0.0)
+    pilot.frame, pilot.screen, pilot.step = frame, "ADVANCE_MENU", 1
+    with pytest.raises(Stuck):
+        pilot.confirm_on("ADVANCE_MENU", "FORCE ADVANCE")
+    assert driver.keys == []
+
+
+def test_capture_reuse_refuses_before_cloning_a_save(tmp_path, monkeypatch):
+    """F15: a refused --reuse-launch must not leave a CAREER-TUNE-CHK* clone behind."""
+    root = tmp_path / "data"
+    folder = root / "demo"
+    folder.mkdir(parents=True)
+    write_checks(folder)
+    write_plan(folder, [{"name": "game_start", "after": "kickoff", "record_s": 1,
+                         "fps": 1, "width": 640, "checks": ["asset"]}])
+    clones = []
+
+    def clone(src, prefix):
+        clones.append(src)
+        return "CAREER-TUNE-CHK1"
+
+    result = runner.capture("demo", "game_start", "0:00", "0:01", save="CAREER-TUNE-X",
+                            data_dir=root, clone=clone, watcher=lambda: False,
+                            reuse=True,
+                            launch=lambda pack: (_ for _ in ()).throw(
+                                AssertionError("no launch")))
+    assert result["status"] == "stopped" and result["stop"] == "attach"
+    assert clones == []

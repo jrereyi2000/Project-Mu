@@ -154,7 +154,7 @@ def client_for(model: str):
         for line in _read_env_lines():
             _os.environ.setdefault(*line)
         try:
-            return go_client(), None
+            return go_client(label="article_model_compare"), None
         except Exception as exc:
             return None, str(exc)
     api_key = os.environ.get("GEMINI_API_KEY")

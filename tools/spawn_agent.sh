@@ -3,7 +3,7 @@
 # Any agent, or JR, may run it. It only ever OPENS a new window; it never types into an existing one
 # (agents must never `tmux send-keys` into another agent's window).
 #
-#   tools/spawn_agent.sh [--dry-run] <label> <claude|opus|deepseek|deepseek-claude|muse|codex|gemini|argon|hydrogen> [prompt]
+#   tools/spawn_agent.sh [--dry-run] <label> <claude|opus|claude-personal|opus-personal|claude-auto|opus-auto|deepseek|deepseek-claude|muse|codex|gemini|argon|hydrogen> [prompt]
 #   e.g. tools/spawn_agent.sh builder-2 opus "/builder"
 #        tools/spawn_agent.sh gm-hiring codex "Pick up the HANDOFF addressed to gm-hiring on the board."
 #
@@ -26,8 +26,23 @@
 #   (it sets the route markers and the session id, then runs `opencode`). deepseek-claude is the
 #   fallback: it runs $MU_DEEPSEEK_CMD (default ~/bin/claude-deepseek, JR's local wrapper that points
 #   Claude Code at DeepSeek; it holds the API key and is never committed), kept until 2026-11-26.
+# - DeepSeek and Muse sessions get **no tmux window** (JR, 2026-11-12): new windows are only for
+#   codex, claude and agy routes. They are started inside OpenCode instead: the wrapper creates the
+#   session, then a background `opencode run` drives it, and the launcher prints the session id and
+#   the log path (`$MU_AGENT_LOG_DIR`, default /tmp/opencode/<label>.log). That is how the activity
+#   sessions have been started all day; the session is visible in OpenCode while it works.
 # - muse starts an OpenCode session on a Muse model through tools/muse_session.sh; the model is
 #   whatever MU_MUSE_MODEL says (Spark by default, Ember for the benchmark's second step).
+# - claude-personal and opus-personal open a normal Claude/Opus tmux window on JR's secondary Claude
+#   account. tools/claude_personal.sh sets CLAUDE_CONFIG_DIR=~/.claude-secondary (override with
+#   MU_CLAUDE_PERSONAL_CONFIG_DIR) and execs the Claude Code binary (MU_CLAUDE_PERSONAL_BIN, default
+#   `claude`). MU_CLAUDE_PERSONAL_CMD instead names a whole command for the personal route — it must be
+#   an executable or a wrapper script (for example tools/claude_personal.sh), never JR's shell alias:
+#   the route runs it with `env`, and `env` cannot run an alias. When a caller on the secondary account
+#   spawns a primary route, CLAUDE_CONFIG_DIR is scrubbed from the child (M-0823 B-4).
+#   claude-auto and opus-auto run tools/claude_account.py choose first: it compares the primary and
+#   personal usage files and starts whichever account is under its quota with more headroom. Model
+#   attribution is unchanged; the account is not a model class.
 # - argon and hydrogen start a Google Antigravity CLI session (`agy`), the two Gemini 4 routes that
 #   serve this repo. argon runs MU_ARGON_MODEL (default gemini-4-argon-medium); hydrogen runs
 #   MU_HYDROGEN_MODEL (default gemini-4-hydrogen-high) and exports MU_AGENT_CLASS=hydrogen and
@@ -45,14 +60,26 @@
 set -euo pipefail
 
 caller_is_deepseek() {
-  [ "${MU_AGENT_CLASS:-}" = deepseek ] ||
-  [[ "${ANTHROPIC_BASE_URL:-}" == *deepseek* ]] ||
-  [[ "${ANTHROPIC_MODEL:-}" == deepseek-* ]]
+  local cls
+  cls="$(printf '%s' "${MU_AGENT_CLASS:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+  if [ -n "$cls" ]; then
+    [ "$cls" = deepseek ]
+    return
+  fi
+  if [[ "${MU_AGENT_MODEL:-}" == deepseek-* ]] ||
+     [[ "${MU_OPENCODE_MODEL:-}" == *deepseek* ]] ||
+     [[ "${ANTHROPIC_BASE_URL:-}" == *deepseek* ]] ||
+     [[ "${ANTHROPIC_MODEL:-}" == deepseek-* ]]; then
+    return 0
+  fi
+  # A bare `opencode` session (started without tools/opencode_session.sh) exports no MU_* marker,
+  # but the CLI sets these for the session it runs, and it is the DeepSeek route (R3 F3).
+  [ "${OPENCODE:-}" = 1 ] || [ -n "${OPENCODE_SESSION_ID:-}" ]
 }
 
 dry=0
 if [ "${1:-}" = "--dry-run" ]; then dry=1; shift; fi
-usage="usage: spawn_agent.sh [--dry-run] <label> <claude|opus|deepseek|deepseek-claude|muse|codex|gemini|argon|hydrogen> [prompt]"
+usage="usage: spawn_agent.sh [--dry-run] <label> <claude|opus|claude-personal|opus-personal|claude-auto|opus-auto|deepseek|deepseek-claude|muse|codex|gemini|argon|hydrogen> [prompt]"
 label="${1:?$usage}"
 agent="${2:?$usage}"
 prompt="${3:-}"
@@ -72,9 +99,31 @@ elif [ -z "$prompt" ]; then
   prompt="Your session label is $label. Do the session start in CLAUDE.md, then wait for JR."
 fi
 
+personal_cmd() {
+  printf '%s' "${MU_CLAUDE_PERSONAL_CMD:-$here/claude_personal.sh}"
+}
+
+choose_account() {
+  PYTHONPATH="$R" python3 -m tools.claude_account choose
+}
+
 case "$agent" in
   claude)          model="${MU_CLAUDE_MODEL:-unknown}"; cmd=(claude "$prompt") ;;
+  claude-personal) model="${MU_CLAUDE_MODEL:-unknown}"; cmd=("$(personal_cmd)" "$prompt") ;;
+  claude-auto)     model="${MU_CLAUDE_MODEL:-unknown}"
+                   account="$(choose_account)" || exit 3
+                   if [ "$account" = personal ]; then cmd=("$(personal_cmd)" "$prompt")
+                   else cmd=(claude "$prompt"); fi ;;
   opus)            model="${MU_OPUS_MODEL:-claude-opus-5-5}"; cmd=(claude --model "$model" --effort medium "$prompt") ;;
+  opus-personal)   model="${MU_OPUS_MODEL:-claude-opus-5-5}"
+                   cmd=("$(personal_cmd)" --model "$model" --effort medium "$prompt") ;;
+  opus-auto)       model="${MU_OPUS_MODEL:-claude-opus-5-5}"
+                   account="$(choose_account)" || exit 3
+                   if [ "$account" = personal ]; then
+                     cmd=("$(personal_cmd)" --model "$model" --effort medium "$prompt")
+                   else
+                     cmd=(claude --model "$model" --effort medium "$prompt")
+                   fi ;;
   deepseek)        model=""; cmd=("$here/opencode_session.sh" --prompt "$prompt") ;;
   deepseek-claude) model="deepseek-v4.1-flash"; cmd=("${MU_DEEPSEEK_CMD:-$HOME/bin/claude-deepseek}" "$prompt") ;;
   muse)            model=""; cmd=("$here/muse_session.sh" --prompt "$prompt") ;;
@@ -83,7 +132,7 @@ case "$agent" in
   argon)           model="${MU_ARGON_MODEL:-gemini-4-argon-medium}"; cmd=(agy --model "$model" -i "$prompt") ;;
   hydrogen)        model="${MU_HYDROGEN_MODEL:-gemini-4-hydrogen-high}"
                    cmd=(agy --model "$model" -i "$prompt") ;;
-  *) echo "spawn_agent: unknown agent '$agent' (claude, opus, deepseek, deepseek-claude, muse, codex, gemini, argon, hydrogen)" >&2; exit 2 ;;
+  *) echo "spawn_agent: unknown agent '$agent' (claude, opus, claude-personal, opus-personal, claude-auto, opus-auto, deepseek, deepseek-claude, muse, codex, gemini, argon, hydrogen)" >&2; exit 2 ;;
 esac
 
 # The route marker the switchboard reads. deepseek and muse set it inside their own wrappers.
@@ -104,17 +153,77 @@ case "$agent" in
     ;;
 esac
 
-inner="$(printf '%q ' "${cmd[@]}")"
-inner="${inner% }; exec bash"
+# A child route must not inherit the caller's route markers (R3 F2). A Claude Code, Codex or
+# Antigravity child started from a DeepSeek session would otherwise look DeepSeek-routed (the spawn
+# guard, /audit's refusal, /context-check's harness) and a DeepSeek child would reserve the parent's
+# MU_OPENCODE_SESSION instead of minting its own. The child's own route re-sets what it needs
+# (opencode_session.sh and muse_session.sh export their markers; hydrogen sets MU_AGENT_CLASS).
+# CLAUDE_CONFIG_DIR is scrubbed too when it points at the secondary account (M-0823 B-4): a personal
+# caller's `claude`/`opus`/`*-auto` child would otherwise start on the secondary account, and the tmux
+# global environment is cleared of it as well so later windows do not inherit it either.
+scrub=(env -u MU_AGENT_CLASS -u MU_AGENT_HARNESS -u MU_AGENT_MODEL -u MU_OPENCODE_MODEL \
+           -u MU_OPENCODE_SESSION -u MU_ALLOW_DEEPSEEK_SPAWN \
+           -u OPENCODE -u OPENCODE_SESSION_ID -u OPENCODE_TERMINAL)
+scrub_vars=(MU_AGENT_CLASS MU_AGENT_HARNESS MU_AGENT_MODEL MU_OPENCODE_MODEL MU_OPENCODE_SESSION \
+            MU_ALLOW_DEEPSEEK_SPAWN OPENCODE OPENCODE_SESSION_ID OPENCODE_TERMINAL CLAUDE_CONFIG_DIR)
+same_dir() { [ -n "$1" ] && [ -n "$2" ] && [ "$(readlink -f -- "$1" 2>/dev/null)" = "$(readlink -f -- "$2" 2>/dev/null)" ]; }
+if same_dir "${CLAUDE_CONFIG_DIR:-}" "${MU_CLAUDE_PERSONAL_CONFIG_DIR:-$HOME/.claude-secondary}"; then
+  scrub+=(-u CLAUDE_CONFIG_DIR)
+fi
+
+# DeepSeek and Muse sessions belong to the shared OpenCode window (JR, 2026-11-12): no tmux window,
+# no window name to collide with. The wrapper mints/pins the session and prints its id.
+case "$agent" in
+  deepseek) shared_wrapper="$here/opencode_session.sh" ;;
+  muse)     shared_wrapper="$here/muse_session.sh" ;;
+  *)        shared_wrapper="" ;;
+esac
+
+if [ -n "$shared_wrapper" ]; then
+  create=("${scrub[@]}" "$shared_wrapper" --session-only --title "Mu $label ($agent)")
+  log="${MU_AGENT_LOG_DIR:-/tmp/opencode}/$label.log"
+else
+  create=()
+  log=""
+  inner="$(printf '%q ' "${scrub[@]}" "${cmd[@]}")"
+  inner="${inner% }; exec bash"
+fi
 
 if [ "$dry" = 1 ]; then
-  printf 'session=%s window=%s dir=%s\nruns (in bash -lic): %s\n' "$S" "$label" "$R" "$inner"
+  if [ -n "$shared_wrapper" ]; then
+    printf 'session=%s no_window=1 dir=%s (started in OpenCode)\ncreate: %s\nthen: %s --run %s\nlog: %s\n' \
+      "$S" "$R" "$(printf '%q ' "${create[@]}")" "$shared_wrapper" "$(printf '%q' "$prompt")" "$log"
+  else
+    printf 'session=%s window=%s dir=%s\nruns (in bash -lic): %s\n' "$S" "$label" "$R" "$inner"
+  fi
+  exit 0
+fi
+
+if [ -n "$shared_wrapper" ]; then
+  # JR, 2026-11-12: a DeepSeek/Spark session is started inside OpenCode and owns no tmux window. The
+  # wrapper mints the session, then `opencode run` drives that session headlessly; the log is the
+  # agent's console and the session is visible in OpenCode while it works.
+  out="$("${create[@]}")" || { echo "spawn_agent: could not create the $agent session" >&2; exit 1; }
+  sid="$(printf '%s\n' "$out" | sed -n 's/^session: //p' | tail -1)"
+  [ -n "$sid" ] || { echo "spawn_agent: $agent session id was not printed" >&2; exit 1; }
+  mkdir -p "$(dirname "$log")"
+  nohup "${scrub[@]}" env MU_OPENCODE_SESSION="$sid" "$shared_wrapper" --run "$prompt" > "$log" 2>&1 &
+  printf 'started %s as '\''%s'\'' in OpenCode (no tmux window): session %s\nlog: %s\n' "$agent" "$label" "$sid" "$log"
   exit 0
 fi
 
 command -v tmux >/dev/null || { echo "spawn_agent: tmux is not installed" >&2; exit 1; }
+created=0
 if ! tmux has-session -t "=$S" 2>/dev/null; then
   tmux new-session -d -s "$S" -n shell -c "$R"
+  created=1
+fi
+if [ "$created" = 1 ]; then
+  # Creating the session copied this caller's environment into tmux's global environment, which
+  # every later window inherits. Drop the route markers a child must never see (R3 F2).
+  for var in "${scrub_vars[@]}"; do
+    tmux set-environment -g -u "$var" 2>/dev/null || true
+  done
 fi
 if tmux list-windows -t "=$S" -F '#{window_name}' | grep -qxF "$label"; then
   echo "spawn_agent: window '$label' already exists in tmux session '$S'" >&2; exit 1

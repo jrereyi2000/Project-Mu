@@ -75,37 +75,43 @@ def classify_prompt(
     conn_info: str = None,
     model: str = DEFAULT_WRITER_MODEL,
 ) -> dict:
-    """Uses Gemini Flash to classify a user article prompt into:
+    """Uses a newsroom model to classify a user article prompt into:
     - target_desk: 'NATIONAL' or 'FANTASY'
     - article_type_id: key in article_types.json
     - writer_archetype: qualified writer
     - team_id: target team ID if applicable, else None
     - desk_note: distilled specific story angle
     - rationale: brief explanation of choice
+
+    The client follows the model (AUDIT R6 F2 / R11): a Go id (`glm-5.3-flash`, the writer default, or
+    `muse-spark-1.3-contributor`) runs on OpenCode Go's Google-compatible transport and needs
+    `OPENCODE_GO_API_KEY` only, while a `gemini-*` id keeps its `GEMINI_API_KEY` requirement.
     """
-    from google import genai
     from google.genai import types
+
+    from newsroom.tool_loop.go_transport import client_for_model, is_go_model
 
     if season is None or week is None:
         curr_s, curr_w = get_league_state(conn_info)
         season = season or curr_s
         week = week or curr_w
 
-    api_key = api_key or os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-    if not api_key:
-        env_file = os.path.join(ROOT, ".env")
-        if os.path.exists(env_file):
-            with open(env_file) as ef:
-                for line in ef:
-                    line = line.strip()
-                    if line.startswith("GEMINI_API_KEY=") or line.startswith("GOOGLE_API_KEY="):
-                        api_key = line.split("=", 1)[1].strip().strip('"').strip("'")
-                        break
+    if not is_go_model(model):
+        api_key = api_key or os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+        if not api_key:
+            env_file = os.path.join(ROOT, ".env")
+            if os.path.exists(env_file):
+                with open(env_file) as ef:
+                    for line in ef:
+                        line = line.strip()
+                        if line.startswith("GEMINI_API_KEY=") or line.startswith("GOOGLE_API_KEY="):
+                            api_key = line.split("=", 1)[1].strip().strip('"').strip("'")
+                            break
 
-    if not api_key:
-        raise RuntimeError("GEMINI_API_KEY is required for prompt classification.")
+        if not api_key:
+            raise RuntimeError("GEMINI_API_KEY is required for prompt classification.")
 
-    client = genai.Client(api_key=api_key)
+    client = client_for_model(model, api_key=api_key, label="custom_commission")
     article_types, fantasy_writers, national_personas = load_article_catalog()
     teams = load_teams(conn_info)
 
@@ -394,7 +400,7 @@ def main():
     parser.add_argument("--slot", help="Slot name override")
     parser.add_argument("--classify-only", action="store_true", help="Only classify and print JSON, do not write")
     parser.add_argument("--dry-run", action="store_true", help="Run without live model call or DB write")
-    parser.add_argument("--model", default=DEFAULT_WRITER_MODEL, help="Gemini model")
+    parser.add_argument("--model", default=DEFAULT_WRITER_MODEL, help="Model id (a Go id or gemini-*)")
 
     args = parser.parse_args()
 

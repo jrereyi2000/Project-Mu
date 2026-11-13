@@ -124,14 +124,29 @@ def test_repo_qa_agent_permissions_are_read_only(agent_frontmatter):
 
     # Last matching rule wins, so deny-all has to come first.
     assert rules[0] == {"action": "*", "resource": "*", "effect": "deny"}
-    assert [r["action"] for r in rules[1:]] == ["read", "glob", "grep"]
-    for rule in rules[1:]:
+    assert [r["action"] for r in rules[1:4]] == ["read", "glob", "grep"]
+    for rule in rules[1:4]:
         assert rule["resource"] == "*"
         assert rule["effect"] == "allow"
 
     allowed = {r["action"] for r in rules if r["effect"] == "allow"}
     assert allowed == {"read", "glob", "grep"}
     assert not allowed & {"shell", "bash", "edit", "write", "patch", "webfetch", "task"}
+
+
+def test_repo_qa_agent_keeps_the_env_read_guard(agent_frontmatter):
+    """R3 F4: `allow read *` re-allowed .env files, overriding OpenCode's default `ask`."""
+    _scalars, lists = agent_frontmatter
+    read_rules = [r for r in lists["permissions"] if r["action"] == "read"]
+    effects = {r["resource"]: r["effect"] for r in read_rules}
+
+    assert effects["*"] == "allow"
+    assert effects["*.env"] == "ask"
+    assert effects["*.env.*"] == "ask"
+    assert effects["*.env.example"] == "allow"
+    # The restore must come after the broad allow, since the last matching rule wins.
+    resources = [r["resource"] for r in read_rules]
+    assert resources.index("*.env") > resources.index("*")
 
 
 def test_offline_skill_names_both_agent_paths():

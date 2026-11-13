@@ -1118,9 +1118,41 @@ def get_team_history(team_identifier: str) -> str:
         return f"Error: {str(e)}"
 
 
+SPLIT_METRIC_UNITS = {
+    "completions": "completions per game",
+    "pass_attempts": "pass attempts per game",
+    "pass_yards": "passing yards per game",
+    "pass_tds": "passing TDs per game",
+    "interceptions": "interceptions per game (a count, not a rate or percentage)",
+    "rush_attempts": "rush attempts per game",
+    "rush_yards": "rushing yards per game",
+    "rush_tds": "rushing TDs per game",
+    "receptions": "receptions per game",
+    "rec_yards": "receiving yards per game",
+    "rec_tds": "receiving TDs per game",
+    "fantasy_points": "fantasy points per game",
+    "comp_pct": "completion percentage (0-100)",
+    "yards_per_attempt": "yards per pass attempt",
+}
+
+
+def split_metric_labels(group):
+    """Unit label for every figure `compute_splits` reports for a position group.
+
+    The split payload used to print bare keys (`interceptions: 0.6`, `+47%`), which let the
+    writer turn a per-game count against strong scoring defenses into an "interception rate
+    when hurried" (V3_DOSSIER_EVALUATION, P8-04). The labels travel with the value.
+    """
+    labels = {stat: SPLIT_METRIC_UNITS[stat] for stat in SPLIT_STATS[group] if stat in SPLIT_METRIC_UNITS}
+    if group == "QB":
+        labels["comp_pct"] = SPLIT_METRIC_UNITS["comp_pct"]
+        labels["yards_per_attempt"] = SPLIT_METRIC_UNITS["yards_per_attempt"]
+    return labels
+
+
 @tool
 def get_player_scheme_splits(player_identifier: str, seasons: int = 2) -> str:
-    """Fetch how a QB, running back, receiver or tight end produces against different kinds of defenses over the last `seasons` seasons (default 2: this one and last): per-game averages and the change from his own average against Strong / Average / Weak scoring defenses (points allowed), pass rushes and coverages (Madden ranks). Only real game lines count. Accepts player name or player ID."""
+    """Fetch how a QB, running back, receiver or tight end produces against different kinds of defenses over the last `seasons` seasons (default 2: this one and last): per-game averages and the change from his own average against Strong / Average / Weak scoring defenses (points allowed), pass rushes and coverages (Madden ranks). Only real game lines count. Accepts player name or player ID. Every figure is a per-game count or average graded by the opponent's season defense, not a rate, and no pressure or hurry split is recorded: a strong scoring-defense split is not a "when hurried" split."""
     try:
         s_val = resolve_season()
         with psycopg.connect(db.db_conn_info) as conn:
@@ -1159,6 +1191,22 @@ def get_player_scheme_splits(player_identifier: str, seasons: int = 2) -> str:
                     "player": name, "position": position, "team": team, "seasons": sorted(span),
                     "real_games": splits["games"], "synthetic_games_skipped": skipped,
                     "overall_per_game": splits["overall_per_game"],
+                    "metric_labels": split_metric_labels(group),
+                    "metric_scope": ("Every figure in overall_per_game and in a split's per_game block is a "
+                                     "per-game average or count over real games, blended toward his overall "
+                                     "average; a count per game is not a rate. comp_pct and yards_per_attempt "
+                                     "are the exceptions: ratios over his attempts (comp_pct a percentage), not "
+                                     "per-game figures. vs_his_average is the percent change in that value, "
+                                     "never a percentage-point change."),
+                    "dimension_scope": {f"{dim} ({desc})": (f"the opponent's season {desc}: a defensive grade, "
+                                                            "not pressure on this player or a game situation"
+                                                            + (", and points allowed in the games visible so far "
+                                                               "(season to date mid-season), not a full-season grade"
+                                                               if dim == "scoring_defense" else ""))
+                                        for dim, desc in DIMENSIONS.items()},
+                    "not_recorded": ["pressure, hurry, blitz, hit and time-to-throw splits",
+                                     "interception rate (only interceptions per game is recorded)",
+                                     "targets, coverage assignment and air yards"],
                     "verdict": (None if any("per_game" in g for d in splits["dimensions"].values() for g in d.values())
                                 else f"Not enough real games yet for any split (each group needs {MIN_GAMES}); "
                                      "don't cite splits for this player."),
@@ -1933,11 +1981,101 @@ LEADER_CATEGORIES = {
     "sacks_allowed": ("-l.blk_sacks_allowed", "l.blk_sacks_allowed IS NOT NULL", "fewest sacks allowed"),
 }
 
+# The leaders query's SELECT list, in row order. `LEADER_RANK_VALUE` is derived from it, so the
+# figure a category is ordered by and the figure its lines print cannot drift apart from the
+# statement (audit-p8-dossier F4: the SELECT order and the index table were two hand-kept lists,
+# so a reorder could silently print one category's total under another's ranking with every test
+# still passing).
+LEADER_SELECT_COLUMNS = (
+    "l.player_id", "COALESCE(l.full_name, l.player_name)", "COALESCE(ps.position, l.position)",
+    "t.city || ' ' || t.name", "l.games_played",
+    "l.def_tackles", "l.def_sacks", "l.def_tfl", "l.def_ints", "l.def_deflections",
+    "l.def_forced_fumbles", "l.def_fumble_recoveries", "l.def_tds", "l.def_safeties",
+    "l.kick_fgm", "l.kick_fga", "l.kick_fg_long", "l.kick_xpm", "l.kick_xpa", "l.kick_fgm_50", "l.kick_fga_50",
+    "l.punt_punts", "l.punt_average", "l.punt_net_average", "l.punt_inside_20",
+    "l.kr_returns", "l.kr_yards", "l.kr_average", "l.kr_tds",
+    "l.pr_returns", "l.pr_yards", "l.pr_average", "l.pr_tds", "l.blk_sacks_allowed",
+    "ps.years_of_experience",
+)
+
+
+def leader_order_column(category):
+    """The row column `category` is ordered by (the ORDER BY expression without its direction)."""
+    return str(LEADER_CATEGORIES[category][0]).lstrip("-").strip()
+
+
+# Index into the row `get_defense_special_teams_leaders` selects, giving the figure that
+# category actually ranks. `takeaways` is computed from two columns.
+LEADER_RANK_VALUE = {cat: LEADER_SELECT_COLUMNS.index(leader_order_column(cat))
+                     for cat in LEADER_CATEGORIES if cat != "takeaways"}
+
+
+def leader_rank_value(row, category):
+    if category == "takeaways":
+        return (row[8] or 0) + (row[11] or 0)
+    return row[LEADER_RANK_VALUE[category]]
+
+
+def leader_listing(rows, category, label, season, team_identifier="", rookies_only=False):
+    """Render one leaders query so each line names the metric that ranks it.
+
+    Rows come back ordered by `label` only, but every line prints the player's full
+    defensive/kicking line. That is how a writer read row 1 of a CAR interceptions list
+    (Darby, 132 tackles) as the team tackle leader while the real leader (Galloway, 153)
+    sat at row 2 (V3_DOSSIER_EVALUATION, P8-04). The `ranked_by` block and the per-line
+    "ranked by ... (list #n)" marker make the ranking explicit; the other figures are
+    context totals, and a ranking in them needs its own category.
+    """
+    lines = []
+    for i, r in enumerate(rows, 1):
+        head = f"{i}. {r[1]} (ID {r[0]}) | {r[2]} | {r[3] or 'Free Agent'}" + (f" | {r[4]} G" if r[4] else "") \
+            + (" | rookie" if r[34] == 0 else (f" | exp {r[34]}" if r[34] is not None else ""))
+        if category == "field_goals":
+            body = kicking_line(r[14], r[15], r[16], r[17], r[18], r[19], r[20])
+        elif category == "punting":
+            body = f"{_num(r[21])} punts, {_num(r[22])} avg, {_num(r[23])} net avg, {_num(r[24])} inside the 20"
+        elif category == "kick_returns":
+            body = f"{_num(r[25])} ret, {_num(r[26])} yds ({_num(r[27])} avg), {_num(r[28])} TD"
+        elif category == "punt_returns":
+            body = f"{_num(r[29])} ret, {_num(r[30])} yds ({_num(r[31])} avg), {_num(r[32])} TD"
+        elif category == "sacks_allowed":
+            body = f"{_num(r[33])} sacks allowed"
+        else:
+            body = defense_line(r[5], r[6], r[7], r[8], r[9], r[10], r[11], r[12], r[13])
+        ranked = _num(leader_rank_value(r, category))
+        lines.append(f"{head} | ranked by {label}: {ranked} (list #{i}) | {body}")
+    scope = "team-filtered" if str(team_identifier or "").strip() else "league-wide"
+    return {
+        "season": season,
+        "category": label,
+        "category_key": category,
+        "ranked_by": {
+            "label": label,
+            "order": "best first",
+            "scope": f"the {scope} list returned here only (at most {len(rows)} rows), not a league or team rank",
+            "warning": (f"Only the 'ranked by {label}' figure ranks these rows. Every other number in a "
+                        "line is a season total shown for context and is not a ranking in that stat, so "
+                        "the first row is not necessarily the team's tackle, sack or interception leader. "
+                        "Ask for the ranking you need by its own category (category='tackles' for a "
+                        "tackle leaderboard)."),
+        },
+        "team": team_identifier or "League-wide",
+        "rookies_only": bool(rookies_only),
+        "leaders": lines or ["No listed players in this category."],
+        "note": ("Season totals from Madden's Season Stats, which lists only the leaders in each category "
+                 f"(defenders are listed by tackles, roughly the top 250). Rows are ordered by {label} only, "
+                 f"so position in this list ranks {label} and nothing else"
+                 + ("; row 1 here is not automatically the team's tackle leader." if label != "tackles" else ".")
+                 + " A player missing here has unknown numbers, not zeros, and a team's listed defenders don't "
+                 "add up to its full team total, so don't sum them into team sacks or takeaways. Pressures, "
+                 "snaps, targets allowed and coverage alignments aren't recorded."),
+    }
+
 
 @tool
 def get_defense_special_teams_leaders(category: str = "sacks", team_identifier: str = "", limit: int = 15,
                                       season: int = 0, rookies_only: bool = False) -> str:
-    """Season leaders in a defensive or special-teams category, league-wide or for one team (team name or abbreviation): each player's full defensive line (tackles, sacks, TFL, INT, pass deflections, forced fumbles, fumble recoveries, defensive TDs) or kicking/punting/return line. category: sacks, interceptions, tackles, tackles_for_loss, pass_deflections, forced_fumbles, takeaways, defensive_tds, field_goals, punting, kick_returns, punt_returns, sacks_allowed (offensive linemen). Each line shows the player's years of experience (rookie = first season). rookies_only=True lists rookies only (for Defensive Rookie of the Year). Use it for a team's defensive playmakers, an opponent's pass rushers or ball hawks, All-Pro defense and special teams, and award races. limit is capped at 50."""
+    """Season leaders in a defensive or special-teams category, league-wide or for one team (team name or abbreviation): each player's full defensive line (tackles, sacks, TFL, INT, pass deflections, forced fumbles, fumble recoveries, defensive TDs) or kicking/punting/return line. category: sacks, interceptions, tackles, tackles_for_loss, pass_deflections, forced_fumbles, takeaways, defensive_tds, field_goals, punting, kick_returns, punt_returns, sacks_allowed (offensive linemen). Each line shows the player's years of experience (rookie = first season). rookies_only=True lists rookies only (for Defensive Rookie of the Year). Use it for a team's defensive playmakers, an opponent's pass rushers or ball hawks, All-Pro defense and special teams, and award races. Rows are ranked only by the requested category, and every line names that ranking; for a tackle leaderboard ask for category='tackles'. limit is capped at 50."""
     try:
         cat = str(category or "sacks").strip().lower().replace(" ", "_")
         if cat not in LEADER_CATEGORIES:
@@ -1953,14 +2091,7 @@ def get_defense_special_teams_leaders(category: str = "sacks", team_identifier: 
                     if not team_id:
                         return f"Team '{team_identifier}' not found."
                 cur.execute(f"""
-                    SELECT l.player_id, COALESCE(l.full_name, l.player_name), COALESCE(ps.position, l.position),
-                           t.city || ' ' || t.name, l.games_played,
-                           l.def_tackles, l.def_sacks, l.def_tfl, l.def_ints, l.def_deflections,
-                           l.def_forced_fumbles, l.def_fumble_recoveries, l.def_tds, l.def_safeties,
-                           l.kick_fgm, l.kick_fga, l.kick_fg_long, l.kick_xpm, l.kick_xpa, l.kick_fgm_50, l.kick_fga_50,
-                           l.punt_punts, l.punt_average, l.punt_net_average, l.punt_inside_20,
-                           l.kr_returns, l.kr_yards, l.kr_average, l.kr_tds,
-                           l.pr_returns, l.pr_yards, l.pr_average, l.pr_tds, l.blk_sacks_allowed, ps.years_of_experience
+                    SELECT {", ".join(LEADER_SELECT_COLUMNS)}
                     FROM season_stat_lines l
                     LEFT JOIN player_seasons ps ON ps.player_id = l.player_id AND ps.season = l.season
                     LEFT JOIN teams t ON t.id = COALESCE(ps.team_id, l.team_id)
@@ -1970,35 +2101,8 @@ def get_defense_special_teams_leaders(category: str = "sacks", team_identifier: 
                     LIMIT %s;
                 """, (s_val, team_id, team_id, bool(rookies_only), lim))
                 rows = cur.fetchall()
-                lines = []
-                for i, r in enumerate(rows, 1):
-                    head = f"{i}. {r[1]} (ID {r[0]}) | {r[2]} | {r[3] or 'Free Agent'}" + (f" | {r[4]} G" if r[4] else "") \
-                        + (" | rookie" if r[34] == 0 else (f" | exp {r[34]}" if r[34] is not None else ""))
-                    if cat == "field_goals":
-                        body = kicking_line(r[14], r[15], r[16], r[17], r[18], r[19], r[20])
-                    elif cat == "punting":
-                        body = f"{_num(r[21])} punts, {_num(r[22])} avg, {_num(r[23])} net avg, {_num(r[24])} inside the 20"
-                    elif cat == "kick_returns":
-                        body = f"{_num(r[25])} ret, {_num(r[26])} yds ({_num(r[27])} avg), {_num(r[28])} TD"
-                    elif cat == "punt_returns":
-                        body = f"{_num(r[29])} ret, {_num(r[30])} yds ({_num(r[31])} avg), {_num(r[32])} TD"
-                    elif cat == "sacks_allowed":
-                        body = f"{_num(r[33])} sacks allowed"
-                    else:
-                        body = defense_line(r[5], r[6], r[7], r[8], r[9], r[10], r[11], r[12], r[13])
-                    lines.append(f"{head} | {body}")
-                return json.dumps({
-                    "season": s_val,
-                    "category": label,
-                    "team": team_identifier or "League-wide",
-                    "rookies_only": bool(rookies_only),
-                    "leaders": lines or ["No listed players in this category."],
-                    "note": "Season totals from Madden's Season Stats, which lists only the leaders in each category "
-                            "(defenders are listed by tackles, roughly the top 250). A player missing here has unknown "
-                            "numbers, not zeros, and a team's listed defenders don't add up to its full team total, so "
-                            "don't sum them into team sacks or takeaways. Pressures, snaps, targets allowed and "
-                            "coverage alignments aren't recorded.",
-                }, indent=2)
+                return json.dumps(leader_listing(rows, cat, label, s_val, team_identifier or "", bool(rookies_only)),
+                                  indent=2)
     except Exception as e:
         return f"Error: {str(e)}"
 
@@ -2892,6 +2996,124 @@ def get_team_injury_report(team_identifier: str, week: int = 0, season: int = 0)
         return f"Error: {str(e)}"
 
 
+RECORD_HOLDER_SEASON = re.compile(r"^(?P<name>.+?)\s*\((?P<season>\d{4})\)$")
+
+
+def previous_holder_season(mention):
+    """('Trey'Mane Davis', 2035) from 'Trey'Mane Davis (2035)', else None (no verifiable season)."""
+    match = RECORD_HOLDER_SEASON.match(str(mention or "").strip())
+    return (match.group("name").strip(), int(match.group("season"))) if match else None
+
+
+def record_result(new_value, previous_value, better="HIGH"):
+    """broke / tied / ranks for a new mark against a previous one; `better` is HIGH or LOW."""
+    new, previous = float(new_value), float(previous_value)
+    if new == previous:
+        return "tied"
+    return "broke" if (new > previous) == (str(better or "HIGH").upper() != "LOW") else "ranks"
+
+
+# How good a result is for the holder: used only to keep a recorded line from upgrading one.
+_RESULT_STRENGTH = {"ranks": 0, "tied": 1, "broke": 2}
+
+
+def _recorded_entry(row):
+    """(season, player_id, holder, value) from a recorded row, with or without the player id."""
+    if len(row) == 4:
+        return row[0], row[1], row[2], row[3]
+    season, holder, value = row
+    return season, None, holder, value
+
+
+def reconcile_record_events(events, better_by_category, recorded):
+    """Flag a record event whose record-book previous value disagrees with the holder's season line.
+
+    The record book carries seeded history (`BOOK`) that can lag the stats: its 2035
+    receiving-TD row says 27 while the recorded 2035 season line says 29, so a 2036 29
+    was reported as a broken record instead of a tie (`V3_DOSSIER_EVALUATION`, P8-04; the
+    eval database was hand-corrected, the source was not). On a real conflict the recorded
+    line wins — `previous_record` is replaced, `result` is recomputed and `source_conflict`
+    carries both values plus the resolution for the writer.
+
+    The override is one-directional (audit-p8-dossier F2). It may only make a mark *worse*:
+    the verified previous value is the best over **every** matching holder (so a co-holder
+    whose line confirms the book, or a partial same-name row below it, can never turn a tie
+    into a broken record), and a recorded value that would upgrade the result (below the
+    book's for a HIGH record, above it for a LOW one) leaves the book's value and result in
+    place and is flagged only, with `kept_book_result` true.
+
+    `recorded` is {category: [(season, holder, value)]} or, when the row carries one,
+    {category: [(season, player_id, holder, value)]} from season_stats / season_stat_lines.
+    Matching is by casefolded name and season; where that name covers more than one player id
+    in the season, `source_conflict.same_name_players` reports how many, since the match is a
+    name match and the value used is the best of them (which cannot upgrade the result).
+    """
+    reconciled = []
+    for event in events:
+        event = dict(event)
+        category, previous = event.get("category"), event.get("previous_record")
+        if previous is None:
+            reconciled.append(event)
+            continue
+        better = better_by_category.get(category, "HIGH")
+        low = str(better).upper() == "LOW"
+        best_value, best_holder, same_name = None, None, 0
+        for mention in event.get("previous_holders") or []:
+            holder_season = previous_holder_season(mention)
+            if not holder_season:
+                continue
+            name, prior_season = holder_season
+            player_ids, values = set(), []
+            for season, player_id, holder, value in map(_recorded_entry, recorded.get(category, [])):
+                if season == prior_season and str(holder).strip().casefold() == name.casefold():
+                    values.append(float(value))
+                    if player_id is not None:
+                        player_ids.add(player_id)
+            if not values:
+                continue
+            same_name = max(same_name, len(player_ids))
+            # The best over every match: max for a HIGH record, min for a LOW one. A value
+            # below the book (above it for LOW) therefore cannot win the comparison.
+            candidate = min(values) if low else max(values)
+            if best_value is None or (candidate < best_value if low else candidate > best_value):
+                best_value, best_holder = candidate, (name, prior_season)
+        if best_value is None:
+            reconciled.append(event)
+            continue
+        if float(previous) == best_value:
+            reconciled.append(event)                    # the recorded line confirms the book
+            continue
+        book_result = event.get("result")
+        resolved = record_result(event.get("value"), best_value, better)
+        kept_book = _RESULT_STRENGTH.get(resolved, 0) > _RESULT_STRENGTH.get(book_result, 0)
+        kept_result = book_result if kept_book else resolved
+        conflict = {
+            "previous_holder": f"{best_holder[0]} ({best_holder[1]})",
+            "book_previous_record": previous,
+            "recorded_previous_record": _num(best_value),
+            "recorded_source": "season_stats / season_stat_lines",
+            "result_if_book_used": book_result,
+            "resolved_result": kept_result,
+            "kept_book_result": kept_book,
+            "note": ("The record-book row and the recorded season line disagree. A recorded line can "
+                     "never make a mark better, only worse, and never upgrades a tie to a broken "
+                     "record, so the record book's value and result stand here and the disagreement is "
+                     "flagged only. Never present this event as broken or shattered, and never describe "
+                     "a tied mark as broken." if kept_book else
+                     "The record-book row and the recorded season line disagree. Use the recorded "
+                     "line; never present this event as broken or shattered, and never upgrade a "
+                     "tie to a broken record."),
+        }
+        if same_name > 1:
+            conflict["same_name_players"] = same_name
+        if not kept_book:
+            event.update(previous_record=_num(best_value),
+                         previous_record_source="recorded season stats")
+        event.update(result=kept_result, source_conflict=conflict)
+        reconciled.append(event)
+    return reconciled
+
+
 @tool
 def get_record_book(category: str = None, team_identifier: str = None, season: int = 0) -> str:
     """Query the all-time NFL record book and franchise records.
@@ -3047,7 +3269,8 @@ def get_record_book(category: str = None, team_identifier: str = None, season: i
                     output["nfl_all_time_records"] = all_nfl
 
                 # 4. Check for any records broken or tied this season
-                from engines.records_engine import evaluate
+                from engines.records_engine import (evaluate, season_defense_values,
+                                                    season_player_values)
                 eval_res = evaluate(cur, s_val)
                 season_records = [
                     {
@@ -3065,7 +3288,25 @@ def get_record_book(category: str = None, team_identifier: str = None, season: i
                     for e in eval_res.get("events", [])
                     if e.get("type") == "nfl_record" or (e.get("type") == "top10" and e.get("result") in ("broke", "tied"))
                 ]
+                # Cross-check those previous values against the holders' recorded season lines.
+                prior_seasons = sorted({holder_season[1] for event in season_records
+                                        for mention in (event.get("previous_holders") or [])
+                                        if (holder_season := previous_holder_season(mention)) and holder_season[1] < s_val})
+                recorded = {}
+                for prior in prior_seasons:
+                    for row in season_player_values(cur, prior) + season_defense_values(cur, prior):
+                        recorded.setdefault(row[0], []).append((prior, row[2], row[3], row[4]))
+                season_records = reconcile_record_events(season_records,
+                                                         {c: info["better"] for c, info in cat_lookup.items()},
+                                                         recorded)
                 output["records_set_this_season"] = season_records
+                output["record_scope_note"] = (
+                    "NFL all-time, franchise and season top-10 are different scopes; a team mark is not a "
+                    "player record. A previous record that disagrees with the holder's recorded season line "
+                    "is flagged source_conflict: the recorded line wins unless it would make the mark "
+                    "better, which is flagged only (the book's value and result then stand), and the "
+                    "event's result is otherwise recomputed. Never call a source_conflict mark broken or "
+                    "'shattered', and never describe a tied mark as broken.")
 
                 return json.dumps(output, indent=2)
     except Exception as e:

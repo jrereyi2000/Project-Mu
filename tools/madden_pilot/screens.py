@@ -108,6 +108,20 @@ class Frame:
                         break
         return None
 
+    def lines_with_rows(self):
+        """[(line text, centre y of its words or None)] in OCR order, for positional rules.
+
+        `self.lines` is authoritative (a caller can pass lines without words); the row comes
+        from the matching word group when there is one.
+        """
+        out = []
+        for index, line in enumerate(self.lines):
+            group = self._groups[index] if index < len(self._groups) else []
+            centres = [float(w["box"][1]) + float(w["box"][3]) / 2
+                       for w in group if w.get("box")]
+            out.append((line, min(centres) if centres else None))
+        return out
+
     def line_is(self, phrase):
         """True when one whole OCR line equals `phrase` (punctuation-blind)."""
         p = norm(phrase)
@@ -184,6 +198,95 @@ def _row_run(px, row, x_center, width, bright):
     return left, right + 1
 
 
+def _covered_bands(px, start, step, height, x0, x1, bright, cover, width, limit=8):
+    """Bands of consecutive rows near `start` that are bright across [x0, x1), outward.
+
+    Used only for a tall selection rectangle whose top border is far from the label. Bounded to
+    `limit` bands so an ordinary menu look does not scan the whole frame for every option.
+    """
+    def covers(row):
+        if row < 0 or row >= height or x1 <= x0:
+            return False
+        lit = sum(1 for column in range(x0, x1) if px[column, row] >= bright)
+        return lit / (x1 - x0) >= cover
+
+    bands: list[list[int]] = []
+    current: list[int] = []
+    row = start
+    while 0 <= row < height and len(bands) < limit:
+        if covers(row):
+            if current and abs(row - current[-1]) <= 4:
+                current.append(row)
+            else:
+                if current:
+                    bands.append(current)
+                current = [row]
+        elif current:
+            bands.append(current)
+            current = []
+            if len(bands) >= limit:
+                break
+        row += step
+    if current and len(bands) < limit:
+        bands.append(current)
+    return bands
+
+
+def _band_run(px, band, center, width, bright):
+    """The widest bright run around `center` on the band's edges (rounded corners vary)."""
+    runs = [_row_run(px, row, center, width, bright) for row in (band[0], band[-1])]
+    runs = [run for run in runs if run is not None]
+    if not runs:
+        return None
+    return max(runs, key=lambda run: run[1] - run[0])
+
+
+def _side_columns(px, rows, edge, width, bright, window):
+    """True when a bright column joins `rows` just inside `edge`, i.e. a rectangle's side."""
+    if not rows:
+        return False
+    for x in range(max(0, edge - window), min(width, edge + window + 1)):
+        if sum(1 for row in rows if px[x, row] >= bright) / len(rows) >= 0.6:
+            return True
+    return False
+
+
+def _enclosing_rectangle(px, up_band, down_band, left, right, bright, width):
+    """True when `up_band` and `down_band` are the top and bottom edges of **one** rectangle.
+
+    A closed panel is a rectangle, so a bright vertical border joins its two horizontal edges on
+    the left and on the right. Two unrelated horizontal rules that happen to span the label (a
+    popup's bottom rule above and a button outline below, the ADVANCE_MENU neighbour bleed of
+    N1) have no such sides and are refused here. The side columns sit just inside the horizontal
+    runs (rounded corners) and are sampled, so the cost is bounded by the pair's own height
+    however tall the card is.
+    """
+    top, bottom = up_band[-1], down_band[0]
+    if bottom - top <= 2:
+        return False
+    step = max(1, (bottom - top) // 48)
+    rows = list(range(top + 1, bottom, step))
+    window = max(3, int(width * 0.006))
+    return (_side_columns(px, rows, left, width, bright, window)
+            and _side_columns(px, rows, right, width, bright, window))
+
+
+def _encloses(px, up_band, down_band, left, right, bright, width, height):
+    """True when the two bands enclose one tall card/panel the label sits inside.
+
+    Either the pair is a **closed shape** (bright sides join it, `_enclosing_rectangle`) or it
+    spans at least a third of the frame's height. A card's own border is far outside `reach` by
+    definition — that is why this fallback exists — while two rules that merely both span the
+    label sit a text row or two apart: on ADVANCE_MENU the popup's bottom rule and the ADVANCE
+    WEEK button's outline are 133-263 px apart at 1080p/1321p (0.12-0.20 of the height), and
+    the measured cards are 642 px in FRANCHISE_LIST and 677 px in the draft-class panel (0.59
+    and 0.63). The draft-class panel's own sides are dark, which is why height is also enough.
+    """
+    if down_band[0] - up_band[-1] >= height * 0.35:
+        return True
+    return _enclosing_rectangle(px, up_band, down_band, left, right, bright, width)
+
+
 def border_highlight(frame, labels, reach=0.06, bright=170, cover=0.85, aliases=None):
     """The one label whose OCR box lies **inside** Madden's selection rectangle, or None.
 
@@ -200,6 +303,9 @@ def border_highlight(frame, labels, reach=0.06, bright=170, cover=0.85, aliases=
     * two separate bands (one above, one below the label) are an outline, accepted only when
       both runs span the label and their left edges agree (the old "nearest bright row" could
       never tell these apart);
+    * a tall card's far-apart top and bottom borders are paired only when both bands are thin
+      border lines and the card's own side borders join them (a closed shape), so an unrelated
+      rule above and a button outline below cannot be read as a card around a neighbour's row;
     * nothing bright, or a label outside every region, means "not selected" — the caller stops
       before Space rather than transferring a neighbour's border.
 
@@ -231,20 +337,21 @@ def border_highlight(frame, labels, reach=0.06, bright=170, cover=0.85, aliases=
         if not boxes:
             return None
 
+        def covers(row, x0, x1):
+            if row < 0 or row >= height or x1 <= x0:
+                return False
+            lit = sum(1 for column in range(x0, x1) if px[column, row] >= bright)
+            return lit / (x1 - x0) >= cover
+
         hits: list[str] = []
         for label, (x, y, w, h) in boxes:
             x0, x1 = max(0, int(x)), min(width, int(x + w))
             if x1 <= x0:
                 continue
+            center = (x0 + x1) // 2
             rows = list(range(max(0, int(y) - span), max(0, int(y)))) + \
                 list(range(min(height, int(y + h)), min(height, int(y + h) + span)))
-            covered: list[int] = []
-            for row in rows:
-                lit = sum(1 for column in range(x0, x1) if px[column, row] >= bright)
-                if lit / (x1 - x0) >= cover:
-                    covered.append(row)
-            if not covered:
-                continue
+            covered = [row for row in rows if covers(row, x0, x1)]
             bands: list[list[int]] = []
             for row in covered:
                 if bands and row - bands[-1][-1] <= 4:
@@ -252,7 +359,6 @@ def border_highlight(frame, labels, reach=0.06, bright=170, cover=0.85, aliases=
                 else:
                     bands.append([row])
             runs: list[tuple[int, int, int, int]] = []      # (top, bottom, run_left, run_right)
-            center = (x0 + x1) // 2
             for band in bands:
                 run = _row_run(px, band[0], center, width, bright) or \
                     _row_run(px, band[-1], center, width, bright)
@@ -276,6 +382,45 @@ def border_highlight(frame, labels, reach=0.06, bright=170, cover=0.85, aliases=
                         break
                 if outlined:
                     break
+            if not (filled or outlined):
+                # A tall portrait card (FRANCHISE_LIST's tiles are ~642 px at 1080p) has its
+                # top border far outside `reach` of the name at the bottom of the card, and
+                # the card's own artwork can produce nearer bright rows. Collect covered rows
+                # outward on each side in bands (bounded), then pair a thin band above with a
+                # thin band below: both runs must span the label, agree on BOTH edges, and be
+                # joined by the card's own side borders. The thinness rule keeps a filled
+                # selected row (ADVANCE_MENU's ~40-row white fill) from being an edge, and the
+                # closed-shape rule keeps two unrelated horizontal rules that both span the
+                # label (that fill's row above, the ADVANCE WEEK button's outline below) from
+                # reading as a card (N1).
+                edge_tol = max(6.0, 0.02 * width)
+                thin = max(6, int(height * 0.006))
+                above_bands = _covered_bands(px, int(y) - 1, -1, height, x0, x1,
+                                             bright, cover, width)
+                below_bands = _covered_bands(px, int(y + h), 1, height, x0, x1,
+                                             bright, cover, width)
+                for up_band in above_bands:
+                    if len(up_band) > thin:
+                        continue
+                    up_run = _band_run(px, up_band, center, width, bright)
+                    if not up_run or up_run[0] > x0 or up_run[1] < x1:
+                        continue
+                    for down_band in below_bands:
+                        if len(down_band) > thin:
+                            continue
+                        down_run = _band_run(px, down_band, center, width, bright)
+                        if not down_run or down_run[0] > x0 or down_run[1] < x1:
+                            continue
+                        if (abs(up_run[0] - down_run[0]) <= edge_tol
+                                and abs(up_run[1] - down_run[1]) <= edge_tol
+                                and _encloses(px, up_band, down_band,
+                                              (up_run[0] + down_run[0]) // 2,
+                                              (up_run[1] + down_run[1]) // 2,
+                                              bright, width, height)):
+                            outlined = True
+                            break
+                    if outlined:
+                        break
             if filled or outlined:
                 hits.append(label)
 

@@ -94,7 +94,7 @@ class ModelResult:
     thinking_tokens: int = 0
     cached_tokens: int = 0
     seconds: float = 0.0
-    cost_usd: float = 0.0
+    cost_usd: Optional[float] = 0.0
     passed: bool = True
     failures: List[str] = dataclasses.field(default_factory=list)
     metrics: Dict[str, Any] = dataclasses.field(default_factory=dict)
@@ -1017,6 +1017,7 @@ def run_evaluation(
             "avg_seconds": 0.0,
             "total_cost_usd": 0.0,
             "avg_cost_usd": 0.0,
+            "unpriced_calls": 0,
         }
         for m in models
     }
@@ -1078,7 +1079,7 @@ def run_evaluation(
                 thinking_tokens=usage.get("thinking_tokens", 0),
                 cached_tokens=usage.get("cached_tokens", 0),
                 seconds=round(elapsed, 3),
-                cost_usd=round(cost, 6),
+                cost_usd=None if cost is None else round(cost, 6),
                 passed=passed,
                 failures=failures,
                 metrics=metrics,
@@ -1097,10 +1098,14 @@ def run_evaluation(
             s["output_tokens"] += res.output_tokens
             s["thinking_tokens"] += res.thinking_tokens
             s["total_seconds"] = round(s["total_seconds"] + res.seconds, 3)
-            s["total_cost_usd"] = round(s["total_cost_usd"] + res.cost_usd, 6)
+            if res.cost_usd is None:                 # an unpriced model is unknown, never $0
+                s["unpriced_calls"] += 1
+            else:
+                s["total_cost_usd"] = round(s["total_cost_usd"] + res.cost_usd, 6)
 
             status_str = "PASS" if passed else f"FAIL ({len(failures)})"
-            print(f"   -> {model:24}: {status_str} in {res.seconds:.2f}s (${res.cost_usd:.5f}) | in:{res.input_tokens} out:{res.output_tokens} think:{res.thinking_tokens}")
+            cost_str = "unpriced" if res.cost_usd is None else f"${res.cost_usd:.5f}"
+            print(f"   -> {model:24}: {status_str} in {res.seconds:.2f}s ({cost_str}) | in:{res.input_tokens} out:{res.output_tokens} think:{res.thinking_tokens}")
 
         report_items.append(item_entry)
 
@@ -1137,6 +1142,7 @@ def render_html_report(data: Dict[str, Any]) -> str:
     for m in models:
         s = summary[m]
         rate_badge = f"<span class='badge {'badge-pass' if s['pass_rate'] >= 90 else 'badge-warn' if s['pass_rate'] >= 60 else 'badge-fail'}'>{s['pass_rate']}% ({s['passed_calls']}/{s['total_calls']})</span>"
+        unpriced_note = f" · {s['unpriced_calls']} unpriced" if s.get("unpriced_calls") else ""
         summary_rows += f"""
         <tr>
             <td><strong>{html.escape(m)}</strong></td>
@@ -1144,7 +1150,7 @@ def render_html_report(data: Dict[str, Any]) -> str:
             <td>{s['total_failures']}</td>
             <td>{s['input_tokens']:,} / {s['output_tokens']:,} / {s['thinking_tokens']:,}</td>
             <td>{s['avg_seconds']:.2f}s ({s['total_seconds']:.1f}s)</td>
-            <td>${s['avg_cost_usd']:.5f} (${s['total_cost_usd']:.4f})</td>
+            <td>${s['avg_cost_usd']:.5f} (${s['total_cost_usd']:.4f}){unpriced_note}</td>
         </tr>
         """
 
@@ -1160,6 +1166,8 @@ def render_html_report(data: Dict[str, Any]) -> str:
             fail_box = f"<ul class='failures-list'>{fail_list}</ul>" if failures else "<p class='pass-text'>All automated guards passed.</p>"
 
             out_text = html.escape(res.get("text", ""))
+            cost = res.get("cost_usd")
+            cost_str = "unpriced" if cost is None else f"${cost:.5f}"
 
             model_cols += f"""
             <div class='model-col'>
@@ -1170,7 +1178,7 @@ def render_html_report(data: Dict[str, Any]) -> str:
                 <div class='metrics-bar'>
                     <span>⏱ {res.get('seconds', 0.0):.2f}s</span>
                     <span>🔢 in:{res.get('input_tokens', 0)} out:{res.get('output_tokens', 0)} think:{res.get('thinking_tokens', 0)}</span>
-                    <span>💵 ${res.get('cost_usd', 0.0):.5f}</span>
+                    <span>💵 {cost_str}</span>
                 </div>
                 <div class='validation-box'>
                     {fail_box}
@@ -1561,6 +1569,9 @@ def run_suite(tasks: List[str], models: List[str], season: int, week: int, limit
             "total_seconds": round(sum(r["total_seconds"] for r in rows), 3),
             "total_cost_usd": round(sum(r["total_cost_usd"] for r in rows), 6),
         }
+        unpriced = sum(r.get("unpriced_calls", 0) for r in rows)
+        if unpriced:
+            totals[m]["unpriced_calls"] = unpriced
     suite["totals"] = totals
 
     os.makedirs(out_dir, exist_ok=True)

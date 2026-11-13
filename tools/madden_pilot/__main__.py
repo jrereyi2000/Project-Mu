@@ -2,9 +2,10 @@
 
     python3 -m tools.madden_pilot launch      [--pack "Mu Base"]
     python3 -m tools.madden_pilot clone-save  [--from CAREER-MU2026] --to CAREER-TUNE-<name>
-    python3 -m tools.madden_pilot sim-season  --save CAREER-TUNE-<name> [--to "week N"|regular-season-end|playoffs-end]
+    python3 -m tools.madden_pilot sim-season  --save CAREER-TUNE-<name> [--managed] [--to "week N"|regular-season-end|playoffs-end]
     python3 -m tools.madden_pilot advance     --save CAREER-TUNE-<name> [--no-quit]
     python3 -m tools.madden_pilot watch-game  --save CAREER-TUNE-<name> [--to kickoff|halftime] [--hold-seconds N]
+    python3 -m tools.madden_pilot boot-game   --save CAREER-TUNE-<name> [--to pregame|kickoff] [--pack P]
     python3 -m tools.madden_pilot catch-up    --save CAREER-<name> [--to-week N] [--dsn ...]
     python3 -m tools.madden_pilot set-setting --path "Settings>Gameplay>Accel Clamp" --value Off
     python3 -m tools.madden_pilot verify-mods --check first_down_line
@@ -74,6 +75,7 @@ class ScriptedMadden:
         self.out = out
         self.t = 0.0
         self.keys = []
+        self.key_log = []
         self.looks = 0
         self.game_quarter = 1
         self.game_seconds = 660       # "1st 11:00": the kickoff scorebug spike S-1 read
@@ -208,6 +210,8 @@ class ScriptedMadden:
         if op == "key":
             name = cmd[cmd.index("--name") + 1]
             times = int(cmd[cmd.index("--times") + 1]) if "--times" in cmd else 1
+            hold = float(cmd[cmd.index("--hold") + 1]) if "--hold" in cmd else None
+            self.key_log.append({"name": name, "screen": self.screen, "hold": hold, "times": times})
             for _ in range(times):
                 before, hl = self.screen, self.highlight
                 self.keys.append(name)
@@ -375,6 +379,13 @@ ROUTES = {
                   "PAUSE_MENU > highlight QUIT GAME (this job's policy; the catalog does not allow it) > Space > "
                   "QUIT_GAME_CONFIRM (EXIT GAME modal) > highlight YES - EXIT TO MENU > Space > "
                   "where it lands (FRANCHISE_LIST reported, not assumed)",
+    "boot-game": "launch {pack} (MMCModManager.exe -launch, unless Madden runs) > window > cold boot (ACCOUNT "
+                 "ERROR, BOOT_SPLASH, TITLE_SCREEN) > a menu > CURRENT FRANCHISES > highlight {tile} > Space > "
+                 "PROGRESSION_WARNING (Proceed) > hub (must be a regular-season game week matching {save}) > "
+                 "GAMEDAY > highlight PLAY SEASON GAME > Space (this job's policy) > GAME_PREGAME_PIVOT > Space > "
+                 "GAME_PREGAME_READY [--to pregame stops here] [--to kickoff: READY > ~40 s intro > "
+                 "GAME_KICKOFF / GAME_KICKOFF_RECEIVE, no key] > hand back to JR (no kick, no play); on a timeout "
+                 "or an unrecognised screen: handback.json, no further key",
 }
 
 
@@ -392,8 +403,12 @@ def build_parser():
     s = sub.add_parser("clone-save", parents=[common], help="copy a save to CAREER-TUNE-<name>")
     s.add_argument("--from", dest="src", default=jobs.BASELINE_SAVE)
     s.add_argument("--to", dest="dst", required=True)
-    s = sub.add_parser("sim-season", parents=[common], help="sim a CAREER-TUNE-* franchise forward")
+    s = sub.add_parser("sim-season", parents=[common],
+                       help="sim a CAREER-TUNE-* franchise forward (a CAREER-MU* managed save with --managed)")
     s.add_argument("--save", required=True)
+    s.add_argument("--managed", action="store_true",
+                   help="allow a CAREER-MU* save (the canonical franchise) as well as CAREER-TUNE-*: it is "
+                        "driven in place, CAREER-MUBASE stays refused, and the watcher must still be stopped")
     s.add_argument("--to", default="regular-season-end", help="'week N', regular-season-end or playoffs-end")
     s.add_argument("--no-quit", action="store_true", help="stay in the franchise after the savepoint")
     s.add_argument("--franchise", help="the franchise already loaded, e.g. TUNE-P2A: sim it in place "
@@ -413,6 +428,19 @@ def build_parser():
     s.add_argument("--franchise", help="the TUNE-* franchise already loaded: watch it in place")
     s.add_argument("--no-quit", action="store_true", help="leave the game/franchise open afterwards")
     s.add_argument("--ready-token", help="the mod-check driver's per-job ready-marker token")
+    s = sub.add_parser("boot-game", parents=[common],
+                       help="launch Madden and boot to the user's pregame/kickoff, then hand JR the controls")
+    s.add_argument("--save", required=True)
+    s.add_argument("--pack", default=jobs.DEFAULT_PACK)
+    s.add_argument("--to", default="pregame",
+                   help="pregame (stop on the READY/readiness screen) or kickoff (also press READY, "
+                        "then stop on the kickoff itself; never kicks)")
+    s.add_argument("--franchise", help="the franchise already loaded (TUNE-<x> or MU<x>); must be the save's own tile")
+    s.add_argument("--managed", action="store_true",
+                   help="allow a CAREER-MU* save (the canonical franchise) as well as CAREER-TUNE-*")
+    s.add_argument("--no-launch", action="store_true", help="use the Madden that is already running")
+    s.add_argument("--timeout", type=int, default=jobs.BOOT_GAME_TIMEOUT,
+                   help=f"seconds for the game-start chain, GAMEDAY to the target (default {jobs.BOOT_GAME_TIMEOUT})")
     s = sub.add_parser("catch-up", parents=[common],
                        help="sim the real CAREER-* franchise one week at a time, waiting for the NFL mirror")
     s.add_argument("--save", required=True)
@@ -493,13 +521,13 @@ def run_dir_for(job, given=None, dry_run=False):
 def dry_pilot(catalog, run_dir, args, out=print):
     start, intro = {"launch": ("MAIN_MENU", 2), "sim-season": ("FRANCHISE_LIST", 0), "quit": ("HUB_WEEKLY", 0),
                     "advance": ("FRANCHISE_LIST", 0), "catch-up": ("FRANCHISE_LIST", 0),
-                    "watch-game": ("FRANCHISE_LIST", 0),
+                    "watch-game": ("FRANCHISE_LIST", 0), "boot-game": ("BOOT_SPLASH", 0),
                     "set-setting": ("HUB_WEEKLY", 0),
                     "verify-mods": ("MAIN_MENU", 0)}.get(args.job, ("MAIN_MENU", 0))
-    if args.job in ("sim-season", "advance", "watch-game") and getattr(args, "franchise", None):
+    if args.job in ("sim-season", "advance", "watch-game", "boot-game") and getattr(args, "franchise", None):
         start = "HUB_WEEKLY"
     tiles = ["TUNE-SPIKE"]
-    if args.job in ("sim-season", "advance", "catch-up", "watch-game"):
+    if args.job in ("sim-season", "advance", "catch-up", "watch-game", "boot-game"):
         tile = jobs.tile_name(args.save).upper()
         tiles = ["ALLUSER-AUTOSAVE", tile] + (["TUNE-SPIKE"] if tile != "TUNE-SPIKE" else [])
     fake = ScriptedMadden(catalog, start=start, tiles=tiles, intro=intro, out=out)
@@ -517,7 +545,7 @@ def main(argv=None, out=print):
     run_dir = run_dir_for(args.job, args.run_dir, args.dry_run)
     catalog = load_catalog()
     fmt = {k: v for k, v in vars(args).items() if v is not None}
-    if args.job in ("sim-season", "advance", "catch-up", "watch-game"):
+    if args.job in ("sim-season", "advance", "catch-up", "watch-game", "boot-game"):
         fmt["tile"] = jobs.tile_name(args.save)
     real_notice = navigate.send_notice
     try:
@@ -551,7 +579,7 @@ def _run(args, run_dir, catalog, fmt, out):
                 out("[dry-run] WARNING: pipeline.watch_save is running; a live run would refuse")
             watcher = lambda: False  # noqa: E731
         result = jobs.sim_season(pilot, save=args.save, to=args.to, watcher=watcher, quit=not args.no_quit,
-                                 franchise=args.franchise)
+                                 franchise=args.franchise, managed=args.managed)
     elif args.job == "advance":
         watcher = jobs.watcher_running
         if args.dry_run:
@@ -567,6 +595,18 @@ def _run(args, run_dir, catalog, fmt, out):
         result = jobs.watch_game(pilot, save=args.save, franchise=args.franchise, to=args.to,
                                  hold_seconds=args.hold_seconds, pack=args.pack, watcher=watcher,
                                  quit=not args.no_quit, ready_token=args.ready_token)
+    elif args.job == "boot-game":
+        watcher = jobs.watcher_running
+        kw = {}
+        if args.dry_run:
+            if jobs.watcher_running():
+                out("[dry-run] WARNING: pipeline.watch_save is running; a live run would refuse")
+            watcher = lambda: False  # noqa: E731
+            kw = {"run": lambda argv: out(f"  run   {' '.join(argv)} (dry run: not started)"),
+                  "madden_running": lambda: False, "manager_running": lambda: False}
+        result = jobs.boot_game(pilot, save=args.save, pack=args.pack, to=args.to, franchise=args.franchise,
+                                managed=args.managed, watcher=watcher, launch=not args.no_launch,
+                                timeout=args.timeout, **kw)
     elif args.job == "catch-up":
         kw = {}
         if args.dry_run:
@@ -588,7 +628,7 @@ def _run(args, run_dir, catalog, fmt, out):
         result = jobs.quit_franchise(pilot, franchise=args.franchise, allow_quit=args.allow_quit)
     out(json.dumps(result, indent=1, default=str))
     status = result.get("status")
-    return 0 if status in ("ok", "pass") else 2 if status == "unknown" else 1
+    return 0 if status in ("ok", "pass") else 2 if status in ("unknown", "handback") else 1
 
 
 class _Missing(dict):

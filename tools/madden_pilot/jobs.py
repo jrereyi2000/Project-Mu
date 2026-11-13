@@ -11,6 +11,7 @@ result dict. `status` is one of:
     launch(pilot, pack="Mu Base")
     clone_save(pilot, src="CAREER-MU2026", dst="CAREER-TUNE-<name>")
     sim_season(pilot, save="CAREER-TUNE-<name>", to="week N" | "regular-season-end" | "playoffs-end")
+    sim_season(pilot, save="CAREER-MU<name>", to="week N", managed=True)
     advance(pilot, save="CAREER-TUNE-<name>")
     watch_game(pilot, save="CAREER-TUNE-<name>", to="kickoff" | "halftime" | "supersim")
     catch_up(pilot, save="CAREER-<name>", to_week=None, dsn=None)
@@ -23,6 +24,13 @@ the clone never overwrites a file that isn't CAREER-TUNE-*; sim_season refuses w
 pipeline.watch_save runs (a clone keeps the original's LeagueID, so the watcher would ingest it
 into the real franchise database); quitting a franchise that isn't TUNE-* is refused unless
 allow_quit (quitting writes <save>-AUTOSAVE).
+
+The managed-save allowance (CLOSE_OUT_CHECKLIST P7-00e, JR 2026-11-12) adds one explicit second
+class and loosens nothing: sim_season also accepts a CAREER-MU* save, but only when the caller
+passes managed=True (`--managed`), and CAREER-MUBASE is refused even then because it is the
+hash-pinned baseline that must never be simulated (P7-00a). Without --managed a CAREER-MU* save
+is refused exactly as before, and every other name is refused with or without it. clone_save,
+advance and watch_game stay CAREER-TUNE-* only.
 
 catch_up is the opposite of sim_season (NFL_WEEKLY_MIRROR_PLAN.md section 2.12): the real
 CAREER-* franchise, with pipeline.watch_save running. It sims one week, saves, quits to the main
@@ -50,11 +58,13 @@ import sys
 import time
 from pathlib import Path
 
-from tools.madden_pilot.navigate import ROOT, TITLE, PilotStop, Stuck, Unknown, same_option
+from tools.madden_pilot.navigate import ROOT, TITLE, Forbidden, PilotStop, Stuck, Unknown, same_option
 from tools.madden_pilot.screens import UNKNOWN, label_match, norm
 
 DEFAULT_SAVES_DIR = "/mnt/c/Users/jrere/Documents/Madden NFL 27/saves/"
 TUNE_SAVE_PREFIX = "CAREER-TUNE-"
+MANAGED_SAVE_PREFIX = "CAREER-MU"      # the canonical franchise's managed saves (CAREER-MU2026)
+PINNED_BASELINE_SAVE = "CAREER-MUBASE"  # hash-pinned; never simulated (P7-00a)
 CAREER_PREFIX = "CAREER-"
 BASELINE_SAVE = "CAREER-MU2026"
 DEFAULT_PACK = "Mu Base"
@@ -203,6 +213,27 @@ def read_header(frame):
     return None
 
 
+TICKER_BAND = 0.965         # the bottom Broadcast Ticker starts near here; it is not this game
+
+
+def _frame_height(frame):
+    """The frame's pixel height, from the look's own size or (once) the saved PNG."""
+    try:
+        if frame.size and len(frame.size) >= 2:
+            return float(frame.size[1])
+    except TypeError:
+        pass
+    if frame.png:
+        try:
+            from PIL import Image
+            with Image.open(frame.png) as opened:
+                frame.size = [opened.width, opened.height]
+            return float(frame.size[1])
+        except Exception:                    # no image/Pillow: no positional rule
+            return None
+    return None
+
+
 def read_game_clock(frame):
     """The game clock off the scorebug's OCR: {"quarter": 1-4 | "OT", "seconds": s}, or None.
 
@@ -213,10 +244,25 @@ def read_game_clock(frame):
     time: a clock needs one or two digits before its separator, and a bare ":40" has none, and
     a time is never read without a quarter word beside it. OCR-digits are not guessed at, so a
     clock that reads as "O:18" is a miss, not a wrong 0:18 — the job would rather stop.
+
+    **The bottom Broadcast Ticker is never this game's clock** (F12): a frame with an unreadable
+    main scorebug ("ost IO:S6") but a lower ticker line "1ST 14:53" used to return the *other*
+    game's 14:53. Rows whose words sit in the bottom `TICKER_BAND` are ignored, so that frame
+    reads None and the caller stops instead of resuming a half on another game's clock.
     """
     if frame is None:
         return None
-    for line in frame.lines:
+    height = _frame_height(frame)
+    cutoff = height * TICKER_BAND if height else None
+
+    def in_ticker(box):
+        if cutoff is None or not box:
+            return False
+        return float(box[1]) + float(box[3]) / 2 > cutoff
+
+    for line, row_y in frame.lines_with_rows():
+        if cutoff is not None and row_y is not None and row_y > cutoff:
+            continue
         up = str(line).upper()
         quarter = _QUARTER_RE.search(up)
         if not quarter:
@@ -226,7 +272,8 @@ def read_game_clock(frame):
             return {"quarter": _QUARTERS[quarter.group(1)],
                     "seconds": int(clock.group(1)) * 60 + int(clock.group(2))}
     # A row split across two OCR lines: the quarter word and the clock word keep their boxes.
-    words = [(str(w.get("text") or "").upper().strip(), w.get("box")) for w in frame.words]
+    words = [(str(w.get("text") or "").upper().strip(), w.get("box")) for w in frame.words
+             if not in_ticker(w.get("box"))]
     quarters = [(text, box) for text, box in words if box and text in _QUARTERS]
     clocks = [(text, box) for text, box in words if box and _CLOCK_RE.fullmatch(text)]
     best = None
@@ -288,9 +335,11 @@ def _summary(name, result):
     st = result.get("status")
     bits = [f"{name}: {st}"]
     for k in ("why", "reason", "save", "season", "weeks_simmed", "end_week", "stopped_because", "pack", "dst",
-              "check", "route", "minutes"):
+              "check", "route", "minutes", "to", "screen"):
         if result.get(k) not in (None, "", []):
             bits.append(f"{k} {result[k]}")
+    if result.get("next"):
+        bits.append(f"next: {result['next']}")
     if result.get("screenshot"):
         bits.append(str(result["screenshot"]))
     return "\n".join(bits)
@@ -325,6 +374,45 @@ def job(name):
 
 def _refuse(why, **extra):
     return {"status": "refused", "why": why, **extra}
+
+
+def save_name_refusal(save, managed=False, verb="simmed"):
+    """Why `save` may not be driven, or None when it may (CLOSE_OUT_CHECKLIST P7-00e).
+
+    Two save classes only:
+      CAREER-TUNE-*  disposable tuning clones, always allowed — the class the pilot exists for;
+      CAREER-MU*     the canonical franchise's managed saves, allowed only with `managed`
+                     (`sim-season --managed`), because driving the real franchise is a decision
+                     the caller has to state.
+    Every other name is refused with or without the flag, and CAREER-MUBASE is refused even with
+    `managed`: it is the hash-pinned baseline (data/baselines/CAREER-MUBASE.sha256) and must never
+    be simulated (P7-00a)."""
+    upper = str(save or "").upper()
+    if save and _valid_save_name(save):
+        if upper.startswith(TUNE_SAVE_PREFIX):
+            return None
+        if upper.startswith(MANAGED_SAVE_PREFIX):
+            if not managed:
+                return (f"{save} is a managed save: it is {verb} only with --managed "
+                        f"({TUNE_SAVE_PREFIX}* stays for disposable clones)")
+            if upper.startswith(PINNED_BASELINE_SAVE):
+                return (f"{PINNED_BASELINE_SAVE} is the pinned baseline and is never {verb}, "
+                        f"not even with --managed (P7-00a)")
+            return None
+    allowed = f"{TUNE_SAVE_PREFIX}* or {MANAGED_SAVE_PREFIX}*" if managed else f"{TUNE_SAVE_PREFIX}*"
+    return f"only {allowed} saves are {verb}, not {save!r}"
+
+
+def _allow_tile(pilot, tile):
+    """Let CURRENT FRANCHISES confirm exactly `tile` for this run, and nothing else.
+
+    The catalog permits only TUNE-* tiles. Two jobs drive a save outside that class by design: the
+    catch-up (the real franchise) and `sim-season --managed` (the canonical one), so each allows its
+    own tile here. `_walk_to_tile` still stops on any other tile's border."""
+    pilot.policy.setdefault("FRANCHISE_LIST", [])
+    if tile not in pilot.policy["FRANCHISE_LIST"]:
+        pilot.policy["FRANCHISE_LIST"].append(tile)
+    return tile
 
 
 # ------------------------------------------------------------------------------- clone_save
@@ -371,8 +459,16 @@ def clone_save(pilot, src=BASELINE_SAVE, dst=None, folder=None, dry_run=False, p
     existing CAREER-TUNE-* file is replaced, anything else never is. The copy gets a fresh
     mtime, so Madden lists it first. The copy is then capacity-pruned (prune_capacity) so
     every tuning run starts with the headroom the season needs; a refused prune leaves the
-    plain copy and reports itself in the result."""
+    plain copy and reports itself in the result.
+
+    The managed class (P7-00e) is deliberately not clonable: sim_season's `--managed` drives the
+    one canonical CAREER-MU* save in place, and a second CAREER-MU* file would keep the real
+    LeagueID while also sitting inside the watcher's CAREER-MU* scope."""
     folder = Path(folder) if folder else saves_dir()
+    if dst and str(dst).upper().startswith(MANAGED_SAVE_PREFIX):
+        return _refuse(f"{dst} is a managed save: it is the canonical franchise, driven in place by "
+                       f"sim-season --managed and under the watcher's {MANAGED_SAVE_PREFIX}* scope; "
+                       f"clone to {TUNE_SAVE_PREFIX}<name> instead", src=src, dst=dst)
     if not dst or not str(dst).upper().startswith(TUNE_SAVE_PREFIX) or len(dst) <= len(TUNE_SAVE_PREFIX):
         return _refuse(f"destination must be {TUNE_SAVE_PREFIX}<name>, not {dst!r}", src=src, dst=dst)
     if not _valid_save_name(dst) or not _valid_save_name(src):
@@ -533,18 +629,11 @@ def launch(pilot, pack=DEFAULT_PACK, run=None, madden_running=None, timeout=LAUN
     The manager runs with its own folder as the working directory (launch_cwd), and the job
     refuses while another MMCModManager.exe is open: `start` would only focus that window, so the
     pack would never be applied and the run would wait 300 s for nothing."""
-    run = run or (lambda argv: subprocess.run(argv, check=True, cwd=launch_cwd()))
-    running = (madden_running or _madden_running)()
-    argv = launch_command(pack)
-    progress.update(pack=pack, command=argv, already_running=bool(running), cwd=launch_cwd())
-    if not running:
-        if (manager_running or _manager_running)():
-            return _refuse("MMCModManager.exe is already open: close it and launch again — a second "
-                           "`start` only focuses the open window (and two managers race over ModData), "
-                           "so the pack is never applied", **progress)
-        run(argv)
-    _wait_window(pilot, timeout)
-    _, screen = wait_menu(pilot, timeout)
+    if run is None:
+        run = lambda argv: subprocess.run(argv, check=True, cwd=launch_cwd())
+    screen, argv, refusal = _start_madden(pilot, pack, run, madden_running, manager_running, timeout, progress)
+    if refusal:
+        return _refuse(refusal, **progress)
     # Provenance for a later same-process fixture (F6): the Windows PID + start time make the
     # instance identifiable, and the applied-pack fingerprint makes its pack state checkable.
     # A machine that cannot read either records it as unverified; that is not a launch failure,
@@ -561,10 +650,28 @@ def launch(pilot, pack=DEFAULT_PACK, run=None, madden_running=None, timeout=LAUN
         applied = None
     identity = identity if isinstance(identity, dict) else None
     applied = applied if isinstance(applied, dict) else None
-    return {"status": "ok", "pack": pack, "command": argv, "already_running": bool(running), "screen": screen,
-            "cwd": progress.get("cwd"),
+    return {"status": "ok", "pack": pack, "command": argv, "already_running": progress.get("already_running"),
+            "screen": screen, "cwd": progress.get("cwd"),
             "process": identity, "process_verified": bool(identity),
             "applied": applied, "applied_verified": bool(applied and applied.get("pack") == pack)}
+
+
+def _start_madden(pilot, pack, run, madden_running, manager_running, timeout, progress):
+    """The launch half of `launch`, shared with boot-game: start Madden with `pack` unless it
+    already runs, wait for its window, then press through the catalogued cold boot to a menu.
+    Returns ``(screen, argv, refusal)``; `refusal` is the manager-open message, else None."""
+    running = (madden_running or _madden_running)()
+    argv = launch_command(pack)
+    progress.update(pack=pack, command=argv, already_running=bool(running), cwd=launch_cwd())
+    if not running:
+        if (manager_running or _manager_running)():
+            return None, argv, ("MMCModManager.exe is already open: close it and launch again — a second "
+                                "`start` only focuses the open window (and two managers race over ModData), "
+                                "so the pack is never applied")
+        run(argv)
+    _wait_window(pilot, timeout)
+    _, screen = wait_menu(pilot, timeout)
+    return screen, argv, None
 
 
 # ------------------------------------------------------------------------------- sim_season
@@ -996,15 +1103,32 @@ def _mtime(path):
 
 @job("sim-season")
 def sim_season(pilot, save=None, to="regular-season-end", watcher=None, folder=None, quit=True, progress=None,
-               franchise=None):
+               franchise=None, managed=False):
     """Load CAREER-TUNE-<name> from the franchise list, sim with NEXT WEEK until `to`, create a
     savepoint, and quit back to the franchise list. Refuses other saves and a running watcher
     before touching the PC. `franchise` (a TUNE-* tile name) says that franchise is already
-    loaded: sim it in place instead of quitting to the list and loading it again."""
-    if not save or not str(save).upper().startswith(TUNE_SAVE_PREFIX) or not _valid_save_name(save):
-        return _refuse(f"only {TUNE_SAVE_PREFIX}* saves are simmed, not {save!r}", save=save)
-    if franchise and not norm(tile_name(franchise)).startswith("TUNE"):
-        return _refuse(f"only a TUNE-* franchise may be simmed in place, not {franchise!r}", save=save)
+    loaded: sim it in place instead of quitting to the list and loading it again.
+
+    `managed=True` (`--managed`) is the managed-save allowance (P7-00e): it also accepts a
+    CAREER-MU* save, the canonical franchise, and allows that save's own tile on CURRENT
+    FRANCHISES for the run. CAREER-MUBASE stays refused (P7-00a). The watcher rule is unchanged:
+    a managed run still needs `pipeline.watch_save` stopped and ingests its weeks afterwards.
+    `franchise` must be the save's own tile on a managed run (P7-00e F1), and the quit guard is
+    lifted only when the loaded franchise is that tile."""
+    why = save_name_refusal(save, managed=managed, verb="simmed")
+    if why:
+        return _refuse(why, save=save)
+    if franchise:
+        wanted = "MU" if str(save).upper().startswith(MANAGED_SAVE_PREFIX) else "TUNE"
+        if not norm(tile_name(franchise)).startswith(wanted):
+            return _refuse(f"only a {wanted}-* franchise may be simmed in place, not {franchise!r}", save=save)
+        if wanted == "MU" and norm(tile_name(franchise)) != norm(tile_name(save)):
+            # P7-00e F1 (audit M-0814): a managed run may sim in place only the save's own MU-*
+            # tile. Another MU-* is a franchise this run was not told to drive — trusting the
+            # caller's word here simmed CAREER-MUBASE and wrote CAREER-MUBASE-AUTOSAVE inside the
+            # watcher's CAREER-MU* scope.
+            return _refuse(f"a managed run may sim in place only the save's own MU-* tile "
+                           f"({tile_name(save)}), not {franchise!r}", save=save)
     try:
         kind, n = parse_target(to)
     except ValueError as e:
@@ -1018,7 +1142,11 @@ def sim_season(pilot, save=None, to="regular-season-end", watcher=None, folder=N
         return _refuse(f"no save {save} in {folder} (clone-save first)", save=save)
     before = {"save": _mtime(save_path), "autosave": _mtime(auto_path)}
     tile = tile_name(save)
-    progress.update(save=save, to=to, weeks_simmed=0)
+    if managed and str(save).upper().startswith(MANAGED_SAVE_PREFIX):
+        # CURRENT FRANCHISES lets only TUNE-* tiles be confirmed; a managed save's own tile is
+        # allowed for this run and nothing else (the catch-up does the same for the real save).
+        _allow_tile(pilot, tile)
+    progress.update(save=save, to=to, weeks_simmed=0, managed=bool(managed))
 
     if franchise:
         # The operator says this franchise is already loaded: go straight to its hub. Checking
@@ -1072,11 +1200,19 @@ def sim_season(pilot, save=None, to="regular-season-end", watcher=None, folder=N
         saved = "autosave (copied to the named save)"
     progress.update(saved=saved)
     if quit:
-        pilot.goto("FRANCHISE_LIST")
+        # A managed save is the real franchise, and quitting writes its autosave — which is exactly
+        # how this job makes the named save and closes the franchise for the league office. `--managed`
+        # is the operator's explicit permission, so it lifts the TUNE-only quit guard (catalog
+        # `quit_guard`) for this route only, through the same switch the `quit` job calls allow_quit.
+        # P7-00e F1 (audit M-0814): the lift belongs to the save's own tile, not to the flag alone.
+        # If the hub turns out to be another franchise, quitting it would write that franchise's
+        # autosave, so the guard stays up and the run stops Forbidden instead.
+        lifted = bool(managed) and norm(pilot.loaded_franchise or "") == norm(tile_name(save))
+        pilot.goto("FRANCHISE_LIST", allow_quit=lifted)
     after = {"save": _mtime(save_path), "autosave": _mtime(auto_path)}
     return {"status": "ok", "save": save, "to": to, "save_path": str(save_path), "autosave_path": str(auto_path),
             "start_week": progress.get("start_week"), "end_week": head.get("week"), "end_phase": head["phase"],
-            "weeks_simmed": weeks, "saved": saved, "quit": quit,
+            "weeks_simmed": weeks, "saved": saved, "quit": quit, "managed": bool(managed),
             "written": {k: (after[k] is not None and after[k] != before[k]) for k in after}}
 
 
@@ -1160,6 +1296,37 @@ def advance(pilot, save=None, franchise=None, quit=True, watcher=None, folder=No
 SIM_SCREENS = ("SUPERSIM_MENU", "SUPERSIM_JUMP_FORWARD")
 
 
+def _allow_play_season_game(pilot):
+    """The guarded allowance both game-starting jobs share: HUB_GAMEDAY's `confirm_ok` keeps
+    ADVANCE WEEK alone (the catalog is never widened); PLAY SEASON GAME is added to the pilot's
+    own policy for this run, exactly as the spike's guard did (spike S-1)."""
+    pilot.policy.setdefault("HUB_GAMEDAY", [])
+    if "PLAY SEASON GAME" not in pilot.policy["HUB_GAMEDAY"]:
+        pilot.policy["HUB_GAMEDAY"].append("PLAY SEASON GAME")
+
+
+def _open_game(pilot, timeout=PREGAME_TIMEOUT):
+    """HUB → GAMEDAY → PLAY SEASON GAME → the pregame pivot's unlabelled SELECT.
+
+    Shared by watch-game (which then kicks off) and boot-game (which hands back before any
+    football key). The pregame pivot's only control is a SELECT hint that does not OCR as a
+    label, so its Space is pressed directly; READY, if it comes next, is left to the caller.
+    Returns the screen the game opened on (normally GAME_PREGAME_READY)."""
+    _allow_play_season_game(pilot)
+    start_screens = ["GAME_PREGAME_READY", "GAME_KICKOFF", "GAME_KICKOFF_RECEIVE", "GAME_PLAY_CALL"]
+    _, screen = wait_known(pilot, HUBS, timeout, poll=1.0, what="a franchise hub")
+    if screen != "HUB_GAMEDAY":
+        pilot.goto("HUB_GAMEDAY", timeout=timeout)
+    pilot.highlight("PLAY SEASON GAME")
+    pilot.confirm_on("HUB_GAMEDAY", "PLAY SEASON GAME", wait=2.5)
+    _, screen = wait_known(pilot, ["GAME_PREGAME_PIVOT", "GAME_PREGAME_READY"], timeout, poll=1.0,
+                           what="the pregame")
+    if screen == "GAME_PREGAME_PIVOT":
+        pilot.press("select", _confirm=True, wait=2.5)
+        _, screen = wait_known(pilot, start_screens, timeout, poll=1.0, what="the ready screen")
+    return screen
+
+
 def _start_game(pilot):
     """GAMEDAY's PLAY SEASON GAME → pregame → READY → the intro → kickoff, and how it started.
 
@@ -1175,28 +1342,14 @@ def _start_game(pilot):
     already gone by the first look (a late attach). The receiving view is never sent the
     kicker's Space hold: it carries no kick controls and its measured transition needs none.
     """
-    pilot.policy.setdefault("HUB_GAMEDAY", [])
-    if "PLAY SEASON GAME" not in pilot.policy["HUB_GAMEDAY"]:
-        pilot.policy["HUB_GAMEDAY"].append("PLAY SEASON GAME")
-    start_screens = ["GAME_PREGAME_READY", "GAME_KICKOFF", "GAME_KICKOFF_RECEIVE", "GAME_PLAY_CALL"]
-    _, screen = wait_known(pilot, HUBS, PREGAME_TIMEOUT, poll=1.0, what="a franchise hub")
-    if screen != "HUB_GAMEDAY":
-        pilot.goto("HUB_GAMEDAY", timeout=PREGAME_TIMEOUT)
-    pilot.highlight("PLAY SEASON GAME")
-    pilot.confirm_on("HUB_GAMEDAY", "PLAY SEASON GAME", wait=2.5)
-    _, screen = wait_known(pilot, ["GAME_PREGAME_PIVOT", "GAME_PREGAME_READY"], PREGAME_TIMEOUT,
-                           poll=1.0, what="the pregame")
-    if screen == "GAME_PREGAME_PIVOT":
-        pilot.press("select", _confirm=True, wait=2.5)
-        _, screen = wait_known(pilot, start_screens, PREGAME_TIMEOUT, poll=1.0,
-                               what="the ready screen")
+    screen = _open_game(pilot)
     if screen == "GAME_PREGAME_READY":
         pilot.highlight("READY")
         pilot.confirm_on("GAME_PREGAME_READY", "READY", wait=3.0)
         screen = None
     if screen is None:
-        _, screen = wait_known(pilot, start_screens[1:], GAME_INTRO_TIMEOUT, poll=2.0,
-                               what="kickoff")
+        _, screen = wait_known(pilot, ["GAME_KICKOFF", "GAME_KICKOFF_RECEIVE", "GAME_PLAY_CALL"],
+                               GAME_INTRO_TIMEOUT, poll=2.0, what="kickoff")
     if screen == "GAME_KICKOFF":
         pilot.press("select", hold=KICK_HOLD, _confirm=True, wait=2.0)   # a hold, not a tap (S-1)
         return screen, "kicking"
@@ -1461,7 +1614,11 @@ def _to_halftime(pilot, progress):
                    f"clock of {HALFTIME_MIN_CLOCK}-{HALFTIME_WINDOW - 1}s may take the half's last "
                    f"play, so no snap is pressed", Stuck)
     _take_one_snap(pilot)                              # the half's last play
-    return pilot.screen, clock
+    # One look after the snap so the ready marker names what is actually on screen at the hold
+    # (the auditor's F1: the pre-snap screen was reported). The show itself is still not
+    # observed here, and the marker says show_observed: false.
+    _, screen = pilot.look()
+    return screen, clock
 
 
 def _quit_game(pilot, save=None):
@@ -1711,6 +1868,189 @@ def watch_game(pilot, save=None, franchise=None, to="kickoff", hold_seconds=60, 
             "written": written, "autosave_written": written["autosave"], **leaving}
 
 
+# ------------------------------------------------------------------------------- boot-game
+BOOT_TARGETS = ("pregame", "kickoff")     # where P8-12 hands JR the controls
+BOOT_GAME_TIMEOUT = 180                   # seconds for the game-start chain (GAMEDAY -> the target)
+HANDBACK_FILE = "handback.json"           # boot-game's one ending file (instead of stop.json)
+
+# What JR does next, per screen a hand-back can leave him on. Guidance only: the pilot's last
+# key is always a menu one, so every one of these is a state he can play from.
+HANDBACK_NEXT = {
+    "GAME_PREGAME_PIVOT": "press Space once to open the readiness screen, then Space on READY",
+    "GAME_PREGAME_READY": "press Space on READY to start the intro, then kick off yourself",
+    "GAME_KICKOFF": "hold Space about 1.5 s to kick off",
+    "GAME_KICKOFF_RECEIVE": "the CPU kicks on its own; call your first play when the play call arrives",
+    "GAME_PLAY_CALL": "call your first play",
+    "HUB_GAMEDAY": "press PLAY SEASON GAME yourself",
+}
+
+
+def _boot_target(to):
+    target = " ".join(str(to or "").strip().lower().replace("_", "-").split())
+    if target not in BOOT_TARGETS:
+        raise ValueError(f"--to must be {' or '.join(BOOT_TARGETS)}, not {to!r}")
+    return target
+
+
+def _handback_next(screen):
+    return HANDBACK_NEXT.get(screen) or (
+        "the pilot pressed nothing more; take over from the screen in the screenshot")
+
+
+def _boot_handback(pilot, error, **extra):
+    """The job's designed ending when it cannot reach the target: hand control back to JR.
+
+    A timeout (Stuck) or an unrecognised screen (Unknown) is not a crash for boot-game: the run
+    stops pressing, writes run_dir/handback.json (the pilot's stop.json describes the same event,
+    so it is folded in and removed), and lets the caller report `handback` while JR plays from
+    whatever is on screen. Safety stops (`Forbidden`) are not handed back — they still stop.
+    """
+    screen = error.info.get("screen") or error.info.get("last_known")
+    payload = {
+        "status": "handback", **extra,
+        "kind": error.kind, "reason": error.reason,
+        "screen": error.info.get("screen"), "last_known": error.info.get("last_known"),
+        "screenshot": error.info.get("screenshot"), "step": error.info.get("step"),
+        "next": _handback_next(screen),
+        "time": datetime.datetime.now().isoformat(timespec="seconds"),
+    }
+    Path(pilot.run_dir).mkdir(parents=True, exist_ok=True)
+    (Path(pilot.run_dir) / HANDBACK_FILE).write_text(json.dumps(payload, indent=1, default=str))
+    (Path(pilot.run_dir) / "stop.json").unlink(missing_ok=True)
+    return payload
+
+
+@job("boot-game")
+def boot_game(pilot, save=None, pack=DEFAULT_PACK, to="pregame", franchise=None, managed=False,
+              folder=None, progress=None, launch=True, timeout=BOOT_GAME_TIMEOUT,
+              launch_timeout=LAUNCH_TIMEOUT, watcher=None, run=None, madden_running=None,
+              manager_running=None):
+    """Boot straight into the user's game: launch → franchise → GAMEDAY → pregame, then hand back.
+
+    V2_MASTER_PLAN §8 route 2 (CLOSE_OUT_CHECKLIST P8-12): Madden is driven only through the
+    catalogued screens and guarded key presses, and the user never touches Madden's menus. The
+    route is `launch` (cold boot to a menu) → the save's own tile on CURRENT FRANCHISES → the
+    saved franchise's hub (checked against the save's own week) → GAMEDAY → PLAY SEASON GAME →
+    the pregame pivot. `--to pregame` (default) stops on the readiness screen (`READY`), the
+    first static pregame frame; `--to kickoff` also confirms READY and stops on the kickoff
+    itself (kicking or receiving view).
+
+    **It never makes a football call.** Its last key is a menu one (the pivot's SELECT, or READY
+    for `--to kickoff`); it never kicks off, calls a play or snaps the ball. The kickoff's 1.5 s
+    Space hold belongs to `watch-game` (and to JR here).
+
+    **Screen checks** are recorded in `result.json`'s `screen_checks`: the cold boot landed on a
+    menu, the tile loaded, the hub is a regular-season game week that matches the save, and the
+    game opened on the pivot. Any earlier screen (bye week, offseason, a hub reading a different
+    week than the save) stops before PLAY SEASON GAME.
+
+    **Hand-back to JR:** a timeout or an unrecognised screen does not stop the run as a failure.
+    It writes `run_dir/handback.json` (where the pilot stopped, the screenshot, and what JR does
+    next on that screen) and reports `status: "handback"`, leaving Madden exactly as it is. Only
+    `Forbidden` (a safety rule) still stops. Callers treat `handback` as "JR has it now".
+
+    The save class is `sim-season`'s: `CAREER-TUNE-*` always, `CAREER-MU*` with `--managed` only
+    (`CAREER-MUBASE` never). `--franchise` means that franchise is already loaded and must be the
+    save's own tile. The watcher rule is unchanged: stop `pipeline.watch_save` first.
+    """
+    why = save_name_refusal(save, managed=managed, verb="booted into")
+    if why:
+        return _refuse(why, save=save)
+    try:
+        target = _boot_target(to)
+    except ValueError as e:
+        return _refuse(str(e), save=save)
+    if franchise and norm(tile_name(franchise)) != norm(tile_name(save)):
+        return _refuse(f"a franchise may be booted in place only on the save's own tile "
+                       f"({tile_name(save)}), not {franchise!r}", save=save)
+    if (watcher or watcher_running)():
+        return _refuse("pipeline.watch_save is running: stop it first (a clone keeps the real "
+                       "franchise's LeagueID, so the watcher would ingest it)", save=save)
+    try:
+        timeout = int(timeout)
+    except (TypeError, ValueError):
+        return _refuse(f"--timeout must be a whole number of seconds, not {timeout!r}", save=save)
+    if timeout < 10:
+        return _refuse(f"--timeout {timeout}s is too short for a game start (10 s minimum)", save=save)
+    folder = Path(folder) if folder else saves_dir()
+    save_path, auto_path = folder / save, folder / f"{save}-AUTOSAVE"
+    if folder.is_dir() and not save_path.is_file() and not getattr(pilot, "dry_run", False):
+        return _refuse(f"no save {save} in {folder} (clone-save first)", save=save)
+    tile = tile_name(save)
+    if str(save).upper().startswith(MANAGED_SAVE_PREFIX):
+        _allow_tile(pilot, tile)          # its own tile on CURRENT FRANCHISES, nothing else
+    progress.update(save=save, to=target, pack=pack, managed=bool(managed), franchise=franchise)
+    checks = []
+    try:
+        if launch:
+            screen, argv, refusal = _start_madden(pilot, pack, run, madden_running, manager_running,
+                                                  launch_timeout, progress)
+            if refusal:
+                return _refuse(refusal, save=save, command=progress.get("command"),
+                               cwd=progress.get("cwd"))
+            checks.append({"check": "cold-boot", "screen": screen, "command": argv})
+        if franchise:
+            pilot.loaded_franchise = norm(tile_name(franchise))
+        else:
+            _load_franchise(pilot, tile, save=save, folder=folder)
+            checks.append({"check": "load", "tile": tile, "screen": pilot.screen,
+                           "franchise": pilot.loaded_franchise})
+        head = _week_now(pilot)
+        if head is None:
+            pilot.stop("boot-game: the hub is on a bye week, so there is no game to boot", Stuck)
+        if head.get("phase") != "WEEK" or not head.get("week") or not 1 <= int(head["week"]) <= 18:
+            pilot.stop(f"boot-game: the franchise is at {head.get('phase')}, not a regular-season "
+                       f"game week; there is no game to boot", Stuck)
+        latest = _latest_save(save_path, auto_path)
+        disk = None if getattr(pilot, "dry_run", False) or not latest.is_file() else _save_header(latest)
+        if disk and disk.get("phase") == "WEEK" and disk.get("week"):
+            same_week = disk["week"] == head["week"]
+            same_year = not disk.get("year") or not head.get("year") or disk["year"] == head["year"]
+            if not (same_week and same_year):
+                pilot.stop(f"boot-game: the hub reads {head.get('year')} WEEK {head['week']} but {save} "
+                           f"holds {disk.get('year')} WEEK {disk['week']}; not starting the wrong game", Stuck)
+        checks.append({"check": "game-week", "year": head.get("year"), "week": head["week"],
+                       "save_week": (disk or {}).get("week")})
+        deadline = pilot.clock() + timeout
+        screen = _open_game(pilot, timeout=max(5.0, min(PREGAME_TIMEOUT, deadline - pilot.clock())))
+        checks.append({"check": "gameday", "screen": "HUB_GAMEDAY",
+                       "highlight": "PLAY SEASON GAME", "opened_on": screen})
+        note = None
+        clock = None
+        if target == "pregame":
+            checks.append({"check": "pregame", "screen": screen})
+            if screen != "GAME_PREGAME_READY":
+                note = ("the readiness screen was already past when the pilot looked; it pressed "
+                        "nothing further")
+        else:
+            if screen == "GAME_PREGAME_READY":
+                pilot.highlight("READY")
+                pilot.confirm_on("GAME_PREGAME_READY", "READY", wait=3.0)
+                screen = None
+            if screen is None:
+                _, screen = wait_known(pilot, ["GAME_KICKOFF", "GAME_KICKOFF_RECEIVE", "GAME_PLAY_CALL"],
+                                       timeout=max(5.0, min(GAME_INTRO_TIMEOUT, deadline - pilot.clock())),
+                                       poll=2.0, what="the kickoff")
+            checks.append({"check": "kickoff", "screen": screen})
+            clock = read_game_clock(pilot.frame)
+            if screen == "GAME_PLAY_CALL":
+                note = ("the game started on the receiving side and Madden had already advanced "
+                        "from the kickoff to the play call; the pilot pressed nothing there")
+        progress.update(end_screen=pilot.screen, clock=clock)
+        result = {"status": "ok", "save": save, "franchise": pilot.loaded_franchise, "to": target,
+                  "pack": pack, "screen": pilot.screen, "clock": clock, "managed": bool(managed),
+                  "launched": bool(launch), "screen_checks": checks, "handback": False,
+                  "football_key": "none: boot-game stops before the kickoff"}
+        if note:
+            result["note"] = note
+        return result
+    except Forbidden:
+        raise
+    except PilotStop as error:
+        return _boot_handback(pilot, error, save=save, to=target,
+                              franchise=pilot.loaded_franchise, screen_checks=checks)
+
+
 # ------------------------------------------------------------------------------- catch_up
 class _MirrorStore:
     """Reads nfl_mirror_settings and nfl_mirror_weeks for the catch-up job; it never writes.
@@ -1849,10 +2189,7 @@ def catch_up(pilot, save=None, to_week=None, dsn=None, progress=None, *, watcher
     # The catalog lets CURRENT FRANCHISES confirm only TUNE-* tiles; the catch-up is the one job
     # allowed the real franchise, so it allows exactly this tile's name for this run (and nothing
     # else: _walk_to_tile still stops on any other tile's border).
-    tile = tile_name(save)
-    pilot.policy.setdefault("FRANCHISE_LIST", [])
-    if tile not in pilot.policy["FRANCHISE_LIST"]:
-        pilot.policy["FRANCHISE_LIST"].append(tile)
+    tile = _allow_tile(pilot, tile_name(save))
     folder = Path(folder) if folder else saves_dir()
     save_path, auto_path = folder / save, folder / f"{save}-AUTOSAVE"
     if folder.is_dir() and not save_path.is_file() and not getattr(pilot, "dry_run", False):

@@ -382,3 +382,119 @@ class GoDefaultsUnchangedTests(unittest.TestCase):
             for label in ("press", "agent_memory", "inbox", "scouting_notes", "agent_wire", "gm_rationale"):
                 self.assertEqual(resolve_provider(label), "gemini", label)
                 self.assertEqual(resolve_model("gemini", label), DEFAULT_GEMINI_MODEL, label)
+
+
+class EstimateCostGoTests(unittest.TestCase):
+    """AUDIT R6 F4 Deferral 2: `estimate_cost` priced every unlisted model at Gemini's (0.15, 0.60), so a
+    Go model's cost was silently wrong instead of priced at its own list rate or reported unpriced."""
+
+    # 2M input of which 1M was cached, 1M output. GLM-5.3-Flash's published rates are
+    # 0.15 in / 0.03 cached read / 0.50 out per million (tools/article_model_compare.py PRICES):
+    #   1M uncached * 0.15 + 1M cached * 0.03 + 1M out * 0.50 = 0.68
+    # Gemini's fallback would answer 2M * 0.15 + 1M * 0.60 = 0.90.
+    USAGE = {"input_tokens": 2_000_000, "cached_tokens": 1_000_000,
+             "output_tokens": 1_000_000, "thinking_tokens": 0}
+
+    def test_glm_5_3_flash_is_priced_at_its_published_rates(self):
+        self.assertAlmostEqual(llm_provider.estimate_cost("glm-5.3-flash", dict(self.USAGE)),
+                               0.68, places=9)
+        self.assertNotAlmostEqual(llm_provider.estimate_cost("glm-5.3-flash", dict(self.USAGE)),
+                                  0.90, places=9)          # never Gemini's numbers
+
+    def test_the_cached_rate_is_used_for_cached_tokens(self):
+        # 1M cached, nothing else: 0.03 at the cached-read rate, not 0.15 at the input rate.
+        self.assertAlmostEqual(
+            llm_provider.estimate_cost("glm-5.3-flash",
+                                       {"input_tokens": 1_000_000, "cached_tokens": 1_000_000,
+                                        "output_tokens": 0}),
+            0.03, places=9)
+
+    def test_the_repro_usage_no_longer_answers_geminis_number(self):
+        # newsroom/social_writer.write_post's usage shape, 200 in / 0 cached / 50 out:
+        # GLM lists 200 * 0.15 + 50 * 0.50 = 0.000055; the old Gemini fallback said 0.00006.
+        usage = {"input": 200, "cached": 0, "output": 50, "thinking": 0}
+        self.assertAlmostEqual(llm_provider.estimate_cost("glm-5.3-flash", usage), 0.000055, places=12)
+
+    def test_a_go_call_says_its_dollars_are_an_allowance_not_cash(self):
+        detail = llm_provider.cost_estimate("glm-5.3-flash", dict(self.USAGE))
+        self.assertEqual(detail["basis"], "allowance")
+        self.assertAlmostEqual(detail["usd"], 0.68, places=9)
+        self.assertEqual(detail["cash_usd"], 0.0)          # the allowance pays; no card is charged
+        self.assertIn("allowance", detail["note"].lower())
+        self.assertIn("not $0", detail["note"])
+
+    def test_an_unpriced_model_is_none_with_a_reason_not_gemini_numbers(self):
+        self.assertIsNone(llm_provider.estimate_cost("some-unlisted-model-9", dict(self.USAGE)))
+        detail = llm_provider.cost_estimate("some-unlisted-model-9", dict(self.USAGE))
+        self.assertEqual(detail["basis"], "unpriced")
+        self.assertIsNone(detail["usd"])
+        self.assertIn("unpriced", detail["note"].lower())
+
+    def test_a_gemini_call_is_still_cash_and_unchanged(self):
+        usage = {"input_tokens": 1_000_000, "output_tokens": 1_000_000, "thinking_tokens": 0}
+        self.assertAlmostEqual(llm_provider.estimate_cost("gemini-3.8-flash", usage), 0.75, places=9)
+        detail = llm_provider.cost_estimate("gemini-3.8-flash", usage)
+        self.assertEqual(detail["basis"], "cash")
+        self.assertAlmostEqual(detail["cash_usd"], 0.75, places=9)
+        self.assertEqual(detail["note"], "")
+
+    def test_a_local_model_is_free_by_construction(self):
+        self.assertEqual(llm_provider.estimate_cost("ollama/qwen2.5:14b", dict(self.USAGE)), 0.0)
+        self.assertEqual(llm_provider.cost_estimate("ollama/qwen2.5:14b", dict(self.USAGE))["basis"],
+                         "local")
+
+    def test_a_prefixed_gemini_id_is_cash_not_an_allowance(self):
+        """N5: `models/gemini-…` and `google/gemini-…` are Gemini ids, not Go models."""
+        usage = {"input_tokens": 1_000_000, "output_tokens": 1_000_000, "thinking_tokens": 0}
+        for model in ("models/gemini-3.8-flash", "google/gemini-2.5-pro"):
+            detail = llm_provider.cost_estimate(model, usage)
+            self.assertEqual(detail["basis"], "cash", model)
+            self.assertAlmostEqual(detail["cash_usd"], detail["usd"], places=12)
+            self.assertGreater(detail["usd"], 0.0)
+
+    def test_a_longer_model_id_wins_over_its_prefix(self):
+        # "gemini-2.5-flash" is a prefix of nothing here, but a Go id with a suffix must not be
+        # priced by a shorter key that happens to be inside it.
+        self.assertEqual(llm_provider._price_for("gemini-3.8-flash-preview")[0], "gemini-3.8-flash")
+
+
+class GoKeyIsolationTests(unittest.TestCase):
+    """AUDIT R6 F1 and AUDIT_QUEUE_INVENTORY.md R11: a caller's Gemini key can never authenticate, or become
+    the cached credential of, the process's OpenCode Go client, and a bare Go id never resolves to Gemini."""
+
+    def setUp(self):
+        clear_go_client()
+
+    def tearDown(self):
+        clear_go_client()
+
+    def test_resolve_provider_sends_a_bare_go_id_to_go(self):
+        with mock.patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(resolve_provider(model="glm-5.3-flash"), "go")
+            self.assertEqual(resolve_provider(model="muse-spark-1.3-contributor"), "go")
+            self.assertEqual(resolve_provider(model="gemini-3.8-flash"), "gemini")
+            self.assertEqual(resolve_provider(model="qwen2.5:14b"), "gemini")   # an Ollama tag is not a Go id
+
+    def test_a_caller_key_never_reaches_go_client(self):
+        client = FakeGoClient("go text")
+        with mock.patch("newsroom.tool_loop.go_transport.go_client", return_value=client) as built, \
+                mock.patch("newsroom.tool_loop.go_transport.go_api_key", return_value="oc_sk_env"):
+            text = generate_text("p", source="agent_memory", model="glm-5.3-flash",
+                                 api_key="GEMINI_KEY", log_tokens=False)
+
+        self.assertEqual(text, "go text")
+        built.assert_called_once()               # no key argument: the transport reads OPENCODE_GO_API_KEY itself
+        self.assertEqual(built.call_args.args, ())
+        self.assertNotIn("api_key", built.call_args.kwargs)
+        self.assertEqual(built.call_args.kwargs.get("label"), "llm_provider")
+
+    def test_a_gemini_key_cannot_stand_in_for_the_go_key(self):
+        with mock.patch("google.genai.Client", side_effect=AssertionError("a client was built")) as built, \
+                mock.patch("newsroom.tool_loop.go_transport.go_api_key", return_value=None):
+            with self.assertRaises(ValueError) as ctx:
+                generate_text("p", source="agent_memory", model="glm-5.3-flash",
+                              api_key="GEMINI_KEY", log_tokens=False)
+
+        self.assertEqual(str(ctx.exception), "OPENCODE_GO_API_KEY is not set")
+        built.assert_not_called()
+

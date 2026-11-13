@@ -21,13 +21,23 @@ import os
 import tempfile
 import unittest
 import urllib.error
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
 
 from tools import go_usage
 
 NOW = datetime(2026, 11, 12, 12, 0, 0, tzinfo=timezone.utc)
+
+
+def frozen_datetime(at):
+    """A datetime class whose now() is pinned, so a ledger fixture never ages out by wall clock."""
+    class Frozen(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return at if tz is None else at.astimezone(tz)
+
+    return Frozen
 THRESHOLDS = {"rolling": 85.0, "weekly": 99.0, "monthly": 95.0}
 API_BODY = {"usage": {
     "rolling": {"status": "ok", "percent": 2, "resetsAt": "2026-11-12T13:04:00Z"},
@@ -62,6 +72,10 @@ def ledger_row(at, allowance_usd, model="deepseek-v4.1-flash", label="dossier"):
             "list_cost_usd": allowance_usd * 1.5, "billing_source": "go"}
 
 
+def iso(at):
+    return at.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 class GoUsageTestCase(unittest.TestCase):
     """Runs main() with a clean environment and a temp repo root, so no .env is read."""
 
@@ -71,19 +85,20 @@ class GoUsageTestCase(unittest.TestCase):
         self.tmp = Path(self._tmp.name)
         self.ledger = str(self.tmp / "go_allowance.jsonl")
 
-    def run_cli(self, argv, env=None):
+    def run_cli(self, argv, env=None, now=NOW):
         base_env = {"MU_GO_ALLOWANCE_FILE": self.ledger}
         base_env.update(env or {})
         stdout = io.StringIO()
         with mock.patch.dict(os.environ, base_env, clear=True), \
              mock.patch.object(go_usage, "_REPO_ROOT", self.tmp), \
              mock.patch.object(go_usage, "DEFAULT_THRESHOLDS", dict(THRESHOLDS)), \
+             mock.patch.object(go_usage, "datetime", frozen_datetime(now)), \
              contextlib.redirect_stdout(stdout):
             code = go_usage.main(argv)
         return code, stdout.getvalue()
 
-    def run_json(self, argv, env=None):
-        code, out = self.run_cli(list(argv) + ["--json"], env=env)
+    def run_json(self, argv, env=None, now=NOW):
+        code, out = self.run_cli(list(argv) + ["--json"], env=env, now=now)
         return code, json.loads(out)
 
     def check(self, **kwargs):
@@ -205,16 +220,17 @@ class TestApiSource(GoUsageTestCase):
 
 
 class TestLedgerSource(GoUsageTestCase):
-    def fixture(self):
-        """Entries a fixed distance from NOW: only the first lands in every window."""
+    def fixture(self, anchor=NOW):
+        """Entries a fixed distance from the anchor: only the first lands in every window."""
+        month_start = anchor.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         write_ledger(self.ledger, [
-            ledger_row("2026-11-12T11:00:00Z", 0.1),    # 1 h ago  -> 5h, week, month
-            ledger_row("2026-11-12T02:00:00Z", 0.2),    # 10 h ago -> week, month
-            ledger_row("2026-11-08T12:00:00Z", 0.4),    # 4 d ago  -> week, month
-            ledger_row("2026-11-01T00:00:00Z", 0.8),    # 11 d ago -> month
-            ledger_row("2026-10-31T23:59:00Z", 1.6),    # last month -> nothing
+            ledger_row(iso(anchor - timedelta(hours=1)), 0.1),      # 1 h ago  -> 5h, week, month
+            ledger_row(iso(anchor - timedelta(hours=10)), 0.2),     # 10 h ago -> week, month
+            ledger_row(iso(anchor - timedelta(days=4)), 0.4),       # 4 d ago  -> week, month
+            ledger_row(iso(anchor - timedelta(days=11)), 0.8),      # 11 d ago -> month
+            ledger_row(iso(month_start - timedelta(minutes=1)), 1.6),  # last month -> nothing
             {"at": "not a timestamp", "allowance_usd": 9.9},
-            {"at": "2026-11-12T11:30:00Z", "allowance_usd": None},
+            {"at": iso(anchor - timedelta(minutes=30)), "allowance_usd": None},
         ])
 
     def test_window_sums_without_a_limit_print_dollars_and_exit_one(self):
@@ -284,6 +300,31 @@ class TestLedgerSource(GoUsageTestCase):
         self.assertEqual(code, 0)
         self.assertAlmostEqual(document["windows"]["monthly"]["percent"], 1.5)
 
+    def test_zero_monthly_limit_is_refused_without_a_crash(self):
+        self.fixture()
+        code, document = self.run_json(["--source", "ledger", "--monthly-limit", "0"])
+        self.assertEqual(code, 1)
+        self.assertIn("invalid monthly limit: 0", document["message"])
+        self.assertIn("5h $0.1000", document["message"])
+        self.assertNotIn("%", document["message"])
+        for window in ("rolling", "weekly", "monthly"):
+            self.assertIsNone(document["windows"][window]["percent"])
+            self.assertIsNone(document["windows"][window]["limit_usd"])
+
+    def test_zero_monthly_limit_from_the_environment_is_refused(self):
+        self.fixture()
+        code, out = self.run_cli(["--source", "ledger"], env={"MU_GO_MONTHLY_LIMIT": "0"})
+        self.assertEqual(code, 1)
+        self.assertIn("invalid monthly limit: 0", out)
+
+    def test_negative_monthly_limit_never_prints_negative_percentages(self):
+        self.fixture()
+        code, out = self.run_cli(["--source", "ledger", "--monthly-limit", "-5"])
+        self.assertEqual(code, 1)
+        self.assertIn("invalid monthly limit: -5", out)
+        self.assertNotIn("-25%", out)
+        self.assertNotIn("$-", out)
+
     def test_cli_prints_dollars_for_the_ledger(self):
         self.fixture()
         code, out = self.run_cli(["--source", "ledger"])
@@ -291,6 +332,73 @@ class TestLedgerSource(GoUsageTestCase):
         self.assertIn("go allowance: 5h $0.1000", out)
         self.assertIn("month $1.5000", out)
         self.assertNotIn("%", out)
+
+    def test_ledger_windows_follow_the_injected_clock_not_the_wall_clock(self):
+        anchor = datetime(2027, 6, 20, 12, 0, tzinfo=timezone.utc)
+        self.fixture(anchor)
+        code, out = self.run_cli(["--source", "ledger"], now=anchor)
+        self.assertEqual(code, 1)
+        self.assertIn("go allowance: 5h $0.1000", out)
+        self.assertIn("weekly $0.7000", out)
+        self.assertIn("month $1.5000", out)
+
+        code, out = self.run_cli(["--source", "ledger", "--monthly-limit", "100"], now=anchor)
+        self.assertEqual(code, 0)
+        self.assertIn("month $1.5000 of $100.00", out)
+
+
+class TestUnpricedLedgerRows(GoUsageTestCase):
+    """AUDIT R6 F4 Deferral 1: a ledger line that carries tokens but no allowance amount must never be
+    priced as $0 (which reads as "this cost nothing"); the report says nothing is priced instead."""
+
+    def token_row(self, at):
+        return {"at": iso(at), "model": "glm-5.3-flash", "label": "social_writer",
+                "input_tokens": 200, "cached_tokens": 0, "output_tokens": 50}
+
+    def test_a_ledger_of_token_rows_only_says_it_cannot_price_them(self):
+        write_ledger(self.ledger, [self.token_row(NOW - timedelta(minutes=5))])
+        code, message, document = self.check(source="ledger", monthly_limit=60.0)
+        self.assertEqual(code, 1)
+        self.assertIn("no priced entries", message)
+        self.assertIn("1 entry carries no allowance amount", message)
+        self.assertNotIn("$0.0000", message)
+        self.assertEqual(document["windows"]["rolling"]["entries"], 0)
+        self.assertEqual(document["unpriced"], 1)
+
+    def test_a_mixed_ledger_reports_the_unpriced_rows_beside_the_dollars(self):
+        write_ledger(self.ledger, [
+            self.token_row(NOW - timedelta(minutes=5)),
+            ledger_row(iso(NOW - timedelta(hours=1)), 0.1),
+        ])
+        code, message, document = self.check(source="ledger")
+        self.assertEqual(code, 1)                       # still "limit unknown" without a limit
+        self.assertIn("5h $0.1000", message)
+        self.assertIn("1 unpriced", message)
+        self.assertEqual(document["unpriced"], 1)
+
+    def test_the_priced_row_shape_is_unchanged_when_nothing_is_unpriced(self):
+        write_ledger(self.ledger, [ledger_row(iso(NOW - timedelta(hours=1)), 0.1)])
+        code, message, document = self.check(source="ledger")
+        self.assertEqual(document["unpriced"], 0)
+        self.assertNotIn("unpriced", message)
+
+    def test_one_tiny_call_never_prints_as_zero_dollars(self):
+        write_ledger(self.ledger, [ledger_row(iso(NOW - timedelta(minutes=5)), 1.2e-05)])
+        code, message, document = self.check(source="ledger", monthly_limit=60.0)
+        self.assertEqual(code, 0)
+        self.assertIn("5h <$0.0001", message)
+        self.assertNotIn("$0.0000", message)
+        self.assertEqual(document["windows"]["rolling"]["usd"], 1.2e-05)
+
+
+class TestFrozenClockFormatting(GoUsageTestCase):
+    def test_api_reset_labels_follow_the_injected_clock(self):
+        with mock.patch("urllib.request.urlopen", return_value=FakeResponse(API_BODY)):
+            code, out = self.run_cli(["--source", "api"],
+                                     env={"OPENCODE_GO_API_KEY": "test-key"},
+                                     now=datetime(2026, 11, 13, 12, 0, tzinfo=timezone.utc))
+        self.assertEqual(code, 0)
+        self.assertIn("(resets Nov 12)", out)
 
 
 if __name__ == "__main__":

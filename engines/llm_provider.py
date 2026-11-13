@@ -146,6 +146,14 @@ def resolve_provider(
         if val in ("gemini", "ollama", "go"):
             return val
 
+    # A bare id OpenCode Go serves (`glm-5.3-flash`, `muse-spark-1.3-contributor`, …) is a Go call, never a
+    # Gemini one: sending it to Google's endpoint answers 404 (AUDIT_QUEUE_INVENTORY.md R11). Non-Go ids keep
+    # their old answer below, and an Ollama tag (`qwen2.5:14b`) is left to its own provider.
+    if model and ":" not in model.strip():
+        from newsroom.tool_loop.go_transport import is_go_model
+        if is_go_model(model):
+            return "go"
+
     return "gemini"
 
 
@@ -360,16 +368,19 @@ def call_gemini(
 _GO_CLIENT: Any = None
 
 
-def get_go_client(api_key: Optional[str] = None) -> Any:
+def get_go_client() -> Any:
     """The process's OpenCode Go client, built once by `go_transport.go_client()`.
 
-    Raises the transport's `ValueError` (`OPENCODE_GO_API_KEY is not set`) when no Go key is
-    configured: a Go call never falls back to a Gemini key or a Gemini answer.
+    The client is authenticated by `OPENCODE_GO_API_KEY` alone (AUDIT R6 F1): a caller's `api_key` is never
+    forwarded here, so a Gemini key can neither authenticate a Go call nor be cached as the Go client's
+    credential for the rest of the process. Raises the transport's `ValueError`
+    (`OPENCODE_GO_API_KEY is not set`) before any client is built or any network call is made: a Go call never
+    falls back to a Gemini key or a Gemini answer.
     """
     global _GO_CLIENT
     if _GO_CLIENT is None:
         from newsroom.tool_loop.go_transport import go_client
-        _GO_CLIENT = go_client(api_key=api_key)
+        _GO_CLIENT = go_client(label="llm_provider")
     return _GO_CLIENT
 
 
@@ -389,6 +400,8 @@ def call_go(
 
     Same shape as `call_gemini`: returns (text, usage_dict, resp). The client is the one
     `go_transport.go_client()` builds, unless a caller injects one (tests, comparisons).
+    `api_key` is accepted for signature compatibility and ignored: a Go call is authenticated by
+    `OPENCODE_GO_API_KEY` only, so a forwarded Gemini key can never reach Go (AUDIT R6 F1).
     """
     from db.llm_usage import _usage
 
@@ -407,7 +420,7 @@ def call_go(
         response_mime_type=response_mime_type,
     )
 
-    c = client if client is not None else get_go_client(api_key=api_key)
+    c = client if client is not None else get_go_client()
     resp = c.models.generate_content(model=clean_model, contents=prompt, config=config)
     usage = _usage(resp)
     return (resp.text or "").strip(), usage, resp
@@ -418,8 +431,10 @@ class GoText:
 
     The Go sibling of `engines.gm_llm.GeminiText`, with the same `.model`, `.label`, callable,
     `.flush()` and `.meter` interface, so `make_llm`, press and the inbox need no signature change.
-    The client is the shared per-process one from `newsroom/tool_loop/go_transport.go_client()`;
-    a missing key raises its `ValueError` instead of falling back to Gemini.
+    The client is the shared per-process one from `newsroom/tool_loop/go_transport.go_client()`, authenticated by
+    `OPENCODE_GO_API_KEY` only (AUDIT R6 F1: the `key` argument is kept for signature compatibility and ignored,
+    so a caller's Gemini key never becomes the Go client's credential); a missing key raises its `ValueError`
+    instead of falling back to Gemini.
     """
 
     def __init__(self, key=None, label="", model=None, temperature=0.7, thinking_level=None, client=None):
@@ -437,7 +452,7 @@ class GoText:
             thinking_level=self.thinking_level,
             temperature=temperature,
         )
-        self.client = client if client is not None else get_go_client(api_key=key)
+        self.client = client if client is not None else get_go_client()
         self.meter = UsageMeter(self.client)
 
     def __call__(self, prompt):
@@ -595,28 +610,96 @@ def generate_text(
     return text
 
 
-def estimate_cost(model: str, usage: dict) -> float:
-    """Calculate estimated USD cost for a model call. Local models (ollama) are $0.00."""
+# List prices in $ per 1M tokens: (input, cached read, output+thinking). One table for every model
+# Mu prices, so a Go model is never silently priced at another provider's rate (AUDIT R6 F4 Deferral 2).
+# The Go ids and their rates are the same values tools/article_model_compare.py's PRICES carries; that
+# tool holds the full 13-model list, this one the models Mu itself calls. A model missing from here is
+# UNPRICED — estimate_cost returns None rather than a guess. The four gemini entries are unchanged.
+MODEL_PRICES: dict[str, tuple[float, float, float]] = {
+    "gemini-3.8-flash": (0.15, 0.15, 0.60),
+    "gemini-3.5-flash-lite": (0.075, 0.075, 0.30),
+    "gemini-2.5-pro": (1.25, 1.25, 5.00),
+    "gemini-2.5-flash": (0.15, 0.15, 0.60),
+    "glm-5.3-flash": (0.15, 0.03, 0.50),
+    "muse-spark-1.3-contributor": (0.10, 0.002, 0.20),
+    "deepseek-v4.1-flash": (0.15, 0.003, 0.60),
+}
+
+# The two ways a call can be "not a card charge", and the one way it can be unknown.
+ALLOWANCE_NOTE = "Go allowance (not $0 free): the list price of these tokens, not cash"
+UNPRICED_NOTE = "unpriced model (no per-token price known)"
+
+
+def _price_for(norm: str):
+    """The (model id, (input, cached, output)) a normalized model id is priced at, longest key first.
+
+    Longest-match, so a longer id is never priced by a shorter key inside it
+    (`gemini-3.8-flash-preview` is priced as `gemini-3.8-flash`, never as something else).
+    """
+    best = None
+    for key, price in MODEL_PRICES.items():
+        if key in norm and (best is None or len(key) > len(best[0])):
+            best = (key, price)
+    return best
+
+
+def _go_id(norm: str) -> str:
+    """A normalized model id without the resource prefix a caller may carry.
+
+    `models/gemini-3.8-flash` and `google/gemini-2.5-pro` name Gemini models, but
+    `go_transport.is_go_model` reads their bare prefix as "not a gemini id" and would call them Go
+    (basis `allowance`, `cash_usd 0.0`). Strip the prefix before asking which provider it is.
+    """
+    for prefix in ("models/", "google/"):
+        if norm.startswith(prefix):
+            return norm[len(prefix):]
+    return norm
+
+
+def cost_estimate(model: str, usage: dict | None) -> dict:
+    """The full answer for one call: the dollars, whether they are cash, and why.
+
+    `estimate_cost` returns only the number, which a caller then prints. That number is a **list
+    price**: for a Go model the allowance pays and no card is charged, so this dict also carries
+    `cash_usd`, `basis` and a plain-language `note` (AUDIT R6 F4):
+
+    - `basis: "cash"`      — a provider bills these tokens at list (Gemini). `cash_usd == usd`.
+    - `basis: "allowance"` — a Go model: `usd` is what the tokens would list at, `cash_usd` is 0.0.
+    - `basis: "local"`     — ollama; no API cost and no listing.
+    - `basis: "unpriced"`  — no known rate: `usd` is None and `note` says so, never another
+                             provider's numbers.
+    """
+    usage = usage or {}
     if not model:
-        return 0.0
+        return {"usd": 0.0, "cash_usd": 0.0, "basis": "unknown", "note": "no model id"}
     norm = normalize_model_name(model).lower()
     if norm.startswith("ollama/") or norm.startswith("ollama:"):
-        return 0.0
-    prices = {
-        "gemini-3.8-flash": (0.15, 0.60),
-        "gemini-3.5-flash-lite": (0.075, 0.30),
-        "gemini-2.5-pro": (1.25, 5.00),
-        "gemini-2.5-flash": (0.15, 0.60),
-    }
-    pin, pout = (0.15, 0.60)
-    for k, v in prices.items():
-        if k in norm:
-            pin, pout = v
-            break
-    inp = usage.get("input_tokens") or usage.get("input") or 0
-    out = usage.get("output_tokens") or usage.get("output") or 0
-    think = usage.get("thinking_tokens") or usage.get("thinking") or 0
-    return (inp * pin + (out + think) * pout) / 1_000_000.0
+        return {"usd": 0.0, "cash_usd": 0.0, "basis": "local", "note": ""}
+    priced = _price_for(norm)
+    if priced is None:
+        return {"usd": None, "cash_usd": None, "basis": "unpriced", "note": UNPRICED_NOTE}
+    _, (pin, pcached, pout) = priced
+    inp = int(usage.get("input_tokens") or usage.get("input") or 0)
+    cached = min(int(usage.get("cached_tokens") or usage.get("cached") or 0), inp)
+    out = int(usage.get("output_tokens") or usage.get("output") or 0)
+    think = int(usage.get("thinking_tokens") or usage.get("thinking") or 0)
+    usd = ((inp - cached) * pin + cached * pcached + (out + think) * pout) / 1_000_000.0
+    from newsroom.tool_loop.go_transport import is_go_model
+    if is_go_model(_go_id(norm)):
+        return {"usd": usd, "cash_usd": 0.0, "basis": "allowance", "note": ALLOWANCE_NOTE}
+    return {"usd": usd, "cash_usd": usd, "basis": "cash", "note": ""}
+
+
+def estimate_cost(model: str, usage: dict) -> float | None:
+    """The list price in USD of one call's tokens, or None when no rate is known for the model.
+
+    Local models (ollama) are $0.00. A Go model is priced at its own published rate, never at
+    Gemini's fallback (AUDIT R6 F4 Deferral 2); because the Go allowance pays for it, that number is a
+    list-price reference and `cash_usd` in `cost_estimate` is the 0.0 a card is actually charged. A
+    caller that must tell cash from allowance uses `cost_estimate`; one that prints a cost may print
+    None as "unpriced".
+    """
+    return cost_estimate(model, usage)["usd"]
 
 
 class ProviderText:

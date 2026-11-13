@@ -201,6 +201,30 @@ class CompiledPromptTests(unittest.TestCase):
                 dispatcher.dispatch_team_local(team_id=5, brief={}, season=2036, week=6)
         ensure.assert_called_once_with(dispatcher.db.db_conn_info, 5, 2036, 5)
 
+    def test_dispatch_team_local_leaves_the_social_model_to_the_social_config(self):
+        """AUDIT R6 F3: Agent Wire Local follows `social_desk.json`/`SOCIAL_MODEL`, not the writer default.
+        `model=None` is what lets `run_team_social` pick `gemini-3.8-flash` again."""
+        import inspect
+        from newsroom import weekly_run
+        from newsroom.social_publish import load_config
+        sig = inspect.signature(swarm_dispatcher.SwarmDispatcher.dispatch_team_local)
+        self.assertIsNone(sig.parameters["model"].default)
+        self.assertEqual(load_config()["model"], "gemini-3.8-flash")
+        self.assertTrue(weekly_run.SOCIAL_MODEL.startswith("gemini-"))
+
+        dispatcher = swarm_dispatcher.SwarmDispatcher(debug_mode=False)
+        conn = mock.MagicMock()
+        cu = conn.cursor.return_value.__enter__.return_value
+        cu.fetchall.return_value = []
+        cu.fetchone.return_value = None
+        conn.__enter__.return_value = conn
+        with mock.patch.object(press_room, "ensure_team_presser", return_value="CLOSED"), \
+                mock.patch.object(swarm_dispatcher.psycopg, "connect", return_value=conn), \
+                mock.patch.object(swarm_dispatcher, "plan_local_portfolio", return_value=[]), \
+                mock.patch("newsroom.social_publish.run_team_social", return_value={}) as social:
+            dispatcher.dispatch_team_local(team_id=5, brief={}, season=2036, week=6, live=True, save_to_db=True)
+        self.assertIsNone(social.call_args.kwargs["model"])
+
 
 # ----------------------------------------------------------------------------------------------- Play Game hook
 GAME = mod_packs.GameInfo(id=77, season=2036, week=5, game_time="Sun 8:20 PM", game_type="REGULAR_SEASON",

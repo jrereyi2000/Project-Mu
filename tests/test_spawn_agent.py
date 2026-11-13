@@ -6,7 +6,10 @@ stub on PATH records any attempt to open a window so a test fails loudly if one 
 
 from __future__ import annotations
 
+import json
+import re
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -20,9 +23,30 @@ exit 1
 """
 
 
+def write_usage(path: Path, five_hour: float, weekly: float, now: float | None = None) -> Path:
+    """A status-line-shaped usage file, fresh against the real clock (M-0823 B-2).
+
+    The `claude_account.py` chooser always runs on the real clock, so a fixture written for a fixed past `now`
+    silently goes stale and changes the chosen account. Never hard-code a timestamp here.
+    """
+    now = int(time.time() if now is None else now)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({
+        "seen_at": now,
+        "five_hour": {"used_percentage": five_hour, "resets_at": now + 3600},
+        "seven_day": {"used_percentage": weekly, "resets_at": now + 86400},
+    }), encoding="utf-8")
+    return path
+
+
 @pytest.fixture
 def env(tmp_path: Path) -> dict[str, str]:
-    """An explicit environment with nothing of JR's tmux or shell in it."""
+    """An explicit environment with nothing of JR's tmux, shell or live usage files in it.
+
+    M-0823 B-1: the auto routes read `claude_account.py`'s two usage files. Without these overrides the tests
+    read JR's live `data/usage/` files and fail whenever both accounts are over quota or unreadable, so the
+    fixture owns both files, fresh and under the thresholds.
+    """
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     tmux = bin_dir / "tmux"
@@ -37,6 +61,8 @@ def env(tmp_path: Path) -> dict[str, str]:
         "MU_TMUX_SESSION": "mu-test",
         "MU_REPO": str(REPO_ROOT),
         "MU_TMUX_MARKER": str(tmp_path / "tmux-called"),
+        "MU_USAGE_FILE": str(write_usage(tmp_path / "usage" / "primary.json", 10, 10)),
+        "MU_USAGE_PERSONAL_FILE": str(write_usage(tmp_path / "usage" / "personal.json", 20, 20)),
     }
 
 
@@ -56,11 +82,22 @@ def _assert_no_window(env: dict[str, str]) -> None:
     assert not marker.exists(), marker.read_text(encoding="utf-8") if marker.exists() else ""
 
 
-def test_deepseek_dry_run_launches_the_opencode_wrapper(env: dict[str, str]) -> None:
+def _real_tmux(env: dict[str, str], tmp_path: Path) -> str:
+    """Point the script at a real tmux server on its own socket, so a window can be inspected."""
+    sock = f"mu-spawn-test-{tmp_path.name}"
+    wrapper = Path(env["PATH"].split(":")[0]) / "tmux"
+    wrapper.write_text(f'#!/usr/bin/env bash\nexec /usr/bin/tmux -L {sock} "$@"\n', encoding="utf-8")
+    wrapper.chmod(0o755)
+    return sock
+
+
+def test_deepseek_dry_run_creates_a_session_with_no_window(env: dict[str, str]) -> None:
     result = _run(env, "--dry-run", "b1", "deepseek", "/builder")
 
     assert result.returncode == 0, result.stderr
-    assert "opencode_session.sh --prompt /builder" in result.stdout
+    assert "no_window=1" in result.stdout                       # JR 2026-11-12: no tmux window for DeepSeek
+    assert "opencode_session.sh --session-only" in result.stdout
+    assert "--run /builder" in result.stdout                    # started inside OpenCode, not in a window
     assert "claude-deepseek" not in result.stdout
     _assert_no_window(env)
 
@@ -72,7 +109,37 @@ def test_deepseek_plain_prompt_gets_the_label_prefix(env: dict[str, str]) -> Non
     # The run line is printf %q-quoted, so spaces in the prompt come back as `\ `.
     unquoted = result.stdout.replace("\\ ", " ")
     assert "Your session label is b1. fix the flaky test" in unquoted
-    assert "opencode_session.sh --prompt" in result.stdout
+    assert "opencode_session.sh --session-only" in result.stdout
+    assert "--run Your\\ session\\ label\\ is\\ b1.\\ fix\\ the\\ flaky\\ test" in result.stdout
+    _assert_no_window(env)
+
+
+def test_deepseek_start_opens_no_window_and_runs_the_session_in_opencode(
+    env: dict[str, str], tmp_path: Path
+) -> None:
+    """The real path: create the session, then drive it with `opencode run` in the background."""
+    calls = tmp_path / "calls.log"
+    stub = tmp_path / "stub-bin" / "opencode"
+    stub.parent.mkdir()
+    stub.write_text(f'#!/usr/bin/env bash\nprintf "%s\\n" "$*" >> "{calls}"\nexit 0\n', encoding="utf-8")
+    stub.chmod(0o755)
+    env["MU_OPENCODE_BIN"] = str(stub)
+    env["MU_ALLOW_DEEPSEEK_SPAWN"] = "1"
+    env["MU_AGENT_LOG_DIR"] = str(tmp_path / "logs")
+
+    result = _run(env, "b1", "deepseek", "/builder")
+
+    assert result.returncode == 0, result.stderr
+    started = re.search(r"session (ses_mu_\d{10}_\d{5})$", result.stdout, re.M)
+    assert started, result.stdout
+    assert f"log: {tmp_path / 'logs' / 'b1.log'}" in result.stdout
+    for _ in range(50):                       # the run is backgrounded; wait for the stub to log it
+        if calls.exists() and "run --session" in calls.read_text(encoding="utf-8"):
+            break
+        time.sleep(0.05)
+    lines = calls.read_text(encoding="utf-8").splitlines()
+    assert any(line.startswith("api post /api/session ") for line in lines), lines
+    assert any(line == f"run --session {started.group(1)} --format default /builder" for line in lines), lines
     _assert_no_window(env)
 
 
@@ -108,7 +175,7 @@ def test_guard_allows_a_deepseek_caller_that_declares_the_rule(env: dict[str, st
     result = _run(env, "--dry-run", "b1", "deepseek", "/builder")
 
     assert result.returncode == 0, result.stderr
-    assert "opencode_session.sh --prompt /builder" in result.stdout
+    assert "opencode_session.sh --session-only" in result.stdout
     _assert_no_window(env)
 
 
@@ -147,15 +214,17 @@ def test_a_claude_caller_may_spawn_a_deepseek_session(env: dict[str, str]) -> No
     result = _run(env, "--dry-run", "b1", "deepseek", "/builder")
 
     assert result.returncode == 0, result.stderr
-    assert "opencode_session.sh --prompt /builder" in result.stdout
+    assert "opencode_session.sh --session-only" in result.stdout
     _assert_no_window(env)
 
 
-def test_muse_dry_run_launches_the_muse_wrapper(env: dict[str, str]) -> None:
+def test_muse_dry_run_creates_a_session_with_no_window(env: dict[str, str]) -> None:
     result = _run(env, "--dry-run", "muse-lab", "muse", "/builder")
 
     assert result.returncode == 0, result.stderr
-    assert "muse_session.sh --prompt /builder" in result.stdout
+    assert "no_window=1" in result.stdout                       # JR 2026-11-12: no tmux window for Spark
+    assert "muse_session.sh --session-only" in result.stdout
+    assert "--run /builder" in result.stdout
     assert "opencode_session.sh" not in result.stdout
     _assert_no_window(env)
 
@@ -166,7 +235,7 @@ def test_muse_plain_prompt_gets_the_label_prefix(env: dict[str, str]) -> None:
     assert result.returncode == 0, result.stderr
     unquoted = result.stdout.replace("\\ ", " ")
     assert "Your session label is muse-lab. run the pilot" in unquoted
-    assert "muse_session.sh --prompt" in result.stdout
+    assert "muse_session.sh --session-only" in result.stdout
     _assert_no_window(env)
 
 
@@ -176,7 +245,7 @@ def test_muse_needs_no_deepseek_spawn_flag(env: dict[str, str]) -> None:
     result = _run(env, "--dry-run", "muse-lab", "muse", "/builder")
 
     assert result.returncode == 0, result.stderr
-    assert "muse_session.sh --prompt /builder" in result.stdout
+    assert "muse_session.sh --session-only" in result.stdout
     _assert_no_window(env)
 
 
@@ -184,7 +253,7 @@ def test_usage_lists_the_muse_type(env: dict[str, str]) -> None:
     result = _run(env)
 
     assert result.returncode == 1
-    assert "<claude|opus|deepseek|deepseek-claude|muse|codex|gemini|argon|hydrogen>" in result.stderr
+    assert "<claude|opus|claude-personal|opus-personal|claude-auto|opus-auto|deepseek|deepseek-claude|muse|codex|gemini|argon|hydrogen>" in result.stderr
     _assert_no_window(env)
 
 
@@ -277,9 +346,107 @@ def test_route_model_overrides_reach_the_export(env: dict[str, str]) -> None:
 
 def test_the_opencode_wrappers_set_the_actor_themselves(env: dict[str, str]) -> None:
     deepseek = _run(env, "--dry-run", "wrap-ds", "deepseek", "/x").stdout
-    assert "MU_AGENT_MODEL=" not in deepseek and "opencode_session.sh --prompt /x" in deepseek
+    assert "MU_AGENT_MODEL=" not in deepseek and "opencode_session.sh --session-only" in deepseek
     muse = _run(env, "--dry-run", "wrap-muse", "muse", "/x").stdout
-    assert "MU_AGENT_MODEL=" not in muse and "muse_session.sh --prompt /x" in muse
+    assert "MU_AGENT_MODEL=" not in muse and "muse_session.sh --session-only" in muse
+    _assert_no_window(env)
+
+
+@pytest.mark.parametrize("agent", ["claude", "opus", "claude-personal", "opus-personal",
+                                   "claude-auto", "opus-auto", "codex", "gemini", "argon",
+                                   "hydrogen"])
+def test_only_codex_claude_and_agy_routes_get_a_window(env: dict[str, str], agent: str) -> None:
+    """JR 2026-11-12: new windows are for codex, claude and agy; DeepSeek/Spark share the OpenCode one."""
+    result = _run(env, "--dry-run", f"win-{agent}", agent, "/x")
+
+    assert result.returncode == 0, result.stderr
+    assert f"window=win-{agent}" in result.stdout
+    assert "no_window" not in result.stdout
+    _assert_no_window(env)
+
+
+def test_claude_personal_dry_run_uses_the_secondary_wrapper(env: dict[str, str]) -> None:
+    result = _run(env, "--dry-run", "personal-1", "claude-personal", "/builder")
+
+    assert result.returncode == 0, result.stderr
+    assert "claude_personal.sh /builder" in result.stdout
+    assert "MU_AGENT_MODEL=unknown" in result.stdout
+    assert "window=personal-1" in result.stdout
+    _assert_no_window(env)
+
+
+def test_opus_personal_keeps_the_opus_model(env: dict[str, str]) -> None:
+    result = _run(env, "--dry-run", "personal-2", "opus-personal", "/audit")
+
+    assert result.returncode == 0, result.stderr
+    assert "claude_personal.sh --model claude-opus-5-5 --effort medium /audit" in result.stdout
+    assert "MU_AGENT_MODEL=claude-opus-5-5" in result.stdout
+    _assert_no_window(env)
+
+
+def test_claude_personal_honours_the_command_override(env: dict[str, str], tmp_path: Path) -> None:
+    fake = tmp_path / "bin" / "claude-personal"
+    env["MU_CLAUDE_PERSONAL_CMD"] = str(fake)
+
+    result = _run(env, "--dry-run", "personal-3", "claude-personal", "/x")
+
+    assert result.returncode == 0, result.stderr
+    assert str(fake) in result.stdout
+    _assert_no_window(env)
+
+
+def test_opus_auto_picks_personal_when_primary_is_over(env: dict[str, str], tmp_path: Path) -> None:
+    primary = write_usage(tmp_path / "primary.json", 92, 20)
+    personal = write_usage(tmp_path / "personal.json", 10, 20)
+    env["MU_USAGE_FILE"] = str(primary)
+    env["MU_USAGE_PERSONAL_FILE"] = str(personal)
+
+    result = _run(env, "--dry-run", "auto-1", "opus-auto", "/builder")
+
+    assert result.returncode == 0, result.stderr
+    assert "claude_personal.sh --model claude-opus-5-5" in result.stdout
+    _assert_no_window(env)
+
+
+def test_opus_auto_picks_primary_when_it_has_more_room(env: dict[str, str], tmp_path: Path) -> None:
+    primary = write_usage(tmp_path / "primary.json", 10, 20)
+    personal = write_usage(tmp_path / "personal.json", 60, 20)
+    env["MU_USAGE_FILE"] = str(primary)
+    env["MU_USAGE_PERSONAL_FILE"] = str(personal)
+
+    result = _run(env, "--dry-run", "auto-2", "opus-auto", "/builder")
+
+    assert result.returncode == 0, result.stderr
+    assert "env MU_AGENT_MODEL=claude-opus-5-5 claude --model" in result.stdout
+    assert "claude_personal.sh" not in result.stdout
+    _assert_no_window(env)
+
+
+def test_the_auto_routes_need_no_live_usage_files(env: dict[str, str], tmp_path: Path) -> None:
+    """M-0823 B-1: the fixture's own fresh files are enough; nothing in `data/usage/` is read."""
+    for var in ("MU_USAGE_FILE", "MU_USAGE_PERSONAL_FILE"):
+        assert str(tmp_path) in env[var], (var, env[var])
+        assert "Project-Mu/data/usage" not in env[var]
+
+    for agent in ("claude-auto", "opus-auto"):
+        result = _run(env, "--dry-run", f"auto-fresh-{agent}", agent, "/builder")
+
+        assert result.returncode == 0, result.stderr
+        assert f"window=auto-fresh-{agent}" in result.stdout
+    _assert_no_window(env)
+
+
+def test_claude_auto_refuses_when_both_accounts_are_over(env: dict[str, str], tmp_path: Path) -> None:
+    for name, pct in (("primary", 92), ("personal", 90)):
+        write_usage(tmp_path / f"{name}.json", pct, 20)
+    env["MU_USAGE_FILE"] = str(tmp_path / "primary.json")
+    env["MU_USAGE_PERSONAL_FILE"] = str(tmp_path / "personal.json")
+
+    result = _run(env, "--dry-run", "auto-3", "claude-auto", "/builder")
+
+    assert result.returncode == 3
+    assert "neither account" in result.stderr
+    assert result.stdout == ""
     _assert_no_window(env)
 
 
@@ -297,3 +464,184 @@ def test_bad_label_exits_2(env: dict[str, str]) -> None:
     assert result.returncode == 2
     assert "kebab-case" in result.stderr
     _assert_no_window(env)
+
+
+# --- the spawn guard's marker coverage (R3 F3) -------------------------------------------------
+
+
+@pytest.mark.parametrize(("name", "value"), [
+    ("MU_AGENT_MODEL", "deepseek-v4.1-flash"),
+    ("MU_OPENCODE_MODEL", "opencode-go/deepseek-v4.1-flash"),
+    ("MU_AGENT_CLASS", "DeepSeek"),
+    ("MU_AGENT_CLASS", "  DeepSeek  "),
+    ("OPENCODE", "1"),
+    ("OPENCODE_SESSION_ID", "ses_mu_1794506156_15570"),
+])
+def test_guard_refuses_every_deepseek_route_marker(
+    env: dict[str, str], name: str, value: str
+) -> None:
+    """R3 F3: the guard covered only MU_AGENT_CLASS=v deepseek, so other markers slipped through."""
+    env[name] = value
+
+    result = _run(env, "--dry-run", "b1", "deepseek", "/builder")
+
+    assert result.returncode == 3, result.stdout
+    assert "MU_ALLOW_DEEPSEEK_SPAWN=1" in result.stderr
+    _assert_no_window(env)
+
+
+def test_a_windowed_route_is_an_unknown_caller_to_the_guard(env: dict[str, str]) -> None:
+    """The guard covers the DeepSeek types only; a claude/opus/codex/agy spawn stays allowed."""
+    env.update({"MU_AGENT_CLASS": "deepseek", "OPENCODE": "1"})
+
+    result = _run(env, "--dry-run", "child-opus", "opus", "/builder")
+
+    assert result.returncode == 0, result.stderr
+    _assert_no_window(env)
+
+
+# --- a child must not inherit the caller's route markers (R3 F2) -------------------------------
+
+
+ROUTE_MARKERS = (
+    "MU_AGENT_CLASS", "MU_AGENT_HARNESS", "MU_AGENT_MODEL", "MU_OPENCODE_MODEL",
+    "MU_OPENCODE_SESSION", "MU_ALLOW_DEEPSEEK_SPAWN",
+    "OPENCODE", "OPENCODE_SESSION_ID", "OPENCODE_TERMINAL",
+)
+
+
+def test_a_windowed_child_command_unsets_the_callers_route_markers(env: dict[str, str]) -> None:
+    env.update({"MU_AGENT_CLASS": "deepseek", "MU_AGENT_HARNESS": "opencode",
+                "MU_AGENT_MODEL": "deepseek-v4.1-flash",
+                "MU_OPENCODE_MODEL": "opencode-go/deepseek-v4.1-flash",
+                "MU_OPENCODE_SESSION": "ses_mu_PARENT_99999",
+                "MU_ALLOW_DEEPSEEK_SPAWN": "1", "OPENCODE": "1",
+                "OPENCODE_SESSION_ID": "ses_mu_PARENT_99999"})
+
+    result = _run(env, "--dry-run", "child-opus", "opus", "/builder")
+
+    assert result.returncode == 0, result.stderr
+    runs = result.stdout.split("runs (in bash -lic): ", 1)[1]
+    tokens = runs.replace("\\", "").split()
+    unset = {tokens[i + 1] for i, token in enumerate(tokens) if token == "-u"}
+    for var in ROUTE_MARKERS:
+        assert var in unset, (var, runs)
+    assert "MU_AGENT_MODEL=claude-opus-5-5" in runs       # the child's own route still sets its actor
+    _assert_no_window(env)
+
+    # The shared OpenCode path is scrubbed too (the session it creates must not resume the parent's).
+    deepseek = _run(env, "--dry-run", "child-ds", "deepseek", "/builder")
+    create = deepseek.stdout.split("create: ", 1)[1].splitlines()[0]
+    tokens = create.replace("\\", "").split()
+    unset = {tokens[i + 1] for i, token in enumerate(tokens) if token == "-u"}
+    for var in ROUTE_MARKERS:
+        assert var in unset, (var, create)
+    _assert_no_window(env)
+
+
+def test_a_deepseek_child_mints_its_own_session_not_the_parents(
+    env: dict[str, str], tmp_path: Path
+) -> None:
+    stub = tmp_path / "stub-bin" / "opencode"
+    stub.parent.mkdir()
+    stub.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+    stub.chmod(0o755)
+    env.update({"MU_OPENCODE_BIN": str(stub), "MU_ALLOW_DEEPSEEK_SPAWN": "1",
+                "MU_OPENCODE_SESSION": "ses_mu_PARENT_99999",
+                "MU_AGENT_LOG_DIR": str(tmp_path / "logs")})
+
+    result = _run(env, "child-ds", "deepseek", "/builder")
+
+    assert result.returncode == 0, result.stderr
+    match = re.search(r"^session: (ses_mu_\d+_\d+)$|session (ses_mu_\d+_\d+)$",
+                      result.stdout, re.M)
+    assert match, result.stdout
+    assert (match.group(1) or match.group(2)) != "ses_mu_PARENT_99999"
+    _assert_no_window(env)
+
+
+@pytest.mark.skipif(not Path("/usr/bin/tmux").exists(), reason="needs a real tmux server")
+def test_a_personal_caller_does_not_leak_its_config_dir(env: dict[str, str], tmp_path: Path) -> None:
+    """M-0823 B-4: a personal-account caller's primary-route child must start on the primary account."""
+    personal = tmp_path / "secondary"
+    personal.mkdir()
+    env.update({"CLAUDE_CONFIG_DIR": str(personal),
+                "MU_CLAUDE_PERSONAL_CONFIG_DIR": str(personal)})
+
+    result = _run(env, "--dry-run", "child-opus", "opus", "/builder")
+
+    assert result.returncode == 0, result.stderr
+    runs = result.stdout.split("runs (in bash -lic): ", 1)[1]
+    tokens = runs.replace("\\", "").split()
+    unset = {tokens[i + 1] for i, token in enumerate(tokens) if token == "-u"}
+    assert "CLAUDE_CONFIG_DIR" in unset, runs
+
+    # The personal route re-sets it inside claude_personal.sh, so scrubbing must not break it.
+    personal_run = _run(env, "--dry-run", "personal-4", "opus-personal", "/audit")
+    assert personal_run.returncode == 0, personal_run.stderr
+    assert "claude_personal.sh --model claude-opus-5-5 --effort medium /audit" in personal_run.stdout
+    _assert_no_window(env)
+
+
+def test_a_primary_caller_keeps_a_custom_config_dir(env: dict[str, str], tmp_path: Path) -> None:
+    """Only the secondary account's directory is scrubbed; a deliberate primary one survives."""
+    env.update({"CLAUDE_CONFIG_DIR": str(tmp_path / "primary-config"),
+                "MU_CLAUDE_PERSONAL_CONFIG_DIR": str(tmp_path / "secondary")})
+
+    result = _run(env, "--dry-run", "child-opus", "opus", "/builder")
+
+    assert result.returncode == 0, result.stderr
+    assert "CLAUDE_CONFIG_DIR" not in result.stdout.split("runs (in bash -lic): ", 1)[1]
+    _assert_no_window(env)
+
+
+def test_a_spawned_window_does_not_inherit_the_callers_markers(
+    env: dict[str, str], tmp_path: Path
+) -> None:
+    """The real path on an isolated tmux server: the child's own environment is inspected."""
+    sock = _real_tmux(env, tmp_path)
+    fake = tmp_path / "fake" / "claude-deepseek"
+    fake.parent.mkdir()
+    fake.write_text('#!/usr/bin/env bash\nenv > "${MU_CHILD_ENV:?}"\n', encoding="utf-8")
+    fake.chmod(0o755)
+    child_env = tmp_path / "child.env"
+    env.update({
+        "MU_DEEPSEEK_CMD": str(fake), "MU_CHILD_ENV": str(child_env),
+        "MU_AGENT_CLASS": "deepseek", "MU_AGENT_HARNESS": "opencode",
+        "MU_AGENT_MODEL": "deepseek-v4.1-flash",
+        "MU_OPENCODE_MODEL": "opencode-go/deepseek-v4.1-flash",
+        "MU_OPENCODE_SESSION": "ses_mu_PARENT_99999",
+        "MU_ALLOW_DEEPSEEK_SPAWN": "1", "OPENCODE": "1",
+        "OPENCODE_SESSION_ID": "ses_mu_PARENT_99999",
+        "CLAUDE_CONFIG_DIR": str(tmp_path / "secondary"),
+        "MU_CLAUDE_PERSONAL_CONFIG_DIR": str(tmp_path / "secondary"),
+    })
+
+    try:
+        result = _run(env, "child-window", "deepseek-claude", "/builder")
+        assert result.returncode == 0, result.stderr + result.stdout
+        deadline = time.monotonic() + 10
+        while not child_env.exists() and time.monotonic() < deadline:
+            time.sleep(0.05)
+        assert child_env.exists(), "the spawned window never ran the agent"
+        child = dict(
+            line.split("=", 1) for line in child_env.read_text(encoding="utf-8").splitlines()
+            if "=" in line
+        )
+        for var in ROUTE_MARKERS:
+            if var == "MU_AGENT_MODEL":
+                continue        # the route re-sets its own actor after the scrub
+            assert var not in child, (var, child.get(var))
+        assert child["MU_AGENT_MODEL"] == "deepseek-v4.1-flash"
+        assert "CLAUDE_CONFIG_DIR" not in child, child.get("CLAUDE_CONFIG_DIR")   # M-0823 B-4
+
+        shown = subprocess.run(
+            ["/usr/bin/tmux", "-L", sock, "show-environment", "-g"],
+            capture_output=True, text=True, check=False,
+        ).stdout
+        global_env = {line.split("=", 1)[0].lstrip("-") for line in shown.splitlines() if "=" in line}
+        for var in ROUTE_MARKERS + ("CLAUDE_CONFIG_DIR",):
+            assert var not in global_env, (var, shown)
+    finally:
+        subprocess.run(["/usr/bin/tmux", "-L", sock, "kill-server"],
+                       capture_output=True, text=True, check=False)

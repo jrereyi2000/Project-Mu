@@ -688,10 +688,20 @@ def advance_talk(cur, b, valuer, talk, rng, llm):
         last = turns[-1]
         last_actor = _turn_actor_team(last, talk)
         actor = other if last_actor == initiator else initiator
-        # The package on the table is the last turn that carried one: a REJECT has none, and handing the next GM an
-        # empty offer turned the talk into a REJECT ping-pong that only burned patience.
+        # The package on the table is the last turn that carried one. A REJECT carries none; the branch below ends
+        # the talk on that package, because only its author could answer an empty offer and it cannot accept it.
         offer_turn = next((t for t in reversed(turns) if t.get("assets")), None)
         offer_assets = _engine_assets(b, offer_turn["assets"]) if offer_turn else []
+        if last.get("action") == "REJECT":
+            # A rejection carries no counter, so the package still on the table is the rejecting side's answer to
+            # *this* actor's own offer. Its author cannot accept it: P3-08's 2036 replay caught the turn after a
+            # REJECT being judged as if the author were the package's receiver, executing rejected deals. The
+            # decline ends the talk on that package, and — as on the walk-away and run-limit stalls — the terminal
+            # turn draws its STALLED-stage leak, which is why the status is set before the draw (audit F1).
+            talk["status"] = "STALLED"
+            _stall(cur, b, valuer, talk, offer_assets, "the other GM rejected the offer")
+            record_leaks(cur, talk, dict(last, assets=offer_assets), b, rng, turns)
+            break
         options = options_for(b, valuer, talk, actor, offer_assets)
         opt, text, source = _choose(cur, b, talk, actor, last_actor, offer_assets, options, turns, rng, llm)
         # source is the writer's LLM | TEMPLATE (message_source); the policy chose the move (choice_source)

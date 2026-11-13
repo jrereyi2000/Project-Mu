@@ -2,6 +2,8 @@
 
 **Status:** built and on main (2026-11-12).
 
+**Post-build audit (2026-11-12, `gemini-4-hydrogen-high (audit-route)`, `data/audit_reports/audit-route/report.md`):** verdict OPEN, five findings, all fixed by `deepseek-v4.1-flash (fix-tooling)`. F1 (HIGH): `/context-check` auto mode read the newest OpenCode session from a Claude Code session because it probed for an `opencode` binary before any Claude Code signal (`04b474f`). F2: `MU_OPENCODE_SESSION`/`MU_AGENT_*` leaked through `tmux new-session` into spawned children; every child is now scrubbed (`c82f81d`). F3: `caller_is_deepseek()` missed `MU_AGENT_MODEL`/`MU_OPENCODE_MODEL`, case variants and a bare `opencode` caller (`c82f81d`). F4: `repo-qa`'s `allow read *` overrode OpenCode's `ask` guard on `.env` files (`93fcbd0`). F5: the `docs/in_progress/` copy this file's move left behind is removed in the same batch. The report verified the per-window session id, explicit `--harness` precedence and the `.opencode` pin as sound.
+
 **As built (wave 2):** U4 documented the route in seven files. Its verify greps pass on main: `claude-deepseek` survives in exactly two fallback mentions (`deepseek/SKILL.md`, `docs/reference/AGENTS.md`), `MU_AGENT_CLASS` appears in the audit and builder skills, and `Haiku` remains in `/offline` only as an accurate Claude Code note. It also corrected three adjacent Madden-spike sentences that restated the superseded 2026-11-11 spawn rule.
 
 **As built (wave 1):**

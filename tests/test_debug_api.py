@@ -126,8 +126,12 @@ class JobsTest(unittest.TestCase):
         fake_conn.__enter__.return_value = fake_conn
         fake_conn.execute.side_effect = [
             mock.MagicMock(fetchone=lambda: {"current_season": 2035, "current_week": 21}),
-            mock.MagicMock(fetchall=lambda: [{"season": 2035, "week": 21, "articles": 9, "tweets": 10}]),
-            mock.MagicMock(fetchone=lambda: {"total_articles": 9, "total_tweets": 10}),
+            mock.MagicMock(fetchall=lambda: [
+                {"season": 2035, "week": 21, "articles": 9, "tweets": 10, "flagged": 2}
+            ]),
+            mock.MagicMock(fetchone=lambda: {
+                "total_articles": 9, "total_tweets": 10, "total_flagged": 2
+            }),
         ]
         with mock.patch.object(dbg, "connect", return_value=fake_conn):
             r = self.client.get("/api/debug/news")
@@ -137,7 +141,28 @@ class JobsTest(unittest.TestCase):
             self.assertEqual(data["current_week"], 21)
             self.assertEqual(data["total_articles"], 9)
             self.assertEqual(data["total_tweets"], 10)
+            # The fact gate's verdict (§7.3) is reported per week and in total (R5b F1).
+            self.assertEqual(data["total_flagged"], 2)
+            self.assertEqual(data["summary"][0]["flagged"], 2)
             self.assertEqual(len(data["summary"]), 1)
+
+    def test_news_summary_endpoint_reports_zero_flags_without_a_count(self):
+        """A partial totals row (no total_flagged key) reports 0 instead of raising (R5b F1)."""
+        fake_conn = mock.MagicMock()
+        fake_conn.__enter__.return_value = fake_conn
+        fake_conn.execute.side_effect = [
+            mock.MagicMock(fetchone=lambda: {"current_season": 2035, "current_week": 21}),
+            mock.MagicMock(fetchall=lambda: [
+                {"season": 2035, "week": 21, "articles": 9, "tweets": 10, "flagged": 0}
+            ]),
+            mock.MagicMock(fetchone=lambda: {"total_articles": 9, "total_tweets": 10}),
+        ]
+        with mock.patch.object(dbg, "connect", return_value=fake_conn):
+            r = self.client.get("/api/debug/news")
+            self.assertEqual(r.status_code, 200, r.text)
+            data = r.json()
+            self.assertEqual(data["total_flagged"], 0)
+            self.assertEqual(data["summary"][0]["flagged"], 0)
 
     def test_clear_news_validation(self):
         r = self.client.post("/api/debug/news/clear", json={"content_type": "ARTICLE"})

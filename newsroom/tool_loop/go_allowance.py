@@ -68,8 +68,14 @@ def to_datetime(at: Any) -> Optional[datetime]:
 
 def record(path: Any = None, *, at: Any = None, model: str = "", label: str = "",
            allowance_usd: Optional[float] = None, list_cost_usd: Optional[float] = None,
-           billing_source: Optional[str] = None) -> None:
-    """Append one allowance entry to the ledger. Never raises."""
+           billing_source: Optional[str] = None,
+           tokens: Optional[Dict[str, Any]] = None) -> None:
+    """Append one allowance entry to the ledger. Never raises.
+
+    ``tokens`` (optional) is the call's own ``{"input", "cached", "output"}`` counts, written
+    beside the dollars as ``input_tokens``/``cached_tokens``/``output_tokens``. ``tools/go_usage.py``
+    prices ``allowance_usd`` only; the counts make the line readable without a database row.
+    """
     row: Dict[str, Any] = {
         "at": to_iso(at if at is not None else datetime.now(timezone.utc)),
         "model": model,
@@ -78,6 +84,11 @@ def record(path: Any = None, *, at: Any = None, model: str = "", label: str = ""
         "list_cost_usd": None if list_cost_usd is None else float(list_cost_usd),
         "billing_source": billing_source,
     }
+    if tokens:
+        for key, field in (("input", "input_tokens"), ("cached", "cached_tokens"),
+                           ("output", "output_tokens")):
+            value = tokens.get(key)
+            row[field] = None if value is None else int(value)
     target = ledger_path(path)
     try:
         target.parent.mkdir(parents=True, exist_ok=True)

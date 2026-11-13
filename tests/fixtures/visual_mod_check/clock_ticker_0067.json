@@ -1,0 +1,998 @@
+{
+ "fixture": "clock_ticker_0067",
+ "source": "data/pilot_runs/audit-visual-supersim-0806e87/steps/0067_UNKNOWN",
+ "screen": "UNKNOWN",
+ "size": [
+  1920,
+  1080
+ ],
+ "lines": [
+  "IO D. UNALES",
+  "NALYTICS - 68",
+  "Mesh Spot in 12 personnel createserossing routes underneath with a spot route for a quick",
+  "medium pass. Great for beating man or finding soft zone gaps.",
+  "PLAYSHEETS",
+  "FORMATION",
+  "CONCEPT PLAY TYPE PLAYER",
+  "PERSONNEL GROUP",
+  "FAVORITES",
+  "z COACH SUGGESTIONS",
+  "RECENT",
+  "@ BENCH DIG CURL",
+  "GUN DEUCECLOSE",
+  "SUPERSIM COACH ADJUSTMENTS",
+  "ost IO:S6",
+  "1ST 14:53",
+  "12 PLAYS",
+  "O 10.0 YDS",
+  "PASS",
+  "ENDENC",
+  "MESHSPOT --",
+  "GUN CLOSE",
+  "WEEK 1",
+  "O I YDS",
+  "O 10.0",
+  "POWERO",
+  "GUN WING STACK",
+  "[DOUBLETAP]ADD/REMOVEFAVORITE PLAYCALLSIJBSTITUTIONS FLIPPLAY",
+  "(0-0) CHI",
+  "(0-0)- BUFFALO O",
+  "o",
+  "CAR (0-0)",
+  "(0-0) HOUSTON",
+  "1ST",
+  "o"
+ ],
+ "words": [
+  {
+   "text": "IO",
+   "box": [
+    180,
+    322,
+    22,
+    22
+   ],
+   "line": 0
+  },
+  {
+   "text": "D.",
+   "box": [
+    211,
+    323,
+    17,
+    20
+   ],
+   "line": 0
+  },
+  {
+   "text": "UNALES",
+   "box": [
+    232,
+    323,
+    77,
+    20
+   ],
+   "line": 0
+  },
+  {
+   "text": "NALYTICS",
+   "box": [
+    351,
+    325,
+    85,
+    12
+   ],
+   "line": 1
+  },
+  {
+   "text": "-",
+   "box": [
+    441,
+    331,
+    5,
+    2
+   ],
+   "line": 1
+  },
+  {
+   "text": "68",
+   "box": [
+    452,
+    325,
+    20,
+    12
+   ],
+   "line": 1
+  },
+  {
+   "text": "Mesh",
+   "box": [
+    178,
+    357,
+    39,
+    12
+   ],
+   "line": 2
+  },
+  {
+   "text": "Spot",
+   "box": [
+    222,
+    357,
+    37,
+    15
+   ],
+   "line": 2
+  },
+  {
+   "text": "in",
+   "box": [
+    264,
+    357,
+    11,
+    12
+   ],
+   "line": 2
+  },
+  {
+   "text": "12",
+   "box": [
+    280,
+    357,
+    14,
+    12
+   ],
+   "line": 2
+  },
+  {
+   "text": "personnel",
+   "box": [
+    299,
+    357,
+    73,
+    15
+   ],
+   "line": 2
+  },
+  {
+   "text": "createserossing",
+   "box": [
+    377,
+    356,
+    125,
+    16
+   ],
+   "line": 2
+  },
+  {
+   "text": "routes",
+   "box": [
+    507,
+    357,
+    49,
+    12
+   ],
+   "line": 2
+  },
+  {
+   "text": "underneath",
+   "box": [
+    561,
+    357,
+    85,
+    12
+   ],
+   "line": 2
+  },
+  {
+   "text": "with",
+   "box": [
+    651,
+    357,
+    31,
+    12
+   ],
+   "line": 2
+  },
+  {
+   "text": "a",
+   "box": [
+    687,
+    360,
+    9,
+    9
+   ],
+   "line": 2
+  },
+  {
+   "text": "spot",
+   "box": [
+    700,
+    357,
+    35,
+    15
+   ],
+   "line": 2
+  },
+  {
+   "text": "route",
+   "box": [
+    740,
+    357,
+    41,
+    12
+   ],
+   "line": 2
+  },
+  {
+   "text": "for",
+   "box": [
+    786,
+    357,
+    22,
+    12
+   ],
+   "line": 2
+  },
+  {
+   "text": "a",
+   "box": [
+    812,
+    360,
+    9,
+    9
+   ],
+   "line": 2
+  },
+  {
+   "text": "quick",
+   "box": [
+    825,
+    357,
+    39,
+    15
+   ],
+   "line": 2
+  },
+  {
+   "text": "medium",
+   "box": [
+    178,
+    373,
+    56,
+    12
+   ],
+   "line": 3
+  },
+  {
+   "text": "pass.",
+   "box": [
+    239,
+    376,
+    39,
+    12
+   ],
+   "line": 3
+  },
+  {
+   "text": "Great",
+   "box": [
+    283,
+    373,
+    42,
+    12
+   ],
+   "line": 3
+  },
+  {
+   "text": "for",
+   "box": [
+    331,
+    373,
+    22,
+    12
+   ],
+   "line": 3
+  },
+  {
+   "text": "beating",
+   "box": [
+    357,
+    373,
+    55,
+    15
+   ],
+   "line": 3
+  },
+  {
+   "text": "man",
+   "box": [
+    417,
+    376,
+    30,
+    9
+   ],
+   "line": 3
+  },
+  {
+   "text": "or",
+   "box": [
+    452,
+    376,
+    16,
+    9
+   ],
+   "line": 3
+  },
+  {
+   "text": "finding",
+   "box": [
+    473,
+    373,
+    48,
+    15
+   ],
+   "line": 3
+  },
+  {
+   "text": "soft",
+   "box": [
+    527,
+    373,
+    31,
+    12
+   ],
+   "line": 3
+  },
+  {
+   "text": "zone",
+   "box": [
+    564,
+    376,
+    35,
+    9
+   ],
+   "line": 3
+  },
+  {
+   "text": "gaps.",
+   "box": [
+    603,
+    376,
+    39,
+    12
+   ],
+   "line": 3
+  },
+  {
+   "text": "PLAYSHEETS",
+   "box": [
+    358,
+    485,
+    98,
+    21
+   ],
+   "line": 4
+  },
+  {
+   "text": "FORMATION",
+   "box": [
+    497,
+    485,
+    92,
+    21
+   ],
+   "line": 5
+  },
+  {
+   "text": "CONCEPT",
+   "box": [
+    630,
+    485,
+    72,
+    21
+   ],
+   "line": 6
+  },
+  {
+   "text": "PLAY",
+   "box": [
+    742,
+    485,
+    38,
+    21
+   ],
+   "line": 6
+  },
+  {
+   "text": "TYPE",
+   "box": [
+    784,
+    485,
+    39,
+    21
+   ],
+   "line": 6
+  },
+  {
+   "text": "PLAYER",
+   "box": [
+    861,
+    485,
+    57,
+    21
+   ],
+   "line": 6
+  },
+  {
+   "text": "PERSONNEL",
+   "box": [
+    961,
+    485,
+    88,
+    21
+   ],
+   "line": 7
+  },
+  {
+   "text": "GROUP",
+   "box": [
+    1053,
+    485,
+    52,
+    21
+   ],
+   "line": 7
+  },
+  {
+   "text": "FAVORITES",
+   "box": [
+    1150,
+    485,
+    84,
+    21
+   ],
+   "line": 8
+  },
+  {
+   "text": "z",
+   "box": [
+    87,
+    488,
+    12,
+    16
+   ],
+   "line": 9
+  },
+  {
+   "text": "COACH",
+   "box": [
+    134,
+    486,
+    58,
+    20
+   ],
+   "line": 9
+  },
+  {
+   "text": "SUGGESTIONS",
+   "box": [
+    197,
+    486,
+    126,
+    20
+   ],
+   "line": 9
+  },
+  {
+   "text": "RECENT",
+   "box": [
+    1272,
+    485,
+    59,
+    21
+   ],
+   "line": 10
+  },
+  {
+   "text": "@",
+   "box": [
+    1299,
+    802,
+    27,
+    26
+   ],
+   "line": 11
+  },
+  {
+   "text": "BENCH",
+   "box": [
+    1350,
+    805,
+    57,
+    20
+   ],
+   "line": 11
+  },
+  {
+   "text": "DIG",
+   "box": [
+    1412,
+    805,
+    30,
+    20
+   ],
+   "line": 11
+  },
+  {
+   "text": "CURL",
+   "box": [
+    1447,
+    805,
+    43,
+    20
+   ],
+   "line": 11
+  },
+  {
+   "text": "GUN",
+   "box": [
+    1350,
+    832,
+    31,
+    21
+   ],
+   "line": 12
+  },
+  {
+   "text": "DEUCECLOSE",
+   "box": [
+    1386,
+    832,
+    101,
+    21
+   ],
+   "line": 12
+  },
+  {
+   "text": "SUPERSIM",
+   "box": [
+    1292,
+    886,
+    66,
+    16
+   ],
+   "line": 13
+  },
+  {
+   "text": "COACH",
+   "box": [
+    1421,
+    886,
+    43,
+    16
+   ],
+   "line": 13
+  },
+  {
+   "text": "ADJUSTMENTS",
+   "box": [
+    1468,
+    886,
+    94,
+    16
+   ],
+   "line": 13
+  },
+  {
+   "text": "ost",
+   "box": [
+    1297,
+    998,
+    34,
+    13
+   ],
+   "line": 14
+  },
+  {
+   "text": "IO:S6",
+   "box": [
+    1344,
+    997,
+    88,
+    17
+   ],
+   "line": 14
+  },
+  {
+   "text": "1ST",
+   "box": [
+    1308,
+    1052,
+    32,
+    15
+   ],
+   "line": 15
+  },
+  {
+   "text": "14:53",
+   "box": [
+    1346,
+    1052,
+    45,
+    15
+   ],
+   "line": 15
+  },
+  {
+   "text": "12",
+   "box": [
+    1782,
+    497,
+    15,
+    16
+   ],
+   "line": 16
+  },
+  {
+   "text": "PLAYS",
+   "box": [
+    1802,
+    497,
+    43,
+    16
+   ],
+   "line": 16
+  },
+  {
+   "text": "O",
+   "box": [
+    1698,
+    766,
+    7,
+    16
+   ],
+   "line": 17
+  },
+  {
+   "text": "10.0",
+   "box": [
+    1753,
+    763,
+    28,
+    20
+   ],
+   "line": 17
+  },
+  {
+   "text": "YDS",
+   "box": [
+    1813,
+    766,
+    25,
+    16
+   ],
+   "line": 17
+  },
+  {
+   "text": "PASS",
+   "box": [
+    86,
+    767,
+    37,
+    12
+   ],
+   "line": 18
+  },
+  {
+   "text": "ENDENC",
+   "box": [
+    152,
+    767,
+    56,
+    12
+   ],
+   "line": 19
+  },
+  {
+   "text": "MESHSPOT",
+   "box": [
+    140,
+    805,
+    99,
+    20
+   ],
+   "line": 20
+  },
+  {
+   "text": "--",
+   "box": [
+    252,
+    810,
+    22,
+    8
+   ],
+   "line": 20
+  },
+  {
+   "text": "GUN",
+   "box": [
+    140,
+    832,
+    31,
+    21
+   ],
+   "line": 21
+  },
+  {
+   "text": "CLOSE",
+   "box": [
+    230,
+    832,
+    47,
+    21
+   ],
+   "line": 21
+  },
+  {
+   "text": "WEEK",
+   "box": [
+    19,
+    1055,
+    56,
+    10
+   ],
+   "line": 22
+  },
+  {
+   "text": "1",
+   "box": [
+    81,
+    1055,
+    9,
+    10
+   ],
+   "line": 22
+  },
+  {
+   "text": "O",
+   "box": [
+    488,
+    766,
+    7,
+    16
+   ],
+   "line": 23
+  },
+  {
+   "text": "I",
+   "box": [
+    543,
+    763,
+    2,
+    20
+   ],
+   "line": 23
+  },
+  {
+   "text": "YDS",
+   "box": [
+    603,
+    766,
+    25,
+    16
+   ],
+   "line": 23
+  },
+  {
+   "text": "O",
+   "box": [
+    1093,
+    766,
+    7,
+    16
+   ],
+   "line": 24
+  },
+  {
+   "text": "10.0",
+   "box": [
+    1148,
+    763,
+    28,
+    20
+   ],
+   "line": 24
+  },
+  {
+   "text": "POWERO",
+   "box": [
+    745,
+    805,
+    78,
+    20
+   ],
+   "line": 25
+  },
+  {
+   "text": "GUN",
+   "box": [
+    745,
+    832,
+    31,
+    21
+   ],
+   "line": 26
+  },
+  {
+   "text": "WING",
+   "box": [
+    780,
+    832,
+    44,
+    21
+   ],
+   "line": 26
+  },
+  {
+   "text": "STACK",
+   "box": [
+    828,
+    832,
+    50,
+    21
+   ],
+   "line": 26
+  },
+  {
+   "text": "[DOUBLETAP]ADD/REMOVEFAVORITE",
+   "box": [
+    498,
+    884,
+    243,
+    20
+   ],
+   "line": 27
+  },
+  {
+   "text": "PLAYCALLSIJBSTITUTIONS",
+   "box": [
+    941,
+    886,
+    167,
+    16
+   ],
+   "line": 27
+  },
+  {
+   "text": "FLIPPLAY",
+   "box": [
+    1170,
+    886,
+    60,
+    16
+   ],
+   "line": 27
+  },
+  {
+   "text": "(0-0)",
+   "box": [
+    505,
+    994,
+    50,
+    18
+   ],
+   "line": 28
+  },
+  {
+   "text": "CHI",
+   "box": [
+    564,
+    994,
+    53,
+    17
+   ],
+   "line": 28
+  },
+  {
+   "text": "(0-0)-",
+   "box": [
+    340,
+    1050,
+    67,
+    18
+   ],
+   "line": 29
+  },
+  {
+   "text": "BUFFALO",
+   "box": [
+    435,
+    1052,
+    115,
+    14
+   ],
+   "line": 29
+  },
+  {
+   "text": "O",
+   "box": [
+    590,
+    1052,
+    16,
+    14
+   ],
+   "line": 29
+  },
+  {
+   "text": "o",
+   "box": [
+    681,
+    991,
+    31,
+    28
+   ],
+   "line": 30
+  },
+  {
+   "text": "CAR",
+   "box": [
+    885,
+    994,
+    68,
+    17
+   ],
+   "line": 31
+  },
+  {
+   "text": "(0-0)",
+   "box": [
+    961,
+    994,
+    50,
+    18
+   ],
+   "line": 31
+  },
+  {
+   "text": "(0-0)",
+   "box": [
+    849,
+    1050,
+    45,
+    18
+   ],
+   "line": 32
+  },
+  {
+   "text": "HOUSTON",
+   "box": [
+    944,
+    1052,
+    121,
+    14
+   ],
+   "line": 32
+  },
+  {
+   "text": "1ST",
+   "box": [
+    1605,
+    998,
+    42,
+    17
+   ],
+   "line": 33
+  },
+  {
+   "text": "o",
+   "box": [
+    1105,
+    1052,
+    16,
+    14
+   ],
+   "line": 34
+  }
+ ]
+}

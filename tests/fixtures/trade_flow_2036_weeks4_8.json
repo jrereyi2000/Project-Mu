@@ -1,0 +1,143 @@
+{
+ "season": 2036,
+ "cleared_proposals": 0,
+ "weeks": [
+  {
+   "week": 4,
+   "budget": {
+    "n": 1,
+    "e_w": 1.333,
+    "p_exec": 0.6,
+    "target": 16.0,
+    "executed": 0,
+    "new": 1,
+    "made_before": 0
+   },
+   "new": 1,
+   "requested": 1,
+   "talk_outcomes": {
+    "AGREED": 1
+   },
+   "talks": 1,
+   "executed": 1,
+   "refused": [],
+   "expired": 0,
+   "rechecked": 0
+  },
+  {
+   "week": 5,
+   "budget": {
+    "n": 2,
+    "e_w": 1.364,
+    "p_exec": 0.667,
+    "target": 16.0,
+    "executed": 1,
+    "new": 2,
+    "made_before": 0
+   },
+   "new": 2,
+   "requested": 2,
+   "talk_outcomes": {
+    "STALLED": 2
+   },
+   "talks": 2,
+   "executed": 0,
+   "refused": [],
+   "expired": 0,
+   "rechecked": 0
+  },
+  {
+   "week": 6,
+   "budget": {
+    "n": 4,
+    "e_w": 1.5,
+    "p_exec": 0.5,
+    "target": 16.0,
+    "executed": 1,
+    "new": 4,
+    "made_before": 0
+   },
+   "new": 4,
+   "requested": 4,
+   "talk_outcomes": {
+    "STALLED": 2,
+    "AGREED": 2
+   },
+   "talks": 4,
+   "executed": 2,
+   "refused": [],
+   "expired": 0,
+   "rechecked": 0
+  },
+  {
+   "week": 7,
+   "budget": {
+    "n": 8,
+    "e_w": 4.333,
+    "p_exec": 0.5,
+    "target": 16.0,
+    "executed": 3,
+    "new": 8,
+    "made_before": 0
+   },
+   "new": 8,
+   "requested": 8,
+   "talk_outcomes": {
+    "STALLED": 6,
+    "AGREED": 2
+   },
+   "talks": 8,
+   "executed": 2,
+   "refused": [],
+   "expired": 0,
+   "rechecked": 0
+  },
+  {
+   "week": 8,
+   "budget": {
+    "n": 14,
+    "e_w": 11.0,
+    "p_exec": 0.4,
+    "target": 16.0,
+    "executed": 5,
+    "new": 14,
+    "made_before": 0
+   },
+   "new": 10,
+   "requested": 14,
+   "talk_outcomes": {
+    "STALLED": 6,
+    "AGREED": 4
+   },
+   "talks": 10,
+   "executed": 4,
+   "refused": [],
+   "expired": 0,
+   "rechecked": 0
+  }
+ ],
+ "talks": 25,
+ "outcomes": {
+  "AGREED": 9,
+  "STALLED": 16,
+  "WALKED_AWAY": 0,
+  "OPEN": 0
+ },
+ "breakdown_share": 0.64,
+ "openings": {
+  "ANCHOR": 5,
+  "FIRM": 20
+ },
+ "turns": 62,
+ "message_lines": {
+  "LLM": 57,
+  "TEMPLATE": 5,
+  "template_share": 0.081
+ },
+ "counters": 13,
+ "counters_per_talk": 0.52,
+ "leaks": 6,
+ "executed": 9,
+ "decided": 25,
+ "executed_share": 0.36
+}

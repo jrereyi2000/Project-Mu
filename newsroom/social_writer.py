@@ -23,6 +23,11 @@ MAX_HASHTAGS = 2
 MONEY_PROBLEM = "dollar figure not in FACTS"
 RUMOR_PROBLEM = "rumor worded as a done deal"
 
+# A 0.0 from `cost_usd` is never "free" unless the model is genuinely unpriced-free (a local Ollama run).
+# AUDIT R6 F4: an OpenCode Go post is covered by the subscription, and a comparison must say so.
+ALLOWANCE_NOTE = "Go allowance (not $0 free)"
+UNPRICED_NOTE = "unpriced model (no per-token price known)"
+
 SOCIAL_RULES = """AGENT WIRE POSTING RULES (MANDATORY):
 - Write ONE social post, at most 280 characters. No links, no markdown, no label in front of it.
 - Real posts are short. Most are under 25 words, and plenty are a fragment of five. Closing punctuation is optional. Post about one thing (one play, one player, one call, one feeling), not the whole game. Use at most one number unless your POST STYLE allows more, and zero is often better. FOCUS is what this post is about; FACTS are background.
@@ -677,6 +682,38 @@ def cost_usd(model: str, usage: dict) -> float:
     return (usage["input"] * pin + (usage["output"] + usage["thinking"]) * pout) / 1_000_000
 
 
+def billing(model: str) -> str:
+    """How a model's tokens are paid for (AUDIT R6 F4), so a 0.0 is never read as "free".
+
+    'local'     an `ollama:` model: nothing is charged.
+    'allowance' an OpenCode Go id: covered by the Go subscription, so `cost_usd` 0.0 means "not billed per
+                token", never "free".
+    'priced'    a model in `PRICES`: `cost_usd` is its list-price cost.
+    'unpriced'  anything else: no price is known, and 0.0 is missing data rather than a free run.
+    """
+    if model and (model.startswith("ollama/") or model.startswith("ollama:")):
+        return "local"
+    try:
+        from newsroom.tool_loop.go_transport import is_go_model
+        if is_go_model(model):
+            return "allowance"
+    except Exception:                                        # go_transport is optional at import time
+        pass
+    return "priced" if model in PRICES else "unpriced"
+
+
+def cost_note(model: str) -> str:
+    """The label a cost line carries, empty for a per-token-priced model."""
+    kind = billing(model)
+    if kind == "allowance":
+        return ALLOWANCE_NOTE
+    if kind == "unpriced":
+        return UNPRICED_NOTE
+    if kind == "local":
+        return "local model (no charge)"
+    return ""
+
+
 SIMILAR_PROBLEM = "too similar to another post"
 
 
@@ -818,6 +855,7 @@ def write_post(client, model: str, system: str, prompt: str, temperature: float 
                 print(f"[social_writer] Ollama rewrite failed ({type(e).__name__}: {e}); keeping initial post.", flush=True)
 
         return {"raw": raw, **post, "usage": usage_total, "cost_usd": 0.0,
+                "billing": billing(model), "cost_note": cost_note(model),
                 "seconds": round(time.time() - start, 2), "calls": calls}
 
     # Gemini and OpenCode Go share this flow: the same config, parse, cleaning, guards and one-rewrite pass. Only
@@ -830,7 +868,7 @@ def write_post(client, model: str, system: str, prompt: str, temperature: float 
     if go:
         model = resolve_model("go", label="agent_wire", model=model)
         if not _is_go_client(client):
-            client = go_transport.go_client()
+            client = go_transport.go_client(label="social_writer")
     elif client is None:
         from google import genai
         key = load_api_key()
@@ -860,6 +898,7 @@ def write_post(client, model: str, system: str, prompt: str, temperature: float 
         post2["problems"] = [f"rewritten once for {' and '.join(reasons)}"] + post2["problems"]
         raw, post = raw2, post2
     return {"raw": raw, **post, "usage": usage_total, "cost_usd": cost_usd(model, usage_total),
+            "billing": billing(model), "cost_note": cost_note(model),
             "seconds": round(time.time() - start, 2), "calls": calls}
 
 

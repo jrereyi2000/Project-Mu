@@ -251,3 +251,44 @@ def test_the_writer_builds_the_go_client_when_none_is_injected(monkeypatch):
     writer = SP._Writer(None, {"teams": {}, "season": 2036, "week": 1}, {}, {}, None, GO_MODEL, 1, lambda *a: None)
 
     assert writer.client is fake and writer.model == GO_MODEL
+
+
+# --------------------------------------------------------------------------- billing labels (AUDIT R6 F4) ---
+def test_a_go_post_reports_an_allowance_not_a_free_post(monkeypatch):
+    """`cost_usd: 0.0` on a Go post is the subscription paying, not a free call."""
+    _clean_env(monkeypatch)
+    fake = _FakeClient(["Arrowhead was ROCKING"])
+    monkeypatch.setattr(go_transport, "go_client", lambda *a, **k: fake)
+
+    out = SW.write_post(None, GO_MODEL, "sys", "prompt")
+
+    assert out["cost_usd"] == 0.0
+    assert out["billing"] == "allowance"
+    assert out["cost_note"] == SW.ALLOWANCE_NOTE
+    assert "not $0" in SW.cost_note(GO_MODEL)
+
+
+def test_a_priced_gemini_post_carries_no_allowance_label():
+    assert SW.billing("gemini-3.8-flash") == "priced"
+    assert SW.cost_note("gemini-3.8-flash") == ""
+
+
+def test_an_unknown_gemini_model_is_unpriced_not_free():
+    assert SW.billing("gemini-9-ultra") == "unpriced"
+    assert SW.cost_note("gemini-9-ultra") == SW.UNPRICED_NOTE
+
+
+def test_the_comment_line_names_the_allowance(monkeypatch):
+    writer = SP._Writer(None, {"teams": {}, "season": 2036, "week": 1}, {}, {}, _FakeClient([]), GO_MODEL, 1,
+                        lambda *a: None)
+    writer.cost_notes[SW.ALLOWANCE_NOTE] += 2
+
+    assert "Go allowance (not $0 free): 2 post(s)" in writer.cost_line()
+
+
+def test_the_model_comparison_labels_a_go_run_as_an_allowance():
+    from tools import social_model_compare as SMC
+    rows = [{"cost_usd": 0.0, "usage": {"input": 100, "output": 20, "thinking": 0}, "problems": []}] * 3
+
+    assert SMC.cost_text(GO_MODEL, rows) == f"{SW.ALLOWANCE_NOTE}, 3 posts"
+    assert SMC.cost_text("gemini-3.8-flash", [dict(rows[0], cost_usd=0.00012)]).startswith("$0.0001 total")

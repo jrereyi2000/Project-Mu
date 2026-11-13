@@ -637,3 +637,124 @@ fact without typing into anyone's window.
   stageable until that builder's NOTICE.
 - **Any fix round from wave 2** — the P7 chain and fact-gate findings will need a fourth builder group once their
   reports land, and that is a new decision, not part of this staging.
+
+---
+
+## 11. Why the auditor windows could not sign off, and the fix now being built
+
+The seven sessions closed at M-0748 never posted a sign-off: a board message does not give an `agy` TUI session a
+**turn**, and only a turn makes it act. That is a harness gap, not a model failure, and it was spiked on JR's word
+the same evening.
+
+### 11.1 Measured, on this machine
+
+```
+agy --model gemini-4-hydrogen-high --output-format json -p="Reply with exactly: SPIKE-OK"
+{"conversation_id":"99333c9d-b6d2-4081-8dd8-a9f10f2b2aab","status":"SUCCESS","response":"SPIKE-OK","num_turns":1,
+ "usage":{"input_tokens":13160,"output_tokens":869,"thinking_tokens":861,"cache_read_tokens":0,"total_tokens":14029}}
+
+agy --model gemini-4-hydrogen-high --output-format json --conversation 99333c9d-… \
+    -p="What single word did you reply with a moment ago?"
+{"conversation_id":"99333c9d-…","status":"SUCCESS","response":"SPIKE-OK","num_turns":2,
+ "usage":{…,"cache_read_tokens":11106,…}}
+```
+
+Three facts follow:
+
+1. **A print-mode turn returns its `conversation_id`** and its token `usage` — the meter
+   `GEMINI_4_HYDROGEN_EVALUATION.md` §3.3 and the hydrogen skill both record as missing.
+2. **`--conversation <id> -p=` resumes that conversation from outside**, with context: `num_turns` 2, 11,106 cached
+   tokens, and it recalled its own previous answer. That is a wake.
+3. **An interactive `agy -i` session exposes no id** — no UUID in any live pane, no conversation store under
+   `~/.config/antigravity` — so the TUI shape cannot be woken at all. The six closed auditors were unwakeable
+   because of *how they were launched*, not because Hydrogen cannot listen.
+
+### 11.2 The shape this implies
+
+Auditors run as **print-mode batches** rather than TUI windows:
+
+```
+tools/agy_batch.sh --label audit-x brief.txt     # first turn; records the conversation id
+tools/agent_board_wake.py --harness agy --label audit-x --conversation <id> --state <path>
+```
+
+`tools/agent_board_wake.py` already has the right shape for Codex (`addressed_headers`, `save_state`, a singleton
+lock, `deliver()` shelling to `codex queue --resume`); the agy mode is the same watcher with an
+`agy --conversation <id> --print-timeout 0 -p=` deliverer that keeps Codex's honesty rule — a non-SUCCESS status
+or a "warning" is **not** a delivered wake.
+
+### 11.3 Dispatched
+
+One unit, `build-agy-wake` (DeepSeek, M-0750): the `agy` harness in the wake tool, `tools/agy_batch.sh`, and the
+skill/spec lines. Files: `tools/agent_board_wake.py`, `tests/test_agent_board_wake.py`, new `tools/agy_batch.sh`,
+`.agents/skills/hydrogen/SKILL.md`, its own spec hunks — deliberately **not** `tools/spawn_agent.sh`,
+`docs/reference/AGENTS.md` or their tests, which `fix-tooling` owns right now.
+
+**Still unverified when it lands, and named in the brief:** whether print mode permits *writes* (the trials only
+read and ran tests), whether `--print-timeout 0` blocks for a 20-minute batch, and whether a killed run leaves a
+resumable conversation. A wake that hangs on a permission prompt is worse than no wake.
+
+### 11.4 The same invisibility bites DeepSeek sessions
+
+`tools/spawn_agent.sh <label> deepseek` no longer opens a tmux window: it mints an OpenCode **service** session and
+runs the first turn through `opencode run`, which has no UI. The session is real and titled
+(`opencode session list` shows `Mu <label> (deepseek)`), but nothing on screen shows it working — JR hit exactly
+this on `build-agy-wake`. To watch or steer one, attach a TUI to the same session id:
+
+```
+tmux new-window -d -t mu: -n <label> -c /home/jrereyi/Project-Mu \
+  "opencode --session <ses_mu_…>; exec bash"
+```
+
+The window is a viewer; the headless runner owns the turn in flight, and anything typed queues behind it. The
+fix-lane builders and `build-agy-wake` are attached this way. Worth folding into `tools/spawn_agent.sh` once
+`fix-tooling` releases it — print it as part of the spawn line, as the DeepSeek route already prints the id.
+
+---
+
+## 12. Backlog snapshot, 2026-11-12 17:50
+
+Everything below is quoted from the reports and NOTICEs named in §9 and §10; none of it is my verdict.
+
+| Row | Audit | Fix | Re-check |
+|---|---|---|---|
+| **R8** P3-04b | **PASS** (`audit-p3-chain/r8`) — no `CALIBRATION_SAMPLE` left anywhere, live `(1.0, 1.25)`, cost 7.3 s a season | none needed | — |
+| **R9** `ded2627` residuals | re-check: all six of the earlier report's findings answered | none needed | — |
+| **R10** `e93e417` | **PASS, F1–F6 CLOSED** (`r10`) — seed 0 draws 373 leavers vs 374 at seed 1; year 2 differs from year 1; live == fit at seed 0; pinned test values re-derived | none needed | — |
+| **R3** route plan | OPEN, 5 | `fix-tooling` F1–F4 on `main`; **F5 blocked on JR** (both OpenCode plan files are still tracked in `HEAD`) | **owed** |
+| **R4** Go pipeline | needs fix, 3 | `fix-tooling` F1–F3 on `main` (`a59a186`, `f91cabd`, `86ed78d`) | **owed** |
+| **R6 + R11** | R6 fails 5, R11 confirmed | `fix-go-voice` `8c97e78` / recheck pin **`190a5fc`** — all five closed, R11 via `client_for_model()` | **owed** |
+| **R5a** fact-gate | CHANGES REQUIRED, 6 (2 HIGH) | `fix-fact-gate`, in flight | owed |
+| **R5b** `45e58d1` | CONDITIONAL PASS, 3 | same builder, in flight | owed |
+| **R1** stats3 | PARTIAL — R2a, R2b open | `fix-stats-id`, in flight | owed |
+| **R2** stats2b | PARTIAL — P1 open | same builder, in flight | owed |
+| **R7** visual mod check | R1/R2/R3/F8/F10/F11 **closed** (F11 live on the PC), F12 open, **F13 and F14 new HIGH** (the launcher's JSON parse and a `border_highlight` regression that stops `watch-game`) | `visual-check-fixes-3` round 3, spawned 18:09 (M-0787) | owed after round 3, and it needs bounded **live PC acceptance** — the halftime footage and the supersim selected rows are blocked by F13/F14, not by a reviewer |
+
+**Closing state (18:20).** The two re-checks came back as recorded above; `recheck-fact-gate` is running on
+`c3d5d06`; `fix-stats-id` is running; `fix-go-allowance` is running on the R6 F4 accounting; `visual-check-fixes-3`
+holds R7's round 3. **Counts.** Nine rows have produced findings (R8/R9/R10 came back clean, and they are the checkpoint-1 chain — that
+is the headline). About **13 findings have a fix on `main` and are awaiting a verdict** (R3 F1–F4, R4 F1–F3,
+R6 F1–F5 with R11). About **12 are in the fix lane right now** (R5a 6, R5b 3, R1 2, R2 1). **One is blocked on
+JR** (R3 F5). R7's round is with its own builder and re-checker.
+
+**17:57–18:05 update.** The two re-checks came back: **R3 F1–F5 all CLOSED** (F5 was fixed properly at `8cf19e4`, so
+it is no longer blocked on JR) and **R4 F1–F3 all CLOSED**, with R4 F1 proved clock-independent rather than lucky.
+**R6 F1/F2/F3/F5 CLOSED; R11's primary and all four sibling paths CLOSED**; **R6 F4 is PARTIAL** and its two
+deferrals are **OPEN** — `go_transport.go_client()` writes `0` entries to `data/usage/go_allowance.jsonl`, and
+`estimate_cost("glm-5.3-flash")` still prices at Gemini's fallback. That is one small unit, not a re-check.
+`fix-fact-gate` then landed all nine of its findings at **`c3d5d06`** and signed off, so **`recheck-fact-gate` is
+owed now**; `fix-stats-id` is still running and its re-check follows its NOTICE.
+
+**What the backlog needed next:** four re-check batches. **Two were opened** (17:49): `recheck-tooling` on
+`R3 + R4` at `a2d21ec` (worktree `audit-a2d21ec`), and `recheck-go-voice` on `R6 + R11` at `190a5fc` (worktree
+`audit-190a5fc`), each with the original report, its repro scripts and the builder's NOTICE as the brief. The
+other two start when `fix-stats-id` and `fix-fact-gate` post theirs. Nothing is waiting on the queue itself any
+more.
+
+**Loose ends for JR, none of them an audit:**
+1. **R3 F5** — `docs/in_progress/OPENCODE_{DEEPSEEK_ROUTE,GO_PIPELINE}_PLAN.md` are still tracked in `HEAD`;
+   deleting them in the main checkout only is not a fix.
+2. **`fix-go-voice`'s two deferrals** — `go_allowance.jsonl` writes from `go_client()`, and `estimate_cost`'s
+   Gemini fallback pricing for `glm-5.3-flash`. Named open, not closed findings.
+3. **R5a F1** is probably already fixed by `45e58d1` — the re-check should verify rather than re-fix.
+4. **`audit-p3-chain`'s out-of-scope note:** `e93e417` also bundles the F6/N1 `lone_two_back` change.

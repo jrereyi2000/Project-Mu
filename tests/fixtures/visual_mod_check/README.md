@@ -15,6 +15,9 @@ re-rendered, re-OCRed or edited; only the surrounding run metadata was dropped.
 | `referee_0072.json` | same run, `0072_UNKNOWN` | F8 negative: referee close-up / empty OCR is not a kickoff state. |
 | `playcall_0004.json`, `playcall_0022.json` | `data/audit_reports/visual_mod_check/live_quit_prepare/steps/0004_UNKNOWN`, `0022_UNKNOWN` | F10: the persistent offensive play-call frames a super-sim Back returns to; classified `GAME_PLAY_CALL`, not Pause. |
 | `playcall_after_receiving.json` | `data/audit_reports/visual_mod_check/after_receiving_timeout` | F8/F10: the play call the receiving kickoff advanced to on its own. |
+| `advance_menu_force_0061.json/.png` | `data/tuning/seasons/p2d/pilot_regular/steps/0061_ADVANCE_MENU` | N1: `FORCE ADVANCE` has the fill; the `ADVANCE WEEK` button's outline below must not make `SIM TO MIDSEASON` (or any row between) read as selected. |
+| `advance_menu_ready_0024.json/.png` | `data/tuning/seasons/p2d/pilot_regular/steps/0024_ADVANCE_MENU` | N1: `READY TO ADVANCE` has the fill; `FORCE ADVANCE` and `SIM TO MIDSEASON` must both read `None`, and the full option list must name only READY. |
+| `advance_menu_ready_unread_p2g0020.json/.png` | `data/tuning/seasons/p2g/stop_01/steps/0020_ADVANCE_MENU` | N1's live failure: READY is selected and OCR drops its text (`TO ADVANCE` / `FORCEADVANCE`); the reader must return `None`, so `confirm_on` stops instead of pressing Space on READY. |
 
 These are game screenshots (scorebugs, menus, player names) with no account, key or personal
 data. `pytest tests/test_visual_mod_check_round2.py` is the consumer; the tests that need a

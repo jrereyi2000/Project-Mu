@@ -195,7 +195,8 @@ def get_news_summary():
         "summary": rows,
         "total_articles": totals["total_articles"] if totals else 0,
         "total_tweets": totals["total_tweets"] if totals else 0,
-        "total_flagged": totals["total_flagged"] if totals else 0,
+        # .get: a partial totals row (or an older caller's fixture) reports 0 flags, never a KeyError.
+        "total_flagged": (totals.get("total_flagged") or 0) if totals else 0,
     }
 
 
