@@ -815,9 +815,20 @@ The application does not persist:
 
 ### Breakpoints
 
+- Shell: `max-width: 1080px`
 - Desktop adjustment: `max-width: 1100px`
 - Tablet: `max-width: 800px`
 - Mobile: `max-width: 560px`
+
+### At 1080px and below
+
+- The header brand margin tightens to 34 px, the nav link gap to 22 px and the nav tool gap to 14 px.
+- Section links drop to the 11 px ladder rung, so the header no longer scrolls the page sideways between 1050 px and 801 px (the collapse point is 800 px).
+
+### Type and containers
+
+- Every type size comes from the `--fs-*` ladder in `src/index.css` `:root`: 10, 11, 12, 13, 14, 15, 16, 18, 20, 22, 24, 28, 32, 36, 40, 44, 48, 64 and 104 px. The floor is 10 px, and no literal `font-size`/`font` size may appear outside `:root`.
+- Page containers are `var(--container)` (1440 px) and `var(--container-narrow)` (1120 px) with `var(--gutter)` (42 px) horizontal padding. Read-width caps inside a page (700–1050 px text blocks) are not containers.
 
 ### At 1100px and below
 
@@ -859,6 +870,9 @@ The stylesheet includes a `prefers-reduced-motion: reduce` mode that disables or
 - Red accent: `#e31837`.
 - Archivo for primary typography.
 - Roboto Mono for labels, metadata, and tabular UI.
+- Type ladder: `--fs-10` … `--fs-104` (10, 11, 12, 13, 14, 15, 16, 18, 20, 22, 24, 28, 32, 36, 40, 44, 48, 64, 104 px) on `:root`; every type declaration names a rung, and `clamp()` endpoints are rungs with the `vw` middle kept.
+- Containers: `--container: 1440px`, `--container-narrow: 1120px`, `--gutter: 42px`.
+- Text colours: `--text-muted: #5c5d63` for muted labels (5.91:1 on paper, 5.49:1 on the table-head grey) and `--red-text: #c4162f` for red text on paper (5.40:1 / 5.02:1). `--accent-text` defaults to `var(--red-text)` and is overridden per page from the team colour. `--gray-500` (#717176) is kept for borders and fills only; `--red` (#e31837) is kept for backgrounds, borders, fills, and text on red or dark surfaces.
 
 ### Mu Fantasy
 
@@ -886,6 +900,7 @@ Implemented accessibility details include:
 - Disabled states for bounded previous/next controls.
 - Keyboard activation of Agent Wire post cards with Enter.
 - Escape-key dismissal for global menus and the fantasy modal.
+- Label, metadata and table-header text uses `--text-muted` (≥4.5:1 on paper and on the table-head grey); red and per-team text uses `--accent-text`/`--red-text`, while `--red` and `--team-color` remain text colours only on red or dark surfaces.
 - Reduced-motion support.
 
 Known limitations:

@@ -1,6 +1,14 @@
 # Project Mu: UI Type Scale and Container Plan
 
-**Status:** approved by JR (2026-11-12); building, wave 1 of 3 — all five §8 recommendations accepted; built by `build-ui-type`.
+**Status:** approved by JR (2026-11-12); building, wave 2 of 3 — all five §8 recommendations accepted; built by `build-ui-type`.
+
+**As built (wave 1, 2026-11-12):**
+- **U1:** `:root` verbatim per §2.2 (`--gray-500` keeps `#717176`, D6); all 698 type declarations in `index.css` → rungs; 22 container blocks and every 42 px horizontal padding → `var(--gutter)`; 79 `color: var(--gray-500)` → `--text-muted`; 49 red/team text rules → `var(--accent-text, var(--red-text))`, with white-on-red and dark-surface text kept on `--red`/`--team-color`. Gap values (52–67, 69–103) took the nearest rung. **One visible growth:** the article H1 clamp max 87 → `--fs-104` (`index.css:662`) — the only rung above 64; flipping that line to `--fs-64` is the alternative if JR dislikes it. The author-page `var(--author-team-color, var(--red))` text rules were left alone: `--accent-text` is published only by the four team pages, so converting them would drop the author's colour.
+- **U4:** all five stylesheets → `var(--fs-*)`; 34 muted-text rules → `--text-muted`; 7 red-text rules → `var(--accent-text, …)`; the history and draft containers → `var(--container)`. `napper.css` and `napperDraft.css` keep their own dark palette (only sizes changed).
+- **Measured on `main` after wave 1** (14 surfaces × 2560/1440/1050/900, headless Chromium against the live site): **0 sideways scroll at every width** (was 177 px at 900), **0 leaves under 10 px** on every surface outside the franchise page (was 78–352), and the two §2.6 token groups pass AA. The franchise page's 8–9 px labels are wave 2's.
+- **Plan defect found in wave 1 (recorded for JR):** §2.2's rule "no literal px sizes anywhere in `Mu_Network/src` except `:root`" and §2.8's invariant on `Mu_Network/src/**` reach files the ownership table does not list — `NapperPage.tsx`, `DebugPage.tsx` and 10 files under `components/napper/` still hold 130 literal sizes (27 under 10 px). A tail unit (U7) sweeps them before U6, so the invariant can be strict network-wide.
+- **Contrast gate scope (§2.7 vs §1's non-goals):** the Mu Fantasy and Agent Wire palettes are explicitly out of colour scope in §1, so U6's tool hard-fails contrast on the Gridiron surfaces and reports the own-palette surfaces (fantasy, napper, social, draft) as advisory rows, with `--strict` for a full sweep. The ticker, disabled controls and `aria-hidden` text are excluded; gradient-backed leaves are reported as unmeasurable rather than failed.
+
 **Builds on:** [`Mu_Network/PROJECT_SPEC.md`](../../Mu_Network/PROJECT_SPEC.md) §9 (Responsive Behavior), §10 (Visual Systems), §11 (Accessibility); root `PROJECT_SPEC.md` §1.1's `Mu_Network/` row; and the measurements in [`P8_PAGE_CHECKS_2026-11-12.md`](../reference/P8_PAGE_CHECKS_2026-11-12.md) §5.
 
 **Goal:** JR reads the whole network on a 1440p screen without squinting. Today the label type is 5–9 px (`516` declarations under 10 px across 20 files), the content sits in a 1240 px column with 660 px gutters on a 2560-wide screen, one grey text colour carries 203 of its uses at 4.04–4.37:1 contrast, and between 1050 px and 801 px the entire page scrolls sideways. This plan puts every size on one ladder behind tokens, widens the shared container, fixes the shell breakpoint, wraps the franchise tab bar, takes label text over 4.5:1, and leaves a machine check so the next bump is one number instead of 700 rules.
@@ -333,3 +341,5 @@ All five were decided on 2026-11-12: JR approved the plan as written and accepte
 
 | Unit | Wave | Branch | Worktree | Result | Merge |
 |---|---|---|---|---|---|
+| U1 | 1 | `ui-type-u1` | `.claude/worktrees/ui-type-u1` | merged | `eb75f8d6` |
+| U4 | 1 | `ui-type-u4` | `.claude/worktrees/ui-type-u4` | merged | `82890d85` |

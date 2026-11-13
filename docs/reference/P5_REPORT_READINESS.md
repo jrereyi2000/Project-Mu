@@ -2,10 +2,8 @@
 
 **Task:** the §7.1 readiness rule (`docs/CLOSE_OUT_CHECKLIST.md:331-332`): *a feature that cannot be measured by a
 number is not ready to activate; if a report doesn't exist, build the report before tuning the feature.* P5 has 13
-open items (P5-02…P5-14, checklist `:365-377`), each a feature × a simulated season. The first completed tuning
-season (P4-01, `check-d`, 2026-11-12, board M-0856, `docs/reference/P4_01_SUPERSIM_BASELINE.md`) wrote one compare
-report and no feature number at all, so there is still no season anyone can check that readiness in. This document
-is that check, done by reading the code.
+open items (P5-02…P5-14, checklist `:365-377`), each a feature × a simulated season, and P4-01 has not delivered a
+season yet, so nobody can check that readiness in a season. This document is that check, done by reading the code.
 
 **Run:** 2026-11-12 by `deepseek-v4.1-flash` (`p5-report-audit`). **Inventory only:** no report was built, no
 season was run, no engine, feature or checklist row was changed, no PC, no save, no database, no model call. Every
@@ -64,10 +62,7 @@ tuning database by the end of a season; nothing turns them into a number a perso
 ## 2. One row per feature (the D2 go-live order)
 
 `FEATURES` is `personality/features.py:60-63`. "Reachable" means: set the feature to `shadow`, run
-`engines/tuning/season_loop.py`, and the feature's engine or hook actually executes during that season. It assumes
-the **week-by-week** walk, the loop's default: `--fast-season` sims the season in one `sim-season` shot and skips the
-weekly league office entirely (`engines/tuning/season_loop.py:437-446`), so under it only the offseason-stage
-features run at all — which is also why the P4-01 season could not have produced a feature number.
+`engines/tuning/season_loop.py`, and the feature's engine or hook actually executes during that season.
 
 | # | Feature | §7.2 signal | Season report? where | Reachable from a season? | Scored against a target? | Gap | Size |
 |---|---|---|---|---|---|---|---|
@@ -90,7 +85,7 @@ features run at all — which is also why the P4-01 season could not have produc
 | 17 | `owner_spending` | cash spend vs cap, facility upgrades; real cash-to-cap ratios | **No.** `engines/owner_policy.py:147-230` (`spending`, `facility_style`, `facility_upgrade_orders`); the data exists — `owner_cash_ledgers` (`db/init_db.sql:2137-2145`) and `team_cap_seasons` (`:447-453`); the shadow receipt records offer counts per wave (`pipeline/league_office_personality.py:615-649`) | **Yes** — free-agency waves | **No** — no cash-to-cap target in P3-06, and no real-NFL cash dataset in the repo | Mu-side ratio per team/season is a query; the **comparator** needs a real cash-to-cap dataset | S + L |
 | 18 | `owner_meddling` | frequency, effect size; rare, bounded | **No.** `owner_decisions` stores every VETO/PUSH with `alternative` (`db/init_db.sql:3823-3836`); the shadow path records reviewed decisions in the receipt without writing rows (`pipeline/league_office_personality.py:656-700`); `VETO_CAP` 1/team/season | **Yes** — signings (and HC hires through the hire review) | **No** — "rare, bounded" has the bound (`VETO_CAP`) but no measure | reviewed candidates vs VETO/PUSH per team/season, veto effect (FA rank of the vetoed player), and shadow-mode counts | S |
 | 19 | `scout_directors` | report divergence from consensus, board lean; bias visible but not distorting | **No — and nothing to report.** In `shadow` the directors are created but **the board lean and the private report rows are `active`-only** (`engines/scouting_engine.py:707-747`: `active` gates `extra_bias` and the edition's director rows) | **No** — scouting runs from the *season scan* (`pipeline/weekly_capture.py:527`), not from `watch_save`, so `season_loop` never runs it | **No** — "not distorting" is undefined | three things: a scouting step in the shadow season (or a documented one-off run), a shadow recording of the leaned board/edition, then the divergence report | M (design) |
-| 20 | `media_voters` | ballot vs article agreement, winner distribution; 100% agreement after P1-12 | **No.** Ballots run only when `mode == "active"` (`newsroom/award_ballots.py:303-312`) and only inside the article path (`newsroom/swarm_dispatcher.py:1467-1507`). P1-12 **enforces** agreement with a rewrite (`docs/CLOSE_OUT_CHECKLIST.md:134`) but stores no agreement figure | **No** — `season_loop` ingests with `--no-articles` (`engines/tuning/season_loop.py:235-243`) and a tuning DB forces `MU_NO_LLM=1` (`pipeline/watch_save.py:1634-1636`); the ballot path never executes | **No** — the 100% rule has a writer-side check, no measurement | a ballot-only shadow entry point (independent of the writer), stored winners per season, then the agreement + distribution report; agreement against real articles needs an articles-on run | M + L |
+| 20 | `media_voters` | ballot vs article agreement, winner distribution; 100% agreement after P1-12 | **No.** Ballots run only when `mode == "active"` (`newsroom/award_ballots.py:307-310`) and only inside the article path (`newsroom/swarm_dispatcher.py:1467-1507`). P1-12 **enforces** agreement with a rewrite (`docs/CLOSE_OUT_CHECKLIST.md:134`) but stores no agreement figure | **No** — `season_loop` ingests with `--no-articles` (`engines/tuning/season_loop.py:235-243`) and a tuning DB forces `MU_NO_LLM=1` (`pipeline/watch_save.py:1634-1636`); the ballot path never executes | **No** — the 100% rule has a writer-side check, no measurement | a ballot-only shadow entry point (independent of the writer), stored winners per season, then the agreement + distribution report; agreement against real articles needs an articles-on run | M + L |
 
 ---
 
@@ -105,10 +100,6 @@ features run at all — which is also why the P4-01 season could not have produc
 * `engines/tuning/decision_compare.py:916-1152` contains only A1–A7 (career length, retirement age, coach changes,
   trades, team movement, draft by round, rookie usage) plus `A1.inflow`.
 * Neither reads `personality_feature_modes`, `league_office_runs.summary`, or any of the tables in §2.
-
-The one completed season shows it: P4-01 scored `CAREER-TUNE-BASE26` straight through
-`engines.tuning.compare` and wrote `P4-01_compare.md` (`docs/reference/P4_01_SUPERSIM_BASELINE.md` §1) — a real
-season, no `decision_compare` report and no feature number.
 
 So §7.1 step 3 — "read the feature's report" — has nothing to read, for any feature. The runbook says it plainly
 and then leaves the reader empty: `docs/reference/P5_01_SHADOW_GATE.md:149-160` (Step 6 runs the season, Step 7
@@ -164,7 +155,7 @@ and a number without a target is not much better.
 Both fail the shadow contract in the same way: `shadow` is a no-op for the exact signal §7.2 names.
 
 1. **`media_voters`.** `decide_awards` / `decide_all_pro` return `None` unless `mode == "active"`
-   (`newsroom/award_ballots.py:303-312`), and the only caller is the article writer
+   (`newsroom/award_ballots.py:307-310`), and the only caller is the article writer
    (`newsroom/swarm_dispatcher.py:1467-1507`). A tuning season runs `--no-articles`
    (`engines/tuning/season_loop.py:235-243`) and forces `MU_NO_LLM=1` (`pipeline/watch_save.py:1634-1636`), so in
    shadow the panel never votes, no winners are stored, and there is nothing to compare with an article.
@@ -218,7 +209,7 @@ baseline pass-through. It needs a reader, not a redesign. The same is true of `c
 
 Ordered so each item is usable the moment it lands, and so the two D2-first features are measured first. "S" items
 are one reader plus a row in the season's report; "L" items are data/targets, not code, and are called out because
-**six features cannot be tuned until they exist**.
+**four features cannot be tuned until they exist**.
 
 **Step 0 — the spine (S).** `engines/tuning/feature_compare.py`: one read-only module over the tuning DB that
 returns `{feature: [{metric, value, target, verdict}]}` and renders `features_<season>.md`, called by
@@ -304,9 +295,8 @@ grep -rn "personality\|feature_modes\|summary->" engines/tuning/*.py
 # the comparators that are said to be missing
 python3 -c "import json;print(sorted(json.load(open('data/tuning/decision_targets.json'))))"
 
-# the shadow no-ops: the panel votes only when active, and the lean/report rows are active-only
-grep -n 'mode == "active"' newsroom/award_ballots.py
-grep -n 'active = out.get\|extra_bias=extra\|if active else None' engines/scouting_engine.py
+# the shadow no-ops
+grep -n "mode == \"active\"\|mode != \"active\"" newsroom/award_ballots.py engines/scouting_engine.py
 
 # the stored-but-unread evidence
 grep -rn "summary->'personality'\|summary\[.personality.\]" --include=*.py .
