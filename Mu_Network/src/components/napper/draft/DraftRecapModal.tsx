@@ -138,7 +138,7 @@ export const DraftRecapModal: React.FC<DraftRecapModalProps> = ({
                     />
                     <button
                       type="button"
-                      className="text-[10px] font-bold text-white mt-1 hover:text-[#00ceb8]"
+                      className="text-[length:var(--fs-10)] font-bold text-white mt-1 hover:text-[#00ceb8]"
                       onClick={() => onSelectPlayer?.(p)}
                       title={`View ${p.name}`}
                     >
@@ -159,7 +159,7 @@ export const DraftRecapModal: React.FC<DraftRecapModalProps> = ({
                   💎
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-[10px] font-black uppercase text-[#10b981] tracking-wider">
+                  <div className="text-[length:var(--fs-10)] font-black uppercase text-[#10b981] tracking-wider">
                     Best Value Pick (+{Math.max(0, analysis.bestValuePick.valueDiff)} slots)
                   </div>
                   <button
@@ -170,7 +170,7 @@ export const DraftRecapModal: React.FC<DraftRecapModalProps> = ({
                   >
                     {analysis.bestValuePick.pick.player.name} ({analysis.bestValuePick.pick.player.position})
                   </button>
-                  <div className="text-[10px] text-[#8a99ad]">
+                  <div className="text-[length:var(--fs-10)] text-[#8a99ad]">
                     Drafted at #{analysis.bestValuePick.pick.pick_overall} by {analysis.bestValuePick.pick.team_name} (ADP #{analysis.bestValuePick.pick.player.adp_rank ?? "—"})
                   </div>
                 </div>
@@ -184,7 +184,7 @@ export const DraftRecapModal: React.FC<DraftRecapModalProps> = ({
                   🎯
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-[10px] font-black uppercase text-[#f43f5e] tracking-wider">
+                  <div className="text-[length:var(--fs-10)] font-black uppercase text-[#f43f5e] tracking-wider">
                     Biggest Reach ({analysis.biggestReachPick.reachDiff} slots)
                   </div>
                   <button
@@ -195,7 +195,7 @@ export const DraftRecapModal: React.FC<DraftRecapModalProps> = ({
                   >
                     {analysis.biggestReachPick.pick.player.name} ({analysis.biggestReachPick.pick.player.position})
                   </button>
-                  <div className="text-[10px] text-[#8a99ad]">
+                  <div className="text-[length:var(--fs-10)] text-[#8a99ad]">
                     Drafted at #{analysis.biggestReachPick.pick.pick_overall} by {analysis.biggestReachPick.pick.team_name} (ADP #{analysis.biggestReachPick.pick.player.adp_rank ?? "—"})
                   </div>
                 </div>
@@ -209,7 +209,7 @@ export const DraftRecapModal: React.FC<DraftRecapModalProps> = ({
               <span className="text-xs font-black uppercase text-white tracking-wider">
                 Full League Standings & Grades
               </span>
-              <span className="text-[10px] text-[#64748b]">
+              <span className="text-[length:var(--fs-10)] text-[#64748b]">
                 Ranked by Projected Fantasy Output
               </span>
             </div>
@@ -240,12 +240,12 @@ export const DraftRecapModal: React.FC<DraftRecapModalProps> = ({
                         <div className="text-xs font-bold text-white flex items-center gap-1.5">
                           <span>{gt.team.name}</span>
                           {isUser && (
-                            <span className="text-[9px] bg-[#00ceb8] text-[#090e17] px-1.5 py-0.2 rounded font-black">
+                            <span className="text-[length:var(--fs-10)] bg-[#00ceb8] text-[#090e17] px-1.5 py-0.2 rounded font-black">
                               YOU
                             </span>
                           )}
                         </div>
-                        <div className="text-[10px] text-[#64748b]">
+                        <div className="text-[length:var(--fs-10)] text-[#64748b]">
                           Slot {gt.team.slot} • {gt.team.manager_handle}
                         </div>
                       </div>
@@ -253,9 +253,9 @@ export const DraftRecapModal: React.FC<DraftRecapModalProps> = ({
 
                     <div className="text-right">
                       <div className="text-xs font-mono font-black text-white">
-                        {gt.totalPts.toFixed(1)} <span className="text-[9px] text-[#64748b]">FPTS</span>
+                        {gt.totalPts.toFixed(1)} <span className="text-[length:var(--fs-10)] text-[#64748b]">FPTS</span>
                       </div>
-                      <div className="text-[10px] text-[#8a99ad]">
+                      <div className="text-[length:var(--fs-10)] text-[#8a99ad]">
                         {gt.team.roster[0] ? (
                           <button
                             type="button"

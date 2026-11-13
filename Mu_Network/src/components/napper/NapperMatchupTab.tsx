@@ -115,7 +115,7 @@ export const NapperMatchupTab: React.FC<NapperMatchupTabProps> = ({
             <BlueRobotAvatar size={48} />
             <div className="min-w-0 flex-1">
               {/* Manager Handle */}
-              <div className="text-[11px] font-semibold tracking-wide text-[#8a99ad] truncate">
+              <div className="text-[length:var(--fs-11)] font-semibold tracking-wide text-[#8a99ad] truncate">
                 @{leftTeam.manager_handle || "jrereyi2000"}
               </div>
               {/* Team Name */}
@@ -144,7 +144,7 @@ export const NapperMatchupTab: React.FC<NapperMatchupTabProps> = ({
 
           {/* VS Divider */}
           <div className="flex flex-col items-center justify-center px-2 shrink-0">
-            <span className="text-[11px] font-extrabold tracking-widest text-[#5c6c80] uppercase">
+            <span className="text-[length:var(--fs-11)] font-extrabold tracking-widest text-[#5c6c80] uppercase">
               VS
             </span>
           </div>
@@ -164,7 +164,7 @@ export const NapperMatchupTab: React.FC<NapperMatchupTabProps> = ({
             {/* Right Team Info */}
             <div className="min-w-0 flex-1 text-right">
               {/* Manager Handle */}
-              <div className="text-[11px] font-semibold tracking-wide text-[#8a99ad] truncate">
+              <div className="text-[length:var(--fs-11)] font-semibold tracking-wide text-[#8a99ad] truncate">
                 {rightTeam.manager_handle || "-"}
               </div>
               {/* Team Name */}
@@ -294,7 +294,7 @@ export const NapperMatchupTab: React.FC<NapperMatchupTabProps> = ({
                         <span className="text-xs font-bold text-white group-hover:text-[#00ceb8] transition-colors truncate">
                           {lp.name}
                         </span>
-                        <span className="text-[11px] text-[#8a99ad] font-semibold">
+                        <span className="text-[length:var(--fs-11)] text-[#8a99ad] font-semibold">
                           {lp.position} - {lp.team}
                         </span>
                         <InjuryPill player={lp} />
@@ -302,13 +302,13 @@ export const NapperMatchupTab: React.FC<NapperMatchupTabProps> = ({
                       {lp.game_result ? (
                         <PostGameLine player={lp} />
                       ) : (
-                      <div className="text-[11px] text-[#8a99ad] flex items-center gap-1.5 mt-0.5 truncate">
+                      <div className="text-[length:var(--fs-11)] text-[#8a99ad] flex items-center gap-1.5 mt-0.5 truncate">
                         <span>{lp.kickoff}</span>
                         <span>{lp.opponent}</span>
                         {lp.game_status && (
                           <>
                             <span className="text-[#5c6c80]">•</span>
-                            <span className="text-[10px] text-[#8a99ad] truncate">
+                            <span className="text-[length:var(--fs-10)] text-[#8a99ad] truncate">
                               {lp.game_status}
                             </span>
                           </>
@@ -323,7 +323,7 @@ export const NapperMatchupTab: React.FC<NapperMatchupTabProps> = ({
                     <div className="text-sm font-black text-white font-mono leading-none">
                       {!lp.is_yet_to_play ? lp.fpts.toFixed(2) : "-"}
                     </div>
-                    <div className={`text-[11px] ${projClass(lp)} font-mono mt-1 font-medium`}>
+                    <div className={`text-[length:var(--fs-11)] ${projClass(lp)} font-mono mt-1 font-medium`}>
                       {lp.proj_fpts != null ? lp.proj_fpts.toFixed(2) : "—"}
                     </div>
                   </div>
@@ -356,7 +356,7 @@ export const NapperMatchupTab: React.FC<NapperMatchupTabProps> = ({
                     >
                       {!rp.is_yet_to_play ? rp.fpts.toFixed(2) : "-"}
                     </div>
-                    <div className={`text-[11px] ${projClass(rp)} font-mono mt-1 font-medium`}>
+                    <div className={`text-[length:var(--fs-11)] ${projClass(rp)} font-mono mt-1 font-medium`}>
                       {rp.proj_fpts != null ? rp.proj_fpts.toFixed(2) : "—"}
                     </div>
                   </div>
@@ -365,7 +365,7 @@ export const NapperMatchupTab: React.FC<NapperMatchupTabProps> = ({
                     <div className="min-w-0 text-right">
                       <div className="flex items-center justify-end gap-1.5 flex-wrap">
                         <InjuryPill player={rp} />
-                        <span className="text-[11px] text-[#8a99ad] font-semibold">
+                        <span className="text-[length:var(--fs-11)] text-[#8a99ad] font-semibold">
                           {rp.position} - {rp.team}
                         </span>
                         <span className="text-xs font-bold text-white group-hover:text-[#00ceb8] transition-colors truncate">
@@ -375,10 +375,10 @@ export const NapperMatchupTab: React.FC<NapperMatchupTabProps> = ({
                       {rp.game_result ? (
                         <PostGameLine player={rp} align="right" />
                       ) : (
-                      <div className="text-[11px] text-[#8a99ad] flex items-center justify-end gap-1.5 mt-0.5 truncate">
+                      <div className="text-[length:var(--fs-11)] text-[#8a99ad] flex items-center justify-end gap-1.5 mt-0.5 truncate">
                         {rp.game_status && (
                           <>
-                            <span className="text-[10px] text-[#8a99ad] truncate">
+                            <span className="text-[length:var(--fs-10)] text-[#8a99ad] truncate">
                               {rp.game_status}
                             </span>
                             <span className="text-[#5c6c80]">•</span>
@@ -418,7 +418,7 @@ export const NapperMatchupTab: React.FC<NapperMatchupTabProps> = ({
         >
           <div className="flex items-center gap-2">
             <span className="tracking-wider uppercase">BENCH</span>
-            <span className="text-[10px] px-1.5 py-0.5 bg-[#1a2332] border border-[#283850] rounded text-[#8a99ad] font-mono">
+            <span className="text-[length:var(--fs-10)] px-1.5 py-0.5 bg-[#1a2332] border border-[#283850] rounded text-[#8a99ad] font-mono">
               {matchup.bench.length}
             </span>
           </div>
@@ -457,14 +457,14 @@ export const NapperMatchupTab: React.FC<NapperMatchupTabProps> = ({
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5 truncate">
                             <span className="text-xs font-bold text-white truncate">{lp.name}</span>
-                            <span className="text-[11px] text-[#8a99ad] font-semibold">
+                            <span className="text-[length:var(--fs-11)] text-[#8a99ad] font-semibold">
                               {lp.position} - {lp.team}
                             </span>
                           </div>
                           {lp.game_result ? (
                             <PostGameLine player={lp} />
                           ) : (
-                            <div className="text-[11px] text-[#8a99ad] mt-0.5">
+                            <div className="text-[length:var(--fs-11)] text-[#8a99ad] mt-0.5">
                               {lp.kickoff} {lp.opponent}
                             </div>
                           )}
@@ -474,7 +474,7 @@ export const NapperMatchupTab: React.FC<NapperMatchupTabProps> = ({
                         <div className="text-xs font-black text-white font-mono leading-none">
                           {!lp.is_yet_to_play ? lp.fpts.toFixed(2) : "-"}
                         </div>
-                        <div className={`text-[10px] ${projClass(lp)} font-mono mt-1 font-medium`}>
+                        <div className={`text-[length:var(--fs-10)] ${projClass(lp)} font-mono mt-1 font-medium`}>
                           {lp.proj_fpts != null ? lp.proj_fpts.toFixed(2) : "—"}
                         </div>
                       </div>
@@ -500,14 +500,14 @@ export const NapperMatchupTab: React.FC<NapperMatchupTabProps> = ({
                         <div className="text-xs font-black text-white font-mono leading-none">
                           {!rp.is_yet_to_play ? rp.fpts.toFixed(2) : "-"}
                         </div>
-                        <div className={`text-[10px] ${projClass(rp)} font-mono mt-1 font-medium`}>
+                        <div className={`text-[length:var(--fs-10)] ${projClass(rp)} font-mono mt-1 font-medium`}>
                           {rp.proj_fpts != null ? rp.proj_fpts.toFixed(2) : "—"}
                         </div>
                       </div>
                       <div className="flex items-center justify-end gap-3 min-w-0 flex-1">
                         <div className="min-w-0 text-right">
                           <div className="flex items-center justify-end gap-1.5 truncate">
-                            <span className="text-[11px] text-[#8a99ad] font-semibold">
+                            <span className="text-[length:var(--fs-11)] text-[#8a99ad] font-semibold">
                               {rp.position} - {rp.team}
                             </span>
                             <span className="text-xs font-bold text-white truncate">{rp.name}</span>
@@ -515,7 +515,7 @@ export const NapperMatchupTab: React.FC<NapperMatchupTabProps> = ({
                           {rp.game_result ? (
                             <PostGameLine player={rp} align="right" />
                           ) : (
-                            <div className="text-[11px] text-[#8a99ad] mt-0.5">
+                            <div className="text-[length:var(--fs-11)] text-[#8a99ad] mt-0.5">
                               {rp.kickoff} {rp.opponent}
                             </div>
                           )}

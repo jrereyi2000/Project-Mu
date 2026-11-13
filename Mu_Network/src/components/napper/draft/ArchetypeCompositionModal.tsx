@@ -301,7 +301,7 @@ export const ArchetypeCompositionModal: React.FC<ArchetypeCompositionModalProps>
         {/* Preset Bar & Status Banner */}
         <div className="px-6 py-3 border-b border-[#20314d] bg-[#0d1626] flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-            <span className="text-[10px] font-bold text-[#64748b] uppercase tracking-wider mr-1">
+            <span className="text-[length:var(--fs-10)] font-bold text-[#64748b] uppercase tracking-wider mr-1">
               Presets:
             </span>
             {ARCHETYPE_PRESETS.map((p) => (
@@ -350,7 +350,7 @@ export const ArchetypeCompositionModal: React.FC<ArchetypeCompositionModalProps>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <span
-                      className="text-[10px] font-black uppercase px-2 py-0.5 rounded tracking-wider border"
+                      className="text-[length:var(--fs-10)] font-black uppercase px-2 py-0.5 rounded tracking-wider border"
                       style={{
                         color: meta.color,
                         backgroundColor: meta.bgColor,
@@ -361,10 +361,10 @@ export const ArchetypeCompositionModal: React.FC<ArchetypeCompositionModalProps>
                     </span>
                     <span className="text-xs font-bold text-white truncate">{meta.label}</span>
                   </div>
-                  <div className="text-[11px] font-medium text-[#00ceb8]/90 mb-0.5">
+                  <div className="text-[length:var(--fs-11)] font-medium text-[#00ceb8]/90 mb-0.5">
                     {meta.tagline}
                   </div>
-                  <p className="text-[11px] text-[#8a99ad] line-clamp-2 leading-relaxed">
+                  <p className="text-[length:var(--fs-11)] text-[#8a99ad] line-clamp-2 leading-relaxed">
                     {meta.description}
                   </p>
                 </div>

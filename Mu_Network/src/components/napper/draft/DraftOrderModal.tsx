@@ -124,7 +124,7 @@ export const DraftOrderModal: React.FC<DraftOrderModalProps> = ({
               <h2 className="text-lg font-black text-white tracking-tight uppercase">
                 Customize Draft Order
               </h2>
-              <span className="text-[11px] font-bold text-[#00ceb8] bg-[#00ceb8]/10 px-2 py-0.5 rounded-full border border-[#00ceb8]/30">
+              <span className="text-[length:var(--fs-11)] font-bold text-[#00ceb8] bg-[#00ceb8]/10 px-2 py-0.5 rounded-full border border-[#00ceb8]/30">
                 {orderedTeams.length} Teams
               </span>
             </div>
@@ -145,7 +145,7 @@ export const DraftOrderModal: React.FC<DraftOrderModalProps> = ({
         {/* Quick Actions Toolbar */}
         <div className="px-6 py-3 bg-[#0e1624] border-b border-[#1c293c] flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-[#63758e]">
+            <span className="text-[length:var(--fs-11)] font-bold uppercase tracking-wider text-[#63758e]">
               Quick Actions:
             </span>
             <button
@@ -178,7 +178,7 @@ export const DraftOrderModal: React.FC<DraftOrderModalProps> = ({
           </div>
 
           {/* User Slot Highlight Indicator */}
-          <div className="text-[11px] font-bold text-[#8a99ad] flex items-center gap-1.5">
+          <div className="text-[length:var(--fs-11)] font-bold text-[#8a99ad] flex items-center gap-1.5">
             <span>Your Spot:</span>
             <span className="text-[#00ceb8] bg-[#00ceb8]/15 px-2 py-0.5 rounded border border-[#00ceb8]/30 font-black">
               Slot #{userSlot}
@@ -264,7 +264,7 @@ export const DraftOrderModal: React.FC<DraftOrderModalProps> = ({
                         {team.name}
                       </span>
                     </div>
-                    <div className="text-[11px] text-[#718299] truncate font-medium">
+                    <div className="text-[length:var(--fs-11)] text-[#718299] truncate font-medium">
                       {team.manager_handle}
                     </div>
                   </div>
@@ -273,7 +273,7 @@ export const DraftOrderModal: React.FC<DraftOrderModalProps> = ({
                 {/* Middle: Prominent AI Archetype Badge & Selector */}
                 <div className="shrink-0 flex items-center">
                   {isUser ? (
-                    <span className="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider text-[#00ceb8] bg-[#00ceb8]/15 border border-[#00ceb8]/40 shadow-sm flex items-center gap-1.5">
+                    <span className="px-2.5 py-1 rounded-lg text-[length:var(--fs-10)] font-black uppercase tracking-wider text-[#00ceb8] bg-[#00ceb8]/15 border border-[#00ceb8]/40 shadow-sm flex items-center gap-1.5">
                       <span className="w-1.5 h-1.5 rounded-full bg-[#00ceb8]" />
                       <span>YOU</span>
                     </span>
@@ -282,7 +282,7 @@ export const DraftOrderModal: React.FC<DraftOrderModalProps> = ({
                       <select
                         value={meta.key}
                         onChange={(e) => handleArchetypeChange(index, e.target.value as NapperManagerArchetype)}
-                        className="appearance-none cursor-pointer pl-6 pr-6 py-1 rounded-lg text-[10px] font-black tracking-wider uppercase border outline-none transition-all hover:brightness-110 shadow-sm"
+                        className="appearance-none cursor-pointer pl-6 pr-6 py-1 rounded-lg text-[length:var(--fs-10)] font-black tracking-wider uppercase border outline-none transition-all hover:brightness-110 shadow-sm"
                         style={{
                           color: meta.color,
                           backgroundColor: meta.bgColor,
@@ -307,7 +307,7 @@ export const DraftOrderModal: React.FC<DraftOrderModalProps> = ({
                       />
                       {/* Down Caret */}
                       <span
-                        className="absolute right-2 text-[8px] pointer-events-none opacity-80"
+                        className="absolute right-2 text-[length:var(--fs-10)] pointer-events-none opacity-80"
                         style={{ color: meta.color }}
                       >
                         ▼
@@ -320,7 +320,7 @@ export const DraftOrderModal: React.FC<DraftOrderModalProps> = ({
                 <div className="flex items-center gap-2 shrink-0">
                   {/* Move directly to Slot Selector */}
                   <div className="flex items-center gap-1">
-                    <span className="text-[10px] font-bold uppercase text-[#63758e] hidden sm:inline">
+                    <span className="text-[length:var(--fs-10)] font-bold uppercase text-[#63758e] hidden sm:inline">
                       Slot:
                     </span>
                     <select

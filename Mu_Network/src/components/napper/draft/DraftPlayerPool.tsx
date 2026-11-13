@@ -222,7 +222,7 @@ export const DraftPlayerPool: React.FC<DraftPlayerPoolProps> = ({
 
         {/* Right Toolbar Controls: Drafted Checkbox, Season, Compare, Sliders */}
         <div className="draft-pool-actions">
-          <label className="flex items-center gap-1.5 text-[11px] font-bold text-[#8a99ad] cursor-pointer hover:text-white select-none">
+          <label className="flex items-center gap-1.5 text-[length:var(--fs-11)] font-bold text-[#8a99ad] cursor-pointer hover:text-white select-none">
             <input
               type="checkbox"
               checked={showDrafted}
@@ -236,7 +236,7 @@ export const DraftPlayerPool: React.FC<DraftPlayerPoolProps> = ({
           <select
             value={selectedSeason}
             onChange={(e) => setSelectedSeason(e.target.value)}
-            className="bg-[#141f33] border border-[#20314d] text-white text-[11px] font-bold py-1 px-2 rounded-md outline-none cursor-pointer"
+            className="bg-[#141f33] border border-[#20314d] text-white text-[length:var(--fs-11)] font-bold py-1 px-2 rounded-md outline-none cursor-pointer"
           >
             <option value="'26">'26</option>
             <option value="'25">'25</option>

@@ -1401,7 +1401,7 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
           <select
             value={simSpeedMs}
             onChange={(e) => setSimSpeedMs(Number(e.target.value))}
-            className="draft-util-btn px-1 text-[10px] font-bold outline-none cursor-pointer"
+            className="draft-util-btn px-1 text-[length:var(--fs-10)] font-bold outline-none cursor-pointer"
             title="Simulation Pace"
           >
             <option value={800}>Normal</option>
@@ -1440,7 +1440,7 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
               PPR (1.0)
             </span>
             <span
-              className="draft-config-pill text-[#00ceb8] cursor-default text-[10px]"
+              className="draft-config-pill text-[#00ceb8] cursor-default text-[length:var(--fs-10)]"
               title="Superflex active (QB/RB/WR/TE in Flex 2)"
             >
               SUPERFLEX
@@ -1492,7 +1492,7 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
             <button
               type="button"
               onClick={() => setArchetypeModalOpen(true)}
-              className="draft-config-pill active flex items-center gap-1 text-[10px]"
+              className="draft-config-pill active flex items-center gap-1 text-[length:var(--fs-10)]"
               title="Open full archetype composition editor"
             >
               <span>⚙ Customize</span>
@@ -1622,7 +1622,7 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
                       <div className="text-xs font-black text-white group-hover:text-[#00ceb8]">
                         {topAssistantRecommendation.name}
                       </div>
-                      <div className="text-[10px] text-[#00ceb8]">
+                      <div className="text-[length:var(--fs-10)] text-[#00ceb8]">
                         {topAssistantRecommendation.position} • {topAssistantRecommendation.team} (ADP #{topAssistantRecommendation.adp_rank ?? "—"})
                       </div>
                     </div>
@@ -1631,7 +1631,7 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
                     <div className="text-xs font-mono font-bold text-white">
                       {topAssistantRecommendation.proj_pts == null ? "—" : topAssistantRecommendation.proj_pts.toFixed(1)}
                     </div>
-                    <div className="text-[9px] text-[#64748b]">PROJ PTS</div>
+                    <div className="text-[length:var(--fs-10)] text-[#64748b]">PROJ PTS</div>
                   </div>
                 </div>
 

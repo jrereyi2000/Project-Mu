@@ -80,14 +80,14 @@ export function NapperScoresTab({ leagueId, embedded = false }: NapperScoresTabP
     <div className="napper-scores-tab" style={{ padding: embedded ? "0 0 24px" : "16px 24px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
         <div>
-          <h2 style={{ color: "#e2e8f0", margin: "0 0 4px 0", fontSize: "18px" }}>Matchups</h2>
-          <p style={{ color: "#8a99ad", margin: 0, fontSize: "12px" }}>Weekly starter points, projections, and team records.</p>
+          <h2 style={{ color: "#e2e8f0", margin: "0 0 4px 0", fontSize: "var(--fs-18)" }}>Matchups</h2>
+          <p style={{ color: "#8a99ad", margin: 0, fontSize: "var(--fs-12)" }}>Weekly starter points, projections, and team records.</p>
         </div>
         <select
           value={week ?? 1}
           onChange={(e) => setWeek(Number(e.target.value))}
           aria-label="Scoreboard week"
-            style={{ background: "#273247", border: "1px solid #283850", color: "#e2e8f0", padding: "9px 14px", borderRadius: "10px", fontSize: "14px", fontWeight: 700, cursor: "pointer" }}
+            style={{ background: "#273247", border: "1px solid #283850", color: "#e2e8f0", padding: "9px 14px", borderRadius: "10px", fontSize: "var(--fs-14)", fontWeight: 700, cursor: "pointer" }}
         >
           {Array.from({ length: 17 }, (_, i) => i + 1).map((w) => (
             <option key={w} value={w}>Wk. {w}</option>
@@ -119,17 +119,17 @@ export function NapperScoresTab({ leagueId, embedded = false }: NapperScoresTabP
               const isHome = side === "home";
               return (
                 <div key={team.id} style={{ minWidth: 0, flex: 1, textAlign: isHome ? "left" : "right" }}>
-                  <div style={{ color: "#8a99ad", fontSize: "11px", lineHeight: "16px", fontWeight: 600, letterSpacing: ".02em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingRight: isHome ? 0 : 36 }}>
+                  <div style={{ color: "#8a99ad", fontSize: "var(--fs-11)", lineHeight: "16px", fontWeight: 600, letterSpacing: ".02em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingRight: isHome ? 0 : 36 }}>
                     {team.manager_handle ? `@${team.manager_handle}` : ""}
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", flexDirection: isHome ? "row" : "row-reverse", marginTop: "2px" }}>
-                    <div style={{ color: "#fff", fontSize: "16px", lineHeight: 1.2, fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{team.team_name}{team.is_user ? " · You" : ""}</div>
-                    <div style={{ color: "#fff", fontSize: "20px", lineHeight: 1, fontWeight: 900, letterSpacing: "-.02em", whiteSpace: "nowrap" }}>{score > 0 ? score.toFixed(2) : "–"}</div>
+                    <div style={{ color: "#fff", fontSize: "var(--fs-16)", lineHeight: 1.2, fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{team.team_name}{team.is_user ? " · You" : ""}</div>
+                    <div style={{ color: "#fff", fontSize: "var(--fs-20)", lineHeight: 1, fontWeight: 900, letterSpacing: "-.02em", whiteSpace: "nowrap" }}>{score > 0 ? score.toFixed(2) : "–"}</div>
                   </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", color: "#8a99ad", fontSize: "11px", marginTop: "3px", fontWeight: 600 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", color: "#8a99ad", fontSize: "var(--fs-11)", marginTop: "3px", fontWeight: 600 }}>
                     <span style={{ fontFamily: "var(--font-mono, monospace)" }}>{isHome ? `Proj ${projection.toFixed(2)}` : `${team.wins}-${team.losses}${team.ties ? `-${team.ties}` : ""}`}</span>
-                    <span style={{ color: "#00ceb8", fontWeight: 900, fontSize: "12px" }}>{isHome ? `${percent}%` : ""}</span>
-                    <span style={{ color: "#00ceb8", fontWeight: 900, fontSize: "12px" }}>{isHome ? "" : `${percent}%`}</span>
+                    <span style={{ color: "#00ceb8", fontWeight: 900, fontSize: "var(--fs-12)" }}>{isHome ? `${percent}%` : ""}</span>
+                    <span style={{ color: "#00ceb8", fontWeight: 900, fontSize: "var(--fs-12)" }}>{isHome ? "" : `${percent}%`}</span>
                     <span style={{ fontFamily: "var(--font-mono, monospace)" }}>{isHome ? `${team.wins}-${team.losses}${team.ties ? `-${team.ties}` : ""}` : `Proj ${projection.toFixed(2)}`}</span>
                   </div>
                 </div>
@@ -153,7 +153,7 @@ export function NapperScoresTab({ leagueId, embedded = false }: NapperScoresTabP
               >
                 <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
                   {renderSide("home")}
-                  <div aria-hidden="true" style={{ zIndex: 1, flex: "0 0 36px", height: 36, borderRadius: "50%", background: "#202b3f", color: "#5c6c80", display: "grid", placeItems: "center", fontSize: "11px", fontWeight: 900 }}>VS</div>
+                  <div aria-hidden="true" style={{ zIndex: 1, flex: "0 0 36px", height: 36, borderRadius: "50%", background: "#202b3f", color: "#5c6c80", display: "grid", placeItems: "center", fontSize: "var(--fs-11)", fontWeight: 900 }}>VS</div>
                   {renderSide("away")}
                 </div>
                 <div className="napper-winprob-track napper-league-matchup-gauge" aria-label={`${homePct}% to ${awayPct}% points share`}>
@@ -161,11 +161,11 @@ export function NapperScoresTab({ leagueId, embedded = false }: NapperScoresTabP
                   <div className="napper-winprob-fill-right" style={{ width: `${awayPct}%` }} />
                 </div>
                 {matchup.playoff_round && (
-                  <span style={{ position: "absolute", top: 10, left: "50%", transform: "translateX(-50%)", color: matchup.playoff_round === "FINAL" ? "#ffc107" : "#00ceb8", fontSize: "10px", fontWeight: 800, textTransform: "uppercase", letterSpacing: ".04em" }}>
+                  <span style={{ position: "absolute", top: 10, left: "50%", transform: "translateX(-50%)", color: matchup.playoff_round === "FINAL" ? "#ffc107" : "#00ceb8", fontSize: "var(--fs-10)", fontWeight: 800, textTransform: "uppercase", letterSpacing: ".04em" }}>
                     {ROUND_TAGS[matchup.playoff_round]} · #{matchup.home.seed} v #{matchup.away.seed}
                   </span>
                 )}
-                <span style={{ position: "absolute", top: 10, right: 18, color: "#8392a8", fontSize: "10px", fontWeight: 800 }}>{matchup.is_final ? "FINAL" : "LIVE"}</span>
+                <span style={{ position: "absolute", top: 10, right: 18, color: "#8392a8", fontSize: "var(--fs-10)", fontWeight: 800 }}>{matchup.is_final ? "FINAL" : "LIVE"}</span>
               </div>
             );
           })}
@@ -189,7 +189,7 @@ export function NapperScoresTab({ leagueId, embedded = false }: NapperScoresTabP
                 <h2 id="napper-matchup-modal-title" className="truncate text-sm font-extrabold text-white">
                   {selectedMatchup.home.team_name} <span className="text-[#5c6c80]">vs</span> {selectedMatchup.away.team_name}
                 </h2>
-                <p className="mt-0.5 text-[11px] font-semibold uppercase tracking-wider text-[#8a99ad]">Week {week}</p>
+                <p className="mt-0.5 text-[length:var(--fs-11)] font-semibold uppercase tracking-wider text-[#8a99ad]">Week {week}</p>
               </div>
               <button
                 type="button"
