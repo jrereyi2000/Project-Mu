@@ -172,7 +172,7 @@ export const TeamNeedsMatrix: React.FC<{ team?: string | null; onClearTeam?: () 
               ) : (
                 filtered.map((t) => (
                   <tr key={t.team_id} style={{ cursor: "default" }}>
-                    <td style={{ fontWeight: 900, fontSize: "15px", color: "#0f172a" }}>#{t.base_draft_slot}</td>
+                    <td style={{ fontWeight: 900, fontSize: "var(--fs-15)", color: "#0f172a" }}>#{t.base_draft_slot}</td>
                     <td>
                       <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                         <img
@@ -181,11 +181,11 @@ export const TeamNeedsMatrix: React.FC<{ team?: string | null; onClearTeam?: () 
                           style={{ width: "32px", height: "32px", objectFit: "contain" }}
                         />
                         <div>
-                          <div style={{ fontWeight: 800, color: "#0f172a", fontSize: "14px" }}>
+                          <div style={{ fontWeight: 800, color: "#0f172a", fontSize: "var(--fs-14)" }}>
                             {t.full_name}{" "}
-                            <span style={{ fontWeight: 600, color: "#64748b", fontSize: "12px" }}>({t.record})</span>
+                            <span style={{ fontWeight: 600, color: "#64748b", fontSize: "var(--fs-12)" }}>({t.record})</span>
                           </div>
-                          <div style={{ fontSize: "11px", color: "#64748b" }}>
+                          <div style={{ fontSize: "var(--fs-11)", color: "#64748b" }}>
                             GM: {t.gm_name || "Front Office"} {t.team_ovr ? `· ${t.team_ovr} OVR` : ""}
                           </div>
                         </div>
@@ -195,7 +195,7 @@ export const TeamNeedsMatrix: React.FC<{ team?: string | null; onClearTeam?: () 
                       <span
                         style={{
                           ...directionStyle(t.direction),
-                          fontSize: "11px",
+                          fontSize: "var(--fs-11)",
                           fontWeight: 800,
                           padding: "3px 9px",
                           borderRadius: "999px",
@@ -212,7 +212,7 @@ export const TeamNeedsMatrix: React.FC<{ team?: string | null; onClearTeam?: () 
                             title={`${n.label}: ${n.reasons.join(", ") || "Roster depth"} (Need score ${n.score})`}
                             style={{
                               ...urgencyStyle(n.urgency),
-                              fontSize: "11px",
+                              fontSize: "var(--fs-11)",
                               fontWeight: 800,
                               padding: "3px 8px",
                               borderRadius: "6px",
@@ -222,19 +222,19 @@ export const TeamNeedsMatrix: React.FC<{ team?: string | null; onClearTeam?: () 
                             }}
                           >
                             <span>{n.group}</span>
-                            <span style={{ fontSize: "9px", opacity: 0.8 }}>{n.urgency}</span>
+                            <span style={{ fontSize: "var(--fs-10)", opacity: 0.8 }}>{n.urgency}</span>
                           </span>
                         ))}
                       </div>
                     </td>
                     <td style={{ whiteSpace: "nowrap" }}>
-                      <div style={{ fontWeight: 900, fontSize: "14px", color: "#0f172a" }}>
+                      <div style={{ fontWeight: 900, fontSize: "var(--fs-14)", color: "#0f172a" }}>
                         Rank #{t.capital_rank}{" "}
-                        <span style={{ fontWeight: 600, fontSize: "12px", color: "#64748b" }}>
+                        <span style={{ fontWeight: 600, fontSize: "var(--fs-12)", color: "#64748b" }}>
                           ({t.draft_capital_points.toLocaleString()} pts)
                         </span>
                       </div>
-                      <div style={{ fontSize: "11px", color: "#475569" }}>
+                      <div style={{ fontSize: "var(--fs-11)", color: "#475569" }}>
                         {t.total_picks} total picks ·{" "}
                         {t.round_1_picks.length > 0
                           ? `R1: ${t.round_1_picks.map((p) => `#${p}`).join(", ")}`
@@ -247,7 +247,7 @@ export const TeamNeedsMatrix: React.FC<{ team?: string | null; onClearTeam?: () 
                           <span
                             key={`${pk.round}-${pk.overall_pick}`}
                             style={{
-                              fontSize: "11px",
+                              fontSize: "var(--fs-11)",
                               fontWeight: 700,
                               padding: "2px 7px",
                               borderRadius: "5px",

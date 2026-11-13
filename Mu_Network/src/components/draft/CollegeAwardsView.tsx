@@ -76,14 +76,14 @@ export const CollegeAwardsView: React.FC<{
       <div className="draft-section-card" style={{ background: "linear-gradient(135deg, #0f172a 0%, #1e293b 100%)", color: "#ffffff", border: "1px solid #f59e0b" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "10px" }}>
           <div>
-            <span style={{ fontSize: "11px", fontWeight: 900, color: "#fbbf24", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+            <span style={{ fontSize: "var(--fs-11)", fontWeight: 900, color: "#fbbf24", textTransform: "uppercase", letterSpacing: "0.08em" }}>
               Collegiate Trophy Race
             </span>
-            <h3 style={{ margin: "2px 0 0", fontSize: "20px", fontWeight: 900 }}>
+            <h3 style={{ margin: "2px 0 0", fontSize: "var(--fs-20)", fontWeight: 900 }}>
               🏆 Heisman &amp; National Player of the Year Watch
             </h3>
           </div>
-          <span style={{ fontSize: "12px", color: "#94a3b8" }}>
+          <span style={{ fontSize: "var(--fs-12)", color: "#94a3b8" }}>
             Click any contender to open their game-by-game dossier
           </span>
         </div>
@@ -107,20 +107,20 @@ export const CollegeAwardsView: React.FC<{
             >
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
-                  <span style={{ background: "#f59e0b", color: "#090e1a", fontWeight: 900, fontSize: "11px", padding: "2px 7px", borderRadius: "4px" }}>
+                  <span style={{ background: "#f59e0b", color: "#090e1a", fontWeight: 900, fontSize: "var(--fs-11)", padding: "2px 7px", borderRadius: "4px" }}>
                     #{p.heisman_rank}
                   </span>
-                  <span style={{ fontWeight: 800, fontSize: "15px", color: "#ffffff" }}>{p.full_name}</span>
-                  <span style={{ fontSize: "11px", fontWeight: 800, color: "#fbbf24" }}>{p.position}</span>
-                  <span style={{ fontSize: "12px", color: "#cbd5e1" }}>· {p.college}</span>
+                  <span style={{ fontWeight: 800, fontSize: "var(--fs-15)", color: "#ffffff" }}>{p.full_name}</span>
+                  <span style={{ fontSize: "var(--fs-11)", fontWeight: 800, color: "#fbbf24" }}>{p.position}</span>
+                  <span style={{ fontSize: "var(--fs-12)", color: "#cbd5e1" }}>· {p.college}</span>
                 </div>
-                <div style={{ fontFamily: "monospace", fontSize: "12px", color: "#e2e8f0" }}>
+                <div style={{ fontFamily: "monospace", fontSize: "var(--fs-12)", color: "#e2e8f0" }}>
                   {p.stat_summary}
                 </div>
               </div>
               <div style={{ textAlign: "right", flexShrink: 0 }}>
-                <div style={{ fontSize: "11px", color: "#94a3b8" }}>Board #{p.rank}</div>
-                <div style={{ fontSize: "17px", fontWeight: 900, color: "#fbbf24" }}>{p.grade?.toFixed(1)}</div>
+                <div style={{ fontSize: "var(--fs-11)", color: "#94a3b8" }}>Board #{p.rank}</div>
+                <div style={{ fontSize: "var(--fs-16)", fontWeight: 900, color: "#fbbf24" }}>{p.grade?.toFixed(1)}</div>
               </div>
             </div>
           ))}
@@ -131,12 +131,12 @@ export const CollegeAwardsView: React.FC<{
       <div className="draft-grid-2">
         {/* Risers */}
         <div className="draft-section-card" style={{ borderTop: "4px solid #10b981" }}>
-          <h3 style={{ margin: "0 0 14px", fontSize: "16px", fontWeight: 900, color: "#0f172a" }}>
+          <h3 style={{ margin: "0 0 14px", fontSize: "var(--fs-16)", fontWeight: 900, color: "#0f172a" }}>
             📈 Biggest Weekly Stock Risers
           </h3>
           <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
             {risers.length === 0 ? (
-              <div style={{ color: "#64748b", fontSize: "13px" }}>No major risers recorded for this step.</div>
+              <div style={{ color: "#64748b", fontSize: "var(--fs-13)" }}>No major risers recorded for this step.</div>
             ) : (
               risers.map((r) => (
                 <div
@@ -153,16 +153,16 @@ export const CollegeAwardsView: React.FC<{
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                       <span className="draft-delta-badge up">▲{r.delta_rank}</span>
-                      <strong style={{ fontSize: "14px", color: "#0f172a" }}>{r.full_name}</strong>
+                      <strong style={{ fontSize: "var(--fs-14)", color: "#0f172a" }}>{r.full_name}</strong>
                       <span className="draft-pos-badge">{r.position}</span>
-                      <span style={{ fontSize: "12px", color: "#475569" }}>{r.college}</span>
+                      <span style={{ fontSize: "var(--fs-12)", color: "#475569" }}>{r.college}</span>
                     </div>
-                    <span style={{ fontSize: "12px", fontWeight: 800, color: "#0f172a" }}>
+                    <span style={{ fontSize: "var(--fs-12)", fontWeight: 800, color: "#0f172a" }}>
                       Now #{r.rank} ({r.grade?.toFixed(1)})
                     </span>
                   </div>
                   {r.events && r.events[0] && (
-                    <div style={{ fontSize: "12px", color: "#334155", marginTop: "4px" }}>
+                    <div style={{ fontSize: "var(--fs-12)", color: "#334155", marginTop: "4px" }}>
                       {r.events[0].blurb || r.events[0].headline}
                     </div>
                   )}
@@ -174,12 +174,12 @@ export const CollegeAwardsView: React.FC<{
 
         {/* Fallers */}
         <div className="draft-section-card" style={{ borderTop: "4px solid #ef4444" }}>
-          <h3 style={{ margin: "0 0 14px", fontSize: "16px", fontWeight: 900, color: "#0f172a" }}>
+          <h3 style={{ margin: "0 0 14px", fontSize: "var(--fs-16)", fontWeight: 900, color: "#0f172a" }}>
             📉 Biggest Weekly Stock Fallers
           </h3>
           <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
             {fallers.length === 0 ? (
-              <div style={{ color: "#64748b", fontSize: "13px" }}>No major fallers recorded for this step.</div>
+              <div style={{ color: "#64748b", fontSize: "var(--fs-13)" }}>No major fallers recorded for this step.</div>
             ) : (
               fallers.map((f) => (
                 <div
@@ -196,16 +196,16 @@ export const CollegeAwardsView: React.FC<{
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                       <span className="draft-delta-badge down">▼{Math.abs(f.delta_rank || 0)}</span>
-                      <strong style={{ fontSize: "14px", color: "#0f172a" }}>{f.full_name}</strong>
+                      <strong style={{ fontSize: "var(--fs-14)", color: "#0f172a" }}>{f.full_name}</strong>
                       <span className="draft-pos-badge">{f.position}</span>
-                      <span style={{ fontSize: "12px", color: "#475569" }}>{f.college}</span>
+                      <span style={{ fontSize: "var(--fs-12)", color: "#475569" }}>{f.college}</span>
                     </div>
-                    <span style={{ fontSize: "12px", fontWeight: 800, color: "#0f172a" }}>
+                    <span style={{ fontSize: "var(--fs-12)", fontWeight: 800, color: "#0f172a" }}>
                       Now #{f.rank} ({f.grade?.toFixed(1)})
                     </span>
                   </div>
                   {f.events && f.events[0] && (
-                    <div style={{ fontSize: "12px", color: "#334155", marginTop: "4px" }}>
+                    <div style={{ fontSize: "var(--fs-12)", color: "#334155", marginTop: "4px" }}>
                       {f.events[0].blurb || f.events[0].headline}
                     </div>
                   )}
@@ -218,7 +218,7 @@ export const CollegeAwardsView: React.FC<{
 
       {/* Section 3: National Positional Awards Showcase */}
       <div>
-        <h3 style={{ margin: "0 0 14px", fontSize: "17px", fontWeight: 900, color: "#0f172a" }}>
+        <h3 style={{ margin: "0 0 14px", fontSize: "var(--fs-16)", fontWeight: 900, color: "#0f172a" }}>
           🏅 National Positional Awards &amp; Watchlists
         </h3>
         <div className="draft-grid-3">
@@ -229,14 +229,14 @@ export const CollegeAwardsView: React.FC<{
               <div key={aw.award} className="draft-section-card">
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
                   <div>
-                    <h4 style={{ margin: 0, fontSize: "15px", fontWeight: 900, color: "#0f172a" }}>{aw.award}</h4>
-                    <div style={{ fontSize: "11px", color: "#64748b", fontWeight: 700 }}>
+                    <h4 style={{ margin: 0, fontSize: "var(--fs-15)", fontWeight: 900, color: "#0f172a" }}>{aw.award}</h4>
+                    <div style={{ fontSize: "var(--fs-11)", color: "#64748b", fontWeight: 700 }}>
                       Positions: {aw.positions.join(" / ")}
                     </div>
                   </div>
                   <span
                     style={{
-                      fontSize: "10px",
+                      fontSize: "var(--fs-10)",
                       fontWeight: 800,
                       padding: "3px 8px",
                       borderRadius: "999px",
@@ -263,17 +263,17 @@ export const CollegeAwardsView: React.FC<{
                     >
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <div>
-                          <strong style={{ fontSize: "13px", color: "#0f172a" }}>{p.full_name}</strong>{" "}
-                          <span style={{ fontSize: "11px", color: "#64748b" }}>
+                          <strong style={{ fontSize: "var(--fs-13)", color: "#0f172a" }}>{p.full_name}</strong>{" "}
+                          <span style={{ fontSize: "var(--fs-11)", color: "#64748b" }}>
                             ({p.position} · {p.college})
                           </span>
                         </div>
-                        <span className={`draft-grade-pill ${gradeTierClass(p.grade)}`} style={{ fontSize: "11px", padding: "2px 7px" }}>
+                        <span className={`draft-grade-pill ${gradeTierClass(p.grade)}`} style={{ fontSize: "var(--fs-11)", padding: "2px 7px" }}>
                           #{p.rank} · {p.grade?.toFixed(1)}
                         </span>
                       </div>
                       {p.stat_summary && (
-                        <div style={{ fontFamily: "monospace", fontSize: "11px", color: "#475569", marginTop: "4px" }}>
+                        <div style={{ fontFamily: "monospace", fontSize: "var(--fs-11)", color: "#475569", marginTop: "4px" }}>
                           {p.stat_summary}
                         </div>
                       )}

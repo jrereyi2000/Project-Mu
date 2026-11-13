@@ -73,13 +73,13 @@ export const MockDraftView: React.FC<{
       <div className="draft-filter-card" style={{ borderLeft: "4px solid #f59e0b" }}>
         <div className="draft-filter-row">
           <div>
-            <span style={{ fontSize: "11px", fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.08em", color: "#b45309" }}>
+            <span style={{ fontSize: "var(--fs-11)", fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.08em", color: "#b45309" }}>
               Official Media Projection · {analyst}
             </span>
-            <h3 style={{ margin: "2px 0 0", fontSize: "20px", fontWeight: 900, color: "#0f172a" }}>
+            <h3 style={{ margin: "2px 0 0", fontSize: "var(--fs-20)", fontWeight: 900, color: "#0f172a" }}>
               {draftSeason} NFL Round 1 Mock Draft (Picks 1–32)
             </h3>
-            <p style={{ margin: "4px 0 0", fontSize: "12.5px", color: "#475569" }}>
+            <p style={{ margin: "4px 0 0", fontSize: "var(--fs-13)", color: "#475569" }}>
               Synthesizing public consensus scouting grades, franchise positional deficiencies, starter age cliffs, and Round 1 positional value multipliers.
             </p>
           </div>
@@ -135,10 +135,10 @@ export const MockDraftView: React.FC<{
                     textAlign: "center",
                   }}
                 >
-                  <div style={{ fontSize: "10px", fontWeight: 800, color: "#94a3b8", textTransform: "uppercase" }}>
+                  <div style={{ fontSize: "var(--fs-10)", fontWeight: 800, color: "#94a3b8", textTransform: "uppercase" }}>
                     PICK
                   </div>
-                  <div style={{ fontSize: "22px", fontWeight: 900, lineHeight: 1.1 }}>#{pk.pick}</div>
+                  <div style={{ fontSize: "var(--fs-22)", fontWeight: 900, lineHeight: 1.1 }}>#{pk.pick}</div>
                 </div>
 
                 {/* Team Info */}
@@ -149,10 +149,10 @@ export const MockDraftView: React.FC<{
                     style={{ width: "40px", height: "40px", objectFit: "contain" }}
                   />
                   <div>
-                    <div style={{ fontWeight: 900, fontSize: "15px", color: "#0f172a" }}>
+                    <div style={{ fontWeight: 900, fontSize: "var(--fs-15)", color: "#0f172a" }}>
                       {pk.team}
                     </div>
-                    <div style={{ fontSize: "11px", color: "#64748b", display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                    <div style={{ fontSize: "var(--fs-11)", color: "#64748b", display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
                       {pk.traded && pk.original_team_abbr && (
                         <span style={{ background: "#fef3c7", color: "#92400e", fontWeight: 800, padding: "1px 6px", borderRadius: "4px" }}>
                           via {pk.original_team_abbr}
@@ -178,14 +178,14 @@ export const MockDraftView: React.FC<{
                       onClick={() => onSelectProspect(p.prospect_key)}
                       style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer", flexWrap: "wrap" }}
                     >
-                      <span style={{ fontSize: "17px", fontWeight: 900, color: "#0f172a", textDecoration: "underline", textDecorationColor: "#cbd5e1" }}>
+                      <span style={{ fontSize: "var(--fs-16)", fontWeight: 900, color: "#0f172a", textDecoration: "underline", textDecorationColor: "#cbd5e1" }}>
                         {p.full_name}
                       </span>
                       <span className="draft-pos-badge">{p.position}</span>
-                      <span style={{ fontWeight: 700, fontSize: "13px", color: "#334155" }}>
+                      <span style={{ fontWeight: 700, fontSize: "var(--fs-13)", color: "#334155" }}>
                         {p.school_display} {p.conference ? `(${p.conference})` : ""}
                       </span>
-                      <span style={{ fontSize: "12px", color: "#64748b" }}>
+                      <span style={{ fontSize: "var(--fs-12)", color: "#64748b" }}>
                         {p.height || "—"} · {p.weight ? `${p.weight} lbs` : "—"}
                       </span>
                     </div>
@@ -202,7 +202,7 @@ export const MockDraftView: React.FC<{
 
                   <div
                     style={{
-                      fontSize: "13px",
+                      fontSize: "var(--fs-13)",
                       color: "#334155",
                       background: "#f8fafc",
                       borderLeft: "3px solid #cbd5e1",

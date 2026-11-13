@@ -114,7 +114,7 @@ export const CollegeGameLog: React.FC<{
     <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
       {/* Cumulative Season Totals Strip */}
       <div>
-        <div style={{ fontSize: "11px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em", color: "#64748b", marginBottom: "8px" }}>
+        <div style={{ fontSize: "var(--fs-11)", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em", color: "#64748b", marginBottom: "8px" }}>
           Cumulative College Season Totals ({games} Charted Games)
         </div>
         <div className="draft-stat-boxes">
@@ -159,7 +159,7 @@ export const CollegeGameLog: React.FC<{
                       <span
                         style={{
                           marginLeft: "6px",
-                          fontSize: "10px",
+                          fontSize: "var(--fs-10)",
                           fontWeight: 800,
                           background: "#fef3c7",
                           color: "#92400e",
@@ -182,14 +182,14 @@ export const CollegeGameLog: React.FC<{
                         textAlign: "right",
                         fontFamily: "monospace",
                         fontWeight: 700,
-                        fontSize: "13px",
+                        fontSize: "var(--fs-13)",
                         color: "#0f172a",
                       }}
                     >
                       {g.stats[k] ?? 0}
                     </td>
                   ))}
-                  <td style={{ fontSize: "12px", color: "#475569", maxWidth: "280px" }}>
+                  <td style={{ fontSize: "var(--fs-12)", color: "#475569", maxWidth: "280px" }}>
                     {g.headline || g.stat_line}
                   </td>
                 </tr>

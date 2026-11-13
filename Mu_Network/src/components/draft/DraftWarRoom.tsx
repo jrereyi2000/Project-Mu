@@ -227,10 +227,10 @@ export const DraftWarRoom: React.FC<{
       {compAwards.length > 0 && (
         <div className="draft-section-card" style={{ borderLeft: "4px solid #7c3aed", background: "#faf5ff" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px", marginBottom: "10px" }}>
-            <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 900, color: "#0f172a" }}>
+            <h3 style={{ margin: 0, fontSize: "var(--fs-16)", fontWeight: 900, color: "#0f172a" }}>
               🏅 {wr?.draft_season} Official Compensatory Picks
             </h3>
-            <span style={{ fontSize: "12px", fontWeight: 700, color: "#6d28d9" }}>
+            <span style={{ fontSize: "var(--fs-12)", fontWeight: 700, color: "#6d28d9" }}>
               {compAwards.length} awarded pick{compAwards.length === 1 ? "" : "s"}
             </span>
           </div>
@@ -257,7 +257,7 @@ export const DraftWarRoom: React.FC<{
                   <span
                     style={{
                       ...badge,
-                      fontSize: "10.5px",
+                      fontSize: "var(--fs-11)",
                       fontWeight: 900,
                       letterSpacing: "0.04em",
                       padding: "2px 7px",
@@ -268,12 +268,12 @@ export const DraftWarRoom: React.FC<{
                     {isJc2a ? "JC2A" : "COMP"}
                   </span>
                   <img src={teamLogo(a.team)} alt={a.team} style={{ width: "22px", height: "22px", objectFit: "contain" }} />
-                  <strong style={{ fontSize: "13px", color: "#0f172a" }}>{a.team_name}</strong>
-                  <span style={{ fontFamily: "monospace", fontSize: "12px", color: "#475569" }}>
+                  <strong style={{ fontSize: "var(--fs-13)", color: "#0f172a" }}>{a.team_name}</strong>
+                  <span style={{ fontFamily: "monospace", fontSize: "var(--fs-12)", color: "#475569" }}>
                     Round {a.round} · Pick {a.slot_in_round} · No. {a.overall_pick} overall
                   </span>
                   {a.reason && (
-                    <span style={{ fontSize: "12px", color: "#6d28d9", flexBasis: "100%" }}>{a.reason}</span>
+                    <span style={{ fontSize: "var(--fs-12)", color: "#6d28d9", flexBasis: "100%" }}>{a.reason}</span>
                   )}
                 </div>
               );
@@ -286,16 +286,16 @@ export const DraftWarRoom: React.FC<{
       <div className="draft-filter-card" style={{ padding: "12px 18px" }}>
         <div className="draft-filter-row">
           <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-            <span style={{ fontSize: "12px", fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.05em", color: "#0f172a" }}>
+            <span style={{ fontSize: "var(--fs-12)", fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.05em", color: "#0f172a" }}>
               🔴 Broadcast War Room Control
             </span>
-            <span style={{ fontSize: "12px", color: "#64748b" }}>
+            <span style={{ fontSize: "var(--fs-12)", color: "#64748b" }}>
               {recordedSlots.length} of 32 Round 1 Picks Recorded
             </span>
             {message && (
               <span
                 style={{
-                  fontSize: "12px",
+                  fontSize: "var(--fs-12)",
                   fontWeight: 700,
                   padding: "3px 10px",
                   borderRadius: "6px",
@@ -319,7 +319,7 @@ export const DraftWarRoom: React.FC<{
             <input
               type="password"
               className="draft-search-input"
-              style={{ minWidth: "180px", padding: "6px 12px", fontSize: "12px" }}
+              style={{ minWidth: "180px", padding: "6px 12px", fontSize: "var(--fs-12)" }}
               placeholder="Operator Debug Token…"
               value={token}
               onChange={(e) => saveToken(e.target.value)}
@@ -331,13 +331,13 @@ export const DraftWarRoom: React.FC<{
       {/* Pre-Lock Order Setup Banner */}
       {wr?.installed && !wr.locked && (
         <div className="war-room-clock-banner">
-          <div style={{ fontSize: "11px", fontWeight: 900, color: "#fbbf24", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "6px" }}>
+          <div style={{ fontSize: "var(--fs-11)", fontWeight: 900, color: "#fbbf24", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "6px" }}>
             Pre-Draft Stage · Order Not Yet Locked
           </div>
-          <h3 style={{ margin: "0 0 8px", fontSize: "20px", fontWeight: 900 }}>
+          <h3 style={{ margin: "0 0 8px", fontSize: "var(--fs-20)", fontWeight: 900 }}>
             Lock {wr.draft_season} Draft Order to Begin Live Round 1 War Room
           </h3>
-          <p style={{ margin: "0 0 14px", fontSize: "13px", color: "#cbd5e1", lineHeight: 1.5 }}>
+          <p style={{ margin: "0 0 14px", fontSize: "var(--fs-13)", color: "#cbd5e1", lineHeight: 1.5 }}>
             {wr.before}
           </p>
           <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
@@ -352,7 +352,7 @@ export const DraftWarRoom: React.FC<{
                 border: "1px solid rgba(255,255,255,0.2)",
                 background: "rgba(255,255,255,0.08)",
                 color: "#ffffff",
-                fontSize: "13px",
+                fontSize: "var(--fs-13)",
                 minWidth: "280px",
               }}
             />
@@ -366,7 +366,7 @@ export const DraftWarRoom: React.FC<{
                 borderRadius: "8px",
                 padding: "10px 18px",
                 fontWeight: 900,
-                fontSize: "13px",
+                fontSize: "var(--fs-13)",
                 cursor: token && !busy ? "pointer" : "not-allowed",
                 opacity: token && !busy ? 1 : 0.5,
               }}
@@ -389,24 +389,24 @@ export const DraftWarRoom: React.FC<{
               />
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
-                  <span style={{ background: "#ef4444", color: "#ffffff", fontWeight: 900, fontSize: "11px", padding: "2px 8px", borderRadius: "4px", letterSpacing: "0.06em" }}>
+                  <span style={{ background: "#ef4444", color: "#ffffff", fontWeight: 900, fontSize: "var(--fs-11)", padding: "2px 8px", borderRadius: "4px", letterSpacing: "0.06em" }}>
                     ON THE CLOCK · PICK #{oc.pick}
                   </span>
                   {oc.original_team !== oc.team && (
-                    <span style={{ background: "rgba(245, 158, 11, 0.2)", color: "#fbbf24", fontWeight: 800, fontSize: "11px", padding: "2px 8px", borderRadius: "4px" }}>
+                    <span style={{ background: "rgba(245, 158, 11, 0.2)", color: "#fbbf24", fontWeight: 800, fontSize: "var(--fs-11)", padding: "2px 8px", borderRadius: "4px" }}>
                       Acquired via {oc.original_team}
                     </span>
                   )}
                   {oc.user_controlled && (
-                    <span style={{ background: "rgba(59, 130, 246, 0.25)", color: "#93c5fd", fontWeight: 800, fontSize: "11px", padding: "2px 8px", borderRadius: "4px" }}>
+                    <span style={{ background: "rgba(59, 130, 246, 0.25)", color: "#93c5fd", fontWeight: 800, fontSize: "var(--fs-11)", padding: "2px 8px", borderRadius: "4px" }}>
                       JR USER TEAM (ADVICE ONLY)
                     </span>
                   )}
                 </div>
-                <h2 style={{ margin: 0, fontSize: "24px", fontWeight: 900 }}>
+                <h2 style={{ margin: 0, fontSize: "var(--fs-24)", fontWeight: 900 }}>
                   {oc.team_name}
                 </h2>
-                <div style={{ fontSize: "12.5px", color: "#94a3b8", marginTop: "2px" }}>
+                <div style={{ fontSize: "var(--fs-13)", color: "#94a3b8", marginTop: "2px" }}>
                   General Manager: <strong style={{ color: "#e2e8f0" }}>{oc.gm || "Front Office"}</strong>
                 </div>
               </div>
@@ -422,7 +422,7 @@ export const DraftWarRoom: React.FC<{
                   border: "1px solid rgba(255,255,255,0.2)",
                   borderRadius: "8px",
                   padding: "8px 14px",
-                  fontSize: "12px",
+                  fontSize: "var(--fs-12)",
                   fontWeight: 700,
                   cursor: token && !busy ? "pointer" : "not-allowed",
                 }}
@@ -445,34 +445,34 @@ export const DraftWarRoom: React.FC<{
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "14px" }}>
                 <div>
-                  <div style={{ fontSize: "11px", fontWeight: 900, color: "#fbbf24", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "4px" }}>
+                  <div style={{ fontSize: "var(--fs-11)", fontWeight: 900, color: "#fbbf24", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "4px" }}>
                     GM War Room Primary Target
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
                     <span
                       onClick={() => onSelectProspect(oc.recommendation!.prospect_key)}
-                      style={{ fontSize: "20px", fontWeight: 900, color: "#ffffff", cursor: "pointer", textDecoration: "underline" }}
+                      style={{ fontSize: "var(--fs-20)", fontWeight: 900, color: "#ffffff", cursor: "pointer", textDecoration: "underline" }}
                     >
                       {oc.recommendation.full_name}
                     </span>
-                    <span style={{ background: "#f59e0b", color: "#090e1a", fontWeight: 900, fontSize: "12px", padding: "2px 8px", borderRadius: "4px" }}>
+                    <span style={{ background: "#f59e0b", color: "#090e1a", fontWeight: 900, fontSize: "var(--fs-12)", padding: "2px 8px", borderRadius: "4px" }}>
                       {oc.recommendation.position}
                     </span>
-                    <span style={{ fontSize: "14px", fontWeight: 700, color: "#cbd5e1" }}>
+                    <span style={{ fontSize: "var(--fs-14)", fontWeight: 700, color: "#cbd5e1" }}>
                       {oc.recommendation.college}
                     </span>
-                    <span style={{ fontSize: "12px", color: "#94a3b8" }}>
+                    <span style={{ fontSize: "var(--fs-12)", color: "#94a3b8" }}>
                       Consensus #{oc.recommendation.consensus_rank} ({oc.recommendation.grade?.toFixed(1)})
                       {oc.recommendation.team_rank ? ` · ${oc.team} Board #${oc.recommendation.team_rank}` : ""}
                     </span>
                   </div>
                   {oc.recommendation.stat_summary && (
-                    <div style={{ fontFamily: "monospace", fontSize: "12px", color: "#cbd5e1", marginTop: "6px" }}>
+                    <div style={{ fontFamily: "monospace", fontSize: "var(--fs-12)", color: "#cbd5e1", marginTop: "6px" }}>
                       College Season: {oc.recommendation.stat_summary}
                     </div>
                   )}
                   {oc.rationale && (
-                    <div style={{ fontSize: "13px", color: "#e2e8f0", fontStyle: "italic", marginTop: "8px" }}>
+                    <div style={{ fontSize: "var(--fs-13)", color: "#e2e8f0", fontStyle: "italic", marginTop: "8px" }}>
                       “{oc.rationale}”
                     </div>
                   )}
@@ -494,7 +494,7 @@ export const DraftWarRoom: React.FC<{
                     border: "none",
                     borderRadius: "10px",
                     padding: "12px 22px",
-                    fontSize: "14px",
+                    fontSize: "var(--fs-14)",
                     fontWeight: 900,
                     cursor: token && !busy ? "pointer" : "not-allowed",
                     opacity: token && !busy ? 1 : 0.5,
@@ -512,7 +512,7 @@ export const DraftWarRoom: React.FC<{
             <div>
               {oc.alternatives.length > 0 && (
                 <div style={{ marginBottom: "12px" }}>
-                  <div style={{ fontSize: "11px", fontWeight: 800, color: "#94a3b8", textTransform: "uppercase", marginBottom: "6px" }}>
+                  <div style={{ fontSize: "var(--fs-11)", fontWeight: 800, color: "#94a3b8", textTransform: "uppercase", marginBottom: "6px" }}>
                     Next Highest on {oc.team} Board:
                   </div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
@@ -534,7 +534,7 @@ export const DraftWarRoom: React.FC<{
                           color: "#f8fafc",
                           borderRadius: "6px",
                           padding: "6px 10px",
-                          fontSize: "12px",
+                          fontSize: "var(--fs-12)",
                           fontWeight: 700,
                           cursor: token && !busy ? "pointer" : "not-allowed",
                         }}
@@ -547,7 +547,7 @@ export const DraftWarRoom: React.FC<{
               )}
 
               <div>
-                <div style={{ fontSize: "11px", fontWeight: 800, color: "#94a3b8", textTransform: "uppercase", marginBottom: "6px" }}>
+                <div style={{ fontSize: "var(--fs-11)", fontWeight: 800, color: "#94a3b8", textTransform: "uppercase", marginBottom: "6px" }}>
                   Draft Different Player (Off-Script / User Selection):
                 </div>
                 <input
@@ -562,7 +562,7 @@ export const DraftWarRoom: React.FC<{
                     border: "1px solid rgba(255,255,255,0.2)",
                     background: "rgba(255,255,255,0.08)",
                     color: "#ffffff",
-                    fontSize: "12.5px",
+                    fontSize: "var(--fs-13)",
                   }}
                 />
                 {offScriptHits.length > 0 && (
@@ -585,7 +585,7 @@ export const DraftWarRoom: React.FC<{
                           border: "none",
                           borderRadius: "6px",
                           padding: "5px 10px",
-                          fontSize: "11.5px",
+                          fontSize: "var(--fs-11)",
                           fontWeight: 700,
                           cursor: "pointer",
                         }}
@@ -600,10 +600,10 @@ export const DraftWarRoom: React.FC<{
 
             {/* Madden Execution Checklist */}
             <div style={{ background: "rgba(0,0,0,0.28)", borderRadius: "10px", padding: "12px 16px" }}>
-              <div style={{ fontSize: "11px", fontWeight: 800, color: "#fbbf24", textTransform: "uppercase", marginBottom: "6px" }}>
+              <div style={{ fontSize: "var(--fs-11)", fontWeight: 800, color: "#fbbf24", textTransform: "uppercase", marginBottom: "6px" }}>
                 🎮 Madden Console Steps
               </div>
-              <ol style={{ margin: 0, paddingLeft: "18px", fontSize: "12.5px", color: "#e2e8f0", lineHeight: 1.6 }}>
+              <ol style={{ margin: 0, paddingLeft: "18px", fontSize: "var(--fs-13)", color: "#e2e8f0", lineHeight: 1.6 }}>
                 {oc.steps.map((s, idx) => (
                   <li key={idx}>{s}</li>
                 ))}
@@ -616,27 +616,27 @@ export const DraftWarRoom: React.FC<{
       {/* Post-Pick 32: Rounds 2-7, one at a time (each round's draft-day trades, then JR sims it) */}
       {wr?.locked && !oc && (
         <div className="war-room-clock-banner" style={{ borderColor: "#10b981" }}>
-          <div style={{ fontSize: "11px", fontWeight: 900, color: "#6ee7b7", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+          <div style={{ fontSize: "var(--fs-11)", fontWeight: 900, color: "#6ee7b7", textTransform: "uppercase", letterSpacing: "0.08em" }}>
             Round 1 Complete · All 32 Selections Recorded
             {wr.rounds?.current ? ` · Round ${wr.rounds.current} Trade Window Open` : ""}
           </div>
-          <h3 style={{ margin: "4px 0 8px", fontSize: "20px", fontWeight: 900 }}>
+          <h3 style={{ margin: "4px 0 8px", fontSize: "var(--fs-20)", fontWeight: 900 }}>
             {wr.rounds?.current
               ? wr.rounds.next ? `Round ${wr.rounds.current}: Trades, Then Sim` : "Round 7: Final Trades, Then Sim"
               : "Rounds 2–7: Trades Before Each Round"}
           </h3>
-          {!wr.rounds?.current && <p style={{ margin: "0 0 10px", fontSize: "13px", color: "#cbd5e1" }}>{wr.after}</p>}
+          {!wr.rounds?.current && <p style={{ margin: "0 0 10px", fontSize: "var(--fs-13)", color: "#cbd5e1" }}>{wr.after}</p>}
           {!wr.rounds_installed && (
-            <p style={{ margin: "0 0 10px", fontSize: "12px", color: "#fca5a5" }}>
+            <p style={{ margin: "0 0 10px", fontSize: "var(--fs-12)", color: "#fca5a5" }}>
               The draft round migration (2027_01_02_draft_round_starts.sql) isn't applied, so Rounds 2–7 trades are off.
             </p>
           )}
           {(wr.rounds?.steps || []).length > 0 && (
             <div style={{ background: "rgba(0,0,0,0.28)", borderRadius: "10px", padding: "12px 16px", marginBottom: "10px" }}>
-              <div style={{ fontSize: "11px", fontWeight: 800, color: "#fbbf24", textTransform: "uppercase", marginBottom: "6px" }}>
+              <div style={{ fontSize: "var(--fs-11)", fontWeight: 800, color: "#fbbf24", textTransform: "uppercase", marginBottom: "6px" }}>
                 🎮 Round {wr.rounds!.current} Madden Steps
               </div>
-              <ol style={{ margin: 0, paddingLeft: "18px", fontSize: "12.5px", color: "#e2e8f0", lineHeight: 1.6 }}>
+              <ol style={{ margin: 0, paddingLeft: "18px", fontSize: "var(--fs-13)", color: "#e2e8f0", lineHeight: 1.6 }}>
                 {wr.rounds!.steps.map((s, idx) => (
                   <li key={idx}>{s}</li>
                 ))}
@@ -664,12 +664,12 @@ export const DraftWarRoom: React.FC<{
       {/* Draft-Day Trade Proposals Alert */}
       {(wr?.trades || []).length > 0 && (
         <div className="draft-section-card" style={{ borderLeft: "4px solid #f59e0b", background: "#fffbeb" }}>
-          <div style={{ fontSize: "12px", fontWeight: 900, textTransform: "uppercase", color: "#92400e", marginBottom: "6px" }}>
+          <div style={{ fontSize: "var(--fs-12)", fontWeight: 900, textTransform: "uppercase", color: "#92400e", marginBottom: "6px" }}>
             📞 Draft-Day Trade Desk Offers (Approve &amp; Confirm on Debug Front Office Card)
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
             {wr!.trades!.map((t) => (
-              <div key={t.id} style={{ fontSize: "13px", color: "#0f172a" }}>
+              <div key={t.id} style={{ fontSize: "var(--fs-13)", color: "#0f172a" }}>
                 <strong>Proposal #{t.id}</strong> (Round {t.round ?? 1} · Pick #{t.pick ?? "?"}
                 {t.move === "DOWN" ? " · trade down" : ""}) ·{" "}
                 <span style={{ fontWeight: 800, color: "#b45309" }}>{t.status}</span> — {t.headline}
@@ -683,7 +683,7 @@ export const DraftWarRoom: React.FC<{
       <div className="draft-grid-2">
         {/* Left: Round 1 Pick-by-Pick Board with Instant Draft Grades */}
         <div className="draft-section-card">
-          <h3 style={{ margin: "0 0 14px", fontSize: "16px", fontWeight: 900, color: "#0f172a" }}>
+          <h3 style={{ margin: "0 0 14px", fontSize: "var(--fs-16)", fontWeight: 900, color: "#0f172a" }}>
             📋 Round 1 Selection Tracker &amp; Instant Draft Grades
           </h3>
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -702,18 +702,18 @@ export const DraftWarRoom: React.FC<{
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                      <span style={{ fontFamily: "monospace", fontWeight: 900, fontSize: "14px", color: "#0f172a", minWidth: "26px" }}>
+                      <span style={{ fontFamily: "monospace", fontWeight: 900, fontSize: "var(--fs-14)", color: "#0f172a", minWidth: "26px" }}>
                         #{s.pick}
                       </span>
                       <img src={teamLogo(s.team)} alt={s.team} style={{ width: "24px", height: "24px", objectFit: "contain" }} />
-                      <strong style={{ fontSize: "13.5px", color: "#0f172a" }}>{s.team}</strong>
+                      <strong style={{ fontSize: "var(--fs-13)", color: "#0f172a" }}>{s.team}</strong>
                       {s.original_team !== s.team && (
-                        <span style={{ fontSize: "11px", color: "#64748b" }}>(via {s.original_team})</span>
+                        <span style={{ fontSize: "var(--fs-11)", color: "#64748b" }}>(via {s.original_team})</span>
                       )}
                       {sel && (
                         <span
                           onClick={() => onSelectProspect(sel.prospect_key)}
-                          style={{ fontWeight: 800, fontSize: "13.5px", color: "#1e40af", cursor: "pointer", textDecoration: "underline" }}
+                          style={{ fontWeight: 800, fontSize: "var(--fs-13)", color: "#1e40af", cursor: "pointer", textDecoration: "underline" }}
                         >
                           {sel.full_name} ({sel.position} · {sel.college})
                         </span>
@@ -728,7 +728,7 @@ export const DraftWarRoom: React.FC<{
                         {sel.madden_match && (
                           <span
                             style={{
-                              fontSize: "10px",
+                              fontSize: "var(--fs-10)",
                               fontWeight: 800,
                               padding: "2px 6px",
                               borderRadius: "4px",
@@ -741,14 +741,14 @@ export const DraftWarRoom: React.FC<{
                         )}
                       </div>
                     ) : isClock ? (
-                      <span style={{ fontSize: "11px", fontWeight: 900, color: "#d97706" }}>ON THE CLOCK</span>
+                      <span style={{ fontSize: "var(--fs-11)", fontWeight: 900, color: "#d97706" }}>ON THE CLOCK</span>
                     ) : (
-                      <span style={{ fontSize: "11px", color: "#94a3b8" }}>Upcoming</span>
+                      <span style={{ fontSize: "var(--fs-11)", color: "#94a3b8" }}>Upcoming</span>
                     )}
                   </div>
 
                   {sel?.rationale && (
-                    <div style={{ fontSize: "12px", color: "#475569", marginTop: "6px", paddingLeft: "36px" }}>
+                    <div style={{ fontSize: "var(--fs-12)", color: "#475569", marginTop: "6px", paddingLeft: "36px" }}>
                       {sel.rationale}
                     </div>
                   )}
@@ -762,7 +762,7 @@ export const DraftWarRoom: React.FC<{
         <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
           <div className="draft-section-card">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "wrap", gap: "10px" }}>
-              <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 900, color: "#0f172a" }}>
+              <h3 style={{ margin: 0, fontSize: "var(--fs-16)", fontWeight: 900, color: "#0f172a" }}>
                 🎯 Best Available Board ({boardView ? `${boardView} Private GM Board` : "Public Consensus"})
               </h3>
               <select
@@ -799,26 +799,26 @@ export const DraftWarRoom: React.FC<{
                 >
                   <div>
                     <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                      <span style={{ fontFamily: "monospace", fontWeight: 900, fontSize: "13px", color: "#0f172a" }}>
+                      <span style={{ fontFamily: "monospace", fontWeight: 900, fontSize: "var(--fs-13)", color: "#0f172a" }}>
                         #{boardView && p.team_rank ? p.team_rank : p.consensus_rank}
                       </span>
-                      <strong style={{ fontSize: "13.5px", color: "#0f172a" }}>{p.full_name}</strong>
+                      <strong style={{ fontSize: "var(--fs-13)", color: "#0f172a" }}>{p.full_name}</strong>
                       <span className="draft-pos-badge">{p.position}</span>
-                      <span style={{ fontSize: "12px", color: "#475569" }}>{p.college}</span>
+                      <span style={{ fontSize: "var(--fs-12)", color: "#475569" }}>{p.college}</span>
                     </div>
                     {p.stat_summary && (
-                      <div style={{ fontFamily: "monospace", fontSize: "11px", color: "#64748b", marginTop: "3px" }}>
+                      <div style={{ fontFamily: "monospace", fontSize: "var(--fs-11)", color: "#64748b", marginTop: "3px" }}>
                         {p.stat_summary}
                       </div>
                     )}
                   </div>
 
                   <div style={{ textAlign: "right", flexShrink: 0 }}>
-                    <span className={`draft-grade-pill ${gradeTierClass(boardView && p.team_grade ? p.team_grade : p.grade)}`} style={{ fontSize: "11.5px", padding: "2px 8px" }}>
+                    <span className={`draft-grade-pill ${gradeTierClass(boardView && p.team_grade ? p.team_grade : p.grade)}`} style={{ fontSize: "var(--fs-11)", padding: "2px 8px" }}>
                       {(boardView && p.team_grade != null ? p.team_grade : p.grade)?.toFixed(1)}
                     </span>
                     {boardView && (
-                      <div style={{ fontSize: "10px", color: "#64748b", marginTop: "2px" }}>
+                      <div style={{ fontSize: "var(--fs-10)", color: "#64748b", marginTop: "2px" }}>
                         Cons #{p.consensus_rank}
                       </div>
                     )}
@@ -831,7 +831,7 @@ export const DraftWarRoom: React.FC<{
           {/* Projected Rest of Round 1 */}
           {(wr?.projected || []).length > 0 && (
             <div className="draft-section-card">
-              <h3 style={{ margin: "0 0 10px", fontSize: "15px", fontWeight: 900, color: "#0f172a" }}>
+              <h3 style={{ margin: "0 0 10px", fontSize: "var(--fs-15)", fontWeight: 900, color: "#0f172a" }}>
                 🔮 Live Simulation: Projected Rest of Round 1
               </h3>
               <div style={{ display: "flex", flexDirection: "column", gap: "6px", maxHeight: "340px", overflowY: "auto" }}>
@@ -845,7 +845,7 @@ export const DraftWarRoom: React.FC<{
                       alignItems: "center",
                       padding: "6px 10px",
                       borderBottom: "1px solid #f1f5f9",
-                      fontSize: "12.5px",
+                      fontSize: "var(--fs-13)",
                       cursor: "pointer",
                     }}
                   >
@@ -853,7 +853,7 @@ export const DraftWarRoom: React.FC<{
                       <span style={{ fontFamily: "monospace", fontWeight: 800, marginRight: "8px" }}>#{proj.pick}</span>
                       <strong>{proj.team}</strong>: {proj.full_name} ({proj.position} · {proj.college})
                     </div>
-                    <span style={{ fontSize: "11px", color: "#64748b" }}>Cons #{proj.consensus_rank}</span>
+                    <span style={{ fontSize: "var(--fs-11)", color: "#64748b" }}>Cons #{proj.consensus_rank}</span>
                   </div>
                 ))}
               </div>
