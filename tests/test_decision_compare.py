@@ -1898,3 +1898,166 @@ def test_free_agent_retirees_are_counted_in_postgres():
             assert ages(back, 2041) == [(back, 2039, "WR", 29)]
         finally:
             conn.rollback()
+
+
+# ------------------------------------------------------------------ cohort gates, end to end (F4/F5)
+
+COHORT_TABLES = ("player_stats, season_stat_general, player_seasons, depth_charts, draft_prospects, "
+                 "player_retirements, players, games, coach_tenures, coach_hot_seat, staff_moves, "
+                 "gm_trade_proposals, league_office_runs")
+
+
+def _empty_the_league(cur):
+    """Empty the tables a cohort test seeds, inside its own transaction.
+
+    The scratch database may be a copy of a real tuning league (the p2g-shape test needs exactly that), so a
+    gate-level test starts from an empty league rather than depending on every row already in it. TRUNCATE is
+    transactional: the test's `conn.rollback()` puts the database back exactly as it was.
+    """
+    cur.execute(f"TRUNCATE TABLE {COHORT_TABLES} RESTART IDENTITY CASCADE")
+
+
+@pytest.mark.integration
+def test_a6_gates_a_drafted_classes_started_seasons_in_postgres():
+    """F4 end to end on real Postgres, rolled back: the started-season cohort reaches the A6 gates.
+
+    A drafted class of 16 (players.draft_round 1-7 plus linked actual picks): 15 hold their own slot in 8+
+    games of both 2028 and 2029, and one holds it for 7 weeks in 2029 only. `read_started_seasons` is the only
+    route by which a season counts as started, so this proves the cohort A6 scores is the one F4 builds: a
+    measured A6.round1 share of 15/16 (0.9375), never NOT MEASURED.
+    """
+    import psycopg
+    dsn = _scratch_dsn()
+    with psycopg.connect(dsn) as conn:
+        cur = conn.cursor()
+        try:
+            _empty_the_league(cur)
+            cur.execute("SELECT id FROM teams ORDER BY id LIMIT 2")
+            teams = [r[0] for r in cur.fetchall()]
+            if len(teams) < 2:
+                pytest.skip("the scratch database has fewer than two teams")
+            home, away = teams
+            for season in (2028, 2029):
+                for week in range(1, 19):
+                    cur.execute("INSERT INTO games "
+                                "(season, week, home_team_id, away_team_id, status, game_type) "
+                                "VALUES (%s, %s, %s, %s, 'COMPLETED', 'REGULAR_SEASON')",
+                                (season, week, home, away))
+            positions = ["QB", "HB", "WR", "TE", "LT", "LG", "C", "RG", "RT",
+                         "LE", "RE", "DT", "MLB", "LOLB", "ROLB", "CB"]
+            for i, position in enumerate(positions):
+                cur.execute("INSERT INTO players (player_name, draft_round) VALUES (%s, 1) RETURNING id",
+                            (f"A6 Cohort {position}",))
+                pid = cur.fetchone()[0]
+                for season in (2028, 2029):
+                    cur.execute("INSERT INTO player_seasons (player_id, season, team_id, position) "
+                                "VALUES (%s, %s, %s, %s)", (pid, season, home, position))
+                charted = (2028, 2029) if i < 15 else (2029,)   # the 16th: 7 weeks is not a started season
+                for season in charted:
+                    for week in range(1, 8 if i >= 15 else 9):
+                        cur.execute("INSERT INTO depth_charts "
+                                    "(team_id, season, week, position_slot, depth, player_id, source) "
+                                    "VALUES (%s, %s, %s, %s, 1, %s, 'MU_COACH')",
+                                    (home, season, week, position, pid))
+                cur.execute("INSERT INTO draft_prospects "
+                            "(draft_season, full_name, position, player_id, actual_round, actual_pick) "
+                            "VALUES (2028, %s, %s, %s, '1', %s)",
+                            (f"A6 Cohort {position}", position, pid, i + 1))
+            obs = C.extract(cur, 2030, league_current_season=2030)
+            rep = C.compare_decisions(obs, targets())
+            assert obs["draft_by_round"]["1"]["n"] == 16
+            assert obs["draft_by_round"]["1"]["share_started_2plus"] == round(15 / 16, 3)
+            assert _gate(rep, "A6.round1").verdict in (C.PASS, C.FAIL)
+        finally:
+            conn.rollback()
+
+
+@pytest.mark.integration
+def test_a1_a2_gate_the_ended_career_cohort_in_postgres():
+    """F5 end to end on real Postgres, rolled back: the ended-career population reaches the A1/A2 gates.
+
+    Fifteen drafted QBs retire at 29 after six seasons (`years_of_experience` 5); a sixteenth is an unsigned
+    free agent whose last signed-or-played season is 2027, two empty seasons before the 2030 report. All
+    sixteen are the A1/A2 cohort, so both gates are measured (n=16, median length 6, median age 29) rather
+    than NOT MEASURED, and the unsigned free agent is inside them.
+    """
+    import psycopg
+    dsn = _scratch_dsn()
+    with psycopg.connect(dsn) as conn:
+        cur = conn.cursor()
+        try:
+            _empty_the_league(cur)
+            cur.execute("SELECT id FROM teams ORDER BY id LIMIT 1")
+            row = cur.fetchone()
+            if not row:
+                pytest.skip("the scratch database has no teams")
+            team = row[0]
+            for i in range(15):
+                name = f"A1 Cohort Retired {i}"
+                cur.execute("INSERT INTO players (player_name, draft_round) VALUES (%s, 1) RETURNING id",
+                            (name,))
+                pid = cur.fetchone()[0]
+                cur.execute("INSERT INTO player_seasons "
+                            "(player_id, season, team_id, position, age, years_of_experience) "
+                            "VALUES (%s, 2029, %s, 'QB', 29, 5)", (pid, team))
+                cur.execute("INSERT INTO player_retirements (season, player_id, player_name, position) "
+                            "VALUES (2029, %s, %s, 'QB')", (pid, name))
+            cur.execute("INSERT INTO players (player_name, draft_round) "
+                        "VALUES ('A1 Cohort Unsigned', 1) RETURNING id")
+            free_agent = cur.fetchone()[0]
+            cur.execute("INSERT INTO player_seasons "
+                        "(player_id, season, team_id, position, age, years_of_experience) "
+                        "VALUES (%s, 2027, %s, 'QB', 28, 4)", (free_agent, team))
+            obs = C.extract(cur, 2030, league_current_season=2030)
+            rep = C.compare_decisions(obs, targets())
+            assert obs["career_length"]["drafted"]["QB"]["n"] == 16
+            assert obs["career_length"]["drafted"]["QB"]["median"] == 6
+            assert obs["retirement_age"]["drafted"]["QB"]["n"] == 16
+            assert obs["retirement_age"]["drafted"]["QB"]["median"] == 29
+            assert _gate(rep, "A1.QB").verdict == C.PASS
+            assert _gate(rep, "A2.QB").verdict == C.PASS
+        finally:
+            conn.rollback()
+
+
+@pytest.mark.integration
+def test_a_lone_offseason_chart_two_seasons_back_credits_only_its_own_next_season_in_postgres():
+    """A6/JR's no-double-boundary rule on real Postgres, rolled back, in its literal case.
+
+    The audit of `76a22fa` noted the existing no-double-boundary test pairs a (Y-1, 26) chart with the
+    (Y-2, 26) one, so a multi-boundary bug would only tie on `ord` and the test would depend on Postgres's
+    tie order. Here a single (2060, 26) chart is the only chart in the database: it credits 2061 and never
+    2062, with nothing else to break a tie.
+    """
+    import psycopg
+    dsn = _scratch_dsn()
+    with psycopg.connect(dsn) as conn:
+        cur = conn.cursor()
+        try:
+            _empty_the_league(cur)
+            cur.execute("SELECT id FROM teams ORDER BY id LIMIT 2")
+            teams = [r[0] for r in cur.fetchall()]
+            if len(teams) < 2:
+                pytest.skip("the scratch database has fewer than two teams")
+            home, away = teams
+            for season in (2061, 2062):
+                for week in range(1, 11):
+                    cur.execute("INSERT INTO games "
+                                "(season, week, home_team_id, away_team_id, status, game_type) "
+                                "VALUES (%s, %s, %s, %s, 'COMPLETED', 'REGULAR_SEASON')",
+                                (season, week, home, away))
+            cur.execute("INSERT INTO players (player_name, draft_round) VALUES ('Lone Chart WR', 1) "
+                        "RETURNING id")
+            pid = cur.fetchone()[0]
+            for season in (2061, 2062):
+                cur.execute("INSERT INTO player_seasons (player_id, season, team_id, position) "
+                            "VALUES (%s, %s, %s, 'WR')", (pid, season, home))
+            cur.execute("INSERT INTO depth_charts "
+                        "(team_id, season, week, position_slot, depth, player_id, source) "
+                        "VALUES (%s, 2060, 26, 'WR', 1, %s, 'JR')", (home, pid))
+            assert C.read_started_seasons(cur, 2061).get(pid) == {2061}
+            later = C.read_started_seasons(cur, 2062)
+            assert later.get(pid) == {2061}          # 2061 is a real start; 2062 must not be credited
+            assert 2062 not in later.get(pid, set())
+        finally:
+            conn.rollback()

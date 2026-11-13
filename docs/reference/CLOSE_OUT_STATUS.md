@@ -299,8 +299,14 @@ and merged but not re-checked after later changes.
   `data/tuning/decision_targets.*` `meta.decisions`.
 - **P3-07** — **PARTIAL**: `engines/tuning/decision_compare.py` exists and `season_loop` writes the report —
   `data/tuning/seasons/p2g/decisions_2026.md` is on disk and reads "INCOMPLETE — 2 pass, 0 fail, 33 not
-  measured". F4 (A6 started-season) and F5 (A1/A2 ended-career cohort) are still held by the checklist's own
-  text; the report's 33-not-measured is the live symptom.
+  measured" (it predates F4/F5 and the drafted-cohort change; p2g carries no `players.draft_round`, so A1/A2/A6
+  stay unmeasured there). **F4 (A6 started-season) and F5 (A1/A2 ended-career cohort) are built**, not held:
+  `7375d1f`, with the R1b/R2b/R4 (`a2238d8`) and A6 chart-in-force (`76a22fa`) rounds CLOSED in
+  `data/audit_reports/p307_*` and `a6_rules_fix`. Verified 2026-11-12 (`p3-decision-fit`) with three new
+  Postgres cohort tests (`tests/test_decision_compare.py`, 58 passed): the A6 class reaches a measured share,
+  the A1/A2 cohort reaches measured gates with an unsigned free agent inside, and the audit's lone
+  `(Y-2, 26)` chart credits only Y-1. The 33-not-measured remains the live symptom of the p2g data (no draft
+  round, no linked class, no weekly trade engine), not of an unbuilt gate.
 - **P3-08** — NOT FOUND: no post-unilateral re-measure; `docs/FOLLOW_UPS.md` still carries the row ("Post-unilateral
   trade flow re-measure → JR / P3-07").
 
