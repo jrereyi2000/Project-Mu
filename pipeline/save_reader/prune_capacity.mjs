@@ -17,6 +17,14 @@
  * fixed 5,662,392-byte slot; the tail (identical byte-for-byte across franchises)
  * never moves, so it is copied back at its original absolute offsets and the gap
  * left by a shorter stream is zero-filled, which is what Madden itself writes.
+ *
+ * The stream is re-deflated with DEFLATE_CANDIDATES, not with zlib's defaults: on every
+ * save measured (2026-11-12) zlib's default (level 6, memLevel 8) produced a stream
+ * 1.6-2.6% LONGER than Madden's own for the same image, while level 9 with a small
+ * memLevel produces one 2.5-4.7% shorter. The rebuilt image is only ~597 KB smaller
+ * than the original (the Highlight rows are empty, so they compress to almost nothing:
+ * measured 596,736 bytes of image became 12,027 bytes of stream), so the old default
+ * settings could no longer fit the original stream and the tool refused a fresh clone.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -87,6 +95,51 @@ export function tableStartOf(unpacked) {
   const assetTableOffset = unpacked.readUInt32BE(4);
   const entries = unpacked.readUInt32BE(36);
   return assetTableOffset + entries * 8;
+}
+
+/**
+ * Deflate settings to try, best first (measured 2026-11-12, see the module docstring).
+ *
+ * Madden's own stream is compressed harder than zlib's defaults. `strategy: 1`
+ * (`Z_FILTERED`) and a small `memLevel` are what match it on this data: the smaller hash
+ * table stops zlib spending bits on short, distant matches in a save that is mostly
+ * repeated structure. The last entry is zlib's own default, kept only so a save that
+ * somehow compresses best there still has a candidate.
+ */
+export const DEFLATE_CANDIDATES = [
+  { level: 9, memLevel: 5, strategy: 1 },
+  { level: 9, memLevel: 5 },
+  { level: 9, memLevel: 6 },
+  { level: 8, memLevel: 6, strategy: 1 },
+  { level: 9, memLevel: 7 },
+  { level: 9, memLevel: 8 },
+  { level: 6, memLevel: 8 },
+];
+
+/**
+ * Deflate `unpacked` with DEFLATE_CANDIDATES and return the best result.
+ *
+ * Stops at the first candidate no longer than `limit` (the original stream length: the
+ * rebuilt stream must fit the slot's fixed tail offset), so the normal case costs one
+ * deflate. When no candidate fits, every candidate is tried and the smallest is returned
+ * with `fits: false`, which the caller reports as a refusal.
+ */
+export function deflateImage(unpacked, limit) {
+  const tried = [];
+  let best = null;
+  for (const setting of DEFLATE_CANDIDATES) {
+    const stream = zlib.deflateSync(unpacked, { windowBits: 15, ...setting });
+    tried.push({ ...setting, bytes: stream.length });
+    if (!best || stream.length < best.stream.length) best = { stream, setting };
+    if (stream.length <= limit) return { ...best, tried, fits: true };
+  }
+  return { ...best, tried, fits: false };
+}
+
+/** First non-zero byte at or after `from`, i.e. where the slot's leftover tail begins, or -1. */
+export function tailStartOf(raw, from) {
+  for (let i = Math.max(0, from); i < raw.length; i++) if (raw[i]) return i;
+  return -1;
 }
 
 /**
@@ -254,7 +307,12 @@ export async function pruneSave({ save, out, policy: policyOverride, maxFill = 0
   parts.push(unpacked.subarray(originalTableEnd)); // trailing bytes after the last table
   const newUnpacked = Buffer.concat(parts);
 
-  const deflated = zlib.deflateSync(newUnpacked, { windowBits: 15 });
+  const {
+    stream: deflated,
+    setting: compression,
+    tried: compressionTried,
+    fits,
+  } = deflateImage(newUnpacked, oldStreamLength);
 
   const report = {
     save,
@@ -264,6 +322,8 @@ export async function pruneSave({ save, out, policy: policyOverride, maxFill = 0
     saved: unpacked.length - newUnpacked.length,
     streamBefore: oldStreamLength,
     streamAfter: deflated.length,
+    compression,
+    compressionTried,
     tables: plan.filter((p) => !p.skipped),
     skipped: plan.filter((p) => p.skipped),
     problems: [],
@@ -272,8 +332,9 @@ export async function pruneSave({ save, out, policy: policyOverride, maxFill = 0
 
   if (dryRun) return report;
 
-  if (deflated.length > oldStreamLength) {
-    throw new Error(`rebuilt stream (${deflated.length}) is longer than the original (${oldStreamLength}); the tail's fixed offsets would shift`);
+  if (!fits) {
+    const attempts = compressionTried.map((t) => `${t.level}/${t.memLevel}/${t.strategy} ${t.bytes}`).join(', ');
+    throw new Error(`rebuilt stream (${deflated.length}) is longer than the original (${oldStreamLength}); the tail's fixed offsets would shift (tried ${attempts})`);
   }
 
   // FBCHUNKS header, the new stream, zero fill up to the old stream end, original tail.
@@ -284,6 +345,20 @@ export async function pruneSave({ save, out, policy: policyOverride, maxFill = 0
   outContents.fill(0, COMPRESSED_DATA_OFFSET + deflated.length, oldStreamEnd);
   deflated.copy(outContents, COMPRESSED_DATA_OFFSET);
   fs.writeFileSync(out, outContents);
+
+  // Read back the stream we just wrote, before trusting the library's parse: it must
+  // inflate to the rebuilt image byte for byte, and the slot's tail must still sit at its
+  // original absolute offsets (everything from its first non-zero byte to EOF unchanged).
+  try {
+    const roundTrip = zlib.inflateSync(outContents.subarray(COMPRESSED_DATA_OFFSET, COMPRESSED_DATA_OFFSET + deflated.length));
+    if (!roundTrip.equals(newUnpacked)) report.problems.push(`the written stream inflates to ${roundTrip.length} bytes, not the rebuilt ${newUnpacked.length}`);
+  } catch (err) {
+    report.problems.push(`the written stream does not inflate: ${err.message}`);
+  }
+  const tailStart = tailStartOf(outContents, oldStreamEnd);
+  if (tailStart >= 0 && !outContents.subarray(tailStart).equals(raw.subarray(tailStart))) {
+    report.problems.push(`the tail from absolute ${tailStart} changed`);
+  }
 
   // Read back: the file must parse, every rebuilt table must show the new capacity,
   // and every live row must still be live.
@@ -322,7 +397,7 @@ async function main() {
   printPlan(report);
   if (args.dryRun) return;
   console.log(`\nwrote ${args.out}`);
-  console.log(`file size ${report.fileSize} (was ${report.fileSizeBefore}); stream ${report.streamAfter} (was ${report.streamBefore})`);
+  console.log(`file size ${report.fileSize} (was ${report.fileSizeBefore}); stream ${report.streamAfter} (was ${report.streamBefore}) at zlib level ${report.compression.level}, memLevel ${report.compression.memLevel}, strategy ${report.compression.strategy}`);
   if (report.problems.length) {
     console.error('\nREAD-BACK PROBLEMS:');
     for (const p of report.problems) console.error('  ' + p);

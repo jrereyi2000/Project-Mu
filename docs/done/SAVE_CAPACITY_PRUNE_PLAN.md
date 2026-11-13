@@ -301,3 +301,48 @@ any newly created table with a generous capacity), not for restoring the saving.
 capacity for its whole life (`python3 -m tools.madden_pilot clone-save ...`). A clone that fails to prune
 warns, keeps the plain copy and records `pruned: false` in `result.json`. Never run the pruner on a live
 franchise without JR.
+
+## 10. Re-measurement: why a fresh clone refused (2026-11-12, `fix-clone-prune`)
+
+`clone-save` began refusing the capacity prune on a fresh `CAREER-MU2026` clone: `prune_capacity.mjs` threw
+*rebuilt stream (3137978) is longer than the original (3056682)* (check-d, M-0855 finding 1), so the P4-01 clone
+ran with **513 KB** of the 20 MiB headroom instead of the ~1.06 MB the Highlight cut buys.
+
+**Cause: the tool's own deflate settings, not the prune.** It re-deflated with zlib's defaults (`deflateSync`:
+level 6, memLevel 8). Madden's own stream is compressed harder than that: on every save measured here the
+default settings produce a stream **1.6–2.6% longer** than Madden's for the *same* image, while level 9 with a
+*small* memLevel produces one **2.5–4.7% shorter**. The Highlight cut only removes 596,736 bytes of *empty*
+rows, which deflate compresses to about 12 KB, so the prune could never make up a 2% handicap: the rebuilt stream
+came out longer than the original and the tool refused.
+
+Measured with the node in this checkout (`zlib.deflateSync`, `windowBits: 15`), on copies of JR's root saves;
+"pruned" is the rebuilt image, "orig" the stream Madden wrote:
+
+| save (unpacked image) | orig stream | pruned 6/8 (old default) | pruned 9/8 | pruned 9/5 | pruned 9/5 `Z_FILTERED` |
+|---|---:|---:|---:|---:|---:|
+| `CAREER-MUBASE.pristine` (20,458,364) | 3,052,965 | 3,133,651 **refused** | 3,091,878 | 2,932,785 | **2,911,141** |
+| `CAREER-GIANTS-AUTOSAVE` (20,456,842) | 3,806,715 | 3,875,573 **refused** | 3,813,298 | 3,704,302 | **3,702,233** |
+| `CAREER-2028SB-XFACTOR` (20,452,557) | 3,644,894 | 3,701,956 **refused** | 3,627,918 | 3,522,895 | **3,515,388** |
+
+The baseline proxy matches the live failure: deflating the pristine `CAREER-MUBASE.pristine` image at 6/8 gives
+3,133,651 against check-d's 3,137,978 on the real clone (the two images differ by a few KB of recent autosave).
+On the unpruned image, level 9/memLevel 5 alone already beats Madden's stream (2,939,463 vs 3,052,965 and
+3,711,689 vs 3,806,715), so the ladder would fit even if nothing were pruned.
+
+**Fix (`prune_capacity.mjs`):** `deflateImage` tries `DEFLATE_CANDIDATES` — level 9 / memLevel 5 / `Z_FILTERED`,
+then level 9 / memLevel 5, 9/6, 8/6 filtered, 9/7, 9/8, and zlib's default 6/8 last — and returns the first
+stream no longer than the original (one deflate in the normal case, ~2.5 s at 20 MB). The refusal is unchanged
+and still writes nothing: if no candidate fits, the smallest is returned with `fits: false` and the error names
+every candidate's length. Read-back now also inflates the written stream and compares it with the rebuilt image
+byte for byte, and checks the tail from its first non-zero byte to EOF is unchanged. **No capacity policy
+changed**: `Highlight` 3,200 → 512 is still the only default, and the 22-table set stays opt-in `--set` only.
+
+**Result on the sample save** (`CAREER-GIANTS-AUTOSAVE` copy): unpacked 20,456,842 → 19,860,106 (596,736 B, the
+same as §9), headroom 514,678 → **1,111,414 B**, stream 3,806,715 → **3,702,233**, read-back clean, and
+`pc_save_reader` snapshots of the original and the pruned copy identical except `meta` (2,990 players, 324 games,
+35 teams, 32 depth charts, 402 prospects). On the real `CAREER-MU2026` clone a `clone-save` at 20:59 pruned
+cleanly at stream 2,915,086 (check-d, `e91c8087`).
+
+Tests: `tests/test_prune_capacity.py` (6 tests, five of them failing on the pre-fix tool) and
+`tests/test_madden_pilot_jobs.py::test_clone_prunes_the_capacity_of_a_real_save`, which passes in the main
+checkout now; `node --test pipeline/save_reader/test/prune_capacity.test.mjs` 8 passed.
