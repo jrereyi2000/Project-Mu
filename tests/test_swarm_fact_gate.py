@@ -481,6 +481,103 @@ def test_a_rewrite_that_breaks_a_structured_article_is_rejected(capsys):
     assert "rewrite rejected" in capsys.readouterr().out
 
 
+def test_an_all_pro_rewrite_off_the_stored_ballot_is_rejected(capsys):
+    """audit-fact-gate-2 N1: `_structured_article_errors` returned on the type's own parser first,
+    so the stored-ballot branches could never run for the only two types a ballot exists for. With
+    the media panel's ballot stored, a rewrite that names another player must be rejected — the
+    original ships labelled `flagged` — not adopted and published as `rewritten`."""
+    dispatcher = _dispatcher(tools=[])
+    dispatcher._all_pro_roster_index = lambda season: {}
+    dispatcher._ballot_brief = lambda season, week, at_id: {
+        "kind": "all_pro", "stored": [{"award_type": "First Team All-Pro", "slot": "QB", "player_id": 1}],
+        "text": "STORED BALLOT RESULTS"}
+    first = "# All-Pro Roster\n\n- **QB**: Stored Guy, Carolina Panthers — voted in by the panel"
+    off_ballot = "# All-Pro Roster\n\n- **QB**: Other Guy, Chicago Bears — my own pick"
+    client = _Client([first, off_ballot])
+
+    def stored_check(text, stored, index):
+        return [] if text == first else [
+            "First Team All-Pro: Other Guy at QB was not voted in by the media panel"]
+
+    with mock.patch("newsroom.swarm_dispatcher.parse_all_pro", return_value=([], [])), \
+         mock.patch("newsroom.swarm_dispatcher.check_all_pro_against_stored", side_effect=stored_check), \
+         mock.patch("newsroom.swarm_dispatcher.fact_gate.check", side_effect=[_gate(1), _gate(0)]), \
+         mock.patch("newsroom.swarm_dispatcher.fact_gate.rewrite_prompt", return_value="fix it"):
+        result = dispatcher._execute_agent(_prompt(article_type="OFFICIAL_AP_ALL_PRO_ROSTER"), 2036, 19,
+                                           None, live=True, model="muse-spark-1.3-contributor",
+                                           save_to_db=False, client=client)
+
+    assert client.models.calls == 2                   # writer + one correction pass
+    assert result["text"] == first                    # the on-ballot original stands
+    assert result["fact_gate_status"] == "flagged"
+    assert result["fact_gate"]["rewritten"] is False   # off-ballot is never a rewrite
+    assert result["fact_gate"]["rewrite_attempted"] is True
+    out = capsys.readouterr().out
+    assert "rewrite rejected" in out and "not voted in by the media panel" in out
+
+
+def test_a_week_22_awards_rewrite_off_the_stored_ballot_is_rejected(capsys):
+    """audit-fact-gate-2 N1, the awards half: the Week 22 AWARDS_TRACKER rewrite is checked against
+    the stored winners, so naming anyone but the panel's winner is rejected."""
+    dispatcher = _dispatcher(tools=[])
+    dispatcher._all_pro_roster_index = lambda season: {}
+    dispatcher._coach_index = lambda season: {}
+    dispatcher._ballot_brief = lambda season, week, at_id: {
+        "kind": "awards", "stored": {"MVP": {"player_id": 1, "name": "Stored Guy", "team_id": 1}},
+        "text": "STORED BALLOT RESULTS"}
+    first = "# Awards\n\n- **MVP**: Stored Guy, Carolina Panthers — the panel's winner"
+    off_ballot = "# Awards\n\n- **MVP**: Other Guy, Chicago Bears — my own pick"
+    client = _Client([first, off_ballot])
+
+    def stored_check(text, stored, roster_index, coach_index):
+        return [] if text == first else [
+            "MVP: the article names Other Guy, but the media panel's ballots chose Stored Guy"]
+
+    with mock.patch("newsroom.swarm_dispatcher.parse_award_winners", return_value=([], [])), \
+         mock.patch("newsroom.swarm_dispatcher.check_awards_against_stored", side_effect=stored_check), \
+         mock.patch("newsroom.swarm_dispatcher.fact_gate.check", side_effect=[_gate(1), _gate(0)]), \
+         mock.patch("newsroom.swarm_dispatcher.fact_gate.rewrite_prompt", return_value="fix it"):
+        result = dispatcher._execute_agent(_prompt(article_type="AWARDS_TRACKER"), 2036, 22, None,
+                                           live=True, model="muse-spark-1.3-contributor",
+                                           save_to_db=False, client=client)
+
+    assert result["text"] == first
+    assert result["fact_gate_status"] == "flagged"
+    assert result["fact_gate"]["rewritten"] is False
+    assert result["fact_gate"]["rewrite_attempted"] is True
+    out = capsys.readouterr().out
+    assert "rewrite rejected" in out and "media panel's ballots chose Stored Guy" in out
+
+
+def test_a_validator_that_raises_rejects_the_rewrite(capsys):
+    """audit-fact-gate-2 N3: the structural check caught every exception and returned [], so a
+    validator that could not read the rewrite let it through. It now fails closed."""
+    dispatcher = _dispatcher(tools=[])
+    dispatcher._power_rankings_team_index = lambda: []
+    first = "# Power Rankings\n\n1. Bears\n2. Bills\n...\n32. Cardinals"
+    broken = "# Power Rankings\n\n1. Bears"
+    client = _Client([first, broken])
+
+    def parse(text, index):
+        if text == broken:
+            raise RuntimeError("parser blew up on the rewrite")
+        return [], []
+
+    with mock.patch("newsroom.swarm_dispatcher.parse_power_rankings", side_effect=parse), \
+         mock.patch("newsroom.swarm_dispatcher.fact_gate.check", side_effect=[_gate(1), _gate(0)]), \
+         mock.patch("newsroom.swarm_dispatcher.fact_gate.rewrite_prompt", return_value="fix it"):
+        result = dispatcher._execute_agent(_prompt(article_type="POWER_RANKINGS"), 2036, 18, None,
+                                           live=True, model="muse-spark-1.3-contributor",
+                                           save_to_db=False, client=client)
+
+    assert result["text"] == first                    # a rewrite nothing could read is not published
+    assert result["fact_gate_status"] == "flagged"
+    assert result["fact_gate"]["rewritten"] is False
+    assert result["fact_gate"]["rewrite_attempted"] is True
+    out = capsys.readouterr().out
+    assert "rewrite rejected" in out and "could not be validated" in out
+
+
 
 
 def test_the_notice_counts_the_weeks_articles():

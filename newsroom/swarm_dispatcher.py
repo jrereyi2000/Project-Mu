@@ -2067,30 +2067,44 @@ If you need specific stats, use your database tools before producing your final 
         `POWER_RANKINGS`, `OFFICIAL_AP_ALL_PRO_ROSTER`, the Week 22 `AWARDS_TRACKER` and
         `SUPER_BOWL_GAME_RECAP` are validated before they are saved; a fact-gate rewrite is checked
         with this same rule, so a correction that drops a team or a winner is rejected instead of
-        shipping a page whose structured table cannot be stored (R5a F5). Never raises.
+        shipping a page whose structured table cannot be stored (R5a F5).
+
+        When the media panel's ballots decided the article (`ballot` is set), the stored ballot is
+        the rule, exactly as it is on the save path (`:1986-2006`): the `check_*_against_stored`
+        check parses the page first itself, so a rewrite that is off-ballot — or whose table no
+        longer parses — is rejected rather than published as `rewritten`. The type's own parser is
+        the rule only when no ballot decided it. The old `if` chain returned on the type's parser
+        first, which made the ballot branches unreachable for the only two article types a ballot
+        exists for (audit-fact-gate-2 N1).
+
+        A validator that raises is an error, never a pass (audit-fact-gate-2 N3): the check cannot
+        read the rewrite, so the rewrite must not be adopted. Never raises.
         """
         if not (text or "").strip() or not at_id:
             return []
         try:
-            if at_id == "POWER_RANKINGS":
-                return parse_power_rankings(text, self._power_rankings_team_index())[1]
-            if at_id == "OFFICIAL_AP_ALL_PRO_ROSTER":
-                return parse_all_pro(text, self._all_pro_roster_index(season))[1]
-            if at_id == "AWARDS_TRACKER" and week == 22:
-                return parse_award_winners(text, self._all_pro_roster_index(season),
-                                           self._coach_index(season))[1]
-            if at_id == "SUPER_BOWL_GAME_RECAP":
-                return parse_sb_mvp(text, self._all_pro_roster_index(season))[1]
-            if ballot and ballot.get("kind") == "all_pro":
-                return check_all_pro_against_stored(text, ballot["stored"],
-                                                    self._all_pro_roster_index(season))
-            if ballot:
-                return check_awards_against_stored(text, ballot["stored"],
-                                                   self._all_pro_roster_index(season),
-                                                   self._coach_index(season))
-        except Exception:
-            return []
-        return []
+            if ballot and ballot.get("stored"):
+                if ballot.get("kind") == "all_pro":
+                    errors = check_all_pro_against_stored(text, ballot["stored"],
+                                                          self._all_pro_roster_index(season))
+                else:
+                    errors = check_awards_against_stored(text, ballot["stored"],
+                                                         self._all_pro_roster_index(season),
+                                                         self._coach_index(season))
+            elif at_id == "POWER_RANKINGS":
+                errors = parse_power_rankings(text, self._power_rankings_team_index())[1]
+            elif at_id == "OFFICIAL_AP_ALL_PRO_ROSTER":
+                errors = parse_all_pro(text, self._all_pro_roster_index(season))[1]
+            elif at_id == "AWARDS_TRACKER" and week == 22:
+                errors = parse_award_winners(text, self._all_pro_roster_index(season),
+                                             self._coach_index(season))[1]
+            elif at_id == "SUPER_BOWL_GAME_RECAP":
+                errors = parse_sb_mvp(text, self._all_pro_roster_index(season))[1]
+            else:
+                errors = []
+        except Exception as exc:  # noqa: BLE001 - a check that cannot read the rewrite rejects it
+            return [f"{at_id} structure could not be validated: {exc}"]
+        return list(errors or [])
 
     def _apply_fact_gate(self, chat, text: str, evidence: str, rewrites,
                          rewrite_allowed: bool = True, validate=None):
