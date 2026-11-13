@@ -25,9 +25,10 @@ def test_an_empty_registry_means_nobody_is_a_user_team():
         assert franchises.user_team_refusal(abbr, []) == NOBODY
 
 
-def test_a_missing_list_and_no_franchise_are_the_same_as_empty():
+def test_a_missing_list_and_no_franchise_are_the_same_as_empty(monkeypatch):
     assert franchises.user_team_abbrs({"db": "madden_x"}) == []          # registered, no user_teams key
-    assert franchises.user_team_abbrs(None) == []                        # no active franchise
+    monkeypatch.setattr(franchises, "active_entry", lambda *a, **k: (None, None))
+    assert franchises.user_team_abbrs() == []                            # no active franchise
 
 
 def test_an_unreadable_registry_is_no_franchise_not_all_of_them(monkeypatch):
