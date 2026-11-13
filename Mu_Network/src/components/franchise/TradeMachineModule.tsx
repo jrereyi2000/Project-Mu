@@ -202,7 +202,7 @@ async function leagueFetch<T>(path: string): Promise<T> {
 
 /** One published CPU transcript, expandable to its turns and the agreed deal (§2.8). */
 function LeagueTalk({ talk }: { talk: PublishedTradeTalk }) {
-  const teams = talk.teams.map((t) => t.abbr).join(" ↔ ");
+  const teams = talk.teams.map((t) => displayAbbr(t.abbr)).join(" ↔ ");
   const weeks = talk.weeks.length === 1 ? `Week ${talk.weeks[0]}` : `Weeks ${talk.weeks.join(", ")}`;
   return (
     <details className="fr-talk">
@@ -214,7 +214,7 @@ function LeagueTalk({ talk }: { talk: PublishedTradeTalk }) {
         {talk.turns.map((turn) => (
           <li key={turn.turn_no}>
             <header>
-              <strong>{turn.team}</strong>
+              <strong>{displayAbbr(turn.team)}</strong>
               {turn.posture && (
                 <span className={`fr-posture ${turn.posture.toLowerCase()}`}>{turn.posture}</span>
               )}
@@ -222,7 +222,7 @@ function LeagueTalk({ talk }: { talk: PublishedTradeTalk }) {
             </header>
             {turn.assets.length > 0 && (
               <div className="fr-talk-assets">
-                {turn.assets.map((a, i) => <span key={i}>{a.from} → {a.to}: {a.label}</span>)}
+                {turn.assets.map((a, i) => <span key={i}>{displayAbbr(a.from)} → {displayAbbr(a.to)}: {a.label}</span>)}
               </div>
             )}
             {turn.message && <p className="fr-quote">“{turn.message}”</p>}
@@ -232,7 +232,7 @@ function LeagueTalk({ talk }: { talk: PublishedTradeTalk }) {
       <div className="fr-talk-final">
         <b>Final deal</b>
         {talk.final.assets.length === 0 ? <span>No assets recorded.</span> : (
-          <ul>{talk.final.assets.map((a, i) => <li key={i}>{a.label} <small>({a.from} → {a.to})</small></li>)}</ul>
+          <ul>{talk.final.assets.map((a, i) => <li key={i}>{a.label} <small>({displayAbbr(a.from)} → {displayAbbr(a.to)})</small></li>)}</ul>
         )}
       </div>
     </details>
