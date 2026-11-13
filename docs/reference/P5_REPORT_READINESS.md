@@ -29,14 +29,14 @@ claim below is a `file:line` in this checkout.
 **No feature has a season report that is called by the tuning season.** `season_loop` writes exactly two files per
 season — `season_<year>.md` (stats, `engines/tuning/compare.py`) and `decisions_<year>.md` (the A1–A7 decision
 gates, `engines/tuning/decision_compare.py`, called at `engines/tuning/season_loop.py:474-484`) — and neither
-mentions a switchboard feature or reads `personality_feature_modes`. Of the 20 features, **one** (§7.2 signal) is
-scored end to end today (`retirement`, through A1/A2), **one** is partially scored by a gate about a different
-question (`owner_patience`, through A3 head-coach changes), **three** have a report somewhere that the season never
-runs (`evolution`, `focus_refresh`, `profiles`), **thirteen** record their evidence in tables that nothing reads, and
-**two** (`scout_directors`, `media_voters`) cannot be observed in a shadow season at all — their `shadow` mode is a
-no-op and neither runs under `season_loop`. Four features name a comparator in §7.2 that does not exist anywhere in
-`decision_targets.json`. Detail per feature in §2, the gaps in §3, and the shortest order that fixes it in §4.
-
+mentions a switchboard feature or reads `personality_feature_modes`. Of the 20 features, **three** have a §7.2 comparator that
+exists and is scored (`retirement` through A1/A2, `owner_patience` through A3, `development_opportunity` through
+A6/A7 as a proxy) — and for the first two the number scored is the league's, not the feature's; **three** more have a
+report somewhere that the season never runs (`evolution`, `focus_refresh`, `profiles`), **thirteen** record their
+evidence in tables that nothing reads, and **two** (`scout_directors`, `media_voters`) cannot be observed in a shadow
+season at all — their `shadow` mode is a
+no-op and neither runs under `season_loop`. Six features name a comparator in §7.2 that does not exist anywhere.
+Detail per feature in §2, the gaps in §3, and the shortest order that fixes it in §4. 
 ---
 
 ## 1. Summary counts
@@ -44,13 +44,13 @@ no-op and neither runs under `season_loop`. Four features name a comparator in �
 | Question | Answer |
 |---|---|
 | Features whose §7.2 number is printed by a report the tuning season calls | **0 of 20** |
-| Features whose §7.2 signal is *scored* against a target today | **1** (`retirement`, A1/A2) + **1 partial** (`owner_patience`, A3) |
 | Features with a report of any kind, somewhere | **5** (`retirement`, `owner_patience`, `evolution`, `focus_refresh`, `profiles` — the last three not run by the season) |
 | Features whose evidence is recorded in the tuning DB but has **no reader** | **13** |
 | Features that cannot be measured in a shadow season today (a design gap, not a missing report) | **2** (`scout_directors`, `media_voters`) + **2 halves** (`coach_loop` / `player_loop` model-call behaviour, forced off by `MU_NO_LLM=1`) |
-| Features whose §7.2 comparator is a P3-06 band that exists | **3** (`retirement` A2, `owner_patience` A3, `development_opportunity` A6/A7 as a proxy) |
-| Features whose §7.2 comparator does not exist anywhere | **4** (`contracts_ambition`, `contracts_relationships`, `trade_requests`, `owner_hiring`) + **1 dataset** (`owner_spending` cash-to-cap) |
-| Features whose §7.2 comparator is a stated binary/constant rule with nothing that evaluates it | **10** |
+| (§7.2 comparator) exists **and** is scored | **3** — `retirement` A2, `owner_patience` A3, `development_opportunity` A6/A7 as a proxy. For the first two the number scored is the *league's*, not the feature's (§3.5) |
+| §7.2 comparator exists but nothing evaluates it (a stated binary or constant rule) | **8** — `producers`, `relationships`, `profiles`, `evolution`, `development_learning`, `coach_loop`, `owner_meddling`, `media_voters` |
+| §7.2 comparator does not exist anywhere | **6** — `contracts_ambition`, `contracts_relationships`, `trade_requests`, `player_loop`, `owner_hiring`, and `owner_spending` (its cash dataset) |
+| §7.2 comparator undefined **and** the signal unmeasurable today | **3** — `focus_refresh`, `coaching_tree_hiring`, `scout_directors` |
 
 The 13 features with recorded-but-unread evidence are `producers`, `relationships`, `contracts_ambition`,
 `contracts_relationships`, `development_learning`, `trade_requests`, `development_opportunity`, `coach_loop`,
