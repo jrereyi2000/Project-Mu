@@ -11,6 +11,7 @@ import type {
   TeamRatings, TeamRecord,
 } from "../../types/franchiseGame";
 import { RANK_STATS } from "../../types/franchiseGame";
+import { displayAbbr } from "../../types/franchiseMarket";
 import { MOVE_LABEL, SharedStyles, StateNote, franchiseFetch, useFranchiseData } from "./RosterCapModule";
 import PressConferencePanel, { useTeamPresser } from "./PressConferencePanel";
 
@@ -188,8 +189,8 @@ function PendingMoves({ o }: { o: FranchiseOverview }) {
 
 function Dossier({ gc }: { gc: GameCenterResponse }) {
   const opp = gc.opponent;
-  if (!opp) return <p className="fo-state">No opponent to scout: there's no unplayed game on {gc.team}'s schedule.</p>;
-  const oppAbbr = opp.abbr ?? "Opponent";
+  if (!opp) return <p className="fo-state">No opponent to scout: there's no unplayed game on {displayAbbr(gc.team)}'s schedule.</p>;
+  const oppAbbr = opp.abbr ? displayAbbr(opp.abbr) : "Opponent";
   const mine = gc.ranks.team;
   const theirs = gc.ranks.opponent;
   return (
@@ -197,7 +198,7 @@ function Dossier({ gc }: { gc: GameCenterResponse }) {
       <div>
         <h3 className="gc-h3">Ratings</h3>
         <table className="gc-table" aria-label="Team ratings">
-          <thead><tr><th>Rating</th><th>{gc.team}</th><th>{oppAbbr}</th></tr></thead>
+          <thead><tr><th>Rating</th><th>{displayAbbr(gc.team)}</th><th>{oppAbbr}</th></tr></thead>
           <tbody>
             <tr><td>Record</td><td>{recordText(gc.record)}</td><td>{recordText(opp.record)}</td></tr>
             {RATING_ROWS.map(([key, label, isRank]) => {
@@ -217,12 +218,12 @@ function Dossier({ gc }: { gc: GameCenterResponse }) {
         {(!gc.ratings || !opp.ratings) && <p className="fo-basis">Ratings missing for a team: no team_seasons row this season.</p>}
       </div>
       <div>
-        <h3 className="gc-h3">Per game ({mine?.games ?? 0} v {theirs?.games ?? 0} games)</h3>
+        <h3 className="gc-h3">Per game ({mine?.games ?? 0} vs {theirs?.games ?? 0} games)</h3>
         {!mine || !theirs ? (
           <p className="fo-state">No completed regular-season box scores to rank yet.</p>
         ) : (
           <table className="gc-table" aria-label="Per-game ranks">
-            <thead><tr><th>Stat</th><th>{gc.team}</th><th>{oppAbbr}</th></tr></thead>
+            <thead><tr><th>Stat</th><th>{displayAbbr(gc.team)}</th><th>{oppAbbr}</th></tr></thead>
             <tbody>
               {RANK_STATS.map((s) => {
                 const a = mine[s];
@@ -246,10 +247,10 @@ function Dossier({ gc }: { gc: GameCenterResponse }) {
 
 function Matchups({ gc }: { gc: GameCenterResponse }) {
   if (gc.matchups.length === 0) return <p className="fo-state">No unit matchups yet: both teams need completed games.</p>;
-  const oppAbbr = gc.opponent?.abbr ?? "Opponent";
+  const oppAbbr = gc.opponent?.abbr ? displayAbbr(gc.opponent.abbr) : "Opponent";
   return (
     <table className="gc-table" aria-label="Unit matchups">
-      <thead><tr><th>Unit</th><th>{gc.team}</th><th>{oppAbbr}</th><th>Edge</th></tr></thead>
+      <thead><tr><th>Unit</th><th>{displayAbbr(gc.team)}</th><th>{oppAbbr}</th><th>Edge</th></tr></thead>
       <tbody>
         {gc.matchups.map((m) => (
           <tr key={m.unit}>
@@ -283,7 +284,7 @@ export default function GameCenterModule({ teamAbbr }: { teamAbbr: string }) {
 
       <section className="fo-block">
         <div className="team-section-title">
-          <span>{teamAbbr} · {o ? `Season ${o.season} · Week ${o.week}` : "This week"}</span>
+          <span>{displayAbbr(teamAbbr)} · {o ? `Season ${o.season} · Week ${o.week}` : "This week"}</span>
           <h2>Game Center</h2>
         </div>
         <div className="gc-next">
@@ -318,7 +319,7 @@ export default function GameCenterModule({ teamAbbr }: { teamAbbr: string }) {
           </div>
         )}
         {o && !o.user_controlled && (
-          <p className="fr-warn">{teamAbbr} isn't one of your franchise's user teams: launching and every move will be refused (403).</p>
+          <p className="fr-warn">{displayAbbr(teamAbbr)} isn't one of your franchise's user teams: launching and every move will be refused (403).</p>
         )}
         {!o && <StateNote state={overview} what="the team overview" />}
         {o && <OverviewTiles o={o} />}
@@ -332,7 +333,7 @@ export default function GameCenterModule({ teamAbbr }: { teamAbbr: string }) {
       )}
 
       <section className="fo-block">
-        <div className="team-section-title"><span>{gc?.opponent ? `${gc.opponent.abbr} · ${recordText(gc.opponent.record)}` : "Opponent"}</span><h2>Scouting Dossier</h2></div>
+        <div className="team-section-title"><span>{gc?.opponent ? `${displayAbbr(gc.opponent.abbr)} · ${recordText(gc.opponent.record)}` : "Opponent"}</span><h2>Scouting Dossier</h2></div>
         {!gc && <StateNote state={center} what="the opponent dossier" />}
         {gc && <Dossier gc={gc} />}
       </section>

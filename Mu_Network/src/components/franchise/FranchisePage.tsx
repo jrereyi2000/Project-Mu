@@ -8,7 +8,7 @@
 import { useEffect, type ComponentType } from "react";
 import "../team/frontOffice.css";
 import { teamLogo } from "../team/format";
-import { TEAM_ABBRS } from "../../types/franchiseMarket";
+import { TEAM_ABBRS, displayAbbr } from "../../types/franchiseMarket";
 import type { FranchiseOverview } from "../../types/franchiseGame";
 import type { InboxListResponse } from "../../types/franchiseInbox";
 import GameCenterModule from "./GameCenterModule";
@@ -128,7 +128,7 @@ export default function FranchisePage({ route }: { route: string }) {
           {o && <span className={`fr-badge ${o.user_controlled ? "yes" : "no"}`}>{o.user_controlled ? "Your team" : "Not a user team"}</span>}
           <label htmlFor="fr-team">Team</label>
           <select id="fr-team" value={team} onChange={(e) => pickTeam(e.target.value)}>
-            {TEAM_ABBRS.map((a) => <option key={a} value={a}>{a}</option>)}
+            {TEAM_ABBRS.map((a) => <option key={a} value={a}>{displayAbbr(a)}</option>)}
           </select>
         </div>
       </header>

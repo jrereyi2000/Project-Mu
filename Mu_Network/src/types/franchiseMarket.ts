@@ -29,6 +29,18 @@ export const TEAM_ABBRS = [
   "LV", "LAC", "LAR", "MIA", "MIN", "NE", "NO", "NYG", "NYJ", "PHI", "PIT", "SF", "SEA", "TB", "TEN", "WAS",
 ] as const;
 
+/**
+ * The site's display abbreviations: the save and the API keep AZ / WAS (and accept ARI / WSH as input
+ * aliases), but the ticker, team hubs and articles say ARI / WSH. Pickers show this; their values stay
+ * the database's abbreviations, so every API call keeps working.
+ */
+const DISPLAY_ABBRS: Record<string, string> = { AZ: "ARI", WAS: "WSH" };
+
+export function displayAbbr(abbr: string | null | undefined): string {
+  const clean = (abbr || "").toUpperCase();
+  return DISPLAY_ABBRS[clean] ?? clean;
+}
+
 // ---- Negotiation (free agents and extensions share one answer) ------------------------------------------------
 
 /** Agent / player answer. Stored in `contract_offers.status` as ACCEPTED / REJECTED / COUNTERED. */

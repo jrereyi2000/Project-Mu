@@ -15,7 +15,7 @@ import "../team/frontOffice.css";
 import type { RosterPlayer, RosterResponse } from "../../types/franchiseRoster";
 import type { InboxStartRequest, InboxThread } from "../../types/franchiseInbox";
 import {
-  TEAM_ABBRS,
+  TEAM_ABBRS, displayAbbr,
   type OwnedPick, type PicksResponse, type PublishedTradeTalk, type TradeEvaluation, type TradePick,
   type TradeRequest, type TradeSide, type TradeTalksResponse,
 } from "../../types/franchiseMarket";
@@ -27,7 +27,7 @@ import {
 const pickKey = (p: TradePick) => `${p.season}-${p.round}-${p.original_team}`;
 const pickLabel = (p: TradePick | OwnedPick, owner: string) => {
   const overall = "overall_pick" in p && p.overall_pick !== null ? ` (#${p.overall_pick})` : "";
-  return `${p.season} ${ordinal(p.round)} round${p.original_team !== owner ? ` (via ${p.original_team})` : ""}${overall}`;
+  return `${p.season} ${ordinal(p.round)} round${p.original_team !== owner ? ` (via ${displayAbbr(p.original_team)})` : ""}${overall}`;
 };
 
 type Side = { players: Set<number>; picks: Set<string> };
@@ -110,7 +110,7 @@ function SideColumn({ abbr, label, them, roster, picks, side, onToggle }: {
   const shown = q.trim() ? players.filter((p) => `${p.name} ${p.position}`.toLowerCase().includes(q.trim().toLowerCase())) : players;
   return (
     <div className={`fr-tm-side${them ? " them" : ""}`}>
-      <header><strong>{abbr}</strong><small>{label} · {side.players.size} player{side.players.size === 1 ? "" : "s"}, {side.picks.size} pick{side.picks.size === 1 ? "" : "s"}</small></header>
+      <header><strong>{displayAbbr(abbr)}</strong><small>{label} · {side.players.size} player{side.players.size === 1 ? "" : "s"}, {side.picks.size} pick{side.picks.size === 1 ? "" : "s"}</small></header>
       {roster.status !== "ready" ? <StateNote state={roster} what={`${abbr}'s roster`} /> : (
         <>
           <input type="search" value={q} placeholder="Filter players" aria-label={`Filter ${abbr} players`} onChange={(e) => setQ(e.target.value)} />
@@ -352,6 +352,9 @@ export default function TradeMachineModule({ teamAbbr }: { teamAbbr: string }) {
   const scale = ev ? Math.max(Math.abs(ev.surplus_us), Math.abs(ev.surplus_them), 1) : 1;
   const sentList = describe(toWire(send), teamAbbr);
   const recvList = describe(toWire(receive), other);
+  // User-facing team text uses the site's display abbreviations (ARI, WSH); the API keeps its own.
+  const teamLabel = displayAbbr(teamAbbr);
+  const otherLabel = displayAbbr(other);
 
   return (
     <section className="team-data-view fo-view">
@@ -359,16 +362,16 @@ export default function TradeMachineModule({ teamAbbr }: { teamAbbr: string }) {
       <NegotiationStyles />
       <style href="fr-tm" precedence="default">{TM_CSS}</style>
       <section className="fo-block">
-        <div className="team-section-title"><span>{teamAbbr} · Two-way trade</span><h2>Trade Machine</h2></div>
+        <div className="team-section-title"><span>{teamLabel} · Two-way trade</span><h2>Trade Machine</h2></div>
         {ourRoster.status === "unavailable" ? <StateNote state={ourRoster} what="the trade machine" /> : (
           <>
             <div className="fr-tm-bar">
               <label>Trade partner
                 <select value={other} onChange={(e) => setOther(e.target.value)}>
-                  {others.map((t) => <option key={t} value={t}>{t}</option>)}
+                  {others.map((t) => <option key={t} value={t}>{displayAbbr(t)}</option>)}
                 </select>
               </label>
-              <span className="fr-grow">Tick what you send and what you want back, then ask {other}'s GM.</span>
+              <span className="fr-grow">Tick what you send and what you want back, then ask {otherLabel}'s GM.</span>
               <button className="fr-btn" onClick={clear} disabled={empty && !ev}>Clear</button>
               <button className="fr-btn" onClick={talkToGm} disabled={send.players.size + send.picks.size === 0 || talking}>
                 {talking ? "Opening…" : "Talk to their GM"}
@@ -380,7 +383,7 @@ export default function TradeMachineModule({ teamAbbr }: { teamAbbr: string }) {
             {talkNote && (
               <p className="fr-talk-note" role="alert">
                 {talkNote.conflict
-                  ? <>A talk with {other}'s GM is already open. <a className="fr-btn" href="#franchise-inbox">Open the inbox</a></>
+                  ? <>A talk with {otherLabel}'s GM is already open. <a className="fr-btn" href="#franchise-inbox">Open the inbox</a></>
                   : <>Couldn't open the talk: {talkNote.message}</>}
               </p>
             )}
@@ -389,25 +392,25 @@ export default function TradeMachineModule({ teamAbbr }: { teamAbbr: string }) {
               <SideColumn abbr={other} label="You receive" them roster={theirRoster} picks={theirPicks} side={receive} onToggle={toggle(setReceive)} />
             </div>
             <div className="fr-tm-sum">
-              <div><b>{teamAbbr} sends</b>{sentList.length ? sentList.join(" · ") : "Nothing yet."}</div>
-              <div><b>{teamAbbr} receives</b>{recvList.length ? recvList.join(" · ") : "Nothing yet."}</div>
+              <div><b>{teamLabel} sends</b>{sentList.length ? sentList.join(" · ") : "Nothing yet."}</div>
+              <div><b>{teamLabel} receives</b>{recvList.length ? recvList.join(" · ") : "Nothing yet."}</div>
             </div>
 
             {evaluation && evaluation.status !== "ready" && <StateNote state={evaluation} what="the trade evaluation" />}
             {ev && (
               <div className="fr-panel" aria-live="polite">
-                <span>{other} GM{stale ? " · the trade changed since this answer" : ""}</span>
+                <span>{otherLabel} GM{stale ? " · the trade changed since this answer" : ""}</span>
                 <h3><span className={`fr-verdict ${ev.verdict}`}>{VERDICT_TEXT[ev.verdict]}</span></h3>
                 {ev.dialogue && <p className="fr-quote">“{ev.dialogue}”</p>}
                 <h4>Surplus value (value in − value out)</h4>
-                <SurplusRow label={teamAbbr} value={ev.surplus_us} scale={scale} />
-                <SurplusRow label={other} value={ev.surplus_them} scale={scale} />
+                <SurplusRow label={teamLabel} value={ev.surplus_us} scale={scale} />
+                <SurplusRow label={otherLabel} value={ev.surplus_them} scale={scale} />
                 <h4>Cap check</h4>
                 <div className="fr-figures">
-                  <div><span>{teamAbbr} cap</span><strong className={ev.cap_legal_us ? "pos" : "neg"}>{ev.cap_legal_us ? "Legal" : "Over"}</strong></div>
-                  <div><span>{teamAbbr} room after</span><strong className={(ev.cap_room_after_us ?? 0) < 0 ? "neg" : ""}>{money(ev.cap_room_after_us)}</strong></div>
-                  <div><span>{other} cap</span><strong className={ev.cap_legal_them ? "pos" : "neg"}>{ev.cap_legal_them ? "Legal" : "Over"}</strong></div>
-                  <div><span>{other} room after</span><strong className={(ev.cap_room_after_them ?? 0) < 0 ? "neg" : ""}>{money(ev.cap_room_after_them)}</strong></div>
+                  <div><span>{teamLabel} cap</span><strong className={ev.cap_legal_us ? "pos" : "neg"}>{ev.cap_legal_us ? "Legal" : "Over"}</strong></div>
+                  <div><span>{teamLabel} room after</span><strong className={(ev.cap_room_after_us ?? 0) < 0 ? "neg" : ""}>{money(ev.cap_room_after_us)}</strong></div>
+                  <div><span>{otherLabel} cap</span><strong className={ev.cap_legal_them ? "pos" : "neg"}>{ev.cap_legal_them ? "Legal" : "Over"}</strong></div>
+                  <div><span>{otherLabel} room after</span><strong className={(ev.cap_room_after_them ?? 0) < 0 ? "neg" : ""}>{money(ev.cap_room_after_them)}</strong></div>
                 </div>
                 {(!ev.cap_legal_us || !ev.cap_legal_them) && <p className="fr-warn" role="alert">At least one team can't absorb the incoming contracts.</p>}
                 {ev.reasons.length > 0 && <ul className="fr-reasons">{ev.reasons.map((r) => <li key={r}>{r}</li>)}</ul>}
@@ -415,8 +418,8 @@ export default function TradeMachineModule({ teamAbbr }: { teamAbbr: string }) {
                   <>
                     <h4>Their counter</h4>
                     <div className="fr-tm-sum" style={{ marginTop: 0 }}>
-                      <div><b>{teamAbbr} sends</b>{describe(ev.counter.send, teamAbbr).join(" · ") || "Nothing"}</div>
-                      <div><b>{teamAbbr} receives</b>{describe(ev.counter.receive, other).join(" · ") || "Nothing"}</div>
+                      <div><b>{teamLabel} sends</b>{describe(ev.counter.send, teamAbbr).join(" · ") || "Nothing"}</div>
+                      <div><b>{teamLabel} receives</b>{describe(ev.counter.receive, other).join(" · ") || "Nothing"}</div>
                     </div>
                     <footer>
                       <button className="fr-btn" onClick={() => { setSend(fromWire(ev.counter!.send)); setReceive(fromWire(ev.counter!.receive)); setStale(true); }}>
