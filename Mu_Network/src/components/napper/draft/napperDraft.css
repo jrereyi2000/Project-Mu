@@ -123,14 +123,14 @@
 }
 
 .draft-main-title {
-  font-size: 17px;
+  font-size: var(--fs-16);
   font-weight: 800;
   color: #ffffff;
   line-height: 1.2;
 }
 
 .draft-sub-title {
-  font-size: 11px;
+  font-size: var(--fs-11);
   font-weight: 500;
   color: var(--draft-text-muted);
   letter-spacing: 0.2px;
@@ -172,7 +172,7 @@
   border-radius: 20px;
   background-color: var(--draft-cyan);
   color: #090e17;
-  font-size: 12px;
+  font-size: var(--fs-12);
   font-weight: 900;
   letter-spacing: 0.6px;
   text-transform: uppercase;
@@ -197,7 +197,7 @@
   border-radius: 17px;
   background-color: #1c2b44;
   color: #e2e8f0;
-  font-size: 11px;
+  font-size: var(--fs-11);
   font-weight: 700;
   border: 1px solid #2c4266;
   cursor: pointer;
@@ -326,7 +326,7 @@
   background-color: #16243a;
   border: 1px solid #223758;
   color: #94a3b8;
-  font-size: 10px;
+  font-size: var(--fs-10);
   font-weight: 800;
   letter-spacing: 0.5px;
   text-transform: uppercase;
@@ -348,7 +348,7 @@
 }
 
 .draft-team-name-label {
-  font-size: 11px;
+  font-size: var(--fs-11);
   font-weight: 700;
   color: #94a3b8;
   text-align: center;
@@ -394,7 +394,7 @@
 
 /* Pick index header */
 .draft-cell-index {
-  font-size: 11px;
+  font-size: var(--fs-11);
   font-weight: 700;
   color: #64748b;
   line-height: 1;
@@ -402,7 +402,7 @@
 
 /* Snake Direction Arrow in Cell */
 .draft-snake-arrow {
-  font-size: 11px;
+  font-size: var(--fs-11);
   color: #475569;
   line-height: 1;
 }
@@ -459,7 +459,7 @@
   border-radius: 50%;
   background-color: #0f172a;
   border: 1px solid #334155;
-  font-size: 7px;
+  font-size: var(--fs-10);
   font-weight: 800;
   display: flex;
   align-items: center;
@@ -475,7 +475,7 @@
 }
 
 .draft-picked-name {
-  font-size: 11px;
+  font-size: var(--fs-11);
   font-weight: 800;
   color: #ffffff;
   white-space: nowrap;
@@ -492,7 +492,7 @@
 }
 
 .draft-picked-pos-badge {
-  font-size: 9px;
+  font-size: var(--fs-10);
   font-weight: 800;
   padding: 1px 4px;
   border-radius: 4px;
@@ -501,7 +501,7 @@
 }
 
 .draft-picked-team {
-  font-size: 9px;
+  font-size: var(--fs-10);
   font-weight: 600;
   color: #94a3b8;
 }
@@ -638,7 +638,7 @@
   border: none;
   outline: none;
   color: #ffffff;
-  font-size: 11px;
+  font-size: var(--fs-11);
   width: 100%;
 }
 
@@ -647,7 +647,7 @@
 }
 
 .draft-kbd-shortcut {
-  font-size: 9px;
+  font-size: var(--fs-10);
   font-weight: 700;
   color: #64748b;
   background-color: #1e2c45;
@@ -667,7 +667,7 @@
 .draft-pos-pill {
   padding: 4px 9px;
   border-radius: 14px;
-  font-size: 10px;
+  font-size: var(--fs-10);
   font-weight: 800;
   color: #94a3b8;
   background-color: #141f33;
@@ -740,7 +740,7 @@
 .draft-pool-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 11px;
+  font-size: var(--fs-11);
 }
 
 .draft-pool-table thead {
@@ -753,7 +753,7 @@
 
 .draft-pool-table th {
   padding: 8px 10px;
-  font-size: 9px;
+  font-size: var(--fs-10);
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -798,7 +798,7 @@
   background-color: #162438;
   border: 1px solid #233758;
   color: #64748b;
-  font-size: 10px;
+  font-size: var(--fs-10);
   font-weight: 800;
   letter-spacing: 0.4px;
   cursor: pointer;
@@ -872,7 +872,7 @@
   border-radius: 50%;
   background-color: #0f172a;
   border: 1px solid #334155;
-  font-size: 7px;
+  font-size: var(--fs-10);
   font-weight: 800;
   display: flex;
   align-items: center;
@@ -886,13 +886,13 @@
 }
 
 .draft-table-player-name {
-  font-size: 12px;
+  font-size: var(--fs-12);
   font-weight: 800;
   color: #ffffff;
 }
 
 .draft-table-player-sub {
-  font-size: 10px;
+  font-size: var(--fs-10);
   color: #94a3b8;
   display: flex;
   align-items: center;
@@ -905,7 +905,7 @@
   background-color: rgba(0, 206, 184, 0.12);
   border: 1px solid rgba(0, 206, 184, 0.3);
   color: #00ceb8;
-  font-size: 11px;
+  font-size: var(--fs-11);
   font-weight: 800;
   display: inline-block;
 }
@@ -942,7 +942,7 @@
   border: none;
   border-bottom: 2px solid transparent;
   color: #8a99ad;
-  font-size: 11px;
+  font-size: var(--fs-11);
   font-weight: 800;
   letter-spacing: 0.8px;
   text-transform: uppercase;
@@ -989,7 +989,7 @@
 }
 
 .draft-roster-heading {
-  font-size: 11px;
+  font-size: var(--fs-11);
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.6px;
@@ -1000,7 +1000,7 @@
   background-color: #17243b;
   border: 1px solid #233758;
   color: #cbd5e1;
-  font-size: 11px;
+  font-size: var(--fs-11);
   font-weight: 700;
   padding: 4px 10px;
   border-radius: 6px;
@@ -1037,7 +1037,7 @@
   width: 38px;
   height: 24px;
   border-radius: 5px;
-  font-size: 9px;
+  font-size: var(--fs-10);
   font-weight: 900;
   display: flex;
   align-items: center;
@@ -1047,24 +1047,24 @@
 }
 
 .draft-slot-empty-label {
-  font-size: 11px;
+  font-size: var(--fs-11);
   font-weight: 600;
   color: #64748b;
 }
 
 .draft-slot-filled-name {
-  font-size: 11px;
+  font-size: var(--fs-11);
   font-weight: 800;
   color: #ffffff;
 }
 
 .draft-slot-filled-meta {
-  font-size: 10px;
+  font-size: var(--fs-10);
   color: #94a3b8;
 }
 
 .draft-slot-filled-pts {
-  font-size: 11px;
+  font-size: var(--fs-11);
   font-weight: 800;
   font-mono: true;
   color: #00ceb8;
@@ -1106,14 +1106,14 @@
   border-radius: 8px;
   background-color: #141f33;
   border: 1px solid #1c2b44;
-  font-size: 11px;
+  font-size: var(--fs-11);
 }
 
 .draft-chat-author {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 10px;
+  font-size: var(--fs-10);
   font-weight: 800;
   color: #38bdf8;
 }
@@ -1138,7 +1138,7 @@
   border: 1px solid #233758;
   border-radius: 6px;
   padding: 6px 10px;
-  font-size: 11px;
+  font-size: var(--fs-11);
   color: #ffffff;
   outline: none;
 }
@@ -1192,7 +1192,7 @@
   width: 44px;
   height: 44px;
   border-radius: 12px;
-  font-size: 20px;
+  font-size: var(--fs-20);
   font-weight: 900;
 }
 
@@ -1228,7 +1228,7 @@
   padding: 8px 16px;
   background-color: #0b121e;
   border-bottom: 1px solid var(--draft-border-subtle);
-  font-size: 11px;
+  font-size: var(--fs-11);
   gap: 12px;
   flex-wrap: wrap;
   z-index: 25;
@@ -1241,7 +1241,7 @@
 }
 
 .draft-config-label {
-  font-size: 10px;
+  font-size: var(--fs-10);
   font-weight: 800;
   text-transform: uppercase;
   color: #64748b;
@@ -1254,7 +1254,7 @@
   background-color: #141f33;
   border: 1px solid #20314d;
   color: #94a3b8;
-  font-size: 11px;
+  font-size: var(--fs-11);
   font-weight: 700;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -1278,7 +1278,7 @@
   background-color: #141f33;
   border: 1px solid #20314d;
   color: #cbd5e1;
-  font-size: 11px;
+  font-size: var(--fs-11);
   font-weight: 700;
   outline: none;
   cursor: pointer;
@@ -1295,7 +1295,7 @@
   display: inline-block;
   padding: 1px 6px;
   border-radius: 4px;
-  font-size: 9px;
+  font-size: var(--fs-10);
   font-weight: 900;
   text-transform: uppercase;
   letter-spacing: 0.5px;
