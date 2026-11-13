@@ -929,6 +929,63 @@ def test_real_franchise_list_selected_tile_and_its_neighbours():
     assert border_highlight(frame, ["TUNE-CHKA"], reach=0.075) is None
 
 
+# ------------------------------------------------------------------ N1: ADVANCE_MENU reads
+# The F14 tall-card pairing is not only for cards: on ADVANCE_MENU the selected row's white fill
+# (above) and the ADVANCE WEEK button's outline (below) are two rules that both span every
+# unselected row, so before the fix every row between them counted as highlighted and the reader
+# returned None (or FORCE ADVANCE while READY TO ADVANCE was selected). These are the auditor's
+# three captured frames (data/audit_reports/audit-visual-r4/recheck-5f76c43.md, N1); the expected
+# values are what `45d1ee1` read, measured over all 907 captured ADVANCE frames.
+ADVANCE_OPTIONS = ["READY TO ADVANCE", "FORCE ADVANCE", "SIM TO MIDSEASON"]
+
+
+def test_advance_menu_force_selected_reads_force_and_nothing_else():
+    """0061: FORCE ADVANCE has the fill; READY and SIM TO MIDSEASON must not read as selected."""
+    frame = fixture_frame("advance_menu_force_0061")
+    assert border_highlight(frame, ADVANCE_OPTIONS, reach=0.06) == "FORCE ADVANCE"
+    assert border_highlight(frame, ["SIM TO MIDSEASON"], reach=0.06) is None
+    assert border_highlight(frame, ["READY TO ADVANCE"], reach=0.06) is None
+
+
+def test_advance_menu_ready_selected_reads_ready_and_nothing_else():
+    """0024: READY TO ADVANCE has the fill; the two rows below must not read as selected."""
+    frame = fixture_frame("advance_menu_ready_0024")
+    assert border_highlight(frame, ADVANCE_OPTIONS, reach=0.06) == "READY TO ADVANCE"
+    assert border_highlight(frame, ["FORCE ADVANCE"], reach=0.06) is None
+    assert border_highlight(frame, ["SIM TO MIDSEASON"], reach=0.06) is None
+
+
+def test_advance_menu_unreadable_ready_never_reads_force():
+    """p2g stop_01/0020: OCR drops READY's text; the reader must not hand back FORCE ADVANCE."""
+    frame = fixture_frame("advance_menu_ready_unread_p2g0020")
+    assert border_highlight(frame, ADVANCE_OPTIONS, reach=0.06) is None
+
+
+class _Keys:
+    """A driver that records the keys it is asked to press and never touches the PC."""
+
+    def __init__(self, frame):
+        self.frame = frame
+        self.keys = []
+
+    def call(self, cmd):
+        if cmd[0] == "key":
+            self.keys.append(cmd[cmd.index("--name") + 1])
+            return {"ok": True}
+        raise AssertionError(f"unexpected driver call {cmd!r}")
+
+
+def test_confirm_on_does_not_press_space_when_ready_is_the_selected_row(tmp_path, notices):
+    """N1's live failure: the pilot pressed Space on READY TO ADVANCE thinking it was FORCE."""
+    frame = fixture_frame("advance_menu_ready_unread_p2g0020")
+    driver = _Keys(frame)
+    pilot = Pilot(CAT, tmp_path, driver=driver, sleep=lambda s: None, clock=lambda: 0.0)
+    pilot.frame, pilot.screen, pilot.step = frame, "ADVANCE_MENU", 1
+    with pytest.raises(Stuck):
+        pilot.confirm_on("ADVANCE_MENU", "FORCE ADVANCE")
+    assert driver.keys == []
+
+
 def test_capture_reuse_refuses_before_cloning_a_save(tmp_path, monkeypatch):
     """F15: a refused --reuse-launch must not leave a CAREER-TUNE-CHK* clone behind."""
     root = tmp_path / "data"

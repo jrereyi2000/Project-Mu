@@ -1,0 +1,566 @@
+{
+ "fixture": "advance_menu_ready_0024",
+ "source": "data/tuning/seasons/p2d/pilot_regular/steps/0024_ADVANCE_MENU",
+ "screen": "ADVANCE_MENU",
+ "png": "advance_menu_ready_0024.png",
+ "size": [
+  1920,
+  1080
+ ],
+ "lines": [
+  "WEEKLY HUB",
+  "MANAGE ROSTER",
+  "COACHCENTRAL",
+  "CUT DAY",
+  "DEF",
+  "LEAGUE",
+  "L 37-19",
+  "CAROLINA",
+  "PANTHERS",
+  "WEEKLY RECAP",
+  "BACK",
+  "OPTIONS",
+  "GAMEDAY",
+  "WEEK 2",
+  "1:00 PM ET",
+  "Mercedes-Benz Stadium",
+  "Sunny",
+  "GAME",
+  "WEEK",
+  "WEEK",
+  "OVR",
+  "oee",
+  "READY TO ADVANCE",
+  "FORCE ADVANCE",
+  "JUMP AHEAD",
+  "SIM TO MIDSEASON",
+  "ADVANCE WEEK",
+  "4 [C] D. CANALES",
+  "LVL",
+  "ATLANTA",
+  "1-0",
+  "PROFILE UNAVAILABLE"
+ ],
+ "words": [
+  {
+   "text": "WEEKLY",
+   "box": [
+    244,
+    25,
+    61,
+    21
+   ],
+   "line": 0
+  },
+  {
+   "text": "HUB",
+   "box": [
+    309,
+    25,
+    31,
+    21
+   ],
+   "line": 0
+  },
+  {
+   "text": "MANAGE",
+   "box": [
+    383,
+    25,
+    67,
+    21
+   ],
+   "line": 1
+  },
+  {
+   "text": "ROSTER",
+   "box": [
+    454,
+    25,
+    60,
+    21
+   ],
+   "line": 1
+  },
+  {
+   "text": "COACHCENTRAL",
+   "box": [
+    558,
+    25,
+    127,
+    21
+   ],
+   "line": 2
+  },
+  {
+   "text": "CUT",
+   "box": [
+    540,
+    226,
+    34,
+    20
+   ],
+   "line": 3
+  },
+  {
+   "text": "DAY",
+   "box": [
+    579,
+    226,
+    34,
+    20
+   ],
+   "line": 3
+  },
+  {
+   "text": "DEF",
+   "box": [
+    656,
+    572,
+    33,
+    9
+   ],
+   "line": 4
+  },
+  {
+   "text": "LEAGUE",
+   "box": [
+    725,
+    25,
+    58,
+    21
+   ],
+   "line": 5
+  },
+  {
+   "text": "L",
+   "box": [
+    719,
+    226,
+    8,
+    20
+   ],
+   "line": 6
+  },
+  {
+   "text": "37-19",
+   "box": [
+    731,
+    226,
+    47,
+    20
+   ],
+   "line": 6
+  },
+  {
+   "text": "CAROLINA",
+   "box": [
+    165,
+    645,
+    76,
+    21
+   ],
+   "line": 7
+  },
+  {
+   "text": "PANTHERS",
+   "box": [
+    168,
+    682,
+    412,
+    99
+   ],
+   "line": 8
+  },
+  {
+   "text": "WEEKLY",
+   "box": [
+    379,
+    859,
+    97,
+    32
+   ],
+   "line": 9
+  },
+  {
+   "text": "RECAP",
+   "box": [
+    484,
+    859,
+    76,
+    32
+   ],
+   "line": 9
+  },
+  {
+   "text": "BACK",
+   "box": [
+    203,
+    1043,
+    32,
+    16
+   ],
+   "line": 10
+  },
+  {
+   "text": "OPTIONS",
+   "box": [
+    821,
+    25,
+    68,
+    21
+   ],
+   "line": 11
+  },
+  {
+   "text": "GAMEDAY",
+   "box": [
+    847,
+    119,
+    85,
+    20
+   ],
+   "line": 12
+  },
+  {
+   "text": "WEEK",
+   "box": [
+    904,
+    232,
+    51,
+    20
+   ],
+   "line": 13
+  },
+  {
+   "text": "2",
+   "box": [
+    959,
+    232,
+    10,
+    20
+   ],
+   "line": 13
+  },
+  {
+   "text": "1:00",
+   "box": [
+    901,
+    621,
+    36,
+    15
+   ],
+   "line": 14
+  },
+  {
+   "text": "PM",
+   "box": [
+    944,
+    621,
+    27,
+    15
+   ],
+   "line": 14
+  },
+  {
+   "text": "ET",
+   "box": [
+    978,
+    621,
+    23,
+    15
+   ],
+   "line": 14
+  },
+  {
+   "text": "Mercedes-Benz",
+   "box": [
+    841,
+    639,
+    140,
+    15
+   ],
+   "line": 15
+  },
+  {
+   "text": "Stadium",
+   "box": [
+    988,
+    639,
+    74,
+    15
+   ],
+   "line": 15
+  },
+  {
+   "text": "Sunny",
+   "box": [
+    942,
+    699,
+    55,
+    19
+   ],
+   "line": 16
+  },
+  {
+   "text": "GAME",
+   "box": [
+    977,
+    859,
+    70,
+    32
+   ],
+   "line": 17
+  },
+  {
+   "text": "WEEK",
+   "box": [
+    1092,
+    226,
+    51,
+    20
+   ],
+   "line": 18
+  },
+  {
+   "text": "WEEK",
+   "box": [
+    1265,
+    226,
+    51,
+    20
+   ],
+   "line": 19
+  },
+  {
+   "text": "OVR",
+   "box": [
+    1212,
+    488,
+    38,
+    9
+   ],
+   "line": 20
+  },
+  {
+   "text": "oee",
+   "box": [
+    1214,
+    572,
+    33,
+    9
+   ],
+   "line": 21
+  },
+  {
+   "text": "READY",
+   "box": [
+    1237,
+    617,
+    55,
+    20
+   ],
+   "line": 22
+  },
+  {
+   "text": "TO",
+   "box": [
+    1296,
+    617,
+    22,
+    20
+   ],
+   "line": 22
+  },
+  {
+   "text": "ADVANCE",
+   "box": [
+    1322,
+    617,
+    81,
+    20
+   ],
+   "line": 22
+  },
+  {
+   "text": "FORCE",
+   "box": [
+    1237,
+    664,
+    49,
+    21
+   ],
+   "line": 23
+  },
+  {
+   "text": "ADVANCE",
+   "box": [
+    1289,
+    664,
+    73,
+    21
+   ],
+   "line": 23
+  },
+  {
+   "text": "JUMP",
+   "box": [
+    1220,
+    724,
+    63,
+    12
+   ],
+   "line": 24
+  },
+  {
+   "text": "AHEAD",
+   "box": [
+    1289,
+    724,
+    81,
+    12
+   ],
+   "line": 24
+  },
+  {
+   "text": "SIM",
+   "box": [
+    1346,
+    766,
+    28,
+    21
+   ],
+   "line": 25
+  },
+  {
+   "text": "TO",
+   "box": [
+    1379,
+    766,
+    20,
+    21
+   ],
+   "line": 25
+  },
+  {
+   "text": "MIDSEASON",
+   "box": [
+    1403,
+    766,
+    91,
+    21
+   ],
+   "line": 25
+  },
+  {
+   "text": "ADVANCE",
+   "box": [
+    1225,
+    859,
+    128,
+    32
+   ],
+   "line": 26
+  },
+  {
+   "text": "WEEK",
+   "box": [
+    1359,
+    859,
+    81,
+    32
+   ],
+   "line": 26
+  },
+  {
+   "text": "4",
+   "box": [
+    1578,
+    28,
+    19,
+    16
+   ],
+   "line": 27
+  },
+  {
+   "text": "[C]",
+   "box": [
+    1615,
+    25,
+    18,
+    20
+   ],
+   "line": 27
+  },
+  {
+   "text": "D.",
+   "box": [
+    1643,
+    28,
+    13,
+    16
+   ],
+   "line": 27
+  },
+  {
+   "text": "CANALES",
+   "box": [
+    1660,
+    28,
+    62,
+    16
+   ],
+   "line": 27
+  },
+  {
+   "text": "LVL",
+   "box": [
+    1545,
+    28,
+    24,
+    7
+   ],
+   "line": 28
+  },
+  {
+   "text": "ATLANTA",
+   "box": [
+    1668,
+    645,
+    72,
+    21
+   ],
+   "line": 29
+  },
+  {
+   "text": "1-0",
+   "box": [
+    1706,
+    795,
+    32,
+    19
+   ],
+   "line": 30
+  },
+  {
+   "text": "PROFILE",
+   "box": [
+    1544,
+    1044,
+    56,
+    16
+   ],
+   "line": 31
+  },
+  {
+   "text": "UNAVAILABLE",
+   "box": [
+    1604,
+    1044,
+    94,
+    16
+   ],
+   "line": 31
+  }
+ ]
+}
