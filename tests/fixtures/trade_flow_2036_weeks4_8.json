@@ -1,0 +1,95 @@
+{
+ "meta": {
+  "checklist": "P3-08 (CLOSE_OUT_CHECKLIST at e2ef6ab)",
+  "measured": "2026-11-12",
+  "where": "scratch clone of madden_2036 (mu_scratch_p3_trade_remeasure_test), migrations through 2027_02_14, all teams CPU, this season's trade history cleared",
+  "how": "python3 -m tools.trade_flow_measure --season 2036 --first-week 4 --last-week 8 --json OUT",
+  "execution": "each week's auto-approved CPU deals executed through front_office._execute (the league office's DB half), so the weekly pacing sees them; a refused deal expired as the league office does",
+  "llm": "Gemini writer on (gm_talks/gm_rationale); the mechanics are the same with --no-llm",
+  "seeds": "the engine's own: search '2036:<week>:IN_SEASON:search', talks '...:talks', policy 'talk:2036:<id>:<n>'",
+  "window_note": "weeks 4-8 are 12/15 of the in-season shape weight, so 9 here scales to ~11 a season"
+ },
+ "weeks": [
+  {
+   "week": 4,
+   "talks": 1,
+   "executed": 1,
+   "refused": [],
+   "expired": 0,
+   "rechecked": 0,
+   "talk_outcomes": {
+    "AGREED": 1
+   }
+  },
+  {
+   "week": 5,
+   "talks": 2,
+   "executed": 0,
+   "refused": [],
+   "expired": 0,
+   "rechecked": 0,
+   "talk_outcomes": {
+    "STALLED": 2
+   }
+  },
+  {
+   "week": 6,
+   "talks": 4,
+   "executed": 2,
+   "refused": [],
+   "expired": 0,
+   "rechecked": 0,
+   "talk_outcomes": {
+    "STALLED": 2,
+    "AGREED": 2
+   }
+  },
+  {
+   "week": 7,
+   "talks": 8,
+   "executed": 2,
+   "refused": [],
+   "expired": 0,
+   "rechecked": 0,
+   "talk_outcomes": {
+    "STALLED": 6,
+    "AGREED": 2
+   }
+  },
+  {
+   "week": 8,
+   "talks": 10,
+   "executed": 4,
+   "refused": [],
+   "expired": 0,
+   "rechecked": 0,
+   "talk_outcomes": {
+    "STALLED": 6,
+    "AGREED": 4
+   }
+  }
+ ],
+ "talks": 25,
+ "outcomes": {
+  "AGREED": 9,
+  "STALLED": 16,
+  "WALKED_AWAY": 0,
+  "OPEN": 0
+ },
+ "breakdown_share": 0.64,
+ "openings": {
+  "ANCHOR": 5,
+  "FIRM": 20
+ },
+ "turns": 62,
+ "message_lines": {
+  "LLM": 57,
+  "TEMPLATE": 5,
+  "template_share": 0.081
+ },
+ "counters_per_talk": 0.52,
+ "leaks": 2,
+ "executed": 9,
+ "decided": 25,
+ "executed_share": 0.36
+}

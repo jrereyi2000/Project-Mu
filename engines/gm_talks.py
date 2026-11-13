@@ -692,6 +692,14 @@ def advance_talk(cur, b, valuer, talk, rng, llm):
         # empty offer turned the talk into a REJECT ping-pong that only burned patience.
         offer_turn = next((t for t in reversed(turns) if t.get("assets")), None)
         offer_assets = _engine_assets(b, offer_turn["assets"]) if offer_turn else []
+        if last.get("action") == "REJECT":
+            # A rejection carries no counter, so the package still on the table is the rejecting side's answer to
+            # *this* actor's own offer. Its author cannot accept it: P3-08's 2036 replay caught the turn after a
+            # REJECT being judged as if the author were the package's receiver, executing rejected deals. The
+            # decline stands (the rejecting side's own patience was already charged when it rejected).
+            talk["status"] = "STALLED"
+            _stall(cur, b, valuer, talk, offer_assets, "the other GM rejected the offer")
+            break
         options = options_for(b, valuer, talk, actor, offer_assets)
         opt, text, source = _choose(cur, b, talk, actor, last_actor, offer_assets, options, turns, rng, llm)
         # source is the writer's LLM | TEMPLATE (message_source); the policy chose the move (choice_source)

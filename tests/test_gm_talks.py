@@ -403,6 +403,44 @@ def test_an_agreed_talk_uses_the_trigger_stored_on_it(monkeypatch):
     assert pid == 9 and seen["trigger"] == "INJURY"
 
 
+def test_a_reject_ends_the_talk_instead_of_accepting_the_author_s_own_offer(monkeypatch):
+    """Turn 1 offers, turn 2 rejects with no counter. The turn 3 actor is the offer's author and the package on the
+    table is its own: it must not be judged as the package's receiver and ACCEPT it (which executed a rejected
+    deal). The decline stands, with the last package stored STALLED (P3-08 replay, 2026-11-12)."""
+    b, v = setup()
+    stored = [{"type": "PLAYER", "player_id": STAR, "from": "BBB", "to": "AAA"},
+              {"type": "PICK", "draft_season": 2037, "round": 4, "original_team": "AAA",
+               "from": "AAA", "to": "BBB"},
+              {"type": "PICK", "draft_season": 2037, "round": 5, "original_team": "AAA",
+               "from": "AAA", "to": "BBB"}]
+    turns = [
+        {"turn_no": 1, "actor": "GM_A", "actor_team_id": 1, "action": "OFFER", "assets": stored,
+         "mood": None, "message": "the opening", "message_source": "TEMPLATE", "options": None,
+         "choice": None, "choice_source": "POLICY", "posture": "FIRM", "surplus_user": None,
+         "surplus_gm": None, "legality": None},
+        {"turn_no": 2, "actor": "GM", "actor_team_id": 2, "action": "REJECT", "assets": None,
+         "mood": "APART", "message": "no", "message_source": "TEMPLATE", "options": None,
+         "choice": "REJECT", "choice_source": "POLICY", "posture": None, "surplus_user": None,
+         "surplus_gm": None, "legality": None},
+    ]
+    monkeypatch.setattr(gt, "_turns", lambda cur, nid: list(turns))
+    monkeypatch.setattr(ge, "rationale_for", lambda b, d, llm: {"rationale_a": "", "rationale_b": "",
+                                                                "headline": "", "source": "TEMPLATE"})
+    seen = {}
+
+    def fake_store(*a, **k):
+        seen.update(k)
+        seen["deal"] = a[2]
+        return 9
+
+    monkeypatch.setattr(ge, "store", fake_store)
+    status = gt.advance_talk(
+        ScriptedCur(lambda sql, params: [(3,)] if "max(turn_no)" in sql else []), b, v,
+        dict(TALK, status="OPEN"), random.Random(1), None)
+    assert status == "STALLED" and seen.get("status") == "STALLED"
+    assert keys(seen["deal"]["assets"]) == keys(gt._engine_assets(b, stored))  # the last package stands
+
+
 def _run_limit_turns():
     """Eight turns (the talk's maximum) whose last is a REJECT with no assets; the opening carries the offer."""
     stored = [{"type": "PLAYER", "player_id": STAR, "from": "BBB", "to": "AAA"},

@@ -15,6 +15,12 @@ Label override: $ARGUMENTS
 1. Read `CLAUDE.md`, then `PROJECT_SPEC.md` (outline first: `grep -n '^##\|^###' PROJECT_SPEC.md`, then the sections a finding touches).
 2. **Your model string.** Commits end with `Model: <id>`. Use `MU_AGENT_MODEL` when the session sets it — the DeepSeek route marks itself with `MU_AGENT_CLASS=deepseek` and sets the model to `deepseek-v4.1-flash`. Otherwise use the model JR's routing note in `CLAUDE.md` names (currently `deepseek-v4.1-flash`), then the harness's own report. If JR tells you otherwise in this conversation, that wins.
 3. **Your label.** Use $ARGUMENTS if given. Otherwise run `grep -o '(builder-[0-9]*)' /home/jrereyi/Project-Mu/AGENT_CONVERSATION.md | sort -u` and take the next number (`builder-3` after `builder-2`). The plain `builder` label from before builder-2 counts as 1.
+4. **OpenCode title.** If your harness is OpenCode (`MU_OPENCODE_SESSION` is set), retitle the session after the start NOTICE and whenever the batch changes, so JR can see the work in the shared window:
+   ```bash
+   opencode api patch "/api/session/$MU_OPENCODE_SESSION" \
+     --data '{"title":"Mu <label> — <task>"}'
+   ```
+   Keep the label first and the current item after the dash (for example `Mu fix-stats-id — R2a/R2b/P1 stats identity`). This is a title change only; it is not a board message.
 
 ## 2. Join the board
 

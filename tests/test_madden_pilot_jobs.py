@@ -177,6 +177,81 @@ def test_sim_refuses_bad_target_and_missing_save(tmp_path, notices):
     assert fake.keys == []
 
 
+# ---------------------------------------------------------------- managed-save allowance (P7-00e)
+def _managed_sim(tmp_path, fake, save="CAREER-MU2026", to="week 3", **kw):
+    p = make_pilot(tmp_path, fake)
+    return p, jobs.sim_season(p, save=save, to=to, watcher=lambda: False,
+                              folder=tmp_path / "none", **kw)
+
+
+def test_sim_managed_sims_the_canonical_save_and_allows_only_its_tile(tmp_path, notices):
+    # P7-00e: CAREER-MU* is the explicit second allowed class, and only with --managed.
+    fake, _ = fake_madden(tiles=("ALLUSER", "MU2026"))
+    p, out = _managed_sim(tmp_path, fake, managed=True)
+    assert out["status"] == "ok", out
+    assert out["save"] == "CAREER-MU2026" and out["managed"] is True
+    assert (out["start_week"], out["end_week"], out["weeks_simmed"]) == (1, 3, 2)
+    assert p.loaded_franchise == "MU2026"
+    assert p.policy == {"FRANCHISE_LIST": ["MU2026"]}       # its own tile, nothing else
+    assert fake.screen == "FRANCHISE_LIST" and fake.week == 3
+    assert result_json(tmp_path)["managed"] is True
+    assert len(notices) == 1 and "sim-season: ok" in notices[0][0]
+
+
+def test_sim_refuses_a_managed_save_without_the_flag(tmp_path, notices):
+    # The same command without --managed is refused exactly as before (the flag is the allowance).
+    fake, _ = fake_madden(tiles=("ALLUSER", "MU2026"))
+    p, out = _managed_sim(tmp_path, fake)
+    assert out["status"] == "refused" and "--managed" in out["why"]
+    assert fake.keys == [] and fake.looks == 0 and p.policy == {}
+    assert result_json(tmp_path)["status"] == "refused"
+
+
+@pytest.mark.parametrize("save", ["CAREER-2029SB", "SAVE-MU1", "MU2026", "CAREER-"])
+def test_sim_managed_still_refuses_every_other_class(tmp_path, notices, save):
+    # --managed widens the rule to CAREER-MU* only; it never opens the gate to another name.
+    fake, _ = fake_madden(tiles=("ALLUSER", "MU2026"))
+    p, out = _managed_sim(tmp_path, fake, save=save, managed=True)
+    assert out["status"] == "refused" and "CAREER-TUNE-" in out["why"]
+    assert fake.keys == [] and fake.looks == 0 and p.policy == {}
+
+
+def test_sim_managed_never_sims_the_pinned_baseline(tmp_path, notices):
+    # CAREER-MUBASE is hash-pinned and must never be simulated, so not even --managed admits it.
+    fake, _ = fake_madden(tiles=("ALLUSER", "MUBASE"))
+    p, out = _managed_sim(tmp_path, fake, save="CAREER-MUBASE", managed=True)
+    assert out["status"] == "refused" and "P7-00a" in out["why"] and "CAREER-MUBASE" in out["why"]
+    assert fake.keys == [] and fake.looks == 0 and p.policy == {}
+
+
+def test_sim_managed_leaves_the_tune_class_unchanged(tmp_path, notices):
+    # CAREER-TUNE-* keeps its behaviour with the flag too: allowed, and no extra tile policy.
+    fake, _ = fake_madden()
+    p, out = _managed_sim(tmp_path, fake, save="CAREER-TUNE-X", managed=True)
+    assert out["status"] == "ok" and out["managed"] is True and p.policy == {}
+    assert (out["start_week"], out["end_week"], out["weeks_simmed"]) == (1, 3, 2)
+
+
+def test_sim_managed_sims_an_already_loaded_managed_franchise_in_place(tmp_path, notices):
+    fake, _ = fake_madden(start="HUB_WEEKLY", tiles=("MU2026",))
+    p, out = _managed_sim(tmp_path, fake, franchise="MU2026", to="week 2", managed=True)
+    assert out["status"] == "ok", out
+    assert out["weeks_simmed"] == 1 and p.loaded_franchise == "MU2026"
+    # the in-place class follows the save: a TUNE tile is still refused for a managed save
+    fake2, _ = fake_madden(start="HUB_WEEKLY")
+    out = jobs.sim_season(make_pilot(tmp_path / "tune", fake2), save="CAREER-MU2026", franchise="TUNE-X",
+                          watcher=lambda: False, folder=tmp_path / "none", managed=True)
+    assert out["status"] == "refused" and "MU-*" in out["why"]
+
+
+def test_clone_refuses_a_managed_destination(tmp_path, notices):
+    # clone-save never writes the managed class (P7-00e): a clone would sit in the watcher's scope.
+    d = _saves(tmp_path)
+    out = jobs.clone_save(make_pilot(tmp_path / "run", fake_madden()[0]), dst="CAREER-MU2027", folder=d)
+    assert out["status"] == "refused" and "managed save" in out["why"] and "CAREER-TUNE-" in out["why"]
+    assert sorted(p.name for p in d.iterdir()) == ["CAREER-2029SB", "CAREER-MU2026"]
+
+
 def test_watcher_check_uses_ps_not_pgrep(monkeypatch):
     monkeypatch.undo()                                   # the real function, with subprocess mocked
     calls = []
@@ -627,6 +702,19 @@ def test_cli_dry_run_refusal_exit_code(tmp_path, notices, monkeypatch):
     rc = cli.main(["sim-season", "--save", "CAREER-MU2026", "--dry-run", "--run-dir", str(tmp_path)],
                   out=lambda s: None)
     assert rc == 1 and result_json(tmp_path)["status"] == "refused"
+
+
+def test_cli_dry_run_sim_season_managed(tmp_path, notices, monkeypatch):
+    # P7-00e's acceptance command, walked on the fake Madden: sim-season --managed --save CAREER-MU2026.
+    monkeypatch.setattr(jobs, "watcher_running", lambda: False)
+    lines = []
+    rc = cli.main(["sim-season", "--save", "CAREER-MU2026", "--managed", "--to", "week 2", "--dry-run",
+                   "--run-dir", str(tmp_path)], out=lines.append)
+    assert rc == 0
+    assert "highlight MU2026" in lines[0]
+    res = result_json(tmp_path)
+    assert res["status"] == "ok" and res["managed"] is True and res["end_week"] == 2
+    assert notices == []
 
 
 def test_cli_dry_run_launch_and_others(tmp_path, notices, monkeypatch):

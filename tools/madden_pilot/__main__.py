@@ -2,7 +2,7 @@
 
     python3 -m tools.madden_pilot launch      [--pack "Mu Base"]
     python3 -m tools.madden_pilot clone-save  [--from CAREER-MU2026] --to CAREER-TUNE-<name>
-    python3 -m tools.madden_pilot sim-season  --save CAREER-TUNE-<name> [--to "week N"|regular-season-end|playoffs-end]
+    python3 -m tools.madden_pilot sim-season  --save CAREER-TUNE-<name> [--managed] [--to "week N"|regular-season-end|playoffs-end]
     python3 -m tools.madden_pilot advance     --save CAREER-TUNE-<name> [--no-quit]
     python3 -m tools.madden_pilot watch-game  --save CAREER-TUNE-<name> [--to kickoff|halftime] [--hold-seconds N]
     python3 -m tools.madden_pilot catch-up    --save CAREER-<name> [--to-week N] [--dsn ...]
@@ -392,8 +392,12 @@ def build_parser():
     s = sub.add_parser("clone-save", parents=[common], help="copy a save to CAREER-TUNE-<name>")
     s.add_argument("--from", dest="src", default=jobs.BASELINE_SAVE)
     s.add_argument("--to", dest="dst", required=True)
-    s = sub.add_parser("sim-season", parents=[common], help="sim a CAREER-TUNE-* franchise forward")
+    s = sub.add_parser("sim-season", parents=[common],
+                       help="sim a CAREER-TUNE-* franchise forward (a CAREER-MU* managed save with --managed)")
     s.add_argument("--save", required=True)
+    s.add_argument("--managed", action="store_true",
+                   help="allow a CAREER-MU* save (the canonical franchise) as well as CAREER-TUNE-*: it is "
+                        "driven in place, CAREER-MUBASE stays refused, and the watcher must still be stopped")
     s.add_argument("--to", default="regular-season-end", help="'week N', regular-season-end or playoffs-end")
     s.add_argument("--no-quit", action="store_true", help="stay in the franchise after the savepoint")
     s.add_argument("--franchise", help="the franchise already loaded, e.g. TUNE-P2A: sim it in place "
@@ -551,7 +555,7 @@ def _run(args, run_dir, catalog, fmt, out):
                 out("[dry-run] WARNING: pipeline.watch_save is running; a live run would refuse")
             watcher = lambda: False  # noqa: E731
         result = jobs.sim_season(pilot, save=args.save, to=args.to, watcher=watcher, quit=not args.no_quit,
-                                 franchise=args.franchise)
+                                 franchise=args.franchise, managed=args.managed)
     elif args.job == "advance":
         watcher = jobs.watcher_running
         if args.dry_run:

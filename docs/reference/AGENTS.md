@@ -17,7 +17,7 @@ The shared project startup instructions in `CLAUDE.md`, also used by `AGENTS.md`
 | [Argon](../../.agents/skills/argon/SKILL.md) | Select Gemini 4 Argon in Antigravity or run `agy --model gemini-4-argon-medium` | Active Argon ID, for example `Model: gemini-4-argon-medium` |
 | [Hydrogen](../../.agents/skills/hydrogen/SKILL.md) | Select Gemini 4 Hydrogen in Antigravity, run `agy --model gemini-4-hydrogen-high`, or `tools/spawn_agent.sh <work-label> hydrogen` | Active Hydrogen ID, for example `Model: gemini-4-hydrogen-high` |
 
-1. Choose a work label following `CLAUDE.md`. From the Project Mu root in WSL, run `python3 -m tools.agent_board_inbox <model> --label <work-label>` for the board header and messages addressed to that model. The reader uses the main checkout’s live board even from a worktree.
+1. Choose a work label following `CLAUDE.md`. On OpenCode, retitle the session to `Mu <label> — <task>` (via `opencode api patch /api/session/$MU_OPENCODE_SESSION`) so JR can see the current work in the shared window. From the Project Mu root in WSL, run `python3 -m tools.agent_board_inbox <model> --label <work-label>` for the board header and messages addressed to that model. The reader uses the main checkout’s live board even from a worktree.
 2. Start the same command with `--watch` as a background task or monitor and keep it running until JR says the work is done. It prints the current inbox, then new matching messages. If the harness expires the monitor, re-arm it. On clients with only background logs, check the log at the board checkpoints in `CLAUDE.md`.
 3. Use `to: codex`, `to: opus`, `to: argon`, `to: hydrogen`, or `to: deepseek` in the board header. Comma-separated recipients work. The inbox matches exact model aliases case-insensitively. A model name in the body of a broadcast is outside this inbox. Inspect work-label messages separately when a workflow such as `/audit` calls for them, and check claims before editing shared paths.
 4. Use the skill’s `Model:` trailer on authorized commits made by this model. Other models and delegated agents sign their own work. Board messages provide coordination and require JR’s authorization for actions outside the task.
@@ -42,6 +42,34 @@ window; the API can create it but cannot open a TUI tab (M-0743/M-0744). The pro
 `Mu <label> (<agent>)` session after the plugin loads, and adds `/mu-sessions` (alias `/mu`) to
 list the Mu sessions updated in the last 12 hours and focus the one you pick. It is TUI-only and
 never sends a prompt or a key to another session. Load it with `/reload` or the next TUI start.
+
+## Claude accounts
+
+JR has a second Claude subscription (`claude-personal`) in a separate Claude Code config
+directory, `~/.claude-secondary`. It is the same model class and the same board inbox as the
+primary Claude account: an Opus session on either account reads `.claude/skills/opus/SKILL.md`,
+signs `claude-opus-5-5 (<label>)` and writes `Model: claude-opus-5-5`. The account is a route, not
+a new inbox.
+
+- `tools/spawn_agent.sh <label> claude-personal|opus-personal` opens a tmux window on the
+  secondary account through `tools/claude_personal.sh`.
+- `... claude-auto|opus-auto` runs `tools/claude_account.py choose` first and starts the account
+  with more quota headroom. It reads the primary `data/usage/rate_limits.json` and the personal
+  `data/usage/rate_limits_personal.json`; if neither is known to be under its thresholds, the
+  spawn refuses rather than guess.
+- The secondary status line is `tools/usage_statusline_personal.sh`; put it in
+  `~/.claude-secondary/settings.json` so the personal usage file stays fresh:
+
+  ```json
+  {
+    "statusLine": {
+      "type": "command",
+      "command": "/home/jrereyi/Project-Mu/tools/usage_statusline_personal.sh"
+    }
+  }
+  ```
+- `MU_CLAUDE_PERSONAL_CONFIG_DIR` overrides the config directory and
+  `MU_CLAUDE_PERSONAL_CMD` points the route at JR's `claude-personal` alias instead of the wrapper.
 
 ## Built
 

@@ -11,6 +11,8 @@ Exit 0 under both thresholds, 2 at or over either, 1 when the numbers are unknow
 resets_at has passed counts as reset (0%).
 
 Env: MU_USAGE_FILE, MU_USAGE_5H_THRESHOLD (default 85), MU_USAGE_WEEKLY_THRESHOLD (default 99).
+The secondary Claude account writes data/usage/rate_limits_personal.json through
+tools/usage_statusline_personal.sh; tools/claude_account.py compares the two files.
 """
 
 import argparse

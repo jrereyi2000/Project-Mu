@@ -7,7 +7,7 @@ Provides mockable hooks for unit tests and local simulation.
 
 Reference:
 - docs/done/PC_MIGRATION_PLAN.md §7.5
-- docs/not_started/PRE_PC_WORK_2.md Item A7
+- docs/done/PRE_PC_WORK_2.md Item A7
 """
 from contextlib import contextmanager
 import os

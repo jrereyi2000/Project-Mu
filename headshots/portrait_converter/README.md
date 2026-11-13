@@ -4,7 +4,7 @@ Standalone utility that converts Project Mu player headshots (`static/players/{p
 
 References:
 - `docs/done/PC_MIGRATION_PLAN.md` §9.4 (*Headshots as In-Game Portraits*)
-- `docs/not_started/PRE_PC_WORK_2.md` Item A5 (*Portrait Converter*)
+- `docs/done/PRE_PC_WORK_2.md` Item A5 (*Portrait Converter*)
 
 ---
 

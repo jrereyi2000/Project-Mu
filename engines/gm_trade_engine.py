@@ -29,7 +29,10 @@ from engines.gm_direction import (SLOTS, TRADE_DEADLINE_WEEK, TRADE_POS_WEIGHT, 
 
 # Budget (JR, 2026-10-20)
 IN_SEASON_TARGET = 20                    # JR, 2026-10-20 (was 17), with the 2025 trade shapes below
-TALK_STALL = 0.25                        # share of CPU-to-CPU talks that break down (an estimate; --talk-stall)
+TALK_STALL = 0.64                        # share of CPU-to-CPU talks that break down. Measured, not assumed:
+                                         # P3-08's 2036 weeks 4-8 replay (2026-11-12) had 16 STALLED of 25 talks
+                                         # (0.64), the same mix P1-25 saw pre-unilateral (0.654); the old 0.25
+                                         # under-predicted breakdowns and over-predicted executed trades.
 OFFSEASON_RANGE = (15, 20)               # drawn per offseason: random.Random(f"offseason:{season}")
 DEADLINE_WEIGHT = 3                      # the last two weeks before the deadline weigh 3x
 PRIOR_EXEC = (3, 2)                      # Beta(3, 2): p_exec starts at 0.6

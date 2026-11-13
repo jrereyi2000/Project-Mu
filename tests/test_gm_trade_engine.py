@@ -222,9 +222,11 @@ def test_injury_trigger_only_for_contend_starter():
 
 
 def test_budget_mean_over_seeded_seasons():
-    # 60% approval: a full season lands near the 20 target, ~60% of it in weeks 7-8, mostly rentals
+    # The planner's own target was 20 executed; P3-08's measurement (TALK_STALL = 0.64) puts a full season at
+    # ~13 executors, inside the real 5-21 band, with ~58% of it in weeks 7-8 and mostly rentals. A season no
+    # longer lands near 20 because two thirds of the talks break down; the *observable* is what the band judges.
     r = ge.simulate_season(0.6, 2000, detail=True)
-    assert 17.5 <= r["mean"] <= 21
+    assert 10 <= r["mean"] <= 16 and 5 <= r["mean"] <= 21
     late = r["by_week"][7] + r["by_week"][8]
     assert 0.5 <= late / r["mean"] <= 0.7
     assert r["by_shape"]["RENTAL"] > 4 * r["by_shape"]["SWAP"] > 0
@@ -585,12 +587,14 @@ def test_decided_counts_stalled_but_rejected_players_do_not():
 
 
 def test_simulate_season_with_talk_stall_stays_near_target():
+    """The planner still reaches the season target at the old 25% breakdown assumption (the pre-P3-08 model);
+    P3-08 replaced that *default* with the measured 64% share, which plans ~13 a season (inside the 5-21 band)."""
     old_mean = 18.56                                                # the pre-talk simulation, seed 0, 2000 seasons
     r = ge.simulate_season(0.6, 2000, detail=True, talk_stall=0.25)
     assert 18 <= r["mean"] <= 22
     assert abs(r["mean"] - old_mean) <= 2
     assert ge.simulate_season(0.6, 300, talk_stall=0.25) == ge.simulate_season(0.6, 300, talk_stall=0.25)
-    assert ge.TALK_STALL == 0.25
+    assert ge.TALK_STALL == _trade_flow_2036()["breakdown_share"]
 
 
 def test_player_jr_rejected_this_week_is_not_offered_again():
@@ -899,3 +903,43 @@ def test_read_books_carries_season_stats_form_and_each_gms_card(monkeypatch):
     assert b["gm"][1]["voice_card"] == {"register": "blunt"}
     assert b["gm"][1]["voice_card_source"] == "AUTHORED"
     assert b["gm"][2]["voice_card"] is None and b["gm"][2]["voice_card_source"] is None
+
+
+# ------------------------------------------------- P3-08 trade-flow measurement ----
+def _trade_flow_2036():
+    import json
+    from pathlib import Path
+    path = Path(__file__).parent / "fixtures" / "trade_flow_2036_weeks4_8.json"
+    return json.loads(path.read_text())
+
+
+def test_talk_stall_is_the_measured_2036_breakdown_share():
+    """TALK_STALL is a measurement, not an assumption (P3-08): the 2036 weeks 4-8 replay on a scratch clone of
+    madden_2036 produced 16 STALLED of 25 CPU talks. The constant must follow that receipt, or --simulate-season
+    plans 16 executed trades for a window the live engine fills with 9."""
+    m = _trade_flow_2036()
+    assert m["talks"] == 25 and m["outcomes"]["AGREED"] == 9 and m["outcomes"]["STALLED"] == 16
+    assert abs(ge.TALK_STALL - m["breakdown_share"]) <= 0.01
+
+
+def test_pacing_model_lands_in_the_real_band_at_the_measured_breakdown():
+    """With the measured breakdown the planner agrees with the replay (9 executed, 10.1 predicted) and a full
+    season sits inside the real 5-21 band; the old 0.25 assumption over-predicted the window by ~60%."""
+    m = _trade_flow_2036()
+    window = ge.simulate_season(seasons=500, first_week=4, talk_stall=m["breakdown_share"])
+    assert abs(window - m["executed"]) <= 3                     # the replay measured 9 in this window
+    season = ge.simulate_season(seasons=500, first_week=1, talk_stall=m["breakdown_share"])
+    assert 5 <= season <= 21                                     # TUNING_ACCEPTANCE_THRESHOLDS A4/A5 band
+    old = ge.simulate_season(seasons=500, first_week=4, talk_stall=0.25)
+    assert old > m["executed"] + 3                               # the assumption this replaced
+
+
+def test_the_default_pacing_model_uses_the_measured_value():
+    """`--simulate-season` without --talk-stall must be the measured config, not a stale default."""
+    from contextlib import redirect_stdout
+    import io
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        ge.main(["--simulate-season", "--seasons", "500", "--first-week", "4"])
+    line = buf.getvalue().splitlines()[0]
+    assert "talk stall 0.64" in line
