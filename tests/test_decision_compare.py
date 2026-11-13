@@ -51,6 +51,14 @@ def movement_pair(lo=2025, hi=2026, eligible=720, moved=180):
             "rate": round(moved / eligible, 4) if eligible else None}
 
 
+def inflow(season=2026, newcomers=389, drafted=224, undrafted=165, slots=1869, source="bounded"):
+    return {"seasons": {season: {
+        "newcomers": newcomers, "rookies": newcomers, "veteran_newcomers": 0,
+        "drafted": drafted, "undrafted": undrafted, "class_size": newcomers, "picks": drafted,
+        "split_source": source, "roster_slots": slots,
+        "bound": round(slots / newcomers, 2), "bound_53": round(32 * 53 / newcomers, 2)}}}
+
+
 def observed(**over):
     cc = {2024: cc_entry(between=5), 2025: cc_entry(between=4), 2026: cc_entry(between=5)}
     trades = {s: trade_entry() for s in (2024, 2025, 2026)}
@@ -71,6 +79,7 @@ def observed(**over):
         "draft_by_round": {str(r): {"n": 30, "games_median": 50, "share_started_2plus": v}
                            for r, v in zip(range(1, 8), (0.85, 0.65, 0.48, 0.34, 0.31, 0.15, 0.11))},
         "rookie_usage": {"n": 200, "median_games": 9.0, "share_8plus": 0.56, "share_12plus": 0.36},
+        "player_inflow": inflow(),
         "data": {"regular_weeks_run": 18, "completed_games": 285},
     }
     obs.update(over)
@@ -219,6 +228,42 @@ def test_rookie_usage_excludes_linemen():
     assert out["share_8plus"] == 0.667
 
 
+def test_player_inflow_splits_drafted_and_undrafted_exactly():
+    """P3-06a: with Madden's draft round, the split is exact and veterans first seen are not rookies."""
+    rows = [(1, 2026, 0, 1), (2, 2026, 0, 7), (3, 2026, 0, None), (4, 2026, 5, 2)]
+    out = C.player_inflow(rows, slots={2026: 1700}, classes={2026: 389}, picks={2026: 224})
+    inf = out[2026]
+    assert inf["newcomers"] == 4 and inf["rookies"] == 3
+    assert inf["drafted"] == 2 and inf["undrafted"] == 1
+    assert inf["veteran_newcomers"] == 1
+    assert inf["split_source"] == "exact"
+    assert inf["bound"] == round(1700 / 4, 2)
+    assert inf["bound_53"] == round(1696 / 4, 2)
+
+
+def test_player_inflow_bounds_an_older_database_by_the_pick_count():
+    """P3-06a: a pre-reader-v9 database has no draft round, so the 224-pick class bounds the split.
+
+    The bound is what the 2015-2025 fit recorded on p2c: 389 entrants, 224 picks, 165 undrafted, and
+    1,696 active slots / 389 entrants = 4.36, the real all-comers mean.
+    """
+    rows = [(pid, 2027, 0, None) for pid in range(1, 390)]
+    out = C.player_inflow(rows, slots={2027: 1869}, classes={2027: 389}, picks={2027: 224})
+    inf = out[2027]
+    assert inf["newcomers"] == 389 and inf["split_source"] == "bounded"
+    assert inf["drafted"] == 224 and inf["undrafted"] == 165
+    assert inf["bound"] == round(1869 / 389, 2)
+    assert inf["bound_53"] == round(1696 / 389, 2)          # 4.36, the real all-comers mean
+
+
+def test_player_inflow_without_a_class_is_unknown_not_drafted():
+    out = C.player_inflow([(1, 2030, 0, None)], slots={2030: 1700})
+    inf = out[2030]
+    assert inf["split_source"] == "unknown"
+    assert inf["drafted"] == 0 and inf["undrafted"] == 1
+    assert inf["class_size"] is None and inf["picks"] is None
+
+
 # ------------------------------------------------------------------ scoring
 
 def _gate(report, code):
@@ -229,7 +274,7 @@ def test_all_pass():
     rep = C.compare_decisions(observed(), targets())
     assert rep.overall == C.PASS
     assert all(g.verdict == C.PASS for g in rep.gates if g.verdict != C.REPORT_ONLY)
-    assert rep.counts()[C.PASS] == len(rep.gates) - 2          # the offseason and mid-season reference rows
+    assert rep.counts()[C.PASS] == len(rep.gates) - 3   # inflow, offseason trades and mid-season: report only
 
 
 def test_a_failing_gate_fails_the_report():
@@ -412,7 +457,9 @@ def test_report_is_json_serializable_and_prints_reasons():
     assert "Verdict: INCOMPLETE" in text
     assert "A3.between_seasons" in text and "✓ PASS" in text
     assert "Not measured, and why" in text
-    assert "Not yet computable" in text and "P3-06a" in text
+    assert "Not yet computable" in text and "GM changes per season" in text
+    assert "P3-06a" not in text.split("## Not yet computable")[1]      # the inflow is measured now
+    assert "Player inflow (P3-06a, report only)" in text
     assert "Reported, not gated" in text
 
 
@@ -453,6 +500,11 @@ def _movement_rows():
 
 MOVEMENT_ROWS = _movement_rows()
 DRAFT_ROWS = [(10, 2025, "1", "WR", 15), (11, 2026, "1", "QB", 17), (12, 2027, "2", "HB", 11)]
+# P3-06a inflow rows: (player_id, first signed-or-played season, years_of_experience, draft_round)
+INFLOW_ROWS = [(31, 2026, 0, 1), (32, 2026, 0, 3), (33, 2026, 0, None), (34, 2026, 4, 2)]
+INFLOW_SLOTS = {2026: 1869}
+INFLOW_CLASSES = {2026: 389}
+INFLOW_PICKS = {2026: 224}
 # (player_id, season, position, age, years_of_experience): the roster rows the ended-career readers see
 PLAYER_SEASONS = [(21, 2025, "QB", 31, 8), (21, 2026, "QB", 32, 9),
                   (22, 2025, "QB", 29, 4), (22, 2026, "QB", 30, 5),
@@ -533,6 +585,23 @@ class FakeCursor:
                 self._rows = [(WEEKS.get(p[0], 0),)]
         elif "WITH signed_seasons AS" in s:
             self._rows = self._ended_career_rows(p, career="ps.years_of_experience" in s)
+        elif "FROM information_schema.columns" in s:
+            self._rows = [(1,)]                              # players.draft_round exists in the fake
+        elif "SELECT min(season) FROM player_seasons" in s:
+            self._rows = [(min(INFLOW_SLOTS),)]
+        elif "SELECT season, count(*) FROM inflow_signed" in s:
+            self._rows = [(season, INFLOW_SLOTS[season]) for season in self._seasons(p)
+                          if season in INFLOW_SLOTS]
+        elif "WITH inflow_signed AS" in s:
+            self._rows = [r for r in INFLOW_ROWS if r[1] in self._seasons(p)]
+        elif "SELECT player_id, draft_season FROM draft_prospects" in s:
+            self._rows = []                                  # no linked actual picks in the fake
+        elif "SELECT draft_season, count(*) FROM draft_prospects" in s:
+            self._rows = [(season, INFLOW_CLASSES[season]) for season in self._seasons(p)
+                          if season in INFLOW_CLASSES]
+        elif "SELECT draft_season, count(*) FROM draft_picks" in s:
+            self._rows = [(season, INFLOW_PICKS[season]) for season in self._seasons(p)
+                          if season in INFLOW_PICKS]
         elif "FROM games WHERE status = 'COMPLETED' AND season = ANY" in s:
             self._rows = [(season, GAMES[season]) for season in self._seasons(p) if season in GAMES]
         elif "max(week) FROM games" in s:
@@ -584,6 +653,11 @@ def test_extract_reads_every_gate():
     assert [p["rate"] for p in obs["movement_pairs"]] == [0.25, 0.25, 0.25]
     assert obs["draft_by_round"]["1"]["n"] == 1                       # the 2026 and 2027 classes are too recent
     assert obs["rookie_usage"]["n"] == 2                              # the 2025 WR and the 2026 QB
+    assert obs["player_inflow"]["seasons"][2026]["newcomers"] == 4    # P3-06a: 3 rookies + 1 veteran
+    assert obs["player_inflow"]["seasons"][2026]["drafted"] == 2
+    assert obs["player_inflow"]["seasons"][2026]["undrafted"] == 1
+    assert obs["player_inflow"]["seasons"][2026]["split_source"] == "exact"
+    assert obs["player_inflow"]["seasons"][2026]["seed"] is True       # 2026 is this fake league's first season
     assert obs["data"]["regular_weeks_run"] == 18
 
 
@@ -1896,5 +1970,220 @@ def test_free_agent_retirees_are_counted_in_postgres():
             retire(back, 2039, "R4 Retired Then Came Back")
             assert career(back, 2041) == [(back, 2039, 2035, "WR", 4), (back, 2039, 2038, "WR", 7)]
             assert ages(back, 2041) == [(back, 2039, "WR", 29)]
+        finally:
+            conn.rollback()
+
+
+# ------------------------------------------------------------------ cohort gates, end to end (F4/F5)
+
+COHORT_TABLES = ("player_stats, season_stat_general, player_seasons, depth_charts, draft_prospects, "
+                 "player_retirements, players, games, coach_tenures, coach_hot_seat, staff_moves, "
+                 "gm_trade_proposals, league_office_runs")
+
+
+def _empty_the_league(cur):
+    """Empty the tables a cohort test seeds, inside its own transaction.
+
+    The scratch database may be a copy of a real tuning league (the p2g-shape test needs exactly that), so a
+    gate-level test starts from an empty league rather than depending on every row already in it. TRUNCATE is
+    transactional: the test's `conn.rollback()` puts the database back exactly as it was.
+    """
+    cur.execute(f"TRUNCATE TABLE {COHORT_TABLES} RESTART IDENTITY CASCADE")
+
+
+@pytest.mark.integration
+def test_a6_gates_a_drafted_classes_started_seasons_in_postgres():
+    """F4 end to end on real Postgres, rolled back: the started-season cohort reaches the A6 gates.
+
+    A drafted class of 16 (players.draft_round 1-7 plus linked actual picks): 15 hold their own slot in 8+
+    games of both 2028 and 2029, and one holds it for 7 weeks in 2029 only. `read_started_seasons` is the only
+    route by which a season counts as started, so this proves the cohort A6 scores is the one F4 builds: a
+    measured A6.round1 share of 15/16 (0.9375), never NOT MEASURED.
+    """
+    import psycopg
+    dsn = _scratch_dsn()
+    with psycopg.connect(dsn) as conn:
+        cur = conn.cursor()
+        try:
+            _empty_the_league(cur)
+            cur.execute("SELECT id FROM teams ORDER BY id LIMIT 2")
+            teams = [r[0] for r in cur.fetchall()]
+            if len(teams) < 2:
+                pytest.skip("the scratch database has fewer than two teams")
+            home, away = teams
+            for season in (2028, 2029):
+                for week in range(1, 19):
+                    cur.execute("INSERT INTO games "
+                                "(season, week, home_team_id, away_team_id, status, game_type) "
+                                "VALUES (%s, %s, %s, %s, 'COMPLETED', 'REGULAR_SEASON')",
+                                (season, week, home, away))
+            positions = ["QB", "HB", "WR", "TE", "LT", "LG", "C", "RG", "RT",
+                         "LE", "RE", "DT", "MLB", "LOLB", "ROLB", "CB"]
+            for i, position in enumerate(positions):
+                cur.execute("INSERT INTO players (player_name, draft_round) VALUES (%s, 1) RETURNING id",
+                            (f"A6 Cohort {position}",))
+                pid = cur.fetchone()[0]
+                for season in (2028, 2029):
+                    cur.execute("INSERT INTO player_seasons (player_id, season, team_id, position) "
+                                "VALUES (%s, %s, %s, %s)", (pid, season, home, position))
+                charted = (2028, 2029) if i < 15 else (2029,)   # the 16th: 7 weeks is not a started season
+                for season in charted:
+                    for week in range(1, 8 if i >= 15 else 9):
+                        cur.execute("INSERT INTO depth_charts "
+                                    "(team_id, season, week, position_slot, depth, player_id, source) "
+                                    "VALUES (%s, %s, %s, %s, 1, %s, 'MU_COACH')",
+                                    (home, season, week, position, pid))
+                cur.execute("INSERT INTO draft_prospects "
+                            "(draft_season, full_name, position, player_id, actual_round, actual_pick) "
+                            "VALUES (2028, %s, %s, %s, '1', %s)",
+                            (f"A6 Cohort {position}", position, pid, i + 1))
+            obs = C.extract(cur, 2030, league_current_season=2030)
+            rep = C.compare_decisions(obs, targets())
+            assert obs["draft_by_round"]["1"]["n"] == 16
+            assert obs["draft_by_round"]["1"]["share_started_2plus"] == round(15 / 16, 3)
+            assert _gate(rep, "A6.round1").verdict in (C.PASS, C.FAIL)
+        finally:
+            conn.rollback()
+
+
+@pytest.mark.integration
+def test_a1_a2_gate_the_ended_career_cohort_in_postgres():
+    """F5 end to end on real Postgres, rolled back: the ended-career population reaches the A1/A2 gates.
+
+    Fifteen drafted QBs retire at 29 after six seasons (`years_of_experience` 5); a sixteenth is an unsigned
+    free agent whose last signed-or-played season is 2027, two empty seasons before the 2030 report. All
+    sixteen are the A1/A2 cohort, so both gates are measured (n=16, median length 6, median age 29) rather
+    than NOT MEASURED, and the unsigned free agent is inside them.
+    """
+    import psycopg
+    dsn = _scratch_dsn()
+    with psycopg.connect(dsn) as conn:
+        cur = conn.cursor()
+        try:
+            _empty_the_league(cur)
+            cur.execute("SELECT id FROM teams ORDER BY id LIMIT 1")
+            row = cur.fetchone()
+            if not row:
+                pytest.skip("the scratch database has no teams")
+            team = row[0]
+            for i in range(15):
+                name = f"A1 Cohort Retired {i}"
+                cur.execute("INSERT INTO players (player_name, draft_round) VALUES (%s, 1) RETURNING id",
+                            (name,))
+                pid = cur.fetchone()[0]
+                cur.execute("INSERT INTO player_seasons "
+                            "(player_id, season, team_id, position, age, years_of_experience) "
+                            "VALUES (%s, 2029, %s, 'QB', 29, 5)", (pid, team))
+                cur.execute("INSERT INTO player_retirements (season, player_id, player_name, position) "
+                            "VALUES (2029, %s, %s, 'QB')", (pid, name))
+            cur.execute("INSERT INTO players (player_name, draft_round) "
+                        "VALUES ('A1 Cohort Unsigned', 1) RETURNING id")
+            free_agent = cur.fetchone()[0]
+            cur.execute("INSERT INTO player_seasons "
+                        "(player_id, season, team_id, position, age, years_of_experience) "
+                        "VALUES (%s, 2027, %s, 'QB', 28, 4)", (free_agent, team))
+            obs = C.extract(cur, 2030, league_current_season=2030)
+            rep = C.compare_decisions(obs, targets())
+            assert obs["career_length"]["drafted"]["QB"]["n"] == 16
+            assert obs["career_length"]["drafted"]["QB"]["median"] == 6
+            assert obs["retirement_age"]["drafted"]["QB"]["n"] == 16
+            assert obs["retirement_age"]["drafted"]["QB"]["median"] == 29
+            assert _gate(rep, "A1.QB").verdict == C.PASS
+            assert _gate(rep, "A2.QB").verdict == C.PASS
+        finally:
+            conn.rollback()
+
+
+@pytest.mark.integration
+def test_a_lone_offseason_chart_two_seasons_back_credits_only_its_own_next_season_in_postgres():
+    """A6/JR's no-double-boundary rule on real Postgres, rolled back, in its literal case.
+
+    The audit of `76a22fa` noted the existing no-double-boundary test pairs a (Y-1, 26) chart with the
+    (Y-2, 26) one, so a multi-boundary bug would only tie on `ord` and the test would depend on Postgres's
+    tie order. Here a single (2060, 26) chart is the only chart in the database: it credits 2061 and never
+    2062, with nothing else to break a tie.
+    """
+    import psycopg
+    dsn = _scratch_dsn()
+    with psycopg.connect(dsn) as conn:
+        cur = conn.cursor()
+        try:
+            _empty_the_league(cur)
+            cur.execute("SELECT id FROM teams ORDER BY id LIMIT 2")
+            teams = [r[0] for r in cur.fetchall()]
+            if len(teams) < 2:
+                pytest.skip("the scratch database has fewer than two teams")
+            home, away = teams
+            for season in (2061, 2062):
+                for week in range(1, 11):
+                    cur.execute("INSERT INTO games "
+                                "(season, week, home_team_id, away_team_id, status, game_type) "
+                                "VALUES (%s, %s, %s, %s, 'COMPLETED', 'REGULAR_SEASON')",
+                                (season, week, home, away))
+            cur.execute("INSERT INTO players (player_name, draft_round) VALUES ('Lone Chart WR', 1) "
+                        "RETURNING id")
+            pid = cur.fetchone()[0]
+            for season in (2061, 2062):
+                cur.execute("INSERT INTO player_seasons (player_id, season, team_id, position) "
+                            "VALUES (%s, %s, %s, 'WR')", (pid, season, home))
+            cur.execute("INSERT INTO depth_charts "
+                        "(team_id, season, week, position_slot, depth, player_id, source) "
+                        "VALUES (%s, 2060, 26, 'WR', 1, %s, 'JR')", (home, pid))
+            assert C.read_started_seasons(cur, 2061).get(pid) == {2061}
+            later = C.read_started_seasons(cur, 2062)
+            assert later.get(pid) == {2061}          # 2061 is a real start; 2062 must not be credited
+            assert 2062 not in later.get(pid, set())
+        finally:
+            conn.rollback()
+
+
+@pytest.mark.integration
+def test_player_inflow_measures_a_drafted_and_udfa_class_in_postgres():
+    """P3-06a on real Postgres, rolled back: a class of 20 enters in 2030 — 12 drafted rookies, 5 undrafted
+    rookies and 3 veterans first seen that season — and the measurement reports the exact split and the
+    roster bound. The report-only gate carries the same numbers."""
+    import psycopg
+    dsn = _scratch_dsn()
+    with psycopg.connect(dsn) as conn:
+        cur = conn.cursor()
+        try:
+            _empty_the_league(cur)
+            cur.execute("SELECT id FROM teams ORDER BY id LIMIT 1")
+            row = cur.fetchone()
+            if not row:
+                pytest.skip("the scratch database has no teams")
+            team = row[0]
+            # one earlier season so 2030 is an inflow season, not the league's initial load
+            cur.execute("INSERT INTO players (player_name) VALUES ('Seed Veteran') RETURNING id")
+            seed = cur.fetchone()[0]
+            cur.execute("INSERT INTO player_seasons (player_id, season, team_id, position) "
+                        "VALUES (%s, 2029, %s, 'QB')", (seed, team))
+            for i in range(20):
+                drafted = i < 12
+                veteran = i >= 17
+                cur.execute("INSERT INTO players (player_name, draft_round) VALUES (%s, %s) RETURNING id",
+                            (f"Inflow {i}", 1 + (i % 7) if drafted else None))
+                pid = cur.fetchone()[0]
+                cur.execute("INSERT INTO player_seasons "
+                            "(player_id, season, team_id, position, years_of_experience) "
+                            "VALUES (%s, 2030, %s, 'QB', %s)", (pid, team, 4 if veteran else 0))
+                if drafted:
+                    cur.execute("INSERT INTO draft_prospects "
+                                "(draft_season, full_name, position, player_id, actual_round, actual_pick) "
+                                "VALUES (2030, %s, 'QB', %s, '1', %s)", (f"Inflow {i}", pid, i + 1))
+            cur.execute("INSERT INTO draft_picks (draft_season, round, original_team_id, owner_team_id) "
+                        "SELECT 2030, 1, t.id, t.id FROM (SELECT id FROM teams ORDER BY id LIMIT 15) t")
+            inf = C.read_player_inflow(cur, [2030])["seasons"][2030]
+            assert inf["newcomers"] == 20 and inf["rookies"] == 17
+            assert inf["drafted"] == 12 and inf["undrafted"] == 5
+            assert inf["veteran_newcomers"] == 3
+            assert inf["split_source"] == "exact"
+            assert inf["class_size"] == 12 and inf["picks"] == 15
+            assert inf["roster_slots"] == 20 and inf["bound"] == 1.0
+            obs = C.extract(cur, 2030, league_current_season=2030)
+            rep = C.compare_decisions(obs, targets())
+            gate = _gate(rep, "A1.inflow")
+            assert gate.verdict == C.REPORT_ONLY
+            assert gate.observed == "20 (12 drafted, 5 undrafted, exact)"
         finally:
             conn.rollback()
