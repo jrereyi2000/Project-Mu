@@ -4305,5 +4305,5 @@ INSERT INTO schema_migrations (version, filename, checksum, source) VALUES
     ('2027_02_27_nfl_mirror', '2027_02_27_nfl_mirror.sql', '7b5d61f3fc3427adaf9c029a5ceb6cfa75b55ba93654d27a52d845624204230c', 'init_db.sql'),
     ('2027_02_28_stats_loader_weeks', '2027_02_28_stats_loader_weeks.sql', '33c2d60765e497dfc353545ed60edba2eca28ddc6d8878ac7e6f2603201a105a', 'init_db.sql'),
     ('2027_02_29_stats_counter_season_games', '2027_02_29_stats_counter_season_games.sql', 'ff13b1669af51461b5017d24a967b1c890aca5f389bb328f6686e9b904193151', 'init_db.sql'),
-    ('2027_02_30_fact_gate', '2027_02_30_fact_gate.sql', '9cbd17d5394a40287ed88847e53ae47e68cb19233278916e5555270099f59bb4', 'init_db.sql')
+    ('2027_02_30_fact_gate', '2027_02_30_fact_gate.sql', 'aad7cc6d2b9a4f676ec556a8881c1cf3341aff3a9bc81694345c5986b4123b58', 'init_db.sql')
 ON CONFLICT (version) DO NOTHING;

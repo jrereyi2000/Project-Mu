@@ -8,7 +8,10 @@
 --   rewritten  a correction pass ran and the kept version has no contradiction.
 --   flagged    the article still contradicts its evidence (or the rewrite returned nothing): it is stored
 --              and visible, and this column is how the reading view and editor list find it.
---   skipped    the gate did not judge it (a mock run, MU_NO_LLM=1, or FACT_GATE_ARTICLES=0).
+--   skipped    the gate did not judge it: a live run with the gate switched off (MU_NO_LLM or
+--              FACT_GATE_ARTICLES=0), no article text, or a checker outage (two failed attempts).
+-- A mock run (`live=False`) never runs the gate and stores NULL, which means "not checked", never
+-- "clean".
 -- `fact_gate` keeps the small JSON payload: the checker model, the verdict counts, the contradicted claims
 -- with their evidence quotes, one entry per check, and the kept/discarded contradiction counts. The article
 -- text is never stored in it.
