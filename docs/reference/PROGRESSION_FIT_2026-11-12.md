@@ -237,8 +237,8 @@ Named by all three:
 `STAR_OVR` is the nearest thing to agreement and still fails the test: all three seeds move it **down**, and
 two of three land on **84** (−2), but seed 1 says 83 (−3). `AGE_BAND_OFFSET[5]` disagrees in direction (seed 0
 down, seeds 1 and 2 up). `LEAGUE_TERM_WEIGHT[0][1]` and `LEAGUE_TERM_OVR_WEIGHT[1][1]` each have two seeds
-moving one way and one the other — the latter also carries seed 2's second-largest gain (0.0024) at the value
-that disagrees.
+moving one way and one the other — the latter also gains most on the seed that disagrees (0.0024 on seed 2,
+against 0.0002 and 0.0007).
 
 Named by two seeds (still not a recommendation under the rule): `BAND_GROWTH_PER_SPREAD[2][1]` 0.2 → **0.3** on
 seeds 0 and 1 (the only exact two-seed value), `BAND_GROWTH_PER_SPREAD[0][1]` 0.3 / 0.4,
