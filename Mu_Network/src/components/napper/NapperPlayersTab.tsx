@@ -108,7 +108,7 @@ export function NapperPlayersTab({ leagueId, onSelectPlayer }: NapperPlayersTabP
 
       {/* Roster limit and waiver priority */}
       {roster && (
-        <div style={{ display: "flex", gap: "18px", flexWrap: "wrap", fontSize: "12px", color: "#8a99ad", marginBottom: "12px" }}>
+        <div style={{ display: "flex", gap: "18px", flexWrap: "wrap", fontSize: "var(--fs-12)", color: "#8a99ad", marginBottom: "12px" }}>
           <span>
             Roster <strong style={{ color: rosterFull ? "#fbbf24" : "#e2e8f0" }}>{roster.active}/{roster.limit}</strong> active
             {roster.ir_limit > 0 && <> · IR {roster.ir}/{roster.ir_limit}</>}
@@ -124,24 +124,24 @@ export function NapperPlayersTab({ leagueId, onSelectPlayer }: NapperPlayersTabP
 
       {/* Pending claims and the last run */}
       {(pendingClaims.length > 0 || lastRun.length > 0) && (
-        <div style={{ background: "#1a2332", borderRadius: "10px", border: "1px solid #283850", padding: "12px 16px", marginBottom: "16px", fontSize: "12px" }}>
+        <div style={{ background: "#1a2332", borderRadius: "10px", border: "1px solid #283850", padding: "12px 16px", marginBottom: "16px", fontSize: "var(--fs-12)" }}>
           {pendingClaims.length > 0 && (
             <>
-              <div style={{ color: "#8a99ad", fontWeight: 700, textTransform: "uppercase", fontSize: "11px", marginBottom: "6px" }}>Your waiver claims</div>
+              <div style={{ color: "#8a99ad", fontWeight: 700, textTransform: "uppercase", fontSize: "var(--fs-11)", marginBottom: "6px" }}>Your waiver claims</div>
               {pendingClaims.map((c) => (
                 <div key={c.claim_id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0", color: "#e2e8f0" }}>
                   <span>
                     {c.rank}. Add <strong>{c.add_name}</strong>{c.drop_name && <> · drop {c.drop_name}</>}
                     {c.waiver_week != null && <span style={{ color: "#8a99ad" }}> · week {c.waiver_week} run</span>}
                   </span>
-                  <button onClick={() => cancelClaim(c)} style={{ background: "transparent", border: "1px solid #283850", color: "#8a99ad", padding: "2px 10px", borderRadius: "6px", cursor: "pointer", fontSize: "11px" }}>Cancel</button>
+                  <button onClick={() => cancelClaim(c)} style={{ background: "transparent", border: "1px solid #283850", color: "#8a99ad", padding: "2px 10px", borderRadius: "6px", cursor: "pointer", fontSize: "var(--fs-11)" }}>Cancel</button>
                 </div>
               ))}
             </>
           )}
           {lastRun.length > 0 && (
             <>
-              <div style={{ color: "#8a99ad", fontWeight: 700, textTransform: "uppercase", fontSize: "11px", margin: pendingClaims.length ? "10px 0 6px" : "0 0 6px" }}>
+              <div style={{ color: "#8a99ad", fontWeight: 700, textTransform: "uppercase", fontSize: "var(--fs-11)", margin: pendingClaims.length ? "10px 0 6px" : "0 0 6px" }}>
                 Last waiver run (week {lastRun[0].week})
               </div>
               {lastRun.map((c) => (
@@ -171,7 +171,7 @@ export function NapperPlayersTab({ leagueId, onSelectPlayer }: NapperPlayersTabP
                 color: position === pos ? "#0f1520" : "#8a99ad",
                 fontWeight: position === pos ? "700" : "500",
                 cursor: "pointer",
-                fontSize: "12px",
+                fontSize: "var(--fs-12)",
               }}
             >
               {pos}
@@ -190,7 +190,7 @@ export function NapperPlayersTab({ leagueId, onSelectPlayer }: NapperPlayersTabP
             color: "#e2e8f0",
             padding: "8px 14px",
             borderRadius: "6px",
-            fontSize: "13px",
+            fontSize: "var(--fs-13)",
             width: "240px",
           }}
         />
@@ -198,7 +198,7 @@ export function NapperPlayersTab({ leagueId, onSelectPlayer }: NapperPlayersTabP
 
       {/* Players List Table */}
       <div style={{ background: "#1a2332", borderRadius: "10px", border: "1px solid #283850", overflow: "hidden" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 100px", padding: "10px 16px", borderBottom: "1px solid #283850", color: "#8a99ad", fontSize: "11px", fontWeight: "700", textTransform: "uppercase" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 100px", padding: "10px 16px", borderBottom: "1px solid #283850", color: "#8a99ad", fontSize: "var(--fs-11)", fontWeight: "700", textTransform: "uppercase" }}>
           <span>Player</span>
           <span>Opponent</span>
           <span style={{ textAlign: "right" }}>Proj Pts</span>
@@ -220,7 +220,7 @@ export function NapperPlayersTab({ leagueId, onSelectPlayer }: NapperPlayersTabP
                 padding: "10px 16px",
                 borderBottom: "1px solid #202d40",
                 alignItems: "center",
-                fontSize: "13px",
+                fontSize: "var(--fs-13)",
               }}
             >
               <button
@@ -237,18 +237,18 @@ export function NapperPlayersTab({ leagueId, onSelectPlayer }: NapperPlayersTabP
                 />
                 <div>
                   <div style={{ color: "#e2e8f0", fontWeight: "600" }}>{p.name}</div>
-                  <div style={{ color: "#8a99ad", fontSize: "11px", display: "flex", gap: "6px", alignItems: "center" }}>
+                  <div style={{ color: "#8a99ad", fontSize: "var(--fs-11)", display: "flex", gap: "6px", alignItems: "center" }}>
                     {p.position} · {p.team} <InjuryPill player={p} />
                     {p.on_waivers && (
                       <span title={`Dropped since the last waiver run: claim only, decided in the week ${p.waiver_week} run`}
-                        style={{ background: "rgba(251, 191, 36, 0.15)", color: "#fbbf24", borderRadius: "4px", padding: "0 5px", fontSize: "10px", fontWeight: 700 }}>
+                        style={{ background: "rgba(251, 191, 36, 0.15)", color: "#fbbf24", borderRadius: "4px", padding: "0 5px", fontSize: "var(--fs-10)", fontWeight: 700 }}>
                         WAIVERS · WK {p.waiver_week}
                       </span>
                     )}
                   </div>
                 </div>
               </button>
-              <div style={{ color: "#8a99ad", fontSize: "11px" }}>
+              <div style={{ color: "#8a99ad", fontSize: "var(--fs-11)" }}>
                 <div>{p.kickoff || "Kickoff TBD"}</div>
                 <div>{p.opponent || "Bye week / no matchup"}</div>
               </div>
@@ -268,7 +268,7 @@ export function NapperPlayersTab({ leagueId, onSelectPlayer }: NapperPlayersTabP
                     borderRadius: "6px",
                     padding: "4px 12px",
                     fontWeight: "700",
-                    fontSize: "12px",
+                    fontSize: "var(--fs-12)",
                     cursor: "pointer",
                   }}
                 >
@@ -285,13 +285,13 @@ export function NapperPlayersTab({ leagueId, onSelectPlayer }: NapperPlayersTabP
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}>
           <div style={{ background: "#1a2332", border: "1px solid #283850", borderRadius: "12px", padding: "24px", maxWidth: "420px", width: "90%" }}>
             <h3 style={{ color: "#e2e8f0", marginTop: 0 }}>{selectedAdd.on_waivers ? "Claim" : "Add"} {selectedAdd.name}?</h3>
-            <p style={{ color: "#8a99ad", fontSize: "13px" }}>
+            <p style={{ color: "#8a99ad", fontSize: "var(--fs-13)" }}>
               {selectedAdd.on_waivers
                 ? <>{selectedAdd.name} ({selectedAdd.position} - {selectedAdd.team}) is on waivers. Your claim is decided in the week {selectedAdd.waiver_week} waiver run, in waiver priority order (worst record first).</>
                 : <>Add {selectedAdd.name} ({selectedAdd.position} - {selectedAdd.team}) to your bench now. This transaction will be logged in the league activity feed.</>}
             </p>
             {context.my_players && (
-              <label style={{ display: "block", color: "#8a99ad", fontSize: "12px", marginTop: "12px" }}>
+              <label style={{ display: "block", color: "#8a99ad", fontSize: "var(--fs-12)", marginTop: "12px" }}>
                 {rosterFull ? `Your roster is full (${roster?.active}/${roster?.limit}). Choose a player to drop:` : "Drop a player (optional):"}
                 <select
                   value={dropId}
