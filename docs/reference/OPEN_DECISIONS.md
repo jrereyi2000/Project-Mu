@@ -5,11 +5,10 @@ Nine sections, eleven calls. Each: the question, the options, what it unblocks, 
 recommendation, and the smallest reversible first step. When you answer one on the board, this file is edited
 to say **DECIDED <date> — "your words"**.
 
-**Status after the 2026-11-12 recheck (this pass): 4 calls still open.** DECIDED: **D1** (merge `68f58943`),
-**D3** (P8-06b deferred — improve the writing, then re-read), **D6** (no constant applied; the question belongs
-to P5-06), **D7** (through D1, implicit), **D9-order** (P4-01 is running now, P5-02 held behind its verdict).
-Still open: **D2** (narrowed by `8fbac3e3`), **D4**, **D5**, **D8/P8-13**. Two optional one-liners: pin **P8-15**
-to post-2034 and make **D7** explicit.
+**Status after JR's answers (2026-11-12): nothing is open.** D2 the season line owns the record; D4 correct the
+migration comment; D5 drop the literal `'JR'` fallback; D8/P8-13 settled by the Codex presentation work (one static
+mod, in-process native selection — my brief was stale); P8-15 pinned post-2034; D7 now an explicit call. D1 and D9
+were already decided. **Two of these need a builder** (D2, D5) and one is a docs edit (D4).
 
 ---
 
@@ -37,25 +36,25 @@ P7-00e and P8-12 commits and would silently revert them (M-0852).
 ---
 
 ### D2 · P8-04 F1 — is the record book or the season line authoritative?
-**Still open — but `8fbac3e3` (2026-11-12, P8-04 F2–F5) shrank it.** The reconcile is now one-directional: a
-recorded line may only make a mark *worse*, so it can never upgrade a result (Davis's tie defect is fixed that
-way, in code, without this decision). What is left is exactly the Crawford direction.
-**Question.** Should a recorded season line that makes a mark **worse** override a BOOK row — the only direction
-still allowed — or should BOOK stay authoritative and the tool only report the dispute?
+**DECIDED 2026-11-12 — "The season line always owns the record." (JR).** Option (a): where a recorded season
+line disagrees with a `BOOK` row, the **recorded line wins**, and the rule is applied in **one shared place** so
+every surface agrees — `get_record_book`, `find_records_broken_in_week` (swarm slate + `press_facts`),
+`server/history_api.py` (`#records`) and `records_engine --apply`. Spec §2.9's "the record book is the authority
+for its seasons" is replaced by this rule.
 
-**Options.** (a) Recorded line wins, applied in **one shared place** for `get_record_book`,
-`find_records_broken_in_week`, `press_facts` and `#records`, spec §2.9 updated. (b) BOOK stays authoritative;
-the tool **reports** `source_conflict` ("disputed — do not call it broken") and keeps BOOK's result in both
-directions. (c) Leave it — not viable: one response contradicts itself.
-**Unblocks.** P8-04 D3/F1 CLOSED and the record/citation surfaces agreeing with each other.
-**Evidence.** `data/audit_reports/audit-p8-dossier/p8-04-recheck.md` §D3/F1 (Crawford repro, DB rows);
-`newsroom/db_tools.py` `reconcile_record_events` (the one-directional rule and `kept_book_result`) and
-`get_record_book`'s `records_set_this_season`; `engines/records_engine.py:14`; `PROJECT_SPEC.md:1044` (§2.9).
-Crawford still flips: book 67, recorded 71, new 69 → "ranks" (that is the *worse* direction, so the fix permits it).
-**Recommend.** (b) — no surface disagrees, Davis still fixed, no unconfirmed number becomes a league record, and
-it reverses by keeping BOOK's result instead of the resolved one.
-**First step.** One builder takes the `kept_book_result` branch unconditionally and adds the dispute note to the
-payload; a fake-cursor test asserts BOOK's result plus the note. One file, one test, revert = delete the line.
+**What a builder must undo and do.** `8fbac3e3` made the reconcile **one-directional** (a recorded line may only
+make a mark worse) to fix Davis without this decision. That is now wrong: the reconcile becomes **bidirectional**
+again, and the `kept_book_result` branch goes. The narrow fix is *not* enough — three surfaces still read BOOK, so
+the same awkward case (Crawford: book 67, recorded 71, new 69) would be "ranks" in the tool and "broke" on
+`#records` and in a press fact. One helper, called by all four.
+**Evidence.** `data/audit_reports/audit-p8-dossier/p8-04-recheck.md` §D3/F1; `newsroom/db_tools.py`
+(`reconcile_record_events`, `get_record_book`), `newsroom/swarm_dispatcher.py:446/2403`,
+`newsroom/press_facts.py:507`, `server/history_api.py`, `engines/records_engine.py:14` and its `evaluate`;
+`PROJECT_SPEC.md:1044` (§2.9).
+**First step.** A builder extracts the reconcile into one helper with a BOOK-vs-recorded policy parameter set to
+"recorded wins", calls it from the four surfaces, and adds the fake-cursor test the audit asked for (BOOK 67 /
+recorded 71 / new 69 → "ranks", and the same answer from the top-10 and `records_set_this_season` sections).
+**Reverses by** flipping the parameter; keep the helper either way.
 
 ---
 
@@ -76,36 +75,41 @@ writing. **First step then:** one dry press conference + your blind read (≈$0.
 ---
 
 ### D4 · Fact-gate migration line-11 comment
-**Question.** `db/migrations/2027_02_30_fact_gate.sql:11` describes `skipped` in words that collide with NULL
-("not checked"); the file is applied and its sha is in the ledger — may the comment be corrected?
+**DECIDED 2026-11-12 — "Correct the comment as well." (JR).** Option (b): the line-11 comment is corrected even
+though the file is applied.
 
-**Options.** (a) Leave it (the applied-migration rule: never edit a shipped migration). (b) Correct the comment
-only, accept a sha mismatch, and note the change in the checklist. (c) Leave the file and put the correction in
-spec §7.3 only.
-**Unblocks.** Nothing. It only ends the fact-gate N2 thread.
+**What it costs, so the edit is done safely.** `db/migrate.py:69-74` checksums every file: `status` reports
+`drift` when an applied file's bytes changed (`:136-137`) and `apply` **raises** on a mismatch (`:180-181`). So a
+comment edit needs three things in one commit: (1) the corrected comment; (2) `db/init_db.sql`'s ledger row
+regenerated (`python3 -m db.migrate sync-init-db`, `db/init_db.sql:4309` holds the current
+`9cbd17d5…59bb4`); (3) a checklist/spec note that every existing database will now show
+`2027_02_30_fact_gate` as **one DRIFT row** in `db.migrate status`, by design — do not "fix" it with
+`db.migrate baseline`, which would stamp genuinely missing migrations as applied.
+**What the comment should say.** `skipped` = the gate deliberately did not judge it (mock run, `MU_NO_LLM=1`,
+`FACT_GATE_ARTICLES=0`); the column's NULL = **not checked** (a row written before the migration). The spec
+§7.3 sentence `fix-c-findings` corrected (`ec8cebec`) already has this wording — reuse it verbatim.
 **Evidence.** `db/migrations/2027_02_30_fact_gate.sql:11`; `data/audit_reports/audit-fact-gate-2/report.md:61-64`
-(N2) and `:74` (applied-migration check by sha). **Re-asked twice today** — `fix-c-findings` left it alone in both
-batches (M-0856, M-0857, M-0862: "line-11 comment is JR's decision"), so it is genuinely unanswered, not lost.
-**Recommend.** (a) — it blocks nothing, and editing an applied migration breaks the ledger's sha chain.
-**First step.** None; the N2 wording goes in §7.3, which is already correct (`PROJECT_SPEC.md:2821` needs N1's
-fix to be reworded at the same time).
+(N2) and `:74` (the sha check that kept it untouched); `db/migrate.py:69-74`, `:136-137`, `:180-181`;
+`PROJECT_SPEC.md` §7.3.
+**First step.** A docs-only commit: the comment, the regenerated ledger row, the drift note. No schema change, so
+nothing re-runs.
 
 ---
 
 ### D5 · `--set-by` — require it?
-**Question.** Should `set`/`activate-cleared` require an actor instead of falling back flag → `MU_SET_BY` →
-`MU_AGENT_MODEL` → `'JR'`?
+**DECIDED 2026-11-12 — "Drop the literal chair fullback." (JR).** Read as *drop the literal `'JR'` fallback* —
+option (c); the transcription garbled it, so correct me on the board if that is not what you meant.
 
-**Options.** (a) Require the flag on `shadow`/`active` writes. (b) Keep the chain as is. (c) Keep the chain but
-**drop the literal `'JR'` fallback** for mode-changing writes — refuse when no actor can be identified.
-**Unblocks.** P5-01a's last open question; trustworthy `personality_feature_modes` history.
-**Evidence.** M-0722, M-0810 item 7, M-0812's answer; `docs/reference/P5_01_SHADOW_GATE.md:335-339` (40 P5-01 rows
-read `set_by = JR`, not rewritten); `tools/spawn_agent.sh` exports `MU_AGENT_MODEL` on every route (M-0828 /
-`b8a7170`), so the gap is only a hand-started bare session. **Recheck 2026-11-12: no answer anywhere** — the last
-word on it is `audit-p5-01a`'s sign-off (M-0818), which leaves it open and non-blocking; nothing since.
-**Recommend.** (c) — identification is nearly always available now, and a refusal beats a wrong name.
-**First step.** One-line builder change: replace the `or "JR"` default with an exit 2 on `shadow`/`active` writes
-only, leaving `off` and reads permissive.
+**The change.** `personality/features.py`'s `_actor` keeps its chain — flag → `MU_SET_BY` → `MU_AGENT_MODEL` —
+and loses only the final `or "JR"`. With no actor identifiable, a **`shadow`/`active`** write exits 2 with a
+message naming the flag; `off` and read paths stay permissive, so a kill switch can never be blocked by a
+missing name. Nothing is required that is not already exported on every spawn route (`b8a7170`), so the only
+callers that change behaviour are hand-started bare `claude`/`gemini` sessions.
+**Evidence.** M-0722; `docs/reference/P5_01_SHADOW_GATE.md:335-339` (the 40 P5-01 rows that read `set_by = JR`);
+`tools/spawn_agent.sh` exporting `MU_AGENT_MODEL` on every route; `personality/features.py:_actor`.
+`audit-p5-01a`'s F1 LOW (no `schema_migrations` table → traceback) is a separate, still-open item.
+**First step.** One builder edits `_actor` plus one test per branch (flag, env, model, none→exit 2 on shadow,
+none→ok on off), and adds the P5-01a row note.
 
 ---
 
@@ -126,44 +130,51 @@ row `:367`.
 ---
 
 ### D7 · P3-06a — is the drafted cohort the A1 gate population?
-**DECIDED 2026-11-12, through D1 — the drafted cohort, all-comers 4.36 as the reported floor.** The merge
-(`68f58943`) ticked P3-06a ☑ and carried `d0330764`'s recorded population into
-`docs/reference/TUNING_ACCEPTANCE_THRESHOLDS.md` and the checklist. JR approved the merge that contains it; **if
-he wants this to read as an explicit call rather than an accepted one, say so and it becomes a line in the
-ledger.** Nothing else is blocked either way.
-**Question.** Mu produces ~247 entrants a season (≥224 drafted, ≤20 undrafted, 92% drafted; roster bound 7.57
-seasons); confirm the drafted cohort as the A1 gate population with all-comers 4.36 reported as the floor.
-
-**Options.** (a) Confirm as drafted, floor reported. (b) Gate on all-comers. (c) Report both, gate on neither
-until the first shadow season.
-**Unblocks.** P3-06a ☑, the A1 career-length gate's final population, P3-03's comparison.
+**DECIDED 2026-11-12 — an explicit call: the drafted cohort, with all-comers 4.36 as the reported floor**
+("write it as an explicit call", JR). Mu produces ~247 entrants a season (≥224 drafted, ≤20 undrafted, 92%
+drafted; roster bound 7.57 seasons against 1,869 slots), so the drafted cohort is the gate population and the
+all-comers mean is reported, never gated. Recorded in `TUNING_ACCEPTANCE_THRESHOLDS.md` §0.2/§2 A1/§7 decision 2
+and the P3-06a row, which went ☑ with the D1 merge (`68f58943`, carrying `d0330764`).
+**What it unblocks.** The A1 career-length gate is final: median 5–6 by group, ±1 (±1.5 QB/K/P), measured on
+players with `draft_round BETWEEN 1 AND 7`; P3-03's comparison uses the same population.
 **Evidence.** `docs/reference/TUNING_ACCEPTANCE_THRESHOLDS.md:52`, `:70-71`, `:111-112`, `:308-310`; M-0850
-(the measurement, `d0330764`); checklist `:248` and `:271`.
-**Recommend.** (a) — Madden's own 224-pick class makes the drafted cohort 92% of inflow by construction, so the
-floor is reported but cannot move the gate.
-**First step.** Tick P3-06a in the same merge as D1 (the row is on that branch).
+(the measurement); checklist `:248`, `:271`.
+**Revisit only if** Mu's own inflow shifts the drafted share materially below ~90% in a shadow season.
 
 ---
 
 ### D8 · P8-13 pack-vs-static, and P8-15 portraits
-**Question A (P8-13) — STILL OPEN.** Ship the dynamic presentation work as one static mod with native selection, or
-keep per-game pack switching? **Question B (P8-15) — already answered "not now":** `V2_MASTER_PLAN.md:340` records
-**"Deferred (JR, 2026-11-03)"**; the only thing left is pinning *when*, which the checklist still asks as
-"do-now or post-2034".
+**P8-13 — SETTLED, and my brief was stale. Corrected 2026-11-12 on JR's word: "a lot of the work has been done
+and is being done by Codex. The dynamic presentation mod is actually nearly wrapped up."** I had built this
+section from the checklist row and `docs/not_started/DYNAMIC_PRESENTATION_MOD_PLAN.md`; the live state is in
+**`docs/in_progress/DYNAMIC_PRESENTATION_HANDOFF.md`** (Codex, 2026-11-10/11) and
+`docs/in_progress/DYNAMIC_PRESENTATION_RESEARCH.md`, and the checklist's "decide pack-vs-static" line is itself
+stale. What that work shows:
 
-**Options A.** (a) One static mod for the broadcast variants G2 proved native (v0.5.1 switches native→cyan→native
-in-process), keep packs for crowd/ball/BCA the plan lists as unproven. (b) Keep per-game packs. (c) A runtime
-bridge. **Options B (formality):** (a) confirm post-2034 and leave the one-portrait spike for a free PC slot.
-(b) run the spike now. (c) leave the deferral undated.
-**Unblocks.** P8-13 (XL, the last presentation item) and P8-15 (L, optional; already deferred, blocks nothing).
-**Evidence.** `docs/not_started/DYNAMIC_PRESENTATION_MOD_PLAN.md:153-230` (§Phase 2–6, G2/G3 gates, the Phase 6
-outcome table); checklist `:446`, `:448`; `docs/in_progress/V2_MASTER_PLAN.md:340` (the 2026-11-03 deferral),
-`:510-512`; converter exists at `headshots/portrait_converter/`, nothing writes `PLYR_PORTRAIT`.
-**Recommend.** A: (a) — broadcast variants proven in-process, packs stay where the plan says unproven. B: (a) —
-generated players only arrive from the 2027 class and nothing in 2026–2033 needs a face, so pin it and stop
-re-deciding it.
-**First step.** A: record the Phase 6 outcome in the plan (one paragraph, no code). B: one line in the P8-15 row
-("post-2034; spike when the PC idles"); no work.
+- **The decision is already made and proved:** one static `.fbmod` switching in-process from native Madden
+  context. **v0.5.1 passed same-stadium AFC → NFC → AFC with no reload** (`RESEARCH.md:299`, `:309`, `:553`), and
+  v0.36/v0.37 played the CBS/FOX matchup and replay-out movies in one session (`HANDOFF.md` verified table).
+  Native selection is the accepted route; "no manifest consumer is required for the accepted deterministic rule"
+  (v0.5.1 receipt). No runtime bridge.
+- **What is actually left** (`HANDOFF.md` "Remaining work"): night halftime recovery and trace; source
+  reconciliation (CBS ticker, postseason corners/fonts, banner/QB panels, team ID, touchdown media,
+  timeout/two-minute flows); team logos and broadcast music scoping (shared global slots, per-game ownership
+  undecided); then **consolidating the three research mods into one `.fbmod`**, removing the v0.42/v0.43 diagnostic
+  markers, and running the same-session Franchise matrix on the combined export.
+- **What it explicitly does not establish:** a production replacement for `pipeline/mod_packs.py`, and it says
+  nothing about crowd density or ball/BCA. So packs stay for those three; the broadcast mod is the static half.
+- **Builds on disk:** `data/mod_builds/halftime_{route,outro}_marker/` (v0.42, v0.43 — diagnostics, to be removed
+  before the release), the three research probes, and `verify_output/dynamic_presentation/` (r4–r5 assets).
+  Receipts and hashes are in each `TEST.md`/`install_receipt.json`.
+
+**So there is no pack-vs-static call for you to make.** The one genuine open item is P8-13's *production cut-over*:
+after consolidation, whether to replace `mod_packs.py`'s broadcast routing with the single mod (keeping packs for
+crowd/ball/BCA) — that is a plan question for Codex, not a decision for you.
+
+**P8-15 — DECIDED 2026-11-12: "pin the portraits to post to 2034" (JR).** Explicit, and it supersedes the undated
+2026-11-03 deferral (`V2_MASTER_PLAN.md:340`). No portrait work before 2034; the one-portrait spike is not
+scheduled. `headshots/portrait_converter/` stays as built, and `PLYR_PORTRAIT` stays unwritten. The P8-15 row
+should read "post-2034" instead of "decide do-now or post-2034".
 
 ---
 
@@ -186,5 +197,8 @@ season is provisional until that verdict (`audit-queue`, M-0865).
 
 ---
 
-**Status of the eleven: 4 open (D2, D4, D5, D8/P8-13), 5 decided or deferred (D1, D3, D6, D7, D9), 2 optional
-one-liners (P8-15's date, D7's explicit line).** D2 is the only one holding a builder to a P8-04 verdict.
+**Status of the eleven: nothing open.** Decided 2026-11-12 — D1, D2, D3 (deferred with a trigger), D4, D5, D6
+(deferred), D7 (explicit), D8/P8-13 (settled by the Codex work), D8/P8-15 (post-2034), D9. **Work this
+creates:** D2 (builder, four surfaces + spec §2.9), D5 (builder, `_actor` + tests), D4 (docs + ledger sha). The
+P8-15 and P8-13 checklist rows need one-line corrections (P8-15 "post-2034"; P8-13 no longer "decide
+pack-vs-static").
