@@ -83,6 +83,29 @@ def execute_approved(cur, season, week, log=print):
     return done, refused
 
 
+def week_row(week, rep, executed, refused):
+    """One week's report row. `new` is the number of talks this run actually sourced: `rep["proposals"]` is empty
+    in the all-CPU era because every deal goes to a talk (audit F2), so the old count was always 0. `requested` is
+    the budget's draw, which differs when the search cannot source that many (week 8 asks for 14, sources 10)."""
+    talks = rep.get("talks") or {}
+    outcomes = {}
+    for t in talks.get("talks") or []:
+        outcomes[t.get("status")] = outcomes.get(t.get("status"), 0) + 1
+    new = len(talks.get("talks") or [])
+    return {
+        "week": week,
+        "budget": rep.get("budget"),
+        "new": new,
+        "requested": (rep.get("budget") or {}).get("new"),
+        "talk_outcomes": outcomes,
+        "talks": new,
+        "executed": executed,
+        "refused": refused,
+        "expired": len(rep.get("expired") or []),
+        "rechecked": len(rep.get("rechecked") or []),
+    }
+
+
 def replay(dsn, season, first_week, last_week, *, reset_first=False, use_llm=True, log=print):
     import psycopg
     from engines import gm_trade_engine as ge
@@ -107,23 +130,10 @@ def replay(dsn, season, first_week, last_week, *, reset_first=False, use_llm=Tru
                 rep = ge.run_week(cur, season, week, llm=llm, talk_llm=talk_llm, log=log)
                 executed, refused = execute_approved(cur, season, week, log=log)
                 conn.commit()
-                talks = rep.get("talks") or {}
-                outcomes = {}
-                for t in talks.get("talks") or []:
-                    outcomes[t.get("status")] = outcomes.get(t.get("status"), 0) + 1
-                weeks.append({
-                    "week": week,
-                    "budget": rep.get("budget"),
-                    "new": len(rep.get("proposals") or []),
-                    "talk_outcomes": outcomes,
-                    "talks": len(talks.get("talks") or []),
-                    "executed": executed,
-                    "refused": refused,
-                    "expired": len(rep.get("expired") or []),
-                    "rechecked": len(rep.get("rechecked") or []),
-                })
-                print(f"week {week}: {len(rep.get('proposals') or [])} new, "
-                      f"{len(talks.get('talks') or [])} talks, {executed} executed, {len(refused)} refused")
+                row = week_row(week, rep, executed, refused)
+                weeks.append(row)
+                print(f"week {week}: {row['new']} new ({row['requested']} requested), "
+                      f"{executed} executed, {len(refused)} refused")
             report = diagnostic(cur, season, weeks, cleared)
     finally:
         flush(llm)

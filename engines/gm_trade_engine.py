@@ -8,7 +8,7 @@ the best, writes the rationale (template, or Gemini through engines/gm_rationale
 JR approves on #debug, makes the trade by hand in Madden and confirms; nothing here touches Madden (D7).
 
   python3 -m engines.gm_trade_engine [--season 2036] [--week 4] [--dry-run] [--replace] [--no-llm]
-  python3 -m engines.gm_trade_engine --simulate-season [--talk-stall 0.25] [--approval 0.6] [--seasons 2000]
+  python3 -m engines.gm_trade_engine --simulate-season [--talk-stall 0.64] [--approval 0.6] [--seasons 2000]
 
 A deal with no user-controlled team on either side goes through engines/gm_talks.py (a short CPU-to-CPU talk): an
 agreement is stored APPROVED with `talks:` and `auto_approved`, a breakdown STALLED. Advisory proposals (a user
@@ -31,8 +31,9 @@ from engines.gm_direction import (SLOTS, TRADE_DEADLINE_WEEK, TRADE_POS_WEIGHT, 
 IN_SEASON_TARGET = 20                    # JR, 2026-10-20 (was 17), with the 2025 trade shapes below
 TALK_STALL = 0.64                        # share of CPU-to-CPU talks that break down. Measured, not assumed:
                                          # P3-08's 2036 weeks 4-8 replay (2026-11-12) had 16 STALLED of 25 talks
-                                         # (0.64), the same mix P1-25 saw pre-unilateral (0.654); the old 0.25
-                                         # under-predicted breakdowns and over-predicted executed trades.
+                                         # (0.64), close to the 65.4% of P1-25's post-build (post-unilateral,
+                                         # post-voice) replay; the pre-unilateral sample had 7 of 7 agreeing. The
+                                         # old 0.25 under-predicted breakdowns and over-predicted executions.
 OFFSEASON_RANGE = (15, 20)               # drawn per offseason: random.Random(f"offseason:{season}")
 DEADLINE_WEIGHT = 3                      # the last two weeks before the deadline weigh 3x
 PRIOR_EXEC = (3, 2)                      # Beta(3, 2): p_exec starts at 0.6
