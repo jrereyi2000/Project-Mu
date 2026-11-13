@@ -1194,10 +1194,15 @@ def get_player_scheme_splits(player_identifier: str, seasons: int = 2) -> str:
                     "metric_labels": split_metric_labels(group),
                     "metric_scope": ("Every figure in overall_per_game and in a split's per_game block is a "
                                      "per-game average or count over real games, blended toward his overall "
-                                     "average; a count per game is not a rate. vs_his_average is the percent "
-                                     "change in that per-game value, not a rate or a percentage-point change."),
+                                     "average; a count per game is not a rate. comp_pct and yards_per_attempt "
+                                     "are the exceptions: ratios over his attempts (comp_pct a percentage), not "
+                                     "per-game figures. vs_his_average is the percent change in that value, "
+                                     "never a percentage-point change."),
                     "dimension_scope": {f"{dim} ({desc})": (f"the opponent's season {desc}: a defensive grade, "
-                                                            "not pressure on this player or a game situation")
+                                                            "not pressure on this player or a game situation"
+                                                            + (", and points allowed in the games visible so far "
+                                                               "(season to date mid-season), not a full-season grade"
+                                                               if dim == "scoring_defense" else ""))
                                         for dim, desc in DIMENSIONS.items()},
                     "not_recorded": ["pressure, hurry, blitz, hit and time-to-throw splits",
                                      "interception rate (only interceptions per game is recorded)",
@@ -1976,14 +1981,33 @@ LEADER_CATEGORIES = {
     "sacks_allowed": ("-l.blk_sacks_allowed", "l.blk_sacks_allowed IS NOT NULL", "fewest sacks allowed"),
 }
 
+# The leaders query's SELECT list, in row order. `LEADER_RANK_VALUE` is derived from it, so the
+# figure a category is ordered by and the figure its lines print cannot drift apart from the
+# statement (audit-p8-dossier F4: the SELECT order and the index table were two hand-kept lists,
+# so a reorder could silently print one category's total under another's ranking with every test
+# still passing).
+LEADER_SELECT_COLUMNS = (
+    "l.player_id", "COALESCE(l.full_name, l.player_name)", "COALESCE(ps.position, l.position)",
+    "t.city || ' ' || t.name", "l.games_played",
+    "l.def_tackles", "l.def_sacks", "l.def_tfl", "l.def_ints", "l.def_deflections",
+    "l.def_forced_fumbles", "l.def_fumble_recoveries", "l.def_tds", "l.def_safeties",
+    "l.kick_fgm", "l.kick_fga", "l.kick_fg_long", "l.kick_xpm", "l.kick_xpa", "l.kick_fgm_50", "l.kick_fga_50",
+    "l.punt_punts", "l.punt_average", "l.punt_net_average", "l.punt_inside_20",
+    "l.kr_returns", "l.kr_yards", "l.kr_average", "l.kr_tds",
+    "l.pr_returns", "l.pr_yards", "l.pr_average", "l.pr_tds", "l.blk_sacks_allowed",
+    "ps.years_of_experience",
+)
+
+
+def leader_order_column(category):
+    """The row column `category` is ordered by (the ORDER BY expression without its direction)."""
+    return str(LEADER_CATEGORIES[category][0]).lstrip("-").strip()
+
+
 # Index into the row `get_defense_special_teams_leaders` selects, giving the figure that
 # category actually ranks. `takeaways` is computed from two columns.
-LEADER_RANK_VALUE = {
-    "sacks": 6, "interceptions": 8, "tackles": 5, "tackles_for_loss": 7,
-    "pass_deflections": 9, "forced_fumbles": 10, "defensive_tds": 12,
-    "field_goals": 14, "punting": 23, "kick_returns": 26, "punt_returns": 30,
-    "sacks_allowed": 33,
-}
+LEADER_RANK_VALUE = {cat: LEADER_SELECT_COLUMNS.index(leader_order_column(cat))
+                     for cat in LEADER_CATEGORIES if cat != "takeaways"}
 
 
 def leader_rank_value(row, category):
@@ -2067,14 +2091,7 @@ def get_defense_special_teams_leaders(category: str = "sacks", team_identifier: 
                     if not team_id:
                         return f"Team '{team_identifier}' not found."
                 cur.execute(f"""
-                    SELECT l.player_id, COALESCE(l.full_name, l.player_name), COALESCE(ps.position, l.position),
-                           t.city || ' ' || t.name, l.games_played,
-                           l.def_tackles, l.def_sacks, l.def_tfl, l.def_ints, l.def_deflections,
-                           l.def_forced_fumbles, l.def_fumble_recoveries, l.def_tds, l.def_safeties,
-                           l.kick_fgm, l.kick_fga, l.kick_fg_long, l.kick_xpm, l.kick_xpa, l.kick_fgm_50, l.kick_fga_50,
-                           l.punt_punts, l.punt_average, l.punt_net_average, l.punt_inside_20,
-                           l.kr_returns, l.kr_yards, l.kr_average, l.kr_tds,
-                           l.pr_returns, l.pr_yards, l.pr_average, l.pr_tds, l.blk_sacks_allowed, ps.years_of_experience
+                    SELECT {", ".join(LEADER_SELECT_COLUMNS)}
                     FROM season_stat_lines l
                     LEFT JOIN player_seasons ps ON ps.player_id = l.player_id AND ps.season = l.season
                     LEFT JOIN teams t ON t.id = COALESCE(ps.team_id, l.team_id)
@@ -2996,53 +3013,103 @@ def record_result(new_value, previous_value, better="HIGH"):
     return "broke" if (new > previous) == (str(better or "HIGH").upper() != "LOW") else "ranks"
 
 
+# How good a result is for the holder: used only to keep a recorded line from upgrading one.
+_RESULT_STRENGTH = {"ranks": 0, "tied": 1, "broke": 2}
+
+
+def _recorded_entry(row):
+    """(season, player_id, holder, value) from a recorded row, with or without the player id."""
+    if len(row) == 4:
+        return row[0], row[1], row[2], row[3]
+    season, holder, value = row
+    return season, None, holder, value
+
+
 def reconcile_record_events(events, better_by_category, recorded):
     """Flag a record event whose record-book previous value disagrees with the holder's season line.
 
     The record book carries seeded history (`BOOK`) that can lag the stats: its 2035
     receiving-TD row says 27 while the recorded 2035 season line says 29, so a 2036 29
     was reported as a broken record instead of a tie (`V3_DOSSIER_EVALUATION`, P8-04; the
-    eval database was hand-corrected, the source was not). A stale row must never turn a
-    tie into a broken record, so on a real conflict the recorded line wins: `previous_record`
-    is replaced, `result` is recomputed and `source_conflict` carries both values plus the
-    resolution for the writer.
+    eval database was hand-corrected, the source was not). On a real conflict the recorded
+    line wins — `previous_record` is replaced, `result` is recomputed and `source_conflict`
+    carries both values plus the resolution for the writer.
 
-    `recorded` is {category: [(season, holder, value)]} from season_stats / season_stat_lines.
+    The override is one-directional (audit-p8-dossier F2). It may only make a mark *worse*:
+    the verified previous value is the best over **every** matching holder (so a co-holder
+    whose line confirms the book, or a partial same-name row below it, can never turn a tie
+    into a broken record), and a recorded value that would upgrade the result (below the
+    book's for a HIGH record, above it for a LOW one) leaves the book's value and result in
+    place and is flagged only, with `kept_book_result` true.
+
+    `recorded` is {category: [(season, holder, value)]} or, when the row carries one,
+    {category: [(season, player_id, holder, value)]} from season_stats / season_stat_lines.
+    Matching is by casefolded name and season; where that name covers more than one player id
+    in the season, `source_conflict.same_name_players` reports how many, since the match is a
+    name match and the value used is the best of them (which cannot upgrade the result).
     """
     reconciled = []
     for event in events:
         event = dict(event)
         category, previous = event.get("category"), event.get("previous_record")
+        if previous is None:
+            reconciled.append(event)
+            continue
+        better = better_by_category.get(category, "HIGH")
+        low = str(better).upper() == "LOW"
+        best_value, best_holder, same_name = None, None, 0
         for mention in event.get("previous_holders") or []:
             holder_season = previous_holder_season(mention)
-            if not holder_season or previous is None:
+            if not holder_season:
                 continue
             name, prior_season = holder_season
-            values = [float(value) for season, holder, value in recorded.get(category, [])
-                      if season == prior_season and str(holder).strip().casefold() == name.casefold()]
+            player_ids, values = set(), []
+            for season, player_id, holder, value in map(_recorded_entry, recorded.get(category, [])):
+                if season == prior_season and str(holder).strip().casefold() == name.casefold():
+                    values.append(float(value))
+                    if player_id is not None:
+                        player_ids.add(player_id)
             if not values:
                 continue
-            better = better_by_category.get(category, "HIGH")
-            verified = (min if str(better).upper() == "LOW" else max)(values)
-            if float(previous) == verified:
-                continue
-            resolved = record_result(event.get("value"), verified, better)
-            event.update(
-                previous_record=_num(verified),
-                previous_record_source="recorded season stats",
-                result=resolved,
-                source_conflict={
-                    "previous_holder": f"{name} ({prior_season})",
-                    "book_previous_record": previous,
-                    "recorded_previous_record": _num(verified),
-                    "recorded_source": "season_stats / season_stat_lines",
-                    "result_if_book_used": event.get("result"),
-                    "resolved_result": resolved,
-                    "note": ("The record-book row and the recorded season line disagree. Use the recorded "
-                             "line; never present this event as broken or shattered, and never upgrade a "
-                             "tie to a broken record."),
-                })
-            break
+            same_name = max(same_name, len(player_ids))
+            # The best over every match: max for a HIGH record, min for a LOW one. A value
+            # below the book (above it for LOW) therefore cannot win the comparison.
+            candidate = min(values) if low else max(values)
+            if best_value is None or (candidate < best_value if low else candidate > best_value):
+                best_value, best_holder = candidate, (name, prior_season)
+        if best_value is None:
+            reconciled.append(event)
+            continue
+        if float(previous) == best_value:
+            reconciled.append(event)                    # the recorded line confirms the book
+            continue
+        book_result = event.get("result")
+        resolved = record_result(event.get("value"), best_value, better)
+        kept_book = _RESULT_STRENGTH.get(resolved, 0) > _RESULT_STRENGTH.get(book_result, 0)
+        kept_result = book_result if kept_book else resolved
+        conflict = {
+            "previous_holder": f"{best_holder[0]} ({best_holder[1]})",
+            "book_previous_record": previous,
+            "recorded_previous_record": _num(best_value),
+            "recorded_source": "season_stats / season_stat_lines",
+            "result_if_book_used": book_result,
+            "resolved_result": kept_result,
+            "kept_book_result": kept_book,
+            "note": ("The record-book row and the recorded season line disagree. A recorded line can "
+                     "never make a mark better, only worse, and never upgrades a tie to a broken "
+                     "record, so the record book's value and result stand here and the disagreement is "
+                     "flagged only. Never present this event as broken or shattered, and never describe "
+                     "a tied mark as broken." if kept_book else
+                     "The record-book row and the recorded season line disagree. Use the recorded "
+                     "line; never present this event as broken or shattered, and never upgrade a "
+                     "tie to a broken record."),
+        }
+        if same_name > 1:
+            conflict["same_name_players"] = same_name
+        if not kept_book:
+            event.update(previous_record=_num(best_value),
+                         previous_record_source="recorded season stats")
+        event.update(result=kept_result, source_conflict=conflict)
         reconciled.append(event)
     return reconciled
 
@@ -3228,7 +3295,7 @@ def get_record_book(category: str = None, team_identifier: str = None, season: i
                 recorded = {}
                 for prior in prior_seasons:
                     for row in season_player_values(cur, prior) + season_defense_values(cur, prior):
-                        recorded.setdefault(row[0], []).append((prior, row[3], row[4]))
+                        recorded.setdefault(row[0], []).append((prior, row[2], row[3], row[4]))
                 season_records = reconcile_record_events(season_records,
                                                          {c: info["better"] for c, info in cat_lookup.items()},
                                                          recorded)
@@ -3236,9 +3303,10 @@ def get_record_book(category: str = None, team_identifier: str = None, season: i
                 output["record_scope_note"] = (
                     "NFL all-time, franchise and season top-10 are different scopes; a team mark is not a "
                     "player record. A previous record that disagrees with the holder's recorded season line "
-                    "is flagged source_conflict: the recorded line wins and the event's result is recomputed. "
-                    "Never call a source_conflict mark broken or 'shattered', and never describe a tied mark "
-                    "as broken.")
+                    "is flagged source_conflict: the recorded line wins unless it would make the mark "
+                    "better, which is flagged only (the book's value and result then stand), and the "
+                    "event's result is otherwise recomputed. Never call a source_conflict mark broken or "
+                    "'shattered', and never describe a tied mark as broken.")
 
                 return json.dumps(output, indent=2)
     except Exception as e:
