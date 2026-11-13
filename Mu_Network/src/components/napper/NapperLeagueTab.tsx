@@ -72,11 +72,11 @@ export function NapperLeagueTab({ leagueId, onRestarted }: NapperLeagueTabProps)
 
       {/* Standings Table */}
       <div style={{ marginBottom: "32px" }}>
-        <h3 style={{ color: "#e2e8f0", fontSize: "16px", marginBottom: "12px", display: "flex", alignItems: "center", gap: "8px" }}>
+        <h3 style={{ color: "#e2e8f0", fontSize: "var(--fs-16)", marginBottom: "12px", display: "flex", alignItems: "center", gap: "8px" }}>
           <span>🏆</span> League Standings
         </h3>
         <div style={{ background: "#1a2332", border: "1px solid #283850", borderRadius: "10px", overflow: "hidden" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "40px 2fr 1fr 1fr 1fr 80px", padding: "10px 16px", borderBottom: "1px solid #283850", color: "#8a99ad", fontSize: "11px", fontWeight: "700", textTransform: "uppercase" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "40px 2fr 1fr 1fr 1fr 80px", padding: "10px 16px", borderBottom: "1px solid #283850", color: "#8a99ad", fontSize: "var(--fs-11)", fontWeight: "700", textTransform: "uppercase" }}>
             <span>Rank</span>
             <span>Team & Manager</span>
             <span style={{ textAlign: "center" }}>W-L-T</span>
@@ -94,7 +94,7 @@ export function NapperLeagueTab({ leagueId, onRestarted }: NapperLeagueTabProps)
                 padding: "12px 16px",
                 borderBottom: "1px solid #202d40",
                 alignItems: "center",
-                fontSize: "13px",
+                fontSize: "var(--fs-13)",
                 background: t.is_user ? "rgba(0, 206, 184, 0.05)" : "transparent",
               }}
             >
@@ -103,14 +103,14 @@ export function NapperLeagueTab({ leagueId, onRestarted }: NapperLeagueTabProps)
                 {t.is_user ? <BlueRobotAvatar size={28} /> : <PinkRobotAvatar size={28} />}
                 <div>
                   <div style={{ color: "#e2e8f0", fontWeight: "600" }}>
-                    {t.team_name} {t.is_user && <span style={{ color: "var(--napper-teal)", fontSize: "11px" }}>(You)</span>}
+                    {t.team_name} {t.is_user && <span style={{ color: "var(--napper-teal)", fontSize: "var(--fs-11)" }}>(You)</span>}
                   </div>
-                  <div style={{ color: "#8a99ad", fontSize: "11px", display: "flex", alignItems: "center", gap: "6px" }}>
+                  <div style={{ color: "#8a99ad", fontSize: "var(--fs-11)", display: "flex", alignItems: "center", gap: "6px" }}>
                     <span>{t.manager_handle}</span>
                     {t.is_ai && (
                       <span
                         style={{
-                          fontSize: "10px",
+                          fontSize: "var(--fs-10)",
                           fontWeight: "700",
                           color: ARCHETYPE_METAS[t.persona as NapperManagerArchetype]?.color || "#8a99ad",
                           background: ARCHETYPE_METAS[t.persona as NapperManagerArchetype]?.bgColor || "rgba(255,255,255,0.06)",
@@ -130,11 +130,11 @@ export function NapperLeagueTab({ leagueId, onRestarted }: NapperLeagueTabProps)
               <div style={{ textAlign: "right", color: "#8a99ad" }}>{parseFloat(t.points_against).toFixed(1)}</div>
               <div style={{ textAlign: "center" }}>
                 {idx < 6 ? (
-                  <span style={{ background: "#202d40", color: "var(--napper-teal)", padding: "2px 8px", borderRadius: "10px", fontSize: "11px", fontWeight: "700" }}>
+                  <span style={{ background: "#202d40", color: "var(--napper-teal)", padding: "2px 8px", borderRadius: "10px", fontSize: "var(--fs-11)", fontWeight: "700" }}>
                     #{t.seed ?? idx + 1}
                   </span>
                 ) : (
-                  <span style={{ color: "#64748b", fontSize: "11px" }}>—</span>
+                  <span style={{ color: "#64748b", fontSize: "var(--fs-11)" }}>—</span>
                 )}
               </div>
             </div>
@@ -161,12 +161,12 @@ function BracketSide({ side, winnerId, decided }: { side: NapperPlayoffSide; win
   const lost = decided && side.team_id !== winnerId;
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", padding: "4px 0", opacity: lost ? 0.5 : 1 }}>
-      <span style={{ color: won ? "var(--napper-teal)" : "#e2e8f0", fontSize: "12px", fontWeight: won ? 800 : 600, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+      <span style={{ color: won ? "var(--napper-teal)" : "#e2e8f0", fontSize: "var(--fs-12)", fontWeight: won ? 800 : 600, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
         <span style={{ color: "#8a99ad", marginRight: "6px" }}>#{side.seed}</span>
         {side.team_name ?? "TBD"}
         {side.is_user ? " · You" : ""}
       </span>
-      <span style={{ color: won ? "var(--napper-teal)" : "#cbd5e1", fontSize: "12px", fontWeight: 700, fontFamily: "var(--font-mono, monospace)" }}>
+      <span style={{ color: won ? "var(--napper-teal)" : "#cbd5e1", fontSize: "var(--fs-12)", fontWeight: 700, fontFamily: "var(--font-mono, monospace)" }}>
         {side.score != null ? side.score.toFixed(2) : side.proj ? `Proj ${side.proj.toFixed(1)}` : ""}
       </span>
     </div>
@@ -185,7 +185,7 @@ function BracketGame({ game }: { game: NapperPlayoffGame }) {
 
 function Placeholder({ text }: { text: string }) {
   return (
-    <div style={{ background: "#1a2332", padding: "8px 10px", borderRadius: "6px", marginBottom: "8px", color: "#8a99ad", fontSize: "12px" }}>{text}</div>
+    <div style={{ background: "#1a2332", padding: "8px 10px", borderRadius: "6px", marginBottom: "8px", color: "#8a99ad", fontSize: "var(--fs-12)" }}>{text}</div>
   );
 }
 
@@ -193,15 +193,15 @@ function PlayoffBracket({ playoffs }: { playoffs: NapperPlayoffs }) {
   const [qf, sf, final] = playoffs.rounds;
   const bye = (i: number) => playoffs.byes[i];
   const roundTitle = (r: { label: string; week: number }, gold = false) => (
-    <div style={{ color: gold ? "#ffc107" : "var(--napper-teal)", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", marginBottom: "8px" }}>
+    <div style={{ color: gold ? "#ffc107" : "var(--napper-teal)", fontSize: "var(--fs-11)", fontWeight: 700, textTransform: "uppercase", marginBottom: "8px" }}>
       {r.label} · Wk {r.week}
     </div>
   );
   return (
     <div style={{ marginBottom: "32px" }}>
-      <h3 style={{ color: "#e2e8f0", fontSize: "16px", marginBottom: "12px", display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+      <h3 style={{ color: "#e2e8f0", fontSize: "var(--fs-16)", marginBottom: "12px", display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
         <span>⚔️</span> Playoff Bracket (Weeks 15–17)
-        <span style={{ background: "#202d40", color: "#8a99ad", padding: "2px 8px", borderRadius: "10px", fontSize: "11px", fontWeight: 700 }}>
+        <span style={{ background: "#202d40", color: "#8a99ad", padding: "2px 8px", borderRadius: "10px", fontSize: "var(--fs-11)", fontWeight: 700 }}>
           {STATUS_TEXT[playoffs.status]}
         </span>
       </h3>
@@ -210,7 +210,7 @@ function PlayoffBracket({ playoffs }: { playoffs: NapperPlayoffs }) {
           <div style={{ background: "#131a27", border: "1px solid #202d40", borderRadius: "8px", padding: "12px" }}>
             {roundTitle(qf)}
             {qf.games.map((g, i) => <BracketGame key={i} game={g} />)}
-            <div style={{ color: "#64748b", fontSize: "11px" }}>
+            <div style={{ color: "#64748b", fontSize: "var(--fs-11)" }}>
               Byes: {playoffs.byes.map((b) => `#${b.seed} ${b.team_name}${b.is_user ? " (You)" : ""}`).join(", ")}
             </div>
           </div>
@@ -226,10 +226,10 @@ function PlayoffBracket({ playoffs }: { playoffs: NapperPlayoffs }) {
             {roundTitle(final, true)}
             {final.games.length ? final.games.map((g, i) => <BracketGame key={i} game={g} />) : <Placeholder text="Semifinal winners" />}
             <div style={{ background: "#1a2332", padding: "12px", borderRadius: "6px", textAlign: "center" }}>
-              <div style={{ color: "#ffc107", fontSize: "13px", fontWeight: 700 }}>
+              <div style={{ color: "#ffc107", fontSize: "var(--fs-13)", fontWeight: 700 }}>
                 🏆 {playoffs.champion ? `${playoffs.champion.team_name}${playoffs.champion.is_user ? " (You)" : ""}` : "Napper Champion"}
               </div>
-              <div style={{ color: "#8a99ad", fontSize: "11px", marginTop: "4px" }}>
+              <div style={{ color: "#8a99ad", fontSize: "var(--fs-11)", marginTop: "4px" }}>
                 {playoffs.champion ? `#${playoffs.champion.seed} seed · league champion` : "Decided in Week 17"}
               </div>
             </div>

@@ -148,10 +148,10 @@ export function NapperTradesTab({ leagueId }: NapperTradesTabProps) {
       {/* Header Bar */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
         <div>
-          <h2 style={{ color: "#e2e8f0", margin: "0 0 4px 0", fontSize: "18px" }}>Trade Market</h2>
-          <p style={{ color: "#8a99ad", margin: 0, fontSize: "12px" }}>Review incoming AI trade offers or initiate reciprocal trade proposals.</p>
+          <h2 style={{ color: "#e2e8f0", margin: "0 0 4px 0", fontSize: "var(--fs-18)" }}>Trade Market</h2>
+          <p style={{ color: "#8a99ad", margin: 0, fontSize: "var(--fs-12)" }}>Review incoming AI trade offers or initiate reciprocal trade proposals.</p>
           {deadline && (
-            <p style={{ color: deadline.open ? "#ffc107" : "#ff8798", margin: "6px 0 0", fontSize: "12px", fontWeight: 700 }}>
+            <p style={{ color: deadline.open ? "#ffc107" : "#ff8798", margin: "6px 0 0", fontSize: "var(--fs-12)", fontWeight: 700 }}>
               {deadline.open
                 ? `⏰ Trade deadline: end of Week ${deadline.week}${deadline.current === deadline.week ? " (this week)" : ""}`
                 : `⏰ The trade deadline (end of Week ${deadline.week}) has passed. Rosters change only through waivers and free agency.`}
@@ -169,7 +169,7 @@ export function NapperTradesTab({ leagueId }: NapperTradesTabProps) {
             borderRadius: "6px",
             padding: "8px 16px",
             fontWeight: "700",
-            fontSize: "13px",
+            fontSize: "var(--fs-13)",
             cursor: deadline?.open === false ? "not-allowed" : "pointer",
           }}
         >
@@ -179,7 +179,7 @@ export function NapperTradesTab({ leagueId }: NapperTradesTabProps) {
 
       {/* Pending Proposals Section */}
       <div style={{ marginBottom: "28px" }}>
-        <h3 style={{ color: "#8a99ad", fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "12px" }}>
+        <h3 style={{ color: "#8a99ad", fontSize: "var(--fs-12)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "12px" }}>
           Pending Proposals ({pendingTrades.length})
         </h3>
 
@@ -203,23 +203,23 @@ export function NapperTradesTab({ leagueId }: NapperTradesTabProps) {
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <span style={{ background: "rgba(0, 206, 184, 0.2)", color: "var(--napper-teal)", padding: "2px 8px", borderRadius: "4px", fontSize: "11px", fontWeight: "700" }}>
+                  <span style={{ background: "rgba(0, 206, 184, 0.2)", color: "var(--napper-teal)", padding: "2px 8px", borderRadius: "4px", fontSize: "var(--fs-11)", fontWeight: "700" }}>
                     {trade.initiated_by_ai ? "AI INITIATED" : "PROPOSED"}
                   </span>
-                  <span style={{ color: "#e2e8f0", fontWeight: "600", fontSize: "14px" }}>
+                  <span style={{ color: "#e2e8f0", fontWeight: "600", fontSize: "var(--fs-14)" }}>
                     {trade.proposer.team_name} ({trade.proposer.manager_handle}) → {trade.target.team_name}
                   </span>
                 </div>
                 <div style={{ display: "flex", gap: "8px" }}>
                   <button
                     onClick={() => respondTrade(trade.id, "ACCEPT")}
-                    style={{ background: "var(--napper-teal)", color: "#0f1520", border: "none", padding: "6px 14px", borderRadius: "6px", fontWeight: "700", fontSize: "12px", cursor: "pointer" }}
+                    style={{ background: "var(--napper-teal)", color: "#0f1520", border: "none", padding: "6px 14px", borderRadius: "6px", fontWeight: "700", fontSize: "var(--fs-12)", cursor: "pointer" }}
                   >
                     Accept Trade
                   </button>
                   <button
                     onClick={() => respondTrade(trade.id, "REJECT")}
-                    style={{ background: "#202d40", color: "#ff4a6e", border: "1px solid #ff4a6e", padding: "6px 14px", borderRadius: "6px", fontWeight: "700", fontSize: "12px", cursor: "pointer" }}
+                    style={{ background: "#202d40", color: "#ff4a6e", border: "1px solid #ff4a6e", padding: "6px 14px", borderRadius: "6px", fontWeight: "700", fontSize: "var(--fs-12)", cursor: "pointer" }}
                   >
                     Decline
                   </button>
@@ -229,31 +229,31 @@ export function NapperTradesTab({ leagueId }: NapperTradesTabProps) {
               {/* Trade Details Breakdown */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", background: "#131a27", padding: "12px 16px", borderRadius: "8px", border: "1px solid #202d40" }}>
                 <div>
-                  <div style={{ color: "#8a99ad", fontSize: "11px", fontWeight: "700", textTransform: "uppercase", marginBottom: "6px" }}>You Receive:</div>
+                  <div style={{ color: "#8a99ad", fontSize: "var(--fs-11)", fontWeight: "700", textTransform: "uppercase", marginBottom: "6px" }}>You Receive:</div>
                   {trade.offered_players.map((p: any) => (
                     <div key={p.id} style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "4px" }}>
                       <img src={getPlayerHeadshotUrl(p.player_id ?? p.id, p.headshot_url || `/static/players/${p.id}.webp`, p.espn_id)} alt="" onError={handleImageError} style={{ width: "24px", height: "24px", borderRadius: "50%", objectFit: "cover" }} />
-                      <span style={{ color: "#e2e8f0", fontSize: "13px", fontWeight: "600" }}>{p.name}</span>
+                      <span style={{ color: "#e2e8f0", fontSize: "var(--fs-13)", fontWeight: "600" }}>{p.name}</span>
                       <InjuryPill player={p} />
-                      <span style={{ color: "var(--napper-teal)", fontSize: "11px" }}>{p.position} · {p.proj_fpts != null ? `${Number(p.proj_fpts).toFixed(1)} proj` : ""}</span>
+                      <span style={{ color: "var(--napper-teal)", fontSize: "var(--fs-11)" }}>{p.position} · {p.proj_fpts != null ? `${Number(p.proj_fpts).toFixed(1)} proj` : ""}</span>
                     </div>
                   ))}
                 </div>
                 <div>
-                  <div style={{ color: "#8a99ad", fontSize: "11px", fontWeight: "700", textTransform: "uppercase", marginBottom: "6px" }}>You Give Up:</div>
+                  <div style={{ color: "#8a99ad", fontSize: "var(--fs-11)", fontWeight: "700", textTransform: "uppercase", marginBottom: "6px" }}>You Give Up:</div>
                   {trade.requested_players.map((p: any) => (
                     <div key={p.id} style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "4px" }}>
                       <img src={getPlayerHeadshotUrl(p.player_id ?? p.id, p.headshot_url || `/static/players/${p.id}.webp`, p.espn_id)} alt="" onError={handleImageError} style={{ width: "24px", height: "24px", borderRadius: "50%", objectFit: "cover" }} />
-                      <span style={{ color: "#e2e8f0", fontSize: "13px", fontWeight: "600" }}>{p.name}</span>
+                      <span style={{ color: "#e2e8f0", fontSize: "var(--fs-13)", fontWeight: "600" }}>{p.name}</span>
                       <InjuryPill player={p} />
-                      <span style={{ color: "#cbd5e1", fontSize: "11px" }}>{p.position} · {p.proj_fpts != null ? `${Number(p.proj_fpts).toFixed(1)} proj` : ""}</span>
+                      <span style={{ color: "#cbd5e1", fontSize: "var(--fs-11)" }}>{p.position} · {p.proj_fpts != null ? `${Number(p.proj_fpts).toFixed(1)} proj` : ""}</span>
                     </div>
                   ))}
                 </div>
               </div>
 
               {trade.ai_rationale && (
-                <div style={{ marginTop: "10px", fontSize: "12px", color: "#8a99ad", fontStyle: "italic" }}>
+                <div style={{ marginTop: "10px", fontSize: "var(--fs-12)", color: "#8a99ad", fontStyle: "italic" }}>
                   💡 Manager Rationale: "{trade.ai_rationale}"
                 </div>
               )}
@@ -264,7 +264,7 @@ export function NapperTradesTab({ leagueId }: NapperTradesTabProps) {
 
       {/* Trade History */}
       <div>
-        <h3 style={{ color: "#8a99ad", fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "12px" }}>
+        <h3 style={{ color: "#8a99ad", fontSize: "var(--fs-12)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "12px" }}>
           Recent League Activity
         </h3>
         <div style={{ background: "#1a2332", border: "1px solid #283850", borderRadius: "10px", overflow: "hidden" }}>
@@ -272,7 +272,7 @@ export function NapperTradesTab({ leagueId }: NapperTradesTabProps) {
             <div style={{ padding: "20px", color: "#8a99ad", textAlign: "center" }}>No completed trades yet this season.</div>
           ) : (
             completedTrades.map((t) => (
-              <div key={t.id} style={{ padding: "12px 16px", borderBottom: "1px solid #202d40", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "13px" }}>
+              <div key={t.id} style={{ padding: "12px 16px", borderBottom: "1px solid #202d40", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "var(--fs-13)" }}>
                 <span style={{ color: "#cbd5e1" }}>
                   <b>{t.proposer.team_name}</b> and <b>{t.target.team_name}</b>
                 </span>
@@ -290,12 +290,12 @@ export function NapperTradesTab({ leagueId }: NapperTradesTabProps) {
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, backdropFilter: "blur(4px)" }}>
           <div style={{ background: "#172233", border: "1px solid #283850", borderRadius: "14px", padding: "24px", maxWidth: "680px", width: "95%", maxHeight: "90vh", overflowY: "auto", boxShadow: "0 20px 40px rgba(0,0,0,0.5)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #223147", paddingBottom: "12px", marginBottom: "16px" }}>
-              <h3 style={{ color: "#e2e8f0", margin: 0, fontSize: "18px", fontWeight: "800" }}>Propose Trade</h3>
-              <button onClick={() => setProposeOpen(false)} style={{ background: "transparent", border: "none", color: "#8a99ad", fontSize: "18px", cursor: "pointer", fontWeight: "bold" }}>✕</button>
+              <h3 style={{ color: "#e2e8f0", margin: 0, fontSize: "var(--fs-18)", fontWeight: "800" }}>Propose Trade</h3>
+              <button onClick={() => setProposeOpen(false)} style={{ background: "transparent", border: "none", color: "#8a99ad", fontSize: "var(--fs-18)", cursor: "pointer", fontWeight: "bold" }}>✕</button>
             </div>
 
             {modalError && (
-              <div style={{ background: "rgba(255, 74, 110, 0.15)", border: "1px solid #ff4a6e", color: "#ff4a6e", padding: "10px 14px", borderRadius: "8px", marginBottom: "16px", fontSize: "12px" }}>
+              <div style={{ background: "rgba(255, 74, 110, 0.15)", border: "1px solid #ff4a6e", color: "#ff4a6e", padding: "10px 14px", borderRadius: "8px", marginBottom: "16px", fontSize: "var(--fs-12)" }}>
                 {modalError}
               </div>
             )}
@@ -306,14 +306,14 @@ export function NapperTradesTab({ leagueId }: NapperTradesTabProps) {
               <div>
                 {/* Select Partner */}
                 <div style={{ marginBottom: "16px" }}>
-                  <label style={{ display: "block", color: "#8a99ad", fontSize: "11px", fontWeight: "700", textTransform: "uppercase", marginBottom: "6px" }}>Trade With Team</label>
+                  <label style={{ display: "block", color: "#8a99ad", fontSize: "var(--fs-11)", fontWeight: "700", textTransform: "uppercase", marginBottom: "6px" }}>Trade With Team</label>
                   <select
                     value={selectedTargetTeamId ?? ""}
                     onChange={(e) => {
                       setSelectedTargetTeamId(Number(e.target.value));
                       setRequestedIds([]);
                     }}
-                    style={{ width: "100%", background: "#111827", border: "1px solid #283850", color: "#e2e8f0", padding: "8px 12px", borderRadius: "8px", fontSize: "13px" }}
+                    style={{ width: "100%", background: "#111827", border: "1px solid #283850", color: "#e2e8f0", padding: "8px 12px", borderRadius: "8px", fontSize: "var(--fs-13)" }}
                   >
                     {teamsRoster.filter((t: any) => !t.is_user).map((t: any) => (
                       <option key={t.id} value={t.id}>
@@ -327,7 +327,7 @@ export function NapperTradesTab({ leagueId }: NapperTradesTabProps) {
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" }}>
                   {/* Your Players to Offer */}
                   <div style={{ background: "#121926", border: "1px solid #202d40", borderRadius: "10px", padding: "12px" }}>
-                    <div style={{ color: "var(--napper-teal)", fontSize: "12px", fontWeight: "700", textTransform: "uppercase", marginBottom: "8px" }}>
+                    <div style={{ color: "var(--napper-teal)", fontSize: "var(--fs-12)", fontWeight: "700", textTransform: "uppercase", marginBottom: "8px" }}>
                       You Offer ({offeredIds.length})
                     </div>
                     <div style={{ maxHeight: "240px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "6px" }}>
@@ -345,7 +345,7 @@ export function NapperTradesTab({ leagueId }: NapperTradesTabProps) {
                               background: isChecked ? "rgba(0, 206, 184, 0.15)" : "#182334",
                               border: isChecked ? "1px solid var(--napper-teal)" : "1px solid transparent",
                               cursor: "pointer",
-                              fontSize: "12px",
+                              fontSize: "var(--fs-12)",
                             }}
                           >
                             <input
@@ -360,7 +360,7 @@ export function NapperTradesTab({ leagueId }: NapperTradesTabProps) {
                             <img src={getPlayerHeadshotUrl(p.player_id ?? p.id, p.headshot_url || `/static/players/${p.id}.webp`, p.espn_id)} alt="" onError={handleImageError} style={{ width: "22px", height: "22px", borderRadius: "50%", objectFit: "cover" }} />
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ color: "#e2e8f0", fontWeight: "600", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
-                              <div style={{ color: "#8a99ad", fontSize: "10px", display: "flex", gap: "4px", alignItems: "center" }}>
+                              <div style={{ color: "#8a99ad", fontSize: "var(--fs-10)", display: "flex", gap: "4px", alignItems: "center" }}>
                                 {p.position} · {Number(p.proj_fpts).toFixed(1)} proj <InjuryPill player={p} />
                                 {p.slot === "IR" && <span>· on IR, can't be traded</span>}
                               </div>
@@ -373,7 +373,7 @@ export function NapperTradesTab({ leagueId }: NapperTradesTabProps) {
 
                   {/* Opponent Players to Request */}
                   <div style={{ background: "#121926", border: "1px solid #202d40", borderRadius: "10px", padding: "12px" }}>
-                    <div style={{ color: "#38bdf8", fontSize: "12px", fontWeight: "700", textTransform: "uppercase", marginBottom: "8px" }}>
+                    <div style={{ color: "#38bdf8", fontSize: "var(--fs-12)", fontWeight: "700", textTransform: "uppercase", marginBottom: "8px" }}>
                       You Request ({requestedIds.length})
                     </div>
                     <div style={{ maxHeight: "240px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "6px" }}>
@@ -391,7 +391,7 @@ export function NapperTradesTab({ leagueId }: NapperTradesTabProps) {
                               background: isChecked ? "rgba(56, 189, 248, 0.15)" : "#182334",
                               border: isChecked ? "1px solid #38bdf8" : "1px solid transparent",
                               cursor: "pointer",
-                              fontSize: "12px",
+                              fontSize: "var(--fs-12)",
                             }}
                           >
                             <input
@@ -406,7 +406,7 @@ export function NapperTradesTab({ leagueId }: NapperTradesTabProps) {
                             <img src={getPlayerHeadshotUrl(p.player_id ?? p.id, p.headshot_url || `/static/players/${p.id}.webp`, p.espn_id)} alt="" onError={handleImageError} style={{ width: "22px", height: "22px", borderRadius: "50%", objectFit: "cover" }} />
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ color: "#e2e8f0", fontWeight: "600", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
-                              <div style={{ color: "#8a99ad", fontSize: "10px", display: "flex", gap: "4px", alignItems: "center" }}>
+                              <div style={{ color: "#8a99ad", fontSize: "var(--fs-10)", display: "flex", gap: "4px", alignItems: "center" }}>
                                 {p.position} · {Number(p.proj_fpts).toFixed(1)} proj <InjuryPill player={p} />
                                 {p.slot === "IR" && <span>· on IR, can't be traded</span>}
                               </div>
@@ -420,19 +420,19 @@ export function NapperTradesTab({ leagueId }: NapperTradesTabProps) {
 
                 {/* Optional Trade Rationale */}
                 <div style={{ marginBottom: "20px" }}>
-                  <label style={{ display: "block", color: "#8a99ad", fontSize: "11px", fontWeight: "700", textTransform: "uppercase", marginBottom: "6px" }}>Trade Message / Note (Optional)</label>
+                  <label style={{ display: "block", color: "#8a99ad", fontSize: "var(--fs-11)", fontWeight: "700", textTransform: "uppercase", marginBottom: "6px" }}>Trade Message / Note (Optional)</label>
                   <input
                     type="text"
                     placeholder="e.g., Solidifying my RB depth while sending you a WR1..."
                     value={rationale}
                     onChange={(e) => setRationale(e.target.value)}
-                    style={{ width: "100%", background: "#111827", border: "1px solid #283850", color: "#e2e8f0", padding: "8px 12px", borderRadius: "8px", fontSize: "13px" }}
+                    style={{ width: "100%", background: "#111827", border: "1px solid #283850", color: "#e2e8f0", padding: "8px 12px", borderRadius: "8px", fontSize: "var(--fs-13)" }}
                   />
                 </div>
 
                 {/* Modal Buttons */}
                 <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
-                  <button onClick={() => setProposeOpen(false)} style={{ background: "transparent", border: "1px solid #283850", color: "#8a99ad", padding: "8px 16px", borderRadius: "6px", cursor: "pointer", fontSize: "13px" }}>
+                  <button onClick={() => setProposeOpen(false)} style={{ background: "transparent", border: "1px solid #283850", color: "#8a99ad", padding: "8px 16px", borderRadius: "6px", cursor: "pointer", fontSize: "var(--fs-13)" }}>
                     Cancel
                   </button>
                   <button
@@ -445,7 +445,7 @@ export function NapperTradesTab({ leagueId }: NapperTradesTabProps) {
                       padding: "8px 20px",
                       borderRadius: "6px",
                       fontWeight: "700",
-                      fontSize: "13px",
+                      fontSize: "var(--fs-13)",
                       cursor: submitting ? "not-allowed" : "pointer",
                       opacity: submitting ? 0.7 : 1,
                     }}
