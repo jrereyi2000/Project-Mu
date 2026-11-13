@@ -88,7 +88,7 @@ const PAGE_CSS = `
 .fr-tabs a.active { color: var(--ink); border-bottom-color: var(--team-color, var(--red)); }
 .fr-tab-count { margin-left: 5px; padding: 1px 5px; border-radius: 8px; color: var(--white); background: var(--team-color, var(--red)); font: 700 var(--fs-10) var(--font-mono); }
 .fr-page .team-data-view.fo-view { max-width: var(--container); }
-@media (max-width: 1200px) { .fr-tabs { flex-wrap: wrap; overflow-x: visible; row-gap: 2px; } }
+@media (max-width: 1400px) { .fr-tabs { flex-wrap: wrap; overflow-x: visible; row-gap: 2px; } }
 @media (max-width: 800px) { .fr-head { padding: 22px 16px 0; } .fr-tabs { padding: 0 16px; } }
 `;
 

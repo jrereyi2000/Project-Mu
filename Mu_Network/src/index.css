@@ -1549,8 +1549,9 @@ footer > div:last-child { margin-left: auto; display: flex; gap: 22px; font-size
 }
 
 @media (max-width: 900px) {
-  .brand { margin-right: 20px; }
-  .nav-links { gap: 14px; }
+  .nav-inner { padding: 0 20px; }
+  .brand { margin-right: 18px; }
+  .nav-links { gap: 13px; }
   .nav-links > a, .teams-trigger, .stats-trigger, .fantasy-trigger { font-size: var(--fs-10); }
   .nav-tools { gap: 10px; }
 }
