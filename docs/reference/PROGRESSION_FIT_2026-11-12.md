@@ -2,7 +2,8 @@
 
 **Run 2026-11-12 by `deepseek-v4.1-flash (closeout-next-step)`** against `main` at `a252164`, one day after
 `ded2627` and `e93e417` changed the code the fit replays. Extended the same afternoon at JR's request with five
-seeds on a **full-roster calibration**.
+seeds on a **full-roster calibration**. **§9 records P3-02's corrected-engine re-run**, three seeds that
+finished the same night — measurement only, nothing applied.
 **Measurement only:** the fit patches constants in memory and restores them; nothing was applied to
 `engines/progression.py`, no file in the engine or the fit was edited, no database was read beyond the save
 snapshot. **Not an audit** — anything needing a correctness judgement is marked **unverified — needs audit**.
@@ -16,6 +17,8 @@ unchanged; the notes below say where a claim was about the engine as it stood at
 
 1. **No constant is applied.** The fit's recommendations below (both calibrations) are recorded and stay
    unapplied. The constants question belongs to the first shadow season's reports (P5-06), not to this fit.
+   The corrected-engine re-run (§9) changes none of this: it recommends nothing at one value across its three
+   seeds either.
 2. **The league-shape calibration runs on the full roster.** The live engine calibrates `calibrate_league_term`
    on every staying player and every rookie, through `league_shape_pool` (`engines/progression.py`), not on a
    400-player stride sample: `CALIBRATION_SAMPLE` and its `_stratified` helper are gone (P3-04b, below), so the
@@ -187,3 +190,90 @@ argued, and the star term does the swinging.
 - Scratch, not kept in the tree: `/tmp/opencode/p3fit/{roster_vs_sample.py,fit_fullroster.py,report.py}`.
 - Proposed checklist rows: **P3-04a** (done — this document) and **P3-04b** (the calibration decision), both
   listed in `CLOSE_OUT_NEXT_STEP.md` §5 for JR to paste or drop.
+
+---
+
+## 9. The corrected-engine re-run (P3-02) — completed 2026-11-12
+
+`p3-decision-fit` started three detached five-season fits on 2026-11-12 and signed off while they were still
+running (≈ 51 / 33 / 38 of 200 replays at sign-off); they finished at **21:00–21:01 EST that night**, **200 of
+200 replays each**, in `.claude/worktrees/p3-decision-fit`. `engines/progression.py` and
+`engines/tuning/progression_fit.py` in that worktree are **identical to `main`'s** (`git diff main --
+engines/progression.py engines/tuning/progression_fit.py` there is empty), so this is the engine after both
+fixes — `ded2627` + `e93e417` (R9, the 2036 target season) and `46d1716` (P3-04b, the full-roster
+calibration) — reached through the engine's own path, with no scratch runner.
+
+- **Snapshot:** `/tmp/opencode/p3fit/mu2026.json`, the same `CAREER-MU2026` snapshot as §1: **2,366 rostered
+  players, 349 rookies, calendar year 2026**; start shape 94 at 90+, mean OVR 71.79, mean age 26.06.
+- **Parameters:** 5 seasons, league term on, budget/evaluations 200, seeds 0–2, full-roster calibration
+  (P3-04b's own path), role games `{starter: 14.32, backup: 8.99}`, injured share 0.0224.
+
+| seed | start → after | gain | constants recommended |
+|---|---|---|---|
+| 0 | **0.9544 → 0.9295** | 0.0249 | 10 |
+| 1 | **0.9268 → 0.8688** | 0.0580 | 13 |
+| 2 | **0.9596 → 0.9043** | 0.0553 | 8 |
+
+Mean start **0.9469**, mean after **0.9009**. These are the P3-04a full-roster set's seeds 0–2 to the digit:
+`data/tuning/progression_fit_full_seed{0,1,2}.json` and these three files differ in nothing but
+`meta.built_at`, so the scratch runner's `_stratified`-identity calibration and P3-04b's built-in full-roster
+path produce the same replay at a seed. That is a reproducibility check on both, not a new measurement of a
+new engine.
+
+### Which moves agree across the seeds
+
+Under §0 decision 1 (and the checklist's rule), only a constant the seeds agree on is a recommendation.
+**No constant is named at one value by all three seeds, so this re-run recommends nothing.**
+
+Named by all three:
+
+| constant | engine now | seed 0 | seed 1 | seed 2 |
+|---|---|---|---|---|
+| `STAR_OVR` | 86 | 84 | 83 | 84 |
+| `AGE_BAND_OFFSET[5]` | −0.19 | −0.59 | +0.21 | +0.01 |
+| `LEAGUE_TERM_WEIGHT[0][1]` | 1.0 | 0.9 | 0.9 | 1.1 |
+| `LEAGUE_TERM_OVR_WEIGHT[1][1]` | 0.5 | 0.4 | 0.3 | 0.7 |
+
+`STAR_OVR` is the nearest thing to agreement and still fails the test: all three seeds move it **down**, and
+two of three land on **84** (−2), but seed 1 says 83 (−3). `AGE_BAND_OFFSET[5]` disagrees in direction (seed 0
+down, seeds 1 and 2 up). `LEAGUE_TERM_WEIGHT[0][1]` and `LEAGUE_TERM_OVR_WEIGHT[1][1]` each have two seeds
+moving one way and one the other — the latter also carries seed 2's second-largest gain (0.0024) at the value
+that disagrees.
+
+Named by two seeds (still not a recommendation under the rule): `BAND_GROWTH_PER_SPREAD[2][1]` 0.2 → **0.3** on
+seeds 0 and 1 (the only exact two-seed value), `BAND_GROWTH_PER_SPREAD[0][1]` 0.3 / 0.4,
+`BAND_GROWTH_PER_SPREAD[1][1]` 0.43 / 0.53, `AGE_BAND_OFFSET[4]` +0.21 / +0.61, `UPKEEP_K` 0.7 / 0.6, and — in
+**opposite** directions — `AGE_BAND_OFFSET[0]` −1.06 / −0.66 and `STAR_MAX_AGE` 31 / 34.
+
+From a **single seed**: `AGE_BAND_OFFSET[1]` −0.56, `AGE_BAND_OFFSET[3]` −0.08,
+`BAND_GROWTH_PER_SPREAD[3][1]` 0.33 and `LEAGUE_TERM_OVR_WEIGHT[0][1]` 0.9 on seed 1; `PERF_WEIGHT` 1.25 on
+seed 2. Seed 2's `PERF_WEIGHT` carries the largest single gain in the whole re-run (0.0143) and still appears
+on one seed only.
+
+Full per-target before/after rows and each seed's replayed 90+/mean-OVR/mean-age/exit table are in the three
+report files themselves.
+
+### What this does not change
+
+Nothing is applied. No constant in `engines/progression.py` was edited, no calibration changed, and no file in
+the engine or the fit was touched to make this record. JR's decision of 2026-11-12 stands: **the constants
+question belongs to the first shadow season's reports (P5-06)**, and this re-run does not reopen it.
+`CLOSE_OUT_CHECKLIST.md`'s P3-02 row and `CLOSE_OUT_STATUS.md` now carry the completed result in place of the
+earlier "re-run open" wording.
+
+### How to check the numbers
+
+The reports are git-ignored data in the worktree, not committed:
+
+```sh
+cd /home/jrereyi/Project-Mu/.claude/worktrees/p3-decision-fit
+python3 -c "import json,glob
+for f in sorted(glob.glob('data/tuning/progression_fit_p3fit_seed*.json')):
+    d=json.load(open(f)); print(f, d['seed'], d['score_before'], '->', d['score_after'],
+                                d['evaluations'], '/', d['budget'], 'replays', len(d['recommended']), 'constants')"
+sed -n '1,10p' data/tuning/progression_fit_p3fit_seed{0,1,2}.md   # each header's own score line
+```
+
+Each report's header also carries the snapshot (2,366 rostered, 349 rookies, 2026) and the replay shape (5
+seasons, league term on); the JSON's `meta` records `"applied": false`.
+

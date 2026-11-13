@@ -281,15 +281,21 @@ and merged but not re-checked after later changes.
   `engines/tuning/targets.py` exists (git-ignored data, as the spec says).
 - **P3-02** — `data/tuning/progression_fit_seed{0,1,2}.md|.json` on disk (2026-11-10 19:39), each with the
   ranked-constants table and before/after score. Nothing applied — consistent with "recommends only"
-  (`engines/tuning/progression_fit.py:81`).
+  (`engines/tuning/progression_fit.py:81`). **The corrected-engine re-run finished 2026-11-12 21:00**
+  (`p3-decision-fit`, seeds 0–2, 200 of 200 replays each: **0.9544 → 0.9295, 0.9268 → 0.8688,
+  0.9596 → 0.9043**), and **no constant is named at one value by all three seeds**, so it recommends nothing;
+  the tables and the cross-seed comparison are in `PROGRESSION_FIT_2026-11-12.md` §9. Still nothing applied —
+  the constants question belongs to P5-06.
 - **P3-03** — **PARTIAL**: the real-NFL half exists — `data/tuning/decision_targets.md` §"Career length
   (seasons), by position" with the drafted/all/undrafted split and the 4.36 vs 3.40 reconciliation. The
   "compare with Mu's output" half waits on P5; P3-06a measured the inflow that bounds it.
 - **P3-04** — **PARTIAL**: the verdict exists (`docs/reference/PROGRESSION_DEVELOPMENT_VERDICT.md`, written
   2026-11-11) and its follow-up is *partly built*: `db/migrations/2027_02_26_league_shape_season.sql` adds
   `league_state.shape_season` and `engines/progression.py:1280` now reads `league_shape_season(cur)` instead of
-  the constant 2036. **Not done:** the P3-02 re-run the verdict asks for — every `progression_fit_seed*.md` is
-  dated 2026-11-10, before the fix.
+  the constant 2036. **The P3-02 re-run the verdict asks for is now done:** P3-04a at `a252164` (both
+  calibrations) and the corrected-engine re-run that finished 2026-11-12 (seeds 0–2, full roster) — tables in
+  `PROGRESSION_FIT_2026-11-12.md` §2/§9, nothing applied. The 2026-11-10 fit files remain on disk as the
+  superseded baseline, not as an outstanding item.
 - **P3-05** — NOT FOUND: no retirement base-rate calibration artifact; `docs/FOLLOW_UPS.md` does not list it and
   no plan file covers it.
 - **P3-06** — module + `tests/test_decision_targets.py` (passed) + `TUNING_ACCEPTANCE_THRESHOLDS.md` §2. The
