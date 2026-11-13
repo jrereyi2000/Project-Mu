@@ -1,6 +1,7 @@
 import { useContext, useEffect, useState, type CSSProperties } from "react";
 import { API_BASE } from "../../api";
 import { SystemContext } from "../../context/SystemContext";
+import { accentText } from "../../lib/accent";
 import { getDivision, logo } from "../../lib/gridiron";
 
 export type PowerRankingEntry = {
@@ -104,7 +105,7 @@ export function PowerRankingsPage() {
           const fullName = `${team.city} ${team.name}`;
           const movement = team.movement;
           return (
-            <article className="ranking-entry" id={`rank-${abbr}`} key={team.team_id} style={team.team_color ? ({ "--team-color": team.team_color } as CSSProperties) : undefined}>
+            <article className="ranking-entry" id={`rank-${abbr}`} key={team.team_id} style={team.team_color ? ({ "--team-color": team.team_color, "--accent-text": accentText(team.team_color) } as CSSProperties) : undefined}>
               <div className="ranking-number">{String(team.rank).padStart(2, "0")}</div>
               <div className="ranking-team-lockup">
                 <img src={logo(team.abbr)} alt={`${fullName} logo`} />

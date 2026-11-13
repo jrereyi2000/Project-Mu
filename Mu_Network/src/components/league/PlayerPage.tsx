@@ -1,6 +1,7 @@
 import { useContext, useEffect, useState } from "react";
 import { API_BASE } from "../../api";
 import { SystemContext } from "../../context/SystemContext";
+import { accentText } from "../../lib/accent";
 import { Chevron, DEFAULT_AVATAR, getPlayerHeadshot, handleHeadshotError, logo } from "../../lib/gridiron";
 import PlayerHonors from "../history/PlayerHonors";
 import PlayerCareerPath from "./PlayerCareerPath";
@@ -204,7 +205,13 @@ export function PlayerPage({ playerId }: { category?: string; playerId: number }
   const playerStories: any[] = Array.isArray(playerData.articles) ? playerData.articles : [];
 
   return (
-    <main className="player-page" style={{ "--team-color": player.team_color || "#e31837" } as React.CSSProperties}>
+    <main
+      className="player-page"
+      style={{
+        "--team-color": player.team_color || "#e31837",
+        "--accent-text": accentText(player.team_color || "#e31837"),
+      } as React.CSSProperties}
+    >
       <section className="player-profile-hero">
         <div className="player-profile-inner">
           <div className="player-portrait" aria-label="Player portrait placeholder">
@@ -388,7 +395,7 @@ export function PlayerPage({ playerId }: { category?: string; playerId: number }
                       <td>
                         <strong>{s.season}</strong>
                         {s.history && <span className="career-history-tag" title="Reconstructed league history (2026–2034)">hist</span>}
-                        {isSelected && <span style={{ marginLeft: "6px", color: "var(--team-color, #e31837)", fontSize: "11px" }}>●</span>}
+                        {isSelected && <span style={{ marginLeft: "6px", color: "var(--accent-text, var(--red-text))", fontSize: "var(--fs-11)" }}>●</span>}
                       </td>
                       <td><a href={`#team-${s.team_abbr.toLowerCase()}`} onClick={(e) => e.stopPropagation()}><img src={logo(s.team_abbr.toLowerCase())} alt="" /><span>{s.team_name}</span></a></td>
                       <td>{s.gp || 0}</td>

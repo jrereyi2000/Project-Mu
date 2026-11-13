@@ -1,6 +1,7 @@
 import { useContext, useEffect, useState } from "react";
 import { API_BASE } from "../../api";
 import { SystemContext } from "../../context/SystemContext";
+import { accentText } from "../../lib/accent";
 import { Chevron, getDivision, getTeamPosition, logo, type Team } from "../../lib/gridiron";
 
 export function SchedulePage() {
@@ -221,7 +222,13 @@ export function TeamSchedulePage({ team }: { team: Team }) {
   const divisionOrdinal = ["1st", "2nd", "3rd", "4th"][divisionPosition - 1];
 
   return (
-    <main className="team-schedule-page" style={{ "--team-color": teamData?.team?.team_color || "#e31837" } as React.CSSProperties}>
+    <main
+      className="team-schedule-page"
+      style={{
+        "--team-color": teamData?.team?.team_color || "#e31837",
+        "--accent-text": accentText(teamData?.team?.team_color || "#e31837"),
+      } as React.CSSProperties}
+    >
       <section className="team-schedule-masthead">
         <div className="team-schedule-identity">
           <img src={logo(team.abbr)} alt={`${team.name} logo`} />
