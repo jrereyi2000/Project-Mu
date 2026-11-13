@@ -19,11 +19,11 @@ const SC_CSS = `
 .sc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
 .sc-card { padding: 16px 18px; display: flex; flex-direction: column; gap: 6px; background: var(--white); border-top: 3px solid var(--gray-100); }
 .sc-card.sc-full { border-top-color: #b8860b; }
-.sc-card > span { color: var(--gray-500); font: 700 8px var(--font-mono); letter-spacing: .07em; text-transform: uppercase; }
-.sc-card .sc-name { font: 700 13px var(--font-sans); }
-.sc-card .sc-salary { font: 700 26px var(--font-mono); letter-spacing: -.05em; }
-.sc-card .sc-years { color: #55575d; font: 600 10px var(--font-mono); }
-.sc-badge { align-self: flex-start; padding: 3px 8px; border-radius: 3px; color: var(--white); background: #b8860b; font: 700 8px var(--font-mono); letter-spacing: .05em; text-transform: uppercase; }
+.sc-card > span { color: var(--text-muted); font: 700 var(--fs-10) var(--font-mono); letter-spacing: .07em; text-transform: uppercase; }
+.sc-card .sc-name { font: 700 var(--fs-13) var(--font-sans); }
+.sc-card .sc-salary { font: 700 var(--fs-24) var(--font-mono); letter-spacing: -.05em; }
+.sc-card .sc-years { color: #55575d; font: 600 var(--fs-10) var(--font-mono); }
+.sc-badge { align-self: flex-start; padding: 3px 8px; border-radius: 3px; color: var(--white); background: #b8860b; font: 700 var(--fs-10) var(--font-mono); letter-spacing: .05em; text-transform: uppercase; }
 `;
 
 function years(n: number): string {

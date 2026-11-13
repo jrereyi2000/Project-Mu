@@ -31,34 +31,34 @@ const SOURCE_LABEL = { MADDEN: "Madden's chart", MU_COACH: "Coaching staff", JR:
 
 const DC_CSS = `
 .fr-dc-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 18px; }
-.fr-dc-bar .fr-grow { flex: 1; color: var(--gray-500); font: 600 9px var(--font-mono); }
+.fr-dc-bar .fr-grow { flex: 1; color: var(--text-muted); font: 600 var(--fs-10) var(--font-mono); }
 .fr-dc-group + .fr-dc-group { margin-top: 30px; }
-.fr-dc-group h3 { margin: 0 0 10px; color: var(--gray-500); font: 700 9px var(--font-mono); letter-spacing: .1em; text-transform: uppercase; }
+.fr-dc-group h3 { margin: 0 0 10px; color: var(--text-muted); font: 700 var(--fs-10) var(--font-mono); letter-spacing: .1em; text-transform: uppercase; }
 .fr-dc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }
 .fr-slot { background: var(--white); border-top: 3px solid var(--ink); }
 .fr-slot.warn { border-top-color: var(--red); }
 .fr-slot.changed { box-shadow: inset 0 0 0 1px #e0a800; }
 .fr-slot header { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; padding: 10px 12px 6px; }
-.fr-slot header strong { font: 700 13px var(--font-mono); }
-.fr-slot header small { color: var(--gray-500); font: 600 8px var(--font-mono); text-transform: uppercase; letter-spacing: .04em; }
+.fr-slot header strong { font: 700 var(--fs-13) var(--font-mono); }
+.fr-slot header small { color: var(--text-muted); font: 600 var(--fs-10) var(--font-mono); text-transform: uppercase; letter-spacing: .04em; }
 .fr-slot ol { margin: 0; padding: 0 0 6px; list-style: none; }
 .fr-slot li { display: grid; grid-template-columns: 18px 1fr auto; align-items: center; gap: 6px; min-height: 30px; padding: 0 12px; border-top: 1px solid var(--gray-100); cursor: pointer; user-select: none; }
 .fr-slot li:hover { background: #f5f4f1; }
 .fr-slot li.sel { background: var(--ink); color: var(--white); }
 .fr-slot li.sel small, .fr-slot li.sel i { color: #c2c0bb; }
 .fr-slot li.over { outline: 2px dashed var(--team-color, var(--red)); outline-offset: -2px; }
-.fr-slot li i { color: var(--gray-300); font: 700 9px var(--font-mono); font-style: normal; }
-.fr-slot li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 11px var(--font-sans); }
-.fr-slot li small { color: var(--gray-500); font: 600 8px var(--font-mono); white-space: nowrap; }
-.fr-slot li.injured span { color: var(--red); }
+.fr-slot li i { color: var(--gray-300); font: 700 var(--fs-10) var(--font-mono); font-style: normal; }
+.fr-slot li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 var(--fs-11) var(--font-sans); }
+.fr-slot li small { color: var(--text-muted); font: 600 var(--fs-10) var(--font-mono); white-space: nowrap; }
+.fr-slot li.injured span { color: var(--accent-text, var(--red-text)); }
 .fr-slot li.sel.injured span { color: #ff9aa9; }
-.fr-inj { margin-left: 4px; padding: 1px 4px; border-radius: 2px; color: var(--white); background: var(--red); font: 700 7px var(--font-mono); }
-.fr-slot .fr-empty-slot { padding: 8px 12px 10px; color: var(--gray-300); font: 600 9px var(--font-mono); }
+.fr-inj { margin-left: 4px; padding: 1px 4px; border-radius: 2px; color: var(--white); background: var(--red); font: 700 var(--fs-10) var(--font-mono); }
+.fr-slot .fr-empty-slot { padding: 8px 12px 10px; color: var(--gray-300); font: 600 var(--fs-10) var(--font-mono); }
 .fr-suggest { margin-bottom: 22px; padding: 18px 20px; background: var(--white); border-top: 3px solid var(--team-color, var(--red)); }
-.fr-suggest h3 { margin: 0 0 4px; font: 700 18px var(--font-sans); letter-spacing: -.02em; }
-.fr-suggest p { margin: 0 0 12px; color: #55575d; font: 500 10px/1.5 var(--font-mono); }
+.fr-suggest h3 { margin: 0 0 4px; font: 700 var(--fs-18) var(--font-sans); letter-spacing: -.02em; }
+.fr-suggest p { margin: 0 0 12px; color: #55575d; font: 500 var(--fs-10)/1.5 var(--font-mono); }
 .fr-suggest ul { margin: 0 0 14px; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 6px 16px; max-height: 260px; overflow: auto; }
-.fr-suggest li { font: 500 10px/1.5 var(--font-mono); color: #55575d; }
+.fr-suggest li { font: 500 var(--fs-10)/1.5 var(--font-mono); color: #55575d; }
 .fr-suggest li b { color: var(--ink); }
 .fr-suggest footer { display: flex; gap: 8px; }
 `;

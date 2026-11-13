@@ -64,32 +64,32 @@ type State =
 const RC_CSS = `
 .rc-overall { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin-bottom: 18px; padding: 18px 20px; background: var(--white); border-top: 3px solid var(--ink); }
 .rc-overall .rc-badge { min-width: 64px; padding: 10px 14px; text-align: center; color: var(--white); background: var(--ink); }
-.rc-overall .rc-badge strong { display: block; font: 700 30px/1 var(--font-sans); letter-spacing: -.04em; }
-.rc-overall .rc-badge span { font: 700 8px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
+.rc-overall .rc-badge strong { display: block; font: 700 var(--fs-28)/1 var(--font-sans); letter-spacing: -.04em; }
+.rc-overall .rc-badge span { font: 700 var(--fs-10) var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
 .rc-overall dl { margin: 0; display: flex; flex-wrap: wrap; gap: 22px; }
-.rc-overall dt { color: var(--gray-500); font: 700 8px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
-.rc-overall dd { margin: 3px 0 0; font: 700 16px var(--font-mono); letter-spacing: -.03em; }
-.rc-overall dd small { margin-left: 5px; color: var(--gray-500); font: 600 9px var(--font-mono); }
+.rc-overall dt { color: var(--text-muted); font: 700 var(--fs-10) var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
+.rc-overall dd { margin: 3px 0 0; font: 700 var(--fs-16) var(--font-mono); letter-spacing: -.03em; }
+.rc-overall dd small { margin-left: 5px; color: var(--text-muted); font: 600 var(--fs-10) var(--font-mono); }
 .rc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
 .rc-tile { padding: 12px 14px; background: var(--white); border-top: 3px solid var(--gray-100); display: flex; flex-direction: column; gap: 4px; }
-.rc-tile span { color: var(--gray-500); font: 700 7px var(--font-mono); letter-spacing: .07em; text-transform: uppercase; }
-.rc-tile strong { font: 700 26px var(--font-mono); letter-spacing: -.05em; }
+.rc-tile span { color: var(--text-muted); font: 700 var(--fs-10) var(--font-mono); letter-spacing: .07em; text-transform: uppercase; }
+.rc-tile strong { font: 700 var(--fs-24) var(--font-mono); letter-spacing: -.05em; }
 .rc-tile.good { border-top-color: #2e7d32; }
 .rc-tile.mid { border-top-color: var(--gray-100); }
 .rc-tile.bad { border-top-color: var(--red); }
 .rc-tile.good strong { color: #2e7d32; }
-.rc-tile.bad strong { color: var(--red); }
+.rc-tile.bad strong { color: var(--accent-text, var(--red-text)); }
 .rc-upgrade { margin-bottom: 10px; padding: 14px 16px; background: var(--white); border-left: 3px solid var(--gray-100); }
 .rc-upgrade header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin-bottom: 8px; }
-.rc-upgrade header strong { font: 700 13px var(--font-sans); }
-.rc-upgrade header .rc-grade { font: 700 15px var(--font-mono); }
-.rc-upgrade header small { color: var(--gray-500); font: 600 9px var(--font-mono); text-transform: uppercase; }
+.rc-upgrade header strong { font: 700 var(--fs-13) var(--font-sans); }
+.rc-upgrade header .rc-grade { font: 700 var(--fs-15) var(--font-mono); }
+.rc-upgrade header small { color: var(--text-muted); font: 600 var(--fs-10) var(--font-mono); text-transform: uppercase; }
 .rc-policy { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px 14px; background: var(--white); border-top: 1px solid var(--gray-100); }
-.rc-policy strong { min-width: 130px; font: 700 12px var(--font-sans); }
-.rc-policy small { color: var(--gray-500); font: 600 9px var(--font-mono); }
+.rc-policy strong { min-width: 130px; font: 700 var(--fs-12) var(--font-sans); }
+.rc-policy small { color: var(--text-muted); font: 600 var(--fs-10) var(--font-mono); }
 .rc-policy .fr-btn { margin-left: auto; }
-.rc-summary { margin: 0 0 14px; color: #55575d; font: 500 10px/1.6 var(--font-mono); }
-.rc-sub { margin: 14px 0 8px; color: var(--gray-500); font: 700 9px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
+.rc-summary { margin: 0 0 14px; color: #55575d; font: 500 var(--fs-10)/1.6 var(--font-mono); }
+.rc-sub { margin: 14px 0 8px; color: var(--text-muted); font: 700 var(--fs-10) var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
 `;
 
 function gradeTone(grade: string): "good" | "mid" | "bad" {

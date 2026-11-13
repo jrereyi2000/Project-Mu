@@ -12,15 +12,15 @@ type Filter = "Injured" | "IR" | "All";
 const MED_CSS = `
 .fr-med { min-width: 760px; }
 .fr-med td:nth-child(3) { color: #55575d; font-weight: 400; background: transparent; }
-.fr-status { padding: 3px 8px; border-radius: 3px; font: 700 8px var(--font-mono); letter-spacing: .05em; }
+.fr-status { padding: 3px 8px; border-radius: 3px; font: 700 var(--fs-10) var(--font-mono); letter-spacing: .05em; }
 .fr-status.OUT { color: var(--white); background: var(--red); }
 .fr-status.DOUBTFUL { color: var(--ink); background: #f7c9a1; }
 .fr-status.QUESTIONABLE { color: var(--ink); background: #fff0b8; }
 .fr-status.HEALTHY { color: var(--ink); background: #e6efe4; }
 .fr-med-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 22px; }
 .fr-med-summary article { padding: 16px 18px; background: var(--white); border-top: 3px solid var(--ink); display: flex; flex-direction: column; gap: 6px; }
-.fr-med-summary span { color: var(--gray-500); font: 700 8px var(--font-mono); letter-spacing: .07em; text-transform: uppercase; }
-.fr-med-summary strong { font: 700 26px var(--font-mono); letter-spacing: -.05em; }
+.fr-med-summary span { color: var(--text-muted); font: 700 var(--fs-10) var(--font-mono); letter-spacing: .07em; text-transform: uppercase; }
+.fr-med-summary strong { font: 700 var(--fs-24) var(--font-mono); letter-spacing: -.05em; }
 @media (max-width: 560px) { .fr-med-summary { grid-template-columns: 1fr 1fr; } }
 `;
 
