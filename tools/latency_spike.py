@@ -51,6 +51,11 @@ def _summary(durations):
     }
 
 
+def _cost_usd(cost):
+    """A rounded dollar amount, or None for an unpriced model: `estimate_cost` says None, not $0."""
+    return None if cost is None else round(cost, 6)
+
+
 def _write(name, payload):
     os.makedirs(DEFAULT_OUT, exist_ok=True)
     path = os.path.join(DEFAULT_OUT, f"{name}_{time.strftime('%Y%m%d_%H%M%S')}.json")
@@ -100,7 +105,7 @@ def run_inbox(calls=20, model=None):
     payload = {"kind": "inbox-latency-spike", "when": time.strftime("%Y-%m-%d %H:%M:%S"),
                "model": getattr(llm, "model_name", None) or model,
                "calls": int(calls), "failures": failures, "prompt_chars": len(prompt),
-               "latency": _summary(durations), "tokens": totals, "cost_usd": round(cost, 6)}
+               "latency": _summary(durations), "tokens": totals, "cost_usd": _cost_usd(cost)}
     path = _write("inbox", payload)
     print(json.dumps({k: v for k, v in payload.items() if k != "tokens"}, indent=2))
     print(f"tokens: {totals}")
@@ -163,7 +168,7 @@ def run_press(dsn, season, week, team, model=None, allow_active=False):
     payload = {"kind": "press-latency-spike", "when": time.strftime("%Y-%m-%d %H:%M:%S"),
                "dsn": dsn, "season": int(season), "week": int(week), "team": team, "model": model_name,
                "wall_s": round(wall, 2), "latency": _summary(llm.durations), "tokens": tokens,
-               "cost_usd": round(estimate_cost(model_name, tokens), 6), "run_week": summary}
+               "cost_usd": _cost_usd(estimate_cost(model_name, tokens)), "run_week": summary}
     path = _write("press", payload)
     print(json.dumps({k: v for k, v in payload.items() if k != "tokens"}, indent=2))
     print(f"tokens: {tokens}")

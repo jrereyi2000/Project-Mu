@@ -700,7 +700,7 @@ def _model_client(model: str):
     raises from the transport rather than silently writing through Gemini."""
     from newsroom.tool_loop.go_transport import go_client, is_go_model
     if is_go_model(model):
-        return go_client()
+        return go_client(label="social_publish")
     return _gemini_client()
 
 

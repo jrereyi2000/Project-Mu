@@ -380,7 +380,7 @@ def get_go_client() -> Any:
     global _GO_CLIENT
     if _GO_CLIENT is None:
         from newsroom.tool_loop.go_transport import go_client
-        _GO_CLIENT = go_client()
+        _GO_CLIENT = go_client(label="llm_provider")
     return _GO_CLIENT
 
 
@@ -643,6 +643,19 @@ def _price_for(norm: str):
     return best
 
 
+def _go_id(norm: str) -> str:
+    """A normalized model id without the resource prefix a caller may carry.
+
+    `models/gemini-3.8-flash` and `google/gemini-2.5-pro` name Gemini models, but
+    `go_transport.is_go_model` reads their bare prefix as "not a gemini id" and would call them Go
+    (basis `allowance`, `cash_usd 0.0`). Strip the prefix before asking which provider it is.
+    """
+    for prefix in ("models/", "google/"):
+        if norm.startswith(prefix):
+            return norm[len(prefix):]
+    return norm
+
+
 def cost_estimate(model: str, usage: dict | None) -> dict:
     """The full answer for one call: the dollars, whether they are cash, and why.
 
@@ -672,7 +685,7 @@ def cost_estimate(model: str, usage: dict | None) -> dict:
     think = int(usage.get("thinking_tokens") or usage.get("thinking") or 0)
     usd = ((inp - cached) * pin + cached * pcached + (out + think) * pout) / 1_000_000.0
     from newsroom.tool_loop.go_transport import is_go_model
-    if is_go_model(model):
+    if is_go_model(_go_id(norm)):
         return {"usd": usd, "cash_usd": 0.0, "basis": "allowance", "note": ALLOWANCE_NOTE}
     return {"usd": usd, "cash_usd": usd, "basis": "cash", "note": ""}
 

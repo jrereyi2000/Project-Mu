@@ -1590,7 +1590,7 @@ If you need specific stats, use your database tools before producing your final 
                 from newsroom.tool_loop.go_transport import go_client, is_go_model
                 if is_go_model(model):
                     try:
-                        client = go_client()
+                        client = go_client(label="swarm_dispatcher")
                     except Exception as exc:
                         print(f"\n⚠️  [GO LIVE CALL SKIPPED]: {exc}")
                         failure_reason = f"Go client unavailable: {exc}"

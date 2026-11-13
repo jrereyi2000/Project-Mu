@@ -43,7 +43,7 @@ def run_gemini_tool_loop(
             # A Go id on the Gemini AFC loop runs on Go's Google-compatible client, never on Google's endpoint
             # (AUDIT_QUEUE_INVENTORY.md R11 sibling path).
             try:
-                client = go_client()
+                client = go_client(label="gemini_loop")
             except Exception as e:
                 return ToolLoopResult(
                     text=f"OpenCode Go client unavailable: {e}",

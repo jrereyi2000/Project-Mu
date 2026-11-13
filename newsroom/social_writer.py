@@ -868,7 +868,7 @@ def write_post(client, model: str, system: str, prompt: str, temperature: float 
     if go:
         model = resolve_model("go", label="agent_wire", model=model)
         if not _is_go_client(client):
-            client = go_transport.go_client()
+            client = go_transport.go_client(label="social_writer")
     elif client is None:
         from google import genai
         key = load_api_key()

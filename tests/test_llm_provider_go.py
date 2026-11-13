@@ -443,6 +443,15 @@ class EstimateCostGoTests(unittest.TestCase):
         self.assertEqual(llm_provider.cost_estimate("ollama/qwen2.5:14b", dict(self.USAGE))["basis"],
                          "local")
 
+    def test_a_prefixed_gemini_id_is_cash_not_an_allowance(self):
+        """N5: `models/gemini-…` and `google/gemini-…` are Gemini ids, not Go models."""
+        usage = {"input_tokens": 1_000_000, "output_tokens": 1_000_000, "thinking_tokens": 0}
+        for model in ("models/gemini-3.8-flash", "google/gemini-2.5-pro"):
+            detail = llm_provider.cost_estimate(model, usage)
+            self.assertEqual(detail["basis"], "cash", model)
+            self.assertAlmostEqual(detail["cash_usd"], detail["usd"], places=12)
+            self.assertGreater(detail["usd"], 0.0)
+
     def test_a_longer_model_id_wins_over_its_prefix(self):
         # "gemini-2.5-flash" is a prefix of nothing here, but a Go id with a suffix must not be
         # priced by a shorter key that happens to be inside it.
@@ -474,7 +483,10 @@ class GoKeyIsolationTests(unittest.TestCase):
                                  api_key="GEMINI_KEY", log_tokens=False)
 
         self.assertEqual(text, "go text")
-        built.assert_called_once_with()          # no key argument: the transport reads OPENCODE_GO_API_KEY itself
+        built.assert_called_once()               # no key argument: the transport reads OPENCODE_GO_API_KEY itself
+        self.assertEqual(built.call_args.args, ())
+        self.assertNotIn("api_key", built.call_args.kwargs)
+        self.assertEqual(built.call_args.kwargs.get("label"), "llm_provider")
 
     def test_a_gemini_key_cannot_stand_in_for_the_go_key(self):
         with mock.patch("google.genai.Client", side_effect=AssertionError("a client was built")) as built, \

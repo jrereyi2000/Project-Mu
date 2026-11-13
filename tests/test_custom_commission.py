@@ -145,7 +145,8 @@ class TestClassifyPromptRoutesByModel(unittest.TestCase):
         self.assertEqual(out["article_type_id"], "MACRO_SLATE_RECAP")
         # The model default is unchanged (no default flip); only the client moved to the one that serves it.
         self.assertEqual(fake.calls[0]["model"], DEFAULT_WRITER_MODEL)
-        self.assertEqual(go_client.call_args, ((), {"api_key": None, "session": None}))
+        self.assertEqual(go_client.call_args, ((), {"api_key": None, "session": None,
+                                                   "label": "custom_commission"}))
 
     def test_a_gemini_model_routes_to_google_with_its_own_key(self):
         fake = _FakeClient()

@@ -83,7 +83,7 @@ def verify(dirpath: str, model: str, slots: list | None, max_claims: int) -> int
             done.add((row["slot"], row["model"]))
         print(f"[factcheck] resuming: {len(done)} article(s) already checked")
 
-    client, error = client_for_model(model)
+    client, error = client_for_model(model, label="article_factcheck")
     if client is None:
         print(f"[factcheck] no checker: {error}")
         return 1

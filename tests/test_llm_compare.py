@@ -543,6 +543,24 @@ class TestModelEvaluationLoop:
         assert any("Connection refused" in f for f in res["failures"])
         assert data["summary"]["ollama:broken"]["failed_calls"] == 1
 
+    def test_an_unpriced_model_records_a_null_cost_without_raising(self):
+        """N2: `estimate_cost` returns None for an unlisted id; the report must carry null, not crash."""
+        inp = TaskInput(id="u", title="Unpriced", task="agent_wire", prompt="Prompt")
+
+        def fake_generate_text(**kwargs):
+            return "Great 24-17 win today by the team!", {"input_tokens": 10, "output_tokens": 5}
+
+        with patch("tools.llm_compare.generate_text", side_effect=fake_generate_text):
+            data = run_evaluation("agent_wire", [inp], ["some-unknown-model"])
+
+        res = data["items"][0]["results"]["some-unknown-model"]
+        assert res["cost_usd"] is None
+        summary = data["summary"]["some-unknown-model"]
+        assert summary["unpriced_calls"] == 1
+        assert summary["total_cost_usd"] == 0.0
+        html = render_html_report(data)                  # formatting a null cost must not raise
+        assert "unpriced" in html
+
 
     def test_run_evaluation_call_options(self):
         # No Gemini fallback, no llm_usage writes, Ollama options from the spec, JSON mode only on JSON tasks

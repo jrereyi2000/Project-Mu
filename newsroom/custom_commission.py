@@ -111,7 +111,7 @@ def classify_prompt(
         if not api_key:
             raise RuntimeError("GEMINI_API_KEY is required for prompt classification.")
 
-    client = client_for_model(model, api_key=api_key)
+    client = client_for_model(model, api_key=api_key, label="custom_commission")
     article_types, fantasy_writers, national_personas = load_article_catalog()
     teams = load_teams(conn_info)
 

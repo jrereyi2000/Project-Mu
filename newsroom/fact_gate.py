@@ -180,7 +180,7 @@ def client_for_model(model: str):
     try:
         from newsroom.tool_loop.go_transport import go_client, is_go_model
         if is_go_model(model):
-            return go_client(), None
+            return go_client(label="fact_gate"), None
         api_key = _env("GEMINI_API_KEY")
         if not api_key:
             return None, "GEMINI_API_KEY is not set"
