@@ -24,8 +24,10 @@ Career length is measured two ways, and the difference matters:
   seasons_any     every season on a roster, CUT included.
 The population split is what explains the rest: the ~3-year figure is the *all players* mean, and it is dragged
 down by undrafted churn (undrafted mean ~2 active seasons). Drafted players average ~6. Mu's rosters are built
-mostly from draft classes, so the drafted cohort is the better target unless Mu also generates a large undrafted
-pool — which is why the module reports all three populations and the caller must pick, not assume.
+mostly from draft classes: **P3-06a measured Mu's inflow on 2026-11-12** (`madden_tune_p2c`, 2027): 247 players
+entered, 244 of them rookies, at least 224 drafted and at most 20 undrafted, so the drafted cohort is 92% of
+Mu's rookie inflow and the drafted target stands. The module still reports all three populations so the caller
+can check the split, not assume it.
 
 Output: data/tuning/decision_targets.json  {"meta": {...}, "career_length": {...}, "retirement_age": {...},
 "coach_changes": {...}, "trades": {...}, "team_movement": {...}, "draft_by_round": {...}, "rookie_usage": {...}}
@@ -465,8 +467,10 @@ def build_targets(seasons=None, cache_refresh=False):
                 "trade_split": "JR, 2026-11-08: the cutdown week counts as preseason, so in-season is Week 1 "
                                "through season end and the gate is 5-21 trades a season",
                 "career_population": "JR, 2026-11-08: use the drafted cohort (median 5-6 seasons), for career "
-                                     "length and retirement age alike; revisit against all_players once Mu's own "
-                                     "draft/UDFA inflow is measured (CLOSE_OUT_CHECKLIST P3-06a)",
+                                     "length and retirement age alike. Confirmed by P3-06a (2026-11-12): Mu's "
+                                     "2027 inflow on p2c was 247 entrants, 244 rookies, at least 224 drafted "
+                                     "and at most 20 undrafted (92% drafted), roster bound 6.87-7.57 seasons, "
+                                     "so the drafted cohort stands",
                 "tolerances": "JR, 2026-11-08: median +/-1 season (+/-1.5 for QB/K/P); shares +/-10 points; "
                               "rates +/-20% relative",
                 "averaging": "JR, 2026-11-08: per-season counts pass on a 3-season mean, and each season must "

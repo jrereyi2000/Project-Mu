@@ -271,7 +271,7 @@ and merged but not re-checked after later changes.
 | P3-04 | Development-curve targets verdict | PARTIAL |
 | P3-05 | Retirement baseline | NOT FOUND |
 | P3-06 | `decision_targets.py` | IMPLEMENTED |
-| P3-06a | Measure Mu's own player inflow | NOT FOUND |
+| P3-06a | Measure Mu's own player inflow | IMPLEMENTED |
 | P3-07 | Decision comparison report | PARTIAL |
 | P3-08 | Post-unilateral trade flow re-measure | NOT FOUND |
 
@@ -284,7 +284,7 @@ and merged but not re-checked after later changes.
   (`engines/tuning/progression_fit.py:81`).
 - **P3-03** — **PARTIAL**: the real-NFL half exists — `data/tuning/decision_targets.md` §"Career length
   (seasons), by position" with the drafted/all/undrafted split and the 4.36 vs 3.40 reconciliation. The
-  "compare with Mu's output" half waits on P5 and on P3-06a's player→pick link.
+  "compare with Mu's output" half waits on P5; P3-06a measured the inflow that bounds it.
 - **P3-04** — **PARTIAL**: the verdict exists (`docs/reference/PROGRESSION_DEVELOPMENT_VERDICT.md`, written
   2026-11-11) and its follow-up is *partly built*: `db/migrations/2027_02_26_league_shape_season.sql` adds
   `league_state.shape_season` and `engines/progression.py:1280` now reads `league_shape_season(cur)` instead of
@@ -295,8 +295,16 @@ and merged but not re-checked after later changes.
 - **P3-06** — module + `tests/test_decision_targets.py` (passed) + `TUNING_ACCEPTANCE_THRESHOLDS.md` §2. The
   "remaining: curated items with no open dataset" (GM/coordinator changes, blockbuster rate, holdouts) is
   stated in §4 of that doc and still open.
-- **P3-06a** — NOT FOUND: no inflow measurement. It is still listed as the reason the A1 cohort is "for now" in
-  `data/tuning/decision_targets.*` `meta.decisions`.
+- **P3-06a** — **IMPLEMENTED 2026-11-12 (`p3-decision-fit`)**: `decision_compare.read_player_inflow` measures
+  players entering per season on a Mu database (first signed-or-played season), split drafted (Madden's
+  `players.draft_round` 1–7, else a linked actual pick, else bounded by the class's pick count) vs undrafted,
+  with the roster bound (`slots / entrants`) and a report-only `A1.inflow` row in every decision report.
+  Measured on `madden_tune_p2c`: **2027 — 247 entrants (244 rookies, 3 veterans first seen), at least 224
+  drafted and at most 20 undrafted, 1,869 slots → 7.57 seasons (6.87 on 32 × 53)**. `p2g`/`p2f` show 188/193
+  entrants and 165 rookies (their DRAFT stage wrote only the comp picks). **Population chosen: the drafted
+  cohort stands** (92% of Mu's rookie inflow), with the all-comers 4.36 as the floor; recorded in
+  `TUNING_ACCEPTANCE_THRESHOLDS.md` §0.2, §2 A1 and §7 decision 2. Tests: `tests/test_decision_compare.py`
+  (exact split, bounded split, unknown class, Postgres measurement; 62 passed on the scratch p2g copy).
 - **P3-07** — **PARTIAL**: `engines/tuning/decision_compare.py` exists and `season_loop` writes the report —
   `data/tuning/seasons/p2g/decisions_2026.md` is on disk and reads "INCOMPLETE — 2 pass, 0 fail, 33 not
   measured" (it predates F4/F5 and the drafted-cohort change; p2g carries no `players.draft_round`, so A1/A2/A6

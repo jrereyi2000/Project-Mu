@@ -44,6 +44,9 @@ Mu-side sources, per gate:
                            that week at which the slot has a player, JR > MU_COACH > MADDEN within it;
                            (Y-1, 24-30) before (Y, 31-32) before week 1; §7 decision 12), not a week in any slot
   A7 rookie usage          first-season games of drafted skill players, excluding linemen (no stat line)
+  A1.inflow (P3-06a)      report only: players entering the league in the season, split drafted/undrafted
+                           (Madden's draft round, else the class's pick count), and the roster bound
+                           (signed-or-played slots / entrants) that sets what A1's population can produce.
 
 Per-season count gates (A3 between seasons, A4 in-season trades, A5 team movement) are scored on a season's
 three consecutive-season mean, with each of those seasons also inside its band (TUNING_ACCEPTANCE_THRESHOLDS.md
@@ -100,9 +103,8 @@ PASS, FAIL = "PASS", "FAIL"
 NOT_MEASURED, INCOMPLETE, REPORT_ONLY = "NOT MEASURED", "INCOMPLETE", "REPORT ONLY"
 
 # TUNING_ACCEPTANCE_THRESHOLDS.md §4: decisions with no dataset yet. Listed, never computed.
+# P3-06a's inflow is measured now (A1.inflow), so it is no longer listed here.
 NOT_YET_COMPUTABLE = (
-    ("P3-06a Mu's own inflow", "sets the attainable career length (roster slots / entrants a season)",
-     "count drafted + generated UDFA players entering per simulated season"),
     ("GM changes per season", "owner_hiring / GM hot seat", "no open dataset; curate, or use HC changes as proxy"),
     ("Coordinator changes per season", "owner_hiring, coaching_tree_hiring",
      "no open dataset; same route"),
@@ -336,6 +338,60 @@ def rookie_usage(rows):
             "share_8plus": D.share_at_least(games, 8), "share_12plus": D.share_at_least(games, 12)}
 
 
+def player_inflow(rows, slots=None, classes=None, picks=None, linked=None):
+    """Players entering the league per season, split into drafted and undrafted (CLOSE_OUT P3-06a).
+
+    rows: (player_id, first_season, years_of_experience, draft_round|None), one per player, where
+    first_season is his first signed-or-played season (the A1 predicate).
+    slots: {season: signed-or-played roster rows}, classes: {draft_season: class size}, picks:
+    {draft_season: picks}, linked: {player_id: draft_season} for linked actual picks. A draft may enter
+    in its own season only.
+
+    `drafted` is exact when the save carries Madden's PLYR_DRAFTROUND (1-7) or the pick is linked to a
+    player. An older database has neither (the pre-reader-v9 tuning copies), so the class's own pick count
+    bounds it instead: a drafted player must enter, an undrafted one may not, and `split_source` says which.
+    `bound` is the arithmetic that bounds A1 — roster slots / entrants — never a gate.
+    """
+    by_season = {}
+    for pid, season, yoe, draft_round in rows:
+        if (yoe or 0) != 0:
+            entry = by_season.setdefault(season, {"newcomers": 0, "rookies": 0, "drafted": 0,
+                                                  "veteran_newcomers": 0})
+            entry["newcomers"] += 1
+            entry["veteran_newcomers"] += 1
+            continue
+        entry = by_season.setdefault(season, {"newcomers": 0, "rookies": 0, "drafted": 0,
+                                              "veteran_newcomers": 0})
+        entry["newcomers"] += 1
+        entry["rookies"] += 1
+        picked = (draft_round is not None and str(draft_round).strip().isdigit()
+                  and 1 <= int(draft_round) <= 7)
+        picked = picked or (pid in (linked or {}) and (linked or {})[pid] == season)
+        if picked:
+            entry["drafted"] += 1
+    out = {}
+    for season, entry in by_season.items():
+        rookies = entry["rookies"]
+        pick_count = (picks or {}).get(season)
+        if entry["drafted"] or not pick_count:
+            drafted = entry["drafted"]
+            source = "exact" if entry["drafted"] else "unknown"
+        else:
+            drafted = min(rookies, pick_count)
+            source = "bounded"
+        slots_n = (slots or {}).get(season)
+        out[season] = {
+            "newcomers": entry["newcomers"], "rookies": rookies,
+            "veteran_newcomers": entry["veteran_newcomers"],
+            "drafted": drafted, "undrafted": rookies - drafted,
+            "class_size": (classes or {}).get(season), "picks": pick_count, "split_source": source,
+            "roster_slots": slots_n, "seed": False,
+            "bound": round(slots_n / entry["newcomers"], 2) if slots_n else None,
+            "bound_53": round(32 * 53 / entry["newcomers"], 2),
+        }
+    return out
+
+
 # ------------------------------------------------------------------ database reads
 
 def _fetch(cur, sql, params=None):
@@ -345,6 +401,12 @@ def _fetch(cur, sql, params=None):
 
 def table_exists(cur, name):
     return bool(_fetch(cur, "SELECT to_regclass(%s) IS NOT NULL", (name,))[0][0])
+
+
+def column_exists(cur, table, column):
+    """Whether a table has a column: older tuning copies predate players.draft_round (reader v9)."""
+    return bool(_fetch(cur, "SELECT count(*) FROM information_schema.columns "
+                            "WHERE table_name = %s AND column_name = %s", (table, column))[0][0])
 
 
 def read_drafted_ids(cur):
@@ -537,6 +599,64 @@ def read_draft_rows(cur, season):
     return [r for r in rows if str(r[2] or "").strip() in {str(i) for i in range(1, 8)}]
 
 
+def read_player_inflow(cur, seasons):
+    """{season: inflow dict} from a Mu database (P3-06a, read-only).
+
+    A newcomer enters in his first signed-or-played season (the A1 predicate). Drafted comes from
+    `players.draft_round` 1-7 when the save has it (reader v9), else from a `draft_prospects` actual pick
+    linked to the player; an older database has neither, and the class's own pick count bounds the split
+    instead (`split_source` says which). Roster slots are that season's signed-or-played player_seasons
+    rows, and `bound` = slots / newcomers is the arithmetic that bounds A1, never a gate.
+    """
+    seasons = sorted(set(seasons))
+    if not seasons:
+        return {"seasons": {}}
+    has_round = column_exists(cur, "players", "draft_round")
+    round_sql = "pl.draft_round" if has_round else "NULL"
+    join = "LEFT JOIN players pl ON pl.id = s.player_id" if has_round else ""
+    signed = """
+            SELECT ps.player_id, ps.season, ps.years_of_experience
+              FROM player_seasons ps
+              LEFT JOIN season_stat_general g
+                     ON g.player_id = ps.player_id AND g.season = ps.season
+              LEFT JOIN (SELECT pst.player_id, gm.season, count(DISTINCT pst.game_id) AS games
+                           FROM player_stats pst JOIN games gm ON gm.id = pst.game_id
+                          GROUP BY 1, 2) pg
+                     ON pg.player_id = ps.player_id AND pg.season = ps.season
+             WHERE ps.player_id IS NOT NULL
+               AND (ps.team_id IS NOT NULL OR COALESCE(g.games_played, pg.games, 0) > 0)"""
+    rows = _fetch(cur, f"""
+        WITH inflow_signed AS ({signed}
+        ), firsts AS (
+            SELECT player_id, min(season) AS first_season FROM inflow_signed GROUP BY 1
+        )
+        SELECT s.player_id, f.first_season, s.years_of_experience, {round_sql}
+          FROM firsts f
+          JOIN inflow_signed s ON s.player_id = f.player_id AND s.season = f.first_season
+          {join}
+         WHERE f.first_season = ANY(%s)""", (seasons,))
+    slots = dict(_fetch(cur, f"""
+        WITH inflow_signed AS ({signed}
+        )
+        SELECT season, count(*) FROM inflow_signed WHERE season = ANY(%s) GROUP BY 1""", (seasons,)))
+    classes, picks, linked = {}, {}, {}
+    if table_exists(cur, "draft_prospects"):
+        classes = dict(_fetch(cur, "SELECT draft_season, count(*) FROM draft_prospects "
+                                    "WHERE draft_season = ANY(%s) GROUP BY 1", (seasons,)))
+        if column_exists(cur, "draft_prospects", "actual_pick"):
+            linked = dict(_fetch(cur, "SELECT player_id, draft_season FROM draft_prospects "
+                                      "WHERE player_id IS NOT NULL AND actual_pick IS NOT NULL "
+                                      "AND draft_season = ANY(%s)", (seasons,)))
+    if table_exists(cur, "draft_picks"):
+        picks = dict(_fetch(cur, "SELECT draft_season, count(*) FROM draft_picks "
+                                 "WHERE draft_season = ANY(%s) GROUP BY 1", (seasons,)))
+    out = player_inflow(rows, slots=slots, classes=classes, picks=picks, linked=linked)
+    earliest = _fetch(cur, "SELECT min(season) FROM player_seasons")[0][0]
+    for season, inf in out.items():
+        inf["seed"] = season == earliest          # the league's initial load is not an inflow season
+    return {"seasons": out}
+
+
 # A career ends at a retirement, or after UNSIGNED_SEASONS_END_CAREER consecutive seasons with no signed-or-
 # played player_seasons row and no later signing — a later signing reopens it (TUNING_ACCEPTANCE_THRESHOLDS.md
 # §7 decision 11). A season is signed-or-played when its row has a team_id (Signed/PracticeSquad) or the player
@@ -682,6 +802,7 @@ def extract(cur, season, league_current_season=None):
         "movement_pairs": movement_pairs,
         "draft_by_round": draft_outcomes(draft_rows, started, season),
         "rookie_usage": rookie_usage([r for r in draft_rows if r[1] <= season]),
+        "player_inflow": read_player_inflow(cur, [season]),
         "data": summary,
     }
 
@@ -829,6 +950,25 @@ def compare_decisions(observed, targets):
             continue
         gates.append(_median_gate(f"A2.{grp}", f"Retirement age, {grp}", drafted_ra.get(grp),
                                   tgt["median"], AGE_TOL, missing))
+
+    # A1.inflow (P3-06a) — the entrants that arithmetically bound A1. Report only: it chooses no gate.
+    inf = ((observed.get("player_inflow") or {}).get("seasons") or {}).get(season)
+    if inf and inf.get("newcomers") and not inf.get("seed"):
+        bound = (f"roster bound {inf['bound']:.2f} seasons on {inf['roster_slots']} signed-or-played rows; "
+                 f"{inf['bound_53']:.2f} at 32 x 53"
+                 if inf.get("bound") is not None else
+                 f"roster bound {inf['bound_53']:.2f} at 32 x 53 (no signed-or-played roster rows)")
+        gates.append(Gate("A1.inflow", "Players entering the league (report only)",
+                          f"{inf['newcomers']} ({inf['drafted']} drafted, {inf['undrafted']} undrafted, "
+                          f"{inf['split_source']})", "— (report only)", REPORT_ONLY, bound))
+    elif inf and inf.get("seed"):
+        gates.append(Gate("A1.inflow", "Players entering the league (report only)",
+                          f"{inf['newcomers']} (seed season)", "— (report only)", REPORT_ONLY,
+                          "the league's initial load, not an inflow season"))
+    else:
+        gates.append(Gate("A1.inflow", "Players entering the league (report only)", "—",
+                          "— (report only)", REPORT_ONLY,
+                          "no player entered the league this season (no signed-or-played player_seasons rows)"))
 
     # A3 head-coach changes — three consecutive seasons, each inside the band (§1, §7 decision 4)
     cc = observed["coach_changes"]
@@ -1007,6 +1147,7 @@ def compare_decisions(observed, targets):
         "all_trades": tr.get("all"),
         "proposals": tr.get("proposed"),
         "proposals_by_status": tr.get("by_status") or {},
+        "player_inflow": inf,
     }
     return DecisionReport(season=season, gates=gates, meta=meta, reference=reference, overall=overall)
 
@@ -1040,6 +1181,26 @@ def format_report(report):
         lines += [f"- **{g.code}** {g.title}: {g.detail}" for g in reasons]
 
     ref = report.reference
+    if ref.get("player_inflow"):
+        inf = ref["player_inflow"]
+        if inf.get("seed"):
+            lines += ["", "## Player inflow (P3-06a, report only)", "",
+                      f"Season {report.season} is the league's **initial load** ({inf['newcomers']} players "
+                      "signed or played), not an inflow season; the measurement starts with the next "
+                      "season's class."]
+        else:
+            bound = (f"roster bound {inf['bound']:.2f} seasons on {inf['roster_slots']} signed-or-played rows "
+                     f"({inf['bound_53']:.2f} at 32 x 53)" if inf.get("bound") is not None
+                     else f"roster bound {inf['bound_53']:.2f} at 32 x 53")
+            lines += ["", "## Player inflow (P3-06a, report only)", "",
+                      f"**{inf['newcomers']} players entered the league in season {report.season}**: "
+                      f"{inf['drafted']} drafted, {inf['undrafted']} undrafted, "
+                      f"{inf['veteran_newcomers']} veterans first seen that season "
+                      f"(split {inf['split_source']}; class {inf['class_size']}, picks {inf['picks']}).",
+                      f"{bound}. This is the arithmetic that bounds A1, not a gate: career length is "
+                      "roster slots / entrants, so the drafted cohort's 5-6 season median needs this inflow "
+                      "to leave room for it."]
+
     if ref.get("career_length_all_players"):
         lines += ["", "## Reference, not gated (all-players cohort)", "",
                   "The decided career-length and retirement-age gates use the **drafted** cohort. The "

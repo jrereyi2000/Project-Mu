@@ -71,6 +71,17 @@ first measuring Mu's inflow** (drafted + generated UDFAs per season). That measu
 exists, the drafted cohort (mean 6.0, median 5–6) is the defensible default, with the all-comers 4.36 as the
 floor and 3.40 only if Mu deliberately models a large camp-body population.
 
+**Measured 2026-11-12 (P3-06a, `p3-decision-fit`).** On `madden_tune_p2c`, the one tuning league that walked a
+real draft: **247 players entered in 2027 — 244 rookies and 3 veterans first seen. At least 224 of those rookies
+were drafted (the 224-pick class) and at most 20 were undrafted**, so the drafted cohort is **92% of Mu's rookie
+inflow**. Roster slots / entrants is **1,869 / 247 = 7.57 seasons** (6.87 on 32 × 53), which leaves room for the
+drafted median of 5–6 and sits well above the all-comers 4.36. **Decision: A1/A2 stay on the drafted cohort**
+(the population is no longer "for now"), with the all-comers 4.36 reported as the floor. `madden_tune_p2g` and
+`p2f`, whose DRAFT stage wrote only the 10 comp picks (P2-03's draft-order bug), show a thinner inflow (188 / 193
+entrants, 165 rookies, bound 8.8–11.5) and are not the sample to calibrate on. The 389-man class itself is
+Madden's; only 244 of it signed or played. The reader is `decision_compare.read_player_inflow`, shown in every
+decision report as the report-only `A1.inflow` row.
+
 ---
 
 ## 1. How a gate is scored
@@ -108,10 +119,12 @@ Populations as described in §0.2. Careers end 2015–2024.
 | P | 3 / 5.1 | 6 / 8.0 | 2 / 3.7 | 19% |
 
 - **Gate (decided, JR 2026-11-08):** the **drafted** median per group within **±1 season** (QB/K/P ±1.5).
-  The all-players mean (4.36) is reported alongside as the floor, not gated. Re-check the population once
-  P3-06a measures Mu's inflow.
-- **Mu source:** `player_seasons` distinct seasons per player, or the lifecycle record; plus a count of players
-  entering per season (drafted + UDFA) for the arithmetic check. **Drafted vs undrafted comes from Madden's own
+  The all-players mean (4.36) is reported alongside as the floor, not gated. **P3-06a measured Mu's inflow
+  (2026-11-12, §0.2): 247 entrants in p2c's 2027, at least 224 drafted, at most 20 undrafted, roster bound
+  6.87–7.57 seasons — the drafted cohort stands and the population is settled.**
+- **Mu source:** `player_seasons` distinct seasons per player, or the lifecycle record; plus the report-only
+  `A1.inflow` reader (`decision_compare.read_player_inflow`) that counts players entering per season and the
+  roster bound. **Drafted vs undrafted comes from Madden's own
   player fields (JR, 2026-11-10):** `PLYR_DRAFTROUND` 1–7 is drafted, 63 is undrafted (with `PLYR_DRAFTPICK` and
   `PLYR_DRAFTTEAM`). Ignore `Background`: on `CAREER-TUNE-P2G` it reads `Undrafted` for the 2027 class Madden had
   just drafted. A career ends at a retirement, or after **two seasons in a row unsigned**; a later signing reopens it.
@@ -238,7 +251,7 @@ from vanilla.
 
 | Decision | Why it matters | How to get it |
 |---|---|---|
-| **P3-06a: Mu's own inflow** | sets the attainable career length (see §0.2 arithmetic) | measure drafted + generated UDFA players per season in a simulated league; required before the A1 gate is final |
+| ~~**P3-06a: Mu's own inflow**~~ **✅ measured 2026-11-12** | sets the attainable career length (see §0.2 arithmetic) | **done:** `decision_compare.read_player_inflow` — 247 entrants in p2c's 2027 (at least 224 drafted, at most 20 undrafted), roster bound 6.87–7.57; reported as the report-only `A1.inflow` row |
 | **GM changes per season** | `owner_hiring` / GM hot seat | no open dataset; curate, or use HC changes as the proxy |
 | **Coordinator changes per season** | `owner_hiring`, `coaching_tree_hiring` | no open dataset; same route |
 | **Blockbuster trade rate** | `MAX_BLOCKBUSTERS` | join `trades.csv` `pfr_id` → `draft_picks.w_av` or Pro Bowl honours |
@@ -305,15 +318,17 @@ Record the failing gate, measured value, engine changed and re-measured value in
 1. **Trade definition — cutdown week is preseason.** In-season is **Week 1 → season end**: 147 trades over
    2015–2025, **band 5–21, median 13**. The September cutdown week counts as preseason and sits in the
    offseason band (45–84). A gate never uses the September-1 definition.
-2. **Career-length population — drafted cohort for now.** Gate on the **drafted** median (5–6 seasons across
-   groups), not the all-comers 3.40. The all-players figure stays in the report as the floor and as the number a
-   broadcaster would quote. **Revisit after P3-06a** (Mu's own draft/UDFA inflow), which is what actually decides
-   which population Mu can produce.
+2. **Career-length population — drafted cohort, confirmed by P3-06a (2026-11-12).** Gate on the **drafted**
+   median (5–6 seasons across groups), not the all-comers 3.40. The all-players figure stays in the report as
+   the floor and as the number a broadcaster would quote. P3-06a measured Mu's inflow (§0.2): 247 entrants in
+   p2c's 2027, **at least 224 drafted and at most 20 undrafted**, so the drafted cohort is 92% of Mu's rookie
+   inflow and the population question is closed. The drafted median is attainable: the roster bound is 6.87–7.57
+   seasons, above the 5–6 target, and the all-comers 4.36 is well below it.
 3. **Tolerances:** median ±1 season (±1.5 QB/K/P); shares ±10 points; rates ±20% relative.
 4. **Averaging:** per-season counts pass on a 3-season mean, and each season must also sit inside the band.
    For in-season trades the per-season band is wider, 3–25 (2026-11-10 decision 9).
-5. **§4 scope:** blockbusters, holdouts and the P3-06a inflow measurement are pre-2026; GM and coordinator
-   changes are deferred to a post-2034 pass.
+5. **§4 scope:** blockbusters and holdouts are pre-2026; GM and coordinator
+   changes are deferred to a post-2034 pass. P3-06a's inflow measurement is done (decision 2).
 6. **Retirement population:** the drafted median, matching A1.
 
 Consequences applied throughout this document: A1's headline gate is the drafted column; A2 uses the drafted
