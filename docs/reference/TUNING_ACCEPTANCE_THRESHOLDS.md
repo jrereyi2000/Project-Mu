@@ -293,7 +293,8 @@ A failed gate is a **bug report against a specific engine**, not a mandate to nu
 | Round 1 and round 7 look the same | `scouting_value` / rookie OVR distribution — fix before AI tuning |
 | Rookies never play | `depth_chart_engine` `close_score_window`; `development_opportunity` |
 
-Record the failing gate, measured value, engine changed and re-measured value in the tuning ledger (P6-03).
+Record the failing gate, measured value, engine changed and re-measured value in the tuning ledger
+([`TUNING_LEDGER.md`](TUNING_LEDGER.md), P6-03; its first entry is P3-08's trade-flow measurement).
 
 ---
 
