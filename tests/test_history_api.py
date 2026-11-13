@@ -113,6 +113,46 @@ def award(award_type, season, name, player_id=None, team="CAR", coach_id=None):
             "position": None, "team": team}
 
 
+class RecordedLineTest(unittest.TestCase):
+    """D2 (JR, 2026-11-12): the season line always owns the record, on the #records page too.
+
+    The seeded BOOK row for Crawford's 2035 passing TDs says 67; the recorded 2035 line says 71. The page
+    must rank the 2036 69 behind 71 exactly as the writer tools do (P8-04 F1)."""
+
+    LINES = {("season_pass_tds", 2035): [(7, "George Crawford", 71.0)]}
+
+    def test_a_book_mark_is_read_through_the_recorded_line(self):
+        marks = {"season_pass_tds": [mark(67, "George Crawford", 2035, "BOOK")]}
+        H.reconcile_marks((marks,), {"season_pass_tds": "HIGH"}, self.LINES)
+        [m] = marks["season_pass_tds"]
+        self.assertEqual((m["value"], m["book_value"], m["source"]), (71, 67, "BOOK"))
+        self.assertEqual(m["recorded_conflict"]["recorded_value"], 71)
+
+    def test_the_page_ranks_the_new_mark_where_the_writer_tools_do(self):
+        marks = {"season_pass_tds": [mark(67, "George Crawford", 2035, "BOOK"),
+                                     mark(69, "George Crawford", 2036, "LEAGUE")]}
+        H.reconcile_marks((marks,), {"season_pass_tds": "HIGH"}, self.LINES)
+        card = H.build_category(cat(), marks["season_pass_tds"], [], [], "all")
+        self.assertEqual([(m["holder"], m["value"], m["rank"]) for m in card["top10"]],
+                         [("George Crawford", 71, 1), ("George Crawford", 69, 2)])
+        self.assertEqual(card["record"][0]["value"], 71)
+
+    def test_an_agreeing_line_and_an_unrecorded_holder_keep_the_book_value(self):
+        marks = {"season_pass_tds": [mark(71, "George Crawford", 2035, "BOOK")],
+                 "season_team_wins": [mark(17, "2035 Carolina Panthers", 2035, "BOOK")]}
+        H.reconcile_marks((marks,), {"season_pass_tds": "HIGH", "season_team_wins": "HIGH"}, self.LINES)
+        self.assertEqual(marks["season_pass_tds"][0]["value"], 71)
+        self.assertNotIn("book_value", marks["season_pass_tds"][0])
+        self.assertNotIn("book_value", marks["season_team_wins"][0])
+
+    def test_a_same_name_pair_is_reported_on_a_corrected_mark(self):
+        marks = {"season_pass_tds": [mark(67, "George Crawford", 2035, "BOOK")]}
+        lines = {("season_pass_tds", 2035): [(7, "George Crawford", 71.0), (9, "George Crawford", 64.0)]}
+        H.reconcile_marks((marks,), {"season_pass_tds": "HIGH"}, lines)
+        self.assertEqual(marks["season_pass_tds"][0]["value"], 71)
+        self.assertEqual(marks["season_pass_tds"][0]["recorded_conflict"]["same_name_players"], 2)
+
+
 class AwardsTest(unittest.TestCase):
     def test_super_bowl_from_the_winners_side(self):
         g = {"id": 9, "home_team_id": 31, "away_team_id": 11, "home_score": 6, "away_score": 59}

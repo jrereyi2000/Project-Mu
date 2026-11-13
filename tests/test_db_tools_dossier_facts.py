@@ -44,7 +44,7 @@ STALE_DAVIS_EVENT = {
     "value": 29, "previous_record": 27,
     "previous_holders": ["Trey'Mane Davis (2035)"], "week": None,
 }
-RECORDED_2035 = {"season_rec_tds": [(2035, "Trey'Mane Davis", 29.0)]}
+RECORDED_2035 = {("season_rec_tds", 2035): [(None, "Trey'Mane Davis", 29.0)]}
 HIGH = {"season_rec_tds": "HIGH"}
 
 MENDOZA_SPLITS = {
@@ -236,7 +236,7 @@ def test_metric_scope_excludes_comp_pct_and_yards_per_attempt_from_per_game_figu
     assert payload["metric_labels"]["yards_per_attempt"] == "yards per pass attempt"
 
 
-# --- defect 3: a stale BOOK row cannot make a tie a broken record --------------------
+# --- defect 3 / D2: the season line always owns the record ---------------------------
 
 def test_previous_holder_season_parses_only_a_named_holder_with_a_season():
     assert db_tools.previous_holder_season("Trey'Mane Davis (2035)") == ("Trey'Mane Davis", 2035)
@@ -262,7 +262,7 @@ def test_stale_book_row_is_re_resolved_from_the_recorded_season_line():
     assert conflict["recorded_previous_record"] == 29
     assert conflict["result_if_book_used"] == "broke"
     assert conflict["resolved_result"] == "tied"
-    assert "never upgrade a tie to a broken record" in conflict["note"]
+    assert "season line owns the record" in conflict["note"]
 
 
 def test_agreeing_book_row_is_left_alone():
@@ -271,7 +271,21 @@ def test_agreeing_book_row_is_left_alone():
     assert event == agreeing and "source_conflict" not in event
 
 
-# --- F2: a recorded line may make a mark worse, never better --------------------------
+def test_a_book_row_below_the_recorded_line_is_raised_too():
+    """D2 / P8-04 F1's live case: Crawford's 2036 69 pass TDs against a seeded BOOK 2035 row of 67 and a
+    recorded 2035 line of 71. The book alone calls it "broke"; the line owns the record, so it ranks."""
+    event = {"type": "top10", "result": "broke", "category": "season_pass_tds",
+             "label": "Passing TDs in a season", "holder": "George Crawford", "team": "Carolina Panthers",
+             "value": 69, "previous_record": 67, "previous_holders": ["George Crawford (2035)"], "week": None}
+    recorded = {("season_pass_tds", 2035): [(7, "George Crawford", 71.0)]}
+    [got] = db_tools.reconcile_record_events([event], {"season_pass_tds": "HIGH"}, recorded)
+    assert got["result"] == "ranks"
+    assert got["previous_record"] == 71
+    assert got["source_conflict"]["result_if_book_used"] == "broke"
+    assert got["source_conflict"]["recorded_previous_record"] == 71
+
+
+# --- D2: the reconcile is bidirectional; the old "never upgrade" refusal is gone ------
 
 def _tied_event(**overrides):
     event = {"type": "top10", "result": "tied", "category": "season_rec_tds",
@@ -282,62 +296,84 @@ def _tied_event(**overrides):
     return event
 
 
-def test_a_lower_recorded_line_cannot_upgrade_a_tie_to_a_broken_record():
-    """F2 (audit repro 1): a partial or same-name row below the book made the override run in
-    the better direction, so a tie came out 'broke, previous 20'."""
-    recorded = {"season_rec_tds": [(2035, "Trey'Mane Davis", 20.0), (2035, "Trey'Mane Davis", 9.0)]}
+def test_a_recorded_line_below_the_book_now_wins_too():
+    """The audit's F2 repro 1 used to be refused (a recorded line could only make a mark worse). JR's
+    decision supersedes that refusal: the line owns the record, so the previous record is 20 and the 29
+    broke it."""
+    recorded = {("season_rec_tds", 2035): [(None, "Trey'Mane Davis", 20.0), (None, "Trey'Mane Davis", 9.0)]}
     [event] = db_tools.reconcile_record_events([_tied_event()], HIGH, recorded)
-    assert event["result"] == "tied"                    # was "broke"
-    assert event["previous_record"] == 29               # the book's value stands
-    assert "previous_record_source" not in event
+    assert event["result"] == "broke"
+    assert event["previous_record"] == 20
+    assert event["previous_record_source"] == "recorded season stats"
     conflict = event["source_conflict"]
-    assert conflict["recorded_previous_record"] == 20   # the best over the holder's rows
-    assert conflict["resolved_result"] == "tied"
-    assert conflict["kept_book_result"] is True
-    assert "flagged only" in conflict["note"]
+    assert conflict["book_previous_record"] == 29
+    assert conflict["recorded_previous_record"] == 20
+    assert conflict["result_if_book_used"] == "tied"
+    assert conflict["resolved_result"] == "broke"
+    assert "kept_book_result" not in conflict          # the one-directional branch is gone
 
 
-def test_a_second_co_holder_cannot_upgrade_a_confirmed_tie():
-    """F2 (audit repro 2): the first holder confirmed 29 and the loop carried on to a second
-    holder recorded at 25, which overrode the tie to 'broke, previous 25'."""
-    recorded = {"season_rec_tds": [(2030, "A A", 29.0), (2035, "B B", 25.0)]}
+def test_a_second_co_holder_cannot_lower_a_confirmed_record():
+    """The best over ALL previous holders stays: one holder's line confirms 29, so a co-holder's 25 is not
+    the record and no conflict is reported (identity, not direction — audit F2 repro 2)."""
+    recorded = {("season_rec_tds", 2030): [(None, "A A", 29.0)],
+                ("season_rec_tds", 2035): [(None, "B B", 25.0)]}
     event = _tied_event(previous_holders=["A A (2030)", "B B (2035)"])
     [got] = db_tools.reconcile_record_events([event], HIGH, recorded)
     assert got == event and "source_conflict" not in got
 
 
-def test_a_recorded_line_may_still_downgrade_a_broken_record():
-    """The override is one-directional, not switched off: a recorded line above the book still
-    replaces it and the result worsens (the stale BOOK row is what this fix is for)."""
+def test_a_recorded_line_above_the_book_still_downgrades_a_broken_record():
+    """The direction the original P8-04 fix was written for, unchanged: a line above the book replaces it
+    and the mark only ranks."""
     event = dict(STALE_DAVIS_EVENT, previous_record=27, result="broke")
-    recorded = {"season_rec_tds": [(2035, "Trey'Mane Davis", 30.0)]}
+    recorded = {("season_rec_tds", 2035): [(None, "Trey'Mane Davis", 30.0)]}
     [got] = db_tools.reconcile_record_events([event], HIGH, recorded)
     assert got["result"] == "ranks"
     assert got["previous_record"] == 30
     assert got["previous_record_source"] == "recorded season stats"
-    assert got["source_conflict"]["kept_book_result"] is False
+    assert got["source_conflict"]["resolved_result"] == "ranks"
 
 
-def test_a_worse_recorded_line_cannot_upgrade_a_low_record():
-    """LOW categories count a lower mark as better: a recorded 300 cannot make a tied 267 'broke'."""
+def test_a_recorded_line_also_wins_for_a_low_record():
+    """LOW categories count a lower mark as better: a recorded 300 against a book 267 is the record, so the
+    267 breaks it (the mirror of the old refusal, which kept the book)."""
     low = {"season_team_fewest_points_allowed": "LOW"}
     event = {"type": "franchise_record", "result": "tied",
              "category": "season_team_fewest_points_allowed", "value": 267,
              "previous_record": 267, "previous_holders": ["A A (2030)"]}
-    recorded = {"season_team_fewest_points_allowed": [(2030, "A A", 300.0)]}
+    recorded = {("season_team_fewest_points_allowed", 2030): [(None, "A A", 300.0)]}
     [got] = db_tools.reconcile_record_events([event], low, recorded)
-    assert got["result"] == "tied" and got["previous_record"] == 267
-    assert got["source_conflict"]["kept_book_result"] is True
+    assert got["result"] == "broke" and got["previous_record"] == 300
+    assert got["source_conflict"]["book_previous_record"] == 267
 
 
 def test_a_same_name_pair_is_reported_when_the_recorded_rows_carry_player_ids():
-    """F2: matching is by name and season; where the rows carry player ids the conflict says how
-    many players share that name, and the value used is the best of them (never an upgrade)."""
-    recorded = {"season_rec_tds": [(2035, 11, "Trey'Mane Davis", 20.0),
-                                   (2035, 12, "Trey'Mane Davis", 9.0)]}
+    """F2 identity: matching is by name, so a name covering two players is reported, and the value used is
+    the best of their rows (now in both directions)."""
+    recorded = {("season_rec_tds", 2035): [(11, "Trey'Mane Davis", 20.0),
+                                          (12, "Trey'Mane Davis", 9.0)]}
     [got] = db_tools.reconcile_record_events([_tied_event()], HIGH, recorded)
     assert got["source_conflict"]["same_name_players"] == 2
-    assert got["result"] == "tied" and got["previous_record"] == 29
+    assert got["result"] == "broke" and got["previous_record"] == 20
+
+
+class RecordBookCursor(FakeCursor):
+    """A BOOK 2035 row of 67 and the league's 2036 row of 69, so the tool's own sections can be read."""
+
+    def execute(self, sql, params=None):
+        self.queries.append((sql, params))
+        if "FROM teams;" in sql:
+            self._rows = [(1, "CAR", "Carolina", "Panthers")]
+        elif "FROM record_categories" in sql:
+            self._rows = [("season_pass_tds", "Passing TDs in a season", "SEASON", "PLAYER", "HIGH", 1)]
+        elif "FROM league_records" in sql:
+            self._rows = [(69.0, "George Crawford", 2036, 1, "LEAGUE")]
+        elif "FROM league_record_entries" in sql:
+            self._rows = [(67.0, "George Crawford", 2035, 1, "BOOK"),
+                          (69.0, "George Crawford", 2036, 1, "LEAGUE")]
+        else:
+            self._rows = []
 
 
 def test_record_book_tool_flags_the_stale_row(monkeypatch):
@@ -362,4 +398,33 @@ def test_record_book_tool_flags_the_stale_row(monkeypatch):
     assert record["previous_record"] == 29
     assert record["source_conflict"]["book_previous_record"] == 27
     assert "source_conflict" in output["record_scope_note"]
-    assert "never describe a tied mark" in output["record_scope_note"]
+    assert "Never describe a tied mark" in output["record_scope_note"]
+
+
+def test_one_record_book_response_ranks_and_lists_the_same_previous_record(monkeypatch):
+    """D2 acceptance (M-0868): BOOK 67, recorded 71, new 69. The event says "ranks", and the same
+    response's all-time record and top 10 carry 71 — the page and the writer tools cannot disagree."""
+    import engines.records_engine as records_engine
+    cur = RecordBookCursor()
+    event = {"type": "top10", "result": "broke", "category": "season_pass_tds",
+             "label": "Passing TDs in a season", "holder": "George Crawford", "team_id": 1,
+             "team": "Carolina Panthers", "player_id": 7, "value": 69, "nfl_record": 67,
+             "nfl_record_holders": ["George Crawford (2035)"], "rank": 1}
+    monkeypatch.setattr(db_tools, "psycopg", type("P", (), {"connect": staticmethod(lambda *a, **k: FakeConn(cur))}))
+    monkeypatch.setattr(db_tools, "resolve_season", lambda season=0: 2036)
+    monkeypatch.setattr(records_engine, "evaluate", lambda cur, season: {"events": [event]})
+    monkeypatch.setattr(records_engine, "season_player_values",
+                        lambda cur, season: [("season_pass_tds", 1, 7, "George Crawford", 71.0)]
+                        if season == 2035 else [])
+    monkeypatch.setattr(records_engine, "season_defense_values", lambda cur, season: [])
+    output = json.loads(get_record_book(category="season_pass_tds", season=2036))
+    [card] = output["categories"]
+    [record] = output["records_set_this_season"]
+
+    assert record["result"] == "ranks"
+    assert record["previous_record"] == 71
+    assert record["source_conflict"]["book_previous_record"] == 67
+    assert [m["value"] for m in card["nfl_all_time_record"]] == [71]
+    assert card["nfl_all_time_record"][0]["source_conflict"]["book_previous_record"] == 67
+    assert [(m["holder"], m["value"], m["rank"]) for m in card["nfl_all_time_top_10"]] == [
+        ("George Crawford", 71, 1), ("George Crawford", 69, 2)]

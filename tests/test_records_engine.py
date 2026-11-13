@@ -56,6 +56,27 @@ def find(result, **kw):
     return [e for e in result["events"] if all(e.get(k) == v for k, v in kw.items())]
 
 
+class ScriptedCursor:
+    """A cursor that answers a SELECT by the first script key found in its text, else no rows."""
+
+    def __init__(self, script):
+        self.script, self._rows, self.queries = script, [], []
+
+    def execute(self, sql, params=None):
+        self.queries.append((sql, params))
+        self._rows = []
+        for key, rows in self.script.items():
+            if key in sql:
+                self._rows = list(rows)
+                return
+
+    def fetchall(self):
+        return list(self._rows)
+
+    def fetchone(self):
+        return self._rows[0] if self._rows else None
+
+
 class EvaluateTests(unittest.TestCase):
     def test_season_records_franchise_and_nfl(self):
         r = run(players=[("season_rec_tds", 11, 7, "Trey'Mane Davis", 27.0), ("season_rec_tds", 11, 8, "Isaiah Carson", 18.0)])
@@ -121,6 +142,82 @@ class EvaluateTests(unittest.TestCase):
     def test_helpers(self):
         self.assertEqual(R.tidy_name("OMAR COOPER JR."), "Omar Cooper Jr.")
         self.assertEqual(R.ordinal(22), "22nd")
+
+
+class RecordedLineOwnsTheRecordTests(unittest.TestCase):
+    """D2 (JR, 2026-11-12): the recorded season line always owns the record, on every engine surface.
+
+    BOOK 2035 says George Crawford threw 67 passing TDs; the recorded 2035 season line says 71. A 2036 69
+    is therefore a rank, not a record — in `evaluate`'s top 10 and in `find_records_broken_in_week`'s
+    threshold alike."""
+
+    BOOK_67 = [("season_pass_tds", 67.0, "George Crawford", 2035, 11, "BOOK")]
+
+    def cursor(self, entries=None, cumulative=()):
+        return ScriptedCursor({
+            "SELECT DISTINCT season FROM franchise_records": [(2035,)],
+            "SELECT DISTINCT category FROM franchise_records": [],
+            "FROM league_record_entries": self.BOOK_67 if entries is None else entries,
+            "FROM franchise_records WHERE season": [],
+            "FROM record_categories": [("season_pass_tds", "Passing TDs in a season", "SEASON", "PLAYER", "HIGH",
+                                        "REGULAR")],
+            "FROM teams": [(11, "CAR", "Carolina", "Panthers")],
+            "SUM(CASE WHEN g.week < %s": list(cumulative),
+        })
+
+    def patches(self, current=69.0):
+        def season_values(_cur, season):
+            if season == 2035:
+                return [("season_pass_tds", 11, 7, "George Crawford", 71.0)]
+            return [("season_pass_tds", 11, 7, "George Crawford", current)] if season == 2036 else []
+        return mock.patch.object(R, "season_player_values", side_effect=season_values), \
+            mock.patch.object(R, "season_defense_values", return_value=[])
+
+    def test_load_book_reads_a_book_row_through_the_recorded_line(self):
+        values, defense = self.patches()
+        with values, defense:
+            book = R.load_book(self.cursor(), 2036)
+        self.assertEqual(book["entries"]["season_pass_tds"], [(71.0, "George Crawford", 2035)])
+        self.assertEqual([(c["book_value"], c["recorded_value"]) for c in book["corrections"]], [(67.0, 71.0)])
+
+    def test_a_mark_below_the_recorded_line_ranks_instead_of_breaking_it(self):
+        values, defense = self.patches()
+        with values, defense, mock.patch.object(R, "team_seasons", return_value={}), \
+                mock.patch.object(R, "game_player_values", return_value=[]):
+            result = R.evaluate(self.cursor(), 2036)
+        [top] = [e for e in result["events"] if e["type"] == "top10"]
+        self.assertEqual((top["result"], top["nfl_record"], top["rank"]), ("ranks", 71, 2))
+        self.assertEqual(top["nfl_record_holders"], ["George Crawford (2035)"])
+        self.assertEqual(len(result["book_corrections"]), 1)
+        self.assertIn("recorded 71", R.format_report(result))
+
+    def test_a_recorded_line_that_matches_the_new_mark_keeps_it_tied(self):
+        """The Davis 2035 case: BOOK 27, recorded 29, a 2036 29 is a tie."""
+        cur = ScriptedCursor({
+            "SELECT DISTINCT season FROM franchise_records": [(2035,)],
+            "SELECT DISTINCT category FROM franchise_records": [],
+            "FROM league_record_entries": [("season_rec_tds", 27.0, "Trey'Mane Davis", 2035, 11, "BOOK")],
+            "FROM franchise_records WHERE season": [],
+            "FROM record_categories": [("season_rec_tds", "Receiving TDs in a season", "SEASON", "PLAYER",
+                                        "HIGH", "REGULAR")],
+            "FROM teams": [(11, "CAR", "Carolina", "Panthers")],
+        })
+        davis = lambda _cur, season: [("season_rec_tds", 11, 7, "Trey'Mane Davis", 29.0)]
+        with mock.patch.object(R, "season_player_values", side_effect=davis), \
+                mock.patch.object(R, "season_defense_values", return_value=[]), \
+                mock.patch.object(R, "team_seasons", return_value={}), \
+                mock.patch.object(R, "game_player_values", return_value=[]):
+            result = R.evaluate(cur, 2036)
+        [top] = [e for e in result["events"] if e["type"] == "top10"]
+        self.assertEqual((top["result"], top["nfl_record"]), ("tied", 29))
+
+    def test_find_records_broken_in_week_uses_the_recorded_threshold(self):
+        """Week 5: Crawford goes from 60 to 69. Against the BOOK 67 that is a broken record; against the
+        recorded 71 it is not, so the slate expansion and press facts cannot call it one."""
+        values, defense = self.patches()
+        cur = self.cursor(cumulative=[(7, "George Crawford", 11, 60.0, 69.0)])
+        with values, defense:
+            self.assertEqual(R.find_records_broken_in_week(cur, 2036, 5), [])
 
 
 class RecordBookTests(unittest.TestCase):

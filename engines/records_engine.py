@@ -10,9 +10,14 @@ single-season record holders and the NFL's all-time top-10 lists), then the leag
   - NFL records and the all-time top 10: a season or a single game (player_stats) that would rank in the top 10.
 
 `evaluate` only reads. `apply` stores the season's record rows with source 'LEAGUE' (it first deletes that season's
-LEAGUE rows, so it can run after every week and the season's totals simply replace themselves). The record book is the
-authority for its seasons: where a BOOK row exists for the same team, category and season, nothing is added, and the
-report lists where the stats and the record book disagree. Old holders are never removed; the views pick the best value.
+LEAGUE rows, so it can run after every week and the season's totals simply replace themselves). The recorded season
+line always owns the record (JR, 2026-11-12, "the season line always owns the record"): a seeded BOOK row that
+disagrees with the holder's own season line (`season_stats` / `season_stat_lines`) is replaced by the recorded value
+before anything is ranked, so every surface that reads the book ranks against the same value
+(`reconcile_mark_value`, used here, by `newsroom/db_tools.py` and by `server/history_api.py`). Where a BOOK row agrees
+with the recorded line for the same team, category and season, `apply` adds nothing; where it disagrees, the league row
+carries the recorded value. The report lists where the stats and the record book disagree. Old holders are never
+removed; the views pick the best value.
 
   python3 -m engines.records_engine --season 2035            # report only
   python3 -m engines.records_engine --season 2035 --apply    # report and store
@@ -20,6 +25,7 @@ report lists where the stats and the record book disagree. Old holders are never
 import argparse
 import collections
 import json
+import re
 
 try:                     # imported lazily so the module (and its tests) load without a database driver
     import psycopg
@@ -68,15 +74,83 @@ def ordinal(n: int) -> str:
 
 
 # ------------------------------------------------------------------------------------------------- reading ---
+RECORD_HOLDER_SEASON = re.compile(r"^(?P<name>.+?)\s*\((?P<season>\d{4})\)$")
+
+
+def holder_season(mention):
+    """('Trey'Mane Davis', 2035) from 'Trey'Mane Davis (2035)', else None (no verifiable season)."""
+    match = RECORD_HOLDER_SEASON.match(str(mention or "").strip())
+    return (match.group("name").strip(), int(match.group("season"))) if match else None
+
+
+def recorded_season_lines(cur, seasons):
+    """{(category, season): [(player_id, holder, value)]} — the league's recorded season lines for `seasons`.
+
+    `season_stats` (players) and `season_stat_lines` (defense and kicking) are what the league actually played, so
+    they are what a seeded BOOK row is checked against (JR, 2026-11-12: the season line always owns the record).
+    This is the one loader every reader of the book uses, so `records_engine`, `newsroom/db_tools.py` and
+    `server/history_api.py` all compare the same values."""
+    lines = collections.defaultdict(list)
+    for season in sorted({int(s) for s in seasons if s}):
+        for cat, _team_id, player_id, holder, value in (season_player_values(cur, season) +
+                                                        season_defense_values(cur, season)):
+            lines[(cat, season)].append((player_id, holder, float(value)))
+    return dict(lines)
+
+
+def reconcile_recorded(book_value, recorded, names, better="HIGH"):
+    """What a book mark's value becomes once its holder's recorded season line is checked, or None.
+
+    `recorded` is the (category, season) slice of `recorded_season_lines`; `names` are the holder names the book
+    lists for the mark. JR's rule (2026-11-12): the recorded season line always owns the record, in either
+    direction — a book row below the line is raised and a book row above it is lowered (the earlier
+    "never upgrade a tie" rule is gone). The value used is the best over every matched row (max for a HIGH record,
+    min for a LOW one), so one co-holder's lower line can never lower the record and a partial or same-name row
+    cannot stand in for it; `same_name_players` counts the player ids that share a matched name.
+
+    None when the book lists no line for the mark, so the caller keeps the book's value."""
+    wanted = {str(n).strip().casefold() for n in names or () if str(n or "").strip()}
+    matches = [(pid, value) for pid, holder, value in recorded or ()
+               if str(holder or "").strip().casefold() in wanted]
+    if not matches:
+        return None
+    low = str(better or "HIGH").upper() == "LOW"
+    return {"book_value": float(book_value) if book_value is not None else None,
+            "recorded_value": (min if low else max)(value for _, value in matches),
+            "same_name_players": len({pid for pid, _ in matches if pid is not None})}
+
+
+def reconcile_mark_value(category, value, holder, season, lines, better="HIGH"):
+    """(value, conflict) for one record-book row: the recorded line's value where the two disagree.
+
+    `lines` is `recorded_season_lines`' mapping. The row keeps its value when there is no recorded line or the
+    line agrees; otherwise it takes the recorded value and the conflict says what the book said. This is the
+    single rule every surface uses (`load_book`, `newsroom/db_tools.get_record_book`,
+    `server/history_api.fetch_marks`), so the page, the writer tools and the engine cannot disagree."""
+    info = reconcile_recorded(value, lines.get((category, season), ()), [holder], better)
+    if not info or info["recorded_value"] == float(value):
+        return value, None
+    return info["recorded_value"], info
+
+
 def load_book(cur, season):
     """Categories, franchise records and top-10 entries from before this season (the baseline the season is measured
-    against), plus the record book's rows for this season (BOOK), which are the authority for it."""
+    against), plus the record book's rows for this season (BOOK). A BOOK row from an earlier season is read through
+    the holder's recorded season line (`reconcile_mark_value`), so the line owns the record here too."""
     cur.execute("SELECT category, label, scope, subject, better, COALESCE(season_type, 'REGULAR') FROM record_categories ORDER BY sort_order")
     cats = {r[0]: {"label": r[1], "scope": r[2], "subject": r[3], "better": r[4], "season_type": r[5]} for r in cur.fetchall()}
+    cur.execute("""SELECT DISTINCT season FROM franchise_records WHERE source = 'BOOK' AND season < %s
+                   UNION SELECT DISTINCT season FROM league_record_entries WHERE source = 'BOOK' AND season < %s""",
+                (season, season))
+    lines = recorded_season_lines(cur, {r[0] for r in cur.fetchall()})
+    corrections = []
     cur.execute("SELECT team_id, category, value, holder, season, source FROM franchise_records WHERE season <= %s", (season,))
     franchise, book_rows = collections.defaultdict(list), []
     for team_id, cat, value, holder, s, source in cur.fetchall():
         if s < season:
+            value, conflict = reconcile_mark_value(cat, value, holder, s, lines, cats.get(cat, {}).get("better"))
+            if conflict:
+                corrections.append({"team_id": team_id, "category": cat, "holder": holder, "season": s, **conflict})
             franchise[(team_id, cat)].append((float(value), holder, s))
         elif source == "BOOK":
             book_rows.append({"team_id": team_id, "category": cat, "value": float(value), "holder": holder})
@@ -84,6 +158,9 @@ def load_book(cur, season):
     entries, book_entries = collections.defaultdict(list), []
     for cat, value, holder, s, team_id, source in cur.fetchall():
         if s < season:
+            value, conflict = reconcile_mark_value(cat, value, holder, s, lines, cats.get(cat, {}).get("better"))
+            if conflict:
+                corrections.append({"team_id": team_id, "category": cat, "holder": holder, "season": s, **conflict})
             entries[cat].append((float(value), holder, s))
         elif source == "BOOK":
             book_entries.append({"team_id": team_id, "category": cat, "value": float(value), "holder": holder})
@@ -92,7 +169,8 @@ def load_book(cur, season):
     cur.execute("SELECT id, abbreviation, city, name FROM teams")
     teams = {r[0]: {"abbr": r[1], "name": f"{r[2]} {r[3]}"} for r in cur.fetchall()}
     return {"categories": cats, "franchise": franchise, "entries": entries, "teams": teams,
-            "book_rows": book_rows, "book_entries": book_entries, "book_categories": book_categories}
+            "book_rows": book_rows, "book_entries": book_entries, "book_categories": book_categories,
+            "corrections": corrections}
 
 
 def season_player_values(cur, season):
@@ -196,7 +274,8 @@ def evaluate(cur, season):
     book = load_book(cur, season)
     cats, teams = book["categories"], book["teams"]
     low = lambda cat: cats[cat]["better"] == "LOW"
-    holders_text = lambda rows, best: [h if h[:4].isdigit() else f"{h} ({s})" for v, h, s in rows if v == best]
+    holders_text = lambda rows, best: list(dict.fromkeys(
+        h if h[:4].isdigit() else f"{h} ({s})" for v, h, s in rows if v == best))
 
     records = team_seasons(cur, season)
     complete = bool(records) and all(r["games"] >= GAMES_PER_SEASON for r in records.values())
@@ -266,8 +345,9 @@ def evaluate(cur, season):
                     events.append({"type": "nfl_record", "result": "broke" if top != best else "tied", **base(c),
                                    "old_value": _num(best), "old_holders": holders_text(rows, best)})
 
-    # The record book is the authority for its seasons: mark the events it confirms and list what it has that the
-    # stats here don't (different data, or a category the engine doesn't compute).
+    # The record book's rows for its own seasons are checked against the recorded lines in load_book (the season
+    # line owns the record). Here: mark the events the book confirms and list what it has that the stats here don't
+    # (different data, or a category the engine doesn't compute).
     book_rows, book_entries = book["book_rows"], book["book_entries"]
     found = {(e["team_id"], e["category"]) for e in events if e["type"] == "franchise_record"}
     for e in events:
@@ -287,12 +367,17 @@ def evaluate(cur, season):
     events.sort(key=lambda e: (order[e["type"]], e.get("rank", 0), list(cats).index(e["category"]), -float(e["value"])))
     return {"season": season, "complete": complete, "games_played": {teams[t]["abbr"]: r["games"] for t, r in records.items()},
             "events": events, "book_only": book_only, "stats_only": stats_only, "book_checked": bool(book_rows),
-            "book_keys": {"franchise": sorted({(b["team_id"], b["category"]) for b in book_rows}),
-                          "entries": sorted({(b["team_id"], b["category"]) for b in book_entries})}}
+            "book_corrections": book.get("corrections", []),
+            "book_keys": {"franchise": sorted({(b["team_id"], b["category"], b["value"]) for b in book_rows}),
+                          "entries": sorted({(b["team_id"], b["category"], b["value"]) for b in book_entries})}}
 
 
 def find_records_broken_in_week(cur, season: int, week: int) -> list[dict]:
     """Finds all NFL-wide all-time records broken or tied in a specific week of `season`.
+
+    The thresholds come from `load_book`, so a BOOK row the holder's recorded season line contradicts is already
+    replaced by the recorded value (the season line owns the record, JR 2026-11-12): the slate expansion and
+    `newsroom/press_facts.py` cannot call a mark broken that the writer tools rank instead.
 
     Returns a list of event dicts:
       type: "nfl_record",
@@ -304,7 +389,8 @@ def find_records_broken_in_week(cur, season: int, week: int) -> list[dict]:
     book = load_book(cur, season)
     cats, teams, entries = book["categories"], book["teams"], book["entries"]
     low = lambda cat: cats[cat]["better"] == "LOW"
-    holders_text = lambda rows, best: [h if h[:4].isdigit() else f"{h} ({s})" for v, h, s in rows if v == best]
+    holders_text = lambda rows, best: list(dict.fromkeys(
+        h if h[:4].isdigit() else f"{h} ({s})" for v, h, s in rows if v == best))
 
     broken_events = []
 
@@ -537,20 +623,26 @@ def find_records_broken_in_week(cur, season: int, week: int) -> list[dict]:
 
 def apply(cur, season, result):
     """Stores the season's record rows (source 'LEAGUE'), replacing any stored earlier for the same season. Where the
-    record book (BOOK) already has the season's row for that team and category, the book's row stands."""
-    book_f = {tuple(k) for k in result["book_keys"]["franchise"]}
-    book_e = {tuple(k) for k in result["book_keys"]["entries"]}
+    record book (BOOK) already carries the season's row for that team, category and value, nothing is added; where
+    its stored value disagrees with the recorded line the event came from, the league row carries the recorded value
+    (the season line owns the record), and the views pick the best of the two."""
+    book_f, book_e = collections.defaultdict(set), collections.defaultdict(set)
+    for team_id, cat, value in result["book_keys"]["franchise"]:
+        book_f[(team_id, cat)].add(float(value))
+    for team_id, cat, value in result["book_keys"]["entries"]:
+        book_e[(team_id, cat)].add(float(value))
     cur.execute("DELETE FROM franchise_records WHERE source = 'LEAGUE' AND season = %s", (season,))
     cur.execute("DELETE FROM league_record_entries WHERE source = 'LEAGUE' AND season = %s", (season,))
     n_f = n_l = 0
     for e in result["events"]:
-        if e["type"] == "franchise_record" and (e["team_id"], e["category"]) not in book_f:
+        key = (e["team_id"], e["category"])
+        if e["type"] == "franchise_record" and float(e["value"]) not in book_f.get(key, ()):
             cur.execute("""INSERT INTO franchise_records (team_id, category, value, holder, player_id, season, source)
                            VALUES (%s, %s, %s, %s, %s, %s, 'LEAGUE') ON CONFLICT (team_id, category, holder, season) DO UPDATE
                            SET value = EXCLUDED.value, player_id = EXCLUDED.player_id""",
                         (e["team_id"], e["category"], e["value"], e["holder"], e["player_id"], season))
             n_f += 1
-        elif e["type"] == "top10" and (e["team_id"], e["category"]) not in book_e:
+        elif e["type"] == "top10" and float(e["value"]) not in book_e.get(key, ()):
             cur.execute("""INSERT INTO league_record_entries (category, value, holder, team_id, player_id, season, game_id, source)
                            VALUES (%s, %s, %s, %s, %s, %s, %s, 'LEAGUE') ON CONFLICT DO NOTHING""",
                         (e["category"], e["value"], e["holder"], e["team_id"], e["player_id"], season, e.get("game_id")))
@@ -595,6 +687,10 @@ def format_report(result) -> str:
         out.append("  none")
     if result.get("book_checked") and not (result.get("book_only") or result.get("stats_only")):
         out.append(f"\nThe record book's {result['season']} entries and the stats agree.")
+    if result.get("book_corrections"):
+        out.append("\nThe recorded season line owns the book where the two disagree:")
+        out += [f"  {b['category']}, {b['holder']} ({b['season']}): book {num(_num(b['book_value']))}, "
+                f"recorded {num(_num(b['recorded_value']))}" for b in result["book_corrections"]]
     if result.get("book_only") or result.get("stats_only"):
         out.append("\nWhere the record book and the stats disagree:")
         out += [f"  In the record book, not in the stats: {b['team']}, {b['label']}: {b['holder']}, {num(b['value'])}"

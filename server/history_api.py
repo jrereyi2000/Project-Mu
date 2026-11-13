@@ -22,8 +22,9 @@ import psycopg
 from fastapi import APIRouter, HTTPException
 
 from engines.coach_profile import fetch_team_coach
-from engines.records_engine import (GAMES_PER_SEASON, better, load_book, rank, season_defense_values,
-                                    season_player_values, team_seasons, tidy_name)
+from engines.records_engine import (GAMES_PER_SEASON, better, load_book, rank, reconcile_mark_value,
+                                    recorded_season_lines, season_defense_values, season_player_values,
+                                    team_seasons, tidy_name)
 from newsroom.all_pro import DEFENSE_QUOTAS, OFFENSE_QUOTAS, SPECIAL_TEAMS_QUOTAS
 
 CONN_INFO = os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")
@@ -183,7 +184,13 @@ def _rows(cur, sql: str, params=()) -> list:
 
 def fetch_marks(cur, abbrs: dict, as_of: dict) -> tuple:
     """(entries by category, franchise rows by category, current franchise rows by category, record holders by
-    category), each as shaped marks."""
+    category), each as shaped marks.
+
+    Every `BOOK` mark is read through its holder's recorded season line (`records_engine.reconcile_mark_value`):
+    JR's rule (2026-11-12) is that the season line always owns the record, so a seeded row the league's own line
+    contradicts cannot win a rank or a record on the page while the writer tools use the recorded value. A corrected
+    mark keeps its own value shape and gains `book_value` and `recorded_conflict` (the same fields the writer tools
+    report as `source_conflict`)."""
     def by_cat(rows):
         out = {}
         for r in rows:
@@ -197,7 +204,28 @@ def fetch_marks(cur, abbrs: dict, as_of: dict) -> tuple:
                                 "source FROM franchise_records_current;"))
     holders = by_cat(_rows(cur, "SELECT category, value, holder, player_id, team_id, season, game_date, source "
                                 "FROM league_records;"))
+    groups = (entries, franchise, current, holders)
+    better_by_cat = {r["category"]: r["better"] for r in _rows(cur, "SELECT category, better FROM record_categories;")}
+    booked = {m["season"] for group in groups for marks in group.values() for m in marks if m["source"] == "BOOK"}
+    reconcile_marks(groups, better_by_cat, recorded_season_lines(cur, booked))
     return entries, franchise, current, holders
+
+
+def reconcile_marks(groups: tuple, better_by_cat: dict, lines: dict) -> None:
+    """Correct every BOOK mark in `groups` from the holder's recorded season line, in place."""
+    for group in groups:
+        for category, marks in group.items():
+            for m in marks:
+                value, conflict = reconcile_mark_value(category, m["value"], m["holder"], m["season"], lines,
+                                                       better_by_cat.get(category, "HIGH"))
+                if not conflict:
+                    continue
+                m["book_value"], m["value"] = num(conflict["book_value"]), num(value)
+                m["recorded_conflict"] = {"book_value": num(conflict["book_value"]),
+                                          "recorded_value": num(conflict["recorded_value"]),
+                                          "source": "season_stats / season_stat_lines"}
+                if conflict["same_name_players"] > 1:
+                    m["recorded_conflict"]["same_name_players"] = conflict["same_name_players"]
 
 
 def build_category(cat: dict, entries: list, franchise: list, holders: list, era: str,

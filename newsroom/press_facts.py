@@ -8,7 +8,9 @@ opinions always pass.
 
 Everything is read through the cursor the caller owns, except two readers that already own their connection
 (`db_tools.get_game_box_score`, a LangChain tool) and `records_engine.find_records_broken_in_week`, which reads the
-record book with many queries. Both are module-level names so callers and tests can replace them.
+record book with many queries. Both are module-level names so callers and tests can replace them. The records reader
+already ranks against the recorded season line where a seeded BOOK row disagrees (D2, 2026-11-12), so a press sheet
+cannot call a mark broken that the writer tools rank.
 """
 from __future__ import annotations
 
