@@ -1,11 +1,14 @@
 # Project Mu: UI Type Scale and Container Plan
 
-**Status:** approved by JR (2026-11-12); building, wave 2 of 3 — all five §8 recommendations accepted; built by `build-ui-type`.
+**Status:** approved by JR (2026-11-12); building, wave 3 of 3 — all five §8 recommendations accepted; built by `build-ui-type`.
 
 **As built (wave 1, 2026-11-12):**
 - **U1:** `:root` verbatim per §2.2 (`--gray-500` keeps `#717176`, D6); all 698 type declarations in `index.css` → rungs; 22 container blocks and every 42 px horizontal padding → `var(--gutter)`; 79 `color: var(--gray-500)` → `--text-muted`; 49 red/team text rules → `var(--accent-text, var(--red-text))`, with white-on-red and dark-surface text kept on `--red`/`--team-color`. Gap values (52–67, 69–103) took the nearest rung. **One visible growth:** the article H1 clamp max 87 → `--fs-104` (`index.css:662`) — the only rung above 64; flipping that line to `--fs-64` is the alternative if JR dislikes it. The author-page `var(--author-team-color, var(--red))` text rules were left alone: `--accent-text` is published only by the four team pages, so converting them would drop the author's colour.
 - **U4:** all five stylesheets → `var(--fs-*)`; 34 muted-text rules → `--text-muted`; 7 red-text rules → `var(--accent-text, …)`; the history and draft containers → `var(--container)`. `napper.css` and `napperDraft.css` keep their own dark palette (only sizes changed).
 - **Measured on `main` after wave 1** (14 surfaces × 2560/1440/1050/900, headless Chromium against the live site): **0 sideways scroll at every width** (was 177 px at 900), **0 leaves under 10 px** on every surface outside the franchise page (was 78–352), and the two §2.6 token groups pass AA. The franchise page's 8–9 px labels are wave 2's.
+- **Wave 2 as built:** U2 swept 124 type declarations in the eight franchise components plus `frontOffice.css` (51 muted-text rules, 16 red-text rules, four 1240 px columns → `var(--container)`), U3 swept 84 declarations in the four conversation modules (39 muted, 3 red), U5 added `lib/accent.ts` and published `--accent-text` from the four team pages. **§2.5's 1200 px breakpoint was revised to 1400 px** (U7b, at `p8-11-layout`'s measurement): the 10 px tab type needs a 1390 px viewport for one row, so 1201–1389 had silently scrolled with no affordance. Measured at 1440/1400/1360/1300/1240/1201/1200/1050/900: one row at 1440, two rows below 1400, **0 tabs clipped, `scrollWidth === clientWidth`**.
+- **§2.4's acceptance was not met by U1 alone and needed a fix:** the 1080 px block cleared 1050–900 but at **850 and 820 the page still scrolled 26 px with the LIVE badge off screen**, and `FANTASY` rendered at 16 px mixed case because `App.tsx` wraps `.fantasy-trigger` in a `<div>`, so `.nav-links > a` never matched it (audit-7 M-0918 F1, `p8-11-layout` M-0927). Fixed in the tail unit U7b with a `@media (max-width: 900px)` step and `.fantasy-trigger` in all four nav selector lists plus the removal of its inline `font: inherit`. **Measured: `scrollWidth === innerWidth` at 1440/1050/1000/950/900/850/820/801/800, search and LIVE inside the viewport at 900, FANTASY at 13/11/10 px uppercase matching TEAMS at every width.**
+- **The tail units (U7a–U7d) close the plan defect recorded above:** all 435 remaining literal font sizes in `NapperPage.tsx`, `DebugPage.tsx`, `components/napper/**`, `DraftPage.tsx`, `components/draft/**`, `App.tsx` and the four unowned stragglers (`DraftWarRoomModule.tsx`, `StaffCards.tsx`, `NewsroomHomePage.tsx`, `StatsPage.tsx`) are now rungs. `grep` for `font-size: Npx`, `fontSize: "Npx"` and `text-[Npx]` across `Mu_Network/src` returns **nothing**. U7b also took the Gridiron contrast tail: `.versus`, the two sort glyphs and the standings row rank → `--text-muted`, the decorative `.story-number`/`.rank` and the footer wordmark → `aria-hidden`, and the author page's `--author-team-color` text → `--accent-text` with `accentText()`.
 - **Plan defect found in wave 1 (recorded for JR):** §2.2's rule "no literal px sizes anywhere in `Mu_Network/src` except `:root`" and §2.8's invariant on `Mu_Network/src/**` reach files the ownership table does not list — `NapperPage.tsx`, `DebugPage.tsx` and 10 files under `components/napper/` still hold 130 literal sizes (27 under 10 px). A tail unit (U7) sweeps them before U6, so the invariant can be strict network-wide.
 - **Contrast gate scope (§2.7 vs §1's non-goals):** the Mu Fantasy and Agent Wire palettes are explicitly out of colour scope in §1, so U6's tool hard-fails contrast on the Gridiron surfaces and reports the own-palette surfaces (fantasy, napper, social, draft) as advisory rows, with `--strict` for a full sweep. The ticker, disabled controls and `aria-hidden` text are excluded; gradient-backed leaves are reported as unmeasurable rather than failed.
 
@@ -118,7 +121,7 @@ The effect on the thing JR complained about: every 7–8 px mono label becomes 1
 }
 ```
 
-`--gray-500` stays for borders and fills (3 border uses, 58 others) and becomes `--gray-500: #5c5d63` **only if** the visual check shows the darker border is acceptable; otherwise the 203 text uses move to `var(--text-muted)` and `--gray-500` keeps its value. **Decision D6 below.**
+`--gray-500` stays for borders and fills (3 border uses, 58 others) and becomes `--gray-500: #5c5d63` **only if** the visual check shows the darker border is acceptable; otherwise the 203 text uses move to `var(--text-muted)` and `--gray-500` keeps its value. **Decision Q5 in §8.**
 
 Every declaration then names a token: `font: 700 var(--fs-11) var(--font-mono)`. No literal `px` sizes anywhere in `Mu_Network/src` after this plan except inside the `:root` block itself.
 
@@ -343,3 +346,10 @@ All five were decided on 2026-11-12: JR approved the plan as written and accepte
 |---|---|---|---|---|---|
 | U1 | 1 | `ui-type-u1` | `.claude/worktrees/ui-type-u1` | merged | `eb75f8d6` |
 | U4 | 1 | `ui-type-u4` | `.claude/worktrees/ui-type-u4` | merged | `82890d85` |
+| U2 | 2 | `ui-type-u2` | `.claude/worktrees/ui-type-u2` | merged | `46c95f18` |
+| U3 | 2 | `ui-type-u3` | `.claude/worktrees/ui-type-u3` | merged | `7b25d2a6` |
+| U5 | 2 | `ui-type-u5` | `.claude/worktrees/ui-type-u5` | merged | `7a5fbc94` |
+| U7a | 3 | `ui-type-u7a` | `.claude/worktrees/ui-type-u7a` | merged | `4b276888` |
+| U7b | 3 | `ui-type-u7b` | `.claude/worktrees/ui-type-u7b` | merged | `aaa0fc8d` |
+| U7c | 3 | `ui-type-u7c` | `.claude/worktrees/ui-type-u7c` | merged | `6540c1f2` |
+| U7d | 3 | `ui-type-u7d` | `.claude/worktrees/ui-type-u7d` | merged | `0a7d2161` |
