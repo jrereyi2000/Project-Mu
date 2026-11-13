@@ -1,6 +1,7 @@
 import { useContext, useEffect, useState } from "react";
 import { API_BASE } from "../../api";
 import { SystemContext } from "../../context/SystemContext";
+import { accentText } from "../../lib/accent";
 import { getDivision, getTeamPosition, logo, playerNames, type Team, teams } from "../../lib/gridiron";
 import FranchiseRecords from "../history/FranchiseRecords";
 import FrontOfficeTab, { type ContractFocus } from "./FrontOfficeTab";
@@ -95,7 +96,13 @@ export function TeamPage({ team }: { team: Team }) {
   ];
 
   return (
-    <main className="team-page" style={{ "--team-color": teamData?.team?.team_color || "#e31837" } as React.CSSProperties}>
+    <main
+      className="team-page"
+      style={{
+        "--team-color": teamData?.team?.team_color || "#e31837",
+        "--accent-text": accentText(teamData?.team?.team_color || "#e31837"),
+      } as React.CSSProperties}
+    >
       <section className="team-masthead">
         <div className="team-masthead-bg" />
         <div className="team-identity">
