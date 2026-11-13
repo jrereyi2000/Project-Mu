@@ -621,9 +621,13 @@ def _team_tracking(cur, team_ids, season: int) -> dict:
     """Tracked pocket attempts per club and career-row range: {(team_id, week, prev_week, prev_season)}.
 
     Summed over every usable Career delta of each club's players, so a receiver's row is checked against the
-    club it played for (a receiver's own `PASSATTEMPTS` is zero). The club is carried in the key so a traded
-    player's row is checked against its own historical clubs, not one substituted season team (audit-5
-    stats3 R2).
+    club it played for (a receiver's own `PASSATTEMPTS` is zero). Each Career row is bound to the club the
+    player's own game lines name over the weeks the row covers, so a traded passer's old rows keep their
+    historical club and a later move cannot relabel them (audit-5 stats3 R2, audit-stats3 R2b). A club the
+    passer has since left is still his: participants come from the game lines as well as `player_seasons`. A
+    row whose covered weeks span more than one club cannot be split, so it is left out rather than counted
+    whole against one of them. Only a row with no game line in its range falls back to the player's season
+    club, which is the only identity a season with no per-game lines has.
     """
     ids = sorted({int(team_id) for team_id in team_ids if team_id is not None})
     if not ids:
@@ -631,25 +635,53 @@ def _team_tracking(cur, team_ids, season: int) -> dict:
     # The clubs' player ids are an array constant, so the planner can apply it inside the view before its
     # per-player window functions; the view then reads only those clubs' rows instead of every player's.
     sql = """
-        WITH team_rows AS MATERIALIZED (
-            SELECT w.week, w.prev_week, w.prev_season, w.delta,
-                   (SELECT MIN(ps.team_id) FROM player_seasons ps
-                    WHERE ps.player_id = w.player_id AND ps.season = %(season)s
-                      AND ps.team_id = ANY(%(team_ids)s)) AS team_id
+        WITH player_games AS MATERIALIZED (
+            SELECT g.player_id, g.week, g.team_id
+            FROM game_stat_lines g
+            WHERE g.season = %(season)s AND g.team_id IS NOT NULL
+              AND g.player_id = ANY(ARRAY(
+                      SELECT ps.player_id FROM player_seasons ps
+                      WHERE ps.season = %(season)s AND ps.team_id = ANY(%(team_ids)s)
+                      UNION
+                      SELECT gl.player_id FROM game_stat_lines gl
+                      WHERE gl.season = %(season)s AND gl.team_id = ANY(%(team_ids)s)))
+        ), season_rows AS MATERIALIZED (
+            SELECT w.player_id, w.week, w.prev_week, w.prev_season, w.delta,
+                   GREATEST(COALESCE(w.prev_week, 0), 0) + 1 AS first_week,
+                   CASE WHEN COALESCE(w.week, 0) <= 0 THEN %(last_week)s ELSE w.week END AS last_week
             FROM player_week_counters w
             WHERE w.player_id = ANY(ARRAY(
                       SELECT ps.player_id FROM player_seasons ps
-                      WHERE ps.team_id = ANY(%(team_ids)s) AND ps.season = %(season)s))
+                      WHERE ps.season = %(season)s AND ps.team_id = ANY(%(team_ids)s)
+                      UNION
+                      SELECT gl.player_id FROM game_stat_lines gl
+                      WHERE gl.season = %(season)s AND gl.team_id = ANY(%(team_ids)s)))
               AND w.credited_season = %(season)s
               AND w.status IN ('OK', 'NO_GAMES') AND w.delta IS NOT NULL
+        ), row_clubs AS (
+            SELECT r.player_id, r.week, r.prev_week, r.prev_season, r.delta,
+                   array_agg(DISTINCT pg.team_id) FILTER (WHERE pg.team_id IS NOT NULL) AS clubs
+            FROM season_rows r
+            LEFT JOIN player_games pg
+                   ON pg.player_id = r.player_id AND pg.week BETWEEN r.first_week AND r.last_week
+            GROUP BY r.player_id, r.week, r.prev_week, r.prev_season, r.delta
+        ), bound AS (
+            SELECT c.week, c.prev_week, c.prev_season, c.delta,
+                   CASE WHEN cardinality(c.clubs) = 1 THEN c.clubs[1]
+                        ELSE (SELECT MIN(ps.team_id) FROM player_seasons ps
+                              WHERE ps.player_id = c.player_id AND ps.season = %(season)s
+                                AND ps.team_id = ANY(%(team_ids)s))
+                   END AS team_id
+            FROM row_clubs c
         )
         SELECT team_id, week, prev_week, prev_season,
                COALESCE(SUM((delta ->> 'PASSATTEMPTS')::int), 0) AS pass_att,
                COALESCE(SUM((delta ->> 'INSIDEPOCKETTHROW_ATTEMPTS')::int), 0)
              + COALESCE(SUM((delta ->> 'OUTSIDEPOCKETTHROW_ATTEMPTS')::int), 0) AS pocket_att
-        FROM team_rows
+        FROM bound
+        WHERE team_id IS NOT NULL
         GROUP BY team_id, week, prev_week, prev_season"""
-    params = {"team_ids": ids, "season": season}
+    params = {"team_ids": ids, "season": season, "last_week": LAST_SEASON_WEEK}
     columns = ("team_id", "week", "prev_week", "prev_season", "pass_att", "pocket_att")
     return {(row["team_id"], row["week"], row["prev_week"], row["prev_season"]):
             (row["pass_att"], row["pocket_att"])
@@ -771,15 +803,22 @@ def _game_weeks(row: dict, team_weeks: set[int], schedule_known: bool) -> set[in
     return weeks
 
 
-def _denominator_games(weeks, game_teams: dict[int, int], games_by_team: dict):
+def _denominator_games(weeks, game_teams: dict[int, int], games_by_team: dict,
+                       identity_games: int, games_claimed: int):
     """The (club, game) pairs whose boxes are the season denominator, or why a game cannot be bound.
 
     A covered week the player's own game line names takes that line's club. A covered week with no line
-    takes the one candidate club that played it; two candidate clubs playing means the historical club
-    cannot be told, so the denominator is refused rather than the current club substituted (audit-5
-    stats3 R2). A week no candidate club played is a bye and contributes no game. The games are those of
-    the covered weeks, so a player inactive for a club game still counts it (the DNP question is separate).
+    takes the one candidate club that played it, but only while the player's identity is not in question:
+    either he has no per-game identity at all this season (the season club is then the only identity the load
+    has), or his own game lines account for every game his Career rows claim, which makes a line-less week a
+    game he did not appear in. When his lines cover fewer games than the rows claim, a game he played has no
+    retained line and its club cannot be established, so the denominator is refused rather than filled from
+    the latest club (audit-5 stats3 R2a, audit-stats3 R2a). Two candidate clubs playing a line-less week mean
+    the historical club cannot be told either (audit-5 stats3 R2). A week no candidate club played is a bye
+    and contributes no game. The games are those of the covered weeks, so a player inactive for a club game
+    still counts it (the DNP question is separate).
     """
+    identity_known = not identity_games or identity_games >= games_claimed
     playing: dict[int, list[tuple[int, dict]]] = {}
     for team_id, games in games_by_team.items():
         for game in games:
@@ -799,6 +838,10 @@ def _denominator_games(weeks, game_teams: dict[int, int], games_by_team: dict):
         if len(candidates) > 1:
             return [], (f"week {week}: the player has no game line and more than one club played; "
                         "the historical club cannot be established")
+        if not identity_known:
+            return [], (f"week {week}: the player's game lines cover {identity_games} of the "
+                        f"{games_claimed} games his Career rows claim, so the historical club cannot be "
+                        "established")
         bound.append(candidates[0])
     return bound, None
 
@@ -851,8 +894,12 @@ def player_metrics(cur, season: int, player_id: int, week: int | None = None) ->
 
     Team denominators are bound per historical game: the player's own game lines say which club each covered
     week belonged to, so a traded player's games are summed club by club rather than through one season team
-    (audit-5 stats3 R2). They are used only when every bound game and box covers the games the numerator
-    covers (audit-5 S1); otherwise `team_denominator` names the gap and the denominator inputs are None.
+    (audit-5 stats3 R2). A line-less covered week takes the one candidate club that played it only while the
+    player's identity is not in question: no per-game identity at all, or his own lines account for every game
+    his Career rows claim; otherwise a game he played has no retained line and the denominator is refused with
+    the week named (audit-stats3 R2a). They are used only when every bound game and box covers the games the
+    numerator covers (audit-5 S1); otherwise `team_denominator` names the gap and the denominator inputs are
+    None.
     `coverage` reports games covered, stat-line games, untracked weeks and lost games, plus `mixed_sources`
     when a metric was suppressed for mixing sources, `invalid_inputs` when a counter contradicts another
     (receptions above targets would publish a catch rate over one, audit-5 S4), and `reasons` for a week that
@@ -986,7 +1033,9 @@ def player_metrics(cur, season: int, player_id: int, week: int | None = None) ->
     if week is None:
         game_weeks = sorted({w for row in used for w in _row_weeks(row)})
         if game_weeks:
-            bound, denominator_reason = _denominator_games(game_weeks, game_teams, games_by_team)
+            bound, denominator_reason = _denominator_games(
+                game_weeks, game_teams, games_by_team,
+                identity_games=len(game_teams), games_claimed=games_covered)
             if denominator_reason is None:
                 denominator_reason = _denominator_reason(games_covered, [game for _, game in bound])
         else:

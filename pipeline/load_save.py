@@ -840,8 +840,9 @@ def load_career_counters(cur, snapshot, season, players, capture_id, report):
     reload of the same week replaces its row; a load outside a playable week takes a stage/sentinel key
     (PRESEASON week 0, OFFSEASON week -1, PROBOWL week -2) that cannot collide with a real week. A row also records
     the season games this load's own season line gave the player (`season_games`, 2027_02_29) when the column
-    exists. A database without the migration reports `table missing` (or `stage column missing`) and writes
-    nothing, so a load against an older schema still succeeds."""
+    exists, and a reload overwrites any legacy provenance (`season_games_source` / `season_games_bound`) with
+    this load's own observation. A database without the migration reports `table missing` (or `stage column
+    missing`) and writes nothing, so a load against an older schema still succeeds."""
     if snapshot.get("meta", {}).get("reader_version", 0) < CAREER_COUNTERS_READER_VERSION:
         report["career_counters"] = f"reader_version < {CAREER_COUNTERS_READER_VERSION}"
         return
@@ -851,19 +852,28 @@ def load_career_counters(cur, snapshot, season, players, capture_id, report):
         return
     cur.execute("SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' "
                 "AND table_name = 'player_career_counters' "
-                "AND column_name IN ('stage', 'load_seq', 'season_games')")
+                "AND column_name IN ('stage', 'load_seq', 'season_games', 'season_games_source', "
+                "'season_games_bound')")
     have = {row[0] for row in cur.fetchall()}
     if not {"stage", "load_seq"} <= have:
         report["career_counters"] = "stage column missing (apply 2027_02_28_stats_loader_weeks)"
         return
     has_season_games = "season_games" in have
+    # A reload replaces the row's provenance, not only its value: a column default applies on INSERT, never on
+    # ON CONFLICT ... DO UPDATE, so an upgraded legacy row would keep claiming LEGACY_UNKNOWN (or LEGACY_ZERO)
+    # and its bound over a load that has now observed the season's games (audit-5 stats2b P1). The load's own
+    # observation is `LOAD` with no bound, and a database without the provenance columns keeps the plain path.
+    has_provenance = has_season_games and {"season_games_source", "season_games_bound"} <= have
+    columns = ["season_games"] if has_season_games else []
+    if has_provenance:
+        columns += ["season_games_source", "season_games_bound"]
     sql = ("INSERT INTO player_career_counters (season, week, stage, player_id, madden_table, counters, "
-           "games_played, capture_id, read_at" + (", season_games" if has_season_games else "") +
-           ") VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s" + (", %s" if has_season_games else "") + ") "
+           "games_played, capture_id, read_at" + "".join(f", {name}" for name in columns) +
+           ") VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s" + ", %s" * len(columns) + ") "
            "ON CONFLICT (season, week, player_id, stage) DO UPDATE SET madden_table = EXCLUDED.madden_table, "
            "counters = EXCLUDED.counters, games_played = EXCLUDED.games_played, "
            "capture_id = EXCLUDED.capture_id, read_at = EXCLUDED.read_at" +
-           (", season_games = EXCLUDED.season_games" if has_season_games else "") +
+           "".join(f", {name} = EXCLUDED.{name}" for name in columns) +
            ", load_seq = nextval('player_career_counters_load_seq')")
     stage, week = counter_position(snapshot)
     year = snapshot["season"]["franchise_year"]
@@ -880,6 +890,8 @@ def load_career_counters(cur, snapshot, season, players, capture_id, report):
         params = (season, week, stage, who[0], table, json.dumps(counters), games_played, capture_id, read_at)
         if has_season_games:
             params += (season_games_played(p, year),)
+            if has_provenance:
+                params += ("LOAD", None)
         cur.execute(sql, params)
         n += 1
     report["career_counter_rows"] = n

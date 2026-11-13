@@ -539,3 +539,115 @@ class IdentityAndIsolationTest(unittest.TestCase):
         self.assertEqual(season_out["coverage"]["games_covered"], 1)
         self.assertEqual(season_out["inputs"]["team_pass_attempts"], 60)
         self.assertAlmostEqual(season_out["metrics"]["target_share"], 5 / 60, places=10)
+
+    def test_r2a_a_missing_old_club_line_refuses_the_latest_club_s_denominator(self):
+        # audit-stats3 R2a: the player's old-club line is gone, so club A vanishes from the candidate set and
+        # the latest club's own week-1 game would stand in for it. The game he played has no retained identity,
+        # so the denominator is refused rather than filled from club B (160 = 100 + 60 and 20/160 = 0.125).
+        season = 2092
+        club_a = self.team("B9-R2A-A")
+        club_b = self.team("B9-R2A-B")
+        pid = self.player("B9 R2A", club_b, season)          # the latest club
+        g_a1 = self.game(season, 1, club_a, attempts=50)
+        self.game(season, 1, club_b, attempts=100)           # club B's own, unrelated week-1 game
+        g_b2 = self.game(season, 2, club_b, attempts=60)
+        self.line(g_a1, pid, club_a, receptions=6)
+        self.line(g_b2, pid, club_b, receptions=4)
+        self.season_games(season, pid, 2)
+        self.career(season, pid, 0, 0, 1, GAMESPLAYED=0)
+        self.career(season, pid, 2, 2, 2, GAMESPLAYED=2, TARGETS=20, RECEIVECATCHES=10)
+        # Only the old club's line is deleted: both games and both boxes stay, and the week is still unnamed.
+        self.cur.execute("DELETE FROM player_stats WHERE game_id = %s AND player_id = %s", (g_a1, pid))
+
+        season_out = am.player_metrics(self.cur, season, pid)
+
+        self.assertIsNone(season_out["inputs"]["team_pass_attempts"])
+        self.assertIsNone(season_out["inputs"]["team_total_plays"])
+        self.assertIsNone(season_out["metrics"]["target_share"])
+        self.assertEqual(season_out["inputs"]["targets"], 20)      # the numerator itself is untouched
+        self.assertEqual(season_out["coverage"]["games_covered"], 2)
+        self.assertIn("week 1", season_out["coverage"]["team_denominator"])
+        self.assertIn("historical club cannot be established",
+                      season_out["coverage"]["team_denominator"])
+
+    def test_r2a_a_line_less_week_the_player_did_not_play_still_counts(self):
+        # The other side of the rule: his lines account for both games his Career rows claim, so week 2 is a
+        # game he did not appear in and still counts for the club's denominator (JR's DNP choice is untouched).
+        season = 2091
+        club = self.team("B9-R2B-TEAM")
+        pid = self.player("B9 R2B", club, season)
+        g1 = self.game(season, 1, club, attempts=50)
+        self.game(season, 2, club, attempts=40)              # no line: he did not play this one
+        g3 = self.game(season, 3, club, attempts=60)
+        self.line(g1, pid, club, receptions=3)
+        self.line(g3, pid, club, receptions=6)
+        self.season_games(season, pid, 2)
+        self.career(season, pid, 0, 0, 1, GAMESPLAYED=0)
+        self.career(season, pid, 1, 1, 2, GAMESPLAYED=1, TARGETS=4, RECEIVECATCHES=3)
+        self.career(season, pid, 3, 2, 3, GAMESPLAYED=2, TARGETS=9, RECEIVECATCHES=6)
+
+        season_out = am.player_metrics(self.cur, season, pid)
+
+        self.assertEqual(season_out["inputs"]["team_pass_attempts"], 150)
+        self.assertEqual(season_out["metrics"]["target_share"], pytest.approx(9 / 150))
+        self.assertIsNone(season_out["coverage"]["team_denominator"])
+        self.assertTrue(season_out["coverage"]["same_games"])
+
+    def traded_passer_fixture(self, season, later_club):
+        """The audit's R2b fixture: receiver A/week 1 tracked as untracked, a passer whose later club moved.
+
+        Club A's week 1 was not tracked (50 pass attempts, no pocket attempts); club B's week 2 was (60/60).
+        The passer who threw club A's week 1 keeps his own week-1 game line, and only `player_seasons` says
+        where he plays now: `later_club` is club B (a later trade to the receiver's own club) or a club that is
+        not a candidate at all.
+        """
+        club_a = self.team("B9-R2F-A")
+        club_b = self.team("B9-R2F-B")
+        extra = club_b if later_club == "B" else self.team("B9-R2F-C")
+        receiver = self.player("B9 R2F", club_b, season)
+        qb_a = self.player("B9 R2F-QA", extra, season)
+        qb_b = self.player("B9 R2F-QB", club_b, season)
+        g_a1 = self.game(season, 1, club_a, attempts=50)
+        g_b2 = self.game(season, 2, club_b, attempts=60)
+        self.line(g_a1, receiver, club_a, receptions=6)
+        self.line(g_b2, receiver, club_b, receptions=2)
+        self.line(g_a1, qb_a, club_a, completions=20, pass_attempts=50)
+        self.line(g_b2, qb_b, club_b, completions=30, pass_attempts=60)
+        self.career(season, qb_a, 0, 0, 1, GAMESPLAYED=0)
+        self.career(season, qb_a, 1, 1, 2, GAMESPLAYED=1, PASSATTEMPTS=50,
+                    INSIDEPOCKETTHROW_ATTEMPTS=0, OUTSIDEPOCKETTHROW_ATTEMPTS=0)
+        self.career(season, qb_b, 0, 0, 1, GAMESPLAYED=0)
+        self.career(season, qb_b, 2, 1, 2, GAMESPLAYED=1, PASSATTEMPTS=60,
+                    INSIDEPOCKETTHROW_ATTEMPTS=60, OUTSIDEPOCKETTHROW_ATTEMPTS=0)
+        self.career(season, receiver, 0, 0, 1, GAMESPLAYED=0)
+        self.career(season, receiver, 1, 1, 2, GAMESPLAYED=1, TARGETS=9, RECEIVECATCHES=6)
+        self.career(season, receiver, 2, 2, 3, GAMESPLAYED=2, TARGETS=14, RECEIVECATCHES=8)
+        return receiver
+
+    def test_r2b_a_traded_passer_s_old_rows_keep_their_historical_club(self):
+        # audit-stats3 R2b: only the passer's later club changed (A -> B), so his week-1 row must still be club
+        # A's untracked interval: untracked 1, used targets 5, denominator 60, share 5/60.
+        season = 2090
+        receiver = self.traded_passer_fixture(season, later_club="B")
+
+        season_out = am.player_metrics(self.cur, season, receiver)
+
+        self.assertEqual(season_out["coverage"]["untracked_weeks"], 1)
+        self.assertEqual(season_out["weeks_unknown"], 1)
+        self.assertEqual(season_out["inputs"]["targets"], 5)
+        self.assertEqual(season_out["coverage"]["games_covered"], 1)
+        self.assertEqual(season_out["inputs"]["team_pass_attempts"], 60)
+        self.assertEqual(season_out["metrics"]["target_share"], pytest.approx(5 / 60))
+
+    def test_r2b_a_passer_who_moved_to_an_unrelated_club_is_still_tracked(self):
+        # A passer who left for a club that is not a candidate at all must not vanish from the tracking query:
+        # his historical week-1 row is still club A's, and the receiver's week-1 row stays untracked.
+        season = 2089
+        receiver = self.traded_passer_fixture(season, later_club="C")
+
+        season_out = am.player_metrics(self.cur, season, receiver)
+
+        self.assertEqual(season_out["coverage"]["untracked_weeks"], 1)
+        self.assertEqual(season_out["inputs"]["targets"], 5)
+        self.assertEqual(season_out["inputs"]["team_pass_attempts"], 60)
+        self.assertEqual(season_out["metrics"]["target_share"], pytest.approx(5 / 60))

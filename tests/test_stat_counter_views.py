@@ -17,6 +17,7 @@ import pytest
 from db import migrate
 from engines import advanced_metrics as am
 from pipeline import load_save as ls
+from tests.test_load_save import TEST_SEASON, v10_snapshot
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MIGRATION = os.path.join(ROOT, "db", "migrations", "2027_02_29_stats_counter_season_games.sql")
@@ -458,3 +459,155 @@ class RealSaveAttributionTest(unittest.TestCase):
         # delta is credited to it.
         self.assertEqual(self.one("SELECT COUNT(*) FROM player_season_counters "
                                   "WHERE season = 2027 AND delta IS NOT NULL"), (0,))
+
+
+@pytest.mark.integration
+class CaptureReloadProvenanceTest(unittest.TestCase):
+    """audit-5 stats2b P1: reloading a retained capture replaces a legacy row's provenance (audit-stats2b P1).
+
+    The upgrade marks every pre-migration row LEGACY_UNKNOWN (or LEGACY_ZERO) and keeps its bound. PostgreSQL
+    applies a column default only on INSERT, never on ON CONFLICT ... DO UPDATE, so a reload that named only
+    `season_games` left the old label and bound in place over a load that had now observed the games, and both
+    views kept reporting unknown history instead of the lost game they could see. Each test drops the columns
+    and views to the legacy shape, loads a real snapshot, upgrades, reloads, and rolls everything back.
+    """
+
+    def setUp(self):
+        self.conn = psycopg.connect(ls.DSN)
+        self.cur = self.conn.cursor()
+        self.body = migrate._strip_outer_transaction(pathlib.Path(MIGRATION).read_text())
+        self.cur.execute("DROP VIEW player_season_counters")
+        self.cur.execute("DROP VIEW player_week_counters")
+        for column in ("season_games_source", "season_games_bound", "season_games"):
+            self.cur.execute("ALTER TABLE player_career_counters DROP COLUMN " + column)
+
+    def tearDown(self):
+        self.conn.rollback()
+        self.conn.close()
+
+    def query(self, sql, *args):
+        self.cur.execute(sql, args)
+        return self.cur.fetchall()
+
+    def one(self, sql, *args):
+        self.cur.execute(sql, args)
+        return self.cur.fetchone()
+
+    def snapshot(self, season_games=1, stage="RegularSeason", career=8):
+        """tests/test_load_save.v10_snapshot with the season line this capture's own save carries."""
+        snap = v10_snapshot()
+        snap["season"].update(week_type=stage, week_index=5 if stage == "RegularSeason" else 0)
+        player = snap["players"][0]
+        player["career_stats"]["stats"]["GAMESPLAYED"] = career
+        player["season_stats"] = ([] if season_games is None else
+                                  [{"kind": "offense",
+                                    "stats": {"SEAS_YEAR": snap["season"]["franchise_year"],
+                                              "GAMESPLAYED": season_games}}])
+        return snap
+
+    def capture(self, only_first=False, **line):
+        """Load the snapshot once; `only_first` drops the second player's career row so a reload leaves it."""
+        snap = self.snapshot(**line)
+        if only_first:
+            snap["players"][1]["career_stats"] = None
+        ls.load_snapshot(self.cur, snap, season=TEST_SEASON)
+        return self.one("SELECT id FROM players WHERE madden_pgid = 900001")[0]
+
+    def upgrade(self):
+        self.cur.execute(self.body)
+
+    def rows(self, pid):
+        return self.query(
+            "SELECT c.season_games, c.season_games_source, c.season_games_bound, w.status, w.games_covered "
+            "FROM player_career_counters c "
+            "JOIN player_week_counters w USING (season, week, stage, player_id, madden_table, load_seq) "
+            "WHERE c.player_id = %s ORDER BY c.load_seq", pid)
+
+    def coverage(self, pid):
+        return self.one("SELECT weeks_partial, games_lost, weeks_unknown, weeks_history_unknown, "
+                        "games_history_bound, games_covered FROM player_season_counters "
+                        "WHERE player_id = %s AND season = %s", pid, TEST_SEASON)
+
+    def reloaded(self, **line):
+        """A legacy load, the upgrade, then the same capture's retained reload."""
+        pid = self.capture(**line)
+        self.upgrade()
+        self.assertEqual(self.rows(pid), [(None, "LEGACY_UNKNOWN", 5, "UNKNOWN_HISTORY", 0)])
+        self.capture(**line)
+        return pid
+
+    def test_a_retained_reload_replaces_unknown_history_with_its_own_observation(self):
+        pid = self.reloaded(season_games=1)
+
+        self.assertEqual(self.rows(pid), [(1, "LOAD", None, "PARTIAL", 1)])
+        self.assertEqual(self.coverage(pid), (1, 1, 0, 0, None, 0))
+        metrics = am.player_metrics(self.cur, TEST_SEASON, pid)
+        self.assertEqual(metrics["weeks_unknown"], 0)
+        self.assertEqual(metrics["coverage"]["games_lost"], 1)
+        self.assertFalse(any("predates" in reason for reason in metrics["coverage"]["reasons"]))
+
+    def test_a_reload_that_observed_five_games_reports_five_lost_games(self):
+        pid = self.reloaded(season_games=5)
+
+        self.assertEqual(self.rows(pid), [(5, "LOAD", None, "PARTIAL", 5)])
+        self.assertEqual(self.coverage(pid), (1, 5, 0, 0, None, 0))
+        self.assertEqual(am.player_metrics(self.cur, TEST_SEASON, pid)["coverage"]["games_lost"], 5)
+
+    def test_a_reload_with_no_season_line_is_a_known_baseline(self):
+        # The save carried no season line for the player: that is the load's own observation, so the row is a
+        # BASELINE with nothing unknown, never the legacy "at most 5" bound.
+        pid = self.reloaded(season_games=None)
+
+        self.assertEqual(self.rows(pid), [(None, "LOAD", None, "BASELINE", 0)])
+        self.assertEqual(self.coverage(pid), (0, 0, 0, 0, None, 0))
+        metrics = am.player_metrics(self.cur, TEST_SEASON, pid)
+        self.assertEqual(metrics["weeks_unknown"], 0)
+        self.assertEqual(metrics["coverage"]["games_lost"], 0)
+        self.assertEqual(metrics["coverage"]["reasons"], [])
+
+    def test_a_legacy_zero_row_and_a_modern_row_survive_repeated_reloads_and_replays(self):
+        # A provable zero-game baseline upgrades as LEGACY_ZERO; a capture reload is then the load's own
+        # observation (here a NULL season line, because a stat-less row keeps no zero games -- group_lines drops
+        # an all-zero group), and repeated reloads and migration replays never put the legacy label back.
+        zero = self.capture(season_games=0, stage="PreSeason", career=0)
+        self.upgrade()
+        self.assertEqual(self.rows(zero), [(0, "LEGACY_ZERO", None, "BASELINE", 0)])
+        self.capture(season_games=0, stage="PreSeason", career=0)
+        self.capture(season_games=0, stage="PreSeason", career=0)
+        self.upgrade()
+        self.upgrade()
+        self.assertEqual(self.rows(zero), [(None, "LOAD", None, "BASELINE", 0)])
+
+    def test_a_legacy_row_that_was_not_reloaded_keeps_its_unknown_history(self):
+        self.capture(season_games=1)
+        self.upgrade()
+        sibling = self.one("SELECT id FROM players WHERE madden_pgid = 900002")[0]
+        before = self.rows(sibling)
+        self.assertEqual(before, [(None, "LEGACY_UNKNOWN", 5, "UNKNOWN_HISTORY", 0)])
+
+        self.capture(season_games=1, only_first=True)      # the reload carries only the first player's row
+        self.upgrade()
+
+        self.assertEqual(self.rows(sibling), before)
+
+    def older_schema(self, *columns):
+        """The pre-2027_02_29 shape: the views and the given columns are dropped, and a load still works."""
+        self.upgrade()
+        self.cur.execute("DROP VIEW player_season_counters")
+        self.cur.execute("DROP VIEW player_week_counters")
+        for column in columns:
+            self.cur.execute("ALTER TABLE player_career_counters DROP COLUMN " + column)
+
+    def test_a_load_on_the_older_schema_still_writes_its_rows(self):
+        # Without `season_games` the loader writes the row's counters as it always did.
+        self.older_schema("season_games_source", "season_games_bound", "season_games")
+        pid = self.capture(season_games=1)
+        self.assertEqual(self.one("SELECT games_played FROM player_career_counters WHERE player_id = %s", pid),
+                         (8,))
+
+    def test_a_load_keeps_its_2027_02_29_path_without_the_provenance_columns(self):
+        # `season_games` exists while the provenance columns do not: the loader keeps its season-games path.
+        self.older_schema("season_games_source", "season_games_bound")
+        pid = self.capture(season_games=1)
+        self.assertEqual(self.one("SELECT season_games FROM player_career_counters WHERE player_id = %s", pid),
+                         (1,))
