@@ -39,9 +39,11 @@ Any model class except Muse may run `/builder`, `/execute-plan` and `/propose`; 
 `tools/spawn_agent.sh <label> deepseek|muse` creates the session headlessly in the shared OpenCode
 window; the API can create it but cannot open a TUI tab (M-0743/M-0744). The project TUI plugin
 `.opencode/plugins/mu-sessions/tui.js` closes that gap: it opens a tab for every **new**
-`Mu <label> (<agent>)` session after the plugin loads, and adds `/mu-sessions` (alias `/mu`) to
-list the Mu sessions updated in the last 12 hours and focus the one you pick. It is TUI-only and
-never sends a prompt or a key to another session. Load it with `/reload` or the next TUI start.
+`Mu <label> (<agent>)` or `Mu <label> — <task>` session after the plugin loads, and adds `/mu-sessions` (alias
+`/mu`) to list the Mu sessions updated in the last 12 hours and focus the one you pick. It only matches a title
+that carries a kebab-case label and then `(` or `—`, so an ordinary chat titled "Mu …" gets no tab, and its
+toast, picker and focus calls are all guarded. It is TUI-only and never sends a prompt or a key to another
+session. Load it with `/reload` or the next TUI start.
 
 ## Claude accounts
 
@@ -68,8 +70,16 @@ a new inbox.
     }
   }
   ```
-- `MU_CLAUDE_PERSONAL_CONFIG_DIR` overrides the config directory and
-  `MU_CLAUDE_PERSONAL_CMD` points the route at JR's `claude-personal` alias instead of the wrapper.
+- `MU_CLAUDE_PERSONAL_CONFIG_DIR` overrides the config directory and `MU_CLAUDE_PERSONAL_BIN` names the
+  Claude Code binary `tools/claude_personal.sh` execs (default `claude`). `MU_CLAUDE_PERSONAL_CMD`, read by
+  `tools/spawn_agent.sh`, replaces the whole personal command instead: it must be a path to an executable or
+  wrapper script (for example `tools/claude_personal.sh`), not JR's `claude-personal` shell alias — the route
+  runs it with `env`, which cannot run an alias (M-0823 B-5).
+- A session started on the secondary account that spawns a primary route (`claude`, `opus`, `codex`, `*-auto`)
+  no longer leaks its `CLAUDE_CONFIG_DIR` into the child or into tmux's global environment (M-0823 B-4), so
+  those windows stay on the primary account. `tools/usage_check.py` reads the account's own usage file
+  (`data/usage/rate_limits_personal.json` under `~/.claude-secondary`), so an auditor on either account
+  measures its own quota (M-0823 B-3).
 
 ## Built
 
@@ -93,7 +103,7 @@ Not skills: tools the skills above (and the auditor) run, so a builder and the a
 |---|---|---|---|
 | `python3 -m tools.offseason_check` | `e2e`: one offseason through `league_office` (carousel, OFFSEASON_START, RESIGN, FREE_AGENCY wave 1, COMBINE) on a copy of a real save and a fresh `mu_scratch_offseason_*` DB, checking after every write the staff-contract invariant, one live row per person, seat Contract\* against the ledger, user wiring, read-back and an empty re-plan. `timelines`: 39 synthetic staff-contract timelines through the real producer, hot seats and carousel, with an expected-totals table. `invariant --dsn`: the invariant over any scratch DB | [ACCEPTANCE_CHECKS.md](ACCEPTANCE_CHECKS.md) | Packaged from the auditor's scripts (JR, 2026-11-10). Only `mu_scratch_*` DBs; the original save is never written (sha256 checked) |
 | `python3 -m tools.agent_board_rotate [--apply] [--keep M-xxxx …] [--keep-last 40]` | Archives old, closed messages from `AGENT_CONVERSATION.md` to `docs/agent_board_archive/` (git-ignored), moved verbatim with their numbers unchanged. It keeps the header, the newest 40 messages, every unreleased CLAIM, every HANDOFF or QUESTION no other session has cited, and anything given with `--keep`. It's a dry run unless given `--apply`. | `/audit` §6 | Run by an auditor while no build wave is active (JR, 2026-11-10). Appends that arrive during the swap are kept. A message's Kind is read only up to the first `·`, so a `**Re:** M-0001 (CLAIM)` on the Kind line cannot make a RELEASE look like an open CLAIM. |
-| `python3 -m tools.usage_check [--five-hour 85] [--weekly 99] [--json]` | Reports the Claude plan's 5-hour and weekly usage from `data/usage/rate_limits.json`. That file is written by `tools/usage_statusline.py`, the Claude Code status line set in `~/.claude/settings.json`, which also shows `5h N% · wk N%` on screen. Exits 0 when under both thresholds, 2 at or over either (85% / 99%), and 1 when the numbers are unknown (no file, or older than 10 minutes). | `/audit` §3 | The limits are account-wide, so any Claude session keeps the file fresh. DeepSeek-routed sessions don't report them and leave the file alone. Added 2026-11-10 (JR) |
+| `python3 -m tools.usage_check [--five-hour 85] [--weekly 99] [--file PATH] [--json]` | Reports the Claude plan's 5-hour and weekly usage from the usage file for this session's account: `data/usage/rate_limits_personal.json` when `CLAUDE_CONFIG_DIR` is the personal config directory (`~/.claude-secondary`, `MU_CLAUDE_PERSONAL_CONFIG_DIR`), else `data/usage/rate_limits.json`; `--file` and then `MU_USAGE_FILE` override that. That file is written by `tools/usage_statusline.py`, the Claude Code status line set in `~/.claude/settings.json` (the secondary one uses `tools/usage_statusline_personal.sh`), which also shows `5h N% · wk N%` on screen. Exits 0 when under both thresholds, 2 at or over either (85% / 99%), and 1 when the numbers are unknown (no file, older than 10 minutes, or a `seen_at` more than a minute in the future). | `/audit` §3 | The limits are account-wide, so any Claude session keeps its own file fresh. DeepSeek-routed sessions don't report them and leave the files alone. Added 2026-11-10 (JR); account-aware and future-`seen_at`-safe 2026-11-12 (M-0823) |
 
 ## Being built
 

@@ -48,7 +48,7 @@ season and the projected class, then re-run the P3-02 fit against the fixed engi
   and `frac` are both gone on `main` now, since the fit takes the pool from `league_shape_pool`.)
 - **Why the numbers had to move:** `ded2627` moved the exit/rookie step into `engines/progression.py`
   (`shape_exits_and_rookies`) so the fit and the live engine cannot drift, and `e93e417` keyed the exit draw on
-  `season:seed`. The fit's replay uses that shared step (`engines/tuning/progression_fit.py:33`), so the three
+  `season:seed`. The fit's replay uses that shared step (`engines/tuning/progression_fit.py:394`), so the three
   reports dated **2026-11-10 19:39–20:14** measured a step that no longer exists.
 
 ---
