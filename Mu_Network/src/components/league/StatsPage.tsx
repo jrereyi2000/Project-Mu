@@ -256,13 +256,13 @@ export function StatsPage({ mode }: { mode: "team" | "player" }) {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={columns.length + (mode === "player" ? 4 : 2)} style={{ textAlign: "center", padding: "3rem", color: "var(--gray-500)" }}>
+                  <td colSpan={columns.length + (mode === "player" ? 4 : 2)} style={{ textAlign: "center", padding: "3rem", color: "var(--text-muted)" }}>
                     Loading {category} statistics...
                   </td>
                 </tr>
               ) : visibleRows.length === 0 ? (
                 <tr>
-                  <td colSpan={columns.length + (mode === "player" ? 4 : 2)} style={{ textAlign: "center", padding: "3rem", color: "var(--gray-500)" }}>
+                  <td colSpan={columns.length + (mode === "player" ? 4 : 2)} style={{ textAlign: "center", padding: "3rem", color: "var(--text-muted)" }}>
                     {seasonType === "Postseason"
                       ? `No postseason ${category} stats recorded for ${season} yet.`
                       : `No statistics found for ${category} in ${season}.`}

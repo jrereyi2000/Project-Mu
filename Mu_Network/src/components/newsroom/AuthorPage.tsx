@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { API_BASE } from "../../api";
 import { PersonalityPanel } from "../personality/PersonalityPanel";
+import { accentText } from "../../lib/accent";
 
 export function AuthorPage({ authorKey }: { authorKey: string }) {
   const [data, setData] = useState<any>(null);
@@ -45,7 +46,7 @@ export function AuthorPage({ authorKey }: { authorKey: string }) {
   const teamColor = author.team?.team_color || "var(--red)";
 
   return (
-    <main className="author-page" style={{ "--author-team-color": teamColor } as any}>
+    <main className="author-page" style={{ "--author-team-color": teamColor, "--accent-text": accentText(author.team?.team_color || "#e31837") } as any}>
       <header className="author-profile-header">
         <div className="author-profile-main">
           <div className="author-avatar-wrap">

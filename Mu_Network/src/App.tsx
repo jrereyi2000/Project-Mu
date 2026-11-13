@@ -226,7 +226,7 @@ function App() {
               <button
                 className={`fantasy-trigger ${fantasyOpen ? "active" : ""}`}
                 onClick={() => { setFantasyOpen(!fantasyOpen); setMenuOpen(false); setStatsOpen(false); }}
-                style={{ background: "none", border: "none", font: "inherit", color: "inherit", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}
+                style={{ background: "none", border: "none", color: "inherit", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}
               >
                 Fantasy <Chevron />
               </button>
@@ -255,8 +255,8 @@ function App() {
                       borderBottom: "1px solid #f1f5f9"
                     }}
                   >
-                    <div style={{ fontWeight: "700", fontSize: "14px", color: "#0f172a" }}>📊 Analytics</div>
-                    <div style={{ color: "#64748b", fontSize: "11px", marginTop: "2px" }}>Consensus rankings, ADP &amp; articles</div>
+                    <div style={{ fontWeight: "700", fontSize: "var(--fs-14)", color: "#0f172a" }}>📊 Analytics</div>
+                    <div style={{ color: "#64748b", fontSize: "var(--fs-11)", marginTop: "2px" }}>Consensus rankings, ADP &amp; articles</div>
                   </a>
                   <a
                     href="#napper"
@@ -268,8 +268,8 @@ function App() {
                       color: "inherit"
                     }}
                   >
-                    <div style={{ fontWeight: "700", fontSize: "14px", color: "#00ceb8" }}>🛏️ Napper</div>
-                    <div style={{ color: "#64748b", fontSize: "11px", marginTop: "2px" }}>Playable leagues, matchups &amp; trades</div>
+                    <div style={{ fontWeight: "700", fontSize: "var(--fs-14)", color: "#00ceb8" }}>🛏️ Napper</div>
+                    <div style={{ color: "#64748b", fontSize: "var(--fs-11)", marginTop: "2px" }}>Playable leagues, matchups &amp; trades</div>
                   </a>
                 </div>
               )}
@@ -335,7 +335,7 @@ function App() {
         />
       )}
       <footer>
-        <div className="footer-brand">GRIDIRON<span>25</span></div>
+        <div className="footer-brand">GRIDIRON<span aria-hidden="true">25</span></div>
         <p>A fictional football simulation network. All scores and reporting are simulated.</p>
         <div><a href="#about">About</a><a href="#privacy">Privacy</a><a href="#terms">Terms</a></div>
       </footer>

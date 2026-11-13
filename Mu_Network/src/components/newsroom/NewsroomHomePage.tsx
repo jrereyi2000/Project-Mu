@@ -155,7 +155,7 @@ export function NewsroomHomePage({
               {/* 2 SECONDARY STORIES */}
               <div className="latest-heading">
                 <h2>Secondary Slots (1 &amp; 2) · Retrospective &amp; Loss Analysis</h2>
-                <span style={{ fontSize: "11px", fontWeight: "bold", textTransform: "uppercase", letterSpacing: ".08em", color: "var(--gray-500)", fontFamily: "var(--font-mono)" }}>
+                <span style={{ fontSize: "var(--fs-11)", fontWeight: "bold", textTransform: "uppercase", letterSpacing: ".08em", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
                   Secondary Analysis · Slots 1 &amp; 2
                 </span>
               </div>
@@ -167,7 +167,7 @@ export function NewsroomHomePage({
 
                   if (secondary.length === 0) {
                     return (
-                      <div style={{ gridColumn: "1 / -1", padding: "28px", color: "var(--gray-500)", background: "var(--paper)", border: "1px solid var(--gray-300)" }}>
+                      <div style={{ gridColumn: "1 / -1", padding: "28px", color: "var(--text-muted)", background: "var(--paper)", border: "1px solid var(--gray-300)" }}>
                         No secondary retrospective articles loaded for Week 24 yet.
                       </div>
                     );
@@ -187,7 +187,7 @@ export function NewsroomHomePage({
 
                     return (
                       <article className="story-card" key={story.id || title} style={{ borderLeft: idx % 2 === 1 ? "1px solid var(--gray-300)" : undefined }}>
-                        <span className="story-number">0{idx + 1}</span>
+                        <span className="story-number" aria-hidden="true">0{idx + 1}</span>
                         <div className="story-copy">
                           <span className="kicker">{withFactGateFlag(story, kicker)}</span>
                           <a href={artLink}><h3>{title}</h3></a>
@@ -206,7 +206,7 @@ export function NewsroomHomePage({
               {/* 3 FEATURE STORIES */}
               <div className="latest-heading" style={{ marginTop: "44px" }}>
                 <h2>Feature Slots (3, 4 &amp; 5) · Offseason In-Depth Audits</h2>
-                <span style={{ fontSize: "11px", fontWeight: "bold", textTransform: "uppercase", letterSpacing: ".08em", color: "var(--gray-500)", fontFamily: "var(--font-mono)" }}>
+                <span style={{ fontSize: "var(--fs-11)", fontWeight: "bold", textTransform: "uppercase", letterSpacing: ".08em", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
                   Coaching · Free Agency · Draft · Slots 3, 4 &amp; 5
                 </span>
               </div>
@@ -225,7 +225,7 @@ export function NewsroomHomePage({
 
                   if (features.length === 0) {
                     return (
-                      <div style={{ gridColumn: "1 / -1", padding: "28px", color: "var(--gray-500)", background: "var(--paper)", border: "1px solid var(--gray-300)" }}>
+                      <div style={{ gridColumn: "1 / -1", padding: "28px", color: "var(--text-muted)", background: "var(--paper)", border: "1px solid var(--gray-300)" }}>
                         No offseason feature articles loaded for Week 24 yet.
                       </div>
                     );
@@ -252,10 +252,10 @@ export function NewsroomHomePage({
                           borderBottom: "none"
                         }}
                       >
-                        <span className="story-number">0{idx + 3}</span>
+                        <span className="story-number" aria-hidden="true">0{idx + 3}</span>
                         <div className="story-copy">
                           <span className="kicker">{withFactGateFlag(story, kicker)}</span>
-                          <a href={artLink}><h3 style={{ fontSize: "20px" }}>{title}</h3></a>
+                          <a href={artLink}><h3 style={{ fontSize: "var(--fs-20)" }}>{title}</h3></a>
                           <p>{blurb}</p>
                           <div className="author-row">
                             <span className="avatar amber">{initials}</span>
@@ -288,7 +288,7 @@ export function NewsroomHomePage({
 
                       return (
                         <article className="story-card" key={story.id || title}>
-                          <span className="story-number">0{idx + 6}</span>
+                          <span className="story-number" aria-hidden="true">0{idx + 6}</span>
                           <div className="story-copy">
                             <span className="kicker">{withFactGateFlag(story, kicker)}</span>
                             <a href={artLink}><h3>{title}</h3></a>
@@ -345,7 +345,7 @@ export function NewsroomHomePage({
 
                     return (
                       <article className={`story-card ${index === 0 ? "feature-card" : ""} ${isRecord ? "record-breaker-card" : ""}`} key={story.id || title}>
-                        <span className="story-number">0{index + 1}</span>
+                        <span className="story-number" aria-hidden="true">0{index + 1}</span>
                         <div className="story-copy">
                           <span className="kicker">{shownKicker}</span>
                           <a href={artLink}><h3>{title}</h3></a>
@@ -385,7 +385,7 @@ export function NewsroomHomePage({
 
                       return (
                         <article className="market-story" key={story.id}>
-                          <span className="rank">{String(index + 1).padStart(2, "0")}</span>
+                          <span className="rank" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
                           <div className="market-copy">
                             <span className="team-tag"><img src={logo(teamAbbr)} alt="" />{withFactGateFlag(story, `${teamName} Beat`)}</span>
                             <a href={`#article-${story.id}`}><h3>{story.headline}</h3></a>
@@ -398,7 +398,7 @@ export function NewsroomHomePage({
 
                   return localStories.map((story, index) => (
                     <article className="market-story" key={story.title}>
-                      <span className="rank">{String(index + 1).padStart(2, "0")}</span>
+                      <span className="rank" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
                       <div className="market-copy">
                         <span className="team-tag"><img src={logo(story.team)} alt="" />{story.tag}</span>
                         <a href={`#article-local-${story.team}`}><h3>{story.title}</h3></a>
