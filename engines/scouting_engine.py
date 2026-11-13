@@ -634,14 +634,10 @@ BOARD_POOL = 200                      # team boards look at the consensus top 20
 
 
 def _user_teams():
-    """The active franchise's user team abbreviations (db/franchises.active_entry, the same source as
-    server/franchise_api.user_teams); [] when none are registered."""
-    try:
-        from db.franchises import active_entry
-        _, entry = active_entry()
-    except Exception:
-        return []
-    return [t.upper() for t in ((entry or {}).get("user_teams") or [])]
+    """The active franchise's user team abbreviations (db/franchises.user_team_abbrs, the one implementation);
+    [] when none are registered, which means nobody is JR's."""
+    from db.franchises import user_team_abbrs
+    return user_team_abbrs()
 
 
 def directors_for(cur, season, lifecycle=None):

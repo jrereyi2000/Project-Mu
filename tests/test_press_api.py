@@ -101,7 +101,6 @@ class ApiTest(unittest.TestCase):
             mock.patch.object(press_api, "_connect", lambda: self.conn),
             mock.patch.object(press_api, "team_row", team_row),
             mock.patch.object(press_api, "league_state", lambda cur: (SEASON, WEEK)),
-            mock.patch.object(press_api, "user_teams", lambda: ["CAR"]),
             mock.patch.object(press_api.press_room, "get_conference_row", lambda cur, cid: self.row if cid == 7 else None),
             mock.patch.object(press_api.press_room, "build_conference", lambda cur, cid, include_hands=None: self.conf),
         ]

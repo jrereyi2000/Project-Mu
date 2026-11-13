@@ -45,6 +45,26 @@ const kindLabel = (kind: string) => KIND_LABEL[kind] ?? kind.replace(/_/g, " ").
 const roleLabel = (role: string) => ROLE_LABEL[role] ?? role;
 const statusLabel = (status: string) => status.replace(/_/g, " ").toLowerCase();
 
+// db/franchises.py:user_team_refusal() says this when the active franchise's registry lists no user team. An empty
+// `user_teams` means nobody is JR's (2026-11-12), so it is a designed empty state, not a load error (P8-08).
+const NO_USER_TEAM = "no user team is registered for this franchise";
+
+function NoUserTeamNote({ teamAbbr }: { teamAbbr: string }) {
+  return (
+    <>
+      <p className="fo-state">
+        No user team is registered for this franchise, so there is no {teamAbbr} inbox to open: a conversation belongs
+        to a team you control, and this franchise's registry entry lists none.
+      </p>
+      <p className="fo-state">
+        Add the team you run to the active franchise's <code>user_teams</code> in <code>data/franchises.json</code>
+        {" "}(<code>python3 -m db.franchises list</code> shows the entry), then reload this page. The take-control
+        panel appears here after that, and the personas you take control of get their conversations.
+      </p>
+    </>
+  );
+}
+
 const INBOX_CSS = `
 .fr-inbox-top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 14px; }
 .fr-inbox-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin-bottom: 16px; }
@@ -804,6 +824,10 @@ export default function InboxModule({ teamAbbr }: { teamAbbr: string }) {
   };
 
   if (actors.status !== "ready") {
+    // P8-08: the inbox belongs to a team JR controls, and the registry can list none (`user_teams: []` means NOBODY
+    // is his — JR, 2026-11-12), in which case every team 403s. That is a designed state, not a broken page. The
+    // string is the server's own (db/franchises.py:user_team_refusal); anything else stays a load error.
+    const noUserTeam = actors.status === "error" && actors.message === NO_USER_TEAM;
     return (
       <section className="team-data-view fo-view">
         <SharedStyles />
@@ -811,7 +835,7 @@ export default function InboxModule({ teamAbbr }: { teamAbbr: string }) {
         <style href="fr-inbox" precedence="default">{INBOX_CSS}</style>
         <section className="fo-block">
           <div className="team-section-title"><span>{teamAbbr} · Inbox</span><h2>Inbox</h2></div>
-          <StateNote state={actors} what="the inbox" />
+          {noUserTeam ? <NoUserTeamNote teamAbbr={teamAbbr} /> : <StateNote state={actors} what="the inbox" />}
         </section>
       </section>
     );

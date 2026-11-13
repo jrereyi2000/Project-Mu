@@ -6,7 +6,9 @@ is controlled only once JR takes control of it, which stores an active `controll
 active franchise registry's `user_teams` count (D6); rows of any other team are ignored. A head coach who is also
 his team's GM (`gm_profiles.coach_id`) is one candidate ("HC & GM"): taking control of him stores both rows.
 
-  user_teams() -> [ABBR]                         db.franchises.active_entry()['user_teams'], upper case
+  user_teams() -> [ABBR]                         db.franchises.user_team_abbrs(), upper case (an empty list means
+                                                 JR controls no team — never all 32; is_user_team()/user_team_refusal()
+                                                 are the rule itself)
   controlled(cur, abbr) -> [Actor]               active rows of a registry user team, GM first; else []
   actor_for(cur, abbr, role) -> Actor | None
   candidates(cur, abbr) -> [{role, persona_id, name, also}]
@@ -40,13 +42,24 @@ class Actor:
 
 
 def user_teams():
-    """The active franchise's user teams, upper case; [] when none are registered or the registry can't be read."""
-    try:
-        from db.franchises import active_entry
-        _, entry = active_entry()
-    except Exception:
-        return []
-    return [str(t).upper() for t in ((entry or {}).get("user_teams") or [])]
+    """The active franchise's user teams, upper case; [] when none are registered or the registry can't be read.
+
+    A thin alias of db.franchises.user_team_abbrs() so tests can patch this module's view; the rule itself (an
+    empty list means nobody is JR's, never all 32) lives there."""
+    from db.franchises import user_team_abbrs
+    return user_team_abbrs()
+
+
+def is_user_team(abbr):
+    """True when `abbr` is a registry user team of the active franchise (db.franchises.registry_team_is_user)."""
+    from db.franchises import registry_team_is_user
+    return registry_team_is_user(abbr, user_teams())
+
+
+def user_team_refusal(abbr):
+    """None when the team is JR's, else the honest 403 text (db/franchises.py:user_team_refusal)."""
+    from db.franchises import user_team_refusal as refusal
+    return refusal(abbr, user_teams())
 
 
 def installed(cur):
@@ -121,8 +134,9 @@ def _pair(cur, team_id, role, pid):
 
 def _require_team(cur, abbr):
     up = str(abbr or "").upper()
-    if up not in user_teams():
-        raise NotUserTeam(f"{up} isn't one of your teams in the franchise registry")
+    refusal = user_team_refusal(up)
+    if refusal:
+        raise NotUserTeam(refusal)
     team = team_row(cur, up)
     if team is None:
         raise NotFound(f"no team {up}")
@@ -139,7 +153,7 @@ def is_active(cur, team_id, role, persona_id):
 def controlled(cur, abbr):
     """Active controlled personas of a registry user team (GM, then COACH, then PLAYER); [] otherwise (D8)."""
     up = str(abbr or "").upper()
-    if up not in user_teams() or not installed(cur):
+    if not is_user_team(up) or not installed(cur):
         return []
     team = team_row(cur, up)
     if team is None:
@@ -159,7 +173,7 @@ def candidates(cur, abbr):
     """Who JR could take control of: the open GM tenure and the head coach ([] outside the registry). A coach-GM
     is one candidate: {"role": "GM", ..., "also": {"role": "COACH", "persona_id"}}."""
     up = str(abbr or "").upper()
-    if up not in user_teams():
+    if not is_user_team(up):
         return []
     team = team_row(cur, up)
     if team is None:

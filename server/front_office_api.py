@@ -684,10 +684,8 @@ def staff_offer(abbr: str, body: StaffOfferIn):
                 raise HTTPException(409, "league_state has no season")
             if not _regclass(cur, "staff_contracts"):
                 raise HTTPException(409, "the staff contracts migration isn't applied")
-            from server.franchise_api import user_teams
-            teams = user_teams()
-            if teams and team_abbr.upper() not in teams:
-                raise HTTPException(403, f"{team_abbr} isn't one of your teams ({', '.join(teams)})")
+            from server.franchise_api import require_user_team
+            require_user_team({"abbr": team_abbr})    # 403 for anyone else's team; an empty registry refuses every team
             # The person must exist and must not already hold an active deal of that kind on this team.
             cur.execute("SELECT count(*) FROM staff_contracts WHERE team_id = %s AND person_kind = %s "
                         "AND person_id = %s AND remaining_years > 0", (team_id, body.person_kind, body.person_id))

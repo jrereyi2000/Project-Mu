@@ -917,3 +917,42 @@ class PolicyTest(ApiTest):
             self.assertEqual(self.client.get("/api/franchise/offers/10/policy").status_code, 403)
             self.assertEqual(self.client.get("/api/franchise/offers/11/policy").status_code, 404)   # no offer
             self.assertEqual(self.client.get("/api/franchise/offers/12/policy").status_code, 404)   # no receipt
+
+
+class UserTeamRuleTest(ApiTest):
+    """P8-08 (JR, 2026-11-12): an empty registry means NOBODY is JR's, never all 32.
+
+    The fixture patches `user_teams` to ["CAR"], so these tests move that one list — the module's own view of the
+    registry — and check the two places the franchise API answered the question: the write gate
+    (`require_user_team`) and the overview flag the page reads (`user_controlled`).
+    """
+
+    GAMES = [(10, 4, CAR, ATL, 24, 17, "COMPLETED", "Sun 1:00 PM", "REGULAR_SEASON")]
+
+    def overview(self, abbr):
+        with mock.patch.object(fa, "season_games", lambda cur, s: self.GAMES), \
+                mock.patch.object(fa, "team_names", lambda cur: {t["id"]: t for t in TEAMS.values()}):
+            r = self.client.get(f"/api/franchise/{abbr}/overview")
+        self.assertEqual(r.status_code, 200, r.text)
+        return r.json()
+
+    def test_an_empty_registry_refuses_every_team_with_the_honest_message(self):
+        slots = {s: [] for s in dce.POSITION_SLOTS}
+        with mock.patch.object(fa, "user_teams", lambda: []):
+            for abbr in ("CAR", "ATL", "AZ"):
+                r = self.client.put(f"/api/franchise/{abbr}/depth-chart", json={"slots": slots})
+                self.assertEqual(r.status_code, 403, r.text)
+                self.assertEqual(r.json()["detail"], "no user team is registered for this franchise")
+        self.assertEqual(self.cur.writes("franchise_pending_moves"), [])
+
+    def test_an_empty_registry_marks_no_team_user_controlled(self):
+        with mock.patch.object(fa, "user_teams", lambda: []):
+            for abbr in ("CAR", "ATL", "AZ"):
+                self.assertFalse(self.overview(abbr)["user_controlled"], abbr)
+
+    def test_one_user_team_still_serves_that_team_only(self):
+        self.assertTrue(self.overview("CAR")["user_controlled"])          # unchanged: the fixture's ["CAR"]
+        self.assertFalse(self.overview("ATL")["user_controlled"])
+        r = self.client.put("/api/franchise/ATL/depth-chart", json={"slots": {s: [] for s in dce.POSITION_SLOTS}})
+        self.assertEqual(r.status_code, 403)
+        self.assertEqual(r.json()["detail"], "ATL isn't one of your user teams (CAR)")

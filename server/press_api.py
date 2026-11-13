@@ -62,16 +62,6 @@ def team_row(cur, abbr: str) -> dict:
     return {"id": row[0], "abbr": row[1], "name": row[2]}
 
 
-def user_teams():
-    """The active franchise's user teams (db/franchises.py); [] when none are registered."""
-    try:
-        from db.franchises import active_entry
-        _, entry = active_entry()
-    except Exception:  # noqa: BLE001
-        return []
-    return [str(t).upper() for t in ((entry or {}).get("user_teams") or [])]
-
-
 def league_state(cur):
     cur.execute("/* q:api_league */ SELECT current_season, current_week FROM league_state WHERE id = 1")
     row = cur.fetchone()

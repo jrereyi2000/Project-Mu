@@ -136,6 +136,23 @@ def test_actor_errors(client):
     assert client.get("/api/franchise/ATL/inbox").status_code == 403
 
 
+def test_an_empty_registry_refuses_every_team_with_the_honest_message(db, client):
+    """P8-08: with `user_teams: []` the inbox refuses every team — and says why, not "CAR isn't one of your teams"."""
+    db.user_teams = []
+    for abbr in ("CAR", "ATL"):
+        for path in ("/inbox", "/inbox/actors", "/inbox/kinds"):
+            r = client.get(f"/api/franchise/{abbr}{path}")
+            assert r.status_code == 403, (abbr, path, r.text)
+            assert r.json()["detail"] == "no user team is registered for this franchise", (abbr, path)
+
+
+def test_one_user_team_refuses_the_others_and_names_it(client):
+    assert client.get("/api/franchise/CAR/inbox").status_code == 200
+    r = client.get("/api/franchise/ATL/inbox")
+    assert r.status_code == 403
+    assert r.json()["detail"] == "ATL isn't one of your user teams (CAR)"
+
+
 def test_coach_gm_candidate_carries_also_as_a_string(db, client):
     db.make_coach_gm()
     cands = client.get("/api/franchise/CAR/inbox/actors").json()["candidates"]

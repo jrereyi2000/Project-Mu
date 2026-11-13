@@ -14,6 +14,10 @@ points at; override with MU_FRANCHISE_REGISTRY). Each franchise database also st
      "franchises": {"<league id>": {"db": "madden_colts", "name": "Colts 2034", "user_teams": ["IND"],
                                     "saves": ["CAREER-COLTS"], "created_at": "..."}}}
 
+`user_teams` is the list of teams JR controls in that franchise, and an **empty list means nobody** is his (JR,
+2026-11-12), never all 32: `user_team_abbrs` / `registry_team_is_user` / `user_team_refusal` below are the only
+implementation of that rule.
+
 The active franchise is the one the site (server/api.py) and the db/*.sh scripts use when DATABASE_URL (MU_DB
 for the scripts) is not set; an explicit setting always wins. Other CLIs (engines, newsroom) still read only
 DATABASE_URL: run them with DATABASE_URL="$(python3 -m db.franchises dsn)".
@@ -177,6 +181,43 @@ def active_dsn(reg=None):
     if not entry:
         return None
     return dsn_for_db(entry["db"])
+
+
+# --- "is this team JR's?" ---------------------------------------------------------------------------------
+# One question, one implementation (JR, 2026-11-12: an empty `user_teams` means NOBODY is yours, never all 32).
+# The servers, the engines and the site all read their answer here; a local `not teams or abbr in teams` is the
+# defect this replaced (P8-08: the franchise API said all 32 were JR's while the inbox refused every team).
+
+def user_team_abbrs(entry=None):
+    """The active franchise's user teams, upper case. [] means JR controls no team in this franchise.
+
+    `entry` overrides the registry read (a caller that already has the active entry); otherwise the active
+    franchise is looked up, and a missing/unreadable registry is no user teams."""
+    if entry is None:
+        try:
+            _, entry = active_entry()
+        except Exception:  # noqa: BLE001 - an unreadable registry is no franchise, not all of them
+            return []
+    return [str(t).upper().strip() for t in ((entry or {}).get("user_teams") or []) if str(t).strip()]
+
+
+def user_team_refusal(abbr, teams=None):
+    """None when `abbr` is one of the franchise's user teams, else the honest refusal text.
+
+    `teams` is the already-resolved `user_team_abbrs()` list (the servers keep their own alias so tests can patch
+    it); None reads the active franchise. This is the only place that decides what counts as "yours"."""
+    clean = str(abbr or "").upper().strip()
+    names = user_team_abbrs() if teams is None else [str(t).upper().strip() for t in (teams or [])]
+    if clean and clean in names:
+        return None
+    if not names:
+        return "no user team is registered for this franchise"
+    return f"{clean} isn't one of your user teams ({', '.join(names)})"
+
+
+def registry_team_is_user(abbr, teams=None):
+    """True when `abbr` is one of the franchise's user teams. An empty `user_teams` means False, for every team."""
+    return user_team_refusal(abbr, teams) is None
 
 
 def export_active_dsn():

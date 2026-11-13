@@ -10,9 +10,10 @@ Conventions. Money in whole dollars; null = not recorded (shown as "—", never 
 `{"detail": string}` (400 bad body, 403 not one of the active franchise's user teams, 404 unknown team / player,
 409 an illegal or refused action). `season` / `week` are league_state's. The league year (`league_year`, the cap
 season) is season + 1 from week 24 on (the offseason, transactions_engine.target_season), else season; contracts and
-cap hits are read at the league year. Write endpoints (PUT depth-chart, moves, offers, propose, game/launch) are
-refused with 403 for a team that isn't in the active franchise's `user_teams` (db/franchises.py) when that list is
-set; an empty list allows every team.
+cap hits are read at the league year. Every team-scoped read and write is refused with 403 for a team that isn't in
+the active franchise's `user_teams` (db/franchises.py), and an **empty** `user_teams` refuses **every** team — it
+means JR controls no team in this franchise, never that he controls all 32 (JR, 2026-11-12; the one rule is
+`db.franchises.user_team_refusal`, and the 403 body says so in words).
 
 Shared shapes:
   QueuedMove   {move_id, kind, status: PENDING|WRITTEN|REFUSED|CANCELLED, created_at: ISO, player_id: int|null}
@@ -60,7 +61,8 @@ Shared shapes:
 
 Other endpoints (U15's Free Agency / Contract Room / Trade Machine shapes and U17's overview, game center
 and launch; these are the contract):
-  GET  /{abbr}/overview -> {team: {id, abbr, name}, season, week, league_year, user_controlled: bool,
+  GET  /{abbr}/overview -> {team: {id, abbr, name}, season, week, league_year, user_controlled: bool (true only
+       when the team is a user team; false for all 32 when the registry lists none),
        record: {wins, losses, ties}, cap: {cap, committed, dead_money, rookie_reserve, room, estimated} (league year),
        roster_counts: {active, practice_squad, injured_reserve, limits: {active, practice_squad}},
        next_game: NextGame|null, pending_moves: [QueuedMove + {payload}]}
@@ -148,6 +150,8 @@ import psycopg
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+
+from db.franchises import user_team_abbrs, user_team_refusal
 
 from engines import cap_history
 from engines import contracts_engine as ce
@@ -243,19 +247,17 @@ def _connect():
 
 
 def user_teams() -> List[str]:
-    """The active franchise's user teams (db/franchises.py); [] when none are registered."""
-    try:
-        from db.franchises import active_entry
-        _, entry = active_entry()
-    except Exception:
-        return []
-    return [t.upper() for t in ((entry or {}).get("user_teams") or [])]
+    """The active franchise's user teams (db/franchises.py); [] when none are registered — which means NOBODY is
+    JR's, never all 32 (JR, 2026-11-12; the one rule is db.franchises.user_team_abbrs)."""
+    return user_team_abbrs()
 
 
 def require_user_team(team: dict):
-    teams = user_teams()
-    if teams and team["abbr"].upper() not in teams:
-        raise HTTPException(403, f"{team['abbr']} isn't one of your teams ({', '.join(teams)})")
+    """403 unless `team` is one of the active franchise's user teams. An empty registry refuses every team, with the
+    honest "no user team is registered for this franchise" (db.franchises.user_team_refusal)."""
+    refusal = user_team_refusal(team["abbr"], user_teams())
+    if refusal:
+        raise HTTPException(403, refusal)
 
 
 # ---------------------------------------------------------------- readers ----
@@ -1097,7 +1099,7 @@ def overview(abbr: str):
             nxt["season"] = ctx["season"]
         teams = user_teams()
         return {"team": ctx["team"], "season": ctx["season"], "week": ctx["week"], "league_year": ctx["T"],
-                "user_controlled": (not teams) or ctx["team"]["abbr"].upper() in teams,
+                "user_controlled": not user_team_refusal(ctx["team"]["abbr"], teams),
                 "record": win_loss(games, tid),
                 "cap": {k: year0[k] for k in ("cap", "committed", "dead_money", "rookie_reserve", "room", "estimated")},
                 "roster_counts": {"active": len(ctx["roster"]["ACTIVE"]), "practice_squad": len(ctx["roster"]["PS"]),

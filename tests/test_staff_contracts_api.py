@@ -187,8 +187,11 @@ class _FakeConnection:
         pass
 
 
-def _client(monkeypatch, cur):
+def _client(monkeypatch, cur, user_teams=("CAR",)):
     monkeypatch.setattr(fo.psycopg, "connect", lambda *a, **kw: _FakeConnection(cur))
+    # The offer is gated by the franchise registry (db/franchises.py, P8-08): patch the list so the tests never read
+    # the machine's own data/franchises.json.
+    monkeypatch.setattr("server.franchise_api.user_teams", lambda: [t.upper() for t in user_teams])
     app = FastAPI()
     app.include_router(fo.router)
     return TestClient(app)
@@ -226,3 +229,20 @@ def test_staff_offer_refuses_full_control_even_when_the_gate_would_pass(monkeypa
                     json={"person_kind": "HC", "person_id": 77, "annual_salary": 20_000_000, "total_years": 6,
                           "full_control": True})
     assert r.status_code == 400 and "Godfather" in r.json()["detail"]
+
+
+def test_an_empty_registry_refuses_the_staff_offer(monkeypatch):
+    """P8-08: with no user team registered, no team's staff can be offered a deal (an empty list is not "all 32")."""
+    client = _client(monkeypatch, _FakeCursor(), user_teams=())
+    r = client.post("/api/team/car/staff/offer",
+                    json={"person_kind": "HC", "person_id": 77, "annual_salary": 9_000_000, "total_years": 5})
+    assert r.status_code == 403
+    assert r.json()["detail"] == "no user team is registered for this franchise"
+
+
+def test_a_team_outside_the_registry_is_refused(monkeypatch):
+    client = _client(monkeypatch, _FakeCursor(), user_teams=("IND",))
+    r = client.post("/api/team/car/staff/offer",
+                    json={"person_kind": "HC", "person_id": 77, "annual_salary": 9_000_000, "total_years": 5})
+    assert r.status_code == 403
+    assert r.json()["detail"] == "CAR isn't one of your user teams (IND)"

@@ -22,7 +22,8 @@ answers an empty list. A Thread adds `actor` and `counterpart` and leaves out th
 internal `team_id`).
 A Message never carries `facts` or a surplus, and its appraisal is only {outcome, reason}: the inbox never shows a
 trust number. Notes are at most 600 characters. Errors are FastAPI's {"detail": string} with
-400 (bad body / kind), 403 (team outside the active franchise's user_teams, or `as` not a controlled role),
+400 (bad body / kind), 403 (team outside the active franchise's user_teams — and every team when the registry lists
+none, "no user team is registered for this franchise" — or `as` not a controlled role),
 404 (unknown team or thread) and 409 (refused persona, read-only thread, cap, missing migration).
 
 The endpoints are thin: every rule (who JR controls, caps, expiry, read-only, event outbox) lives in
@@ -78,14 +79,16 @@ def _errors():
 
 
 def _team(cur, abbr):
-    """(team_id, ABBR) for a registry user team: 404 for an unknown team, 403 outside user_teams. The page's
-    display abbreviations (ARI, WSH) resolve to the save's (AZ, WAS), as in server/franchise_api.py."""
+    """(team_id, ABBR) for a registry user team: 404 for an unknown team, 403 outside user_teams (and 403 for every
+    team when the registry lists none — "no user team is registered for this franchise"). The page's display
+    abbreviations (ARI, WSH) resolve to the save's (AZ, WAS), as in server/franchise_api.py."""
     clean = str(abbr or "").upper().strip()
     team = actors.team_row(cur, ABBR_ALIASES.get(clean, clean))
     if team is None:
         raise HTTPException(404, f"Team '{abbr}' not found")
-    if team[1] not in actors.user_teams():
-        raise HTTPException(403, f"{team[1]} isn't one of your teams in the franchise registry")
+    refusal = actors.user_team_refusal(team[1])
+    if refusal:
+        raise HTTPException(403, refusal)
     return team
 
 
