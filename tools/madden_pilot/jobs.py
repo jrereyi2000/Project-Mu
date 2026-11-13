@@ -213,7 +213,7 @@ def read_header(frame):
     return None
 
 
-TICKER_BAND = 0.94          # the bottom Broadcast Ticker starts near here; it is not this game
+TICKER_BAND = 0.965         # the bottom Broadcast Ticker starts near here; it is not this game
 
 
 def _frame_height(frame):

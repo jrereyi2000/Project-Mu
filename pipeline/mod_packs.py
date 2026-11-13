@@ -268,8 +268,10 @@ def pack_fingerprint(name, path=None, mods_dir=None):
     folder = Path(mods_dir) if mods_dir else Path(manager_dir()) / "Mods"
     # MMC keeps .fbmod files both in Mods/ and in per-game subfolders (Mods/Madden27/ on
     # 2026-11-12), so a direct Mods/<name> lookup reported every enabled file missing and the
-    # fingerprint never covered them (F6). Index the tree once and match by relative path or,
-    # failing that, by file name.
+    # fingerprint never covered them (F6). Index the tree once, then resolve each enabled entry to
+    # the game's own subfolder copy first, the Mods/ root copy second, and the exact relative path
+    # last — never another game's subfolder, and **every** copy that exists, so a stale root copy
+    # cannot hide a change to the live nested one (N4).
     index = {}
     try:
         for found in folder.rglob("*.fbmod"):
@@ -279,23 +281,31 @@ def pack_fingerprint(name, path=None, mods_dir=None):
                 continue
     except OSError:
         index = {}
-    by_name = {}
-    for relative, found in index.items():
-        by_name.setdefault(Path(relative).name, found)
+    by_name: dict[str, list[Path]] = {}
+    for relative, found in sorted(index.items()):
+        parts = Path(relative).parts
+        if len(parts) == 1:                          # Mods/<mod>: the root copy comes second
+            by_name.setdefault(parts[0], []).append(found)
+        elif len(parts) == 2 and parts[0] == GAME_PROFILE:
+            by_name.setdefault(parts[1], []).insert(0, found)   # Mods/Madden27/<mod> wins
     files = []
     for mod, enabled in entries:
         if not enabled:
             continue
-        found = index.get(mod) or by_name.get(Path(mod).name)
-        if found is None:
+        copies = list(by_name.get(Path(mod).name, []))
+        exact = index.get(Path(mod).as_posix())
+        if exact is not None and exact not in copies:
+            copies.append(exact)
+        if not copies:
             files.append([mod, None, None])
             continue
-        try:
-            stat = found.stat()
-            files.append([Path(mod).as_posix(), int(stat.st_size), int(stat.st_mtime_ns),
-                          str(found.relative_to(folder).as_posix())])
-        except OSError:
-            files.append([mod, None, None])
+        for found in copies:
+            try:
+                stat = found.stat()
+                files.append([Path(mod).as_posix(), int(stat.st_size), int(stat.st_mtime_ns),
+                              str(found.relative_to(folder).as_posix())])
+            except OSError:
+                files.append([mod, None, None])
     payload = {
         "pack": name,
         "entries": [[mod, bool(enabled)] for mod, enabled in entries],

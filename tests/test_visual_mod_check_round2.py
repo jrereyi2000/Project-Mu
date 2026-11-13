@@ -385,6 +385,45 @@ def test_halftime_marker_names_the_post_snap_screen_not_pause(tmp_path, notices)
     assert ready["show_observed"] is False
 
 
+def test_the_ready_marker_names_the_post_snap_screen_when_the_game_changes(tmp_path, notices,
+                                                                          monkeypatch):
+    """N2: the fake leaves the play call at the snap, so only a post-snap look can name the screen.
+
+    The older F1 fakes never changed screen at the snap, so `ready.json` happened to match on
+    `45d1ee1` too and could not tell the fix from the bug. Here the half's last snap hands over to
+    the uncatalogued halftime show: the marker and `_to_halftime` must both report UNKNOWN (the
+    pre-fix pin reports the pre-snap GAME_PLAY_CALL).
+    """
+    class HalftimeShow(WatchMadden):
+        snaps = 0
+
+        def on_key(self, name):
+            before = self.screen
+            super().on_key(name)
+            if before == "GAME_PLAY_CALL" and name == self.keymap.get("select", "space"):
+                self.snaps += 1
+                if self.snaps == 2:                    # the snap itself
+                    self.go("HALFTIME_SHOW")            # a real show frame is uncatalogued
+
+    returned = {}
+    real = jobs._to_halftime
+
+    def spy(pilot, progress):
+        screen, clock = real(pilot, progress)
+        returned["screen"] = screen
+        return screen, clock
+
+    monkeypatch.setattr(jobs, "_to_halftime", spy)
+    fake = HalftimeShow(CAT, tiles=["TUNE-X"], out=lambda s: None)
+    _, out = watch(tmp_path, fake, to="halftime", hold_seconds=2, quit=False)
+    assert out["status"] == "ok", out
+    assert fake.snaps == 2
+    ready = json.loads((tmp_path / jobs.READY_FILE).read_text())
+    assert returned["screen"] == "UNKNOWN"
+    assert ready["screen"] == "UNKNOWN"
+    assert ready["show_observed"] is False
+
+
 @pytest.mark.parametrize("clock_line,reason", [
     ("2nd 0:00", "no last"), ("3rd 12:40", "Q2"), ("2nd :40", "clock read None")])
 def test_halftime_revalidates_the_clock_before_the_last_snap(tmp_path, notices, clock_line, reason):
@@ -493,6 +532,37 @@ def test_pack_fingerprint_finds_models_in_mmcs_per_game_subfolder(tmp_path):
     (nested / "a.fbmod").write_bytes(b"changed")
     second = mod_packs.pack_fingerprint("Mu Test", path=str(config), mods_dir=str(mods))
     assert second["fingerprint"] != first["fingerprint"]
+
+
+def test_pack_fingerprint_hashes_both_copies_and_refuses_another_games_folder(tmp_path):
+    """N4: a stale Mods/ root copy must not hide the live Mods/Madden27/ one, and another game's
+    folder is not this pack's file. Both measured on 2026-11-12 as the remaining F6 edge cases."""
+    from pipeline import mod_packs
+    config = tmp_path / "manager_config.json"
+    mods = tmp_path / "Mods"
+    nested = mods / "Madden27"
+    nested.mkdir(parents=True)
+    (mods / "a.fbmod").write_bytes(b"stale root copy")
+    (nested / "a.fbmod").write_bytes(b"live nested copy")
+    config.write_text(json.dumps({"Games": {"Madden27": {
+        "Options": {"SelectedPack": "Mu Test"},
+        "Packs": {"Mu Test": "a.fbmod:True"}}}}), encoding="utf-8")
+    first = mod_packs.pack_fingerprint("Mu Test", path=str(config), mods_dir=str(mods))
+    assert first["files_complete"] is True
+    time.sleep(0.01)
+    (nested / "a.fbmod").write_bytes(b"changed nested copy")
+    second = mod_packs.pack_fingerprint("Mu Test", path=str(config), mods_dir=str(mods))
+    assert second["fingerprint"] != first["fingerprint"]
+    time.sleep(0.01)
+    (mods / "a.fbmod").write_bytes(b"changed root copy")
+    third = mod_packs.pack_fingerprint("Mu Test", path=str(config), mods_dir=str(mods))
+    assert third["fingerprint"] != second["fingerprint"]
+    # another game's subfolder is never accepted by the file-name fallback
+    other = tmp_path / "Other"
+    (other / "Madden26").mkdir(parents=True)
+    (other / "Madden26" / "a.fbmod").write_bytes(b"the wrong game")
+    only_other = mod_packs.pack_fingerprint("Mu Test", path=str(config), mods_dir=str(other))
+    assert only_other["files_complete"] is False
 
 
 def _receipt(**over):
@@ -866,6 +936,17 @@ def test_read_game_clock_never_reads_the_bottom_broadcast_ticker():
     # the kickoff fixture's real scorebug still reads
     assert read_game_clock(fixture_frame("receiving_kickoff_0047")) == {"quarter": 1,
                                                                         "seconds": 660}
+
+
+def test_the_ticker_cutoff_still_reads_a_genuine_low_scorebug():
+    """N3: OCR placed two real main scorebugs at centre y≈1033 (0.956 h), under the old 0.94 band.
+
+    `live_field_0049` is one of them: `ISt 10:56` is the main scorebug (the pin read None); the
+    ticker frame above stays a miss, so the band still keeps another game's clock out.
+    """
+    from tools.madden_pilot.jobs import read_game_clock
+    assert read_game_clock(fixture_frame("live_field_0049")) == {"quarter": 1, "seconds": 656}
+    assert read_game_clock(fixture_frame("clock_ticker_0067")) is None
 
 
 def test_a_live_field_watermark_is_not_the_title_screen():
