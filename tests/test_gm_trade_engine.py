@@ -943,3 +943,34 @@ def test_the_default_pacing_model_uses_the_measured_value():
         ge.main(["--simulate-season", "--seasons", "500", "--first-week", "4"])
     line = buf.getvalue().splitlines()[0]
     assert "talk stall 0.64" in line
+
+
+def test_the_fixture_is_the_tools_raw_report():
+    """The fixture is the `--json` output, not a hand-trimmed copy (audit-p3-trade E7): every report field, the
+    per-week budget and the cleared count are present, and `requested` sits beside the sourced talk count."""
+    m = _trade_flow_2036()
+    assert {"season", "cleared_proposals", "weeks", "talks", "outcomes", "breakdown_share", "openings", "turns",
+            "message_lines", "counters", "counters_per_talk", "leaks", "executed", "decided",
+            "executed_share"} <= set(m)
+    assert m["weeks"][0]["budget"]["new"] == m["weeks"][0]["requested"]
+    assert [w["new"] for w in m["weeks"]] == [1, 2, 4, 8, 10]      # talks sourced, not rep["proposals"]
+    assert [w["requested"] for w in m["weeks"]] == [1, 2, 4, 8, 14]
+
+
+def test_the_measured_writer_fallback_share_is_under_the_plan_target():
+    """The writer's TEMPLATE share is measured, not assumed (P3-08): 57 LLM / 5 TEMPLATE lines on the replay, 8.1%,
+    under GM_TALK_VOICE_PLAN's 10% target. The 5 fallbacks were the repeated-phrase style rule."""
+    m = _trade_flow_2036()
+    lines = m["message_lines"]
+    assert lines["LLM"] + lines["TEMPLATE"] == m["turns"] == 62
+    assert lines["template_share"] == 0.081 and lines["template_share"] <= 0.10
+
+
+def test_the_measured_leak_draw_includes_the_stalled_stage():
+    """The REJECT stall's terminal draw is part of the receipt (audit-p3-trade F1): the pin's replay drew no
+    STALLED-stage leak at all, this one draws the stage, and the total is the 6 in the fixture."""
+    m = _trade_flow_2036()
+    assert m["leaks"] == 6
+    # 15 of the 16 stalls end on a REJECT; the stage is seed-dependent, so the count is the observable
+    assert m["outcomes"]["STALLED"] == 16 and m["outcomes"]["AGREED"] == 9
+
