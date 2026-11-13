@@ -81,6 +81,8 @@ reads it rather than hard-coding it. `db.register` would name the database `madd
 | CAR inbox (expect 200) | `http://127.0.0.1:8011/api/franchise/CAR/inbox` |
 | CAR actors (expect 200) | `http://127.0.0.1:8011/api/franchise/CAR/inbox/actors` |
 | CHI inbox (expect 403, and that is correct) | `http://127.0.0.1:8011/api/franchise/CHI/inbox` |
+| CAR presser (P8-09: expect a `USER` `SCHEDULED` conference) | `http://127.0.0.1:8011/api/franchise/CAR/press` |
+| CAR press history (P8-09: empty until a conference closes) | `http://127.0.0.1:8011/api/franchise/CAR/press/history` |
 
 The site is served from `Mu_Network/dist`, so a changed frontend needs `cd Mu_Network && npm run build` before the
 walk; the scratch server serves the same built site as `:8000`.
@@ -112,13 +114,42 @@ The live site on `:8000` was never restarted and never written; its `overview` s
 `user_controlled: true` for both teams because that process predates `p8-08-rootcause`'s commit — the scratch server
 runs the current tree.
 
+## P8-09 presser — the one approved cast (2026-11-12)
+
+JR approved **one** presser cast into this scratch database so P8-09 can be walked too. It was made at 21:4x and
+nothing of it touched `madden_mu2026`.
+
+- **What was cast.** `newsroom.press_room.schedule_week(cur, 2026, 1)` — the product path — with
+  `press_cast.cast_week` narrowed to CAR's week-1 game (**game 8, CHI at CAR**) so no other game's conference rows
+  or game scripts are built. Two rows resulted: **CAR `USER` SCHEDULED** (subject: head coach Dave Canales) and
+  CHI `AGENT` SCHEDULED (Ben Johnson), each with three beat reporters in the room.
+- **The one model round.** The CAR conference's first round of hands was drafted (what `start_user` would otherwise
+  do on the page's **start** click): **`gemini-3.8-flash`, 3 calls, 8,449 input / 312 output tokens**, recorded as
+  three `llm_usage` rows (`source = press`) in `mu_scratch_p808`; the conference row reads `calls = 3`. No other
+  model call was made; the CHI row is inert (`calls = 0`).
+- **One fixture write the page needs.** `GET /api/franchise/{abbr}/press` reads the team's **last completed game**,
+  and the copy's week 1 had CAR–CHI still `SCHEDULED` 0–0 (JR's own game is the one the live franchise has not
+  played). So game 8 is marked **`COMPLETED` 24–17 CAR** in `mu_scratch_p808` only, and the conference's frozen
+  facts were rebuilt from it. **That score is fabricated for the fixture**; it exists nowhere else, and `refresh`
+  (a fresh copy) removes it.
+- **What answers now** on `:8011`: `GET /api/franchise/CAR/press` → `conference` id 1, `team CAR`, `opponent CHI`,
+  `controller USER`, `status SCHEDULED`, `result W`, `score 24-17`, 3 attendees with 3 hands, plus
+  `opponent_presser {conference_id: 2, status: SCHEDULED}`; `GET /api/franchise/CAR/press/history` → empty until a
+  conference closes; `GET /api/franchise/CHI/press` → CHI's AGENT podium. P8-09's clicks (podium → pick reporter →
+  answer → no comment → end → edit → approve → review → history) are POST/PUT and are allowed **on `:8011` only**.
+- **After `refresh` the cast is gone** (a fresh copy has no conferences and no completed CAR game). To redo it, re-run
+  the two steps: the narrowed `schedule_week(cur, 2026, 1, llm=None)` with `press_cast.cast_week` filtered to the
+  game, then `press_room._draft_first_round(cur, press_room.get_conference_row(cur, <id>), press_room._local_meter(
+  press_room._default_llm()))` — that is the one model round — then the game-8 fixture update
+  (`status = 'COMPLETED'`, 24–17) and a facts refresh.
+
 ## Boundaries
 
 - Never point the live server, `db/*.sh` or a pipeline step at `mu_scratch_p808`; it is a page fixture, not a league.
 - Never register a user team in `data/franchises.json` to get P8-08 to pass — the live registry's empty list is the
   decided state, and the honest 403 is the correct live answer.
 - No saves are read or written and no Madden PC run is involved.
-- P8-09 (the press conference) still needs JR's decision to spend one press-model cast (`press_room.schedule_week`);
-  this scratch franchise only makes the page reachable. Nothing is cast by this script.
+- P8-09 (the presser) is walkable on this scratch franchise after the one approved cast (above). The cast spent
+  three press-model calls; nothing else is spent by the script, and nothing is ever cast into `madden_mu2026`.
 - The database and the `:8011` server stay up only as long as a walk needs them. Drop both when the P8-08/P8-09 rows
   are checked: `tools/p8_scratch_franchise.sh drop`.
