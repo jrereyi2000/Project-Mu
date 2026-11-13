@@ -35,7 +35,11 @@
 #   whatever MU_MUSE_MODEL says (Spark by default, Ember for the benchmark's second step).
 # - claude-personal and opus-personal open a normal Claude/Opus tmux window on JR's secondary Claude
 #   account. tools/claude_personal.sh sets CLAUDE_CONFIG_DIR=~/.claude-secondary (override with
-#   MU_CLAUDE_PERSONAL_CONFIG_DIR, or point MU_CLAUDE_PERSONAL_CMD at JR's `claude-personal` alias).
+#   MU_CLAUDE_PERSONAL_CONFIG_DIR) and execs the Claude Code binary (MU_CLAUDE_PERSONAL_BIN, default
+#   `claude`). MU_CLAUDE_PERSONAL_CMD instead names a whole command for the personal route — it must be
+#   an executable or a wrapper script (for example tools/claude_personal.sh), never JR's shell alias:
+#   the route runs it with `env`, and `env` cannot run an alias. When a caller on the secondary account
+#   spawns a primary route, CLAUDE_CONFIG_DIR is scrubbed from the child (M-0823 B-4).
 #   claude-auto and opus-auto run tools/claude_account.py choose first: it compares the primary and
 #   personal usage files and starts whichever account is under its quota with more headroom. Model
 #   attribution is unchanged; the account is not a model class.
@@ -154,11 +158,18 @@ esac
 # guard, /audit's refusal, /context-check's harness) and a DeepSeek child would reserve the parent's
 # MU_OPENCODE_SESSION instead of minting its own. The child's own route re-sets what it needs
 # (opencode_session.sh and muse_session.sh export their markers; hydrogen sets MU_AGENT_CLASS).
+# CLAUDE_CONFIG_DIR is scrubbed too when it points at the secondary account (M-0823 B-4): a personal
+# caller's `claude`/`opus`/`*-auto` child would otherwise start on the secondary account, and the tmux
+# global environment is cleared of it as well so later windows do not inherit it either.
 scrub=(env -u MU_AGENT_CLASS -u MU_AGENT_HARNESS -u MU_AGENT_MODEL -u MU_OPENCODE_MODEL \
            -u MU_OPENCODE_SESSION -u MU_ALLOW_DEEPSEEK_SPAWN \
            -u OPENCODE -u OPENCODE_SESSION_ID -u OPENCODE_TERMINAL)
 scrub_vars=(MU_AGENT_CLASS MU_AGENT_HARNESS MU_AGENT_MODEL MU_OPENCODE_MODEL MU_OPENCODE_SESSION \
-            MU_ALLOW_DEEPSEEK_SPAWN OPENCODE OPENCODE_SESSION_ID OPENCODE_TERMINAL)
+            MU_ALLOW_DEEPSEEK_SPAWN OPENCODE OPENCODE_SESSION_ID OPENCODE_TERMINAL CLAUDE_CONFIG_DIR)
+same_dir() { [ -n "$1" ] && [ -n "$2" ] && [ "$(readlink -f -- "$1" 2>/dev/null)" = "$(readlink -f -- "$2" 2>/dev/null)" ]; }
+if same_dir "${CLAUDE_CONFIG_DIR:-}" "${MU_CLAUDE_PERSONAL_CONFIG_DIR:-$HOME/.claude-secondary}"; then
+  scrub+=(-u CLAUDE_CONFIG_DIR)
+fi
 
 # DeepSeek and Muse sessions belong to the shared OpenCode window (JR, 2026-11-12): no tmux window,
 # no window name to collide with. The wrapper mints/pins the session and prints its id.

@@ -40,6 +40,12 @@ const sessions = [
     time: { created: now + 1000, updated: now + 1000 } },
   { id: "ses_chat", title: "Something else", location: { directory: "/p" },
     time: { created: now + 1000, updated: now + 1000 } },
+  // P-1: a chat that merely starts with "Mu " is not an agent session.
+  { id: "ses_plain", title: "Mu notes for the week", location: { directory: "/p" },
+    time: { created: now + 1000, updated: now + 1000 } },
+  // The retitle every builder session gets (e4ed3d85): `Mu <label> — <task>`.
+  { id: "ses_task", title: "Mu fix-agents — P1 stats identity", location: { directory: "/p" },
+    time: { created: now + 1000, updated: now + 1000 } },
 ]
 let selected = "ses_new"
 const context = {
@@ -59,16 +65,27 @@ globalThis.setInterval = (fn) => { fn(); return 1 }
 globalThis.clearInterval = () => {}
 
 module.default.setup(context)
-assert.deepEqual(opened, ["ses_new"])              // only a new, same-project Mu session
+assert.deepEqual(opened, ["ses_new", "ses_task"])   // new same-project Mu sessions only
 assert.equal(layer.commands[0].id, "mu.sessions.open")
 
 await layer.commands[0].run()
-assert.deepEqual(opened, ["ses_new", "focus:ses_new"])
+assert.deepEqual(opened, ["ses_new", "ses_task", "focus:ses_new"])
 
 selected = "ses_old"
 await layer.commands[0].run()
 assert.equal(opened.at(-1), "focus:ses_old")
 assert.ok(toasts.some((toast) => String(toast.message).includes("Mu new")))
+
+// P-2: a toast, picker or focus call that throws must not break the command.
+context.ui.toast.show = () => { throw new Error("no toast") }
+context.ui.dialog.select = async () => { throw new Error("no picker") }
+await layer.commands[0].run()                        // picker throws: resolves, no focus
+assert.equal(opened.at(-1), "focus:ses_old")
+context.ui.dialog.select = async () => "ses_other"
+context.ui.tabs.focus = () => { throw new Error("no focus") }
+await layer.commands[0].run()                        // focus throws: resolves
+sessions.length = 0
+await layer.commands[0].run()                        // empty list, throwing toast: resolves
 console.log("ok")
 ''', encoding="utf-8")
     env = {"PLUGIN": str(PLUGIN), "PATH": "/usr/bin:/bin:" + str(Path(node).parent)}

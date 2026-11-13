@@ -23,6 +23,11 @@ chosen account's ``claude``. The chooser is deliberately conservative:
 
 Both commands accept ``--primary-file``, ``--personal-file``, ``--five-hour``, ``--weekly`` and
 ``--max-age``; ``MU_USAGE_FILE`` and ``MU_USAGE_PERSONAL_FILE`` override the two paths.
+
+Do not make ``tools/usage_check`` follow the session's account by exporting ``MU_USAGE_FILE`` from a
+wrapper: this module reads ``MU_USAGE_FILE`` as the *primary* path, so that would hide the primary file
+from the chooser. ``usage_check`` picks the account's own file from ``CLAUDE_CONFIG_DIR`` instead
+(board M-0823 B-3).
 """
 from __future__ import annotations
 

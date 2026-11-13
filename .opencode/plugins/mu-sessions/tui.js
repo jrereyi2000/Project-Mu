@@ -7,12 +7,14 @@
 // focuses the one JR picks. It never sends a prompt or a key to another session.
 import { Plugin } from "@opencode/plugin/tui"
 
-const TITLE_PREFIX = "Mu "
+// `Mu <label> (<agent>)` from spawn_agent.sh and `Mu <label> — <task>` from the session retitle
+// (e4ed3d85). An ordinary chat that happens to start with "Mu " is not an agent session.
+const TITLE_RE = /^Mu [a-z0-9][a-z0-9-]* (\(|— )/
 const POLL_MS = 2000
 const RECENT_MS = 12 * 60 * 60 * 1000
 
 function isMuSession(session) {
-  return String(session?.title ?? "").startsWith(TITLE_PREFIX)
+  return TITLE_RE.test(String(session?.title ?? ""))
 }
 
 function updatedAt(session) {
@@ -104,23 +106,36 @@ export default Plugin.define({
               .filter((session) => now - updatedAt(session) <= RECENT_MS)
               .sort((left, right) => updatedAt(right) - updatedAt(left))
             if (recent.length === 0) {
-              context.ui.toast.show({
-                message: "No Mu agent sessions in the last 12 hours",
-                variant: "warning",
-              })
+              try {
+                context.ui.toast.show({
+                  message: "No Mu agent sessions in the last 12 hours",
+                  variant: "warning",
+                })
+              } catch {
+                // A toast is best effort; an empty list is not an error.
+              }
               return
             }
-            const choice = await context.ui.dialog.select({
-              title: "Mu agent sessions",
-              options: recent.map((session) => ({
-                title: String(session.title ?? session.id),
-                value: session.id,
-                description: new Date(updatedAt(session)).toLocaleTimeString(),
-              })),
-            })
+            let choice
+            try {
+              choice = await context.ui.dialog.select({
+                title: "Mu agent sessions",
+                options: recent.map((session) => ({
+                  title: String(session.title ?? session.id),
+                  value: session.id,
+                  description: new Date(updatedAt(session)).toLocaleTimeString(),
+                })),
+              })
+            } catch {
+              return            // a cancelled or unavailable picker must never break the TUI
+            }
             if (!choice) return
-            if (tabsOn()) context.ui.tabs.focus(choice)
-            else context.ui.router.navigate({ type: "session", sessionID: choice })
+            try {
+              if (tabsOn()) context.ui.tabs.focus(choice)
+              else context.ui.router.navigate({ type: "session", sessionID: choice })
+            } catch {
+              // Focusing is best effort too: the session stays open in OpenCode either way.
+            }
           },
         },
       ],

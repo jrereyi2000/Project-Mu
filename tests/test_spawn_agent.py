@@ -23,9 +23,30 @@ exit 1
 """
 
 
+def write_usage(path: Path, five_hour: float, weekly: float, now: float | None = None) -> Path:
+    """A status-line-shaped usage file, fresh against the real clock (M-0823 B-2).
+
+    The `claude_account.py` chooser always runs on the real clock, so a fixture written for a fixed past `now`
+    silently goes stale and changes the chosen account. Never hard-code a timestamp here.
+    """
+    now = int(time.time() if now is None else now)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({
+        "seen_at": now,
+        "five_hour": {"used_percentage": five_hour, "resets_at": now + 3600},
+        "seven_day": {"used_percentage": weekly, "resets_at": now + 86400},
+    }), encoding="utf-8")
+    return path
+
+
 @pytest.fixture
 def env(tmp_path: Path) -> dict[str, str]:
-    """An explicit environment with nothing of JR's tmux or shell in it."""
+    """An explicit environment with nothing of JR's tmux, shell or live usage files in it.
+
+    M-0823 B-1: the auto routes read `claude_account.py`'s two usage files. Without these overrides the tests
+    read JR's live `data/usage/` files and fail whenever both accounts are over quota or unreadable, so the
+    fixture owns both files, fresh and under the thresholds.
+    """
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     tmux = bin_dir / "tmux"
@@ -40,6 +61,8 @@ def env(tmp_path: Path) -> dict[str, str]:
         "MU_TMUX_SESSION": "mu-test",
         "MU_REPO": str(REPO_ROOT),
         "MU_TMUX_MARKER": str(tmp_path / "tmux-called"),
+        "MU_USAGE_FILE": str(write_usage(tmp_path / "usage" / "primary.json", 10, 10)),
+        "MU_USAGE_PERSONAL_FILE": str(write_usage(tmp_path / "usage" / "personal.json", 20, 20)),
     }
 
 
@@ -373,15 +396,8 @@ def test_claude_personal_honours_the_command_override(env: dict[str, str], tmp_p
 
 
 def test_opus_auto_picks_personal_when_primary_is_over(env: dict[str, str], tmp_path: Path) -> None:
-    now = 1_800_000_000
-    primary = tmp_path / "primary.json"
-    personal = tmp_path / "personal.json"
-    for path, pct in ((primary, 92), (personal, 10)):
-        path.write_text(json.dumps({
-            "seen_at": now,
-            "five_hour": {"used_percentage": pct, "resets_at": now + 3600},
-            "seven_day": {"used_percentage": 20, "resets_at": now + 86400},
-        }), encoding="utf-8")
+    primary = write_usage(tmp_path / "primary.json", 92, 20)
+    personal = write_usage(tmp_path / "personal.json", 10, 20)
     env["MU_USAGE_FILE"] = str(primary)
     env["MU_USAGE_PERSONAL_FILE"] = str(personal)
 
@@ -393,15 +409,8 @@ def test_opus_auto_picks_personal_when_primary_is_over(env: dict[str, str], tmp_
 
 
 def test_opus_auto_picks_primary_when_it_has_more_room(env: dict[str, str], tmp_path: Path) -> None:
-    now = 1_800_000_000
-    primary = tmp_path / "primary.json"
-    personal = tmp_path / "personal.json"
-    for path, pct in ((primary, 10), (personal, 60)):
-        path.write_text(json.dumps({
-            "seen_at": now,
-            "five_hour": {"used_percentage": pct, "resets_at": now + 3600},
-            "seven_day": {"used_percentage": 20, "resets_at": now + 86400},
-        }), encoding="utf-8")
+    primary = write_usage(tmp_path / "primary.json", 10, 20)
+    personal = write_usage(tmp_path / "personal.json", 60, 20)
     env["MU_USAGE_FILE"] = str(primary)
     env["MU_USAGE_PERSONAL_FILE"] = str(personal)
 
@@ -413,14 +422,23 @@ def test_opus_auto_picks_primary_when_it_has_more_room(env: dict[str, str], tmp_
     _assert_no_window(env)
 
 
+def test_the_auto_routes_need_no_live_usage_files(env: dict[str, str], tmp_path: Path) -> None:
+    """M-0823 B-1: the fixture's own fresh files are enough; nothing in `data/usage/` is read."""
+    for var in ("MU_USAGE_FILE", "MU_USAGE_PERSONAL_FILE"):
+        assert str(tmp_path) in env[var], (var, env[var])
+        assert "Project-Mu/data/usage" not in env[var]
+
+    for agent in ("claude-auto", "opus-auto"):
+        result = _run(env, "--dry-run", f"auto-fresh-{agent}", agent, "/builder")
+
+        assert result.returncode == 0, result.stderr
+        assert f"window=auto-fresh-{agent}" in result.stdout
+    _assert_no_window(env)
+
+
 def test_claude_auto_refuses_when_both_accounts_are_over(env: dict[str, str], tmp_path: Path) -> None:
-    now = 1_800_000_000
     for name, pct in (("primary", 92), ("personal", 90)):
-        (tmp_path / f"{name}.json").write_text(json.dumps({
-            "seen_at": now,
-            "five_hour": {"used_percentage": pct, "resets_at": now + 3600},
-            "seven_day": {"used_percentage": 20, "resets_at": now + 86400},
-        }), encoding="utf-8")
+        write_usage(tmp_path / f"{name}.json", pct, 20)
     env["MU_USAGE_FILE"] = str(tmp_path / "primary.json")
     env["MU_USAGE_PERSONAL_FILE"] = str(tmp_path / "personal.json")
 
@@ -543,6 +561,40 @@ def test_a_deepseek_child_mints_its_own_session_not_the_parents(
 
 
 @pytest.mark.skipif(not Path("/usr/bin/tmux").exists(), reason="needs a real tmux server")
+def test_a_personal_caller_does_not_leak_its_config_dir(env: dict[str, str], tmp_path: Path) -> None:
+    """M-0823 B-4: a personal-account caller's primary-route child must start on the primary account."""
+    personal = tmp_path / "secondary"
+    personal.mkdir()
+    env.update({"CLAUDE_CONFIG_DIR": str(personal),
+                "MU_CLAUDE_PERSONAL_CONFIG_DIR": str(personal)})
+
+    result = _run(env, "--dry-run", "child-opus", "opus", "/builder")
+
+    assert result.returncode == 0, result.stderr
+    runs = result.stdout.split("runs (in bash -lic): ", 1)[1]
+    tokens = runs.replace("\\", "").split()
+    unset = {tokens[i + 1] for i, token in enumerate(tokens) if token == "-u"}
+    assert "CLAUDE_CONFIG_DIR" in unset, runs
+
+    # The personal route re-sets it inside claude_personal.sh, so scrubbing must not break it.
+    personal_run = _run(env, "--dry-run", "personal-4", "opus-personal", "/audit")
+    assert personal_run.returncode == 0, personal_run.stderr
+    assert "claude_personal.sh --model claude-opus-5-5 --effort medium /audit" in personal_run.stdout
+    _assert_no_window(env)
+
+
+def test_a_primary_caller_keeps_a_custom_config_dir(env: dict[str, str], tmp_path: Path) -> None:
+    """Only the secondary account's directory is scrubbed; a deliberate primary one survives."""
+    env.update({"CLAUDE_CONFIG_DIR": str(tmp_path / "primary-config"),
+                "MU_CLAUDE_PERSONAL_CONFIG_DIR": str(tmp_path / "secondary")})
+
+    result = _run(env, "--dry-run", "child-opus", "opus", "/builder")
+
+    assert result.returncode == 0, result.stderr
+    assert "CLAUDE_CONFIG_DIR" not in result.stdout.split("runs (in bash -lic): ", 1)[1]
+    _assert_no_window(env)
+
+
 def test_a_spawned_window_does_not_inherit_the_callers_markers(
     env: dict[str, str], tmp_path: Path
 ) -> None:
@@ -561,6 +613,8 @@ def test_a_spawned_window_does_not_inherit_the_callers_markers(
         "MU_OPENCODE_SESSION": "ses_mu_PARENT_99999",
         "MU_ALLOW_DEEPSEEK_SPAWN": "1", "OPENCODE": "1",
         "OPENCODE_SESSION_ID": "ses_mu_PARENT_99999",
+        "CLAUDE_CONFIG_DIR": str(tmp_path / "secondary"),
+        "MU_CLAUDE_PERSONAL_CONFIG_DIR": str(tmp_path / "secondary"),
     })
 
     try:
@@ -579,13 +633,14 @@ def test_a_spawned_window_does_not_inherit_the_callers_markers(
                 continue        # the route re-sets its own actor after the scrub
             assert var not in child, (var, child.get(var))
         assert child["MU_AGENT_MODEL"] == "deepseek-v4.1-flash"
+        assert "CLAUDE_CONFIG_DIR" not in child, child.get("CLAUDE_CONFIG_DIR")   # M-0823 B-4
 
         shown = subprocess.run(
             ["/usr/bin/tmux", "-L", sock, "show-environment", "-g"],
             capture_output=True, text=True, check=False,
         ).stdout
         global_env = {line.split("=", 1)[0].lstrip("-") for line in shown.splitlines() if "=" in line}
-        for var in ROUTE_MARKERS:
+        for var in ROUTE_MARKERS + ("CLAUDE_CONFIG_DIR",):
             assert var not in global_env, (var, shown)
     finally:
         subprocess.run(["/usr/bin/tmux", "-L", sock, "kill-server"],
