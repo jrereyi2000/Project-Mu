@@ -28,10 +28,6 @@ import os
 import random
 import sys
 
-SEASON_TABLES = ("gm_trade_assets", "gm_trade_leaks", "gm_trade_negotiation_turns", "gm_trade_negotiations",
-                 "gm_trade_proposals")
-
-
 def _require_scratch(conn):
     """The connection is the authority, whatever the DSN text says (db/migrate.py's rule)."""
     name = conn.execute("SELECT current_database()").fetchone()[0]
