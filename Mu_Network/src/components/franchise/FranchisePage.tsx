@@ -71,23 +71,24 @@ const href = (slug: string, team: string | null) => `#franchise-${slug}${team ? 
 
 const PAGE_CSS = `
 .fr-page { background: var(--paper, #f4f3f0); min-height: 70vh; }
-.fr-head { max-width: 1240px; margin: 0 auto; padding: 30px 42px 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; }
+.fr-head { max-width: var(--container); margin: 0 auto; padding: 30px var(--gutter) 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; }
 .fr-head-team { display: flex; align-items: center; gap: 14px; }
 .fr-head-team img { width: 54px; height: 54px; object-fit: contain; }
-.fr-head-team span { color: var(--team-color, var(--red)); font: 700 8px var(--font-mono); letter-spacing: .12em; text-transform: uppercase; }
-.fr-head-team h1 { margin: 4px 0 0; font: 700 28px var(--font-sans); letter-spacing: -.04em; text-transform: uppercase; }
-.fr-head-team small { display: block; margin-top: 4px; color: #55575d; font: 600 10px var(--font-mono); }
-.fr-picker { display: flex; align-items: center; gap: 8px; color: var(--gray-500); font: 700 8px var(--font-mono); letter-spacing: .07em; text-transform: uppercase; }
-.fr-picker select { height: 32px; padding: 0 10px; border: 1px solid var(--gray-100); border-radius: 16px; background: var(--white); color: var(--ink); font: 700 10px var(--font-mono); }
-.fr-badge { padding: 3px 8px; border-radius: 3px; font: 700 8px var(--font-mono); letter-spacing: .05em; text-transform: uppercase; }
+.fr-head-team span { color: var(--accent-text, var(--red-text)); font: 700 var(--fs-10) var(--font-mono); letter-spacing: .12em; text-transform: uppercase; }
+.fr-head-team h1 { margin: 4px 0 0; font: 700 var(--fs-28) var(--font-sans); letter-spacing: -.04em; text-transform: uppercase; }
+.fr-head-team small { display: block; margin-top: 4px; color: #55575d; font: 600 var(--fs-10) var(--font-mono); }
+.fr-picker { display: flex; align-items: center; gap: 8px; color: var(--text-muted); font: 700 var(--fs-10) var(--font-mono); letter-spacing: .07em; text-transform: uppercase; }
+.fr-picker select { height: 32px; padding: 0 10px; border: 1px solid var(--gray-100); border-radius: 16px; background: var(--white); color: var(--ink); font: 700 var(--fs-10) var(--font-mono); }
+.fr-badge { padding: 3px 8px; border-radius: 3px; font: 700 var(--fs-10) var(--font-mono); letter-spacing: .05em; text-transform: uppercase; }
 .fr-badge.yes { color: var(--ink); background: #e6efe4; }
 .fr-badge.no { color: var(--white); background: var(--red); }
-.fr-tabs { max-width: 1240px; margin: 18px auto 0; padding: 0 42px; display: flex; gap: 4px; overflow-x: auto; border-bottom: 1px solid var(--gray-100); }
-.fr-tabs a { flex: none; padding: 12px 14px; color: var(--gray-500); font: 700 9px var(--font-mono); letter-spacing: .06em; text-transform: uppercase; text-decoration: none; border-bottom: 3px solid transparent; white-space: nowrap; }
+.fr-tabs { max-width: var(--container); margin: 18px auto 0; padding: 0 var(--gutter); display: flex; gap: 4px; overflow-x: auto; border-bottom: 1px solid var(--gray-100); }
+.fr-tabs a { flex: none; padding: 12px 14px; color: var(--text-muted); font: 700 var(--fs-10) var(--font-mono); letter-spacing: .06em; text-transform: uppercase; text-decoration: none; border-bottom: 3px solid transparent; white-space: nowrap; }
 .fr-tabs a:hover { color: var(--ink); }
 .fr-tabs a.active { color: var(--ink); border-bottom-color: var(--team-color, var(--red)); }
-.fr-tab-count { margin-left: 5px; padding: 1px 5px; border-radius: 8px; color: var(--white); background: var(--team-color, var(--red)); font: 700 8px var(--font-mono); }
-.fr-page .team-data-view.fo-view { max-width: 1240px; }
+.fr-tab-count { margin-left: 5px; padding: 1px 5px; border-radius: 8px; color: var(--white); background: var(--team-color, var(--red)); font: 700 var(--fs-10) var(--font-mono); }
+.fr-page .team-data-view.fo-view { max-width: var(--container); }
+@media (max-width: 1200px) { .fr-tabs { flex-wrap: wrap; overflow-x: visible; row-gap: 2px; } }
 @media (max-width: 800px) { .fr-head { padding: 22px 16px 0; } .fr-tabs { padding: 0 16px; } }
 `;
 
