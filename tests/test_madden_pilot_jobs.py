@@ -244,6 +244,32 @@ def test_sim_managed_sims_an_already_loaded_managed_franchise_in_place(tmp_path,
     assert out["status"] == "refused" and "MU-*" in out["why"]
 
 
+def test_sim_managed_in_place_refuses_any_other_mu_tile(tmp_path, notices):
+    # P7-00e F1 (audit M-0814): --franchise MUBASE used to sim the pinned baseline through the
+    # managed in-place path and write CAREER-MUBASE-AUTOSAVE. Only the save's own tile is in place.
+    fake, _ = fake_madden(start="HUB_WEEKLY", tiles=("MU2026",))
+    p = make_pilot(tmp_path, fake)
+    out = jobs.sim_season(p, save="CAREER-MU2026", franchise="MUBASE", watcher=lambda: False,
+                          folder=tmp_path / "none", managed=True)
+    assert out["status"] == "refused", out
+    assert "own MU-* tile" in out["why"] and "MU2026" in out["why"] and "MUBASE" in out["why"]
+    assert fake.keys == [] and fake.looks == 0 and p.policy == {}
+
+
+def test_sim_managed_quit_lift_needs_the_loaded_franchise_to_be_the_save_s_tile(tmp_path, notices, monkeypatch):
+    # P7-00e F1: allow_quit is not a property of --managed alone. If the hub turns out to be a
+    # different franchise, quitting it would write that franchise's autosave, so the guard holds.
+    fake, _ = fake_madden(start="HUB_WEEKLY", tiles=("MU2026",))
+    p = make_pilot(tmp_path, fake)
+    monkeypatch.setattr(jobs, "_load_franchise",
+                        lambda pilot, tile, save=None, folder=None: setattr(pilot, "loaded_franchise", "MUBASE"))
+    out = jobs.sim_season(p, save="CAREER-MU2026", to="week 2", watcher=lambda: False,
+                          folder=tmp_path / "none", managed=True)
+    assert out["status"] == "stopped" and out["kind"] == "Forbidden", out
+    assert "refusing to quit franchise MUBASE" in out["reason"]
+    assert fake.screen == "HUB_WEEKLY"          # it never reached the quit dialog
+
+
 def test_clone_refuses_a_managed_destination(tmp_path, notices):
     # clone-save never writes the managed class (P7-00e): a clone would sit in the watcher's scope.
     d = _saves(tmp_path)
@@ -1412,6 +1438,204 @@ def test_cli_dry_run_watch_game_refuses_a_bad_target(tmp_path, notices, monkeypa
                    "--run-dir", str(tmp_path)], out=lines.append)
     assert rc == 1 and result_json(tmp_path)["status"] == "refused"
     assert notices == []
+
+
+# ---------------------------------------------------------------- boot-game (P8-12)
+def _boot(tmp_path, fake, **kw):
+    p = make_pilot(tmp_path, fake)
+    kw.setdefault("folder", tmp_path / "none")
+    kw.setdefault("watcher", lambda: False)
+    kw.setdefault("launch", False)
+    kw.setdefault("managed", False)
+    return p, jobs.boot_game(p, save=kw.pop("save", "CAREER-TUNE-X"), **kw)
+
+
+IN_GAME_SCREENS = ("GAME_KICKOFF", "GAME_KICKOFF_RECEIVE", "GAME_PLAY", "GAME_PLAY_CALL", "PAUSE_MENU",
+                   "SUPERSIM_MENU", "SUPERSIM_JUMP_FORWARD")
+
+
+def test_boot_game_walks_the_cold_boot_to_the_pregame_and_makes_no_football_call(tmp_path, notices):
+    # P8-12: one route, launch -> the user's pregame, with the cold boot pressed through the catalog.
+    fake, log = fake_madden(start="BOOT_SPLASH", tiles=("ALLUSER", "TUNE-X"))
+    p = make_pilot(tmp_path, fake)
+    out = jobs.boot_game(p, save="CAREER-TUNE-X", watcher=lambda: False, folder=tmp_path / "none",
+                         run=lambda argv: None, madden_running=lambda: False, manager_running=lambda: False)
+    assert out["status"] == "ok", out
+    assert out["to"] == "pregame" and out["screen"] == "GAME_PREGAME_READY"
+    assert out["handback"] is False and fake.screen == "GAME_PREGAME_READY"
+    assert "football_key" in out and out["football_key"].startswith("none")
+    text = "\n".join(log)
+    assert "key   space     BOOT_SPLASH -> TITLE_SCREEN" in text     # pressed through confirm_on
+    assert "key   space     TITLE_SCREEN -> MAIN_MENU" in text
+    assert "PROGRESSION_WARNING on PROCEED WITHOUT PROGRESSION -> HUB_WEEKLY" in text
+    assert "HUB_GAMEDAY on PLAY SEASON GAME -> GAME_PREGAME_PIVOT" in text
+    assert "GAME_PREGAME_PIVOT -> GAME_PREGAME_READY" in text
+    assert [c["check"] for c in out["screen_checks"]] == ["cold-boot", "load", "game-week", "gameday",
+                                                          "pregame"]
+    assert out["screen_checks"][2]["week"] == 1
+    assert p.policy == {"HUB_GAMEDAY": ["PLAY SEASON GAME"]}   # the catalog itself is never widened
+    assert CAT["screens"]["HUB_GAMEDAY"]["confirm_ok"] == ["ADVANCE WEEK"]
+    # the point: no key was pressed on an in-game screen and nothing was held like the kick
+    assert all(k["screen"] not in IN_GAME_SCREENS for k in fake.key_log)
+    assert max((k["hold"] or 0) for k in fake.key_log) < 1.0
+    assert not (tmp_path / "handback.json").exists()
+
+
+def test_boot_game_to_kickoff_stops_on_the_kickoff_and_never_kicks(tmp_path, notices):
+    fake, _ = fake_madden(start="FRANCHISE_LIST", tiles=("TUNE-X",))
+    _, out = _boot(tmp_path, fake, to="kickoff")
+    assert out["status"] == "ok" and out["screen"] == "GAME_KICKOFF", out
+    assert out["clock"] == {"quarter": 1, "seconds": 660}       # 1st 11:00, S-1's kickoff
+    assert fake.screen == "GAME_KICKOFF"                        # not GAME_PLAY: the kick is JR's
+    assert all(k["screen"] not in IN_GAME_SCREENS for k in fake.key_log)
+    assert [c["check"] for c in out["screen_checks"]][-1] == "kickoff"
+    assert out["screen_checks"][-1]["screen"] == "GAME_KICKOFF"
+
+
+def test_boot_game_hands_back_when_the_pregame_never_arrives(tmp_path, notices):
+    class MuteMadden(ScriptedMadden):
+        def on_key(self, name):
+            if self.screen == "HUB_GAMEDAY" and name == self.keymap.get("select", "space"):
+                return                       # PLAY SEASON GAME never opens the pregame
+            super().on_key(name)
+
+    fake = MuteMadden(CAT, start="HUB_WEEKLY", tiles=["TUNE-X"], out=lambda s: None)
+    out = jobs.boot_game(make_pilot(tmp_path, fake), save="CAREER-TUNE-X", franchise="TUNE-X",
+                         watcher=lambda: False, folder=tmp_path / "none", launch=False, timeout=30)
+    assert out["status"] == "handback" and out["kind"] == "Stuck", out
+    assert "waited" in out["reason"] and "the pregame" in out["reason"]
+    assert out["screen"] == "HUB_GAMEDAY" and out["next"] == "press PLAY SEASON GAME yourself"
+    handback = json.loads((tmp_path / "handback.json").read_text())
+    assert handback["status"] == "handback" and handback["screen"] == "HUB_GAMEDAY"
+    assert handback["reason"] and handback["next"] == "press PLAY SEASON GAME yourself"
+    assert not (tmp_path / "stop.json").exists()                # one ending file, not two
+    assert any("handback" in msg for msg, _ in notices)
+
+
+def test_boot_game_hands_back_on_an_unrecognised_screen(tmp_path, notices):
+    class UnseenMadden(ScriptedMadden):
+        def on_key(self, name):
+            if self.screen == "GAME_PREGAME_PIVOT" and name == self.keymap.get("select", "space"):
+                self.screen = "SECRET_SCREEN"    # a frame the catalog cannot name
+                return
+            super().on_key(name)
+
+    fake = UnseenMadden(CAT, start="HUB_WEEKLY", tiles=["TUNE-X"], out=lambda s: None)
+    out = jobs.boot_game(make_pilot(tmp_path, fake), save="CAREER-TUNE-X", franchise="TUNE-X",
+                         watcher=lambda: False, folder=tmp_path / "none", launch=False)
+    assert out["status"] == "handback" and out["kind"] == "Unknown", out
+    assert out["screen"] == "UNKNOWN"
+    assert out["next"].startswith("the pilot pressed nothing more")
+    handback = json.loads((tmp_path / "handback.json").read_text())
+    assert handback["kind"] == "Unknown" and handback["step"] > 0
+    # it never pressed a key after the frame went unrecognised
+    assert fake.key_log[-1]["screen"] == "GAME_PREGAME_PIVOT"
+
+
+def test_boot_game_refuses_bad_saves_targets_and_a_mismatched_in_place_franchise(tmp_path, notices):
+    fake, _ = fake_madden()
+    p = make_pilot(tmp_path, fake)
+    out = jobs.boot_game(p, save="CAREER-2029SB", watcher=lambda: False, folder=tmp_path / "none")
+    assert out["status"] == "refused" and "CAREER-TUNE-" in out["why"]
+    out = jobs.boot_game(p, save="CAREER-MU2026", watcher=lambda: False, folder=tmp_path / "none")
+    assert out["status"] == "refused" and "--managed" in out["why"]
+    out = jobs.boot_game(p, save="CAREER-MUBASE", managed=True, watcher=lambda: False, folder=tmp_path / "none")
+    assert out["status"] == "refused" and "P7-00a" in out["why"]
+    out = jobs.boot_game(p, save="CAREER-TUNE-X", to="halftime", watcher=lambda: False, folder=tmp_path / "none")
+    assert out["status"] == "refused" and "pregame or kickoff" in out["why"]
+    out = jobs.boot_game(p, save="CAREER-TUNE-X", franchise="TUNE-Y", watcher=lambda: False,
+                         folder=tmp_path / "none")
+    assert out["status"] == "refused" and "own tile" in out["why"]
+    out = jobs.boot_game(p, save="CAREER-TUNE-X", timeout=5, watcher=lambda: False, folder=tmp_path / "none")
+    assert out["status"] == "refused" and "10 s minimum" in out["why"]
+    out = jobs.boot_game(p, save="CAREER-TUNE-X", watcher=lambda: True, folder=tmp_path / "none")
+    assert out["status"] == "refused" and "watch_save" in out["why"]
+    assert fake.keys == [] and fake.looks == 0
+
+
+def test_boot_game_refuses_a_missing_save_file_before_launching(tmp_path, notices):
+    saves = tmp_path / "saves"
+    saves.mkdir()
+    fake, _ = fake_madden()
+    started = []
+    out = jobs.boot_game(make_pilot(tmp_path, fake), save="CAREER-TUNE-X", watcher=lambda: False, folder=saves,
+                         run=started.append, madden_running=lambda: False)
+    assert out["status"] == "refused" and "clone-save" in out["why"]
+    assert started == [] and fake.keys == [] and fake.looks == 0
+
+
+def test_boot_game_hands_back_when_the_hub_is_not_the_save_s_week(tmp_path, notices, monkeypatch):
+    # The screen check before any football: a hub reading a different week from the save is not
+    # the game the caller asked to boot, so the job hands back with no key pressed.
+    saves = tmp_path / "saves"
+    saves.mkdir()
+    (saves / "CAREER-TUNE-X").write_bytes(b"x")
+    monkeypatch.setattr(jobs, "_save_header",
+                        lambda path: {"year": 2026, "phase": "WEEK", "week": 2})
+    fake, _ = fake_madden(start="HUB_WEEKLY", tiles=("TUNE-X",))
+    out = jobs.boot_game(make_pilot(tmp_path, fake), save="CAREER-TUNE-X", franchise="TUNE-X",
+                         watcher=lambda: False, folder=saves, launch=False)
+    assert out["status"] == "handback" and out["kind"] == "Stuck", out
+    assert "not starting the wrong game" in out["reason"]
+    assert fake.screen == "HUB_WEEKLY" and fake.keys == []
+
+
+def test_boot_game_hands_back_on_a_bye_week(tmp_path, notices):
+    fake, _ = fake_madden(start="HUB_BYE", tiles=("TUNE-X",))
+    out = jobs.boot_game(make_pilot(tmp_path, fake), save="CAREER-TUNE-X", franchise="TUNE-X",
+                         watcher=lambda: False, folder=tmp_path / "none", launch=False)
+    assert out["status"] == "handback" and "bye week" in out["reason"]
+    assert fake.keys == []                       # there is no game to open; nothing is pressed
+
+
+def test_boot_game_boots_a_managed_save_only_on_its_own_tile(tmp_path, notices):
+    fake, _ = fake_madden(start="FRANCHISE_LIST", tiles=("ALLUSER", "MU2026"))
+    p = make_pilot(tmp_path, fake)
+    out = jobs.boot_game(p, save="CAREER-MU2026", managed=True, watcher=lambda: False,
+                         folder=tmp_path / "none", launch=False)
+    assert out["status"] == "ok" and out["franchise"] == "MU2026", out
+    assert p.policy == {"FRANCHISE_LIST": ["MU2026"], "HUB_GAMEDAY": ["PLAY SEASON GAME"]}
+    # in place is allowed only on the save's own tile (the same rule as the managed sim, P7-00e F1)
+    fake2, _ = fake_madden(start="HUB_WEEKLY", tiles=("MU2026",))
+    out = jobs.boot_game(make_pilot(tmp_path / "x", fake2), save="CAREER-MU2026", managed=True,
+                         franchise="MUBASE", watcher=lambda: False, folder=tmp_path / "none", launch=False)
+    assert out["status"] == "refused" and "own tile" in out["why"]
+
+
+# ---------------------------------------------------------------- CLI dry runs (boot-game)
+def test_cli_dry_run_boot_game_prints_the_route_and_touches_nothing(tmp_path, notices, monkeypatch):
+    monkeypatch.setattr(jobs, "watcher_running", lambda: False)
+    lines = []
+    rc = cli.main(["boot-game", "--save", "CAREER-TUNE-X", "--dry-run", "--run-dir", str(tmp_path)],
+                  out=lines.append)
+    assert rc == 0
+    assert lines[0].startswith("[dry-run] boot-game: launch Mu Base")
+    assert "handback.json" in lines[0] and "no kick, no play" in lines[0]
+    text = "\n".join(lines)
+    assert "BOOT_SPLASH" in text and "PLAY SEASON GAME" in text
+    res = result_json(tmp_path)
+    assert res["status"] == "ok" and res["screen"] == "GAME_PREGAME_READY" and res["dry_run"] is True
+    assert res["to"] == "pregame" and res["launched"] is True
+    assert notices == []
+
+
+def test_cli_dry_run_boot_game_kickoff_and_handback_exit_codes(tmp_path, notices, monkeypatch):
+    monkeypatch.setattr(jobs, "watcher_running", lambda: False)
+    lines = []
+    rc = cli.main(["boot-game", "--save", "CAREER-TUNE-X", "--to", "kickoff", "--dry-run",
+                   "--run-dir", str(tmp_path / "k")], out=lines.append)
+    assert rc == 0 and result_json(tmp_path / "k")["screen"] == "GAME_KICKOFF"
+
+    def handback(*a, **k):
+        (tmp_path / "h").mkdir(parents=True, exist_ok=True)
+        payload = {"status": "handback", "screen": "UNKNOWN"}
+        (tmp_path / "h" / "result.json").write_text(json.dumps(payload))
+        return payload
+
+    monkeypatch.setattr(jobs, "boot_game", handback)
+    rc = cli.main(["boot-game", "--save", "CAREER-TUNE-X", "--dry-run", "--run-dir", str(tmp_path / "h")],
+                  out=lines.append)
+    assert rc == 2 and result_json(tmp_path / "h")["status"] == "handback"
 
 
 # ---------------------------------------------------------------- measured pause menu variants (F7)
