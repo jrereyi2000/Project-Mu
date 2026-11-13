@@ -53,13 +53,13 @@ export const CombineCard: React.FC<{ combine: CombineProfileData; position: stri
         </div>
         <div className="draft-stat-box">
           <div className="draft-stat-box-label">Medical Check</div>
-          <div className="draft-stat-box-val" style={{ fontSize: "15px", textTransform: "uppercase", color: "#15803d" }}>
+          <div className="draft-stat-box-val" style={{ fontSize: "var(--fs-15)", textTransform: "uppercase", color: "#15803d" }}>
             {combine.medical || "Cleared"}
           </div>
         </div>
         <div className="draft-stat-box">
           <div className="draft-stat-box-label">Team Interviews</div>
-          <div className="draft-stat-box-val" style={{ fontSize: "15px", textTransform: "uppercase" }}>
+          <div className="draft-stat-box-val" style={{ fontSize: "var(--fs-15)", textTransform: "uppercase" }}>
             {combine.interviews || "Scheduled"}
           </div>
         </div>
@@ -69,30 +69,30 @@ export const CombineCard: React.FC<{ combine: CombineProfileData; position: stri
       {combine.participated && drills.length > 0 ? (
         <div className="draft-section-card" style={{ padding: "18px 22px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-            <h4 style={{ margin: 0, fontSize: "13px", fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            <h4 style={{ margin: 0, fontSize: "var(--fs-13)", fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.05em" }}>
               NFL Scouting Combine Workout · vs. {position} Positional Benchmarks
             </h4>
             {combine.headline && (
-              <span style={{ fontSize: "12px", fontWeight: 700, color: "#0f172a", background: "#fef3c7", padding: "3px 10px", borderRadius: "999px" }}>
+              <span style={{ fontSize: "var(--fs-12)", fontWeight: 700, color: "#0f172a", background: "#fef3c7", padding: "3px 10px", borderRadius: "999px" }}>
                 {combine.headline}
               </span>
             )}
           </div>
           {combine.blurb && (
-            <p style={{ margin: "0 0 14px", fontSize: "13px", color: "#475569" }}>{combine.blurb}</p>
+            <p style={{ margin: "0 0 14px", fontSize: "var(--fs-13)", color: "#475569" }}>{combine.blurb}</p>
           )}
           <div>
             {drills.map((d) => (
               <div key={d.key} className="combine-drill-row">
-                <div style={{ fontWeight: 700, fontSize: "13px", color: "#0f172a" }}>{d.label}</div>
-                <div style={{ fontFamily: "monospace", fontWeight: 800, fontSize: "14px", color: "#1e293b" }}>{d.value}</div>
+                <div style={{ fontWeight: 700, fontSize: "var(--fs-13)", color: "#0f172a" }}>{d.label}</div>
+                <div style={{ fontFamily: "monospace", fontWeight: 800, fontSize: "var(--fs-14)", color: "#1e293b" }}>{d.value}</div>
                 <div className="combine-bar-track">
                   <div
                     className="combine-bar-fill"
                     style={{ width: `${d.percentile}%`, background: percentileColor(d.percentile) }}
                   />
                 </div>
-                <div style={{ textAlign: "right", fontWeight: 800, fontSize: "12px", color: percentileColor(d.percentile) }}>
+                <div style={{ textAlign: "right", fontWeight: 800, fontSize: "var(--fs-12)", color: percentileColor(d.percentile) }}>
                   {d.percentile}th %
                 </div>
               </div>
@@ -101,10 +101,10 @@ export const CombineCard: React.FC<{ combine: CombineProfileData; position: stri
         </div>
       ) : (
         <div className="draft-section-card" style={{ background: "#f8fafc", textAlign: "center", padding: "28px 20px" }}>
-          <div style={{ fontSize: "14px", fontWeight: 800, color: "#0f172a", marginBottom: "6px" }}>
+          <div style={{ fontSize: "var(--fs-14)", fontWeight: 800, color: "#0f172a", marginBottom: "6px" }}>
             NFL Scouting Combine Testing Pending (Offseason Stage 1 · Step 24)
           </div>
-          <p style={{ margin: 0, fontSize: "13px", color: "#64748b" }}>
+          <p style={{ margin: 0, fontSize: "var(--fs-13)", color: "#64748b" }}>
             Verified school measurables ({combine.height || "—"}, {combine.weight ? `${combine.weight} lbs` : "—"}) are on file.
             Official 40-yard dash, vertical, broad jump, 3-cone, and bench press percentiles populate once the Combine runs in Indianapolis.
           </p>
@@ -114,10 +114,10 @@ export const CombineCard: React.FC<{ combine: CombineProfileData; position: stri
       {/* Pro Day Note */}
       {combine.pro_day_blurb && (
         <div className="draft-section-card" style={{ borderLeft: "4px solid #f59e0b" }}>
-          <div style={{ fontSize: "11px", fontWeight: 800, textTransform: "uppercase", color: "#b45309", marginBottom: "4px" }}>
+          <div style={{ fontSize: "var(--fs-11)", fontWeight: 800, textTransform: "uppercase", color: "#b45309", marginBottom: "4px" }}>
             Campus Pro Day Report ({combine.pro_day_result?.toUpperCase()})
           </div>
-          <div style={{ fontSize: "13px", color: "#1e293b" }}>{combine.pro_day_blurb}</div>
+          <div style={{ fontSize: "var(--fs-13)", color: "#1e293b" }}>{combine.pro_day_blurb}</div>
         </div>
       )}
     </div>

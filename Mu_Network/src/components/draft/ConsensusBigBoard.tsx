@@ -145,7 +145,7 @@ export const ConsensusBigBoard: React.FC<{
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <span style={{ fontSize: "12px", fontWeight: 700, color: "#64748b" }}>Conference / Tier:</span>
+            <span style={{ fontSize: "var(--fs-12)", fontWeight: 700, color: "#64748b" }}>Conference / Tier:</span>
             <select
               className="draft-select"
               value={confFilter}
@@ -162,7 +162,7 @@ export const ConsensusBigBoard: React.FC<{
                 </option>
               ))}
             </select>
-            <span style={{ fontSize: "12px", fontWeight: 700, color: "#475569" }}>
+            <span style={{ fontSize: "var(--fs-12)", fontWeight: 700, color: "#475569" }}>
               {totalMatching} Prospects
             </span>
           </div>
@@ -221,8 +221,8 @@ export const ConsensusBigBoard: React.FC<{
                         </div>
                       </td>
                       <td>
-                        <div style={{ fontWeight: 800, color: "#0f172a", fontSize: "14px" }}>{p.full_name}</div>
-                        <div style={{ fontSize: "11px", color: "#64748b", textTransform: "capitalize" }}>
+                        <div style={{ fontWeight: 800, color: "#0f172a", fontSize: "var(--fs-14)" }}>{p.full_name}</div>
+                        <div style={{ fontSize: "var(--fs-11)", color: "#64748b", textTransform: "capitalize" }}>
                           {p.class_year || "Upperclassman"} {p.age ? `· Age ${p.age}` : ""}
                         </div>
                       </td>
@@ -231,11 +231,11 @@ export const ConsensusBigBoard: React.FC<{
                       </td>
                       <td>
                         <div style={{ fontWeight: 700, color: "#1e293b" }}>{p.school_display}</div>
-                        <div style={{ fontSize: "11px", color: "#64748b" }}>
+                        <div style={{ fontSize: "var(--fs-11)", color: "#64748b" }}>
                           {p.conference || "Independent"} {p.level ? `· ${p.level}` : ""}
                         </div>
                       </td>
-                      <td style={{ whiteSpace: "nowrap", fontSize: "12.5px", color: "#334155", fontWeight: 600 }}>
+                      <td style={{ whiteSpace: "nowrap", fontSize: "var(--fs-13)", color: "#334155", fontWeight: 600 }}>
                         {p.height || "—"} · {p.weight ? `${p.weight} lbs` : "—"}
                       </td>
                       <td>
@@ -243,13 +243,13 @@ export const ConsensusBigBoard: React.FC<{
                           {p.grade != null ? p.grade.toFixed(1) : "—"}
                         </span>
                       </td>
-                      <td style={{ whiteSpace: "nowrap", fontSize: "12px", fontWeight: 700, color: "#334155" }}>
+                      <td style={{ whiteSpace: "nowrap", fontSize: "var(--fs-12)", fontWeight: 700, color: "#334155" }}>
                         {p.round_label}
                       </td>
                       <td>
                         <span className="draft-stat-chip">{p.stat_summary}</span>
                       </td>
-                      <td style={{ fontSize: "12px", color: "#475569", maxWidth: "240px" }}>
+                      <td style={{ fontSize: "var(--fs-12)", color: "#475569", maxWidth: "240px" }}>
                         {p.top_headline ? (
                           <span style={{ fontWeight: 600, color: "#0f172a" }}>{p.top_headline}</span>
                         ) : (

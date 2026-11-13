@@ -146,7 +146,7 @@ export const DraftPage: React.FC = () => {
                 >
                   <span className="draft-ticker-rank">#{h.rank}</span>
                   <strong>{h.headline}</strong>
-                  <span style={{ color: "#64748b", fontSize: "11px" }}>({h.position} · {h.college})</span>
+                  <span style={{ color: "#64748b", fontSize: "var(--fs-11)" }}>({h.position} · {h.college})</span>
                 </button>
               ))}
             </div>

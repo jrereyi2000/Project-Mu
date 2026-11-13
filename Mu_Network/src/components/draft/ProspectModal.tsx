@@ -253,19 +253,19 @@ export const ProspectModal: React.FC<{
             <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "18px", paddingRight: "36px" }}>
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "6px" }}>
-                  <span style={{ background: "#f59e0b", color: "#090e1a", fontWeight: 900, fontSize: "13px", padding: "3px 9px", borderRadius: "6px" }}>
+                  <span style={{ background: "#f59e0b", color: "#090e1a", fontWeight: 900, fontSize: "var(--fs-13)", padding: "3px 9px", borderRadius: "6px" }}>
                     RANK #{p.rank}
                   </span>
-                  <span style={{ background: "rgba(255,255,255,0.12)", color: "#f8fafc", fontWeight: 800, fontSize: "12px", padding: "3px 9px", borderRadius: "6px" }}>
+                  <span style={{ background: "rgba(255,255,255,0.12)", color: "#f8fafc", fontWeight: 800, fontSize: "var(--fs-12)", padding: "3px 9px", borderRadius: "6px" }}>
                     {p.position} · {p.position_words.toUpperCase()}
                   </span>
-                  <span style={{ color: "#fbbf24", fontWeight: 700, fontSize: "12px" }}>
+                  <span style={{ color: "#fbbf24", fontWeight: 700, fontSize: "var(--fs-12)" }}>
                     {p.round_label.toUpperCase()}
                   </span>
                   {p.net_rank_change !== 0 && (
                     <span
                       style={{
-                        fontSize: "11px",
+                        fontSize: "var(--fs-11)",
                         fontWeight: 800,
                         padding: "2px 8px",
                         borderRadius: "999px",
@@ -277,10 +277,10 @@ export const ProspectModal: React.FC<{
                     </span>
                   )}
                 </div>
-                <h2 style={{ margin: 0, fontSize: "26px", fontWeight: 900, letterSpacing: "0.02em" }}>
+                <h2 style={{ margin: 0, fontSize: "var(--fs-24)", fontWeight: 900, letterSpacing: "0.02em" }}>
                   {p.full_name}
                 </h2>
-                <div style={{ marginTop: "6px", fontSize: "13px", color: "#cbd5e1", display: "flex", flexWrap: "wrap", gap: "12px" }}>
+                <div style={{ marginTop: "6px", fontSize: "var(--fs-13)", color: "#cbd5e1", display: "flex", flexWrap: "wrap", gap: "12px" }}>
                   <span>
                     <strong style={{ color: "#ffffff" }}>
                       {p.school_display} {p.nickname || ""}
@@ -309,13 +309,13 @@ export const ProspectModal: React.FC<{
                     textAlign: "center",
                   }}
                 >
-                  <div style={{ fontSize: "10px", fontWeight: 800, color: "#fbbf24", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                  <div style={{ fontSize: "var(--fs-10)", fontWeight: 800, color: "#fbbf24", letterSpacing: "0.08em", textTransform: "uppercase" }}>
                     Consensus Grade
                   </div>
-                  <div style={{ fontSize: "28px", fontWeight: 900, color: "#ffffff", lineHeight: 1.1 }}>
+                  <div style={{ fontSize: "var(--fs-28)", fontWeight: 900, color: "#ffffff", lineHeight: 1.1 }}>
                     {p.grade?.toFixed(1)}
                   </div>
-                  <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "2px" }}>
+                  <div style={{ fontSize: "var(--fs-11)", color: "#94a3b8", marginTop: "2px" }}>
                     Peak #{p.peak_rank} ({p.peak_grade?.toFixed(1)})
                   </div>
                 </div>
@@ -334,7 +334,7 @@ export const ProspectModal: React.FC<{
                   border: "none",
                   borderRadius: "6px",
                   padding: "7px 14px",
-                  fontSize: "12px",
+                  fontSize: "var(--fs-12)",
                   fontWeight: 800,
                   cursor: "pointer",
                 }}
@@ -349,7 +349,7 @@ export const ProspectModal: React.FC<{
                   border: "none",
                   borderRadius: "6px",
                   padding: "7px 14px",
-                  fontSize: "12px",
+                  fontSize: "var(--fs-12)",
                   fontWeight: 800,
                   cursor: "pointer",
                 }}
@@ -364,7 +364,7 @@ export const ProspectModal: React.FC<{
                   border: "none",
                   borderRadius: "6px",
                   padding: "7px 14px",
-                  fontSize: "12px",
+                  fontSize: "var(--fs-12)",
                   fontWeight: 800,
                   cursor: "pointer",
                 }}
@@ -380,7 +380,7 @@ export const ProspectModal: React.FC<{
                     border: "none",
                     borderRadius: "6px",
                     padding: "7px 14px",
-                    fontSize: "12px",
+                    fontSize: "var(--fs-12)",
                     fontWeight: 800,
                     cursor: "pointer",
                   }}
@@ -407,7 +407,7 @@ export const ProspectModal: React.FC<{
               <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
                 {/* Stock Trajectory Progression Strip */}
                 <div className="draft-section-card">
-                  <div style={{ fontSize: "11px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em", color: "#64748b", marginBottom: "12px" }}>
+                  <div style={{ fontSize: "var(--fs-11)", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em", color: "#64748b", marginBottom: "12px" }}>
                     Weekly Consensus Board Progression
                   </div>
                   <div style={{ display: "flex", gap: "8px", overflowX: "auto", paddingBottom: "6px" }}>
@@ -424,11 +424,11 @@ export const ProspectModal: React.FC<{
                           flexShrink: 0,
                         }}
                       >
-                        <div style={{ fontSize: "10px", fontWeight: 700, color: "#64748b" }}>Step {gh.step}</div>
-                        <div style={{ fontSize: "16px", fontWeight: 900, color: "#0f172a", marginTop: "2px" }}>
+                        <div style={{ fontSize: "var(--fs-10)", fontWeight: 700, color: "#64748b" }}>Step {gh.step}</div>
+                        <div style={{ fontSize: "var(--fs-16)", fontWeight: 900, color: "#0f172a", marginTop: "2px" }}>
                           #{gh.rank}
                         </div>
-                        <div style={{ fontSize: "11px", fontWeight: 700, color: "#b45309" }}>
+                        <div style={{ fontSize: "var(--fs-11)", fontWeight: 700, color: "#b45309" }}>
                           {gh.grade?.toFixed(1)}
                         </div>
                       </div>
@@ -439,7 +439,7 @@ export const ProspectModal: React.FC<{
                 {/* Chronological Event Feed */}
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                   {dossier.timeline.length === 0 ? (
-                    <div style={{ color: "#64748b", fontSize: "13px" }}>No scouting notes recorded yet.</div>
+                    <div style={{ color: "#64748b", fontSize: "var(--fs-13)" }}>No scouting notes recorded yet.</div>
                   ) : (
                     dossier.timeline.map((ev, i) => (
                       <div
@@ -458,17 +458,17 @@ export const ProspectModal: React.FC<{
                         }}
                       >
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
-                          <span style={{ fontSize: "11px", fontWeight: 800, color: "#64748b", textTransform: "uppercase" }}>
+                          <span style={{ fontSize: "var(--fs-11)", fontWeight: 800, color: "#64748b", textTransform: "uppercase" }}>
                             {ev.step_label} · {ev.kind}
                             {ev.team ? ` (${ev.team})` : ""}
                           </span>
                         </div>
                         {ev.headline && (
-                          <div style={{ fontSize: "14px", fontWeight: 800, color: "#0f172a", marginBottom: "3px" }}>
+                          <div style={{ fontSize: "var(--fs-14)", fontWeight: 800, color: "#0f172a", marginBottom: "3px" }}>
                             {ev.headline}
                           </div>
                         )}
-                        {ev.blurb && <div style={{ fontSize: "13px", color: "#334155" }}>{ev.blurb}</div>}
+                        {ev.blurb && <div style={{ fontSize: "var(--fs-13)", color: "#334155" }}>{ev.blurb}</div>}
                       </div>
                     ))
                   )}
