@@ -24,6 +24,7 @@ REGISTRY="$DIR/franchises.json"
 PIDFILE="$DIR/server.pid"
 LOG="$DIR/server.log"
 PY="$ROOT/.venv/bin/python"
+export PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}"   # run from any cwd (audit F3)
 DSN="host=localhost dbname=$DB user=postgres password=postgres"
 USER_TEAM=CAR
 
@@ -37,13 +38,25 @@ esac
 case "$SOURCE_DB" in
   mu_scratch_*|postgres|template*) echo "refusing to copy from '$SOURCE_DB'" >&2; exit 2 ;;
 esac
+# The two overrides are guarded too: this script must never take the live site's port or the live registry (audit F4).
+case "$PORT" in
+  ''|*[!0-9]*) echo "MU_SCRATCH_PORT must be a port number, got '$PORT'" >&2; exit 2 ;;
+  8000) echo "refusing port 8000 (the live site); pick a scratch port such as 8011" >&2; exit 2 ;;
+esac
+LIVE_REGISTRY="$ROOT/data/franchises.json"
+if [ -e "$LIVE_REGISTRY" ] && [ "$(readlink -f "$REGISTRY")" = "$(readlink -f "$LIVE_REGISTRY")" ]; then
+  echo "refusing to write the live franchise registry ($LIVE_REGISTRY); set MU_SCRATCH_DIR elsewhere" >&2
+  exit 2
+fi
 
 psql_t() { docker exec -i "$PG" psql -U postgres -d "${2:-postgres}" -tAc "$1"; }
 db_exists() { [ "$(psql_t "select 1 from pg_database where datname = '$DB'")" = "1" ]; }
-listening_pid() { ss -ltnp 2>/dev/null | grep ":$PORT " | sed -n 's/.*pid=\([0-9]*\).*/\1/p' | head -1; }
+# `|| true` on both lines: under `set -o pipefail` a bare grep with no match would abort every caller (audit F1).
+listening_pid() { ss -ltnp 2>/dev/null | grep ":$PORT " | sed -n 's/.*pid=\([0-9]*\).*/\1/p' | head -1 || true; }
 server_pid() {
   local pid; pid=$([ -f "$PIDFILE" ] && cat "$PIDFILE" || true)
   if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then echo "$pid"; else listening_pid; fi
+  return 0
 }
 server_up() {
   local pid; pid=$(server_pid)
@@ -51,10 +64,21 @@ server_up() {
     && curl -fsS -o /dev/null "http://127.0.0.1:$PORT/api/franchise/$USER_TEAM/overview"
 }
 port_busy() { ss -ltn 2>/dev/null | grep -q ":$PORT "; }
+# A pid taken from the port (no pidfile) is only ours if it is really this scratch uvicorn (audit F4).
+owns_listener() {
+  local pid=${1:-} args
+  [ -n "$pid" ] || return 1
+  args=$(ps -o args= -p "$pid" 2>/dev/null || true)
+  case "$args" in *uvicorn*server.api:app*"--port $PORT"*) return 0 ;; *) return 1 ;; esac
+}
 
 stop_server() {
-  local pid; pid=$(server_pid)
+  local pid; pid=$(server_pid || true)
   if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+    if [ ! -f "$PIDFILE" ] && ! owns_listener "$pid"; then
+      echo "refusing to stop pid $pid on :$PORT: it is not this scratch server (no $PIDFILE)" >&2
+      return 1
+    fi
     kill "$pid" 2>/dev/null || true
     for _ in $(seq 1 40); do kill -0 "$pid" 2>/dev/null || break; sleep 0.25; done
     kill -0 "$pid" 2>/dev/null && kill -9 "$pid" 2>/dev/null || true
@@ -63,6 +87,7 @@ stop_server() {
     echo ":$PORT is not running"
   fi
   rm -f "$PIDFILE"
+  return 0
 }
 
 copy_db() {
@@ -150,8 +175,9 @@ if d.get("controlled"):
 c = [x for x in d.get("candidates") or [] if x.get("role") == os.environ["ROLE"]]
 if not c:
     print(json.dumps({"error": "no " + os.environ["ROLE"] + " candidate"})); raise SystemExit(1)
-print(json.dumps({"role": os.environ["ROLE"], "persona_id": c[0]["persona_id"]}))')
+print(json.dumps({"role": os.environ["ROLE"], "persona_id": c[0]["persona_id"]}))' || true)
   case "$body" in
+    '') echo "take-control: the actors endpoint gave no decision; nothing posted" >&2; return 1 ;;
     *already*) echo "take-control: already held -> $body"; return 0 ;;
     *error*) echo "take-control: $body" >&2; return 1 ;;
   esac

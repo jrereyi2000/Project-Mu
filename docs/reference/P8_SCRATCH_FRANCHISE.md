@@ -107,8 +107,14 @@ POST /api/franchise/CAR/inbox/actors  {"role":"GM","persona_id":"5"}
 ```
 
 After it, `GET /api/franchise/CAR/inbox` returns four `WAITING_JR` threads (one `VISION`, three `CONTRACT`) and
-`unread: 4`; all of them exist only in `mu_scratch_p808`. The live database still read 0 `controlled_personas` and
+`unread: 4`; all of them exist only in `mu_scratch_p808`. The live database read 0 `controlled_personas` and
 0 `inbox_threads` when this was written, and `data/franchises.json` still had `user_teams: []`.
+
+**Live registry correction (2026-11-12 21:37, not this session):** `data/franchises.json` was edited after this
+fixture was built and now reads `user_teams: ["CAR"]` (and `saves: [CAREER-MUBASE, CAREER-MU2026]`). This session
+never wrote that file — the scratch registry is what keeps `:8011` independent of it — but any statement below or
+elsewhere that the live registry is still empty is out of date. With `p8-08-rootcause`'s rule, the live franchise
+now serves CAR and refuses the other 31.
 
 The live site on `:8000` was never restarted and never written; its `overview` still showed the pre-fix
 `user_controlled: true` for both teams because that process predates `p8-08-rootcause`'s commit — the scratch server
@@ -146,8 +152,9 @@ nothing of it touched `madden_mu2026`.
 ## Boundaries
 
 - Never point the live server, `db/*.sh` or a pipeline step at `mu_scratch_p808`; it is a page fixture, not a league.
-- Never register a user team in `data/franchises.json` to get P8-08 to pass — the live registry's empty list is the
-  decided state, and the honest 403 is the correct live answer.
+- Never register a user team in `data/franchises.json` from a session to get P8-08 to pass — with
+  `p8-08-rootcause`'s rule the live answer is honest either way, and the file is JR's to decide. (It now carries
+  `user_teams: ["CAR"]`, registered 2026-11-12 21:37 by someone other than this session.)
 - No saves are read or written and no Madden PC run is involved.
 - P8-09 (the presser) is walkable on this scratch franchise after the one approved cast (above). The cast spent
   three press-model calls; nothing else is spent by the script, and nothing is ever cast into `madden_mu2026`.
