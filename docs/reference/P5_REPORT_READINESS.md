@@ -2,8 +2,10 @@
 
 **Task:** the §7.1 readiness rule (`docs/CLOSE_OUT_CHECKLIST.md:331-332`): *a feature that cannot be measured by a
 number is not ready to activate; if a report doesn't exist, build the report before tuning the feature.* P5 has 13
-open items (P5-02…P5-14, checklist `:365-377`), each a feature × a simulated season, and P4-01 has not delivered a
-season yet, so nobody can check that readiness in a season. This document is that check, done by reading the code.
+open items (P5-02…P5-14, checklist `:365-377`), each a feature × a simulated season. The first completed tuning
+season (P4-01, `check-d`, 2026-11-12, board M-0856, `docs/reference/P4_01_SUPERSIM_BASELINE.md`) wrote one compare
+report and no feature number at all, so there is still no season anyone can check that readiness in. This document
+is that check, done by reading the code.
 
 **Run:** 2026-11-12 by `deepseek-v4.1-flash` (`p5-report-audit`). **Inventory only:** no report was built, no
 season was run, no engine, feature or checklist row was changed, no PC, no save, no database, no model call. Every
@@ -62,7 +64,10 @@ tuning database by the end of a season; nothing turns them into a number a perso
 ## 2. One row per feature (the D2 go-live order)
 
 `FEATURES` is `personality/features.py:60-63`. "Reachable" means: set the feature to `shadow`, run
-`engines/tuning/season_loop.py`, and the feature's engine or hook actually executes during that season.
+`engines/tuning/season_loop.py`, and the feature's engine or hook actually executes during that season. It assumes
+the **week-by-week** walk, the loop's default: `--fast-season` sims the season in one `sim-season` shot and skips the
+weekly league office entirely (`engines/tuning/season_loop.py:437-446`), so under it only the offseason-stage
+features run at all — which is also why the P4-01 season could not have produced a feature number.
 
 | # | Feature | §7.2 signal | Season report? where | Reachable from a season? | Scored against a target? | Gap | Size |
 |---|---|---|---|---|---|---|---|
@@ -100,6 +105,10 @@ tuning database by the end of a season; nothing turns them into a number a perso
 * `engines/tuning/decision_compare.py:916-1152` contains only A1–A7 (career length, retirement age, coach changes,
   trades, team movement, draft by round, rookie usage) plus `A1.inflow`.
 * Neither reads `personality_feature_modes`, `league_office_runs.summary`, or any of the tables in §2.
+
+The one completed season shows it: P4-01 scored `CAREER-TUNE-BASE26` straight through
+`engines.tuning.compare` and wrote `P4-01_compare.md` (`docs/reference/P4_01_SUPERSIM_BASELINE.md` §1) — a real
+season, no `decision_compare` report and no feature number.
 
 So §7.1 step 3 — "read the feature's report" — has nothing to read, for any feature. The runbook says it plainly
 and then leaves the reader empty: `docs/reference/P5_01_SHADOW_GATE.md:149-160` (Step 6 runs the season, Step 7
