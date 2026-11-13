@@ -1,5 +1,10 @@
 # V3 dossier evaluation — 2026-10-30
 
+> **Status (2026-11-12): cancelled by JR.** Production articles stay on the ReAct/tool-call path;
+> the dossier evaluation and the P8-05 paired matrix are not being run. The `newsroom/db_tools.py`
+> corrections from P8-04 are retained because the leaderboard, metric-scope and record-book fixes
+> serve the tool-call readers too. This document is the archive of the experiment, not a plan.
+
 Original assessment (superseded in part by the pilot addendum below): retain ReAct as production baseline. Dossiers are promising evidence packaging, but this prototype cannot yet establish factual/editorial parity or savings. No model calls, publication, migrations, or archive writes were performed.
 
 ## Checks and artifacts
