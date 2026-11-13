@@ -46,7 +46,7 @@ Detail per feature in §2, the gaps in §3, and the shortest order that fixes it
 | Question | Answer |
 |---|---|
 | Features whose §7.2 number is printed by a report the tuning season calls | **0 of 20** |
-| Features with a report of any kind, somewhere | **5** (`retirement`, `owner_patience`, `evolution`, `focus_refresh`, `profiles` — the last three not run by the season) |
+| Features with a report of any kind, somewhere | **5** — `retirement` and `owner_patience` (scored, though as league gates), `evolution` and `focus_refresh` (a real `.md`, run at OFFSEASON_START, with the DB rows rolled back), `profiles` (an offline manifest check only) |
 | Features whose evidence is recorded in the tuning DB but has **no reader** | **12** |
 | Features whose `shadow` evidence is a **file**, not a table (so no query can reach it) | **3** — `evolution` and `focus_refresh` (per-season `.md`, DB rows rolled back), `trade_requests` (one JSON per tick) |
 | Features that cannot be measured in a shadow season today (a design gap, not a missing report) | **2** (`scout_directors`, `media_voters`) + **2 halves** (`coach_loop` / `player_loop` model-call behaviour, forced off by `MU_NO_LLM=1`) |
