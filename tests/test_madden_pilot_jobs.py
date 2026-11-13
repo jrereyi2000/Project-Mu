@@ -278,7 +278,7 @@ def test_clone_refuses_a_managed_destination(tmp_path, notices):
     assert sorted(p.name for p in d.iterdir()) == ["CAREER-2029SB", "CAREER-MU2026"]
 
 
-def test_watcher_check_uses_ps_not_pgrep(monkeypatch):
+def test_watcher_check_reads_ps_and_counts_only_a_python_running_the_module(monkeypatch):
     monkeypatch.undo()                                   # the real function, with subprocess mocked
     calls = []
 
@@ -287,10 +287,62 @@ def test_watcher_check_uses_ps_not_pgrep(monkeypatch):
         return subprocess.CompletedProcess(cmd, 0, stdout="python3 -m pipeline.watch_save\n", stderr="")
     monkeypatch.setattr(jobs.subprocess, "run", fake_run)
     assert jobs.watcher_running() is True
-    assert calls == ['ps -eo args | grep "[p]ipeline[.]watch_save"'] and "pgrep" not in calls[0]
+    assert calls == [["ps", "-eo", "args"]] and "pgrep" not in " ".join(calls[0])
+    assert "pipeline" not in " ".join(calls[0][:1])
     monkeypatch.setattr(jobs.subprocess, "run",
                         lambda cmd, **kw: subprocess.CompletedProcess(cmd, 1, stdout="", stderr=""))
     assert jobs.watcher_running() is False
+
+
+@pytest.mark.parametrize("line", [
+    "python3 -m pipeline.watch_save",
+    "/usr/bin/python3.11 -m pipeline.watch_save --once",
+    "python3 -mpipeline.watch_save",
+    "python3 /home/jrereyi/Project-Mu/pipeline/watch_save.py",
+    "python3.11 'pipeline/watch_save.py'",
+])
+def test_watcher_check_counts_a_real_watcher(monkeypatch, line):
+    # A python interpreter whose own arguments run the module is the watcher (check-d, M-0855).
+    monkeypatch.undo()
+    monkeypatch.setattr(jobs.subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(
+        cmd, 0, stdout="ARGS\n" + line + "\n", stderr=""))
+    assert jobs.watcher_running() is True
+
+
+@pytest.mark.parametrize("line", [
+    # check-d's own run: the module name sits in an `opencode run` prompt, not in a python argv
+    "opencode run --session ses_mu_1 refuseme if pipeline.watch_save is running",
+    "grep pipeline.watch_save tools/madden_pilot/jobs.py",
+    "vim /home/jrereyi/Project-Mu/pipeline/watch_save.py",
+    "bash -c python3 -m pipeline.watch_save",
+    "python3 -m pipeline.watch_saver",
+    "python3 -m pipeline.save_reader.watch_save",   # a different module under a like name
+    "/bin/sh -c ps -eo args",
+])
+def test_watcher_check_ignores_a_decoy_command_line(monkeypatch, line):
+    # The literal string in someone's command line is not a running watcher: matching it made
+    # every pilot job refuse with "pipeline.watch_save is running" while none existed (M-0855).
+    monkeypatch.undo()
+    monkeypatch.setattr(jobs.subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(
+        cmd, 0, stdout="ARGS\n" + line + "\n", stderr=""))
+    assert jobs.watcher_running() is False
+
+
+def test_no_watcher_proceeds_and_a_decoy_still_proceeds(tmp_path, notices, monkeypatch):
+    # The job's own gate reads the same honest check: only a decoy line runs the sim, a real
+    # watcher still refuses, and no output at all proceeds as before.
+    monkeypatch.undo()
+    decoy = "opencode run --session x is pipeline.watch_save running?\n"
+    for name, ps, status in (("decoy", "ARGS\n" + decoy, "ok"),
+                             ("none", "ARGS\n", "ok"),
+                             ("real", "ARGS\npython3 -m pipeline.watch_save\n", "refused")):
+        monkeypatch.setattr(jobs.subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(
+            cmd, 0, stdout=ps, stderr=""))
+        fake, _ = fake_madden()
+        out = jobs.sim_season(make_pilot(tmp_path / f"run-{name}", fake), save="CAREER-TUNE-X",
+                              to="week 2", folder=tmp_path / f"saves-{name}")
+        assert out["status"] == status, (name, out)
+        assert bool(fake.keys) == (status != "refused"), name
 
 
 # ---------------------------------------------------------------- header and targets
@@ -407,6 +459,55 @@ def test_sim_stuck_when_week_does_not_advance(tmp_path, notices):
     fake = NoAdvance(CAT, tiles=["TUNE-X"], out=lambda s: None)
     _, out = _sim(tmp_path, fake)
     assert out["status"] == "stopped" and out["kind"] == "Stuck" and "header" in out["reason"]
+
+
+class ByeMadden(ScriptedMadden):
+    """A fake whose hub opens on the GAMEDAY tab, and whose week `bye` is a bye week: no
+    "2026. WEEK N" header anywhere and BYE WEEK where the matchup line would be (check-d,
+    2026-11-12: the real hub opened on GAMEDAY and `_week_now` chased a Weekly Hub that *is*
+    HUB_BYE all week, ping-ponging 62 steps into `Stuck: goto HUB_WEEKLY timed out on HUB_BYE`)."""
+
+    def __init__(self, *args, bye=2, **kw):
+        self.bye = bye
+        super().__init__(*args, **kw)
+
+    def on_bye(self):
+        return self.week == self.bye
+
+    def header(self):
+        return "" if self.on_bye() else super().header()
+
+    def go(self, screen):
+        was = self.screen
+        if screen == "HUB_WEEKLY" and self.on_bye() and was not in ("HUB_GAMEDAY", "HUB_BYE"):
+            screen = "HUB_GAMEDAY"          # the hub opens on the tab it was last left on
+        super().go(screen)
+
+    def lines(self, screen):
+        out = super().lines(screen)
+        if self.on_bye() and screen in ("HUB_GAMEDAY", "HUB_WEEKLY"):
+            out = [ln for ln in out if not ln.startswith(f"{self.year}. ")] + ["BYE WEEK"]
+        return out
+
+
+def test_week_now_reads_a_bye_week_from_the_gameday_tab(tmp_path, notices):
+    # The bye stop must be read from whichever hub tab the run opens on: on the parent this
+    # raises Stuck after goto("HUB_WEEKLY") ping-pongs on HUB_BYE (check-d's MED finding).
+    fake = ByeMadden(CAT, tiles=["TUNE-X"], week=2, out=lambda s: None)
+    p = make_pilot(tmp_path, fake)
+    jobs._load_franchise(p, "TUNE-X", save="CAREER-TUNE-X", folder=tmp_path / "none")
+    assert fake.screen == "HUB_GAMEDAY" and p.screen == "HUB_GAMEDAY"
+    assert jobs._week_now(p, allow_unreadable=True) is None
+    assert p.screen in ("HUB_GAMEDAY", "HUB_BYE")       # never chased HUB_WEEKLY by name
+    assert not (tmp_path / "stop.json").exists() and not notices
+
+
+def test_week_now_reads_the_bye_from_the_weekly_hub_too(tmp_path, notices):
+    # The unchanged half: the hub opening on WEEKLY HUB on the bye week is HUB_BYE, read at once.
+    fake = ByeMadden(CAT, start="HUB_BYE", tiles=["TUNE-X"], week=2, out=lambda s: None)
+    p = make_pilot(tmp_path, fake)
+    assert jobs._week_now(p, allow_unreadable=True) is None
+    assert p.screen == "HUB_BYE" and fake.keys == []     # no tab pressed on a hub already read
 
 
 def test_the_loader_leaves_for_the_main_menu_when_a_new_clone_is_not_on_the_list(tmp_path, notices):

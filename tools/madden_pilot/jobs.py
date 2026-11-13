@@ -70,7 +70,9 @@ BASELINE_SAVE = "CAREER-MU2026"
 DEFAULT_PACK = "Mu Base"
 MANAGER_EXE = "MMCModManager.exe"
 DEFAULT_MANAGER_DIR = "/mnt/c/Madden27Modding/MMC_Modding_Tools_v1.1.0.7/MMC_ModManager_v1.1.0.7"
-WATCHER_CHECK = 'ps -eo args | grep "[p]ipeline[.]watch_save"'
+WATCHER_PS = ["ps", "-eo", "args"]          # every process's command line; no shell, no grep
+WATCHER_MODULE = "pipeline.watch_save"
+_PYTHON_EXE = re.compile(r"python(?:\d+(?:\.\d+)*)?(?:\.exe)?", re.I)
 
 # Every screen a loaded franchise can open on. A live event takes the focus on load: at the Free
 # agency frenzy Madden opens the LIVE EVENT tab, not GAMEDAY (2026-11-10).
@@ -162,11 +164,41 @@ def saves_dir():
     return Path(env("MADDEN_SAVES_DIR", DEFAULT_SAVES_DIR))
 
 
+def _runs_watch_save(line):
+    """True when one `ps` command line is a python interpreter running pipeline.watch_save.
+
+    The words alone are not the watcher: an `opencode run` prompt, an editor or a `grep` that
+    merely mentions the module once made every pilot job refuse with "pipeline.watch_save is
+    running" while none was (check-d, M-0855). The module has to be the interpreter's own
+    argument, as `python3 -m pipeline.watch_save` or `python3 pipeline/watch_save.py`."""
+    parts = [p.strip("'\"") for p in line.split()]
+    if not parts:
+        return False
+    exe = parts[0].replace("\\", "/").rsplit("/", 1)[-1]
+    if not _PYTHON_EXE.fullmatch(exe):
+        return False
+    args = parts[1:]
+    for i, arg in enumerate(args):
+        path = arg.replace("\\", "/")
+        if path == "-m" and args[i + 1:i + 2] == [WATCHER_MODULE]:
+            return True
+        if path == "-m" + WATCHER_MODULE:
+            return True
+        head, _, name = path.rpartition("/")
+        if name == "watch_save.py" and "pipeline" in head.split("/"):
+            return True
+    return False
+
+
 def watcher_running():
-    """True when a pipeline.watch_save process runs in WSL. `pgrep -f` would match the
-    calling shell's own command line, so the [p] trick keeps grep from matching itself."""
-    out = subprocess.run(WATCHER_CHECK, shell=True, capture_output=True, text=True)
-    return bool(out.stdout.strip())
+    """True when a python interpreter actually runs pipeline.watch_save in WSL.
+
+    A substring match is not enough (check-d, M-0855: this session's own `opencode run` prompt
+    carries the module name, and every pilot job then refused while no watcher existed), so
+    each process's own command line is read and only a python interpreter with the module as
+    its argument counts. Reading `ps` directly also keeps the check from matching itself."""
+    out = subprocess.run(WATCHER_PS, capture_output=True, text=True)
+    return any(_runs_watch_save(line) for line in (out.stdout or "").splitlines())
 
 
 def tile_name(save):
@@ -675,24 +707,48 @@ def _start_madden(pilot, pack, run, madden_running, manager_running, timeout, pr
 
 
 # ------------------------------------------------------------------------------- sim_season
+def _bye_week(frame, screen):
+    """True when the hub is on the user team's bye week, whichever tab the run opened on.
+
+    The Weekly Hub shows nothing but BYE WEEK that week (catalog HUB_BYE), and the GAMEDAY tab
+    carries the same words where the matchup line would be — so a run that opens on GAMEDAY is
+    still on a bye, and its GAMEDAY frame has no header at all (check-d, 2026-11-12, M-0855)."""
+    if screen == "HUB_BYE":
+        return True
+    return screen in HUBS and frame is not None and frame.has("BYE WEEK")
+
+
 def _week_now(pilot, allow_unreadable=False):
     """Read the week/phase header from the current hub, then the Gameday tab, then the Weekly Hub.
 
     Gameday carries the header too (including the year-less postseason phase, "WILDCARD WEEK").
     Stuck when every header is unreadable (a bye week shows only BYE WEEK; the season loop passes
-    allow_unreadable and counts instead)."""
+    allow_unreadable and counts instead). A bye week is a stop, not an unreadable header, and it
+    is read from whichever hub tab the run opened on: the Weekly Hub *is* HUB_BYE that week, so
+    the hub is stepped one tab and read where the run lands rather than chased by name."""
     frame, screen = pilot.look()
-    if screen == "HUB_BYE":
+    if _bye_week(frame, screen):
         return None                  # a bye week's hub carries no week number at all
     head = read_header(frame)
     if head is None:
         with patience(pilot, 120, 1.0):
             frame = pilot.goto("HUB_GAMEDAY")
+        if _bye_week(frame, pilot.screen):
+            return None
         head = read_header(frame)
     if head is None:
+        # The Weekly Hub is one tab from GAMEDAY, but the target doesn't exist on a bye week
+        # (the Weekly Hub *is* HUB_BYE): goto ping-ponged on it for 62 steps and stopped the
+        # season (check-d, 2026-11-12, M-0855), so the tab is stepped and the landing read.
         with patience(pilot, 20, 1.0):
-            frame = pilot.goto("HUB_WEEKLY")
-        head = read_header(frame)
+            for _ in range(3):
+                pilot.press("tab_next", wait=1.0)
+                frame, landed = pilot.look()
+                if _bye_week(frame, landed):
+                    return None
+                if landed == "HUB_WEEKLY":
+                    head = read_header(frame)
+                    break
     if head is None and not allow_unreadable:
         pilot.stop("can't read the week header (2026. WEEK N) on the hub", Stuck)
     return head
