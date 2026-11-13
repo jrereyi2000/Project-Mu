@@ -388,7 +388,7 @@ export const NapperPage: React.FC<NapperPageProps> = ({
             <span className="text-xl font-black tracking-tight text-white font-sans lowercase">
               sleeper
             </span>
-            <span className="text-[10px] uppercase font-extrabold tracking-widest text-[#00ceb8] bg-[#00ceb8]/15 px-1.5 py-0.5 rounded border border-[#00ceb8]/30">
+            <span className="text-[length:var(--fs-10)] uppercase font-extrabold tracking-widest text-[#00ceb8] bg-[#00ceb8]/15 px-1.5 py-0.5 rounded border border-[#00ceb8]/30">
               napper
             </span>
           </div>
@@ -425,7 +425,7 @@ export const NapperPage: React.FC<NapperPageProps> = ({
                   <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
                 </svg>
                 {pendingTradesCount > 0 && (
-                  <span className="absolute -top-1.5 -right-2 bg-[#00ceb8] text-[#0d1722] text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center animate-pulse">
+                  <span className="absolute -top-1.5 -right-2 bg-[#00ceb8] text-[#0d1722] text-[length:var(--fs-10)] font-black w-4 h-4 rounded-full flex items-center justify-center animate-pulse">
                     {pendingTradesCount}
                   </span>
                 )}
@@ -433,7 +433,7 @@ export const NapperPage: React.FC<NapperPageProps> = ({
               <span>Trade Proposals</span>
             </div>
             {pendingTradesCount > 0 && (
-              <span className="text-[10px] font-bold text-[#00ceb8] bg-[#00ceb8]/10 px-1.5 py-0.5 rounded">
+              <span className="text-[length:var(--fs-10)] font-bold text-[#00ceb8] bg-[#00ceb8]/10 px-1.5 py-0.5 rounded">
                 {pendingTradesCount} new
               </span>
             )}
@@ -464,7 +464,7 @@ export const NapperPage: React.FC<NapperPageProps> = ({
                 </svg>
                 <span>Mock Draft Room</span>
               </div>
-              <span className="text-[9px] font-black uppercase tracking-wider text-[#00ceb8] bg-[#00ceb8]/10 px-1.5 py-0.5 rounded">
+              <span className="text-[length:var(--fs-10)] font-black uppercase tracking-wider text-[#00ceb8] bg-[#00ceb8]/10 px-1.5 py-0.5 rounded">
                 Live
               </span>
             </div>
@@ -473,7 +473,7 @@ export const NapperPage: React.FC<NapperPageProps> = ({
 
         {/* Leagues Header */}
         <div className="px-5 pt-3 pb-1 flex items-center justify-between">
-          <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#5c6c80]">
+          <span className="text-[length:var(--fs-10)] font-extrabold uppercase tracking-wider text-[#5c6c80]">
             Leagues ({leagues.length})
           </span>
           <button
@@ -495,14 +495,14 @@ export const NapperPage: React.FC<NapperPageProps> = ({
           {restartable.map((lg) => (
             <div key={`restart-${lg.id}`} className="p-2.5 rounded-xl border border-[#00ceb8]/50 bg-[#16303a]">
               <div className="text-xs font-bold text-white truncate">{lg.name}</div>
-              <div className="text-[10px] text-[#8a99ad] truncate">
+              <div className="text-[length:var(--fs-10)] text-[#8a99ad] truncate">
                 {lg.season} season complete{lg.final_rank ? ` · you finished #${lg.final_rank}` : ""}
               </div>
               <button
                 type="button"
                 onClick={() => handleRestartLeague(lg.id)}
                 disabled={restartingId !== null}
-                className="mt-1.5 w-full rounded-lg bg-[#00ceb8] text-[#0d1722] text-[10px] font-extrabold py-1 cursor-pointer disabled:opacity-60"
+                className="mt-1.5 w-full rounded-lg bg-[#00ceb8] text-[#0d1722] text-[length:var(--fs-10)] font-extrabold py-1 cursor-pointer disabled:opacity-60"
               >
                 {restartingId === lg.id ? "Starting…" : "Start the new season"}
               </button>
@@ -541,13 +541,13 @@ export const NapperPage: React.FC<NapperPageProps> = ({
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="text-xs font-bold text-white truncate">{lg.name}</div>
-                    <div className="text-[10px] text-[#8a99ad] truncate">
+                    <div className="text-[length:var(--fs-10)] text-[#8a99ad] truncate">
                       {isPreDraft ? (
-                        <span className="text-[#38bdf8] font-bold uppercase tracking-wider text-[9px]">
+                        <span className="text-[#38bdf8] font-bold uppercase tracking-wider text-[length:var(--fs-10)]">
                           • PRE DRAFT ({lg.teams_count}T)
                         </span>
                       ) : isComplete ? (
-                        <span className="text-[#ffc107] font-bold uppercase tracking-wider text-[9px]">
+                        <span className="text-[#ffc107] font-bold uppercase tracking-wider text-[length:var(--fs-10)]">
                           • SEASON COMPLETE
                         </span>
                       ) : (
@@ -559,7 +559,7 @@ export const NapperPage: React.FC<NapperPageProps> = ({
                       )}
                     </div>
                     {!isPreDraft && !isComplete && (
-                      <div className="flex items-center justify-between text-[10px] font-mono mt-0.5">
+                      <div className="flex items-center justify-between text-[length:var(--fs-10)] font-mono mt-0.5">
                         <span className="text-white font-semibold">
                           {(lg.user_score ?? 0).toFixed(1)} pro: {(lg.user_proj ?? 0).toFixed(1)}
                         </span>
@@ -583,13 +583,13 @@ export const NapperPage: React.FC<NapperPageProps> = ({
               <div className="text-xs font-bold text-white truncate">
                 {profile?.handle || "jrereyi2000"}
               </div>
-              <div className="flex items-center gap-1.5 text-[10px] text-[#8a99ad]">
+              <div className="flex items-center gap-1.5 text-[length:var(--fs-10)] text-[#8a99ad]">
                 <span className="text-[#f59e0b]">🏆</span>
                 <span className="font-mono font-bold text-[#cbd5e1]">
                   {profile?.trophies ?? 0}
                 </span>
                 <span className="text-[#5c6c80]">•</span>
-                <span className="text-[#00ceb8] text-[9px] font-semibold">Online</span>
+                <span className="text-[#00ceb8] text-[length:var(--fs-10)] font-semibold">Online</span>
               </div>
             </div>
           </div>
@@ -630,7 +630,7 @@ export const NapperPage: React.FC<NapperPageProps> = ({
                   <span className="text-xs text-[#8a99ad] font-medium">
                     {currentLeague.season} • {currentLeague.teams_count}-Team {currentLeague.scoring_type}
                   </span>
-                  <span className="text-[10px] font-bold text-[#00ceb8] bg-[#00ceb8]/15 px-2 py-0.5 rounded-full border border-[#00ceb8]/30">
+                  <span className="text-[length:var(--fs-10)] font-bold text-[#00ceb8] bg-[#00ceb8]/15 px-2 py-0.5 rounded-full border border-[#00ceb8]/30">
                     {currentLeague.status}
                   </span>
                 </>}
@@ -819,7 +819,7 @@ export const NapperPage: React.FC<NapperPageProps> = ({
             <h2 className="text-base font-extrabold text-white tracking-wide">
               League Chat
             </h2>
-            <span className="text-[10px] font-mono text-[#00ceb8] bg-[#00ceb8]/15 px-1.5 py-0.5 rounded font-bold">
+            <span className="text-[length:var(--fs-10)] font-mono text-[#00ceb8] bg-[#00ceb8]/15 px-1.5 py-0.5 rounded font-bold">
               Lg #{selectedLeagueId}
             </span>
           </div>
@@ -865,13 +865,13 @@ export const NapperPage: React.FC<NapperPageProps> = ({
                 return (
                   <div key={msg.id} className="napper-chat-card-benchwarmer">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#cbd5e1]">
+                      <span className="text-[length:var(--fs-11)] font-extrabold uppercase tracking-wider text-[#cbd5e1]">
                         {card.title || "BENCHWARMER OF THE WEEK"}
                       </span>
                       <span className="text-base font-serif text-[#8a99ad] leading-none">”</span>
                     </div>
 
-                    <div className="text-[11px] text-[#8a99ad] mb-2 leading-relaxed">
+                    <div className="text-[length:var(--fs-11)] text-[#8a99ad] mb-2 leading-relaxed">
                       {card.subtitle || msg.message_text}
                     </div>
 
@@ -886,10 +886,10 @@ export const NapperPage: React.FC<NapperPageProps> = ({
                         <div className="text-xs font-bold text-white truncate">
                           {p.name}
                         </div>
-                        <div className="text-[10px] text-[#8a99ad] font-semibold">
+                        <div className="text-[length:var(--fs-10)] text-[#8a99ad] font-semibold">
                           {p.position} - {p.team}
                         </div>
-                        <div className="text-[9px] text-[#8a99ad] truncate mt-0.5 font-mono">
+                        <div className="text-[length:var(--fs-10)] text-[#8a99ad] truncate mt-0.5 font-mono">
                           {p.stats}
                         </div>
                       </div>
@@ -915,10 +915,10 @@ export const NapperPage: React.FC<NapperPageProps> = ({
                       {card.subtitle || msg.message_text}
                     </div>
                     {card.details && (
-                      <div className="text-[11px] text-[#8a99ad] space-y-1 bg-[#141926] p-2 rounded-lg mt-1 font-mono">
+                      <div className="text-[length:var(--fs-11)] text-[#8a99ad] space-y-1 bg-[#141926] p-2 rounded-lg mt-1 font-mono">
                         {card.details.offered && <div>⇄ Gives: <span className="text-white">{card.details.offered}</span></div>}
                         {card.details.requested && <div>⇄ Gets: <span className="text-white">{card.details.requested}</span></div>}
-                        {card.details.rationale && <div className="text-[10px] italic text-[#94a3b8] mt-1 font-sans">"{card.details.rationale}"</div>}
+                        {card.details.rationale && <div className="text-[length:var(--fs-10)] italic text-[#94a3b8] mt-1 font-sans">"{card.details.rationale}"</div>}
                       </div>
                     )}
                   </div>
@@ -929,7 +929,7 @@ export const NapperPage: React.FC<NapperPageProps> = ({
               if (card && card.type === "WAIVER_CLAIM") {
                 return (
                   <div key={msg.id} className="bg-[#172533] border border-[#00ceb8]/40 rounded-xl p-3 shadow-sm">
-                    <div className="flex items-center gap-1.5 text-[11px] font-extrabold text-[#00ceb8] mb-1">
+                    <div className="flex items-center gap-1.5 text-[length:var(--fs-11)] font-extrabold text-[#00ceb8] mb-1">
                       <span>⚡</span>
                       <span>WAIVER WIRE TRANSACTION</span>
                     </div>
@@ -951,7 +951,7 @@ export const NapperPage: React.FC<NapperPageProps> = ({
                         {msg.sender_handle || msg.sender_name}
                       </span>
                     </div>
-                    <span className="text-[9px] text-[#5c6c80]">
+                    <span className="text-[length:var(--fs-10)] text-[#5c6c80]">
                       {msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}
                     </span>
                   </div>
@@ -979,7 +979,7 @@ export const NapperPage: React.FC<NapperPageProps> = ({
             onClick={() => {
               setInputText((prev) => prev + " 🏈");
             }}
-            className="px-2 py-1 rounded bg-[#1a2536] hover:bg-[#223147] border border-[#283850] text-[10px] font-black text-[#8a99ad] hover:text-white transition-colors cursor-pointer shrink-0"
+            className="px-2 py-1 rounded bg-[#1a2536] hover:bg-[#223147] border border-[#283850] text-[length:var(--fs-10)] font-black text-[#8a99ad] hover:text-white transition-colors cursor-pointer shrink-0"
           >
             GIF
           </button>
@@ -1121,7 +1121,7 @@ export const NapperPage: React.FC<NapperPageProps> = ({
                   <div className="flex items-center gap-2">
                     <div className="flex-1 py-2 px-3 text-xs font-bold rounded-xl border bg-[#00ceb8]/15 border-[#00ceb8] text-[#00ceb8] flex items-center justify-between">
                       <span>Full PPR (1.0 Point Per Reception)</span>
-                      <span className="text-[10px] px-2 py-0.5 rounded bg-[#00ceb8]/20 text-[#00ceb8] uppercase font-black">Official</span>
+                      <span className="text-[length:var(--fs-10)] px-2 py-0.5 rounded bg-[#00ceb8]/20 text-[#00ceb8] uppercase font-black">Official</span>
                     </div>
                   </div>
                 </div>
@@ -1227,7 +1227,7 @@ export const NapperPage: React.FC<NapperPageProps> = ({
                     >
                       <div>
                         <div className="text-xs font-bold text-white">{lg.name}</div>
-                        <div className="text-[10px] text-[#8a99ad]">
+                        <div className="text-[length:var(--fs-10)] text-[#8a99ad]">
                           {lg.teams_count} Teams • {lg.scoring_type} • {lg.status}
                         </div>
                       </div>

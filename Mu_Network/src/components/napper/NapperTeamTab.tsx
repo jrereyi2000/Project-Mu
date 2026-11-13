@@ -274,7 +274,7 @@ export const NapperTeamTab: React.FC<NapperTeamTabProps> = ({
               <div className="text-xs font-bold text-white">
                 Swapping: <span className="text-[#00ceb8]">{selectedPlayer.name}</span> ({selectedPlayer.position} - {selectedPlayer.team})
               </div>
-              <div className="text-[11px] text-[#8a99ad]">
+              <div className="text-[length:var(--fs-11)] text-[#8a99ad]">
                 Click a highlighted slot below to complete the swap, or drop him
               </div>
             </div>
@@ -387,7 +387,7 @@ export const NapperTeamTab: React.FC<NapperTeamTabProps> = ({
                           >
                             {p.name}
                           </span>
-                          <span className="text-[10px] text-[#8a99ad] font-semibold">
+                          <span className="text-[length:var(--fs-10)] text-[#8a99ad] font-semibold">
                             {p.position} - {p.team}
                           </span>
                           <InjuryPill player={p} />
@@ -395,7 +395,7 @@ export const NapperTeamTab: React.FC<NapperTeamTabProps> = ({
                         {p.game_result ? (
                           <PostGameLine player={p} />
                         ) : (
-                          <div className="text-[11px] text-[#8a99ad] mt-0.5">
+                          <div className="text-[length:var(--fs-11)] text-[#8a99ad] mt-0.5">
                             {p.kickoff} {p.opponent}
                           </div>
                         )}
@@ -409,7 +409,7 @@ export const NapperTeamTab: React.FC<NapperTeamTabProps> = ({
                 {/* Right: swap target indicator */}
                 <div className="flex items-center gap-3 pl-3 shrink-0">
                   {isEligibleTarget && (
-                    <span className="text-[11px] font-extrabold px-2.5 py-1 rounded bg-[#00ceb8] text-[#0b141e] animate-pulse">
+                    <span className="text-[length:var(--fs-11)] font-extrabold px-2.5 py-1 rounded bg-[#00ceb8] text-[#0b141e] animate-pulse">
                       SWAP HERE
                     </span>
                   )}
@@ -474,7 +474,7 @@ export const NapperTeamTab: React.FC<NapperTeamTabProps> = ({
                           >
                             {p.name}
                           </span>
-                          <span className="text-[10px] text-[#8a99ad] font-semibold">
+                          <span className="text-[length:var(--fs-10)] text-[#8a99ad] font-semibold">
                             {p.position} - {p.team}
                           </span>
                           <InjuryPill player={p} />
@@ -482,7 +482,7 @@ export const NapperTeamTab: React.FC<NapperTeamTabProps> = ({
                         {p.game_result ? (
                           <PostGameLine player={p} />
                         ) : (
-                          <div className="text-[11px] text-[#8a99ad] mt-0.5">
+                          <div className="text-[length:var(--fs-11)] text-[#8a99ad] mt-0.5">
                             {p.kickoff} {p.opponent}
                           </div>
                         )}
@@ -495,7 +495,7 @@ export const NapperTeamTab: React.FC<NapperTeamTabProps> = ({
 
                 <div className="flex items-center gap-3 pl-3 shrink-0">
                   {isEligibleTarget && (
-                    <span className="text-[11px] font-extrabold px-2.5 py-1 rounded bg-[#00ceb8] text-[#0b141e] animate-pulse">
+                    <span className="text-[length:var(--fs-11)] font-extrabold px-2.5 py-1 rounded bg-[#00ceb8] text-[#0b141e] animate-pulse">
                       MOVE TO BENCH
                     </span>
                   )}
@@ -546,14 +546,14 @@ export const NapperTeamTab: React.FC<NapperTeamTabProps> = ({
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5">
                           <span className="text-xs font-bold text-white truncate">{p.name}</span>
-                          <span className="text-[10px] text-[#ff6b87] font-semibold">
+                          <span className="text-[length:var(--fs-10)] text-[#ff6b87] font-semibold">
                             {p.position} - {p.team}
                           </span>
                           {p.injury_status ? <InjuryPill player={p} /> : (
-                            <span className="text-[10px] text-[#8a99ad]" title="No longer injured: move to your bench to free the IR slot">Healthy</span>
+                            <span className="text-[length:var(--fs-10)] text-[#8a99ad]" title="No longer injured: move to your bench to free the IR slot">Healthy</span>
                           )}
                         </div>
-                        <div className="text-[11px] text-[#ff6b87]/80 mt-0.5">
+                        <div className="text-[length:var(--fs-11)] text-[#ff6b87]/80 mt-0.5">
                           {p.kickoff}
                         </div>
                       </div>

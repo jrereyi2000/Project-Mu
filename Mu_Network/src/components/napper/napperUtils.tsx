@@ -124,7 +124,7 @@ export function projClass(player: { is_yet_to_play?: boolean; fpts?: number; pro
 export const PostGameLine: React.FC<{ player: { game_result?: string | null; stat_line?: string | null }; align?: "left" | "right" }> = ({ player, align = "left" }) => {
   if (!player.game_result) return null;
   return (
-    <div className={`mt-0.5 text-[11px] leading-snug ${align === "right" ? "text-right" : "text-left"}`}>
+    <div className={`mt-0.5 text-[length:var(--fs-11)] leading-snug ${align === "right" ? "text-right" : "text-left"}`}>
       <div className="text-[#8a99ad] font-semibold">{player.game_result}</div>
       {player.stat_line && <div className="text-[#cbd5e1] whitespace-normal break-words">{player.stat_line}</div>}
     </div>

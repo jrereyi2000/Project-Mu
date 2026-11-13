@@ -242,7 +242,7 @@ export const DraftBoardGrid: React.FC<DraftBoardGridProps> = ({
                       ) : (
                         <div className="flex-1 flex items-center justify-center">
                           {isCurrentClock ? (
-                            <span className="text-[10px] font-black text-[#00ceb8] tracking-wider animate-pulse uppercase">
+                            <span className="text-[length:var(--fs-10)] font-black text-[#00ceb8] tracking-wider animate-pulse uppercase">
                               ON CLOCK
                             </span>
                           ) : null}

@@ -39,7 +39,7 @@ function show(v: unknown): string {
 const btn = "px-3 py-1.5 text-xs font-bold uppercase tracking-wider border-2 border-[var(--ink)] bg-white hover:bg-[var(--ink)] hover:text-white disabled:opacity-40 disabled:hover:bg-white disabled:hover:text-[var(--ink)]";
 const btnRed = "px-3 py-2 text-xs font-bold uppercase tracking-wider text-white bg-[var(--red)] border-2 border-[var(--red)] hover:bg-[var(--ink)] hover:border-[var(--ink)] disabled:opacity-40";
 const card = "bg-white border-t-4 border-[var(--ink)] p-4";
-const label = "block text-[10px] font-bold uppercase tracking-widest text-[var(--gray-500)] mb-1";
+const label = "block text-[length:var(--fs-10)] font-bold uppercase tracking-widest text-[var(--text-muted)] mb-1";
 const input = "border border-[var(--gray-300)] px-2 py-1 text-sm bg-white w-full";
 
 // ------------------------------------------------------------- control ----
@@ -69,29 +69,29 @@ function TransactionsCard() {
   }, []);
   const line = (r: TxRow) => (
     <div key={r.id} className="border-b border-[var(--gray-100)] pb-1">
-      <span className="font-mono text-[var(--gray-500)] mr-2">{r.txn_date}</span>
+      <span className="font-mono text-[var(--text-muted)] mr-2">{r.txn_date}</span>
       <b className="mr-2">{r.type}</b>{r.raw_text}
-      {!r.applied && <span className="ml-2 text-[var(--gray-500)]">(history)</span>}
+      {!r.applied && <span className="ml-2 text-[var(--text-muted)]">(history)</span>}
     </div>
   );
   return (
     <section className={card}>
       <h3 className="font-black uppercase tracking-wide mb-3">League transactions{tx ? ` · ${tx.season}` : ""}</h3>
-      {error && <p className="text-xs text-[var(--red)]">{error}</p>}
-      {tx && !tx.installed && <p className="text-xs text-[var(--gray-500)]">The transactions migration isn't applied to this database yet.</p>}
+      {error && <p className="text-xs text-[var(--accent-text,var(--red-text))]">{error}</p>}
+      {tx && !tx.installed && <p className="text-xs text-[var(--text-muted)]">The transactions migration isn't applied to this database yet.</p>}
       {tx?.installed && (
         <div className="grid gap-3 text-xs">
           <div>
             <span className={label}>Unparsed rows ({tx.unparsed.length})</span>
-            {tx.unparsed.length ? tx.unparsed.map(line) : <span className="text-[var(--gray-500)]">None.</span>}
+            {tx.unparsed.length ? tx.unparsed.map(line) : <span className="text-[var(--text-muted)]">None.</span>}
           </div>
           <div>
             <span className={label}>Ambiguous players ({tx.ambiguous.length})</span>
-            {tx.ambiguous.length ? tx.ambiguous.map(line) : <span className="text-[var(--gray-500)]">None.</span>}
+            {tx.ambiguous.length ? tx.ambiguous.map(line) : <span className="text-[var(--text-muted)]">None.</span>}
           </div>
           <div>
             <span className={label}>Latest rows</span>
-            {tx.rows.length ? tx.rows.map(line) : <span className="text-[var(--gray-500)]">Nothing loaded yet.</span>}
+            {tx.rows.length ? tx.rows.map(line) : <span className="text-[var(--text-muted)]">Nothing loaded yet.</span>}
           </div>
         </div>
       )}
@@ -137,24 +137,24 @@ function DraftRoomCard({ token: _token }: { token: string }) {
     <section className={card}>
       <div className="flex items-center justify-between gap-2 mb-3">
         <div>
-          <span className="text-[10px] font-bold uppercase tracking-[.2em] text-[#b48a2c] block">Mu Scouting &amp; Draft Bureau</span>
+          <span className="text-[length:var(--fs-10)] font-bold uppercase tracking-[.2em] text-[#b48a2c] block">Mu Scouting &amp; Draft Bureau</span>
           <h3 className="font-black uppercase tracking-wide text-lg leading-tight">
             Draft Central{dr?.draft_season ? ` · ${dr.draft_season} Class` : ""}
           </h3>
         </div>
         {dr?.step !== undefined && (
-          <span className="text-[11px] font-mono font-bold px-2 py-0.5 bg-[var(--ink)] text-white">
+          <span className="text-[length:var(--fs-11)] font-mono font-bold px-2 py-0.5 bg-[var(--ink)] text-white">
             STEP {dr.step}/24
           </span>
         )}
       </div>
-      {error && <p className="text-xs text-[var(--red)] mb-2">{error}</p>}
+      {error && <p className="text-xs text-[var(--accent-text,var(--red-text))] mb-2">{error}</p>}
       {dr && !dr.installed && (
-        <p className="text-xs text-[var(--gray-500)] mb-3">
+        <p className="text-xs text-[var(--text-muted)] mb-3">
           The scouting migration (2026_12_12_scouting.sql) isn't applied to this database yet.
         </p>
       )}
-      {dr?.error && <p className="text-xs text-[var(--gray-500)] mb-3">{dr.error}</p>}
+      {dr?.error && <p className="text-xs text-[var(--text-muted)] mb-3">{dr.error}</p>}
       {dr?.installed && (
         <div className="grid gap-2.5 text-xs mb-4">
           <div className="grid grid-cols-3 gap-2 bg-[var(--paper)] border border-[var(--gray-200)] p-2.5">
@@ -185,7 +185,7 @@ function DraftRoomCard({ token: _token }: { token: string }) {
                   <div key={p.prospect_key} className="flex items-center justify-between text-xs">
                     <span>
                       <b className="font-mono mr-1.5">#{p.consensus_rank}</b>
-                      <b>{p.full_name}</b> · {p.position} · <span className="text-[var(--gray-500)]">{p.college}</span>
+                      <b>{p.full_name}</b> · {p.position} · <span className="text-[var(--text-muted)]">{p.college}</span>
                     </span>
                     <span className="font-mono font-bold">{p.grade.toFixed(1)}</span>
                   </div>
@@ -236,8 +236,8 @@ function FrontOfficeCard({ token }: { token: string }) {
   return (
     <section className={card}>
       <h3 className="font-black uppercase tracking-wide mb-3">Front office{fo ? ` · ${fo.season}` : ""}</h3>
-      {error && <p className="text-xs text-[var(--red)]">{error}</p>}
-      {fo && !fo.installed && <p className="text-xs text-[var(--gray-500)]">The GM agents migration (2026_12_10_gm_agents.sql) isn't applied to this database yet.</p>}
+      {error && <p className="text-xs text-[var(--accent-text,var(--red-text))]">{error}</p>}
+      {fo && !fo.installed && <p className="text-xs text-[var(--text-muted)]">The GM agents migration (2026_12_10_gm_agents.sql) isn't applied to this database yet.</p>}
       {fo?.installed && b && (
         <div className="grid gap-3 text-xs">
           <div className="flex flex-wrap gap-3">
@@ -248,17 +248,17 @@ function FrontOfficeCard({ token }: { token: string }) {
             <span>JR approval rate {Math.round(b.p_exec * 100)}%</span>
             <span>offseason {b.offseason_executed} / {b.offseason_target}{b.offseason_stage?.done ? ` · stage ${b.offseason_stage.done} (${b.offseason_stage.done_name}) done` : ""}{b.offseason_stage?.next && fo.window === "OFFSEASON" ? ` · next: ${b.offseason_stage.next_name}` : ""}</span>
           </div>
-          {message && <p className="text-[var(--red)]">{message}</p>}
+          {message && <p className="text-[var(--accent-text,var(--red-text))]">{message}</p>}
           <div>
             <span className={label}>Proposals</span>
-            {(fo.proposals || []).length === 0 && <span className="text-[var(--gray-500)]">None yet.</span>}
+            {(fo.proposals || []).length === 0 && <span className="text-[var(--text-muted)]">None yet.</span>}
             {(fo.proposals || []).map(p => (
               <div key={p.id} className="border-b border-[var(--gray-100)] py-1">
                 <button className="text-left w-full" onClick={() => setOpen(open === p.id ? null : p.id)}>
-                  <span className="font-mono text-[var(--gray-500)] mr-2">#{p.id} wk {p.week}</span>
+                  <span className="font-mono text-[var(--text-muted)] mr-2">#{p.id} wk {p.week}</span>
                   <b className="mr-2">{p.status}</b>{p.chip && <span className="mr-2 px-1 bg-[var(--gray-100)]">{p.chip}</span>}
                   <b>{p.team_a} ↔ {p.team_b}</b>: {p.headline || p.origin}
-                  {p.flags.length > 0 && <span className="ml-2 text-[var(--gray-500)]">[{p.flags.join(", ")}]</span>}
+                  {p.flags.length > 0 && <span className="ml-2 text-[var(--text-muted)]">[{p.flags.join(", ")}]</span>}
                 </button>
                 {open === p.id && (
                   <div className="grid gap-1 mt-1 pl-2 border-l-2 border-[var(--gray-300)]">
@@ -267,8 +267,8 @@ function FrontOfficeCard({ token }: { token: string }) {
                     ))}
                     {p.rationale_a && <p><i>{p.rationale_a}</i></p>}
                     {p.rationale_b && <p><i>{p.rationale_b}</i></p>}
-                    <div>{Object.entries(p.legality || {}).map(([k, c]) => <span key={k} className={`mr-2 ${c.ok ? "" : "text-[var(--red)] font-bold"}`}>{k}: {c.detail}</span>)}</div>
-                    {p.status_reason && <div className="text-[var(--gray-500)]">{p.status_reason}</div>}
+                    <div>{Object.entries(p.legality || {}).map(([k, c]) => <span key={k} className={`mr-2 ${c.ok ? "" : "text-[var(--accent-text,var(--red-text))] font-bold"}`}>{k}: {c.detail}</span>)}</div>
+                    {p.status_reason && <div className="text-[var(--text-muted)]">{p.status_reason}</div>}
                     {(p.status === "APPROVED" || p.status === "PROPOSED") && <ol className="list-decimal pl-5">{p.steps.map((s, i) => <li key={i}>{s}</li>)}</ol>}
                     <div className="flex flex-wrap gap-2 mt-1">
                       {p.status === "PROPOSED" && <button className={btn} disabled={!token} onClick={() => act(`/front-office/proposals/${p.id}/approve`)}>Approve</button>}
@@ -296,14 +296,14 @@ function FrontOfficeCard({ token }: { token: string }) {
           </div>
           <div>
             <span className={label}>Flags ({(fo.flags || []).length})</span>
-            {(fo.flags || []).length ? fo.flags!.map((f, i) => <div key={i}><b className="mr-2">{f.kind}</b>{f.detail}</div>) : <span className="text-[var(--gray-500)]">None.</span>}
+            {(fo.flags || []).length ? fo.flags!.map((f, i) => <div key={i}><b className="mr-2">{f.kind}</b>{f.detail}</div>) : <span className="text-[var(--text-muted)]">None.</span>}
           </div>
           <div>
             <span className={label}>Trade rows seen in Madden's log</span>
-            {(fo.sightings || []).length === 0 && <span className="text-[var(--gray-500)]">None.</span>}
+            {(fo.sightings || []).length === 0 && <span className="text-[var(--text-muted)]">None.</span>}
             {(fo.sightings || []).map(s => (
               <div key={s.id} className="border-b border-[var(--gray-100)] pb-1">
-                <span className="font-mono text-[var(--gray-500)] mr-2">{s.txn_date}</span><b className="mr-2">{s.match_status}</b>{s.raw_text}
+                <span className="font-mono text-[var(--text-muted)] mr-2">{s.txn_date}</span><b className="mr-2">{s.match_status}</b>{s.raw_text}
                 {s.match_status !== "MATCHED" && (
                   <div className="pl-2">
                     <div>Parsed legs: {(s.resolved || []).map(x => JSON.stringify(x)).join(" · ") || "none"}{(s.unresolved || []).length ? ` · unresolved: ${s.unresolved!.join(", ")}` : ""}</div>
@@ -361,15 +361,15 @@ function TradeFinderCard() {
     <div key={i} className="pl-2 border-l-2 border-[var(--gray-300)] mb-1">
       {d.shape && <b className="mr-2">{d.shape}</b>}
       <span>{buyer} gets {d.buyer_gets.join(", ")} · {res?.player.team} gets {d.seller_gets.join(", ") || "nothing"}</span>
-      <div className="text-[var(--gray-500)]">surplus {buyer} {money(d.buyer_surplus)}, {res?.player.team} {money(d.seller_surplus)} · cap after {Object.entries(d.cap_after).map(([t, v]) => `${t} ${money(v)}`).join(", ")}</div>
-      {d.failed.length > 0 && <div className="text-[var(--red)]">fails: {d.failed.map(f => d.checks[f] ? `${f} (${d.checks[f].detail})` : f).join("; ")}</div>}
+      <div className="text-[var(--text-muted)]">surplus {buyer} {money(d.buyer_surplus)}, {res?.player.team} {money(d.seller_surplus)} · cap after {Object.entries(d.cap_after).map(([t, v]) => `${t} ${money(v)}`).join(", ")}</div>
+      {d.failed.length > 0 && <div className="text-[var(--accent-text,var(--red-text))]">fails: {d.failed.map(f => d.checks[f] ? `${f} (${d.checks[f].detail})` : f).join("; ")}</div>}
     </div>
   );
   const p = res?.player;
   return (
     <section className={card}>
       <h3 className="font-black uppercase tracking-wide mb-3">Trade finder</h3>
-      <p className="text-xs text-[var(--gray-500)] mb-2">Pick a player: every package the GM engine's rules allow for him from each other team, with both GMs' view and every check. Read-only: nothing is proposed or saved.</p>
+      <p className="text-xs text-[var(--text-muted)] mb-2">Pick a player: every package the GM engine's rules allow for him from each other team, with both GMs' view and every check. Read-only: nothing is proposed or saved.</p>
       <div className="grid grid-cols-3 gap-2">
         <input className={`${input} col-span-2`} placeholder="Player name" value={q} onChange={e => setQ(e.target.value)} />
         <input className={input} placeholder="Buyer (optional, e.g. CAR)" value={team} onChange={e => setTeam(e.target.value)} />
@@ -384,21 +384,21 @@ function TradeFinderCard() {
         </div>
       )}
       {busy && <p className="text-xs mt-2">Searching…</p>}
-      {error && <p className="text-xs text-[var(--red)] mt-2">{error}</p>}
+      {error && <p className="text-xs text-[var(--accent-text,var(--red-text))] mt-2">{error}</p>}
       {res && p && (
         <div className="grid gap-2 text-xs mt-3">
           <div><b>{p.name}</b> · {p.team} {p.pos} {p.ovr} · age {p.age}{p.dev ? ` · ${p.dev}` : ""} · {p.years_left ?? "?"} yr left · hit {money(p.cap_hit)} · {p.team} {p.seller_record} {p.seller_direction}{p.ladder ? ` · ladder R${p.ladder[0]}${p.ladder[0] === p.ladder[1] ? "" : `–R${p.ladder[1]}`}` : p.ovr && p.ovr >= 88 && res.window === "IN_SEASON" ? " · blockbuster only (weeks 7–8)" : ""} · {res.window} week {res.week}</div>
-          {res.notes.map((n, i) => <div key={i} className="text-[var(--red)]">{n}</div>)}
+          {res.notes.map((n, i) => <div key={i} className="text-[var(--accent-text,var(--red-text))]">{n}</div>)}
           <label><input type="checkbox" checked={showMisses} onChange={e => setShowMisses(e.target.checked)} /> show teams with no viable package (and why)</label>
           {res.teams.filter(t => showMisses || t.n_viable > 0).map(t => (
             <div key={t.team} className="border-b border-[var(--gray-100)] pb-1">
-              <b>{t.team}</b> <span className="text-[var(--gray-500)]">{t.direction} {t.record} · {t.n_viable} of {t.tried} packages work</span>
-              {t.notes.map((n, i) => <span key={i} className="ml-2 text-[var(--gray-500)]">({n})</span>)}
+              <b>{t.team}</b> <span className="text-[var(--text-muted)]">{t.direction} {t.record} · {t.n_viable} of {t.tried} packages work</span>
+              {t.notes.map((n, i) => <span key={i} className="ml-2 text-[var(--text-muted)]">({n})</span>)}
               {t.viable.map((d, i) => deal(d, t.team, i))}
-              {t.n_viable === 0 && t.best_miss && <div><span className="text-[var(--gray-500)]">closest miss:</span>{deal(t.best_miss, t.team, 0)}<span className="text-[var(--gray-500)]">all misses: {Object.entries(t.misses).map(([k, v]) => `${k} ${v}`).join(", ")}</span></div>}
+              {t.n_viable === 0 && t.best_miss && <div><span className="text-[var(--text-muted)]">closest miss:</span>{deal(t.best_miss, t.team, 0)}<span className="text-[var(--text-muted)]">all misses: {Object.entries(t.misses).map(([k, v]) => `${k} ${v}`).join(", ")}</span></div>}
             </div>
           ))}
-          {!showMisses && res.teams.every(t => t.n_viable === 0) && <div className="text-[var(--gray-500)]">No team has a package that passes every check and both GMs. Tick the box to see each team's closest miss.</div>}
+          {!showMisses && res.teams.every(t => t.n_viable === 0) && <div className="text-[var(--text-muted)]">No team has a package that passes every check and both GMs. Tick the box to see each team's closest miss.</div>}
         </div>
       )}
     </section>
@@ -471,12 +471,12 @@ function NegotiateCard({ token }: { token: string }) {
   const side = (t: NgTeam | undefined, from: string, to: string) => t && (
     <div className="min-w-0">
       <span className={label}>{from === userTeam ? `You send (${from})` : `You get (${from}, ${t.gm_name || "GM"})`}</span>
-      <div className="text-[var(--gray-500)] mb-1">{t.direction} {t.record ?? ""} · needs {t.needs.join(", ") || "-"} · cap {money(t.cap_space)}</div>
+      <div className="text-[var(--text-muted)] mb-1">{t.direction} {t.record ?? ""} · needs {t.needs.join(", ") || "-"} · cap {money(t.cap_space)}</div>
       <div className="max-h-56 overflow-auto border border-[var(--gray-100)]">
         {t.players.map(p => {
           const a: NgAsset = { type: "PLAYER", player_id: p.player_id, from, to };
           return (
-            <label key={p.player_id} className={`flex gap-1 px-1 ${p.tradeable ? "" : "text-[var(--gray-500)]"}`} title={p.why_not || ""}>
+            <label key={p.player_id} className={`flex gap-1 px-1 ${p.tradeable ? "" : "text-[var(--text-muted)]"}`} title={p.why_not || ""}>
               <input type="checkbox" disabled={!p.tradeable} checked={!!picked[assetKey(a)]} onChange={() => toggle(a)} />
               <span className="truncate">{p.pos} {p.name} {p.ovr} · {p.age} · {money(p.cap_hit)} {p.years_left ?? "?"}y{p.starter ? " · starter" : ""}{p.why_not ? ` · ${p.why_not}` : ""}</span>
             </label>
@@ -485,7 +485,7 @@ function NegotiateCard({ token }: { token: string }) {
         {t.picks.map(k => {
           const a: NgAsset = { type: "PICK", draft_season: k.draft_season, round: k.round, original_team: k.original_team, from, to };
           return (
-            <label key={k.label} className={`flex gap-1 px-1 ${k.booked ? "text-[var(--gray-500)]" : ""}`}>
+            <label key={k.label} className={`flex gap-1 px-1 ${k.booked ? "text-[var(--text-muted)]" : ""}`}>
               <input type="checkbox" disabled={k.booked} checked={!!picked[assetKey(a)]} onChange={() => toggle(a)} />
               <span>{k.label}{k.booked ? " · in an open proposal" : ""}</span>
             </label>
@@ -498,7 +498,7 @@ function NegotiateCard({ token }: { token: string }) {
   return (
     <section className={card}>
       <h3 className="font-black uppercase tracking-wide mb-3">Negotiate with a GM</h3>
-      <p className="text-xs text-[var(--gray-500)] mb-2">Offer a trade from a team you control. The GM accepts, counters, or turns it down, and walks away if you keep wasting his time. A deal you both agree on lands on the Front office card, approved.</p>
+      <p className="text-xs text-[var(--text-muted)] mb-2">Offer a trade from a team you control. The GM accepts, counters, or turns it down, and walks away if you keep wasting his time. A deal you both agree on lands on the Front office card, approved.</p>
       <div className="grid grid-cols-2 gap-2 text-xs">
         <select className={input} value={userTeam} onChange={e => setUserTeam(e.target.value)}>
           <option value="">Your team</option>
@@ -509,7 +509,7 @@ function NegotiateCard({ token }: { token: string }) {
           {gmTeams.map(t => <option key={t.abbr} value={t.abbr}>{t.abbr} · {t.gm_name} ({t.direction || "-"})</option>)}
         </select>
       </div>
-      {message && <p className="text-xs text-[var(--red)] mt-2">{message}</p>}
+      {message && <p className="text-xs text-[var(--accent-text,var(--red-text))] mt-2">{message}</p>}
       {thread && (
         <div className="text-xs mt-3 grid gap-1">
           <div><b>#{thread.id} {thread.status}</b> · week {thread.week} · {thread.gm_name}'s patience {"●".repeat(thread.patience_left)}{"○".repeat(Math.max(0, thread.patience - thread.patience_left))}{thread.status_reason ? ` · ${thread.status_reason}` : ""}{thread.proposal_id ? ` · proposal #${thread.proposal_id}` : ""}</div>
@@ -518,9 +518,9 @@ function NegotiateCard({ token }: { token: string }) {
               <b className="mr-2">{t.actor === "GM" ? thread.gm_name : "You"} · {t.action}</b>
               {t.mood && t.actor === "JR" && <span className="mr-2 px-1 bg-[var(--gray-100)]">{t.mood === "INSULTED" ? "insulting" : t.mood === "APART" ? "far apart" : "close"}</span>}
               {t.legs && <span>you get {t.legs.filter(l => l.to === thread.user_team).map(l => l.label).join(", ") || "nothing"} · they get {t.legs.filter(l => l.to === thread.gm_team).map(l => l.label).join(", ") || "nothing"}</span>}
-              {t.surplus_user !== null && t.legs && <span className="text-[var(--gray-500)]"> · your surplus {money(t.surplus_user)}</span>}
-              {t.message && <p className={t.actor === "GM" ? "" : "italic text-[var(--gray-500)]"}>{t.message}</p>}
-              {Object.keys(t.failed_checks).length > 0 && t.actor === "JR" && <div className="text-[var(--red)]">{Object.entries(t.failed_checks).map(([k, v]) => `${k}: ${v}`).join("; ")}</div>}
+              {t.surplus_user !== null && t.legs && <span className="text-[var(--text-muted)]"> · your surplus {money(t.surplus_user)}</span>}
+              {t.message && <p className={t.actor === "GM" ? "" : "italic text-[var(--text-muted)]"}>{t.message}</p>}
+              {Object.keys(t.failed_checks).length > 0 && t.actor === "JR" && <div className="text-[var(--accent-text,var(--red-text))]">{Object.entries(t.failed_checks).map(([k, v]) => `${k}: ${v}`).join("; ")}</div>}
             </div>
           ))}
           {thread.on_table && (
@@ -550,7 +550,7 @@ function NegotiateCard({ token }: { token: string }) {
 
 function StatusPill({ status }: { status: string }) {
   const color = status === "running" ? "bg-amber-400 text-black" : status === "done" ? "bg-emerald-600 text-white" : status === "stopped" ? "bg-[var(--gray-500)] text-white" : "bg-[var(--red)] text-white";
-  return <span className={`px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${color}`}>{status}</span>;
+  return <span className={`px-2 py-0.5 text-[length:var(--fs-10)] font-bold uppercase tracking-wider ${color}`}>{status}</span>;
 }
 
 function Control({ token, data, reload }: { token: string; data: DebugState | null; reload: () => void }) {
@@ -916,13 +916,13 @@ function Control({ token, data, reload }: { token: string; data: DebugState | nu
             <label><span className={label}>Current week</span><input className={input} inputMode="numeric" value={week} onChange={e => setWeek(e.target.value)} /></label>
           </div>
           <button className={btn} disabled={busy || !token} onClick={saveState}>Save</button>
-          <p className="text-xs text-[var(--gray-500)] mt-2">Current week = Madden's next unplayed week (19–23 = postseason). The weekly load sets it; edit it only to fix it.</p>
+          <p className="text-xs text-[var(--text-muted)] mt-2">Current week = Madden's next unplayed week (19–23 = postseason). The weekly load sets it; edit it only to fix it.</p>
         </section>
 
         <section className={card}>
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-black uppercase tracking-wide">Newsroom & Articles</h3>
-            <span className="text-[10px] font-mono text-[var(--gray-500)]">
+            <span className="text-[length:var(--fs-10)] font-mono text-[var(--text-muted)]">
               {news ? `${news.total_articles} articles · ${news.total_tweets} posts${news.total_flagged ? ` · ${news.total_flagged} fact-gate flagged` : ""}` : "Loading..."}
             </span>
           </div>
@@ -976,7 +976,7 @@ function Control({ token, data, reload }: { token: string; data: DebugState | nu
             </button>
           </div>
 
-          <p className="text-xs text-[var(--gray-500)] mt-2">
+          <p className="text-xs text-[var(--text-muted)] mt-2">
             Clearing articles removes article tags, power rankings, and agent memory takes, allowing the week to be rerun cleanly.
           </p>
         </section>
@@ -984,7 +984,7 @@ function Control({ token, data, reload }: { token: string; data: DebugState | nu
         <section className={card}>
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-black uppercase tracking-wide">Offseason Editorial Package</h3>
-            <span className="text-[10px] font-mono text-[var(--gray-500)]">Week 24 Slate</span>
+            <span className="text-[length:var(--fs-10)] font-mono text-[var(--text-muted)]">Week 24 Slate</span>
           </div>
           <p className="text-xs text-[var(--gray-600)] mb-3">
             Publish the 6-article offseason editorial package (Super Bowl recap &amp; retrospectives, coaching carousel audit, marquee signings, and first-round draft recap).
@@ -1041,7 +1041,7 @@ function Control({ token, data, reload }: { token: string; data: DebugState | nu
                 className="w-4 h-4 text-[var(--red)] border-[var(--gray-300)] rounded cursor-pointer"
               />
               <label htmlFor="offseason-dry-run" className="text-xs font-bold uppercase tracking-wider text-[var(--ink)] cursor-pointer select-none">
-                Dry Run (<code className="font-mono text-[11px] font-normal">--dry-run</code>)
+                Dry Run (<code className="font-mono text-[length:var(--fs-11)] font-normal">--dry-run</code>)
               </label>
             </div>
 
@@ -1062,7 +1062,7 @@ function Control({ token, data, reload }: { token: string; data: DebugState | nu
               </button>
               {offseasonPreviewData && (
                 <button
-                  className="px-2 py-1 text-xs border border-[var(--gray-300)] text-[var(--gray-500)] hover:text-black"
+                  className="px-2 py-1 text-xs border border-[var(--gray-300)] text-[var(--text-muted)] hover:text-black"
                   onClick={() => setOffseasonPreviewData(null)}
                 >
                   Dismiss Preview
@@ -1073,16 +1073,16 @@ function Control({ token, data, reload }: { token: string; data: DebugState | nu
             {offseasonPreviewData && (
               <div className="bg-[var(--paper)] p-3 text-xs border border-[var(--gray-200)] mt-2">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="font-bold uppercase text-[10px] tracking-wider text-[var(--ink)]">Manifest Preview Result</span>
+                  <span className="font-bold uppercase text-[length:var(--fs-10)] tracking-wider text-[var(--ink)]">Manifest Preview Result</span>
                   <StatusPill status={offseasonPreviewData.valid !== false && !offseasonPreviewData.error ? "done" : "stopped"} />
                 </div>
                 {offseasonPreviewData.error && (
-                  <div className="text-[var(--red)] font-bold mb-2">Error: {String(offseasonPreviewData.error)}</div>
+                  <div className="text-[var(--accent-text,var(--red-text))] font-bold mb-2">Error: {String(offseasonPreviewData.error)}</div>
                 )}
                 {offseasonPreviewData.summary && (
                   <div className="text-[var(--ink)] mb-2 font-medium">{String(offseasonPreviewData.summary)}</div>
                 )}
-                <pre className="max-h-60 overflow-y-auto text-[11px] font-mono bg-white p-2 border border-[var(--gray-200)] text-[var(--gray-700)]">
+                <pre className="max-h-60 overflow-y-auto text-[length:var(--fs-11)] font-mono bg-white p-2 border border-[var(--gray-200)] text-[var(--gray-700)]">
                   {JSON.stringify(offseasonPreviewData, null, 2)}
                 </pre>
               </div>
@@ -1093,7 +1093,7 @@ function Control({ token, data, reload }: { token: string; data: DebugState | nu
         <section className={card}>
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-black uppercase tracking-wide">Commission Custom Story</h3>
-            <span className="text-[10px] font-mono text-[var(--gray-500)]">AI Editorial Desk</span>
+            <span className="text-[length:var(--fs-10)] font-mono text-[var(--text-muted)]">AI Editorial Desk</span>
           </div>
           <p className="text-xs text-[var(--gray-600)] mb-3">
             Give a story prompt or topic. Step 1 uses Gemini to classify the angle and assign an appropriate writer. Step 2 lets you review or adjust parameters before dispatching the ReAct swarm.
@@ -1144,7 +1144,7 @@ function Control({ token, data, reload }: { token: string; data: DebugState | nu
           ) : (
             <div className="grid gap-3 border-t border-[var(--gray-200)] pt-3">
               <div className="bg-[var(--paper)] p-2.5 text-xs border border-[var(--gray-200)]">
-                <div className="font-bold text-[10px] uppercase text-[var(--ink)] mb-1">Proposed Angle & Rationale</div>
+                <div className="font-bold text-[length:var(--fs-10)] uppercase text-[var(--ink)] mb-1">Proposed Angle & Rationale</div>
                 <p className="text-[var(--gray-700)] italic">{customPlan.classification.rationale}</p>
               </div>
 
@@ -1262,7 +1262,7 @@ function Control({ token, data, reload }: { token: string; data: DebugState | nu
             {RUNS.map(r => (
               <div key={r.kind} className="flex flex-col gap-1">
                 <button className={btnRed} disabled={busy || !token || !!running} onClick={() => start(r.kind, r.title)}>{r.title}</button>
-                <span className="text-xs text-[var(--gray-500)]">{r.note}</span>
+                <span className="text-xs text-[var(--text-muted)]">{r.note}</span>
               </div>
             ))}
           </div>
@@ -1272,7 +1272,7 @@ function Control({ token, data, reload }: { token: string; data: DebugState | nu
               {resumable.map(c => <option key={c.folder} value={c.folder}>{c.folder} · {c.mode} · {c.stage}</option>)}
             </select>
           </label>
-          {!token && <p className="text-xs text-[var(--red)] mt-2">Enter the debug token above to start runs or edit.</p>}
+          {!token && <p className="text-xs text-[var(--accent-text,var(--red-text))] mt-2">Enter the debug token above to start runs or edit.</p>}
           {running && <p className="text-xs mt-2">A run is in progress; one at a time.</p>}
         </section>
 
@@ -1283,7 +1283,7 @@ function Control({ token, data, reload }: { token: string; data: DebugState | nu
               <div key={c.id} className="flex flex-wrap gap-2 items-center border-b border-[var(--gray-100)] pb-1">
                 <StatusPill status={c.status === "loaded" ? "done" : c.status === "failed" ? "failed" : c.status} />
                 <b className="font-mono">{c.folder}</b><span>{c.mode}</span>{c.week !== null && <span>wk {c.week}</span>}
-                {c.error && <span className="w-full text-[var(--red)] break-words">{c.error}</span>}
+                {c.error && <span className="w-full text-[var(--accent-text,var(--red-text))] break-words">{c.error}</span>}
               </div>
             ))}
           </div>
@@ -1306,7 +1306,7 @@ function Control({ token, data, reload }: { token: string; data: DebugState | nu
           {latest?.status === "done" && latest.url_hash && (
             <div className="bg-emerald-50 border-2 border-emerald-500 p-3 mb-3 text-xs text-emerald-950 flex flex-wrap items-center justify-between gap-2">
               <div>
-                <span className="font-black uppercase tracking-wider block text-[10px] text-emerald-800">
+                <span className="font-black uppercase tracking-wider block text-[length:var(--fs-10)] text-emerald-800">
                   {latest.kind === "custom_commission" ? "Commissioned Story Published" : "Article Published"}
                 </span>
                 <span className="font-bold">{latest.headline || "Story ready"}</span>
@@ -1315,13 +1315,13 @@ function Control({ token, data, reload }: { token: string; data: DebugState | nu
                 href={latest.url_hash}
                 target="_blank"
                 rel="noreferrer"
-                className="px-3 py-1.5 bg-emerald-700 text-white font-bold uppercase text-[10px] tracking-wider hover:bg-emerald-800"
+                className="px-3 py-1.5 bg-emerald-700 text-white font-bold uppercase text-[length:var(--fs-10)] tracking-wider hover:bg-emerald-800"
               >
                 Read Story →
               </a>
             </div>
           )}
-          <pre ref={logRef} className="bg-[#07080a] text-[#d8d8d8] text-[11px] leading-snug p-3 h-[420px] overflow-auto whitespace-pre-wrap break-words font-mono">{log || "Logs appear here when a run starts."}</pre>
+          <pre ref={logRef} className="bg-[#07080a] text-[#d8d8d8] text-[length:var(--fs-11)] leading-snug p-3 h-[420px] overflow-auto whitespace-pre-wrap break-words font-mono">{log || "Logs appear here when a run starts."}</pre>
         </section>
         <section className={card}>
           <h3 className="font-black uppercase tracking-wide mb-3">Run history</h3>
@@ -1330,11 +1330,11 @@ function Control({ token, data, reload }: { token: string; data: DebugState | nu
               <button key={j.id} className="flex flex-wrap gap-2 items-center text-left hover:bg-[var(--paper)] py-1"
                 onClick={() => call<{ log: string }>(`/jobs/${j.id}/log?lines=300`).then(r => setLog(r.log))}>
                 <StatusPill status={j.status} /><span className="font-mono">{j.id}</span><span>{j.kind_label}</span>
-                {j.resume && <span className="text-[var(--gray-500)]">resume {j.resume}</span>}
-                {j.exit_code !== undefined && j.exit_code !== null && <span className="text-[var(--gray-500)]">exit {j.exit_code}</span>}
+                {j.resume && <span className="text-[var(--text-muted)]">resume {j.resume}</span>}
+                {j.exit_code !== undefined && j.exit_code !== null && <span className="text-[var(--text-muted)]">exit {j.exit_code}</span>}
               </button>
             ))}
-            {!jobs.length && <span className="text-[var(--gray-500)]">None yet.</span>}
+            {!jobs.length && <span className="text-[var(--text-muted)]">None yet.</span>}
           </div>
         </section>
         {message && <p className="text-sm font-bold">{message}</p>}
@@ -1423,11 +1423,11 @@ function Tables({ token }: { token: string }) {
           <button className={btn} disabled={page >= pages} onClick={() => setPage(page + 1)}>›</button>
         </div>
       </div>
-      <p className="text-[11px] text-[var(--gray-500)]">
+      <p className="text-[length:var(--fs-11)] text-[var(--text-muted)]">
         Click a header to sort. Filter boxes: text = contains; <code>=5</code>, <code>!=5</code>, <code>&gt;=300</code>, <code>&lt;10</code> compare; <code>null</code> / <code>!null</code>.
         {data && data.kind === "table" && data.pk.length > 0 ? (token ? " Tap a cell to edit (Enter saves, Esc cancels, empty = NULL)." : " Enter the debug token to edit cells.") : data ? " Views and tables without a primary key are read-only." : ""}
       </p>
-      {error && <p className="text-sm text-[var(--red)] font-bold">{error}</p>}
+      {error && <p className="text-sm text-[var(--accent-text,var(--red-text))] font-bold">{error}</p>}
       <div className={`overflow-auto max-h-[70vh] bg-white border-t-4 border-[var(--ink)] ${loading ? "opacity-60" : ""}`}>
         {data && (
           <table className="text-xs border-collapse min-w-full">
@@ -1444,7 +1444,7 @@ function Tables({ token }: { token: string }) {
               <tr>
                 {data.columns.map(c => (
                   <th key={c.column} className="px-1 py-1 border-b border-[var(--gray-300)]">
-                    <input className="w-full min-w-[64px] border border-[var(--gray-300)] px-1 py-0.5 text-[11px] font-normal bg-white"
+                    <input className="w-full min-w-[64px] border border-[var(--gray-300)] px-1 py-0.5 text-[length:var(--fs-11)] font-normal bg-white"
                       value={filters[c.column] || ""} placeholder="filter"
                       onChange={e => { setFilters({ ...filters, [c.column]: e.target.value }); setPage(1); }} />
                   </th>
@@ -1495,12 +1495,12 @@ function Endpoints() {
       <div className="bg-white border-t-4 border-[var(--ink)]">
         {shown.map(e => (
           <div key={e.path + e.methods.join()} className="flex flex-wrap gap-x-3 gap-y-1 items-baseline px-3 py-2 border-b border-[var(--gray-100)] text-sm">
-            {e.methods.map(m => <span key={m} className={`text-[10px] font-bold px-1.5 py-0.5 ${m === "GET" ? "bg-emerald-600" : m === "DELETE" ? "bg-[var(--red)]" : "bg-[var(--ink)]"} text-white`}>{m}</span>)}
+            {e.methods.map(m => <span key={m} className={`text-[length:var(--fs-10)] font-bold px-1.5 py-0.5 ${m === "GET" ? "bg-emerald-600" : m === "DELETE" ? "bg-[var(--red)]" : "bg-[var(--ink)]"} text-white`}>{m}</span>)}
             {e.methods.includes("GET") && !e.path_params.length
               ? <a className="font-mono underline" href={`${API_BASE}${e.path}`} target="_blank" rel="noreferrer">{e.path}</a>
               : <span className="font-mono">{e.path}</span>}
-            {e.query_params.length > 0 && <span className="text-xs text-[var(--gray-500)]">?{e.query_params.join("&")}</span>}
-            {e.doc && <span className="w-full text-xs text-[var(--gray-500)]">{e.doc}</span>}
+            {e.query_params.length > 0 && <span className="text-xs text-[var(--text-muted)]">?{e.query_params.join("&")}</span>}
+            {e.doc && <span className="w-full text-xs text-[var(--text-muted)]">{e.doc}</span>}
           </div>
         ))}
       </div>
@@ -1531,7 +1531,7 @@ function DocMarkdown({ content }: { content: string }) {
       i++;
       while (i < lines.length && !lines[i].startsWith("```")) code.push(lines[i++]);
       i++;
-      out.push(<pre key={out.length} className="bg-[#07080a] text-[#d8d8d8] text-[11px] leading-snug p-3 overflow-x-auto my-3 font-mono">{code.join("\n")}</pre>);
+      out.push(<pre key={out.length} className="bg-[#07080a] text-[#d8d8d8] text-[length:var(--fs-11)] leading-snug p-3 overflow-x-auto my-3 font-mono">{code.join("\n")}</pre>);
       continue;
     }
     const h = line.match(/^(#{1,6})\s+(.*)$/);
@@ -1556,7 +1556,7 @@ function DocMarkdown({ content }: { content: string }) {
     }
     const li = line.match(/^(\s*)([-*]|\d+\.)\s+(.*)$/);
     if (li) {
-      out.push(<div key={out.length} className="text-sm leading-relaxed flex gap-2" style={{ paddingLeft: `${li[1].length * 8}px` }}><span className="text-[var(--gray-500)]">{/\d/.test(li[2]) ? li[2] : "•"}</span><span>{inline(li[3])}</span></div>);
+      out.push(<div key={out.length} className="text-sm leading-relaxed flex gap-2" style={{ paddingLeft: `${li[1].length * 8}px` }}><span className="text-[var(--text-muted)]">{/\d/.test(li[2]) ? li[2] : "•"}</span><span>{inline(li[3])}</span></div>);
       i++; continue;
     }
     if (line.trim() === "") { i++; continue; }
@@ -1587,9 +1587,9 @@ function Docs() {
       <div className="flex flex-wrap gap-2">
         {DOCS.map(d => <button key={d.key} className={`${btn} ${doc === d.key ? "!bg-[var(--ink)] !text-white" : ""}`} onClick={() => setDoc(d.key)}>{d.title}</button>)}
       </div>
-      {error && <p className="text-sm text-[var(--red)]">{error}</p>}
+      {error && <p className="text-sm text-[var(--accent-text,var(--red-text))]">{error}</p>}
       <article className="bg-white border-t-4 border-[var(--ink)] p-4 md:p-8 overflow-x-auto debug-doc">
-        {text ? <DocMarkdown content={text} /> : !error && <p className="text-sm text-[var(--gray-500)]">Loading…</p>}
+        {text ? <DocMarkdown content={text} /> : !error && <p className="text-sm text-[var(--text-muted)]">Loading…</p>}
       </article>
     </div>
   );
@@ -1618,7 +1618,7 @@ export default function DebugPage() {
     <main className="max-w-[1400px] mx-auto px-4 py-6 md:py-10">
       <div className="flex flex-wrap items-end gap-4 border-b-2 border-[var(--ink)] pb-4 mb-4">
         <div className="mr-auto">
-          <p className="text-[10px] font-bold uppercase tracking-[.2em] text-[var(--red)]">Debug</p>
+          <p className="text-[length:var(--fs-10)] font-bold uppercase tracking-[.2em] text-[var(--accent-text,var(--red-text))]">Debug</p>
           <h1 className="text-3xl md:text-4xl font-black uppercase leading-none">League control</h1>
           {data && (
             <p className="text-xs font-mono mt-2">
@@ -1626,7 +1626,7 @@ export default function DebugPage() {
               {data.running_job ? ` · running: ${data.running_job.kind}` : ""}
             </p>
           )}
-          {error && <p className="text-xs text-[var(--red)] mt-2">API not reachable ({error}). Is it running on {API_BASE}?</p>}
+          {error && <p className="text-xs text-[var(--accent-text,var(--red-text))] mt-2">API not reachable ({error}). Is it running on {API_BASE}?</p>}
         </div>
         <label className="w-full sm:w-64"><span className={label}>Debug token {token ? "✓" : "(needed for edits and runs)"}</span>
           <input className={input} type="password" value={token} onChange={e => saveToken(e.target.value)} placeholder="DEBUG_TOKEN from .env" />
@@ -1635,7 +1635,7 @@ export default function DebugPage() {
       <nav className="flex gap-1 mb-4 overflow-x-auto">
         {TABS.map(t => (
           <button key={t} onClick={() => choose(t)}
-            className={`px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-4 ${tab === t ? "border-[var(--red)]" : "border-transparent text-[var(--gray-500)]"}`}>{t}</button>
+            className={`px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-4 ${tab === t ? "border-[var(--red)]" : "border-transparent text-[var(--text-muted)]"}`}>{t}</button>
         ))}
       </nav>
       {tab === "Control" && <Control token={token} data={data} reload={reload} />}

@@ -198,15 +198,15 @@ export const DraftRosterQueue: React.FC<DraftRosterQueueProps> = ({
           </div>
 
           {currentTeam && (
-            <div className="px-3 py-1.5 bg-[#090e17] border-b border-[#182333] flex items-center justify-between text-[11px]">
+            <div className="px-3 py-1.5 bg-[#090e17] border-b border-[#182333] flex items-center justify-between text-[length:var(--fs-11)]">
               <span className="text-[#8a99ad] font-bold">{currentTeam.manager_handle}</span>
               {currentTeam.slot === userSlot ? (
-                <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-[#00ceb8]/15 border border-[#00ceb8]/40 text-[#00ceb8]">
+                <span className="px-2 py-0.5 rounded text-[length:var(--fs-10)] font-black uppercase tracking-wider bg-[#00ceb8]/15 border border-[#00ceb8]/40 text-[#00ceb8]">
                   YOU
                 </span>
               ) : currentTeam.persona && currentTeam.persona in ARCHETYPE_METAS ? (
                 <span
-                  className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider border"
+                  className="px-2 py-0.5 rounded text-[length:var(--fs-10)] font-black uppercase tracking-wider border"
                   style={{
                     color: (ARCHETYPE_METAS as any)[currentTeam.persona].color,
                     backgroundColor: (ARCHETYPE_METAS as any)[currentTeam.persona].bgColor,
@@ -255,7 +255,7 @@ export const DraftRosterQueue: React.FC<DraftRosterQueueProps> = ({
 
                   {item.player && (
                     <div className="draft-slot-filled-pts">
-                      {item.player.proj_pts == null ? "—" : item.player.proj_pts.toFixed(1)} <span className="text-[9px] text-[#64748b]">pts</span>
+                      {item.player.proj_pts == null ? "—" : item.player.proj_pts.toFixed(1)} <span className="text-[length:var(--fs-10)] text-[#64748b]">pts</span>
                     </div>
                   )}
                 </div>
@@ -270,7 +270,7 @@ export const DraftRosterQueue: React.FC<DraftRosterQueueProps> = ({
         <div className="draft-side-content">
           <div className="draft-roster-subbar">
             <span className="draft-roster-heading">STARRED QUEUE</span>
-            <span className="text-[10px] text-[#64748b]">
+            <span className="text-[length:var(--fs-10)] text-[#64748b]">
               Auto-pick drafts top queue player
             </span>
           </div>
@@ -281,7 +281,7 @@ export const DraftRosterQueue: React.FC<DraftRosterQueueProps> = ({
                 <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
               </svg>
               <p>Your queue is empty.</p>
-              <p className="text-[10px] text-[#475569]">
+              <p className="text-[length:var(--fs-10)] text-[#475569]">
                 Star players in the draft pool on the left to queue them up.
               </p>
             </div>
@@ -290,11 +290,11 @@ export const DraftRosterQueue: React.FC<DraftRosterQueueProps> = ({
               {queuedPlayers.map((player, idx) => (
                 <div key={player.player_id} className="draft-queue-item">
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <span className="text-[11px] font-black text-[#64748b] w-4">
+                    <span className="text-[length:var(--fs-11)] font-black text-[#64748b] w-4">
                       {idx + 1}
                     </span>
                     <span
-                      className="text-[9px] font-extrabold px-1.5 py-0.5 rounded text-white"
+                      className="text-[length:var(--fs-10)] font-extrabold px-1.5 py-0.5 rounded text-white"
                       style={{ backgroundColor: getSlotColor(player.position) }}
                     >
                       {player.position}
@@ -309,7 +309,7 @@ export const DraftRosterQueue: React.FC<DraftRosterQueueProps> = ({
                         <div className="text-xs font-bold text-white group-hover:text-[#00ceb8] truncate">
                           {player.name}
                         </div>
-                        <div className="text-[10px] text-[#64748b]">
+                        <div className="text-[length:var(--fs-10)] text-[#64748b]">
                           {player.team} • ADP {player.adp == null ? "—" : player.adp.toFixed(1)} • {player.proj_pts == null ? "—" : player.proj_pts.toFixed(1)} pts
                         </div>
                       </button>
@@ -322,7 +322,7 @@ export const DraftRosterQueue: React.FC<DraftRosterQueueProps> = ({
                       <button
                         type="button"
                         onClick={() => onDraftPlayer(player)}
-                        className="px-2 py-1 rounded bg-[#00ceb8] hover:bg-[#2bd9c6] text-[#090e17] text-[10px] font-black uppercase tracking-wider"
+                        className="px-2 py-1 rounded bg-[#00ceb8] hover:bg-[#2bd9c6] text-[#090e17] text-[length:var(--fs-10)] font-black uppercase tracking-wider"
                       >
                         Draft
                       </button>
@@ -382,21 +382,21 @@ export const DraftRosterQueue: React.FC<DraftRosterQueueProps> = ({
               <div key={c.id} className="draft-chat-msg">
                 <div className="draft-chat-author">
                   <span>{c.sender_name}</span>
-                  <span className="text-[#64748b] text-[9px] font-normal">
+                  <span className="text-[#64748b] text-[length:var(--fs-10)] font-normal">
                     {c.sender_handle}
                   </span>
-                  <span className="text-[#475569] text-[9px] font-normal ml-auto">
+                  <span className="text-[#475569] text-[length:var(--fs-10)] font-normal ml-auto">
                     {c.timestamp}
                   </span>
                 </div>
 
                 {c.pick_badge && (
                   <div className="flex items-center gap-2 my-1 px-2 py-1 rounded bg-[#090e17] border border-[#1f2d45]">
-                    <span className="text-[9px] font-mono font-bold text-[#00ceb8]">
+                    <span className="text-[length:var(--fs-10)] font-mono font-bold text-[#00ceb8]">
                       {c.pick_badge.pick_num}
                     </span>
                     <span
-                      className="text-[8px] font-black px-1.5 rounded text-white"
+                      className="text-[length:var(--fs-10)] font-black px-1.5 rounded text-white"
                       style={{ backgroundColor: getSlotColor(c.pick_badge.pos) }}
                     >
                       {c.pick_badge.pos}
