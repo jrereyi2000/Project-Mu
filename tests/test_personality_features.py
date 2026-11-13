@@ -119,8 +119,9 @@ def activate_all_before(cur, feature, now=NOW):
 @pytest.fixture(autouse=True)
 def everything_installed(monkeypatch):
     monkeypatch.setattr(pf, 'installed', lambda feature: (True, None))
-    # The actor chain falls back to the harness env; keep the offline tests deterministic.
-    monkeypatch.delenv('MU_SET_BY', raising=False)
+    # Every shadow/active write must name an actor (D5: no literal 'JR' fallback), so the suite names one for the
+    # cases that are not about the actor chain; those set or delete the env themselves.
+    monkeypatch.setenv('MU_SET_BY', 'pytest')
     monkeypatch.delenv('MU_AGENT_MODEL', raising=False)
 
 
@@ -307,7 +308,7 @@ def test_active_still_needs_d3_with_the_migration_applied():
         pf.set_mode(cur, LEAGUE, 'producers', 'active', version='v1', review_ref='r', now=NOW)
 
 
-def test_set_by_precedence_flag_then_env_then_model_then_jr(monkeypatch):
+def test_set_by_precedence_flag_then_env_then_model_and_no_fallback(monkeypatch):
     cur = FakeCursor()
     receipt = pf.set_mode(cur, LEAGUE, 'producers', 'shadow', version='v1', review_ref='r', now=NOW,
                           set_by='builder-11')
@@ -325,8 +326,37 @@ def test_set_by_precedence_flag_then_env_then_model_then_jr(monkeypatch):
                        now=NOW)['set_by'] == 'some-model'
 
     monkeypatch.delenv('MU_AGENT_MODEL')
-    assert pf.set_mode(FakeCursor(), LEAGUE, 'producers', 'shadow', version='v1', review_ref='r',
-                       now=NOW)['set_by'] == 'JR'
+    with pytest.raises(pf.FeatureError, match='no identifiable actor') as e:
+        pf.set_mode(FakeCursor(), LEAGUE, 'producers', 'shadow', version='v1', review_ref='r', now=NOW)
+    assert e.value.code == pf.EXIT_INVALID                  # the 'JR' fallback is gone (D5)
+
+
+def test_no_actor_exits_2_on_a_shadow_or_active_write_but_off_and_reads_stay_permissive(monkeypatch):
+    """D5 (JR, 2026-11-12: 'Drop the literal chair fullback'): nobody writes a switch as JR."""
+    monkeypatch.delenv('MU_SET_BY', raising=False)
+    monkeypatch.delenv('MU_AGENT_MODEL', raising=False)
+    cur = FakeCursor()
+    for mode in ('shadow', 'active'):
+        with pytest.raises(pf.FeatureError, match='no identifiable actor') as e:
+            pf.set_mode(cur, LEAGUE, 'producers', mode, version='v1', review_ref='r', now=NOW)
+        assert e.value.code == pf.EXIT_INVALID and e.value.code == 2
+    assert cur.queries == []                                # nothing was read or written
+    assert pf.mode(cur, LEAGUE, 'producers') == 'off'       # reads need no actor
+    assert pf.snapshot(cur, LEAGUE)['features']['producers']['mode'] == 'off'
+
+    off = pf.set_mode(cur, LEAGUE, 'producers', 'off', version='v1', review_ref='r', now=NOW)
+    assert (off['to_mode'], off['set_by']) == ('off', pf.UNATTRIBUTED)
+    assert pf.config(cur, LEAGUE, 'producers')['set_by'] == pf.UNATTRIBUTED
+
+    with pytest.raises(pf.FeatureError, match='cleared_by is not set: no identifiable actor'):
+        pf._actor(None, 'cleared_by')                       # a clearance row names its importer, or exits 2
+
+    conn = FakeConn(FakeCursor())
+    monkeypatch.setattr(pf, 'connect', lambda dsn: conn)
+    err = []
+    assert pf.main(['set', 'producers', 'shadow', '--version', 'v1', '--review', 'r',
+                    '--dsn', 'postgresql://u@localhost/madden_test'], out=lambda m: None, err=err.append) == 2
+    assert 'no identifiable actor' in err[-1] and conn.commits == 0
 
 
 def test_empty_actor_is_a_bad_request(monkeypatch):
@@ -481,7 +511,8 @@ def test_cli_set_by_and_cleared_by_flags(monkeypatch, tmp_path):
     assert pf.main(['activate-cleared', '--review', 'go', '--set-by', 'builder-11', '--dsn', dsn],
                    out=lambda m: None) == 0
     assert pf.config(real, LEAGUE, 'producers')['set_by'] == 'builder-11'
-    monkeypatch.setenv('MU_AGENT_MODEL', 'deepseek-v4.1-flash')      # no flag: the harness env names the actor
+    monkeypatch.delenv('MU_SET_BY')                                   # no flag: the harness env names the actor
+    monkeypatch.setenv('MU_AGENT_MODEL', 'deepseek-v4.1-flash')
     out = []
     assert pf.main(['set', 'producers', 'shadow', '--version', 'v1', '--review', 'r', '--dsn', dsn],
                    out=out.append, err=lambda m: None) == 0

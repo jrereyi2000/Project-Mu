@@ -18,7 +18,9 @@ Nothing here switches a feature on by itself: a missing row (or a database witho
   activate_cleared(cur, league_id, *, now, review_ref, set_by=None) -> [result]
 
 `set_by`/`cleared_by` name the actor that threw the switch: the argument, else MU_SET_BY, else MU_AGENT_MODEL,
-else 'JR' (_actor). Nothing here writes 'JR' on an agent's behalf when the environment names one.
+and there is no further fallback (D5, JR 2026-11-12). With no identifiable actor a `shadow` or `active` write, or a
+clearance import, is a bad request (exit 2, the message names the flag and the env vars); an `off` write stays
+allowed and records `unattributed`; reads never need an actor.
 
 `league_id` is the league's integer id; a lifecycle universe id ('mu:<uuid>') is accepted too and resolved through
 persona_lifecycle_universes (the contract store's read_contract_activation passes one). `now` is the franchise time
@@ -64,6 +66,7 @@ OBSERVE_ONLY = ('producers', 'relationships')
 TABLES = ('personality_feature_modes', 'personality_feature_mode_changes', 'personality_feature_clearances')
 SHADOW_SEASON_TICK = 24          # OFFSEASON_START: a shadow from here last season covers one full simulated season
 TICKS_PER_SEASON = 32
+UNATTRIBUTED = 'unattributed'    # an `off` write with no identifiable actor: honest, never an agent writing as JR
 CLEARANCE_SCHEMA = 'personality-feature-clearance-v1'
 REFUSED_DATABASES = ('madden_2036', 'postgres')
 EXIT_OK, EXIT_INVALID, EXIT_REFUSED = 0, 2, 4
@@ -123,15 +126,24 @@ def _text(value, label):
     return value
 
 
-def _actor(name, label):
-    """Who threw the switch: the argument, else MU_SET_BY, else MU_AGENT_MODEL, else 'JR'."""
+def _actor(name, label, mode=None):
+    """Who threw the switch: the argument, else MU_SET_BY, else MU_AGENT_MODEL (D5, JR 2026-11-12).
+
+    There is no literal 'JR' fallback: an agent must never write a mode change as JR. With no identifiable actor a
+    `shadow` or `active` write (and a clearance record, whose column is NOT NULL) is a bad request — exit 2, with a
+    message saying how to name the actor — while an `off` write stays permissive and records `unattributed`, and the
+    read paths never call this at all."""
     if name is not None:
         return _text(name, label).strip()
     for env in ('MU_SET_BY', 'MU_AGENT_MODEL'):
         value = (os.environ.get(env) or '').strip()
         if value:
             return value
-    return 'JR'
+    if mode == 'off':
+        return UNATTRIBUTED
+    flag = '--' + label.replace('_', '-')
+    raise FeatureError(f'{label} is not set: no identifiable actor for a {mode or "clearance"} write (pass {flag}, '
+                       f'or set MU_SET_BY or MU_AGENT_MODEL); nothing writes itself as JR')
 
 
 def _now(now):
@@ -397,7 +409,7 @@ def set_mode(cur, league_id, feature, mode, *, version, config=None, review_ref=
     current config (or, going active on a clearance, the clearance's config). set_by is resolved by _actor."""
     _feature(feature), _mode(mode)
     _text(version, 'version')
-    set_by = _actor(set_by, 'set_by')
+    set_by = _actor(set_by, 'set_by', mode=mode)
     now = _now(now)
     if force_reason is not None:
         _text(force_reason, 'force_reason')
@@ -558,7 +570,7 @@ def activate_cleared(cur, league_id, *, now, review_ref, set_by=None):
     set_by is resolved once by _actor and lands on every change."""
     now = _now(now)
     _text(review_ref, 'review_ref')
-    set_by = _actor(set_by, 'set_by')
+    set_by = _actor(set_by, 'set_by', mode='active')
     league = _league(cur, league_id)
     _require_tables(cur)
     out = []
@@ -648,7 +660,8 @@ def parser():
     p.add_argument('--config', help='JSON file with the feature config')
     p.add_argument('--force', metavar='REASON', help='skip the order and shadow-season rules (recorded)')
     p.add_argument('--set-by', metavar='TEXT',
-                   help='who is throwing the switch (default: MU_SET_BY, else MU_AGENT_MODEL, else JR)')
+                   help='who is throwing the switch (default: MU_SET_BY, else MU_AGENT_MODEL; '
+                        'required for shadow/active)')
     p = add('history', 'every mode change')
     p.add_argument('--feature', choices=FEATURES)
     p = add('export-clearance', "write a tuning franchise's shadow-season clearance")
@@ -659,11 +672,12 @@ def parser():
     p = add('import-clearance', 'import a clearance into this franchise')
     p.add_argument('path')
     p.add_argument('--cleared-by', metavar='TEXT',
-                   help='who imported it (default: MU_SET_BY, else MU_AGENT_MODEL, else JR)')
+                   help='who imported it (default: MU_SET_BY, else MU_AGENT_MODEL; required)')
     p = add('activate-cleared', 'switch on every cleared feature in order (real franchise, before 2026 week 1)')
     p.add_argument('--review', required=True)
     p.add_argument('--set-by', metavar='TEXT',
-                   help='who is throwing the switch (default: MU_SET_BY, else MU_AGENT_MODEL, else JR)')
+                   help='who is throwing the switch (default: MU_SET_BY, else MU_AGENT_MODEL; '
+                        'required for shadow/active)')
     return ap
 
 
